@@ -76,7 +76,7 @@ def read_port_config() -> int:
         except (json.JSONDecodeError, OSError):
             pass
 
-    return 3077
+    return 9761
 
 
 def find_free_port(start: int) -> int:
