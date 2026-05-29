@@ -1,0 +1,16 @@
+node_modules/
+.DS_Store
+*.log
+.env*
+*.local
+.claude/
+.vscode/*
+.idea/
+.codex/
+.cursor/
+.aider/
+.aider.chat.history.md
+.continue/
+.windsurf/
+.gemini/
+.codeium/
