@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# claw-fleet-refresh — Called by LaunchAgent every 5 minutes.
+# Runs claw-fleet and writes a human-readable summary to /tmp/claw-fleet-summary.txt.
+
+set -euo pipefail
+
+CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
+SUMMARY="/tmp/claw-fleet-summary.txt"
+
+# Run the main query
+"$(dirname "$0")/claw-fleet" "$@" >/dev/null 2>&1
+
+# Generate formatted summary
+python3 - "$CACHE" "$SUMMARY" <<'PYEOF'
+import json, time, sys, os
+
+cache_path, summary_path = sys.argv[1], sys.argv[2]
+
+try:
+    d = json.load(open(cache_path))
+except Exception as e:
+    with open(summary_path, "w") as f:
+        f.write(f"ERROR: could not read {cache_path}: {e}\n")
+    print(f"ERROR: could not read {cache_path}: {e}")
+    sys.exit(1)
+
+ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(d.get("queried_at", time.time())))
+
+lines = []
+lines.append(f"# Claw Fleet — {ts}")
+lines.append("")
+lines.append("| # | Account | Email | 5hr | 7d | Sonnet | 5hr Reset | Status |")
+lines.append("|---|---------|-------|:---:|:---:|:---:|-----------|--------|")
+
+best_opus = None
+best_sonnet = None
+best_opus_val = 999
+best_sonnet_val = 999
+earliest_reset = None
+earliest_reset_acct = None
+
+accounts = d.get("accounts") or []
+for i, a in enumerate(accounts, 1):
+    acct = a.get("account") or str(i)
+    email = a.get("email") or acct
+    u = a.get("usage")
+    if not u or a.get("error"):
+        lines.append(f"| {i} | {acct} | {email} | — | — | — | — | ❌ |")
+        continue
+
+    fh = u.get("five_hour") or {}
+    sd = u.get("seven_day") or {}
+    ss = u.get("seven_day_sonnet") or {}
+
+    fh_pct = fh.get("utilization") or 0
+    sd_pct = sd.get("utilization") or 0
+    ss_pct = ss.get("utilization") or 0
+    reset = fh.get("resets_in") or "—"
+
+    if fh_pct >= 100:
+        status = "🔴"
+        r = fh.get("resets_at") or 0
+        if r and (earliest_reset is None or r < earliest_reset):
+            earliest_reset = r
+            earliest_reset_acct = i
+    elif fh_pct >= 80:
+        status = "⚠️"
+    else:
+        status = "✅"
+
+    if fh_pct < 100:
+        if sd_pct < best_opus_val:
+            best_opus_val = sd_pct
+            best_opus = i
+        if ss_pct < best_sonnet_val:
+            best_sonnet_val = ss_pct
+            best_sonnet = i
+
+    lines.append(f"| {i} | {acct} | {email} | {fh_pct:.0f}% | {sd_pct:.0f}% | {ss_pct:.0f}% | {reset} | {status} |")
+
+lines.append("")
+
+avail = sum(
+    1 for a in accounts
+    if (a.get("usage") or {}).get("five_hour", {}) and
+       ((a.get("usage") or {}).get("five_hour") or {}).get("utilization", 0) < 100 and
+       not a.get("error")
+)
+total = len(accounts)
+
+pool_line = f"**Pool:** {avail}/{total} available"
+if best_opus:
+    pool_line += f" · Opus -> Acc{best_opus} ({best_opus_val:.0f}% 7d)"
+if best_sonnet:
+    pool_line += f" · Sonnet -> Acc{best_sonnet} ({best_sonnet_val:.0f}% 7d)"
+if avail == 0 and earliest_reset_acct and earliest_reset:
+    remaining = max(0, earliest_reset - time.time())
+    h = int(remaining // 3600)
+    m = int((remaining % 3600) // 60)
+    t = f"{h}h {m:02d}m" if h else f"{m}m"
+    pool_line += f" · All limited — Acc{earliest_reset_acct} unlocks in {t}"
+
+lines.append(pool_line)
+
+out = "\n".join(lines) + "\n"
+with open(summary_path, "w") as f:
+    f.write(out)
+print(out)
+PYEOF
+
+# Write quota-state.json for PEWS build mode continuity
+QUOTA_STATE_DIR="$HOME/.claude/temp"
+QUOTA_STATE="$QUOTA_STATE_DIR/quota-state.json"
+mkdir -p "$QUOTA_STATE_DIR"
+python3 - "$CACHE" "$QUOTA_STATE" <<'PYEOF'
+import json, os, sys, time
+from datetime import datetime, timezone
+
+cache_path, out_path = sys.argv[1], sys.argv[2]
+now = time.time()
+
+try:
+    d = json.load(open(cache_path))
+except Exception:
+    d = {"accounts": []}
+
+accounts = d.get("accounts") or []
+
+# CC: all provider=claude accounts (default provider when field absent)
+claude_accts = [
+    a for a in accounts
+    if a.get("provider", "claude") == "claude" and not a.get("error")
+]
+cc_total = sum(1 for a in accounts if a.get("provider", "claude") == "claude")
+
+cc_available = []
+earliest_reset = None
+
+for a in claude_accts:
+    fh = (a.get("usage") or {}).get("five_hour") or {}
+    pct = fh.get("utilization") or 0
+    resets_at = fh.get("resets_at") or 0
+    if pct < 100:
+        cc_available.append(a.get("account"))
+    else:
+        if resets_at and (earliest_reset is None or resets_at < earliest_reset):
+            earliest_reset = resets_at
+
+# Pick best account: lowest five_hour utilization among available
+best_account = None
+best_pct = 999
+for a in claude_accts:
+    fh = (a.get("usage") or {}).get("five_hour") or {}
+    pct = fh.get("utilization") or 0
+    if pct < 100 and pct < best_pct:
+        best_pct = pct
+        best_account = a.get("account")
+
+cc_quota_hit = len(cc_available) == 0 and cc_total > 0
+cc_resets_iso = None
+if cc_quota_hit and earliest_reset:
+    cc_resets_iso = datetime.fromtimestamp(earliest_reset, tz=timezone.utc).isoformat()
+
+# OC: provider=opencode entry (opencode-1)
+# five_hour slot = rolling utilization; t3_zen_available always true (Zen free tier unaffected)
+oc_entry = next((a for a in accounts if a.get("provider") == "opencode"), None)
+oc_quota_hit = False
+oc_rolling_pct = None
+oc_resets_iso = None
+if oc_entry and not oc_entry.get("error"):
+    fh = (oc_entry.get("usage") or {}).get("five_hour") or {}
+    oc_rolling_pct = fh.get("utilization")
+    resets_at = fh.get("resets_at") or 0
+    if oc_rolling_pct is not None and oc_rolling_pct >= 100:
+        oc_quota_hit = True
+        if resets_at:
+            oc_resets_iso = datetime.fromtimestamp(resets_at, tz=timezone.utc).isoformat()
+
+out = {
+    "cc": {
+        "quota_hit": cc_quota_hit,
+        "available_count": len(cc_available),
+        "total_count": cc_total,
+        "models_available": ["opus", "sonnet", "haiku"] if not cc_quota_hit else [],
+        "best_account": best_account,
+        "resets_at": cc_resets_iso,
+    },
+    "oc": {
+        "quota_hit": oc_quota_hit,
+        "rolling_pct": oc_rolling_pct,
+        "models_available": (
+            ["gpt-5.5", "deepseek-v4-pro", "deepseek-v4-flash"]
+            if not oc_quota_hit
+            else ["deepseek-v4-flash"]
+        ),
+        "t3_zen_available": True,
+        "resets_at": oc_resets_iso,
+    },
+    "last_updated": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+}
+
+tmp = out_path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(out, f, indent=2)
+    f.write("\n")
+os.replace(tmp, out_path)
+PYEOF

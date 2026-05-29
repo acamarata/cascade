@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+# claw-fleet-gemini-proxy — Gemini API pooling proxy server.
+#
+# Listens on port 3761, loads all Gemini API keys from ~/.claude/vault.env,
+# rotates them round-robin, and automatically retries on HTTP 429 (Rate Limit).
+# Supports streaming responses (SSE) natively.
+#
+# Exposes: http://localhost:3761
+
+import os
+import sys
+import re
+import http.server
+import socketserver
+import urllib.request
+import urllib.error
+import json
+import time
+from pathlib import Path
+
+PORT = 3761
+VAULT_PATH = Path.home() / ".claude" / "vault.env"
+LOG_PATH = Path.home() / "Library/Logs/claw-fleet-gemini-proxy.log"
+
+# Ensure log directory exists
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+def log(msg):
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    log_line = f"{timestamp} {msg}\n"
+    sys.stderr.write(log_line)
+    try:
+        with open(LOG_PATH, "a") as f:
+            f.write(log_line)
+    except Exception:
+        pass
+
+def load_keys():
+    keys = []
+    if not VAULT_PATH.exists():
+        log(f"Warning: vault file not found at {VAULT_PATH}")
+        return keys
+    
+    try:
+        with open(VAULT_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # Match GEMINI_API_KEY_OPENCLAW, GEMINI_FREE_KEY_*, GEMINI_KEY_*
+                if "GEMINI" in line and "=" in line:
+                    parts = line.split("=", 1)
+                    key_val = parts[1].split("#", 1)[0].strip()
+                    # Strip quotes if present
+                    key_val = key_val.strip('"').strip("'")
+                    if key_val and key_val.startswith("AIzaSy"):
+                        keys.append(key_val)
+    except Exception as e:
+        log(f"Error loading keys from vault: {e}")
+    
+    # Deduplicate while preserving order
+    seen = set()
+    deduped_keys = [x for x in keys if not (x in seen or seen.add(x))]
+    return deduped_keys
+
+class GeminiProxyHandler(http.server.BaseHTTPRequestHandler):
+    # Class-level key pool state
+    keys = []
+    current_key_index = 0
+
+    @classmethod
+    def initialize_pool(cls):
+        cls.keys = load_keys()
+        log(f"Initialized key pool with {len(cls.keys)} Gemini API keys.")
+
+    def log_message(self, format, *args):
+        # Suppress default http.server logging to stdout, route to our log file
+        log(f"HTTP {self.address_string()} - - {format % args}")
+
+    def get_next_key(self):
+        if not self.keys:
+            # Reload keys dynamically if pool is empty
+            self.keys = load_keys()
+            if not self.keys:
+                return None
+        
+        key = self.keys[self.current_key_index]
+        self.current_key_index = (self.current_key_index + 1) % len(self.keys)
+        return key
+
+    def do_GET(self):
+        self.handle_proxy_request("GET")
+
+    def do_POST(self):
+        self.handle_proxy_request("POST")
+
+    def handle_proxy_request(self, method):
+        # Extract request body for POST
+        body = None
+        if method == "POST":
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+
+        # Build downstream headers
+        headers = {}
+        for k, v in self.headers.items():
+            if k.lower() not in ('host', 'connection', 'content-length'):
+                headers[k] = v
+
+        # Attempt request with key rotation and retries
+        max_retries = min(5, len(self.keys)) if self.keys else 3
+        for attempt in range(max_retries):
+            key = self.get_next_key()
+            if not key:
+                self.send_error_response(500, "No Gemini API keys found in vault.env")
+                return
+
+            # Construct downstream URL
+            # Path is e.g. /v1beta/models/gemini-1.5-flash:generateContent
+            # We strip any existing key parameter and append our rotated key
+            path_without_key = re.sub(r'[?&]key=[^&]*', '', self.path)
+            separator = "&" if "?" in path_without_key else "?"
+            downstream_url = f"https://generativelanguage.googleapis.com{path_without_key}{separator}key={key}"
+
+            log(f"Forwarding {method} request to Gemini API (Attempt {attempt + 1}/{max_retries}, Key Index: {self.current_key_index})")
+
+            try:
+                req = urllib.request.Request(
+                    downstream_url,
+                    data=body,
+                    headers=headers,
+                    method=method
+                )
+                
+                # Expose a longer timeout for reasoning models
+                with urllib.request.urlopen(req, timeout=300) as response:
+                    # Send response status and headers back to client
+                    self.send_response(response.status)
+                    for k, v in response.getheaders():
+                        if k.lower() not in ('transfer-encoding', 'connection'):
+                            self.send_header(k, v)
+                    self.end_headers()
+
+                    # Stream response body back to client
+                    while True:
+                        chunk = response.read(8192)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                    return
+
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    log(f"Rate limit (HTTP 429) hit on key index {self.current_key_index}. Retrying with next key...")
+                    continue
+                else:
+                    # For other HTTP errors, forward the error response directly to the client
+                    log(f"HTTP Error {e.code} from Gemini API: {e.reason}")
+                    self.send_response(e.code)
+                    for k, v in e.headers.items():
+                        if k.lower() not in ('transfer-encoding', 'connection'):
+                            self.send_header(k, v)
+                    self.end_headers()
+                    self.wfile.write(e.read())
+                    return
+            except Exception as e:
+                log(f"Network or proxy error: {e}")
+                self.send_error_response(502, f"Proxy error: {e}")
+                return
+
+        # If we exhausted all retries
+        self.send_error_response(429, "All Gemini API keys in the pool are currently rate-limited.")
+
+    def send_error_response(self, code, message):
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        err_body = {
+            "error": {
+                "code": code,
+                "message": message,
+                "status": "PROXY_ERROR"
+            }
+        }
+        self.wfile.write(json.dumps(err_body).encode('utf-8'))
+
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+
+def main():
+    # Initialize the key pool
+    GeminiProxyHandler.initialize_pool()
+    if not GeminiProxyHandler.keys:
+        log("Error: No Gemini API keys found in vault.env. Proxy will fail requests until keys are added.")
+
+    server = ThreadedTCPServer(('127.0.0.1', PORT), GeminiProxyHandler)
+    log(f"Starting Gemini Pooling Proxy Server on http://127.0.0.1:{PORT}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        log("Shutting down proxy server...")
+        server.shutdown()
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()

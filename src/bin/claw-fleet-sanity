@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# claw-fleet-sanity — Runs every 3600s via LaunchAgent.
+# Validates the usage cache for time-window and utilization anomalies.
+# Writes a "sanity" block back into the cache and appends a log line.
+
+set -u
+LOG="$HOME/Library/Logs/claw-fleet-sanity.log"
+CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
+
+# ── Log truncation — keep last 500 lines, truncate above 800 ─────────────────
+if [ -f "$LOG" ]; then
+  LINES=$(/usr/bin/wc -l < "$LOG" 2>/dev/null | /usr/bin/tr -d ' ' || echo 0)
+  if [ "${LINES:-0}" -gt 800 ]; then
+    /usr/bin/tail -500 "$LOG" > "$LOG.tmp" && /bin/mv "$LOG.tmp" "$LOG"
+  fi
+fi
+
+# ── Run sanity check via embedded Python ──────────────────────────────────────
+python3 - "$CACHE" "$LOG" <<'PYEOF'
+import json, os, sys, time
+from datetime import datetime, timezone
+
+cache_path, log_path = sys.argv[1], sys.argv[2]
+now = time.time()
+
+anomalies = []
+
+try:
+    with open(cache_path) as fh:
+        cache = json.load(fh)
+except Exception as e:
+    # Cache missing or corrupt — log and exit cleanly
+    iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(log_path, "a") as lf:
+        lf.write(f"{iso} ok=false anomalies=1 cache_unreadable:{e}\n")
+    sys.exit(0)
+
+accounts = cache.get("accounts", [])
+
+FIVE_HOUR_WINDOW   = 5.5 * 3600      # 5h + 30m slack
+SEVEN_DAY_WINDOW   = 7.5 * 86400     # 7d + 12h slack
+
+for acct in accounts:
+    label    = acct.get("account", "?")
+    provider = acct.get("provider", "claude")
+    usage    = acct.get("usage")
+    err      = acct.get("last_error")
+    bo_until = acct.get("back_off_until", 0) or 0
+
+    # gemini entries are quota_opaque — only verify the entry exists
+    if provider == "gemini":
+        continue
+
+    # null usage without any error and not in back-off
+    if usage is None and not err and bo_until <= now:
+        anomalies.append({
+            "account": label,
+            "kind":    "null_usage_no_error",
+            "detail":  "usage is null but last_error is null and no active back-off",
+        })
+        continue
+
+    if usage is None:
+        # errored or backing off — nothing further to check
+        continue
+
+    # Validate each limit window
+    checks = {
+        "five_hour":        (FIVE_HOUR_WINDOW,  "5h"),
+        "seven_day":        (SEVEN_DAY_WINDOW,   "7d"),
+        "seven_day_sonnet": (SEVEN_DAY_WINDOW,   "7d"),
+        "seven_day_opus":   (SEVEN_DAY_WINDOW,   "7d"),
+    }
+    for key, (max_window, window_label) in checks.items():
+        limit = usage.get(key)
+        if limit is None:
+            continue  # absent window is fine
+
+        resets_at = limit.get("resets_at") or 0
+        util      = limit.get("utilization")
+
+        # resets_at must be in the future
+        if resets_at <= now:
+            anomalies.append({
+                "account": label,
+                "kind":    f"{key}_reset_past",
+                "detail":  f"resets_at {resets_at:.0f} is in the past (now={now:.0f})",
+            })
+        # resets_at must not be absurdly far
+        elif resets_at > now + max_window:
+            anomalies.append({
+                "account": label,
+                "kind":    f"{key}_reset_too_far",
+                "detail":  f"resets_at {resets_at:.0f} is >{window_label} ahead (now={now:.0f})",
+            })
+
+        # utilization must be a float in [0, 100]
+        if util is not None:
+            try:
+                u = float(util)
+                if not (0.0 <= u <= 100.0):
+                    raise ValueError(f"out of range: {u}")
+            except (TypeError, ValueError) as ve:
+                anomalies.append({
+                    "account": label,
+                    "kind":    f"{key}_util_invalid",
+                    "detail":  str(ve),
+                })
+
+# Write sanity block back into cache (atomic)
+ok_flag = len(anomalies) == 0
+cache["sanity"] = {
+    "checked_at": int(now),
+    "anomalies":  anomalies,
+    "ok":         ok_flag,
+}
+
+tmp = cache_path + ".sanity.tmp"
+try:
+    with open(tmp, "w") as fh:
+        json.dump(cache, fh, indent=2)
+    os.replace(tmp, cache_path)
+except Exception as e:
+    try:
+        os.unlink(tmp)
+    except Exception:
+        pass
+    iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(log_path, "a") as lf:
+        lf.write(f"{iso} ok=false anomalies=1 cache_write_failed:{e}\n")
+    sys.exit(0)
+
+# Append one-line summary to log
+iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+n   = len(anomalies)
+if anomalies:
+    detail_parts = [f"{a['account']}:{a['kind']}" for a in anomalies]
+    detail = " [" + " ".join(detail_parts) + "]"
+else:
+    detail = ""
+with open(log_path, "a") as lf:
+    lf.write(f"{iso} ok={str(ok_flag).lower()} anomalies={n}{detail}\n")
+PYEOF
+
+exit 0

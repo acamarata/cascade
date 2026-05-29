@@ -1,0 +1,24 @@
+.DS_Store
+*.log
+*.cache
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+node_modules/
+/tmp/
+# Do not commit rendered plist (installer generates this from template)
+src/launchd/io.clawfleet.refresh.plist
+.vscode/*
+.claude/
+.codex/
+.cursor/
+.aider/
+.aider.chat.history.md
+.continue/
+.windsurf/
+.gemini/
+.codeium/
+
+# Secrets
+.env*
