@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""claw-dash HTTP server — serves static web files and /api/* endpoints."""
+
+import json
+import os
+import signal
+import sys
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+
+HOME = Path.home()
+CLAW_DASH_DIR = HOME / ".claw-dash"
+
+# ---------------------------------------------------------------------------
+# GCI constants
+# ---------------------------------------------------------------------------
+
+GCI_ROOT = os.path.join(HOME, ".claude")
+GCI_CATS = {
+    "rules":      {"dir": "rules",      "pattern": "*.md",      "subdir": False},
+    "references": {"dir": "references", "pattern": "*.md",      "subdir": False},
+    "memory":     {"dir": "memory",     "pattern": "*.md",      "subdir": False},
+    "agents":     {"dir": "agents",     "pattern": "*.md",      "subdir": False},
+    "skills":     {"dir": "skills",     "pattern": "SKILL.md",  "subdir": True},
+    "spine":      {"dir": "",           "pattern": "*.md",      "subdir": False, "files": ["CLAUDE.md", "RTK.md"]},
+}
+CACHE_FILE = CLAW_DASH_DIR / "cache.json"
+CONFIG_FILE = CLAW_DASH_DIR / "config.json"
+PORT_FILE = CLAW_DASH_DIR / "port"
+
+
+def find_web_dir() -> Path:
+    """Locate the static web directory (in priority order)."""
+    # 1. Explicit env var
+    if "CLAW_DASH_WEB" in os.environ:
+        p = Path(os.environ["CLAW_DASH_WEB"])
+        if p.is_dir():
+            return p
+
+    # 2. Installed path
+    installed = HOME / ".local" / "share" / "claw-dash" / "web"
+    if installed.is_dir():
+        return installed
+
+    # 3. Dev mode: script lives in src/bin/, web is in src/web/
+    script_path = Path(__file__).resolve()
+    dev_web = script_path.parent.parent / "web"
+    if dev_web.is_dir():
+        return dev_web
+
+    raise FileNotFoundError(
+        "Could not find the claw-dash web directory. "
+        "Set CLAW_DASH_WEB or install to ~/.local/share/claw-dash/web/."
+    )
+
+
+def read_port_config() -> int:
+    """Return the configured base port (default 3077)."""
+    # Env var wins
+    if "CLAW_DASH_PORT" in os.environ:
+        try:
+            return int(os.environ["CLAW_DASH_PORT"])
+        except ValueError:
+            pass
+
+    # config.json next
+    if CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(CONFIG_FILE.read_text())
+            if isinstance(cfg.get("port"), int):
+                return cfg["port"]
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    return 3077
+
+
+def find_free_port(start: int) -> int:
+    """Try ports [start, start+20) and return the first free one."""
+    import socket
+
+    for port in range(start, start + 21):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("", port))
+                return port
+        except OSError:
+            continue
+    raise OSError(f"No free port found in range {start}–{start + 20}")
+
+
+# ---------------------------------------------------------------------------
+# GCI helpers
+# ---------------------------------------------------------------------------
+
+def _safe_gci_path(cat, name):
+    """Resolve and validate a GCI file path. Returns path or raises ValueError."""
+    import re
+    if cat not in GCI_CATS:
+        raise ValueError(f"Unknown category: {cat}")
+    if not re.match(r'^[A-Za-z0-9._-]+\.md$', name):
+        raise ValueError(f"Invalid filename: {name}")
+    info = GCI_CATS[cat]
+    if "files" in info and name not in info["files"]:
+        raise ValueError(f"File not in {cat}: {name}")
+    if info["subdir"]:
+        stem = name[:-3] if name.endswith(".md") else name
+        path = os.path.join(GCI_ROOT, info["dir"], stem, "SKILL.md")
+    else:
+        path = os.path.join(GCI_ROOT, info["dir"], name) if info["dir"] else os.path.join(GCI_ROOT, name)
+    real = os.path.realpath(path)
+    if not real.startswith(os.path.realpath(GCI_ROOT)):
+        raise ValueError("Path traversal denied")
+    return path
+
+
+def _parse_cites(text):
+    """Extract referenced file names from a GCI markdown file."""
+    import re
+    pattern = r'(?:Full rule|Reference|See [Aa]lso|Source of truth)[:\s]+[`]?([~./a-zA-Z0-9_-]+\.md)[`]?'
+    return list(dict.fromkeys(re.findall(pattern, text)))
+
+
+def _walk_gci():
+    """Build the GCI index — list of all files per category with metadata."""
+    result = {}
+    for cat, info in GCI_CATS.items():
+        files = []
+        if "files" in info:
+            for fname in info["files"]:
+                p = os.path.join(GCI_ROOT, fname)
+                if os.path.exists(p):
+                    st = os.stat(p)
+                    files.append({"name": fname, "lines": len(open(p).readlines()), "mtime": int(st.st_mtime), "size": st.st_size})
+        elif info["subdir"]:
+            skill_dir = os.path.join(GCI_ROOT, info["dir"])
+            if os.path.isdir(skill_dir):
+                for d in sorted(os.listdir(skill_dir)):
+                    p = os.path.join(skill_dir, d, "SKILL.md")
+                    if os.path.exists(p):
+                        st = os.stat(p)
+                        files.append({"name": d + ".md", "lines": len(open(p).readlines()), "mtime": int(st.st_mtime), "size": st.st_size})
+        else:
+            d = os.path.join(GCI_ROOT, info["dir"]) if info["dir"] else GCI_ROOT
+            if os.path.isdir(d):
+                for fname in sorted(os.listdir(d)):
+                    if fname.endswith(".md") and os.path.isfile(os.path.join(d, fname)):
+                        p = os.path.join(d, fname)
+                        st = os.stat(p)
+                        files.append({"name": fname, "lines": len(open(p).readlines()), "mtime": int(st.st_mtime), "size": st.st_size})
+        result[cat] = files
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Request handler
+# ---------------------------------------------------------------------------
+
+class ClawDashHandler(SimpleHTTPRequestHandler):
+    """Serves /api/* from the cache directory; everything else from web_dir."""
+
+    def __init__(self, *args, web_dir: Path, **kwargs):
+        self.web_dir = web_dir
+        # SimpleHTTPRequestHandler.directory is used by translate_path
+        super().__init__(*args, directory=str(web_dir), **kwargs)
+
+    # ------------------------------------------------------------------
+    # Silence access log
+    # ------------------------------------------------------------------
+    def log_message(self, fmt, *args):  # noqa: N802
+        pass
+
+    # ------------------------------------------------------------------
+    # CORS on every response
+    # ------------------------------------------------------------------
+    def add_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+
+    def do_OPTIONS(self):  # noqa: N802
+        self.send_response(200)
+        self.add_cors_headers()
+        self.end_headers()
+
+    # ------------------------------------------------------------------
+    # API routes
+    # ------------------------------------------------------------------
+    def do_GET(self):  # noqa: N802
+        from urllib.parse import urlparse, parse_qs
+        path = urlparse(self.path).path
+        if path == "/api/cache":
+            self._serve_json_file(CACHE_FILE, no_cache=True)
+        elif path == "/api/config":
+            self._serve_json_file(CONFIG_FILE, no_cache=False, fallback=b"{}")
+        elif path == "/api/gci":
+            index = _walk_gci()
+            self._json(index)
+        elif path == "/api/gci/file":
+            qs = parse_qs(urlparse(self.path).query)
+            cat = (qs.get("cat") or [""])[0]
+            name = (qs.get("name") or [""])[0]
+            try:
+                fpath = _safe_gci_path(cat, name)
+                if not os.path.exists(fpath):
+                    self.send_error(404, "Not found"); return
+                raw = open(fpath, encoding="utf-8").read()
+                st = os.stat(fpath)
+                cites = _parse_cites(raw)
+                self._json({"cat": cat, "name": name, "raw": raw, "mtime": int(st.st_mtime), "lines": raw.count("\n") + 1, "cites": cites})
+            except ValueError as e:
+                self.send_error(400, str(e))
+        else:
+            super().do_GET()
+
+    def do_PUT(self):  # noqa: N802
+        self.add_cors_headers()
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        if parsed.path == "/api/gci/file":
+            cat = (qs.get("cat") or [""])[0]
+            name = (qs.get("name") or [""])[0]
+            try:
+                fpath = _safe_gci_path(cat, name)
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length).decode("utf-8")
+                tmp = fpath + ".tmp." + str(os.getpid())
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(body)
+                os.replace(tmp, fpath)
+                st = os.stat(fpath)
+                self._json({"ok": True, "mtime": int(st.st_mtime)})
+            except ValueError as e:
+                self.send_error(400, str(e))
+        else:
+            self.send_error(404, "Not found")
+
+    def do_POST(self):  # noqa: N802
+        self.add_cors_headers()
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        if parsed.path == "/api/gci/file":
+            cat = (qs.get("cat") or [""])[0]
+            name = (qs.get("name") or [""])[0]
+            try:
+                fpath = _safe_gci_path(cat, name)
+                if os.path.exists(fpath):
+                    self.send_error(409, "File already exists"); return
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length).decode("utf-8")
+                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                with open(fpath, "w", encoding="utf-8") as f:
+                    f.write(body)
+                st = os.stat(fpath)
+                self._json({"ok": True, "mtime": int(st.st_mtime)})
+            except ValueError as e:
+                self.send_error(400, str(e))
+        else:
+            self.send_error(404, "Not found")
+
+    def do_DELETE(self):  # noqa: N802
+        self.add_cors_headers()
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        if parsed.path == "/api/gci/file":
+            cat = (qs.get("cat") or [""])[0]
+            name = (qs.get("name") or [""])[0]
+            if cat == "spine":
+                self.send_error(403, "Spine files cannot be deleted"); return
+            try:
+                fpath = _safe_gci_path(cat, name)
+                if not os.path.exists(fpath):
+                    self.send_error(404, "Not found"); return
+                os.remove(fpath)
+                self._json({"ok": True})
+            except ValueError as e:
+                self.send_error(400, str(e))
+        else:
+            self.send_error(404, "Not found")
+
+    def _json(self, data):
+        """Send a JSON response with CORS headers."""
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(200)
+        self.add_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_json_file(self, path: Path, *, no_cache: bool, fallback: bytes = None):
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            if fallback is not None:
+                data = fallback
+            else:
+                self.send_response(404)
+                self.add_cors_headers()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error":"not found"}')
+                return
+        except OSError as exc:
+            self.send_response(500)
+            self.add_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(exc)}).encode())
+            return
+
+        self.send_response(200)
+        self.add_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        if no_cache:
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
+
+    # ------------------------------------------------------------------
+    # Inject CORS on static files too
+    # ------------------------------------------------------------------
+    def end_headers(self):  # noqa: N802
+        # Already added for API routes; add for static only if missing
+        # SimpleHTTPRequestHandler calls end_headers after we've already sent
+        # our headers — to avoid duplicates we only inject here for non-API paths
+        super().end_headers()
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    web_dir = find_web_dir()
+    base_port = read_port_config()
+    port = find_free_port(base_port)
+
+    CLAW_DASH_DIR.mkdir(parents=True, exist_ok=True)
+
+    def make_handler(*args, **kwargs):
+        return ClawDashHandler(*args, web_dir=web_dir, **kwargs)
+
+    server = HTTPServer(("", port), make_handler)
+
+    # Write port file so other tools (e.g. claw-dash open) know where to connect
+    PORT_FILE.write_text(str(port))
+
+    def _cleanup(signum=None, frame=None):
+        try:
+            PORT_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+        server.server_close()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _cleanup)
+    signal.signal(signal.SIGINT, _cleanup)
+
+    print(f"claw-dash server running at http://localhost:{port}", file=sys.stderr)
+
+    try:
+        server.serve_forever()
+    finally:
+        _cleanup()
+
+
+if __name__ == "__main__":
+    main()

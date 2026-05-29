@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# claw-dash-sync — After editing the repo, re-copy bin scripts + web files +
+# widget to their deployed locations. Needed because the bin scripts CANNOT be
+# symlinks (launchd refuses symlinks across volume boundaries).
+
+set -euo pipefail
+
+# Find the repo. In order of preference:
+#   1. CLAW_DASH_REPO env var
+#   2. ~/.config/claw-dash/repo-path (written at install time)
+#   3. Current working directory if it looks like the repo
+#   4. Script's own parent parent dir (if run from inside the repo)
+find_repo() {
+  if [ -n "${CLAW_DASH_REPO:-}" ] && [ -f "$CLAW_DASH_REPO/src/bin/claw-dash" ]; then
+    echo "$CLAW_DASH_REPO"; return 0
+  fi
+  if [ -f "$HOME/.config/claw-dash/repo-path" ]; then
+    local p; p=$(cat "$HOME/.config/claw-dash/repo-path")
+    if [ -f "$p/src/bin/claw-dash" ]; then echo "$p"; return 0; fi
+  fi
+  if [ -f "./src/bin/claw-dash" ]; then echo "$(pwd)"; return 0; fi
+  local self_repo; self_repo="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd || true)"
+  if [ -n "$self_repo" ] && [ -f "$self_repo/src/bin/claw-dash" ]; then echo "$self_repo"; return 0; fi
+  return 1
+}
+
+REPO=$(find_repo) || {
+  echo "ERR: cannot locate claw-dash repo. Set CLAW_DASH_REPO=/path/to/repo or cd into it." >&2
+  exit 1
+}
+echo "repo: $REPO"
+
+BIN="$HOME/bin"
+WEB_DEST="$HOME/.local/share/claw-dash/web"
+WIDGET_DEST="$HOME/Library/Application Support/Übersicht/widgets/claw-dash.widget"
+
+mkdir -p "$BIN"
+
+# Bin scripts — always copy (never symlink, launchd cross-volume restriction).
+cp "$REPO/src/bin/claw-dash"        "$BIN/claw-dash"
+cp "$REPO/src/bin/claw-dash-server" "$BIN/claw-dash-server"
+cp "$REPO/src/bin/claw-dash-sync"   "$BIN/claw-dash-sync"
+chmod +x "$BIN"/claw-dash*
+echo "✓ bin scripts synced"
+
+# Web files: only copy if the deployed path is a real dir (not a symlink — symlinks = dev mode).
+if [ -e "$WEB_DEST" ] && [ ! -L "$WEB_DEST" ]; then
+  rm -rf "$WEB_DEST"
+  cp -R "$REPO/src/web" "$WEB_DEST"
+  echo "✓ web files synced"
+fi
+
+# Widget: same dev-vs-copy detection.
+if [ -e "$WIDGET_DEST" ] && [ ! -L "$WIDGET_DEST" ]; then
+  rm -rf "$WIDGET_DEST"
+  cp -R "$REPO/src/widget/ubersicht/claw-dash.widget" "$WIDGET_DEST"
+  echo "✓ widget synced"
+fi
+
+# Reload LaunchAgents so they pick up the new binaries.
+for label in io.clawdash.refresh io.clawdash.server; do
+  plist="$HOME/Library/LaunchAgents/${label}.plist"
+  if [ -f "$plist" ]; then
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load "$plist"
+    echo "✓ reloaded $label"
+  fi
+done
+
+# Mirror cache to App Group container (for macOS native widget)
+_APP_GROUP="$HOME/Library/Group Containers/group.io.clawdash"
+if [ -d "$_APP_GROUP" ]; then
+  cp "$HOME/.claw-dash/cache.json" "$_APP_GROUP/cache.json" 2>/dev/null || true
+fi
