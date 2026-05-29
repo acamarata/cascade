@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# claw-fleet-refresh — Called by LaunchAgent every 5 minutes.
-# Runs claw-fleet and writes a human-readable summary to /tmp/claw-fleet-summary.txt.
+# cascade-refresh — Called by LaunchAgent every 5 minutes.
+# Runs cascade and writes a human-readable summary to /tmp/cascade-summary.txt.
 
 set -euo pipefail
 
 CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
-SUMMARY="/tmp/claw-fleet-summary.txt"
+SUMMARY="/tmp/cascade-summary.txt"
 
 # Run the main query
-"$(dirname "$0")/claw-fleet" "$@" >/dev/null 2>&1
+"$(dirname "$0")/cascade" "$@" >/dev/null 2>&1
 
 # Generate formatted summary
 python3 - "$CACHE" "$SUMMARY" <<'PYEOF'

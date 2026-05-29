@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claw-fleet-opencode — usage collector for OpenCode Go subscription.
+# cascade-opencode — usage collector for OpenCode Go subscription.
 #
 # Scrapes opencode.ai/workspace/{workspaceID}/go for rolling/weekly/monthly
 # usage percentages. Emits exactly 1 entry: opencode-1.
@@ -23,8 +23,8 @@ set -euo pipefail
 
 VAULT="${HOME}/.claude/vault.env"
 CACHE="${HOME}/.claude/usage-cache.json"
-LOG="${HOME}/Library/Logs/claw-fleet-opencode.log"
-DEBUG_LOG="${HOME}/Library/Logs/claw-fleet-opencode-debug.log"
+LOG="${HOME}/Library/Logs/cascade-opencode.log"
+DEBUG_LOG="${HOME}/Library/Logs/cascade-opencode-debug.log"
 
 mkdir -p "$(dirname "${LOG}")" "$(dirname "${CACHE}")"
 

@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.clawfleet.watchdog</string>
+    <string>io.cascade.gemini-proxy</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>@BIN@/claw-fleet-watchdog</string>
+        <string>@BIN@/cascade-gemini-proxy</string>
     </array>
-    <key>StartInterval</key>
-    <integer>60</integer>
+    <key>KeepAlive</key>
+    <true/>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>@HOME@/Library/Logs/claw-fleet-watchdog.log</string>
+    <string>@HOME@/Library/Logs/cascade-gemini-proxy.log</string>
     <key>StandardErrorPath</key>
-    <string>@HOME@/Library/Logs/claw-fleet-watchdog.log</string>
+    <string>@HOME@/Library/Logs/cascade-gemini-proxy.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claw-fleet-gemini — usage collector for Gemini API (openclaw-io GCP project).
+# cascade-gemini — usage collector for Gemini API (openclaw-io GCP project).
 #
 # Emits exactly 1 entry: gemini-1 = alisalaah@gmail.com (openclaw-io, paid API key).
 #
@@ -30,8 +30,8 @@ set -euo pipefail
 
 VAULT="${HOME}/.claude/vault.env"
 CACHE="${HOME}/.claude/usage-cache.json"
-LOG="${HOME}/Library/Logs/claw-fleet-gemini.log"
-DEBUG_LOG="${HOME}/Library/Logs/claw-fleet-gemini-debug.log"
+LOG="${HOME}/Library/Logs/cascade-gemini.log"
+DEBUG_LOG="${HOME}/Library/Logs/cascade-gemini-debug.log"
 ADC="${HOME}/.config/gcloud/application_default_credentials.json"
 
 mkdir -p "$(dirname "${LOG}")" "$(dirname "${CACHE}")"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# claw-fleet-sanity — Runs every 3600s via LaunchAgent.
+# cascade-sanity — Runs every 3600s via LaunchAgent.
 # Validates the usage cache for time-window and utilization anomalies.
 # Writes a "sanity" block back into the cache and appends a log line.
 
 set -u
-LOG="$HOME/Library/Logs/claw-fleet-sanity.log"
+LOG="$HOME/Library/Logs/cascade-sanity.log"
 CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
 
 # ── Log truncation — keep last 500 lines, truncate above 800 ─────────────────

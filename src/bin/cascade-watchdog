@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claw-fleet-watchdog — Runs every 60s via LaunchAgent.
+# cascade-watchdog — Runs every 60s via LaunchAgent.
 # Verifies the cache daemon + Übersicht widget host are healthy; heals if not.
 #
 # Redundancy ladder:
@@ -10,7 +10,7 @@
 #   4. Cache aged >300s despite (2)? Touch index.jsx to bump the widget.
 
 set -u
-LOG="$HOME/Library/Logs/claw-fleet-watchdog.log"
+LOG="$HOME/Library/Logs/cascade-watchdog.log"
 exec >>"$LOG" 2>&1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] tick"
 
@@ -23,10 +23,10 @@ if [ -f "$LOG" ]; then
   fi
 fi
 
-# ── 1. Cache daemon (io.clawfleet.refresh) ──────────────────────────────────
-PLIST="$HOME/Library/LaunchAgents/io.clawfleet.refresh.plist"
+# ── 1. Cache daemon (io.cascade.refresh) ──────────────────────────────────
+PLIST="$HOME/Library/LaunchAgents/io.cascade.refresh.plist"
 if [ -f "$PLIST" ]; then
-  if ! /bin/launchctl list io.clawfleet.refresh >/dev/null 2>&1; then
+  if ! /bin/launchctl list io.cascade.refresh >/dev/null 2>&1; then
     echo "  cache daemon not loaded — loading"
     /bin/launchctl load "$PLIST" 2>&1
   fi
@@ -40,22 +40,22 @@ if [ -f "$CACHE" ]; then
   CACHE_AGE=$(( $(/bin/date +%s) - $(/usr/bin/stat -f %m "$CACHE") ))
   if [ "$CACHE_AGE" -gt 120 ]; then
     echo "  cache stale (${CACHE_AGE}s) — triggering refresh"
-    "$HOME/bin/claw-fleet-refresh" >/dev/null 2>&1 || true
+    "$HOME/bin/cascade-refresh" >/dev/null 2>&1 || true
   fi
 else
   echo "  cache missing — seeding"
-  "$HOME/bin/claw-fleet-refresh" >/dev/null 2>&1 || true
+  "$HOME/bin/cascade-refresh" >/dev/null 2>&1 || true
 fi
 
 # ── 3. Übersicht.app — widget host (opt-in via marker file) ─────────────────
 # The native ClawFleet.app is the supported display surface now; its own
-# LaunchAgent (com.acamarata.clawfleet.menubar) handles keepalive directly.
+# LaunchAgent (com.acamarata.cascade.menubar) handles keepalive directly.
 # We no longer force-launch Übersicht here. To re-enable Übersicht supervision,
-# touch ~/.config/claw-fleet/supervise-ubersicht and the block below will
+# touch ~/.config/cascade/supervise-ubersicht and the block below will
 # match the binary via the encoding-safe `bersicht.app/Contents/MacOS/` path
 # suffix (avoids the Latin-1 diacritic round-trip bug that produced ~28k
 # spurious launches in an earlier version).
-if [ -f "$HOME/.config/claw-fleet/supervise-ubersicht" ]; then
+if [ -f "$HOME/.config/cascade/supervise-ubersicht" ]; then
   if ! /usr/bin/pgrep -fq "bersicht.app/Contents/MacOS/"; then
     echo "  Übersicht not running — launching (supervise-ubersicht flag set)"
     /usr/bin/open -ga "Übersicht" 2>&1 || echo "  launch failed"
@@ -66,7 +66,7 @@ fi
 #     attempts above, bump the widget so Übersicht reloads it from scratch.
 #     Catches the rare case where Übersicht is up but the widget process
 #     stopped polling its command for any reason.
-WIDGET="$HOME/Library/Application Support/Übersicht/widgets/claw-fleet.widget/index.jsx"
+WIDGET="$HOME/Library/Application Support/Übersicht/widgets/cascade.widget/index.jsx"
 if [ -f "$WIDGET" ] && [ "$CACHE_AGE" -gt 300 ]; then
   echo "  cache aged ${CACHE_AGE}s despite refresh — bumping widget index.jsx"
   /usr/bin/touch "$WIDGET"

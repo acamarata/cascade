@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# claw-fleet — Query all detected Claude Code Max accounts for live usage data.
+# cascade — Query all detected Claude Code Max accounts for live usage data.
 # Uses the /api/oauth/usage endpoint directly (no haiku probes needed).
 # Automatically refreshes expired OAuth tokens via an internal claude prompt.
 #
 # Account discovery (in priority order):
-#   1. ~/.config/claw-fleet/config.json  — explicit list overrides auto-detection
+#   1. ~/.config/cascade/config.json  — explicit list overrides auto-detection
 #   2. Auto-detect: glob ~/.claude-acc* (sorted), optionally include ~/.claude
 #
 # Output: JSON to $CLAW_FLEET_CACHE (default: ~/.claude/usage-cache.json)
 #
-# Usage: claw-fleet [--help] [--include-primary]
+# Usage: cascade [--help] [--include-primary]
 #   --include-primary   Also query ~/.claude even when ~/.claude-acc* dirs exist
 #   --help              Show this message
 
@@ -30,9 +30,9 @@ done
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
-CONFIG_FILE="$HOME/.config/claw-fleet/config.json"
-OUTDIR="/tmp/claw-fleet-probes"
-RESULT="/tmp/claw-fleet-result.json"   # back-compat /tmp copy
+CONFIG_FILE="$HOME/.config/cascade/config.json"
+OUTDIR="/tmp/cascade-probes"
+RESULT="/tmp/cascade-result.json"   # back-compat /tmp copy
 mkdir -p "$OUTDIR"
 rm -f "$OUTDIR"/*.json
 
@@ -302,7 +302,7 @@ echo "Found ${#ACCOUNT_LINES[@]} account(s). Querying (staggered 2s)..." >&2
 # we let Anthropic's hidden per-IP throttle window actually drain instead of
 # extending it with every retry. The merge step writes `back_off_until` when
 # a probe returns `rate_limit_error` (exponential 2→10 min cap).
-SKIP_FILE="$(mktemp -t claw-fleet-skip.XXXXXX)"
+SKIP_FILE="$(mktemp -t cascade-skip.XXXXXX)"
 python3 - "$CACHE" "$SKIP_FILE" <<'PYEOF'
 import json, sys, time
 cache_path, out_path = sys.argv[1], sys.argv[2]
@@ -334,7 +334,7 @@ for line in "${ACCOUNT_LINES[@]}"; do
 
   if [[ "$SKIP_LIST" == *" $label "* ]]; then
     echo "  Skipping $label (rate-limit back-off)" >&2
-    # No probe → no /tmp/claw-fleet-probes/${label}.json → merge will carry
+    # No probe → no /tmp/cascade-probes/${label}.json → merge will carry
     # forward the prior entry intact (including its back_off_until field).
     continue
   fi

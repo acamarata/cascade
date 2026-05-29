@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# claw-fleet-gemini-proxy — Gemini API pooling proxy server.
+# cascade-gemini-proxy — Gemini API pooling proxy server.
 #
 # Listens on port 3761, loads all Gemini API keys from ~/.claude/vault.env,
 # rotates them round-robin, and automatically retries on HTTP 429 (Rate Limit).
@@ -20,7 +20,7 @@ from pathlib import Path
 
 PORT = 3761
 VAULT_PATH = Path.home() / ".claude" / "vault.env"
-LOG_PATH = Path.home() / "Library/Logs/claw-fleet-gemini-proxy.log"
+LOG_PATH = Path.home() / "Library/Logs/cascade-gemini-proxy.log"
 
 # Ensure log directory exists
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)

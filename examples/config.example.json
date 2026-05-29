@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy to ~/.config/claw-fleet/config.json to override auto-detection.",
+  "_comment": "Copy to ~/.config/cascade/config.json to override auto-detection.",
   "accounts": [
     {
       "dir": "~/.claude-acc1",

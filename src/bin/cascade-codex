@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claw-fleet-codex — Poll OpenAI Codex (ChatGPT plan) rate-limit headers.
+# cascade-codex — Poll OpenAI Codex (ChatGPT plan) rate-limit headers.
 #
 # Discovers Codex accounts via ~/.codex* auth.json files, makes a minimal
 # /backend-api/codex/responses probe per account, parses x-codex-* response
@@ -110,7 +110,7 @@ acct_id = tokens.get("account_id", "")
 refresh = tokens.get("refresh_token")
 
 # Refresh-on-the-fly when the local access_token is expired. The codex CLI
-# does this itself when it's used; without it, claw-fleet rows go blank
+# does this itself when it's used; without it, cascade rows go blank
 # after ~20 days of CLI inactivity even though the ChatGPT/OpenAI sub is
 # fully active. We try the refresh BEFORE the probe to avoid wasting the
 # probe call on a known-expired token.

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# cascade-sync — After editing the repo, re-copy bin scripts + widget to
+# their deployed locations. Needed because the scripts CANNOT be symlinks
+# (launchd refuses symlinks across volume boundaries).
+
+set -euo pipefail
+
+# Find the repo. In order of preference:
+#   1. CLAW_FLEET_REPO env var
+#   2. ~/.config/cascade/repo-path (written at install time)
+#   3. Current working directory if it looks like the repo
+#   4. Script's own parent dir (if run from inside the repo)
+find_repo() {
+  if [ -n "${CLAW_FLEET_REPO:-}" ] && [ -f "$CLAW_FLEET_REPO/src/bin/cascade" ]; then
+    echo "$CLAW_FLEET_REPO"; return 0
+  fi
+  if [ -f "$HOME/.config/cascade/repo-path" ]; then
+    local p; p=$(cat "$HOME/.config/cascade/repo-path")
+    if [ -f "$p/src/bin/cascade" ]; then echo "$p"; return 0; fi
+  fi
+  if [ -f "./src/bin/cascade" ]; then echo "$(pwd)"; return 0; fi
+  local self_repo; self_repo="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd || true)"
+  if [ -n "$self_repo" ] && [ -f "$self_repo/src/bin/cascade" ]; then echo "$self_repo"; return 0; fi
+  return 1
+}
+
+REPO=$(find_repo) || { echo "ERR: cannot locate cascade repo. Set CLAW_FLEET_REPO=/path/to/repo or cd into it." >&2; exit 1; }
+echo "repo: $REPO"
+
+BIN="$HOME/bin"
+UBW="$HOME/Library/Application Support/Übersicht/widgets/cascade.widget"
+SBP="$HOME/Library/Application Support/SwiftBar/Plugins/cascade.5s.sh"
+
+mkdir -p "$BIN"
+cp "$REPO/src/bin/cascade"          "$BIN/cascade"
+cp "$REPO/src/bin/cascade-refresh"  "$BIN/cascade-refresh"
+cp "$REPO/src/bin/cascade-watchdog" "$BIN/cascade-watchdog"
+cp "$REPO/src/bin/cascade-sanity"   "$BIN/cascade-sanity"
+cp "$REPO/src/bin/cascade-sync"     "$BIN/cascade-sync"
+cp "$REPO/src/bin/cascade-codex"    "$BIN/cascade-codex"
+cp "$REPO/src/bin/cascade-gemini"   "$BIN/cascade-gemini"
+cp "$REPO/src/bin/cascade-opencode" "$BIN/cascade-opencode"
+chmod +x "$BIN"/cascade*
+echo "✓ bin scripts synced"
+
+# Widget: only copy if the deployed path is a real dir (not a symlink — symlinks = dev mode).
+if [ -e "$UBW" ] && [ ! -L "$UBW" ]; then
+  rm -rf "$UBW"
+  cp -R "$REPO/src/widgets/ubersicht/cascade.widget" "$UBW"
+  echo "✓ widget synced"
+fi
+
+# SwiftBar plugin — same dev-vs-copy detection.
+if [ -e "$SBP" ] && [ ! -L "$SBP" ]; then
+  cp "$REPO/src/widgets/swiftbar/cascade.5s.sh" "$SBP"
+  chmod +x "$SBP"
+  echo "✓ swiftbar plugin synced"
+fi
+
+# Reload LaunchAgents so they pick up the new binaries.
+for label in io.cascade.refresh io.cascade.watchdog; do
+  plist="$HOME/Library/LaunchAgents/${label}.plist"
+  if [ -f "$plist" ]; then
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load "$plist"
+    echo "✓ reloaded $label"
+  fi
+done
