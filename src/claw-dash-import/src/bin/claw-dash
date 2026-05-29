@@ -1,0 +1,544 @@
+#!/usr/bin/env bash
+# claw-dash — Read .claude/ project directories and output a JSON cache.
+# Used by the claw-dash dashboard and macOS widget to display Claude Code
+# project state: tasks, inbox, ideas, memory, and threads.
+#
+# Project discovery (in priority order):
+#   1. ~/.claw-dash/config.json  — explicit list of projects
+#   2. Auto-detect: search ~/Sites/, ~/Documents/, ~/Projects/, ~/Developer/,
+#      ~/Downloads (root), and immediate subdirs of ~/ for .claude/ directories.
+#      Capped at 10 projects, sorted by path.
+#
+# Output: JSON written to $CLAW_DASH_CACHE (default: ~/.claw-dash/cache.json)
+# Prints the cache path to stdout when done.
+#
+# Usage: claw-dash [--help]
+#   --help   Show this message
+
+set -u
+
+# ── CLI args ──────────────────────────────────────────────────────────────────
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      grep '^#' "$0" | head -18 | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) echo "Unknown flag: $arg" >&2; exit 1 ;;
+  esac
+done
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+CACHE="${CLAW_DASH_CACHE:-$HOME/.claw-dash/cache.json}"
+CONFIG_FILE="$HOME/.claw-dash/config.json"
+
+# ── Project discovery ─────────────────────────────────────────────────────────
+# Prints lines of the form: path|label|enabled
+detect_projects() {
+  python3 - "$CONFIG_FILE" "$HOME" <<'PYEOF'
+import json
+import os
+import sys
+
+config_file = sys.argv[1]
+home = sys.argv[2]
+
+if os.path.exists(config_file):
+    try:
+        cfg = json.load(open(config_file))
+        for p in cfg.get("projects", []):
+            path = os.path.expanduser(p.get("path", ""))
+            label = p.get("label") or os.path.basename(path) or path
+            enabled = str(p.get("enabled", True)).lower()
+            print(f"{path}|{label}|{enabled}")
+        sys.exit(0)
+    except Exception as e:
+        print(f"config parse error: {e}", file=sys.stderr)
+
+# Auto-detect: search known parent directories for immediate subdirs
+# containing a .claude/ directory. Also check ~/Downloads itself.
+search_roots = [
+    home,
+    os.path.join(home, "Sites"),
+    os.path.join(home, "Documents"),
+    os.path.join(home, "Projects"),
+    os.path.join(home, "Developer"),
+]
+
+found = []
+
+# ~/Downloads is checked at its root, not its subdirs
+downloads = os.path.join(home, "Downloads")
+if os.path.isdir(os.path.join(downloads, ".claude")):
+    found.append(downloads)
+
+for root in search_roots:
+    if not os.path.isdir(root):
+        continue
+    try:
+        entries = sorted(os.listdir(root))
+    except OSError:
+        continue
+    for name in entries:
+        if name.startswith(".") or name == "_":
+            continue
+        path = os.path.join(root, name)
+        if not os.path.isdir(path):
+            continue
+        if os.path.isdir(os.path.join(path, ".claude")):
+            if path not in found:
+                found.append(path)
+
+found.sort()
+found = found[:10]
+
+for path in found:
+    label = os.path.basename(path) or path
+    print(f"{path}|{label}|true")
+PYEOF
+}
+
+# ── Main runner ───────────────────────────────────────────────────────────────
+# Receives project list as a temp file path ($1) to avoid stdin conflict with
+# the Python heredoc. The pipe pattern (detect_projects | run_main) doesn't
+# work because the heredoc overrides Python's stdin, leaving sys.stdin at EOF.
+run_main() {
+  local projects_file="$1"
+  python3 - "$CONFIG_FILE" "$CACHE" "$projects_file" <<'PYEOF'
+import json
+import os
+import re
+import sys
+import time
+
+config_file = sys.argv[1]
+cache_path = sys.argv[2]
+projects_file = sys.argv[3]
+home = os.path.expanduser("~")
+
+# ── Task parsing ──────────────────────────────────────────────────────────────
+STATE_EMOJIS = {
+    "🔲": "planned",
+    "⏳": "ready",
+    "🚧": "active",
+    "👀": "review",
+    "✅": "done",
+    "🔒": "blocked",
+    "❌": "failed",
+    "⏸️": "paused",
+    "🚫": "canceled",
+}
+
+def parse_tasks(text):
+    tasks = []
+    if not text:
+        return tasks
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Strip common list prefixes
+        body = re.sub(r"^[-*]\s*", "", stripped)
+        for emoji, state in STATE_EMOJIS.items():
+            if emoji in body:
+                idx = body.index(emoji)
+                after = body[idx + len(emoji):].strip()
+                tasks.append({
+                    "line": stripped,
+                    "state": state,
+                    "emoji": emoji,
+                    "text": after,
+                })
+                break
+    return tasks
+
+# ── MEMORY.md entry parsing ───────────────────────────────────────────────────
+def parse_memory_index(text):
+    entries = []
+    if not text:
+        return entries
+    # Match: - [Title](file.md) — one-line hook
+    pattern = re.compile(r"^\s*-\s+\[.*?\]\(([^)]+\.md)\)\s*[—\-–]+\s*(.+)$")
+    for line in text.splitlines():
+        m = pattern.match(line)
+        if m:
+            entries.append({
+                "filename": m.group(1),
+                "summary": m.group(2).strip(),
+            })
+    return entries
+
+# ── Safe file read ────────────────────────────────────────────────────────────
+def read_file(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+def file_mtime(path):
+    try:
+        return int(os.path.getmtime(path))
+    except OSError:
+        return 0
+
+def read_dir_md_files(dir_path, skip_names=None):
+    """Return list of {filename, raw, mtime} for all .md files in dir_path."""
+    results = []
+    skip_names = skip_names or set()
+    if not os.path.isdir(dir_path):
+        return results
+    try:
+        names = sorted(os.listdir(dir_path))
+    except OSError:
+        return results
+    for name in names:
+        if name.startswith("."):
+            continue
+        if not name.endswith(".md"):
+            continue
+        if name in skip_names:
+            continue
+        fpath = os.path.join(dir_path, name)
+        if not os.path.isfile(fpath):
+            continue
+        raw = read_file(fpath)
+        results.append({
+            "filename": name,
+            "raw": raw or "",
+            "mtime": file_mtime(fpath),
+        })
+    return results
+
+# ── Thread parsing ────────────────────────────────────────────────────────────
+def read_threads(threads_dir):
+    threads = {}
+    if not os.path.isdir(threads_dir):
+        return threads
+    try:
+        names = sorted(os.listdir(threads_dir))
+    except OSError:
+        return threads
+    for name in names:
+        if name.startswith("."):
+            continue
+        tdir = os.path.join(threads_dir, name)
+        if not os.path.isdir(tdir):
+            continue
+        readme = read_file(os.path.join(tdir, "README.md"))
+        tasks_dir = os.path.join(tdir, "tasks")
+        task_files = ["planned", "open", "review", "done", "archived"]
+        tasks = {}
+        for tf in task_files:
+            raw = read_file(os.path.join(tasks_dir, f"{tf}.md"))
+            tasks[tf] = parse_tasks(raw) if raw else []
+        threads[name] = {
+            "readme": readme or "",
+            "tasks": tasks,
+        }
+    return threads
+
+# ── Project reading ───────────────────────────────────────────────────────────
+def read_project(path, label, enabled):
+    claude_dir = os.path.join(path, ".claude")
+    result = {
+        "path": path,
+        "label": label,
+        "enabled": enabled,
+        "error": None,
+        "active": None,
+        "queue": None,
+        "done": None,
+        "memory_index": None,
+        "memory_files": {},
+        "inbox": [],
+        "ideas": [],
+        "threads": {},
+    }
+
+    if not os.path.isdir(claude_dir):
+        result["error"] = "no .claude directory"
+        return result
+
+    tasks_dir = os.path.join(claude_dir, "tasks")
+    memory_dir = os.path.join(claude_dir, "memory")
+    inbox_dir = os.path.join(claude_dir, "inbox")
+    ideas_dir = os.path.join(claude_dir, "ideas")
+    threads_dir = os.path.join(memory_dir, "threads")
+
+    # active.md
+    active_raw = read_file(os.path.join(tasks_dir, "active.md"))
+    result["active"] = {
+        "raw": active_raw or "",
+        "tasks": parse_tasks(active_raw),
+    }
+
+    # queue.md
+    queue_raw = read_file(os.path.join(tasks_dir, "queue.md"))
+    result["queue"] = {"raw": queue_raw or ""}
+
+    # done.md
+    done_raw = read_file(os.path.join(tasks_dir, "done.md"))
+    result["done"] = {"raw": done_raw or ""}
+
+    # MEMORY.md
+    memory_index_raw = read_file(os.path.join(memory_dir, "MEMORY.md"))
+    result["memory_index"] = {
+        "raw": memory_index_raw or "",
+        "entries": parse_memory_index(memory_index_raw),
+    }
+
+    # Individual memory files (skip MEMORY.md itself)
+    if os.path.isdir(memory_dir):
+        try:
+            for name in sorted(os.listdir(memory_dir)):
+                if name.startswith("."):
+                    continue
+                if not name.endswith(".md"):
+                    continue
+                if name == "MEMORY.md":
+                    continue
+                fpath = os.path.join(memory_dir, name)
+                if os.path.isfile(fpath):
+                    raw = read_file(fpath)
+                    result["memory_files"][name] = raw or ""
+        except OSError:
+            pass
+
+    # Inbox files — sorted by mtime descending (newest first)
+    inbox_files = read_dir_md_files(inbox_dir)
+    inbox_files.sort(key=lambda x: x["mtime"], reverse=True)
+    result["inbox"] = inbox_files
+
+    # Ideas files — sorted by mtime descending
+    ideas_files = read_dir_md_files(ideas_dir)
+    ideas_files.sort(key=lambda x: x["mtime"], reverse=True)
+    result["ideas"] = ideas_files
+
+    # Threads
+    result["threads"] = read_threads(threads_dir)
+
+    return result
+
+# ── Widget summary ────────────────────────────────────────────────────────────
+def build_widget(projects, prior_cache):
+    home = os.path.expanduser("~")
+
+    # GCI stats
+    def _count_md(dirpath):
+        try:
+            return len([f for f in os.listdir(dirpath)
+                        if f.endswith(".md") and not f.startswith(".")])
+        except OSError:
+            return 0
+
+    def _count_skill_dirs(dirpath):
+        try:
+            return len([d for d in os.listdir(dirpath)
+                        if os.path.isfile(os.path.join(dirpath, d, "SKILL.md"))])
+        except OSError:
+            return 0
+
+    def _newest_mtime(dirpath, subdir=False, specific_files=None):
+        """Return the newest mtime (int) of .md files in dirpath."""
+        try:
+            if specific_files:
+                mtimes = [os.stat(os.path.join(dirpath, f)).st_mtime
+                          for f in specific_files if os.path.exists(os.path.join(dirpath, f))]
+            elif subdir:
+                mtimes = []
+                for d in os.listdir(dirpath):
+                    p = os.path.join(dirpath, d, "SKILL.md")
+                    if os.path.exists(p):
+                        mtimes.append(os.stat(p).st_mtime)
+            else:
+                mtimes = [os.stat(os.path.join(dirpath, f)).st_mtime
+                          for f in os.listdir(dirpath)
+                          if f.endswith(".md") and os.path.isfile(os.path.join(dirpath, f))]
+            return int(max(mtimes)) if mtimes else 0
+        except OSError:
+            return 0
+
+    gci_memory       = max(0, _count_md(os.path.join(home, ".claude", "memory")) - 1)
+    gci_rules        = _count_md(os.path.join(home, ".claude", "rules"))
+    gci_refs         = _count_md(os.path.join(home, ".claude", "references"))
+    gci_instructions = _count_skill_dirs(os.path.join(home, ".claude", "skills"))
+
+    _gci_rules_dir  = os.path.join(home, ".claude", "rules")
+    _gci_refs_dir   = os.path.join(home, ".claude", "references")
+    _gci_mem_dir    = os.path.join(home, ".claude", "memory")
+    _gci_skills_dir = os.path.join(home, ".claude", "skills")
+    _gci_agents_dir = os.path.join(home, ".claude", "agents")
+    _gci_root       = os.path.join(home, ".claude")
+
+    # Per-project summaries (all enabled, with or without error)
+    project_rows = []
+    total_active  = 0
+    total_planned = 0
+    total_ready   = 0
+    total_review  = 0
+    total_blocked = 0
+    total_inbox   = 0
+    total_ideas   = 0
+
+    for p in projects:
+        if not p.get("enabled"):
+            continue
+
+        task_counts = {"active": 0, "planned": 0, "ready": 0, "review": 0,
+                       "done": 0, "blocked": 0, "paused": 0}
+        active_data = p.get("active") or {}
+        for t in active_data.get("tasks", []):
+            state = t.get("state", "")
+            if state in task_counts:
+                task_counts[state] += 1
+
+        inbox_count  = len(p.get("inbox", []))
+        ideas_count  = len(p.get("ideas", []))
+        memory_count = len(p.get("memory_files") or {})
+
+        project_rows.append({
+            "label":    p["label"],
+            "error":    bool(p.get("error")),
+            "active":   task_counts["active"],
+            "ready":    task_counts["ready"],
+            "planned":  task_counts["planned"],
+            "review":   task_counts["review"],
+            "blocked":  task_counts["blocked"],
+            "done":     task_counts["done"],
+            "inbox":    inbox_count,
+            "ideas":    ideas_count,
+            "memory":   memory_count,
+        })
+
+        total_active  += task_counts["active"]
+        total_planned += task_counts["planned"] + task_counts["ready"]
+        total_review  += task_counts["review"]
+        total_blocked += task_counts["blocked"]
+        total_inbox   += inbox_count
+        total_ideas   += ideas_count
+
+    # Primary project: most recently modified active.md
+    primary = None
+    best_mtime = -1
+    for p in projects:
+        if not p.get("enabled"):
+            continue
+        active_path = os.path.join(p["path"], ".claude", "tasks", "active.md")
+        mt = file_mtime(active_path)
+        if mt > best_mtime:
+            best_mtime = mt
+            primary = p
+
+    active_phase  = None
+    active_thread = None
+    if primary:
+        active_data = primary.get("active") or {}
+        active_raw  = (active_data.get("raw") or "")
+        for line in active_raw.splitlines():
+            if re.match(r"^##\s+Phase", line):
+                active_phase = line.lstrip("#").strip()
+                break
+        if prior_cache and "_widget" in prior_cache:
+            active_thread = prior_cache["_widget"].get("active_thread")
+
+    return {
+        "gci": {
+            # flat counts — backward compat for widget
+            "rules":        gci_rules,
+            "references":   gci_refs,
+            "memory":       gci_memory,
+            "instructions": gci_instructions,
+            "agents":       _count_md(_gci_agents_dir),
+            # rich per-category objects for web app
+            "cats": {
+                "rules":      {"count": gci_rules,        "mtime": _newest_mtime(_gci_rules_dir)},
+                "references": {"count": gci_refs,         "mtime": _newest_mtime(_gci_refs_dir)},
+                "memory":     {"count": gci_memory,       "mtime": _newest_mtime(_gci_mem_dir)},
+                "skills":     {"count": gci_instructions, "mtime": _newest_mtime(_gci_skills_dir, subdir=True)},
+                "agents":     {"count": _count_md(_gci_agents_dir), "mtime": _newest_mtime(_gci_agents_dir)},
+                "spine":      {"count": 2,                "mtime": _newest_mtime(_gci_root, specific_files=["CLAUDE.md", "RTK.md"])},
+            },
+        },
+        "projects":       project_rows,
+        "totals": {
+            "active":   total_active,
+            "planned":  total_planned,
+            "review":   total_review,
+            "blocked":  total_blocked,
+            "inbox":    total_inbox,
+            "ideas":    total_ideas,
+        },
+        "active_project": primary["label"] if primary else None,
+        "active_phase":   active_phase,
+        "active_thread":  active_thread,
+        # kept for back-compat (old widget fallback)
+        "task_counts":    {"active": total_active, "planned": total_planned,
+                           "review": total_review, "done": 0},
+        "inbox_unread":   total_inbox,
+    }
+
+# ── Load project list ─────────────────────────────────────────────────────────
+# Projects are read from the temp file written by detect_projects.
+project_specs = []
+with open(projects_file, encoding="utf-8") as _pf:
+    lines_raw = _pf.readlines()
+for line in lines_raw:
+    line = line.strip()
+    if not line:
+        continue
+    parts = line.split("|", 2)
+    if len(parts) != 3:
+        continue
+    path, label, enabled_str = parts
+    path = os.path.expanduser(path)
+    enabled = enabled_str.lower() == "true"
+    project_specs.append((path, label, enabled))
+
+# Load prior cache for widget continuity
+prior_cache = None
+if os.path.exists(cache_path):
+    try:
+        with open(cache_path) as f:
+            prior_cache = json.load(f)
+    except Exception:
+        pass
+
+# Read each project
+projects_data = []
+for path, label, enabled in project_specs:
+    print(f"  reading {label} ({path})", file=sys.stderr)
+    data = read_project(path, label, enabled)
+    projects_data.append(data)
+
+widget = build_widget(projects_data, prior_cache)
+
+output = {
+    "generated_at": int(time.time()),
+    "_widget": widget,
+    "projects": projects_data,
+}
+
+os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+with open(cache_path, "w", encoding="utf-8") as f:
+    json.dump(output, f, indent=2, ensure_ascii=False)
+
+# Mirror to App Group container for native macOS widget
+app_group = os.path.join(home, "Library", "Group Containers", "group.io.clawdash")
+if os.path.isdir(app_group):
+    import shutil
+    shutil.copy2(cache_path, os.path.join(app_group, "cache.json"))
+PYEOF
+}
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+echo "claw-dash: building cache..." >&2
+
+mkdir -p "$(dirname "$CACHE")"
+
+_PROJECTS_TMP=$(mktemp)
+detect_projects > "$_PROJECTS_TMP"
+run_main "$_PROJECTS_TMP"
+rm -f "$_PROJECTS_TMP"
+
+echo "$CACHE"
