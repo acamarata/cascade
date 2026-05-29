@@ -1,0 +1,371 @@
+#!/usr/bin/env bash
+# claw-fleet-codex — Poll OpenAI Codex (ChatGPT plan) rate-limit headers.
+#
+# Discovers Codex accounts via ~/.codex* auth.json files, makes a minimal
+# /backend-api/codex/responses probe per account, parses x-codex-* response
+# headers into the same usage schema Claw Fleet uses, and merges into
+# ~/.claude/usage-cache.json with provider="codex".
+#
+# Cost per probe: ~1 token per account (request closed immediately after
+# headers arrive, no response body read).
+
+set -u
+CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
+
+# Find Codex config dirs (~/.codex + ~/.codex-acc*).
+find_codex_dirs() {
+  local dirs=()
+  for d in "$HOME"/.codex "$HOME"/.codex-acc*; do
+    [ -d "$d" ] || continue
+    [[ "$d" == *.bak ]] && continue
+    [[ "$d" == *.bak.* ]] && continue
+    [[ "$d" == *.lock ]] && continue
+    [[ "$d" == *.tmp ]] && continue
+    [ -f "$d/auth.json" ] || continue
+    dirs+=("$d")
+  done
+  printf '%s\n' "${dirs[@]}"
+}
+
+probe_account() {
+  local cfg_dir="$1"
+  local label="$2"
+
+  /usr/bin/python3 - "$cfg_dir" "$label" <<'PYEOF'
+import json, os, sys, time, base64, urllib.parse, urllib.request, urllib.error
+from datetime import datetime
+
+cfg_dir, label = sys.argv[1], sys.argv[2]
+auth_path = os.path.join(cfg_dir, "auth.json")
+
+# OpenAI Codex CLI public OAuth client. Verified 2026-05-24; matches the
+# id used by the official codex CLI when it refreshes-and-retries on 401.
+CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+CODEX_OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
+
+def _jwt_claims(jwt):
+    """Decode the payload of an unverified JWT (we only need claims, not sig)."""
+    try:
+        p = jwt.split(".")[1]
+        p += "=" * (-len(p) % 4)
+        return json.loads(base64.urlsafe_b64decode(p))
+    except Exception:
+        return {}
+
+def _is_expired(access_token, leeway_s=60):
+    """Treat a token as expired when its 'exp' is within `leeway_s` of now."""
+    exp = _jwt_claims(access_token).get("exp")
+    if not isinstance(exp, (int, float)):
+        return False   # unknown — leave it to the API to reject
+    return time.time() + leeway_s >= exp
+
+def _refresh_codex_tokens(refresh_token):
+    """Exchange a refresh_token for fresh access/id tokens via auth.openai.com.
+    Mirrors what the codex CLI does on 401. Returns the parsed token body on
+    success, None on failure (caller surfaces auth_expired)."""
+    body = urllib.parse.urlencode({
+        "grant_type":    "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id":     CODEX_OAUTH_CLIENT_ID,
+    }).encode()
+    req = urllib.request.Request(
+        CODEX_OAUTH_TOKEN_URL, data=body, method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+def _save_refreshed(auth, new_tokens, path):
+    """Persist refreshed tokens back to auth.json atomically. Preserves
+    everything else in the file (account_id, OPENAI_API_KEY, etc.)."""
+    auth.setdefault("tokens", {})
+    if new_tokens.get("access_token"):
+        auth["tokens"]["access_token"] = new_tokens["access_token"]
+    if new_tokens.get("id_token"):
+        auth["tokens"]["id_token"] = new_tokens["id_token"]
+    # OpenAI rotates refresh tokens on every exchange.
+    if new_tokens.get("refresh_token"):
+        auth["tokens"]["refresh_token"] = new_tokens["refresh_token"]
+    auth["last_refresh"] = datetime.utcnow().isoformat() + "Z"
+    tmp = path + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(auth, fh, indent=2)
+    os.replace(tmp, path)
+
+try:
+    auth = json.load(open(auth_path))
+except Exception as e:
+    print(json.dumps({
+        "account": label, "provider": "codex", "email": label, "usage": None,
+        "queried_at": int(time.time()), "error": f"auth_load_failed: {e}",
+    }))
+    sys.exit(0)
+
+tokens = auth.get("tokens", {}) or {}
+token = tokens.get("access_token")
+acct_id = tokens.get("account_id", "")
+refresh = tokens.get("refresh_token")
+
+# Refresh-on-the-fly when the local access_token is expired. The codex CLI
+# does this itself when it's used; without it, claw-fleet rows go blank
+# after ~20 days of CLI inactivity even though the ChatGPT/OpenAI sub is
+# fully active. We try the refresh BEFORE the probe to avoid wasting the
+# probe call on a known-expired token.
+if token and refresh and _is_expired(token):
+    new_tokens = _refresh_codex_tokens(refresh)
+    if new_tokens and new_tokens.get("access_token"):
+        _save_refreshed(auth, new_tokens, auth_path)
+        token = new_tokens["access_token"]
+        # Reload to pick up the rotated refresh_token field.
+        try:    tokens = json.load(open(auth_path)).get("tokens", {}) or {}
+        except Exception: pass
+
+if not token:
+    print(json.dumps({
+        "account": label, "provider": "codex", "email": label, "usage": None,
+        "queried_at": int(time.time()), "error": "no_access_token",
+    }))
+    sys.exit(0)
+
+# Extract email from id_token JWT payload or claims embedded in access_token.
+email = label
+try:
+    jwt = tokens.get("id_token") or token
+    claims = _jwt_claims(jwt)
+    email = claims.get("email") or email
+except Exception:
+    pass
+
+# Minimal valid /responses probe — shortest request that returns headers.
+body = json.dumps({
+    "model": "gpt-5.4",
+    "instructions": "x",
+    "input": [{"type": "message", "role": "user",
+               "content": [{"type": "input_text", "text": "."}]}],
+    "reasoning": {"effort": "none"},
+    "stream": True,
+    "store": False,
+}).encode()
+
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json",
+    "chatgpt-account-id": acct_id,
+    "User-Agent": "codex_cli_rs/0.100.0",
+    "OpenAI-Beta": "responses-v1",
+    "Originator": "codex_cli_rs",
+    "Accept": "text/event-stream",
+}
+
+req = urllib.request.Request(
+    "https://chatgpt.com/backend-api/codex/responses",
+    data=body, method="POST", headers=headers,
+)
+
+now = int(time.time())
+
+def _probe_once(bearer):
+    """Run the /responses probe with `bearer` as Authorization. Returns
+    (http_code, lowercased_response_headers, http_error_obj_or_None).
+    `http_error_obj` is the HTTPError when the response was non-2xx so the
+    caller can retry on 401 with a freshly refreshed token."""
+    h = dict(headers); h["Authorization"] = f"Bearer {bearer}"
+    rq = urllib.request.Request(
+        "https://chatgpt.com/backend-api/codex/responses",
+        data=body, method="POST", headers=h,
+    )
+    try:
+        r = urllib.request.urlopen(rq, timeout=30)
+        resp = {k.lower(): v for k, v in r.headers.items()}
+        try: r.close()
+        except Exception: pass
+        return r.status, resp, None
+    except urllib.error.HTTPError as he:
+        return he.code, {k.lower(): v for k, v in (he.headers or {}).items()}, he
+
+try:
+    status_code, resp_headers, http_err = _probe_once(token)
+    # 401 from the probe: token rejected server-side even though it looked
+    # locally valid. Try one refresh-and-retry like the codex CLI does, then
+    # accept the result of the retry (success or final 401).
+    if status_code == 401 and refresh:
+        new_tokens = _refresh_codex_tokens(refresh)
+        if new_tokens and new_tokens.get("access_token"):
+            _save_refreshed(auth, new_tokens, auth_path)
+            token = new_tokens["access_token"]
+            status_code, resp_headers, http_err = _probe_once(token)
+    if http_err is not None:
+        raise http_err
+except urllib.error.HTTPError as e:
+    if e.code == 401:
+        # Expired / revoked token; refresh already attempted above.
+        print(json.dumps({
+            "account": label, "provider": "codex", "email": email, "usage": None,
+            "queried_at": now, "error": "auth_expired", "last_error": "auth_expired",
+        }))
+        sys.exit(0)
+    # OpenAI returns 429 when a Codex account has hit its cap — but the same
+    # response often still carries x-codex-* utilization headers. Capture
+    # those so the widget shows the actual 100% utilization instead of
+    # reverting to dashes when the cap is reached.
+    err_headers = {k.lower(): v for k, v in (e.headers or {}).items()}
+    if any(k.startswith("x-codex-") for k in err_headers):
+        resp_headers = err_headers
+    else:
+        print(json.dumps({
+            "account": label, "provider": "codex", "email": email, "usage": None,
+            "queried_at": now, "error": f"http_{e.code}",
+        }))
+        sys.exit(0)
+except Exception as e:
+    print(json.dumps({
+        "account": label, "provider": "codex", "email": email, "usage": None,
+        "queried_at": now, "error": f"probe_failed: {type(e).__name__}",
+    }))
+    sys.exit(0)
+
+def as_float(k):
+    try: return float(resp_headers.get(k, ""))
+    except (TypeError, ValueError): return None
+
+def as_int(k):
+    try: return int(resp_headers.get(k, ""))
+    except (TypeError, ValueError): return None
+
+primary_used = as_float("x-codex-primary-used-percent")
+primary_reset = as_int("x-codex-primary-reset-at")
+primary_window_min = as_int("x-codex-primary-window-minutes")
+secondary_used = as_float("x-codex-secondary-used-percent")
+secondary_reset = as_int("x-codex-secondary-reset-at")
+secondary_window_min = as_int("x-codex-secondary-window-minutes")
+
+def pack_limit(pct, reset_at):
+    if pct is None:
+        return None
+    remaining = max(0, (reset_at or now) - now)
+    h = remaining // 3600
+    m = (remaining % 3600) // 60
+    resets_in = f"{h}h {m:02d}m" if h > 0 else f"{m}m"
+    return {"utilization": pct, "resets_at": reset_at or 0, "resets_in": resets_in}
+
+# Map Codex primary (5h) → five_hour, secondary (7d) → seven_day so the
+# widget, /aa CLI, and CRD consumers all see the same schema.
+usage = {
+    "five_hour":        pack_limit(primary_used, primary_reset),
+    "seven_day":        pack_limit(secondary_used, secondary_reset),
+    "seven_day_sonnet": None,
+    "seven_day_opus":   None,
+    "extra_usage":      {
+        "is_enabled":    resp_headers.get("x-codex-credits-has-credits", "False") == "True",
+        "monthly_limit": None,
+        "used_credits":  None,
+        "utilization":   None,
+        "currency":      None,
+    },
+}
+
+out = {
+    "account":    label,
+    "provider":   "codex",
+    "email":      email,
+    "plan_type":  resp_headers.get("x-codex-plan-type"),
+    "active_limit": resp_headers.get("x-codex-active-limit"),
+    "primary_window_minutes":   primary_window_min,
+    "secondary_window_minutes": secondary_window_min,
+    "usage":      usage,
+    "queried_at": now,
+    "error":      None,
+}
+print(json.dumps(out))
+PYEOF
+}
+
+# Main loop — probe each detected account, then merge into shared cache.
+mapfile -t DIRS < <(find_codex_dirs)
+if [ ${#DIRS[@]} -eq 0 ]; then
+  echo "No Codex accounts found. Expected ~/.codex/auth.json or ~/.codex-acc*/auth.json" >&2
+  exit 0
+fi
+
+echo "Probing ${#DIRS[@]} Codex account(s)..." >&2
+
+# Derive label from dir basename: ".codex" → "codex", ".codex-acc1" → "codex-acc1"
+TMP=$(mktemp -d)
+for i in "${!DIRS[@]}"; do
+  d="${DIRS[$i]}"
+  label=$(basename "$d")
+  label="${label#.}"
+  echo "  $label" >&2
+  probe_account "$d" "$label" > "$TMP/$i.json" &
+done
+wait
+
+# Merge: read prior cache, drop prior codex entries, append fresh ones.
+/usr/bin/python3 - "$TMP" "$CACHE" <<'PYEOF'
+import json, os, sys, glob, time
+
+tmp_dir, cache_path = sys.argv[1], sys.argv[2]
+now = int(time.time())
+
+# Load prior cache (preserve Claude + any other provider entries).
+prior = {"accounts": [], "queried_at": now}
+if os.path.exists(cache_path):
+    try: prior = json.load(open(cache_path))
+    except Exception: pass
+
+# Keep everything that ISN'T a codex entry.
+kept = [a for a in prior.get("accounts", []) if a.get("provider") != "codex"]
+
+# Index prior codex entries by account label so we can carry forward usage
+# data when a fresh probe fails (auth_expired, http_429 when account is at
+# 100%, network error, etc.). Without this, hitting the cap on Codex wipes
+# the cached 100% values back to dashes — the exact bug the Claude side fixes
+# via its own carry-forward branch.
+prior_codex = {a.get("account"): a for a in prior.get("accounts", [])
+               if a.get("provider") == "codex"}
+
+def has_usage(a):
+    u = (a or {}).get("usage") or {}
+    return u.get("five_hour") is not None or u.get("seven_day") is not None
+
+# Read fresh codex probes.
+fresh = []
+for f in sorted(glob.glob(os.path.join(tmp_dir, "*.json"))):
+    try:
+        a = json.load(open(f))
+        label = a.get("account")
+        prev = prior_codex.get(label)
+        if a.get("error"):
+            # Probe failed (auth, 429, network, etc). Carry forward prior good
+            # usage so the row still renders the last-known numbers (dimmed
+            # via row opacity if 7d hit 100%) instead of reverting to dashes.
+            if prev and has_usage(prev):
+                merged = {**prev,
+                          "last_api_attempt": now,
+                          "last_error":       a.get("error"),
+                          "carry_forward":    True}
+                fresh.append(merged)
+                continue
+            # No prior data to carry — keep the error entry as-is.
+            a["last_api_attempt"] = now
+            fresh.append(a)
+        else:
+            a["last_pull_at"] = now
+            a["last_api_attempt"] = now
+            fresh.append(a)
+    except Exception:
+        pass
+
+out = dict(prior)
+out["accounts"] = kept + fresh
+out["queried_at"] = now
+os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+with open(cache_path, "w") as fh:
+    json.dump(out, fh, indent=2)
+print(f"  merged {len(fresh)} codex + {len(kept)} other into {cache_path}", file=sys.stderr)
+PYEOF
+
+rm -rf "$TMP"

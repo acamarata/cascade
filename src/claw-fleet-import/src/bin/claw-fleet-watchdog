@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# claw-fleet-watchdog — Runs every 60s via LaunchAgent.
+# Verifies the cache daemon + Übersicht widget host are healthy; heals if not.
+#
+# Redundancy ladder:
+#   0. Self-truncate log (keep last 1000 lines) so we never balloon again.
+#   1. Cache daemon LaunchAgent loaded? Re-load if not.
+#   2. Cache fresh (<120s)? Force-refresh if not.
+#   3. Übersicht running? Launch if not (encoding-safe pgrep).
+#   4. Cache aged >300s despite (2)? Touch index.jsx to bump the widget.
+
+set -u
+LOG="$HOME/Library/Logs/claw-fleet-watchdog.log"
+exec >>"$LOG" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] tick"
+
+# ── 0. Log truncation — keep last 1000 lines, no more 2.5MB log files ────────
+if [ -f "$LOG" ]; then
+  LINES=$(/usr/bin/wc -l < "$LOG" 2>/dev/null | /usr/bin/tr -d ' ' || echo 0)
+  if [ "${LINES:-0}" -gt 1500 ]; then
+    /usr/bin/tail -1000 "$LOG" > "$LOG.tmp" && /bin/mv "$LOG.tmp" "$LOG"
+    echo "  log truncated to last 1000 lines (was $LINES)"
+  fi
+fi
+
+# ── 1. Cache daemon (io.clawfleet.refresh) ──────────────────────────────────
+PLIST="$HOME/Library/LaunchAgents/io.clawfleet.refresh.plist"
+if [ -f "$PLIST" ]; then
+  if ! /bin/launchctl list io.clawfleet.refresh >/dev/null 2>&1; then
+    echo "  cache daemon not loaded — loading"
+    /bin/launchctl load "$PLIST" 2>&1
+  fi
+fi
+
+# ── 2. Cache freshness — if older than 2 min, force-refresh ──────────────────
+# Tightened from 5 min so a stalled refresh agent surfaces twice as fast.
+CACHE="$HOME/.claude/usage-cache.json"
+CACHE_AGE=0
+if [ -f "$CACHE" ]; then
+  CACHE_AGE=$(( $(/bin/date +%s) - $(/usr/bin/stat -f %m "$CACHE") ))
+  if [ "$CACHE_AGE" -gt 120 ]; then
+    echo "  cache stale (${CACHE_AGE}s) — triggering refresh"
+    "$HOME/bin/claw-fleet-refresh" >/dev/null 2>&1 || true
+  fi
+else
+  echo "  cache missing — seeding"
+  "$HOME/bin/claw-fleet-refresh" >/dev/null 2>&1 || true
+fi
+
+# ── 3. Übersicht.app — widget host (opt-in via marker file) ─────────────────
+# The native ClawFleet.app is the supported display surface now; its own
+# LaunchAgent (com.acamarata.clawfleet.menubar) handles keepalive directly.
+# We no longer force-launch Übersicht here. To re-enable Übersicht supervision,
+# touch ~/.config/claw-fleet/supervise-ubersicht and the block below will
+# match the binary via the encoding-safe `bersicht.app/Contents/MacOS/` path
+# suffix (avoids the Latin-1 diacritic round-trip bug that produced ~28k
+# spurious launches in an earlier version).
+if [ -f "$HOME/.config/claw-fleet/supervise-ubersicht" ]; then
+  if ! /usr/bin/pgrep -fq "bersicht.app/Contents/MacOS/"; then
+    echo "  Übersicht not running — launching (supervise-ubersicht flag set)"
+    /usr/bin/open -ga "Übersicht" 2>&1 || echo "  launch failed"
+  fi
+fi
+
+# ── 4. Widget self-heal — if cache is stale beyond 5 min despite refresh
+#     attempts above, bump the widget so Übersicht reloads it from scratch.
+#     Catches the rare case where Übersicht is up but the widget process
+#     stopped polling its command for any reason.
+WIDGET="$HOME/Library/Application Support/Übersicht/widgets/claw-fleet.widget/index.jsx"
+if [ -f "$WIDGET" ] && [ "$CACHE_AGE" -gt 300 ]; then
+  echo "  cache aged ${CACHE_AGE}s despite refresh — bumping widget index.jsx"
+  /usr/bin/touch "$WIDGET"
+fi
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] done"

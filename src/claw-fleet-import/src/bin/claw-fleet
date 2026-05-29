@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+# claw-fleet — Query all detected Claude Code Max accounts for live usage data.
+# Uses the /api/oauth/usage endpoint directly (no haiku probes needed).
+# Automatically refreshes expired OAuth tokens via an internal claude prompt.
+#
+# Account discovery (in priority order):
+#   1. ~/.config/claw-fleet/config.json  — explicit list overrides auto-detection
+#   2. Auto-detect: glob ~/.claude-acc* (sorted), optionally include ~/.claude
+#
+# Output: JSON to $CLAW_FLEET_CACHE (default: ~/.claude/usage-cache.json)
+#
+# Usage: claw-fleet [--help] [--include-primary]
+#   --include-primary   Also query ~/.claude even when ~/.claude-acc* dirs exist
+#   --help              Show this message
+
+set -euo pipefail
+
+# ── CLI args ──────────────────────────────────────────────────────────────────
+INCLUDE_PRIMARY=false
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      grep '^#' "$0" | head -20 | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    --include-primary) INCLUDE_PRIMARY=true ;;
+    *) echo "Unknown flag: $arg" >&2; exit 1 ;;
+  esac
+done
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
+CONFIG_FILE="$HOME/.config/claw-fleet/config.json"
+OUTDIR="/tmp/claw-fleet-probes"
+RESULT="/tmp/claw-fleet-result.json"   # back-compat /tmp copy
+mkdir -p "$OUTDIR"
+rm -f "$OUTDIR"/*.json
+
+# ── Account discovery ─────────────────────────────────────────────────────────
+# Prints lines of the form: config_dir|label|enabled|do_not_query
+detect_accounts() {
+  if [ -f "$CONFIG_FILE" ]; then
+    # Config-file mode: explicit list
+    python3 - "$CONFIG_FILE" <<'PYEOF'
+import json, os, sys
+cfg = json.load(open(sys.argv[1]))
+for a in cfg.get("accounts", []):
+    d = os.path.expanduser(a.get("dir", ""))
+    label = a.get("label") or os.path.basename(d)
+    enabled = str(a.get("enabled", True)).lower()
+    dnq = str(a.get("do_not_query", False)).lower()
+    print(f"{d}|{label}|{enabled}|{dnq}")
+PYEOF
+    return
+  fi
+
+  # Auto-detect: ~/.claude-acc* sorted (glob, no ls|grep), then optionally ~/.claude
+  local dirs=()
+  for d in "$HOME"/.claude-acc*; do
+    # Skip if dir doesn't exist (unmatched glob), or has a transient/backup suffix.
+    # `.lock` covers OAuth refresh lockfile dirs that briefly appear next to the
+    # real account dirs — probing them produces ghost entries that stick in the
+    # cache forever via the prior-merge fallback.
+    [ -d "$d" ] || continue
+    [[ "$d" == *.bak  ]] && continue
+    [[ "$d" == *.bak.* ]] && continue
+    [[ "$d" == *.lock ]] && continue
+    [[ "$d" == *.tmp  ]] && continue
+    dirs+=("$d")
+  done
+  # Sort (glob order is fine on macOS; explicit sort for safety)
+  if [ ${#dirs[@]} -gt 0 ]; then
+    mapfile -t dirs < <(printf '%s\n' "${dirs[@]}" | sort)
+  fi
+
+  if $INCLUDE_PRIMARY || [ ${#dirs[@]} -eq 0 ]; then
+    # Include ~/.claude if flagged, or if no acc dirs found
+    dirs=("$HOME/.claude" "${dirs[@]}")
+  fi
+
+  for d in "${dirs[@]}"; do
+    label=$(basename "$d")
+    # Strip leading dot so the label isn't a dotfile (breaks globs, ugly in UI).
+    label="${label#.}"
+    echo "${d}|${label}|true|false"
+  done
+}
+
+# ── Email extraction from keychain JSON ───────────────────────────────────────
+# The keychain JSON is {"claudeAiOauth": {"accessToken": "...", ...}}
+# There is no explicit email field in the OAuth payload — extract from JWT sub claim
+# or from the JWT email claim if present; fallback to dir basename.
+extract_email_from_jwt() {
+  python3 - "$1" <<'PYEOF'
+import sys, json, base64
+
+token = sys.argv[1]
+try:
+    parts = token.split(".")
+    if len(parts) >= 2:
+        # Add padding
+        payload = parts[1]
+        payload += "=" * (4 - len(payload) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(payload))
+        for key in ("email", "sub"):
+            val = decoded.get(key, "")
+            if "@" in str(val):
+                print(val)
+                sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)
+PYEOF
+}
+
+# ── Token retrieval ───────────────────────────────────────────────────────────
+get_token() {
+  local svc="$1"
+  python3 - "$svc" <<'PYEOF'
+import sys, json, subprocess, time
+
+svc = sys.argv[1]
+raw = subprocess.run(
+    ["security", "find-generic-password", "-s", svc, "-w"],
+    capture_output=True, text=True
+)
+if raw.returncode != 0:
+    sys.exit(1)
+cred = json.loads(raw.stdout.strip())
+oauth = cred.get("claudeAiOauth", {})
+expires_at = oauth.get("expiresAt", 0) / 1000  # ms -> seconds
+now = time.time()
+if now < expires_at - 60:
+    print(oauth.get("accessToken", ""))
+else:
+    print("EXPIRED")
+PYEOF
+}
+
+# ── Token refresh ─────────────────────────────────────────────────────────────
+refresh_token() {
+  local svc="$1"
+  local config_dir="$2"
+  echo "  Refreshing token for $(basename "$config_dir")..." >&2
+  CLAUDECODE="" CLAUDE_CONFIG_DIR="$config_dir" claude -p "ok" --max-turns 1 >/dev/null 2>&1 || return 1
+  get_token "$svc"
+}
+
+# ── Per-account query ─────────────────────────────────────────────────────────
+query_account() {
+  local config_dir="$1"
+  local label="$2"
+  local outfile="$OUTDIR/${label}.json"
+
+  # Compute keychain service: sha256(absolute_config_dir_path)[:8]
+  local suffix
+  suffix=$(python3 -c "import hashlib; print(hashlib.sha256('${config_dir}'.encode()).hexdigest()[:8])")
+  local svc="Claude Code-credentials-${suffix}"
+
+  local token
+  token=$(get_token "$svc") || {
+    printf '{"account":"%s","email":"%s","usage":null,"queried_at":%d,"error":"keychain_failed"}\n' \
+      "$label" "$label" "$(date +%s)" > "$outfile"
+    return
+  }
+
+  if [ "$token" = "EXPIRED" ]; then
+    token=$(refresh_token "$svc" "$config_dir") || {
+      printf '{"account":"%s","email":"%s","usage":null,"queried_at":%d,"error":"refresh_failed"}\n' \
+        "$label" "$label" "$(date +%s)" > "$outfile"
+      return
+    }
+  fi
+
+  # Extract email: prefer ~/.claude.json's oauthAccount.emailAddress, fall back to
+  # JWT sub/email claim, then to the label.
+  local email
+  email=$(python3 - "$config_dir" <<'PYEOF'
+import json, os, sys
+p = os.path.join(sys.argv[1], ".claude.json")
+try:
+    d = json.load(open(p))
+    e = (d.get("oauthAccount") or {}).get("emailAddress")
+    if e:
+        print(e); sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)
+PYEOF
+  ) || email=$(extract_email_from_jwt "$token") || email="$label"
+
+  # Call usage API
+  local api_raw
+  api_raw=$(curl -s --max-time 10 \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -H "anthropic-beta: oauth-2025-04-20" \
+    "https://api.anthropic.com/api/oauth/usage" 2>/dev/null) || {
+    printf '{"account":"%s","email":"%s","usage":null,"queried_at":%d,"error":"api_failed"}\n' \
+      "$label" "$email" "$(date +%s)" > "$outfile"
+    return
+  }
+
+  # Parse API response
+  python3 - "$label" "$email" "$outfile" "$api_raw" <<'PYEOF'
+import json, sys, time
+from datetime import datetime
+
+acct, email, outfile, api_raw = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+try:
+    raw = json.loads(api_raw)
+except Exception as e:
+    json.dump({"account": acct, "email": email, "usage": None, "queried_at": int(time.time()), "error": f"parse_failed: {e}"}, open(outfile, "w"), indent=2)
+    sys.exit(0)
+
+# Anthropic returns 200 with an error envelope on rate-limit / auth failure
+# (no five_hour key, just {"error": {"type": "rate_limit_error", ...}}).
+# Without this check, the probe writes usage={five_hour: None, ...} with
+# error: None, which the merge treats as a successful pull and OVERWRITES
+# the prior cached usage data with empty values. That is what was wiping
+# the widget back to "—" every time a probe got rate-limited.
+if isinstance(raw, dict) and isinstance(raw.get("error"), dict) and "five_hour" not in raw:
+    err_type = (raw.get("error") or {}).get("type") or "api_error"
+    json.dump({"account": acct, "email": email, "usage": None, "queried_at": int(time.time()), "error": err_type}, open(outfile, "w"), indent=2)
+    sys.exit(0)
+
+now = time.time()
+
+def parse_limit(data):
+    if not data:
+        return None
+    resets_at_str = data.get("resets_at", "")
+    utilization = data.get("utilization")
+    resets_at = 0
+    if resets_at_str:
+        try:
+            dt = datetime.fromisoformat(resets_at_str)
+            resets_at = dt.timestamp()
+        except Exception:
+            pass
+    remaining = max(0, resets_at - now)
+    hours = int(remaining // 3600)
+    mins = int((remaining % 3600) // 60)
+    resets_in = f"{hours}h {mins:02d}m" if hours > 0 else f"{mins}m"
+    return {
+        "utilization": utilization,
+        "resets_at": resets_at,
+        "resets_in": resets_in,
+    }
+
+usage = {
+    "five_hour":        parse_limit(raw.get("five_hour")),
+    "seven_day":        parse_limit(raw.get("seven_day")),
+    "seven_day_sonnet": parse_limit(raw.get("seven_day_sonnet")),
+    "seven_day_opus":   parse_limit(raw.get("seven_day_opus")),
+    "extra_usage":      raw.get("extra_usage"),
+}
+
+out = {
+    "account":    acct,
+    "email":      email,
+    "usage":      usage,
+    "queried_at": int(now),
+    "error":      None,
+}
+json.dump(out, open(outfile, "w"), indent=2)
+PYEOF
+}
+
+# ── Emit disabled stub ────────────────────────────────────────────────────────
+emit_stub() {
+  local label="$1"
+  local outfile="$OUTDIR/${label}.json"
+  python3 - "$label" "$outfile" <<'PYEOF'
+import json, sys, time
+label, outfile = sys.argv[1], sys.argv[2]
+json.dump({
+    "account": label,
+    "email":   label,
+    "usage":   {"five_hour": None, "seven_day": None, "seven_day_sonnet": None, "seven_day_opus": None, "extra_usage": None},
+    "queried_at": int(time.time()),
+    "error":   "do_not_query",
+    "note":    "account disabled; skipped to save token refresh",
+}, open(outfile, "w"), indent=2)
+PYEOF
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+echo "Detecting accounts..." >&2
+mapfile -t ACCOUNT_LINES < <(detect_accounts)
+
+if [ ${#ACCOUNT_LINES[@]} -eq 0 ]; then
+  echo "No Claude config directories detected. Is ~/.claude-acc1 or ~/.claude present?" >&2
+  exit 1
+fi
+
+echo "Found ${#ACCOUNT_LINES[@]} account(s). Querying (staggered 2s)..." >&2
+
+# Build the rate-limit back-off skip list from the prior cache. Accounts whose
+# `back_off_until` is still in the future get NO probe this cycle — that's how
+# we let Anthropic's hidden per-IP throttle window actually drain instead of
+# extending it with every retry. The merge step writes `back_off_until` when
+# a probe returns `rate_limit_error` (exponential 2→10 min cap).
+SKIP_FILE="$(mktemp -t claw-fleet-skip.XXXXXX)"
+python3 - "$CACHE" "$SKIP_FILE" <<'PYEOF'
+import json, sys, time
+cache_path, out_path = sys.argv[1], sys.argv[2]
+now = int(time.time())
+skip = []
+try:
+    d = json.load(open(cache_path))
+    for a in d.get("accounts", []):
+        if a.get("provider", "claude") != "claude":
+            continue
+        if a.get("back_off_until", 0) > now:
+            skip.append(a.get("account"))
+except Exception:
+    pass
+open(out_path, "w").write(" ".join(skip))
+PYEOF
+SKIP_LIST=" $(cat "$SKIP_FILE") "
+rm -f "$SKIP_FILE"
+
+# Stagger queries by 2s to avoid refresh rate limits
+for line in "${ACCOUNT_LINES[@]}"; do
+  IFS='|' read -r config_dir label enabled do_not_query <<< "$line"
+
+  if [ "$enabled" = "false" ] || [ "$do_not_query" = "true" ]; then
+    echo "  Skipping $label (disabled/do_not_query)" >&2
+    emit_stub "$label"
+    continue
+  fi
+
+  if [[ "$SKIP_LIST" == *" $label "* ]]; then
+    echo "  Skipping $label (rate-limit back-off)" >&2
+    # No probe → no /tmp/claw-fleet-probes/${label}.json → merge will carry
+    # forward the prior entry intact (including its back_off_until field).
+    continue
+  fi
+
+  query_account "$config_dir" "$label" &
+  sleep 2
+done
+wait
+
+# ── Merge with persistent cache ────────────────────────────────────────────────
+mkdir -p "$(dirname "$CACHE")"
+
+python3 - "$OUTDIR" "$RESULT" "$CACHE" <<'PYEOF'
+import json, glob, sys, time, os
+
+outdir, result, persist = sys.argv[1], sys.argv[2], sys.argv[3]
+now = int(time.time())
+
+# Load prior persistent cache — split by provider so this poller only touches
+# Claude entries; other providers (codex, gemini, ...) are preserved untouched.
+prior_claude = {}
+other_providers = []
+if os.path.exists(persist):
+    try:
+        prior_raw = json.load(open(persist))
+        for a in prior_raw.get("accounts", []):
+            if a.get("provider", "claude") == "claude":
+                prior_claude[a.get("account")] = a
+            else:
+                other_providers.append(a)
+    except Exception:
+        pass
+
+# Read fresh Claude probe results.
+fresh = {}
+for f in sorted(glob.glob(f"{outdir}/*.json")):
+    try:
+        a = json.load(open(f))
+        a["provider"] = "claude"
+        fresh[a.get("account")] = a
+    except Exception:
+        pass
+
+def pull_succeeded(a):
+    # A pull is successful if we got a parseable 200 OK with a usage object.
+    # Anthropic legitimately returns null for individual windows (e.g. five_hour)
+    # when the account has been dormant in that window — that is NOT a failure.
+    # Requiring five_hour to be non-null caused quiet accounts to freeze
+    # last_pull_at, tripping the widget's >10min stale flag (the * marker).
+    if not a:
+        return False
+    if a.get("error"):
+        return False
+    return a.get("usage") is not None
+
+BACKOFF_MIN = 120   # first back-off: 2 minutes
+BACKOFF_MAX = 600   # cap at 10 minutes
+
+merged_claude = []
+all_claude = sorted(set(list(fresh.keys()) + list(prior_claude.keys())))
+for acct in all_claude:
+    f = fresh.get(acct)
+    p = prior_claude.get(acct)
+    if f and pull_succeeded(f):
+        # Successful pull — clear any prior back-off state and reset the
+        # exponential counter so the next failure starts from the floor.
+        f["last_pull_at"]     = now
+        f["last_api_attempt"] = now
+        f["back_off_until"]   = 0
+        f["back_off_secs"]    = BACKOFF_MIN
+        merged_claude.append(f)
+    elif f and p:
+        # Probe ran but failed. Carry forward prior usage so the row still
+        # renders the last good numbers. For rate_limit_error specifically,
+        # set/extend an exponential back-off so the next cycle skips this
+        # account entirely (see pre-probe filter above) — that's what lets
+        # Anthropic's throttle window actually drain.
+        err = f.get("error") or "api_unreachable"
+        carried = {**p, "last_api_attempt": now, "last_error": err}
+        if err == "rate_limit_error":
+            # First rate-limit on this account → BACKOFF_MIN (2 min).
+            # Subsequent consecutive rate-limits → double up to BACKOFF_MAX.
+            prev_secs = p.get("back_off_secs") or 0
+            next_secs = BACKOFF_MIN if prev_secs == 0 else min(BACKOFF_MAX, prev_secs * 2)
+            carried["back_off_until"] = now + next_secs
+            carried["back_off_secs"]  = next_secs
+        merged_claude.append(carried)
+    elif p:
+        # Probe was skipped this cycle (back-off active) OR completely absent.
+        # Preserve prior entry verbatim — including its back_off_until — so
+        # the next cycle's pre-probe filter keeps respecting it. Crucially,
+        # we do NOT touch last_api_attempt here; that would mask the genuine
+        # last-attempt time used elsewhere.
+        merged_claude.append(p)
+    elif f:
+        # Probe ran, failed, and there's no prior cache entry to carry from.
+        f["last_api_attempt"] = now
+        merged_claude.append(f)
+
+out = {}
+if os.path.exists(persist):
+    try:
+        out = dict(json.load(open(persist)))
+    except Exception:
+        pass
+out["accounts"] = merged_claude + other_providers
+out["queried_at"] = now
+
+for path in (persist, result):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            json.dump(out, fh, indent=2)
+    except Exception as e:
+        print(f"Warning: could not write {path}: {e}", file=sys.stderr)
+PYEOF
+
+echo "$CACHE"

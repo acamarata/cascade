@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+# claw-fleet-gemini — usage collector for Gemini API (openclaw-io GCP project).
+#
+# Emits exactly 1 entry: gemini-1 = alisalaah@gmail.com (openclaw-io, paid API key).
+#
+# Authentication: API-key based. Cookie-based approach removed 2026-05-21.
+#
+# Required vault vars:
+#   GEMINI_API_KEY_OPENCLAW   — API key for openclaw-io GCP project (mandatory)
+#
+# Optional vault vars:
+#   GEMINI_GCP_PROJECT_ID     — GCP project ID for Cloud Monitoring queries
+#                               (default: openclaw-io). Only used when ADC is present.
+#
+# Probe logic:
+#   1. Validate key: GET generativelanguage.googleapis.com/v1beta/models?key={KEY}
+#      → status ok / auth_invalid / api_error / network_error
+#   2. If ADC is detected (~/.config/gcloud/application_default_credentials.json
+#      exists AND gcloud print-access-token succeeds): query Cloud Monitoring
+#      timeSeries for quota/rate/net_usage on generativelanguage.googleapis.com.
+#      Maps per-minute metric → usage.five_hour, per-day metric → usage.seven_day.
+#      quota_opaque=False on this path.
+#   3. If ADC absent: status=ok, quota_opaque=true, usage slots null, note carries
+#      the gcloud command to enable real numbers.
+#
+# Status codes: ok | no_auth | auth_invalid | api_error | network_error
+# last_pull_at is only set on status=ok.
+
+set -euo pipefail
+
+VAULT="${HOME}/.claude/vault.env"
+CACHE="${HOME}/.claude/usage-cache.json"
+LOG="${HOME}/Library/Logs/claw-fleet-gemini.log"
+DEBUG_LOG="${HOME}/Library/Logs/claw-fleet-gemini-debug.log"
+ADC="${HOME}/.config/gcloud/application_default_credentials.json"
+
+mkdir -p "$(dirname "${LOG}")" "$(dirname "${CACHE}")"
+
+log() {
+  printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "${LOG}"
+}
+
+if [[ ! -f "${VAULT}" ]]; then
+  log "fatal: vault ${VAULT} missing"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+set +u
+source "${VAULT}"
+set -u
+
+NOW=$(date +%s)
+
+# Detect ADC: file must exist AND gcloud must hand us a token without error.
+ADC_TOKEN=""
+if [[ -f "${ADC}" ]]; then
+  ADC_TOKEN=$(gcloud auth application-default print-access-token 2>/dev/null || true)
+fi
+
+# Pass secrets through env to keep them out of argv / process listings.
+GEMINI_API_KEY="${GEMINI_API_KEY_OPENCLAW:-}" \
+GCP_PROJECT="${GEMINI_GCP_PROJECT_ID:-openclaw-io}" \
+ADC_TOKEN="${ADC_TOKEN}" \
+RPD_LIMIT="${GEMINI_RPD_LIMIT_OPENCLAW:-}" \
+CACHE="${CACHE}" \
+NOW="${NOW}" \
+DEBUG_LOG="${DEBUG_LOG}" \
+python3 <<'PY'
+import json
+import os
+import time
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+cache_path  = Path(os.environ["CACHE"])
+now         = int(os.environ["NOW"])
+debug_log   = Path(os.environ["DEBUG_LOG"])
+api_key     = os.environ.get("GEMINI_API_KEY", "").strip()
+gcp_project = os.environ.get("GCP_PROJECT", "openclaw-io").strip()
+adc_token   = os.environ.get("ADC_TOKEN", "").strip()
+
+MODELS_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models"
+    f"?key={api_key}&pageSize=1"
+)
+# RPM limit returned by quota/limit for model_requests (verified 2026-05-21).
+# api_requests returns MaxInt64 (no practical limit); generate_content_requests
+# daily limit is NOT emitted by quota/limit on Tier 1 paid projects, so we fall
+# back to the published Google AI Studio Tier 1 RPD figure (10,000 for most
+# models; override via GEMINI_RPD_LIMIT_OPENCLAW in vault.env if your project
+# is on a different tier).
+#
+# Notes for the user:
+#  - Gemini Advanced consumer subscriptions ($20/mo via the Gemini app) do NOT
+#    raise these API quotas. They're separate products: the subscription gives
+#    you better consumer models in the Gemini chat app, while API usage is
+#    governed by your GCP project's tier (Free / Paid Tier 1 / Tier 2 / Tier 3).
+_MODEL_REQUESTS_RPM_LIMIT = 200  # req/min on openclaw-io Tier 1
+_RPD_LIMIT_DEFAULT = 10_000      # typical paid Tier 1 daily limit (overridable)
+
+
+def _mon_url(metric_slug: str, start_offset: int) -> str:
+    """Build a Cloud Monitoring timeSeries URL.
+
+    metric_slug must be URL-encoded (e.g. 'quota%2Frate%2Fnet_usage').
+    start_offset is seconds before now to set the query start time.
+    All segments are f-strings so no .format() call is needed and there
+    is no risk of double-brace escape confusion.
+    """
+    end_t   = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+    start_t = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - start_offset))
+    return (
+        f"https://monitoring.googleapis.com/v3/projects/{gcp_project}"
+        f"/timeSeries?filter=metric.type%3D%22serviceruntime.googleapis.com"
+        f"%2F{metric_slug}%22+AND+resource.labels.service%3D"
+        f"%22generativelanguage.googleapis.com%22"
+        f"&interval.endTime={end_t}&interval.startTime={start_t}"
+        f"&view=FULL"
+    )
+
+
+def _fetch_monitoring(url: str) -> dict:
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Authorization", f"Bearer {adc_token}")
+    req.add_header("Accept", "application/json")
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read(1_048_576))
+
+
+def write_debug(msg: str) -> None:
+    debug_log.parent.mkdir(parents=True, exist_ok=True)
+    with debug_log.open("a") as fh:
+        fh.write(f"{time.strftime('%FT%TZ', time.gmtime())} {msg}\n")
+
+
+def build_entry(status: str, note: str, http_code=None,
+                usage_five_hour=None, usage_seven_day=None,
+                quota_opaque=True):
+    last_pull = now if status == "ok" else None
+    err_map = {
+        "ok":            None,
+        "no_auth":       "no_auth",
+        "auth_invalid":  f"http_{http_code}" if http_code else "auth_invalid",
+        "api_error":     f"http_{http_code}" if http_code else "api_error",
+        "network_error": "network_error",
+    }
+    entry = {
+        "provider":    "gemini",
+        "account":     "gemini-1",
+        "email":       "alisalaah@gmail.com (openclaw-io API)",
+        "plan_type":   "api_paid",
+        "usage": {
+            "five_hour":   usage_five_hour,
+            "seven_day":   usage_seven_day,
+            "seven_day_sonnet": None,
+            "seven_day_opus":   None,
+            "extra_usage": None,
+        },
+        "quota_opaque":     quota_opaque,
+        "status":           status,
+        "note":             note,
+        "queried_at":       now,
+        "last_api_attempt": now,
+        "error":            None,
+        "last_error":       err_map.get(status),
+        "http_code":        http_code,
+    }
+    if last_pull is not None:
+        entry["last_pull_at"] = last_pull
+    return entry
+
+
+# Gate 1: API key must be present.
+if not api_key:
+    write_debug("no_auth: GEMINI_API_KEY_OPENCLAW missing in vault")
+    entry = build_entry(
+        status="no_auth",
+        note="Add GEMINI_API_KEY_OPENCLAW to ~/.claude/vault.env",
+    )
+else:
+    # Step 1: validate key with a lightweight models list call.
+    req = urllib.request.Request(MODELS_URL, method="GET")
+    req.add_header("Accept", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            http_code = r.status
+            r.read(4096)  # consume body; we only need the status
+        write_debug(f"models probe: http={http_code} project={gcp_project} adc={'yes' if adc_token else 'no'}")
+
+        if http_code == 200:
+            # Step 2 (Mode B): Cloud Monitoring aggregation when ADC is available.
+            if adc_token:
+                try:
+                    # --- Usage query: net_usage over last 24 h ---
+                    # One per-minute point per (method × quota_metric) series.
+                    # We only aggregate generate_content_requests — that excludes
+                    # ListModels probes that fire every 5 min from our own poller.
+                    usage_data = _fetch_monitoring(
+                        _mon_url("quota%2Frate%2Fnet_usage", 86400)
+                    )
+                    cutoff_5m = now - 300
+                    sum_5m    = 0
+                    sum_24h   = 0
+                    for ts in usage_data.get("timeSeries", []):
+                        qm = ts.get("metric", {}).get("labels", {}).get("quota_metric", "")
+                        if "generate_content" not in qm:
+                            # Skip ListModels / api_requests probes from our own poller
+                            continue
+                        for pt in ts.get("points", []):
+                            val = int(pt.get("value", {}).get("int64Value", 0))
+                            # endTime is the closed boundary of the 1-min bucket
+                            end_str = pt.get("interval", {}).get("endTime", "")
+                            try:
+                                pt_epoch = time.mktime(
+                                    time.strptime(end_str, "%Y-%m-%dT%H:%M:%SZ")
+                                ) - time.timezone   # strptime assumes local; correct to UTC
+                            except ValueError:
+                                pt_epoch = 0
+                            sum_24h += val
+                            if pt_epoch >= cutoff_5m:
+                                sum_5m += val
+
+                    n_series = len(usage_data.get("timeSeries", []))
+                    write_debug(
+                        f"monitoring: {n_series} total series, "
+                        f"generate_content 5m={sum_5m} 24h={sum_24h}"
+                    )
+
+                    # --- Limits query: quota/limit for model_requests RPM ---
+                    # Returns model_requests=200/min on openclaw-io Tier 1.
+                    # api_requests limit is MaxInt64 (no practical ceiling) — skip.
+                    # generate_content_requests daily limit is NOT returned for paid
+                    # projects; RPD % is left null and raw counts go into the note.
+                    rpm_limit = _MODEL_REQUESTS_RPM_LIMIT  # default; overwrite if API agrees
+                    try:
+                        limit_data = _fetch_monitoring(
+                            _mon_url("quota%2Flimit", 3600)
+                        )
+                        MAXINT64 = 9_223_372_036_854_775_807
+                        for ts in limit_data.get("timeSeries", []):
+                            qm  = ts.get("metric", {}).get("labels", {}).get("quota_metric", "")
+                            pts = ts.get("points", [])
+                            if not pts:
+                                continue
+                            val = int(pts[0].get("value", {}).get("int64Value", 0))
+                            # Pick smallest non-zero, non-MaxInt64 value for model_requests
+                            if "model_requests" in qm and 0 < val < MAXINT64:
+                                rpm_limit = min(rpm_limit, val)
+                    except Exception as lim_err:
+                        write_debug(f"limits query error: {type(lim_err).__name__}: {lim_err}")
+
+                    # --- five_hour slot: % of RPM limit consumed in the last 5 min ---
+                    # We have raw request count over 300 s (5 one-minute buckets max).
+                    # Average RPM = sum_5m / 5; utilization = (avg_rpm / rpm_limit) * 100.
+                    # Reset is next 60-second boundary (rolling RPM window).
+                    avg_rpm = sum_5m / 5.0
+                    five_util = round(min((avg_rpm / rpm_limit) * 100, 100.0), 2)
+                    next_min  = (now // 60 + 1) * 60
+                    resets_in_5h = f"{next_min - now}s"
+                    five_hour_val = {
+                        "utilization": five_util,
+                        "resets_at":   next_min,
+                        "resets_in":   resets_in_5h,
+                    }
+
+                    # --- seven_day slot: 24h request count as % of daily limit ---
+                    # Google updated the AI Studio usage UI in 2026 to publish per-
+                    # tier daily limits clearly; for paid Tier 1 the typical
+                    # aggregated daily cap is 10,000 req/day. Cloud Monitoring's
+                    # quota/limit doesn't return RPD for Tier 1 projects, so we
+                    # use the published figure as a default with a vault-var
+                    # override (GEMINI_RPD_LIMIT_OPENCLAW). Reset = next UTC midnight.
+                    rpd_limit_env = os.environ.get("RPD_LIMIT", "").strip()
+                    try:
+                        rpd_limit = int(rpd_limit_env) if rpd_limit_env else _RPD_LIMIT_DEFAULT
+                    except ValueError:
+                        rpd_limit = _RPD_LIMIT_DEFAULT
+                    seven_util = round(min((sum_24h / rpd_limit) * 100, 100.0), 2) if rpd_limit else None
+                    import math as _math
+                    tomorrow_midnight = (_math.floor(now / 86400) + 1) * 86400
+                    h, rem = divmod(tomorrow_midnight - now, 3600)
+                    m      = rem // 60
+                    seven_day_val = {
+                        "utilization": seven_util,
+                        "resets_at":   tomorrow_midnight,
+                        "resets_in":   f"{h}h {m:02d}m",
+                    }
+
+                    note = (
+                        f"{gcp_project} (Tier 1): "
+                        f"5m {sum_5m} req ({five_util:.1f}% of {rpm_limit} RPM) • "
+                        f"24h {sum_24h} req ({seven_util:.1f}% of {rpd_limit:,} RPD est.)"
+                    )
+
+                    entry = build_entry(
+                        status="ok",
+                        note=note,
+                        http_code=200,
+                        usage_five_hour=five_hour_val,
+                        usage_seven_day=seven_day_val,
+                        quota_opaque=False,
+                    )
+
+                except Exception as mon_err:
+                    write_debug(f"monitoring error: {type(mon_err).__name__}: {mon_err}")
+                    entry = build_entry(
+                        status="ok",
+                        note=(
+                            f"API key valid; Cloud Monitoring query failed "
+                            f"({type(mon_err).__name__}: {mon_err}). "
+                            "Check ADC token scope or project permissions."
+                        ),
+                        http_code=200,
+                        quota_opaque=True,
+                    )
+            else:
+                # ADC absent — opaque path, tell user how to upgrade.
+                entry = build_entry(
+                    status="ok",
+                    note=(
+                        "API key valid; run "
+                        "`gcloud auth application-default login --project=openclaw-io` "
+                        "for real consumption numbers via Cloud Monitoring."
+                    ),
+                    http_code=200,
+                    quota_opaque=True,
+                )
+        else:
+            entry = build_entry(
+                status="api_error",
+                note=f"Unexpected HTTP {http_code} from models endpoint",
+                http_code=http_code,
+            )
+
+    except urllib.error.HTTPError as e:
+        write_debug(f"HTTPError code={e.code}")
+        if e.code in (401, 403):
+            entry = build_entry(
+                status="auth_invalid",
+                note=f"HTTP {e.code} — API key invalid or revoked",
+                http_code=e.code,
+            )
+        else:
+            entry = build_entry(
+                status="api_error",
+                note=f"HTTP {e.code} from models endpoint",
+                http_code=e.code,
+            )
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        write_debug(f"network error: {type(e).__name__}: {e}")
+        entry = build_entry(
+            status="network_error",
+            note=f"Network failure: {type(e).__name__}",
+        )
+
+
+# Atomic cache merge — replace gemini rows, preserve all other top-level keys.
+if cache_path.exists():
+    try:
+        cache = json.loads(cache_path.read_text())
+    except json.JSONDecodeError:
+        cache = {}
+else:
+    cache = {}
+
+if not isinstance(cache, dict):
+    cache = {}
+if not isinstance(cache.get("accounts"), list):
+    cache["accounts"] = []
+
+non_gemini = [
+    a for a in cache["accounts"]
+    if not (isinstance(a, dict) and a.get("provider") == "gemini")
+]
+cache["accounts"] = non_gemini + [entry]
+cache["queried_at"] = now
+
+tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+tmp_path.write_text(json.dumps(cache, indent=2))
+os.replace(tmp_path, cache_path)
+
+print(f"gemini probe: status={entry.get('status')} http={entry.get('http_code')} quota_opaque={entry.get('quota_opaque')} adc={'yes' if adc_token else 'no'}")
+PY
+
+log "ran gemini-1 probe (api-key) → ${CACHE}"

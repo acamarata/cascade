@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy to ~/.config/claw-fleet/config.json to override auto-detection.",
+  "accounts": [
+    {
+      "dir": "~/.claude-acc1",
+      "label": "Main",
+      "enabled": true,
+      "do_not_query": false
+    },
+    {
+      "dir": "~/.claude-acc2",
+      "label": "Work",
+      "enabled": true,
+      "do_not_query": false
+    },
+    {
+      "dir": "~/.claude-acc3",
+      "label": "Archive",
+      "enabled": false,
+      "do_not_query": true
+    }
+  ],
+  "include_primary": false,
+  "poll_interval_seconds": 300
+}

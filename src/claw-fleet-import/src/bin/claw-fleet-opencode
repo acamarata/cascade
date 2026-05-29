@@ -1,0 +1,421 @@
+#!/usr/bin/env bash
+# claw-fleet-opencode — usage collector for OpenCode Go subscription.
+#
+# Scrapes opencode.ai/workspace/{workspaceID}/go for rolling/weekly/monthly
+# usage percentages. Emits exactly 1 entry: opencode-1.
+#
+# Required vault vars (from opencode.ai session cookie in Chrome):
+#   OPENCODE_GO_WORKSPACE_ID   — "wrk_XXXXXXXXXX" from workspace URL
+#   OPENCODE_GO_AUTH_COOKIE    — value of the "auth" cookie on opencode.ai
+#
+# Status codes emitted:
+#   ok            — page returned 200 and usage data parsed
+#   no_auth       — vault vars missing
+#   auth_expired  — 302 redirect to auth.opencode.ai or login page
+#   throttled     — HTTP 429
+#   api_error     — other HTTP error
+#   network_error — socket/curl failure
+#
+# Cache slot note: seven_day_sonnet is repurposed for monthly utilization.
+# The widget has no dedicated monthly column; the note field documents this.
+
+set -euo pipefail
+
+VAULT="${HOME}/.claude/vault.env"
+CACHE="${HOME}/.claude/usage-cache.json"
+LOG="${HOME}/Library/Logs/claw-fleet-opencode.log"
+DEBUG_LOG="${HOME}/Library/Logs/claw-fleet-opencode-debug.log"
+
+mkdir -p "$(dirname "${LOG}")" "$(dirname "${CACHE}")"
+
+log() {
+  printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "${LOG}"
+  # Self-truncate to 500 lines
+  if [ "$(wc -l < "${LOG}")" -gt 500 ]; then
+    tail -500 "${LOG}" > "${LOG}.tmp" && mv "${LOG}.tmp" "${LOG}"
+  fi
+}
+
+if [[ ! -f "${VAULT}" ]]; then
+  log "fatal: vault ${VAULT} missing"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+set +u
+source "${VAULT}"
+set -u
+
+NOW=$(date +%s)
+
+# Pass credentials via env, not argv, to avoid process-listing leaks.
+OPENCODE_WS="${OPENCODE_GO_WORKSPACE_ID:-}" \
+OPENCODE_AUTH="${OPENCODE_GO_AUTH_COOKIE:-}" \
+CACHE="${CACHE}" \
+NOW="${NOW}" \
+DEBUG_LOG="${DEBUG_LOG}" \
+python3 <<'PY'
+import json
+import os
+import re
+import sys
+import time
+import html
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+cache_path = Path(os.environ["CACHE"])
+now        = int(os.environ["NOW"])
+debug_log  = Path(os.environ["DEBUG_LOG"])
+ws_id      = os.environ.get("OPENCODE_WS", "").strip()
+auth_cookie = os.environ.get("OPENCODE_AUTH", "").strip()
+
+# OpenCode Go plan limits in USD, from opencode.ai/docs/go (2026-05-21).
+# The dashboard exposes percentages, not dollar amounts — the widget needs
+# these constants to compute "$30 of $30" from "100%". If OpenCode publishes
+# tier-specific limits via the RSC payload later, the parser can override
+# these per-call by reading them from the page.
+GO_LIMITS_USD = {
+    "rolling":  12,   # 5-hour window
+    "weekly":   30,   # 7-day window
+    "monthly":  60,   # 30-day window
+}
+
+def write_debug(msg: str) -> None:
+    debug_log.parent.mkdir(parents=True, exist_ok=True)
+    lines = debug_log.read_text().splitlines() if debug_log.exists() else []
+    lines.append(f"{time.strftime('%FT%TZ', time.gmtime())} {msg}")
+    # Self-truncate to 1000 lines
+    if len(lines) > 1000:
+        lines = lines[-1000:]
+    debug_log.write_text("\n".join(lines) + "\n")
+
+def build_entry(status, note, http_code=None,
+                rolling=None, weekly=None, monthly=None,
+                rolling_resets=0, weekly_resets=0, monthly_resets=0,
+                rolling_status=None, weekly_status=None, monthly_status=None,
+                meta=None):
+    """Build a single opencode-1 cache entry.
+
+    rolling_status / weekly_status / monthly_status carry the per-slot state
+    string the dashboard emits ("ok" or "rate-limited"). The widget uses it as
+    the authoritative cap signal — more reliable than percentage>=100 because
+    OpenCode can flip a slot to rate-limited before the rounded percent hits
+    100.
+
+    meta carries OpenCode-specific plan info (balance, useBalance, monthlyLimit,
+    subscriptionPlan, liteSubscriptionID) so we can detect plan upgrades and
+    surface credit-based usage without re-scraping.
+    """
+    last_pull = now if status == "ok" else None
+    err_map = {
+        "ok":            None,
+        "auth_expired":  "auth_expired",
+        "throttled":     "rate_limit_error",
+        "no_auth":       "no_auth",
+        "api_error":     f"http_{http_code}" if http_code else "api_error",
+        "network_error": "network_error",
+    }
+    def slot(util, reset_in, slot_status):
+        if util is None and slot_status is None:
+            return None
+        d = {
+            "utilization": util,
+            "resets_at":   (now + reset_in) if reset_in else 0,
+        }
+        if slot_status is not None:
+            d["status"] = slot_status
+        return d
+    entry = {
+        "provider":  "opencode",
+        "account":   "opencode-1",
+        "email":     "OpenCode Go",
+        "plan_type": "go",
+        "usage": {
+            "five_hour":         slot(rolling, rolling_resets, rolling_status),
+            "seven_day":         slot(weekly,  weekly_resets,  weekly_status),
+            # monthly% repurposed into seven_day_sonnet slot (no dedicated monthly column)
+            "seven_day_sonnet":  slot(monthly, monthly_resets, monthly_status),
+            "extra_usage": None,
+        },
+        "quota_opaque":     status != "ok",
+        "status":           status,
+        "note":             note,
+        "queried_at":       now,
+        "last_api_attempt": now,
+        "error":            None,
+        "last_error":       err_map.get(status),
+        "http_code":        http_code,
+    }
+    if last_pull is not None:
+        entry["last_pull_at"] = last_pull
+    if meta:
+        entry["opencode_meta"] = meta
+    return entry
+
+# Gate: both vault vars required
+if not ws_id or not auth_cookie:
+    write_debug("no_auth: OPENCODE_GO_WORKSPACE_ID or OPENCODE_GO_AUTH_COOKIE missing in vault")
+    entry = build_entry(
+        status="no_auth",
+        note="Add OPENCODE_GO_WORKSPACE_ID + OPENCODE_GO_AUTH_COOKIE to vault.env",
+    )
+else:
+    url = f"https://opencode.ai/workspace/{ws_id}/go"
+    headers = {
+        "Cookie":     f"auth={auth_cookie}",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/avif,image/webp,*/*;q=0.8"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://opencode.ai/",
+    }
+
+    # Disable automatic redirect following so we can detect the auth redirect.
+    class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None  # don't follow; raise HTTPError instead
+
+    opener = urllib.request.build_opener(NoRedirectHandler())
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with opener.open(req, timeout=15) as r:
+            code      = r.status
+            final_url = r.url
+            body_raw  = r.read(400_000)
+            body      = body_raw.decode("utf-8", errors="replace")
+
+            write_debug(
+                f"http={code} url={final_url} bytes={len(body)} "
+                f"ws={ws_id[:8]}... auth_len={len(auth_cookie)}"
+            )
+
+            # Detect login redirect in body (sometimes 200 + login page)
+            is_login = (
+                "auth.opencode.ai" in final_url
+                or "/login" in final_url
+                or "Sign in" in body[:4_000]
+                or '"redirectTo"' in body[:4_000]
+            )
+            if is_login:
+                entry = build_entry(
+                    status="auth_expired",
+                    note="Session cookie expired — re-export auth cookie from Chrome on opencode.ai",
+                    http_code=code,
+                )
+            elif code == 200:
+                # Unescape HTML entities before regex (Next.js embeds &quot; etc.)
+                body_unescaped = html.unescape(body)
+
+                # The dashboard ships its state as a React Server Components
+                # payload using JS object literal syntax with UNQUOTED keys
+                # (e.g. `rollingUsage:$R[34]={status:"ok",resetInSec:18000,
+                # usagePercent:0}`). The earlier quoted-key regex never matched.
+                # Word-boundary on the bare keyword + bare colon handles both
+                # shapes (RSC and any future JSON-y variant).
+                def extract_usage(field_prefix):
+                    pct_m = re.search(
+                        rf'\b{field_prefix}\b[^{{]*\{{[^}}]*\busagePercent\s*:\s*([\d.]+)',
+                        body_unescaped,
+                    )
+                    reset_m = re.search(
+                        rf'\b{field_prefix}\b[^{{]*\{{[^}}]*\bresetInSec\s*:\s*(\d+)',
+                        body_unescaped,
+                    )
+                    status_m = re.search(
+                        rf'\b{field_prefix}\b[^{{]*\{{[^}}]*\bstatus\s*:\s*"([^"]+)"',
+                        body_unescaped,
+                    )
+                    pct    = float(pct_m.group(1)) if pct_m else None
+                    reset  = int(reset_m.group(1)) if reset_m else 0
+                    slot_status = status_m.group(1) if status_m else None
+                    return pct, reset, slot_status
+
+                rolling_pct, rolling_reset, rolling_st = extract_usage("rollingUsage")
+                weekly_pct,  weekly_reset,  weekly_st  = extract_usage("weeklyUsage")
+                monthly_pct, monthly_reset, monthly_st = extract_usage("monthlyUsage")
+
+                # Extract opencode-specific meta. The RSC payload also exposes
+                # balance (credit cents — when >0 the workspace can spend it
+                # past the weekly cap), useBalance (whether balance spend is
+                # currently enabled), monthlyLimit (custom $ cap), subscription
+                # info (null on Go plan; set on Pro/Max), and the Stripe
+                # liteSubscriptionID. Persisting these lets downstream readers
+                # detect plan upgrades and balance-based usage without a re-scrape.
+                def extract_literal(field):
+                    m = re.search(rf'\b{field}\s*:\s*([^,}}\n]+)', body_unescaped)
+                    if not m:
+                        return None
+                    raw = m.group(1).strip()
+                    if raw == "!0":    return True
+                    if raw == "!1":    return False
+                    if raw == "null":  return None
+                    if raw.startswith('"') and raw.endswith('"'):
+                        return raw[1:-1]
+                    try:
+                        return int(raw)
+                    except ValueError:
+                        try:
+                            return float(raw)
+                        except ValueError:
+                            return None
+
+                meta = {
+                    "balance":               extract_literal("balance"),
+                    "use_balance":           extract_literal("useBalance"),
+                    "monthly_limit":         extract_literal("monthlyLimit"),
+                    "subscription_plan":     extract_literal("subscriptionPlan"),
+                    "lite_subscription_id":  extract_literal("liteSubscriptionID"),
+                    "is_admin":              extract_literal("isAdmin"),
+                }
+                # Drop keys whose extraction returned None to keep the cache tidy.
+                meta = {k: v for k, v in meta.items() if v is not None}
+
+                parsed_any = any(v is not None for v in [rolling_pct, weekly_pct, monthly_pct])
+                write_debug(
+                    f"parsed: rolling={rolling_pct}/{rolling_st} weekly={weekly_pct}/{weekly_st} "
+                    f"monthly={monthly_pct}/{monthly_st} meta={meta} parsed_any={parsed_any}"
+                )
+
+                if parsed_any:
+                    # Compute dollar amounts from percentages using the published
+                    # Go-plan limits. The dashboard only ships percent + status;
+                    # multiplying by the documented limit gives the headline
+                    # dollar figure that matches what the OpenCode billing page
+                    # actually shows. Spend rounds to two decimals because OC
+                    # reports usage percent rounded to integer — anything beyond
+                    # cents is precision we don't have.
+                    def dollars(pct, limit):
+                        if pct is None:
+                            return None
+                        return round(pct * limit / 100, 2)
+
+                    spent = {
+                        "rolling":  dollars(rolling_pct, GO_LIMITS_USD["rolling"]),
+                        "weekly":   dollars(weekly_pct,  GO_LIMITS_USD["weekly"]),
+                        "monthly":  dollars(monthly_pct, GO_LIMITS_USD["monthly"]),
+                    }
+                    # Add limits + spend to the meta block so the widget can
+                    # render dollar context without re-encoding the constants.
+                    meta["limits_usd"] = dict(GO_LIMITS_USD)
+                    meta["spent_usd"]  = spent
+
+                    # Build a user-readable note that summarizes the three
+                    # windows in dollars + percent + status. Useful when staring
+                    # at the cache directly or in CLI output.
+                    def lbl(spent_d, limit, pct, st):
+                        if pct is None: return "—"
+                        s = f"${spent_d:.0f}/${limit}" if spent_d is not None else f"{int(round(pct))}%"
+                        if st and st != "ok":
+                            s += f" {st}"
+                        return s
+                    plan = meta.get("subscription_plan") or "go"
+                    bal  = meta.get("balance")
+                    bal_part = f" • bal ${bal/100:.2f}" if bal else ""
+                    note = (
+                        f"{plan}: 5h {lbl(spent['rolling'], GO_LIMITS_USD['rolling'], rolling_pct, rolling_st)} • "
+                        f"7d {lbl(spent['weekly'],  GO_LIMITS_USD['weekly'],  weekly_pct,  weekly_st)} • "
+                        f"mo {lbl(spent['monthly'], GO_LIMITS_USD['monthly'], monthly_pct, monthly_st)}{bal_part}"
+                    )
+                    entry = build_entry(
+                        status="ok",
+                        note=note,
+                        http_code=code,
+                        rolling=rolling_pct,
+                        weekly=weekly_pct,
+                        monthly=monthly_pct,
+                        rolling_resets=rolling_reset,
+                        weekly_resets=weekly_reset,
+                        monthly_resets=monthly_reset,
+                        rolling_status=rolling_st,
+                        weekly_status=weekly_st,
+                        monthly_status=monthly_st,
+                        meta=meta or None,
+                    )
+                else:
+                    # 200 but no usage fields — page structure changed
+                    write_debug(f"parse_failed: body_excerpt={body[:500]!r}")
+                    entry = build_entry(
+                        status="api_error",
+                        note="200 OK but usage fields not found — page markup may have changed",
+                        http_code=code,
+                    )
+            else:
+                entry = build_entry(
+                    status="api_error",
+                    note=f"Unexpected HTTP {code}",
+                    http_code=code,
+                )
+
+    except urllib.error.HTTPError as e:
+        write_debug(f"HTTPError code={e.code} url={url}")
+        if e.code in (301, 302, 303, 307, 308):
+            location = e.headers.get("Location", "")
+            write_debug(f"redirect to: {location}")
+            entry = build_entry(
+                status="auth_expired",
+                note="Redirected to login — re-export auth cookie from opencode.ai",
+                http_code=e.code,
+            )
+        elif e.code == 429:
+            entry = build_entry(
+                status="throttled",
+                note="HTTP 429 from opencode.ai — rate limited",
+                http_code=429,
+            )
+        elif e.code in (401, 403):
+            entry = build_entry(
+                status="auth_expired",
+                note=f"HTTP {e.code} — cookie invalid or expired",
+                http_code=e.code,
+            )
+        else:
+            entry = build_entry(
+                status="api_error",
+                note=f"HTTP {e.code}",
+                http_code=e.code,
+            )
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        write_debug(f"network error: {type(e).__name__}: {e}")
+        entry = build_entry(
+            status="network_error",
+            note=f"Network failure: {type(e).__name__}",
+        )
+
+# Atomic cache merge: preserve all non-opencode entries.
+if cache_path.exists():
+    try:
+        cache = json.loads(cache_path.read_text())
+    except json.JSONDecodeError:
+        cache = {"accounts": []}
+else:
+    cache = {"accounts": []}
+
+if not isinstance(cache, dict):
+    cache = {"accounts": []}
+if not isinstance(cache.get("accounts"), list):
+    cache["accounts"] = []
+
+non_opencode = [
+    a for a in cache["accounts"]
+    if not (isinstance(a, dict) and a.get("provider") == "opencode")
+]
+cache["accounts"] = non_opencode + [entry]
+cache["queried_at"] = now
+
+tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+tmp_path.write_text(json.dumps(cache, indent=2))
+os.replace(tmp_path, cache_path)
+
+print(f"opencode probe: status={entry.get('status')} http={entry.get('http_code')}")
+PY
+
+log "ran opencode-1 probe → ${CACHE}"
