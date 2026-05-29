@@ -1,4 +1,4 @@
-// claw-dash — full dashboard application
+// cascade-dash — full dashboard application
 // Vanilla JS, no framework, no external dependencies
 
 'use strict';
@@ -303,7 +303,7 @@ function renderTopbar() {
   document.getElementById('topbar').innerHTML =
     `<div class="topbar-left">
        <span class="brand-icon">⚡</span>
-       <span class="brand-name">claw-dash</span>
+       <span class="brand-name">cascade-dash</span>
        ${projects.length > 1
          ? `<select class="project-picker" data-action="pick-project">${projectOptions}</select>`
          : proj ? `<span class="project-name-static">${esc(proj.name || proj.path || '')}</span>` : ''
@@ -799,11 +799,11 @@ function gciNewFile() {
 function render() {
   if (!cache) {
     document.getElementById('topbar').innerHTML =
-      `<div class="topbar-left"><span class="brand-icon">⚡</span><span class="brand-name">claw-dash</span></div>
+      `<div class="topbar-left"><span class="brand-icon">⚡</span><span class="brand-name">cascade-dash</span></div>
        <div class="topbar-right"><span class="updated-text">Waiting for data…</span></div>`;
     document.getElementById('sidebar').innerHTML = '';
     document.getElementById('main').innerHTML =
-      `<div class="empty-state loading">Loading cache…<br><small>Make sure the claw-dash poller is running.</small></div>`;
+      `<div class="empty-state loading">Loading cache…<br><small>Make sure the cascade-dash poller is running.</small></div>`;
     return;
   }
 

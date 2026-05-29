@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""claw-dash HTTP server — serves static web files and /api/* endpoints."""
+"""cascade-dash HTTP server — serves static web files and /api/* endpoints."""
 
 import json
 import os
@@ -13,7 +13,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 HOME = Path.home()
-CLAW_DASH_DIR = HOME / ".claw-dash"
+CLAW_DASH_DIR = HOME / ".cascade-dash"
 
 # ---------------------------------------------------------------------------
 # GCI constants
@@ -42,7 +42,7 @@ def find_web_dir() -> Path:
             return p
 
     # 2. Installed path
-    installed = HOME / ".local" / "share" / "claw-dash" / "web"
+    installed = HOME / ".local" / "share" / "cascade-dash" / "web"
     if installed.is_dir():
         return installed
 
@@ -53,8 +53,8 @@ def find_web_dir() -> Path:
         return dev_web
 
     raise FileNotFoundError(
-        "Could not find the claw-dash web directory. "
-        "Set CLAW_DASH_WEB or install to ~/.local/share/claw-dash/web/."
+        "Could not find the cascade-dash web directory. "
+        "Set CLAW_DASH_WEB or install to ~/.local/share/cascade-dash/web/."
     )
 
 
@@ -354,7 +354,7 @@ def main():
 
     server = HTTPServer(("", port), make_handler)
 
-    # Write port file so other tools (e.g. claw-dash open) know where to connect
+    # Write port file so other tools (e.g. cascade-dash open) know where to connect
     PORT_FILE.write_text(str(port))
 
     def _cleanup(signum=None, frame=None):
@@ -368,7 +368,7 @@ def main():
     signal.signal(signal.SIGTERM, _cleanup)
     signal.signal(signal.SIGINT, _cleanup)
 
-    print(f"claw-dash server running at http://localhost:{port}", file=sys.stderr)
+    print(f"cascade-dash server running at http://localhost:{port}", file=sys.stderr)
 
     try:
         server.serve_forever()

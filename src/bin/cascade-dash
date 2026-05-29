@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# claw-dash — Read .claude/ project directories and output a JSON cache.
-# Used by the claw-dash dashboard and macOS widget to display Claude Code
+# cascade-dash — Read .claude/ project directories and output a JSON cache.
+# Used by the cascade-dash dashboard and macOS widget to display Claude Code
 # project state: tasks, inbox, ideas, memory, and threads.
 #
 # Project discovery (in priority order):
-#   1. ~/.claw-dash/config.json  — explicit list of projects
+#   1. ~/.cascade-dash/config.json  — explicit list of projects
 #   2. Auto-detect: search ~/Sites/, ~/Documents/, ~/Projects/, ~/Developer/,
 #      ~/Downloads (root), and immediate subdirs of ~/ for .claude/ directories.
 #      Capped at 10 projects, sorted by path.
 #
-# Output: JSON written to $CLAW_DASH_CACHE (default: ~/.claw-dash/cache.json)
+# Output: JSON written to $CLAW_DASH_CACHE (default: ~/.cascade-dash/cache.json)
 # Prints the cache path to stdout when done.
 #
-# Usage: claw-dash [--help]
+# Usage: cascade-dash [--help]
 #   --help   Show this message
 
 set -u
@@ -29,8 +29,8 @@ for arg in "$@"; do
 done
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-CACHE="${CLAW_DASH_CACHE:-$HOME/.claw-dash/cache.json}"
-CONFIG_FILE="$HOME/.claw-dash/config.json"
+CACHE="${CLAW_DASH_CACHE:-$HOME/.cascade-dash/cache.json}"
+CONFIG_FILE="$HOME/.cascade-dash/config.json"
 
 # ── Project discovery ─────────────────────────────────────────────────────────
 # Prints lines of the form: path|label|enabled
@@ -524,7 +524,7 @@ with open(cache_path, "w", encoding="utf-8") as f:
     json.dump(output, f, indent=2, ensure_ascii=False)
 
 # Mirror to App Group container for native macOS widget
-app_group = os.path.join(home, "Library", "Group Containers", "group.io.clawdash")
+app_group = os.path.join(home, "Library", "Group Containers", "group.io.cascade")
 if os.path.isdir(app_group):
     import shutil
     shutil.copy2(cache_path, os.path.join(app_group, "cache.json"))
@@ -532,7 +532,7 @@ PYEOF
 }
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
-echo "claw-dash: building cache..." >&2
+echo "cascade-dash: building cache..." >&2
 
 mkdir -p "$(dirname "$CACHE")"
 

@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.clawdash.refresh</string>
+    <string>io.cascade.refresh</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>@BIN@/claw-dash > /dev/null 2>&amp;1</string>
+        <string>@BIN@/cascade-dash > /dev/null 2>&amp;1</string>
     </array>
     <key>StartInterval</key>
     <integer>15</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>@HOME@/Library/Logs/claw-dash-refresh.log</string>
+    <string>@HOME@/Library/Logs/cascade-dash-refresh.log</string>
     <key>StandardErrorPath</key>
-    <string>@HOME@/Library/Logs/claw-dash-refresh.err</string>
+    <string>@HOME@/Library/Logs/cascade-dash-refresh.err</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
