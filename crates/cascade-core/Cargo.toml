@@ -1,0 +1,47 @@
+[package]
+name = "cascade-core"
+description = "Cascade runtime — orchestrates retrieval, chunking, and agent dispatch"
+readme = "README.md"
+keywords = ["cascade", "rag", "ai", "orchestration"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[features]
+# Platform keychain backends — enable exactly one per target at build time.
+# These are optional so the crate compiles without any OS keychain dependency
+# when running tests on a CI host that has no keychain daemon.
+keychain-macos   = []
+keychain-linux   = []
+keychain-windows = []
+
+[dependencies]
+cascade-types = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+async-trait   = { workspace = true }
+thiserror     = { workspace = true }
+tokio         = { workspace = true }
+tracing       = { workspace = true }
+rusqlite      = { workspace = true }
+
+# macOS Keychain (activated by keychain-macos feature + build.rs target detection)
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "2", optional = true }
+
+# Linux Secret Service via D-Bus
+[target.'cfg(target_os = "linux")'.dependencies]
+secret-service = { version = "3", optional = true }
+
+# Windows Credential Manager
+# TODO(P1): wire up a real Windows keychain crate when building for Windows.
+# The correct crate name is `windows` (microsoft/windows-rs) with the
+# `Security_Credentials` feature. Stub out for now so the workspace resolves
+# on macOS/Linux CI without a Windows-only dep.
+
+[dev-dependencies]
+tempfile = "3"
+tokio    = { workspace = true }

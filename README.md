@@ -1,45 +1,100 @@
-# cascade
+# Cascade
 
-Cascading fleet dashboard and Gemini proxy relay for multi-agent Claude / OpenCode sessions.
+[![Build](https://img.shields.io/github/actions/workflow/status/acamarata/cascade/ci.yml?branch=main&label=build)](https://github.com/acamarata/cascade/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/cascade-core.svg)](https://crates.io/crates/cascade-core)
+[![npm](https://img.shields.io/npm/v/@acamarata/cascade.svg)](https://www.npmjs.com/package/@acamarata/cascade)
+[![docs.rs](https://img.shields.io/docsrs/cascade-core)](https://docs.rs/cascade-core)
+[![MSRV](https://img.shields.io/badge/rust-1.78+-orange.svg)](https://www.rust-lang.org)
+[![Discussions](https://img.shields.io/github/discussions/acamarata/cascade)](https://github.com/acamarata/cascade/discussions)
 
-Absorbed from `claw-fleet` (Gemini proxy daemon) and `claw-dash` (fleet dashboard) — merged into a single unified tool in May 2026.
+A six-tier instruction cascade manager for AI coding agents. Write your rules once, at the right scope, and every tool picks them up automatically.
 
-## What it does
+---
 
-- **Gemini proxy** (`src/bin/cascade-gemini-proxy`): runs on `localhost:3761`, rotates across 28 Gemini API keys from vault, writes utilization to `~/.claude/temp/quota-state.json`
-- **Fleet dashboard** (`src/web/`): reads `quota-state.json`, renders per-account utilization as a web UI on `localhost:9761`
-- **launchd agents**: both services run as user launchd agents, auto-start on login, restart on crash
+## The problem
 
-## Ports
+AI coding agents read instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and so on). Most teams end up with a tangle: rules duplicated across repos, tools that see different subsets, no clear override order. When you work across many repos and tool contexts, this becomes expensive to maintain and easy to get wrong.
 
-| Service | Port | Protocol | Purpose |
-|---|---|---|---|
-| `cascade-gemini-proxy` | 3761 | HTTP | Gemini API relay + quota tracking |
-| `cascade-dashboard` | 9761 | HTTP | Fleet utilization dashboard |
+## What Cascade does
+
+Cascade manages a six-tier hierarchy of instruction files:
+
+```
+GCI  — global, applies everywhere
+ └─ PCI  — per-project cluster
+     └─ APC  — per-application
+         └─ PPC  — per-product
+             └─ PRC  — per-repo
+                 └─ PAC  — per-app context
+```
+
+Each tier inherits from the one above. A rule at the GCI level applies everywhere unless a lower tier overrides it. Cascade resolves the full effective instruction set for any given working directory and writes the tool-specific files each agent expects.
 
 ## Install
 
+**macOS (Homebrew)**
 ```bash
-bash install.sh
+brew install acamarata/tap/cascade
 ```
 
-## Uninstall
+**Linux (AUR)**
+```bash
+yay -S cascade-bin
+```
+
+**Windows (Winget)**
+```powershell
+winget install acamarata.cascade
+```
+
+**From source**
+```bash
+cargo install cascade-cli
+```
+
+Verify: `cascade --version`
+
+## Quickstart
 
 ```bash
-bash uninstall.sh
+# First-time setup: interactive wizard
+cascade init
+
+# Edit your global rules
+cascade edit --tier gci
+
+# Sync derived files to all connected tools
+cascade sync
+
+# Search your indexed rule base
+cascade search "authentication"
+
+# Check status
+cascade status
 ```
 
-## Architecture
+Full documentation: [the handbook](docs/handbook/) and [the wiki](../../wiki).
 
-```
-vault.env (28 Gemini keys, G1-G8)
-    └─ cascade-gemini-proxy (localhost:3761)
-           └─ quota-state.json (~/.claude/temp/)
-                  └─ cascade-dashboard (localhost:9761)
-```
+## Screenshots
 
-## Migration history
+| Onboarding wizard | Cascade editor | RAG search |
+|---|---|---|
+| *(screenshot — E5 beta)* | *(screenshot — E4 beta)* | *(screenshot — E7 beta)* |
 
-Absorbed from two prior repos in E12 (2026-05-29):
-- `claw-fleet` — Gemini proxy daemon + launchd agents (local snapshot, GitHub deleted 2026-05-27)
-- `claw-dash` — fleet dashboard web UI + widget (GitHub: acamarata/claw-dash, archived 2026-05-29)
+## Features
+
+- Automatic discovery and resolution of CASCADE.md files in the working tree
+- Derived-file writer: generates CLAUDE.md, AGENTS.md, .cursorrules, and others from a single source
+- MCP server exposing the resolved cascade as context to any MCP-compatible tool
+- Local RAG index over your instruction corpus: semantic search, citations, no cloud required
+- Onboarding wizard for first-run setup across 7 supported tools
+- All data stays local; no telemetry by default
+
+## Contributing
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and [the wiki Contributing page](../../wiki/Contributing).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

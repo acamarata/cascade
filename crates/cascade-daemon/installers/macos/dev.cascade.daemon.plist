@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent manifest for cascaded on macOS.
+
+  Install path : ~/Library/LaunchAgents/dev.cascade.daemon.plist
+  Installed by : `cascade daemon install` (see supervisor.rs)
+  Idempotency  : install command checks plist presence + launchctl list
+                 before loading; no admin elevation required on second call.
+
+  DO NOT hand-edit this template while the daemon is installed. Run
+  `cascade daemon install` to regenerate it from the current binary path.
+
+  Keys:
+    KeepAlive=true        — launchd restarts on crash automatically
+    ThrottleInterval=10   — minimum 10s between restart attempts
+    RunAtLoad=true        — starts on login session open
+-->
+<plist version="1.0">
+<dict>
+    <!-- Service label — matches bundle ID convention dev.cascade.* -->
+    <key>Label</key>
+    <string>dev.cascade.daemon</string>
+
+    <!-- Substituted with the real binary path at install time by cascade CLI -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__CASCADE_BIN_PATH__</string>
+    </array>
+
+    <!-- Crash recovery: launchd restarts the process on unclean exit -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Rate-limit restarts to avoid rapid crash loops -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Start at login without requiring explicit `launchctl start` -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Environment: tell daemon to write JSON logs, not TTY-colored output -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>__HOME_DIR__</string>
+        <key>CASCADE_LOG_FORMAT</key>
+        <string>json</string>
+        <key>CASCADE_LOG_LEVEL</key>
+        <string>info</string>
+    </dict>
+
+    <!-- Route stdout/stderr to ~/Library/Logs/ for Console.app visibility -->
+    <key>StandardOutPath</key>
+    <string>__HOME_DIR__/Library/Logs/cascade-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME_DIR__/Library/Logs/cascade-daemon-err.log</string>
+</dict>
+</plist>

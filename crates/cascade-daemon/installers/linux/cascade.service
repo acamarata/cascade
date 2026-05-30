@@ -1,0 +1,44 @@
+# cascade.service — systemd user unit for cascaded.
+#
+# Install path : ~/.config/systemd/user/cascade.service
+# Installed by : `cascade daemon install` (see supervisor.rs)
+# Activation   : systemctl --user enable --now cascade.service
+#
+# This is a *user* unit — no root required. It runs inside the user's
+# login session and stops when the session ends (or on explicit stop).
+#
+# Restart=always + RestartSec=10 gives the base restart behavior.
+# Exponential backoff for repeated crashes is handled in supervisor.rs
+# so this unit stays simple. If the daemon exits cleanly (exit 0 from
+# graceful shutdown), systemd will NOT restart it.
+#
+# Template note: __CASCADE_BIN_PATH__ is substituted by `cascade daemon
+# install` with the real binary path at install time.
+
+[Unit]
+Description=Cascade AI context daemon
+Documentation=https://github.com/acamarata/cascade
+# Start after the user's D-Bus session and network are up.
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=__CASCADE_BIN_PATH__
+Restart=always
+RestartSec=10
+
+# Give the process up to 10 seconds to flush state on stop before SIGKILL.
+TimeoutStopSec=10
+
+# Pass log format hint — daemon respects this env var to emit JSON.
+Environment=CASCADE_LOG_FORMAT=json
+Environment=CASCADE_LOG_LEVEL=info
+
+# Write a crash marker if the process exits with a non-zero code so the
+# next `cascade status` shows a "last crashed" indicator.
+# (Full crash reporting via Sentry is deferred to v0.2.0 per Q25.)
+
+[Install]
+# default.target is the correct anchor for user services; never use
+# multi-user.target in a user unit.
+WantedBy=default.target

@@ -1,0 +1,32 @@
+[package]
+name = "cascade-cli"
+description = "Command-line interface for the Cascade AI context framework"
+readme = "README.md"
+keywords = ["cascade", "cli", "ai"]
+default-run = "cascade"
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[[bin]]
+name = "cascade"
+path = "src/main.rs"
+
+[dependencies]
+cascade-core  = { workspace = true }
+cascade-types = { workspace = true }
+async-trait   = { workspace = true }
+clap          = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+tokio         = { workspace = true }
+toml          = "0.8"
+toml_edit     = "0.22"
+tracing       = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

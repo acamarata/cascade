@@ -1,0 +1,7 @@
+# Cascade — strict Clippy configuration
+# Run: cargo clippy --workspace --all-targets -- -D warnings
+
+msrv = "1.75"
+
+# Enforce documentation on all public items
+# Applied via: #![deny(missing_docs)] in each crate lib.rs

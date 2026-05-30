@@ -1,0 +1,27 @@
+[package]
+name = "cascade-plugins"
+description = "WASM plugin host for Cascade — load and execute sandboxed provider plugins"
+readme = "README.md"
+keywords = ["cascade", "plugins", "wasm", "ai"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+cascade-types = { workspace = true }
+wasmtime      = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+thiserror     = { workspace = true }
+tracing       = { workspace = true }
+async-trait   = { workspace = true }
+tokio         = { workspace = true }
+semver        = "1"
+toml          = "0.8"
+dirs          = "5"
+
+[dev-dependencies]
+tempfile      = "3"

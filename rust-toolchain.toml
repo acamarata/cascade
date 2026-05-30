@@ -1,0 +1,4 @@
+[toolchain]
+channel = "stable"
+# MSRV 1.75 — async fn in traits stable, required for cascade-types traits
+components = ["rustfmt", "clippy"]

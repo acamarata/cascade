@@ -1,0 +1,28 @@
+[package]
+name = "cascade-types"
+description = "Core traits and types for the Cascade AI context framework"
+readme = "README.md"
+keywords = ["cascade", "rag", "ai", "context", "mcp"]
+categories = ["api-bindings"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+async-trait = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true }
+tracing     = { workspace = true }
+# TOML is the format for human-edited config files (CRIT-5 policy).
+toml        = "0.8"
+
+[dev-dependencies]
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
