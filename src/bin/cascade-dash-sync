@@ -6,13 +6,13 @@
 set -euo pipefail
 
 # Find the repo. In order of preference:
-#   1. CLAW_DASH_REPO env var
+#   1. CASCADE_DASH_REPO env var
 #   2. ~/.config/cascade-dash/repo-path (written at install time)
 #   3. Current working directory if it looks like the repo
 #   4. Script's own parent parent dir (if run from inside the repo)
 find_repo() {
-  if [ -n "${CLAW_DASH_REPO:-}" ] && [ -f "$CLAW_DASH_REPO/src/bin/cascade-dash" ]; then
-    echo "$CLAW_DASH_REPO"; return 0
+  if [ -n "${CASCADE_DASH_REPO:-}" ] && [ -f "$CASCADE_DASH_REPO/src/bin/cascade-dash" ]; then
+    echo "$CASCADE_DASH_REPO"; return 0
   fi
   if [ -f "$HOME/.config/cascade-dash/repo-path" ]; then
     local p; p=$(cat "$HOME/.config/cascade-dash/repo-path")
@@ -25,7 +25,7 @@ find_repo() {
 }
 
 REPO=$(find_repo) || {
-  echo "ERR: cannot locate cascade-dash repo. Set CLAW_DASH_REPO=/path/to/repo or cd into it." >&2
+  echo "ERR: cannot locate cascade-dash repo. Set CASCADE_DASH_REPO=/path/to/repo or cd into it." >&2
   exit 1
 }
 echo "repo: $REPO"
@@ -70,5 +70,5 @@ done
 # Mirror cache to App Group container (for macOS native widget)
 _APP_GROUP="$HOME/Library/Group Containers/group.io.cascade"
 if [ -d "$_APP_GROUP" ]; then
-  cp "$HOME/.cascade-dash/cache.json" "$_APP_GROUP/cache.json" 2>/dev/null || true
+  cp "$HOME/.cascade/cache.json" "$_APP_GROUP/cache.json" 2>/dev/null || true
 fi

@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.cascade.server</string>
+    <string>io.cascade.dashboard</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
         <string>@BIN@/cascade-dash-server</string>
     </array>
     <key>KeepAlive</key>
@@ -15,16 +17,16 @@
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>@HOME@/Library/Logs/cascade-dash-server.log</string>
+    <string>@HOME@/Library/Logs/cascade-dashboard.log</string>
     <key>StandardErrorPath</key>
-    <string>@HOME@/Library/Logs/cascade-dash-server.log</string>
+    <string>@HOME@/Library/Logs/cascade-dashboard.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>@BIN@:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
         <string>@HOME@</string>
-        <key>CLAW_DASH_PORT</key>
+        <key>CASCADE_DASH_PORT</key>
         <string>9761</string>
     </dict>
 </dict>

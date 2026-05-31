@@ -4,12 +4,12 @@
 # project state: tasks, inbox, ideas, memory, and threads.
 #
 # Project discovery (in priority order):
-#   1. ~/.cascade-dash/config.json  — explicit list of projects
+#   1. ~/.cascade/config.json  — explicit list of projects
 #   2. Auto-detect: search ~/Sites/, ~/Documents/, ~/Projects/, ~/Developer/,
 #      ~/Downloads (root), and immediate subdirs of ~/ for .claude/ directories.
 #      Capped at 10 projects, sorted by path.
 #
-# Output: JSON written to $CLAW_DASH_CACHE (default: ~/.cascade-dash/cache.json)
+# Output: JSON written to $CASCADE_DASH_CACHE (default: ~/.cascade/cache.json)
 # Prints the cache path to stdout when done.
 #
 # Usage: cascade-dash [--help]
@@ -29,8 +29,8 @@ for arg in "$@"; do
 done
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-CACHE="${CLAW_DASH_CACHE:-$HOME/.cascade-dash/cache.json}"
-CONFIG_FILE="$HOME/.cascade-dash/config.json"
+CACHE="${CASCADE_DASH_CACHE:-$HOME/.cascade/cache.json}"
+CONFIG_FILE="$HOME/.cascade/config.json"
 
 # ── Project discovery ─────────────────────────────────────────────────────────
 # Prints lines of the form: path|label|enabled

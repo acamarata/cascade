@@ -3,7 +3,7 @@
 #
 # Unloads:
 #   - io.cascade.gemini-proxy (Gemini proxy, port 3761)
-#   - io.cascade.server       (fleet dashboard, port 9761)
+#   - io.cascade.dashboard     (fleet dashboard, port 9761)
 #   - io.cascade.refresh      (data poller)
 #
 # Removes:
@@ -63,7 +63,7 @@ unload_launchd() {
 }
 
 unload_launchd "io.cascade.refresh"
-unload_launchd "io.cascade.server"
+unload_launchd "io.cascade.dashboard"
 unload_launchd "io.cascade.gemini-proxy"
 
 # ---------------------------------------------------------------------------

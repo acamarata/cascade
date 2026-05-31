@@ -3,7 +3,7 @@
 #
 # Installs:
 #   - cascade-gemini-proxy (Gemini API relay, localhost:3761) as io.cascade.gemini-proxy
-#   - cascade-dash-server  (fleet dashboard, localhost:9761)  as io.cascade.server
+#   - cascade-dash-server  (fleet dashboard, localhost:9761)  as io.cascade.dashboard
 #   - cascade-refresh      (data poller, every 15s)           as io.cascade.refresh
 #
 # All agents run as user launchd agents (no admin required).
@@ -119,7 +119,7 @@ install_launchd() {
 }
 
 install_launchd "io.cascade.gemini-proxy"  "$SCRIPT_DIR/src/launchd/io.cascade.gemini-proxy.plist.template"
-install_launchd "io.cascade.server"        "$SCRIPT_DIR/src/launchd/io.cascade.dashboard.plist.template"
+install_launchd "io.cascade.dashboard"     "$SCRIPT_DIR/src/launchd/io.cascade.dashboard.plist.template"
 install_launchd "io.cascade.refresh"       "$SCRIPT_DIR/src/launchd/io.cascade.refresh.plist.template"
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,13 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 HOME = Path.home()
-CLAW_DASH_DIR = HOME / ".cascade-dash"
+CASCADE_DASH_DIR = HOME / ".cascade"
+
+# ---------------------------------------------------------------------------
+# Quota state (written by cascade-refresh)
+# ---------------------------------------------------------------------------
+
+QUOTA_STATE_FILE = HOME / ".claude" / "temp" / "quota-state.json"
 
 # ---------------------------------------------------------------------------
 # GCI constants
@@ -28,16 +34,15 @@ GCI_CATS = {
     "skills":     {"dir": "skills",     "pattern": "SKILL.md",  "subdir": True},
     "spine":      {"dir": "",           "pattern": "*.md",      "subdir": False, "files": ["CLAUDE.md", "RTK.md"]},
 }
-CACHE_FILE = CLAW_DASH_DIR / "cache.json"
-CONFIG_FILE = CLAW_DASH_DIR / "config.json"
-PORT_FILE = CLAW_DASH_DIR / "port"
+CONFIG_FILE = CASCADE_DASH_DIR / "config.json"
+PORT_FILE = CASCADE_DASH_DIR / "port"
 
 
 def find_web_dir() -> Path:
     """Locate the static web directory (in priority order)."""
     # 1. Explicit env var
-    if "CLAW_DASH_WEB" in os.environ:
-        p = Path(os.environ["CLAW_DASH_WEB"])
+    if "CASCADE_DASH_WEB" in os.environ:
+        p = Path(os.environ["CASCADE_DASH_WEB"])
         if p.is_dir():
             return p
 
@@ -54,16 +59,16 @@ def find_web_dir() -> Path:
 
     raise FileNotFoundError(
         "Could not find the cascade-dash web directory. "
-        "Set CLAW_DASH_WEB or install to ~/.local/share/cascade-dash/web/."
+        "Set CASCADE_DASH_WEB or install to ~/.local/share/cascade/web/."
     )
 
 
 def read_port_config() -> int:
     """Return the configured base port (default 3077)."""
     # Env var wins
-    if "CLAW_DASH_PORT" in os.environ:
+    if "CASCADE_DASH_PORT" in os.environ:
         try:
-            return int(os.environ["CLAW_DASH_PORT"])
+            return int(os.environ["CASCADE_DASH_PORT"])
         except ValueError:
             pass
 
@@ -161,7 +166,7 @@ def _walk_gci():
 # Request handler
 # ---------------------------------------------------------------------------
 
-class ClawDashHandler(SimpleHTTPRequestHandler):
+class CascadeDashHandler(SimpleHTTPRequestHandler):
     """Serves /api/* from the cache directory; everything else from web_dir."""
 
     def __init__(self, *args, web_dir: Path, **kwargs):
@@ -195,7 +200,7 @@ class ClawDashHandler(SimpleHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         path = urlparse(self.path).path
         if path == "/api/cache":
-            self._serve_json_file(CACHE_FILE, no_cache=True)
+            self._serve_json_file(QUOTA_STATE_FILE, no_cache=True)
         elif path == "/api/config":
             self._serve_json_file(CONFIG_FILE, no_cache=False, fallback=b"{}")
         elif path == "/api/gci":
@@ -347,10 +352,10 @@ def main():
     base_port = read_port_config()
     port = find_free_port(base_port)
 
-    CLAW_DASH_DIR.mkdir(parents=True, exist_ok=True)
+    CASCADE_DASH_DIR.mkdir(parents=True, exist_ok=True)
 
     def make_handler(*args, **kwargs):
-        return ClawDashHandler(*args, web_dir=web_dir, **kwargs)
+        return CascadeDashHandler(*args, web_dir=web_dir, **kwargs)
 
     server = HTTPServer(("", port), make_handler)
 
