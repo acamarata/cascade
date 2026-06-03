@@ -62,7 +62,11 @@ impl HealthState {
             .inner
             .try_read()
             .map(|g| g.clone())
-            .unwrap_or_else(|_| HealthInner { queue_depth: 0, ram_kb: 0, cpu_pct: 0.0 });
+            .unwrap_or_else(|_| HealthInner {
+                queue_depth: 0,
+                ram_kb: 0,
+                cpu_pct: 0.0,
+            });
 
         HealthSnapshot {
             status: "ok",
@@ -120,7 +124,9 @@ async fn sample_resources() -> (u64, f32) {
 #[cfg(target_os = "linux")]
 async fn sample_linux() -> (u64, f32) {
     // VmRSS line in /proc/self/status gives RSS in kB.
-    let content = tokio::fs::read_to_string("/proc/self/status").await.unwrap_or_default();
+    let content = tokio::fs::read_to_string("/proc/self/status")
+        .await
+        .unwrap_or_default();
     let ram_kb = content
         .lines()
         .find(|l| l.starts_with("VmRSS:"))

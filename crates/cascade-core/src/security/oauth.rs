@@ -51,6 +51,7 @@ pub struct OAuthCallbackValidator {
 }
 
 /// A validated and ready-to-use authorization code.
+#[derive(Debug)]
 pub struct AuthorizationCode(pub String);
 
 /// Reasons an OAuth callback can be rejected.
@@ -221,10 +222,10 @@ mod tests {
 
     fn make_validator() -> OAuthCallbackValidator {
         OAuthCallbackValidator::new(
-            vec![0u8; 32],                            // session_key
-            vec![1u8; 32],                            // nonce
+            vec![0u8; 32],                                      // session_key
+            vec![1u8; 32],                                      // nonce
             vec!["https://localhost:9761/callback".to_owned()], // registered
-            b"pkce-verifier-bytes",                   // pkce verifier
+            b"pkce-verifier-bytes",                             // pkce verifier
         )
     }
 

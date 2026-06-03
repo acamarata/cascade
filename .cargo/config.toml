@@ -1,0 +1,23 @@
+# Cascade workspace cargo config.
+#
+# macOS build-host override: on this host the PATH-resolved `cc` is a wrapper
+# (the agent launcher) that shadows the system C compiler. This breaks BOTH:
+#   1. cargo's Rust link step (-lSystem / -liconv link errors)  -> `linker` below
+#   2. cc-rs build scripts that compile C (e.g. libsqlite3-sys via cascade-rag),
+#      which call `cc` directly and get the launcher ("unknown option '-O0'")
+#      -> CC / CXX in [env] below
+# All overrides point at the real Apple clang. Scoped to darwin targets only;
+# the Linux/Windows CI matrix is untouched and uses its own default toolchain.
+
+[target.aarch64-apple-darwin]
+linker = "/usr/bin/clang"
+
+[target.x86_64-apple-darwin]
+linker = "/usr/bin/clang"
+
+[alias]
+coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
+
+[env]
+CC = "/usr/bin/clang"
+CXX = "/usr/bin/clang++"

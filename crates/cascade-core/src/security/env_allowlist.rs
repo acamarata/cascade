@@ -128,7 +128,8 @@ impl EnvVarAllowlist {
         for (key, _value) in all_vars {
             if self.is_allowed(&key) {
                 // Canonicalize the value: strip null bytes and control chars.
-                let cleaned = self.canonicalize_value(&key, &std::env::var(&key).unwrap_or_default());
+                let cleaned =
+                    self.canonicalize_value(&key, &std::env::var(&key).unwrap_or_default());
                 // Only update if cleaning changed the value.
                 if cleaned != std::env::var(&key).unwrap_or_default() {
                     std::env::set_var(&key, &cleaned);
@@ -144,8 +145,7 @@ impl EnvVarAllowlist {
     }
 
     fn is_allowed(&self, key: &str) -> bool {
-        ALLOWED_ENV_VARS.contains(&key)
-            || self.extra_allowed.iter().any(|s| s == key)
+        ALLOWED_ENV_VARS.contains(&key) || self.extra_allowed.iter().any(|s| s == key)
     }
 
     /// Canonicalize an environment variable value.

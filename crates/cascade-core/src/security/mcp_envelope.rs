@@ -129,12 +129,10 @@ impl McpEnvelopeValidator {
         raw: &Value,
         logger: &AuditLogger,
     ) -> Result<McpRequest, JsonRpcError> {
-        let obj = raw.as_object().ok_or_else(|| {
-            JsonRpcError {
-                code: error_codes::INVALID_REQUEST,
-                message: "message must be a JSON object".to_owned(),
-                data: None,
-            }
+        let obj = raw.as_object().ok_or_else(|| JsonRpcError {
+            code: error_codes::INVALID_REQUEST,
+            message: "message must be a JSON object".to_owned(),
+            data: None,
         })?;
 
         // `jsonrpc` field must be present and equal to "2.0".

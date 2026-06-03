@@ -4,10 +4,10 @@
 //! orchestrator. The `Tier` enum encodes the model capability class (not any
 //! specific model name) so agents remain vendor-neutral.
 
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error::Result;
 
 // ── Tier ─────────────────────────────────────────────────────────────────────
 

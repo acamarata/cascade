@@ -119,8 +119,7 @@ impl std::str::FromStr for CascadeTier {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_acronym(s)
-            .ok_or_else(|| format!("unknown cascade tier: {s}"))
+        Self::from_acronym(s).ok_or_else(|| format!("unknown cascade tier: {s}"))
     }
 }
 
@@ -174,7 +173,10 @@ mod tests {
     fn tier_precedence_order() {
         let tiers = CascadeTier::all_in_precedence_order();
         for window in tiers.windows(2) {
-            assert!(window[0] < window[1], "GCI must be < PCI < APC < PPC < PRC < PAC in Ord");
+            assert!(
+                window[0] < window[1],
+                "GCI must be < PCI < APC < PPC < PRC < PAC in Ord"
+            );
         }
     }
 

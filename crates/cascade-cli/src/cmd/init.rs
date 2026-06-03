@@ -19,9 +19,11 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::{CascadeError, Result};
-use cascade_types::paths::{CASCADE_DIR_NAME, CASCADE_MD_NAME, AGENTS_MD_NAME, CLAUDE_MD_NAME, subdirs};
+use cascade_types::paths::{
+    subdirs, AGENTS_MD_NAME, CASCADE_DIR_NAME, CASCADE_MD_NAME, CLAUDE_MD_NAME,
+};
+use clap::Args;
 
 use super::Command;
 
@@ -63,10 +65,16 @@ const SUBDIRS: &[&str] = &[
 #[async_trait]
 impl Command for InitArgs {
     async fn run(&self) -> Result<()> {
-        let cwd = std::env::current_dir()
-            .map_err(|e| CascadeError::Io { path: PathBuf::from("."), operation: "get cwd", source: e })?;
+        let cwd = std::env::current_dir().map_err(|e| CascadeError::Io {
+            path: PathBuf::from("."),
+            operation: "get cwd",
+            source: e,
+        })?;
 
-        let tier_label = self.tier.as_deref().unwrap_or_else(|| auto_detect_tier(&cwd));
+        let tier_label = self
+            .tier
+            .as_deref()
+            .unwrap_or_else(|| auto_detect_tier(&cwd));
         let root = tier_root(&cwd, tier_label)?;
         let cascade_dir = root.join(CASCADE_DIR_NAME);
 
@@ -84,8 +92,14 @@ impl Command for InitArgs {
                 println!("  {}/{}/", CASCADE_DIR_NAME, sub);
             }
             println!("  {}/{}", CASCADE_DIR_NAME, CASCADE_MD_NAME);
-            println!("  {}/{} -> {}", CASCADE_DIR_NAME, CLAUDE_MD_NAME, CASCADE_MD_NAME);
-            println!("  {}/{} -> {}", CASCADE_DIR_NAME, AGENTS_MD_NAME, CASCADE_MD_NAME);
+            println!(
+                "  {}/{} -> {}",
+                CASCADE_DIR_NAME, CLAUDE_MD_NAME, CASCADE_MD_NAME
+            );
+            println!(
+                "  {}/{} -> {}",
+                CASCADE_DIR_NAME, AGENTS_MD_NAME, CASCADE_MD_NAME
+            );
             println!("  {}/.gitignore", CASCADE_DIR_NAME);
             return Ok(());
         }
@@ -93,16 +107,22 @@ impl Command for InitArgs {
         // Create subdirectories.
         for sub in SUBDIRS {
             let dir = cascade_dir.join(sub);
-            std::fs::create_dir_all(&dir)
-                .map_err(|e| CascadeError::Io { path: dir.clone(), operation: "create_dir_all", source: e })?;
+            std::fs::create_dir_all(&dir).map_err(|e| CascadeError::Io {
+                path: dir.clone(),
+                operation: "create_dir_all",
+                source: e,
+            })?;
         }
 
         // Write starter CASCADE.md.
         let cascade_md = cascade_dir.join(CASCADE_MD_NAME);
         if !cascade_md.exists() || self.force {
             let content = starter_template(tier_label);
-            std::fs::write(&cascade_md, content)
-                .map_err(|e| CascadeError::Io { path: cascade_md.clone(), operation: "write CASCADE.md", source: e })?;
+            std::fs::write(&cascade_md, content).map_err(|e| CascadeError::Io {
+                path: cascade_md.clone(),
+                operation: "write CASCADE.md",
+                source: e,
+            })?;
         }
 
         // Create CLAUDE.md and AGENTS.md symlinks.
@@ -111,11 +131,18 @@ impl Command for InitArgs {
         // Write .gitignore.
         let gitignore = cascade_dir.join(".gitignore");
         if !gitignore.exists() || self.force {
-            std::fs::write(&gitignore, GITIGNORE_CONTENT)
-                .map_err(|e| CascadeError::Io { path: gitignore, operation: "write .gitignore", source: e })?;
+            std::fs::write(&gitignore, GITIGNORE_CONTENT).map_err(|e| CascadeError::Io {
+                path: gitignore,
+                operation: "write .gitignore",
+                source: e,
+            })?;
         }
 
-        println!("Initialised {} cascade at {}", tier_label.to_uppercase(), cascade_dir.display());
+        println!(
+            "Initialised {} cascade at {}",
+            tier_label.to_uppercase(),
+            cascade_dir.display()
+        );
         Ok(())
     }
 }
@@ -152,7 +179,9 @@ fn tier_root(cwd: &Path, tier: &str) -> Result<PathBuf> {
 }
 
 fn find_git_root(cwd: &Path) -> Option<PathBuf> {
-    cwd.ancestors().find(|p| p.join(".git").exists()).map(|p| p.to_path_buf())
+    cwd.ancestors()
+        .find(|p| p.join(".git").exists())
+        .map(|p| p.to_path_buf())
 }
 
 fn starter_template(tier: &str) -> String {

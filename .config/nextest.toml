@@ -1,0 +1,12 @@
+# cargo-nextest configuration for the Cascade workspace.
+# Reference: https://nexte.st/docs/configuration
+
+[profile.ci]
+# Retry failed tests up to 2 times in CI mode
+retries = 2
+
+# Do not stop on first failure — run all tests to get full coverage
+fail-fast = false
+
+# Use system CPU count for test parallelism
+test-threads = "num-cpus"

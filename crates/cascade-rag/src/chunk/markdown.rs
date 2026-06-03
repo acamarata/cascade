@@ -17,8 +17,8 @@
 //! Sprint ticket: T-P1-E7-S06-04
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 use serde_json::json;
+use std::collections::HashMap;
 
 use cascade_types::{
     chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document},
@@ -44,10 +44,7 @@ impl Chunker for MarkdownChunker {
             if text.is_empty() {
                 continue;
             }
-            let byte_start = doc
-                .content
-                .find(text)
-                .unwrap_or(byte_cursor);
+            let byte_start = doc.content.find(text).unwrap_or(byte_cursor);
             let byte_end = byte_start + text.len();
             byte_cursor = byte_end;
 

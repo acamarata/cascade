@@ -134,8 +134,7 @@ impl SecretsScanner {
             let mut base_offset = 0usize;
             while let Some(pos) = search.find(pattern.needle) {
                 let abs_pos = base_offset + pos;
-                let window_end =
-                    (abs_pos + pattern.needle.len() + 24).min(text.len());
+                let window_end = (abs_pos + pattern.needle.len() + 24).min(text.len());
                 let window = &text[abs_pos..window_end];
                 let len = window.len();
                 if len >= pattern.min_match_len {
@@ -178,14 +177,15 @@ impl SecretsScanner {
                 .collect();
             // A valid JWT has exactly 2 dots separating 3 non-empty parts.
             let parts: Vec<&str> = token.splitn(4, '.').collect();
-            if parts.len() == 3
-                && parts.iter().all(|p| p.len() >= 4)
-            {
+            if parts.len() == 3 && parts.iter().all(|p| p.len() >= 4) {
                 matches.push(SecretMatch {
                     kind: "jwt".to_owned(),
                     start: abs,
                     len: token.len(),
-                    redacted_sample: format!("{}.[REDACTED].[REDACTED]", &parts[0][..4.min(parts[0].len())]),
+                    redacted_sample: format!(
+                        "{}.[REDACTED].[REDACTED]",
+                        &parts[0][..4.min(parts[0].len())]
+                    ),
                 });
             }
             base = abs + 2;
@@ -277,7 +277,9 @@ fn shannon_entropy(s: &str) -> f64 {
 
 /// Yield `(token, byte_offset)` pairs by splitting on common delimiters.
 fn tokenize_with_offsets(text: &str) -> Vec<(&str, usize)> {
-    let delimiters = [' ', '\t', '\n', '\r', '"', '\'', '`', ',', ';', '(', ')', '[', ']', '{', '}'];
+    let delimiters = [
+        ' ', '\t', '\n', '\r', '"', '\'', '`', ',', ';', '(', ')', '[', ']', '{', '}',
+    ];
     let mut result = Vec::new();
     let mut start = 0usize;
     let chars: Vec<(usize, char)> = text.char_indices().collect();
@@ -336,7 +338,10 @@ mod tests {
         let scanner = SecretsScanner::default();
         let prose = "The prayer time for Fajr is 05:12 and Isha is 21:44 in Medina.";
         let matches = scanner.scan(prose);
-        assert!(matches.is_empty(), "unexpected matches in clean prose: {matches:?}");
+        assert!(
+            matches.is_empty(),
+            "unexpected matches in clean prose: {matches:?}"
+        );
     }
 
     #[test]

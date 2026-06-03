@@ -23,8 +23,8 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::{CascadeError, Result};
+use clap::Args;
 
 use super::Command;
 
@@ -67,11 +67,17 @@ impl Command for MigrateArgs {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let home = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()));
 
-        let from_tool = self.from.as_deref().unwrap_or_else(|| detect_legacy_tool(&home, &cwd));
+        let from_tool = self
+            .from
+            .as_deref()
+            .unwrap_or_else(|| detect_legacy_tool(&home, &cwd));
 
         let legacy_root = legacy_home(&home, &cwd, from_tool);
         if !legacy_root.exists() {
-            eprintln!("no {} directory found — nothing to migrate", legacy_root.display());
+            eprintln!(
+                "no {} directory found — nothing to migrate",
+                legacy_root.display()
+            );
             return Ok(());
         }
 
@@ -86,8 +92,17 @@ impl Command for MigrateArgs {
         println!("{:<55} {:<55} {}", "SOURCE", "DEST", "STATUS");
         println!("{}", "-".repeat(120));
         for e in &entries {
-            let status = if e.conflict { "SKIP (conflict)" } else { "COPY" };
-            println!("{:<55} {:<55} {}", e.source.display(), e.dest.display(), status);
+            let status = if e.conflict {
+                "SKIP (conflict)"
+            } else {
+                "COPY"
+            };
+            println!(
+                "{:<55} {:<55} {}",
+                e.source.display(),
+                e.dest.display(),
+                status
+            );
         }
 
         if self.dry_run {
@@ -156,12 +171,20 @@ fn legacy_home(home: &Path, cwd: &Path, tool: &str) -> PathBuf {
         "opencode" => {
             // Check local first, then $HOME.
             let local = cwd.join(".opencode");
-            if local.exists() { local } else { home.join(".opencode") }
+            if local.exists() {
+                local
+            } else {
+                home.join(".opencode")
+            }
         }
         "codex" => home.join(".codex"),
         _ => {
             let local = cwd.join(".claude");
-            if local.exists() { local } else { home.join(".claude") }
+            if local.exists() {
+                local
+            } else {
+                home.join(".claude")
+            }
         }
     }
 }
@@ -197,7 +220,11 @@ fn build_migration_plan(legacy: &Path, dest: &Path, tool: &str) -> Vec<Migration
                 let rel = src_file.strip_prefix(&src_dir).unwrap_or(&src_file);
                 let dest_file = dest.join(dst_sub).join(rel);
                 let conflict = dest_file.exists();
-                entries.push(MigrationEntry { source: src_file, dest: dest_file, conflict });
+                entries.push(MigrationEntry {
+                    source: src_file,
+                    dest: dest_file,
+                    conflict,
+                });
             }
         }
     }
@@ -208,7 +235,11 @@ fn build_migration_plan(legacy: &Path, dest: &Path, tool: &str) -> Vec<Migration
         if claude_md.exists() && !claude_md.is_symlink() {
             let dest_file = dest.join("CASCADE.md");
             let conflict = dest_file.exists();
-            entries.push(MigrationEntry { source: claude_md, dest: dest_file, conflict });
+            entries.push(MigrationEntry {
+                source: claude_md,
+                dest: dest_file,
+                conflict,
+            });
         }
     }
 

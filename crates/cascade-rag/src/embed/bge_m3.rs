@@ -121,8 +121,8 @@ impl BgeM3Provider {
                 .with_cache_dir(model_dir.clone())
                 .with_show_download_progress(true);
             // Warm-up: perform a single dummy embed to pre-allocate ONNX buffers.
-            let model = TextEmbedding::try_new(init_opts)
-                .map_err(|e| CascadeError::EmbeddingFailed {
+            let model =
+                TextEmbedding::try_new(init_opts).map_err(|e| CascadeError::EmbeddingFailed {
                     provider: "bge-m3".into(),
                     detail: format!("fastembed init: {e}"),
                 })?;

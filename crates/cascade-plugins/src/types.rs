@@ -11,18 +11,31 @@
 
 use async_trait::async_trait;
 use cascade_types::{
-    agent::{Agent, AgentInput, AgentOutput},
-    chunker::{ChunkOpts, Chunker, Document},
-    embedding_provider::{EmbedOpts, EmbeddingProvider},
-    error::Result,
-    parser::Parser,
-    query_strategy::QueryStrategy,
-    reranker::Reranker,
-    retriever::{RetrievalQuery, RetrievalResult, Retriever},
+    agent::{Agent, AgentMeta, AgentResponse, Context, Tier},
+    chunker::{Chunk, ChunkOpts, Chunker, Document},
+    embedding_provider::{EmbedOpts, Embedding, EmbeddingProvider},
+    error::{CascadeError, Result},
+    parser::{Parser, ParserKind},
+    query_strategy::{ExpandedQuery, QueryStrategy, StrategyKind},
+    reranker::{RerankOpts, RerankResult, Reranker},
+    retriever::{RetrievalHit, RetrieveOpts, Retriever},
 };
 use std::sync::Arc;
 
 use crate::sandbox::WasmPlugin;
+
+// ── Error conversion helpers ──────────────────────────────────────────────────
+
+/// Convert a `SandboxError` into the `CascadeError::Boxed` variant so `?` works
+/// in all dispatcher impls without requiring `From<SandboxError> for CascadeError`
+/// on the types crate (which must stay vendor-neutral).
+fn sandbox_err(e: crate::sandbox::SandboxError) -> CascadeError {
+    CascadeError::Boxed(Box::new(e))
+}
+
+fn json_err(e: serde_json::Error) -> CascadeError {
+    CascadeError::Boxed(Box::new(e))
+}
 
 // ── Chunker dispatcher ────────────────────────────────────────────────────────
 
@@ -32,6 +45,7 @@ pub struct WasmChunker {
 }
 
 impl WasmChunker {
+    /// Construct a new WASM-backed chunker dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -39,10 +53,14 @@ impl WasmChunker {
 
 #[async_trait]
 impl Chunker for WasmChunker {
-    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<cascade_types::chunker::Chunk>> {
+    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<Chunk>> {
         let input = serde_json::json!({ "doc": doc, "opts": opts });
-        let result = self.plugin.call_export("chunker_chunk", &input).await?;
-        Ok(serde_json::from_value(result)?)
+        let result = self
+            .plugin
+            .call_export("chunker_chunk", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
     }
 }
 
@@ -54,6 +72,7 @@ pub struct WasmRetriever {
 }
 
 impl WasmRetriever {
+    /// Construct a new WASM-backed retriever dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -61,10 +80,14 @@ impl WasmRetriever {
 
 #[async_trait]
 impl Retriever for WasmRetriever {
-    async fn retrieve(&self, query: &RetrievalQuery) -> Result<RetrievalResult> {
-        let input = serde_json::json!({ "query": query });
-        let result = self.plugin.call_export("retriever_retrieve", &input).await?;
-        Ok(serde_json::from_value(result)?)
+    async fn retrieve(&self, query: &str, opts: &RetrieveOpts) -> Result<Vec<RetrievalHit>> {
+        let input = serde_json::json!({ "query": query, "opts": opts });
+        let result = self
+            .plugin
+            .call_export("retriever_retrieve", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
     }
 }
 
@@ -76,6 +99,7 @@ pub struct WasmEmbeddingProvider {
 }
 
 impl WasmEmbeddingProvider {
+    /// Construct a new WASM-backed embedding provider dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -83,10 +107,21 @@ impl WasmEmbeddingProvider {
 
 #[async_trait]
 impl EmbeddingProvider for WasmEmbeddingProvider {
-    async fn embed(&self, texts: &[String], opts: &EmbedOpts) -> Result<Vec<Vec<f32>>> {
+    async fn embed(&self, texts: &[&str], opts: &EmbedOpts) -> Result<Vec<Embedding>> {
         let input = serde_json::json!({ "texts": texts, "opts": opts });
-        let result = self.plugin.call_export("provider_embed", &input).await?;
-        Ok(serde_json::from_value(result)?)
+        let result = self
+            .plugin
+            .call_export("provider_embed", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
+    }
+
+    fn dimension(&self) -> usize {
+        // WHY: WASM plugins declare their embedding dimension in the manifest;
+        // the sandbox reads it at load time. Stub returns 0 until the manifest
+        // accessor is wired (P4 deliverable).
+        self.plugin.declared_dimension().unwrap_or(0)
     }
 }
 
@@ -98,6 +133,7 @@ pub struct WasmAgent {
 }
 
 impl WasmAgent {
+    /// Construct a new WASM-backed agent dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -105,10 +141,24 @@ impl WasmAgent {
 
 #[async_trait]
 impl Agent for WasmAgent {
-    async fn run(&self, input: AgentInput) -> Result<AgentOutput> {
-        let payload = serde_json::json!({ "input": input });
-        let result = self.plugin.call_export("agent_run", &payload).await?;
-        Ok(serde_json::from_value(result)?)
+    fn tier(&self) -> Tier {
+        // WHY: WASM agents run at T3 by default (bounded, cheap work).
+        // A future manifest field can override this; T3 is the safe default.
+        Tier::T3
+    }
+
+    async fn handle(&self, prompt: &str, ctx: &Context) -> Result<AgentResponse> {
+        let payload = serde_json::json!({ "prompt": prompt, "ctx": ctx });
+        let result = self
+            .plugin
+            .call_export("agent_handle", &payload)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value::<AgentResponse>(result).map_err(json_err)
+    }
+
+    fn name(&self) -> &str {
+        "wasm-agent"
     }
 }
 
@@ -120,6 +170,7 @@ pub struct WasmParser {
 }
 
 impl WasmParser {
+    /// Construct a new WASM-backed parser dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -127,15 +178,21 @@ impl WasmParser {
 
 #[async_trait]
 impl Parser for WasmParser {
-    async fn parse(&self, path: &std::path::Path) -> Result<Document> {
-        let input = serde_json::json!({ "path": path.to_string_lossy() });
-        let result = self.plugin.call_export("parser_parse", &input).await?;
-        Ok(serde_json::from_value(result)?)
+    fn kind(&self) -> ParserKind {
+        // WHY: plugins declare their parser kind in the manifest; the sandbox
+        // reads it at load time. PlainText is the safe fallback until the
+        // manifest accessor is wired (P4 deliverable).
+        ParserKind::PlainText
     }
 
-    fn supports_extension(&self, ext: &str) -> bool {
-        // Synchronous ABI call — plugins declare supported extensions at load time.
-        self.plugin.declared_extensions().contains(&ext.to_ascii_lowercase())
+    async fn parse(&self, path: &std::path::Path) -> Result<Document> {
+        let input = serde_json::json!({ "path": path.to_string_lossy() });
+        let result = self
+            .plugin
+            .call_export("parser_parse", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
     }
 }
 
@@ -147,6 +204,7 @@ pub struct WasmReranker {
 }
 
 impl WasmReranker {
+    /// Construct a new WASM-backed reranker dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -157,11 +215,16 @@ impl Reranker for WasmReranker {
     async fn rerank(
         &self,
         query: &str,
-        hits: Vec<cascade_types::reranker::ScoredChunk>,
-    ) -> Result<Vec<cascade_types::reranker::ScoredChunk>> {
-        let input = serde_json::json!({ "query": query, "hits": hits });
-        let result = self.plugin.call_export("reranker_rerank", &input).await?;
-        Ok(serde_json::from_value(result)?)
+        candidates: &[Chunk],
+        opts: &RerankOpts,
+    ) -> Result<Vec<RerankResult>> {
+        let input = serde_json::json!({ "query": query, "candidates": candidates, "opts": opts });
+        let result = self
+            .plugin
+            .call_export("reranker_rerank", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
     }
 }
 
@@ -173,6 +236,7 @@ pub struct WasmQueryStrategy {
 }
 
 impl WasmQueryStrategy {
+    /// Construct a new WASM-backed query strategy dispatcher.
     pub fn new(plugin: Arc<WasmPlugin>) -> Self {
         Self { plugin }
     }
@@ -180,9 +244,24 @@ impl WasmQueryStrategy {
 
 #[async_trait]
 impl QueryStrategy for WasmQueryStrategy {
-    async fn expand(&self, query: &str) -> Result<Vec<String>> {
+    fn kind(&self) -> StrategyKind {
+        // WHY: plugins declare their strategy kind in the manifest; stub returns
+        // PureVector (identity pass-through) until the accessor is wired (P4).
+        StrategyKind::PureVector
+    }
+
+    async fn expand(&self, query: &str) -> Result<ExpandedQuery> {
         let input = serde_json::json!({ "query": query });
-        let result = self.plugin.call_export("strategy_expand", &input).await?;
-        Ok(serde_json::from_value(result)?)
+        let result = self
+            .plugin
+            .call_export("strategy_expand", &input)
+            .await
+            .map_err(sandbox_err)?;
+        serde_json::from_value(result).map_err(json_err)
     }
 }
+
+// ── Unused import suppression (AgentMeta used via AgentResponse default) ─────
+// WHY: AgentMeta is imported because AgentResponse carries it; the dispatcher
+// does not construct it directly (the WASM plugin returns JSON).
+fn _use_agent_meta(_: AgentMeta) {}

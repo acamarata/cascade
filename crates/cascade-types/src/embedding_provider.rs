@@ -4,9 +4,9 @@
 //! floating-point vectors. Implementations wrap specific model APIs or
 //! local inference runtimes; the trait is provider-agnostic.
 
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::error::Result;
 
 // ── ProviderKind ──────────────────────────────────────────────────────────────
 
@@ -111,8 +111,17 @@ impl Embedding {
     ///
     /// Returns a value in `[-1.0, 1.0]`. Returns `0.0` if either vector is zero.
     pub fn cosine_similarity(&self, other: &Embedding) -> f32 {
-        debug_assert_eq!(self.dim(), other.dim(), "dimension mismatch in cosine_similarity");
-        let dot: f32 = self.values.iter().zip(&other.values).map(|(a, b)| a * b).sum();
+        debug_assert_eq!(
+            self.dim(),
+            other.dim(),
+            "dimension mismatch in cosine_similarity"
+        );
+        let dot: f32 = self
+            .values
+            .iter()
+            .zip(&other.values)
+            .map(|(a, b)| a * b)
+            .sum();
         let norm_a: f32 = self.values.iter().map(|x| x * x).sum::<f32>().sqrt();
         let norm_b: f32 = other.values.iter().map(|x| x * x).sum::<f32>().sqrt();
         if norm_a == 0.0 || norm_b == 0.0 {

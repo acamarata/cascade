@@ -37,6 +37,7 @@
 use clap::Parser;
 
 mod cmd;
+mod ipc_client;
 
 use cmd::Cli;
 

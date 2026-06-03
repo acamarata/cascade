@@ -113,10 +113,8 @@ impl PluginManifest {
     pub fn parse(toml_bytes: &[u8]) -> Result<Self, ManifestError> {
         // Step 1: deserialize. Use a partial struct first to extract schema_version
         // before full deserialization, so the version error comes before field errors.
-        let raw: toml::Value = toml::from_str(
-            std::str::from_utf8(toml_bytes).unwrap_or_default()
-        )
-        .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
+        let raw: toml::Value = toml::from_str(std::str::from_utf8(toml_bytes).unwrap_or_default())
+            .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
 
         let version_val = raw
             .get("schema_version")
@@ -142,10 +140,9 @@ impl PluginManifest {
         }
 
         // Step 3: full deserialization.
-        let manifest: PluginManifest = toml::from_str(
-            std::str::from_utf8(toml_bytes).unwrap_or_default()
-        )
-        .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
+        let manifest: PluginManifest =
+            toml::from_str(std::str::from_utf8(toml_bytes).unwrap_or_default())
+                .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
 
         manifest.validate()?;
         Ok(manifest)
@@ -214,6 +211,9 @@ cascade_version = ">=0.1.0"
 "#;
         let err = PluginManifest::parse(toml.as_bytes()).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("Update Cascade"), "should suggest update: {msg}");
+        assert!(
+            msg.contains("Update Cascade"),
+            "should suggest update: {msg}"
+        );
     }
 }

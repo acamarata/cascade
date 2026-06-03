@@ -7,9 +7,9 @@
 //! These allow Claude Code and OpenCode to load cascade instructions without
 //! knowing the `.cascade/` directory structure.
 
-use std::path::Path;
 use cascade_types::error::{CascadeError, Result};
 use cascade_types::paths::{AGENTS_MD_NAME, CASCADE_MD_NAME, CLAUDE_MD_NAME};
+use std::path::Path;
 
 /// Create the CLAUDE.md and AGENTS.md symlinks inside `cascade_dir`.
 ///
@@ -23,15 +23,24 @@ pub fn create_siblings(cascade_dir: &Path, force: bool) -> Result<()> {
             if !force {
                 continue;
             }
-            std::fs::remove_file(&link)
-                .map_err(|e| CascadeError::Io { path: link.clone(), operation: "remove stale symlink", source: e })?;
+            std::fs::remove_file(&link).map_err(|e| CascadeError::Io {
+                path: link.clone(),
+                operation: "remove stale symlink",
+                source: e,
+            })?;
         }
         #[cfg(unix)]
-        std::os::unix::fs::symlink(target, &link)
-            .map_err(|e| CascadeError::Io { path: link.clone(), operation: "create unix symlink", source: e })?;
+        std::os::unix::fs::symlink(target, &link).map_err(|e| CascadeError::Io {
+            path: link.clone(),
+            operation: "create unix symlink",
+            source: e,
+        })?;
         #[cfg(windows)]
-        std::os::windows::fs::symlink_file(target, &link)
-            .map_err(|e| CascadeError::Io { path: link.clone(), operation: "create windows symlink", source: e })?;
+        std::os::windows::fs::symlink_file(target, &link).map_err(|e| CascadeError::Io {
+            path: link.clone(),
+            operation: "create windows symlink",
+            source: e,
+        })?;
     }
     Ok(())
 }
@@ -50,7 +59,10 @@ pub fn verify_siblings(cascade_dir: &Path) -> Vec<String> {
             issues.push(format!("{} exists but is not a symlink", name));
         } else if let Ok(dest) = std::fs::read_link(&link) {
             if dest != std::path::Path::new(CASCADE_MD_NAME) {
-                issues.push(format!("{} points to {:?}, expected {}", name, dest, CASCADE_MD_NAME));
+                issues.push(format!(
+                    "{} points to {:?}, expected {}",
+                    name, dest, CASCADE_MD_NAME
+                ));
             }
         }
     }

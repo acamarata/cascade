@@ -59,15 +59,21 @@
 pub mod agent;
 pub mod cascade_tier;
 pub mod chunker;
+pub mod codec;
 pub mod config;
 pub mod embedding_provider;
 pub mod error;
+pub mod hook;
+pub mod ipc;
 pub mod key_storage;
 pub mod parser;
 pub mod paths;
 pub mod query_strategy;
+pub mod quota_store;
 pub mod reranker;
 pub mod retriever;
+pub mod scheduled_task;
+pub mod tiers;
 
 // ── Top-level re-exports ──────────────────────────────────────────────────────
 //
@@ -77,21 +83,24 @@ pub mod retriever;
 pub use agent::{Agent, AgentMeta, AgentResponse, Context, NoopAgent, Tier};
 pub use cascade_tier::{CascadeTier, InboxTier};
 pub use chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document, NoopChunker};
-pub use config::{
-    CascadeConfig, DaemonConfig, McpConfig, PluginConfig, ProviderConfig, RagConfig,
-};
+pub use config::{CascadeConfig, DaemonConfig, McpConfig, PluginConfig, ProviderConfig, RagConfig};
 pub use embedding_provider::{
     EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, NoopEmbeddingProvider, ProviderKind,
 };
 pub use error::{CascadeError, Result};
+pub use hook::HookConfigEntry;
 pub use key_storage::{InMemoryKeyStorage, KeyInfo, KeyStorage, SecretBytes};
 pub use parser::{ParserKind, PlainTextParser};
 pub use paths::{
-    daemon_pid, daemon_socket, global_cascade_dir, global_config, home_dir,
-    project_cascade_dir, project_cascade_md, project_subdir,
-    subdirs, CASCADE_DIR_NAME, CASCADE_MD_NAME, CLAUDE_MD_NAME, AGENTS_MD_NAME,
-    DAEMON_PIPE_WIN,
+    daemon_pid, daemon_socket, global_cascade_dir, global_config, home_dir, project_cascade_dir,
+    project_cascade_md, project_subdir, subdirs, AGENTS_MD_NAME, CASCADE_DIR_NAME, CASCADE_MD_NAME,
+    CLAUDE_MD_NAME, DAEMON_PIPE_WIN,
 };
-pub use query_strategy::{ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind};
+pub use query_strategy::{
+    ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind,
+};
+pub use quota_store::{
+    AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
+};
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};

@@ -176,7 +176,11 @@ mod tests {
             subdirs::PROVIDERS,
         ];
         for name in all {
-            assert_eq!(name, name.to_lowercase(), "subdir name must be lowercase: {name}");
+            assert_eq!(
+                name,
+                name.to_lowercase(),
+                "subdir name must be lowercase: {name}"
+            );
             assert!(!name.contains('/'), "subdir must not contain slash: {name}");
         }
     }

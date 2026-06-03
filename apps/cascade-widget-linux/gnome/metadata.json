@@ -1,0 +1,11 @@
+{
+  "uuid": "cascade-quota-widget@acamarata",
+  "name": "Cascade Quota Widget",
+  "description": "Shows Cascade AI fleet quota and inbox status in the top bar.",
+  "version": 1,
+  "shell-version": [
+    "45",
+    "46"
+  ],
+  "url": "https://github.com/acamarata/cascade"
+}

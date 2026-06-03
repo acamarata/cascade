@@ -56,7 +56,10 @@ impl Response {
         Response::Ok(serde_json::to_value(v).unwrap_or(serde_json::Value::Null))
     }
     pub fn err(code: i32, msg: impl Into<String>) -> Self {
-        Response::Error { code, message: msg.into() }
+        Response::Error {
+            code,
+            message: msg.into(),
+        }
     }
 }
 
@@ -75,7 +78,11 @@ impl IpcServer {
         bus: Arc<EventBus>,
     ) -> Result<Self, DaemonError> {
         let socket_path = config_dir.join(SOCKET_NAME);
-        Ok(Self { socket_path, health, bus })
+        Ok(Self {
+            socket_path,
+            health,
+            bus,
+        })
     }
 
     /// Bind the Unix socket and serve connections until `shutdown` fires.
@@ -95,8 +102,7 @@ impl IpcServer {
         // Remove stale socket from a previous run.
         let _ = tokio::fs::remove_file(&self.socket_path).await;
 
-        let listener =
-            UnixListener::bind(&self.socket_path).map_err(DaemonError::Io)?;
+        let listener = UnixListener::bind(&self.socket_path).map_err(DaemonError::Io)?;
         info!(path = %self.socket_path.display(), "IPC socket listening");
 
         let server = Arc::new(self);
@@ -183,7 +189,10 @@ where
         }
 
         let mut body = vec![0u8; len];
-        reader.read_exact(&mut body).await.map_err(DaemonError::Io)?;
+        reader
+            .read_exact(&mut body)
+            .await
+            .map_err(DaemonError::Io)?;
 
         let request: Request = match serde_json::from_slice(&body) {
             Ok(r) => r,
@@ -233,19 +242,15 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
                 Err(e) => Response::err(-32001, e.to_string()),
             }
         }
-        Request::HotwordLookup { word } => {
-            match server.bus.hotword_lookup(&word).await {
-                Ok(Some(block)) => Response::ok(serde_json::json!({ "block": block })),
-                Ok(None) => Response::ok(serde_json::json!({ "block": null })),
-                Err(e) => Response::err(-32002, e.to_string()),
-            }
-        }
-        Request::ProviderQuota => {
-            match server.bus.provider_quota().await {
-                Ok(quota) => Response::ok(quota),
-                Err(e) => Response::err(-32003, e.to_string()),
-            }
-        }
+        Request::HotwordLookup { word } => match server.bus.hotword_lookup(&word).await {
+            Ok(Some(block)) => Response::ok(serde_json::json!({ "block": block })),
+            Ok(None) => Response::ok(serde_json::json!({ "block": null })),
+            Err(e) => Response::err(-32002, e.to_string()),
+        },
+        Request::ProviderQuota => match server.bus.provider_quota().await {
+            Ok(quota) => Response::ok(quota),
+            Err(e) => Response::err(-32003, e.to_string()),
+        },
         Request::DaemonStop => {
             // Actual cancellation is handled by the signal handler; here we
             // just acknowledge and let the supervisor wind down naturally.

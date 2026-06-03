@@ -13,9 +13,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use clap::{Args, Subcommand};
 use cascade_types::error::{CascadeError, Result};
 use cascade_types::paths;
+use clap::{Args, Subcommand};
 
 use super::Command;
 
@@ -175,7 +175,10 @@ impl Command for DaemonStatusArgs {
             });
             println!("{}", serde_json::to_string_pretty(&out).unwrap());
         } else {
-            println!("socket: {}", if socket_ok { "present" } else { "not found" });
+            println!(
+                "socket: {}",
+                if socket_ok { "present" } else { "not found" }
+            );
             match pid {
                 Some(p) => println!("pid:    {} ({})", p, if alive { "alive" } else { "stale" }),
                 None => println!("pid:    not found"),
@@ -214,11 +217,16 @@ fn process_is_alive(pid: u32) -> bool {
 
 #[cfg(unix)]
 fn send_sigterm(pid: u32) -> Result<()> {
-    let ret = unsafe { libc_kill(pid as i32, 15 /* SIGTERM */) };
+    let ret = unsafe {
+        libc_kill(pid as i32, 15 /* SIGTERM */)
+    };
     if ret == 0 {
         Ok(())
     } else {
-        Err(CascadeError::Other(format!("kill({}, SIGTERM) failed: errno {}", pid, ret)))
+        Err(CascadeError::Other(format!(
+            "kill({}, SIGTERM) failed: errno {}",
+            pid, ret
+        )))
     }
 }
 
@@ -227,7 +235,9 @@ fn send_sigterm(pid: u32) -> Result<()> {
     // Windows: use TerminateProcess via std.
     use std::os::windows::io::FromRawHandle;
     let _ = pid;
-    Err(CascadeError::Other("daemon stop on Windows not yet implemented".into()))
+    Err(CascadeError::Other(
+        "daemon stop on Windows not yet implemented".into(),
+    ))
 }
 
 /// Detach the child process from the parent's process group on Unix.

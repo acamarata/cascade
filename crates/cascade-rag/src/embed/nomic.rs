@@ -10,10 +10,7 @@
 
 use async_trait::async_trait;
 
-use cascade_types::{
-    error::Result,
-    EmbedOpts, Embedding, EmbeddingProvider, ProviderKind,
-};
+use cascade_types::{error::Result, EmbedOpts, Embedding, EmbeddingProvider, ProviderKind};
 
 /// Embedding dimension for Nomic Embed Text v1.5.
 const NOMIC_DIM: usize = 768;

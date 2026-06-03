@@ -10,8 +10,8 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::Result;
+use clap::Args;
 
 use super::Command;
 

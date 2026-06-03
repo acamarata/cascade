@@ -5,8 +5,8 @@
 //! - `lessons.md` — gotchas and learnings
 //! - `patterns.md` — codebase conventions
 
-use std::path::{Path, PathBuf};
 use cascade_types::error::{CascadeError, Result};
+use std::path::{Path, PathBuf};
 
 /// Read a memory file from `cascade_dir/memory/{name}.md`.
 ///
@@ -16,7 +16,11 @@ pub async fn read(cascade_dir: &Path, name: &str) -> Result<Option<String>> {
     match tokio::fs::read_to_string(&path).await {
         Ok(content) => Ok(Some(content)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(CascadeError::Io { path, operation: "read memory file", source: e }),
+        Err(e) => Err(CascadeError::Io {
+            path,
+            operation: "read memory file",
+            source: e,
+        }),
     }
 }
 
@@ -33,12 +37,26 @@ pub async fn write(cascade_dir: &Path, name: &str, content: &str, append: bool) 
             .append(true)
             .open(&path)
             .await
-            .map_err(|e| CascadeError::Io { path: path.clone(), operation: "open memory file for append", source: e })?;
-        file.write_all(content.as_bytes()).await
-            .map_err(|e| CascadeError::Io { path: path.clone(), operation: "write memory file append", source: e })?;
+            .map_err(|e| CascadeError::Io {
+                path: path.clone(),
+                operation: "open memory file for append",
+                source: e,
+            })?;
+        file.write_all(content.as_bytes())
+            .await
+            .map_err(|e| CascadeError::Io {
+                path: path.clone(),
+                operation: "write memory file append",
+                source: e,
+            })?;
     } else {
-        tokio::fs::write(&path, content).await
-            .map_err(|e| CascadeError::Io { path: path.clone(), operation: "write memory file", source: e })?;
+        tokio::fs::write(&path, content)
+            .await
+            .map_err(|e| CascadeError::Io {
+                path: path.clone(),
+                operation: "write memory file",
+                source: e,
+            })?;
     }
     Ok(path)
 }

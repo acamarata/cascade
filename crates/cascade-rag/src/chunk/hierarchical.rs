@@ -22,8 +22,8 @@
 //! SPORT: MASTER-LIBS.md → cascade-rag::chunk::HierarchicalChunker
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 use serde_json::json;
+use std::collections::HashMap;
 use tracing::debug;
 
 use cascade_types::{
@@ -93,7 +93,10 @@ impl Chunker for HierarchicalChunker {
 
             for mut chunk in child_chunks {
                 // Tag each child with its parent_id for later retrieval.
-                chunk.metadata.extra.insert("parent_id".into(), json!(parent_id));
+                chunk
+                    .metadata
+                    .extra
+                    .insert("parent_id".into(), json!(parent_id));
                 chunk.metadata.chunk_index = global_idx;
                 global_idx += 1;
                 all_chunks.push(chunk);

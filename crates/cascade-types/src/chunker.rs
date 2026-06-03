@@ -4,10 +4,10 @@
 //! and retrieval. Implementations range from naive fixed-size character windows
 //! to semantic paragraph-aware splitters.
 
-use std::collections::HashMap;
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::error::Result;
+use std::collections::HashMap;
 
 // ── Document ──────────────────────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ impl Chunker for NoopChunker {
         }
         let len = doc.content.len();
         Ok(vec![Chunk {
-            id: format!("noop-0"),
+            id: "noop-0".to_owned(),
             text: doc.content.clone(),
             metadata: ChunkMetadata {
                 start_byte: 0,

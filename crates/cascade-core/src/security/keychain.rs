@@ -190,12 +190,12 @@ impl KeyStorage for LinuxSecretService {
                         detail: e.to_string(),
                     }
                 })?;
-                let collection = ss.get_default_collection().map_err(|e| {
-                    CascadeError::KeyStorageFailed {
-                        backend: "linux-secret-service".into(),
-                        detail: e.to_string(),
-                    }
-                })?;
+                let collection =
+                    ss.get_default_collection()
+                        .map_err(|e| CascadeError::KeyStorageFailed {
+                            backend: "linux-secret-service".into(),
+                            detail: e.to_string(),
+                        })?;
                 let items = collection
                     .search_items(vec![("cascade-key-id", key_id.as_str())])
                     .map_err(|e| CascadeError::KeyStorageFailed {
@@ -205,10 +205,12 @@ impl KeyStorage for LinuxSecretService {
                 let item = items.first().ok_or_else(|| CascadeError::KeyNotFound {
                     key_id: key_id.clone(),
                 })?;
-                let secret = item.get_secret().map_err(|e| CascadeError::KeyStorageFailed {
-                    backend: "linux-secret-service".into(),
-                    detail: e.to_string(),
-                })?;
+                let secret = item
+                    .get_secret()
+                    .map_err(|e| CascadeError::KeyStorageFailed {
+                        backend: "linux-secret-service".into(),
+                        detail: e.to_string(),
+                    })?;
                 Ok(SecretBytes::new(secret))
             })
             .await
@@ -239,12 +241,12 @@ impl KeyStorage for LinuxSecretService {
                         detail: e.to_string(),
                     }
                 })?;
-                let collection = ss.get_default_collection().map_err(|e| {
-                    CascadeError::KeyStorageFailed {
-                        backend: "linux-secret-service".into(),
-                        detail: e.to_string(),
-                    }
-                })?;
+                let collection =
+                    ss.get_default_collection()
+                        .map_err(|e| CascadeError::KeyStorageFailed {
+                            backend: "linux-secret-service".into(),
+                            detail: e.to_string(),
+                        })?;
                 collection
                     .create_item(
                         &format!("cascade:{key_id}"),
@@ -306,7 +308,7 @@ impl KeyStorage for WindowsCredentialManager {
                 use credential_manager::Credential;
                 Credential::new(None, &target)
                     .and_then(|c| c.get_password())
-                    .map(|s| SecretBytes::from_str(&s))
+                    .map(|s| SecretBytes::from_utf8_str(&s))
                     .map_err(|e| CascadeError::KeyStorageFailed {
                         backend: "windows-credential-manager".into(),
                         detail: e.to_string(),
@@ -390,7 +392,10 @@ pub fn build_key_storage() -> Box<dyn KeyStorage> {
     }
     #[cfg(target_os = "windows")]
     {
-        tracing::info!(backend = "windows-credential-manager", "key storage initialized");
+        tracing::info!(
+            backend = "windows-credential-manager",
+            "key storage initialized"
+        );
         return Box::new(WindowsCredentialManager);
     }
     #[allow(unreachable_code)]

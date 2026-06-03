@@ -19,8 +19,8 @@
 //! `--top N` limits results to the top N hits (default 10).
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::Result;
+use clap::Args;
 
 use super::Command;
 
@@ -68,7 +68,9 @@ async fn search_via_daemon(query: &str, top: usize, json: bool) -> Result<()> {
 async fn search_inline(query: &str, top: usize, json: bool) -> Result<()> {
     use std::path::PathBuf;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let resolved = cascade_core::resolution::Resolver::new().resolve(&cwd).await?;
+    let resolved = cascade_core::resolution::Resolver::new()
+        .resolve(&cwd)
+        .await?;
 
     let terms: Vec<&str> = query.split_whitespace().collect();
 
@@ -80,7 +82,11 @@ async fn search_inline(query: &str, top: usize, json: bool) -> Result<()> {
                 .iter()
                 .filter(|&&t| para.to_lowercase().contains(&t.to_lowercase()))
                 .count();
-            if score > 0 { Some((score, para.to_string())) } else { None }
+            if score > 0 {
+                Some((score, para.to_string()))
+            } else {
+                None
+            }
         })
         .collect();
 

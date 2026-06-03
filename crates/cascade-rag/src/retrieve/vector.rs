@@ -47,10 +47,14 @@ impl Retriever for VectorRetriever {
             model_override: None,
         };
         let embeddings = self.embedder.embed(&[query], &embed_opts).await?;
-        let query_vec = embeddings
-            .into_iter()
-            .next()
-            .ok_or_else(|| CascadeError::EmbeddingFailed { provider: "unknown".into(), detail: "empty embedding result".into() })?;
+        let query_vec =
+            embeddings
+                .into_iter()
+                .next()
+                .ok_or_else(|| CascadeError::EmbeddingFailed {
+                    provider: "unknown".into(),
+                    detail: "empty embedding result".into(),
+                })?;
 
         // Serialise as little-endian f32 blob for sqlite-vec.
         let blob: Vec<u8> = query_vec

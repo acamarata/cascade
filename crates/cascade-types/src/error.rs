@@ -118,6 +118,13 @@ pub enum CascadeError {
         detail: String,
     },
 
+    // ── Schema ────────────────────────────────────────────────────────────
+    /// A store's persisted schema version does not match the compiled schema
+    /// version. Returned when a store reads an existing database table with
+    /// a different schema_version field than it expects.
+    #[error("Schema mismatch: expected schema version {expected}, found {found}")]
+    SchemaMismatch { expected: u32, found: u32 },
+
     // ── Generic ───────────────────────────────────────────────────────────
     /// A catch-all for errors that do not fit a more specific variant.
     /// Prefer a specific variant; use this only during initial prototyping.
@@ -142,11 +149,7 @@ impl CascadeError {
     /// # use std::path::PathBuf;
     /// let err = CascadeError::io(PathBuf::from("/tmp/x"), "read", std::io::Error::last_os_error());
     /// ```
-    pub fn io(
-        path: impl Into<PathBuf>,
-        operation: &'static str,
-        source: std::io::Error,
-    ) -> Self {
+    pub fn io(path: impl Into<PathBuf>, operation: &'static str, source: std::io::Error) -> Self {
         CascadeError::Io {
             path: path.into(),
             operation,

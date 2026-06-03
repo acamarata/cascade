@@ -81,6 +81,12 @@ pub struct JsonRpcError {
     pub data: Option<Value>,
 }
 
+impl std::fmt::Display for JsonRpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "JSON-RPC error {} — {}", self.code, self.message)
+    }
+}
+
 /// Request identifier — may be a string, integer, or null.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]

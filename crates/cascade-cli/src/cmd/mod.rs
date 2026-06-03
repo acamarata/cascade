@@ -4,14 +4,18 @@
 //! [`Command::run`] which returns a [`cascade_types::error::Result<()>`].
 //! The `main` entry point dispatches through [`Commands::run`].
 
+pub mod backup;
+pub mod completions;
 pub mod config;
 pub mod daemon;
 pub mod doctor;
+pub mod harness;
 pub mod inbox;
 pub mod init;
 pub mod link;
 pub mod memory;
 pub mod migrate;
+pub mod ping;
 pub mod resolve;
 pub mod search;
 pub mod status;
@@ -66,6 +70,16 @@ pub enum Commands {
     Doctor(doctor::DoctorArgs),
     /// Control the cascade background daemon.
     Daemon(daemon::DaemonArgs),
+    /// Print shell completion script to stdout.
+    Completions(completions::CompletionsArgs),
+    /// Backup snapshots (list/restore).
+    Backup(backup::BackupArgs),
+    /// Show AI harness detection status.
+    #[command(hide = true)]
+    Harness(harness::HarnessArgs),
+    /// Ping the cascade daemon (hidden diagnostic).
+    #[command(hide = true)]
+    Ping(ping::PingArgs),
 }
 
 impl Commands {
@@ -84,6 +98,10 @@ impl Commands {
             Commands::Migrate(args) => args.run().await,
             Commands::Doctor(args) => args.run().await,
             Commands::Daemon(args) => args.run().await,
+            Commands::Completions(args) => args.run().await,
+            Commands::Backup(args) => args.run().await,
+            Commands::Harness(args) => args.run().await,
+            Commands::Ping(args) => args.run().await,
         }
     }
 }

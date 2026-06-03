@@ -27,8 +27,8 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::eval
 
-use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 // ── Ground truth ──────────────────────────────────────────────────────────────
 
@@ -64,19 +64,24 @@ impl GroundTruth {
     /// Each line is one [`EvalQuery`].  Empty lines are skipped.
     pub fn load_jsonl(path: &std::path::Path) -> cascade_types::error::Result<Self> {
         use cascade_types::error::CascadeError;
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| CascadeError::io(path, "read", e))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| CascadeError::io(path, "read", e))?;
         let queries: Vec<EvalQuery> = content
             .lines()
             .filter(|l| !l.trim().is_empty())
             .map(|l| {
-                serde_json::from_str(l).map_err(|e| {
-                    CascadeError::ParseFailed { path: path.to_path_buf(), detail: format!("ground-truth JSONL: {e}") }
+                serde_json::from_str(l).map_err(|e| CascadeError::ParseFailed {
+                    path: path.to_path_buf(),
+                    detail: format!("ground-truth JSONL: {e}"),
                 })
             })
             .collect::<cascade_types::error::Result<Vec<_>>>()?;
         Ok(Self {
-            name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("dataset").to_string(),
+            name: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("dataset")
+                .to_string(),
             version: "1.0.0".into(),
             queries,
         })
@@ -141,7 +146,8 @@ impl EvalMetrics {
         let mut prec_sum = 0.0f32;
 
         for (eq, ranked) in ground_truth.queries.iter().zip(results.iter()) {
-            let relevant: HashSet<&str> = eq.relevant_chunk_ids.iter().map(|s| s.as_str()).collect();
+            let relevant: HashSet<&str> =
+                eq.relevant_chunk_ids.iter().map(|s| s.as_str()).collect();
             let top_k: Vec<&str> = ranked.iter().take(k).map(|s| s.as_str()).collect();
 
             mrr_sum += mrr_at_k(&top_k, &relevant, k);
@@ -253,7 +259,10 @@ mod tests {
         let relevant: HashSet<&str> = ["a", "b"].iter().cloned().collect();
         // Perfect ranking: both relevant items at top.
         let score = ndcg_at_k(&["a", "b", "c"], &relevant, 3);
-        assert!((score - 1.0).abs() < 1e-6, "NDCG should be 1.0 for perfect ranking, got {score}");
+        assert!(
+            (score - 1.0).abs() < 1e-6,
+            "NDCG should be 1.0 for perfect ranking, got {score}"
+        );
     }
 
     #[test]

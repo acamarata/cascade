@@ -22,10 +22,7 @@ use crate::{event_bus::EventBus, healthcheck::HealthState, ipc::IpcServer};
 
 /// Drives the daemon's main loop. Starts the IPC server, health poller, and
 /// event bus, then blocks until `shutdown` fires.
-pub async fn run(
-    config_dir: PathBuf,
-    shutdown: CancellationToken,
-) -> Result<(), DaemonError> {
+pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(), DaemonError> {
     let start_time = std::time::Instant::now();
     info!(config_dir = %config_dir.display(), "supervisor starting");
 
@@ -98,9 +95,13 @@ async fn install_macos(daemon_bin: &Path) -> Result<InstallResult, DaemonError> 
 
     let plist_content = macos_plist_template(daemon_bin);
     if let Some(parent) = plist_path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(DaemonError::Io)?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(DaemonError::Io)?;
     }
-    tokio::fs::write(&plist_path, plist_content).await.map_err(DaemonError::Io)?;
+    tokio::fs::write(&plist_path, plist_content)
+        .await
+        .map_err(DaemonError::Io)?;
 
     let status = tokio::process::Command::new("launchctl")
         .args(["load", "-w", plist_path.to_str().unwrap_or_default()])
@@ -124,7 +125,9 @@ async fn uninstall_macos() -> Result<(), DaemonError> {
             .args(["unload", "-w", plist_path.to_str().unwrap_or_default()])
             .status()
             .await;
-        tokio::fs::remove_file(&plist_path).await.map_err(DaemonError::Io)?;
+        tokio::fs::remove_file(&plist_path)
+            .await
+            .map_err(DaemonError::Io)?;
         info!("LaunchAgent uninstalled");
     } else {
         warn!("plist not found — nothing to uninstall");
@@ -185,9 +188,13 @@ async fn install_linux(daemon_bin: &Path) -> Result<InstallResult, DaemonError> 
 
     let unit_content = linux_unit_template(daemon_bin);
     if let Some(parent) = unit_path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(DaemonError::Io)?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(DaemonError::Io)?;
     }
-    tokio::fs::write(&unit_path, unit_content).await.map_err(DaemonError::Io)?;
+    tokio::fs::write(&unit_path, unit_content)
+        .await
+        .map_err(DaemonError::Io)?;
 
     // daemon-reload so systemd picks up the new unit file.
     let _ = tokio::process::Command::new("systemctl")
@@ -217,7 +224,9 @@ async fn uninstall_linux() -> Result<(), DaemonError> {
         .await;
     let unit_path = linux_unit_path()?;
     if unit_path.exists() {
-        tokio::fs::remove_file(&unit_path).await.map_err(DaemonError::Io)?;
+        tokio::fs::remove_file(&unit_path)
+            .await
+            .map_err(DaemonError::Io)?;
     }
     let _ = tokio::process::Command::new("systemctl")
         .args(["--user", "daemon-reload"])
@@ -265,10 +274,14 @@ async fn install_windows(daemon_bin: &Path) -> Result<InstallResult, DaemonError
     let bin = daemon_bin.to_string_lossy();
     let output = tokio::process::Command::new("sc")
         .args([
-            "create", "CascadeDaemon",
-            "binPath=", &bin,
-            "start=", "auto",
-            "type=", "userown",
+            "create",
+            "CascadeDaemon",
+            "binPath=",
+            &bin,
+            "start=",
+            "auto",
+            "type=",
+            "userown",
         ])
         .output()
         .await

@@ -35,9 +35,9 @@ pub mod code;
 pub mod markdown;
 pub mod pdf;
 
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
-use async_trait::async_trait;
 
 use cascade_types::{
     chunker::Document,
@@ -82,8 +82,15 @@ impl ParserRegistry {
             .parsers
             .iter()
             .find(|p| p.kind() == kind)
-            .or_else(|| self.parsers.iter().find(|p| p.kind() == ParserKind::PlainText))
-            .ok_or_else(|| CascadeError::ParseFailed { path: path.to_path_buf(), detail: "no parser registered for this file type".into() })?;
+            .or_else(|| {
+                self.parsers
+                    .iter()
+                    .find(|p| p.kind() == ParserKind::PlainText)
+            })
+            .ok_or_else(|| CascadeError::ParseFailed {
+                path: path.to_path_buf(),
+                detail: "no parser registered for this file type".into(),
+            })?;
         parser.parse(path).await
     }
 

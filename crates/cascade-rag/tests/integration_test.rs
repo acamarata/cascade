@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use cascade_rag::{
     cache::QueryCache,
-    citation::{Citation, CitationSet},
     chunk::FixedSizeChunker,
+    citation::{Citation, CitationSet},
     eval::{EvalMetrics, EvalQuery, GroundTruth},
     index::RagIndex,
     retrieve::rrf::{RrfConfig, RrfRetriever},
@@ -24,7 +24,7 @@ use cascade_rag::{
 use cascade_types::{
     chunker::{ChunkOpts, Chunker, Document},
     error::Result,
-    NoopEmbeddingProvider, NoopReranker, Reranker, RerankOpts, Retriever, RetrieveOpts,
+    NoopEmbeddingProvider, NoopReranker, RerankOpts, Reranker, RetrieveOpts, Retriever,
 };
 
 // ── TierLevel ─────────────────────────────────────────────────────────────────
@@ -52,7 +52,10 @@ async fn fixed_size_chunker_basic() -> Result<()> {
     let chunks = chunker.chunk(&doc, &opts).await?;
     assert!(!chunks.is_empty(), "should produce chunks");
     for (i, c) in chunks.iter().enumerate() {
-        assert_eq!(c.metadata.chunk_index, i, "chunk_index should be sequential");
+        assert_eq!(
+            c.metadata.chunk_index, i,
+            "chunk_index should be sequential"
+        );
     }
     assert_eq!(
         chunks[0].metadata.total_chunks,
@@ -84,12 +87,18 @@ async fn fixed_size_chunker_overlap() -> Result<()> {
     // With overlap, consecutive chunks share characters.
     if chunks.len() >= 2 {
         let tail_first: String = chunks[0].text.chars().rev().take(2).collect();
-        let head_second: String = chunks[1].text.chars().take(2).collect::<String>()
+        let head_second: String = chunks[1]
+            .text
+            .chars()
+            .take(2)
+            .collect::<String>()
             .chars()
             .collect();
         // The last 2 chars of chunk[0] should appear in chunk[1].
         assert!(
-            chunks[1].text.starts_with(&chunks[0].text[chunks[0].text.len() - 2..])
+            chunks[1]
+                .text
+                .starts_with(&chunks[0].text[chunks[0].text.len() - 2..])
                 || !chunks[1].text.is_empty(),
             "overlap should produce shared content at boundaries"
         );
@@ -108,7 +117,10 @@ async fn markdown_chunker_heading_split() -> Result<()> {
         ..Document::from_text("# Section 1\n\nParagraph one.\n\n# Section 2\n\nParagraph two.")
     };
     let chunks = chunker.chunk(&doc, &ChunkOpts::default()).await?;
-    assert!(chunks.len() >= 2, "should produce at least 2 chunks for 2 headings");
+    assert!(
+        chunks.len() >= 2,
+        "should produce at least 2 chunks for 2 headings"
+    );
     Ok(())
 }
 
@@ -139,15 +151,25 @@ async fn index_upsert_and_fts_query() -> Result<()> {
     let idx = RagIndex::open(&db_path).await?;
     idx.upsert_chunk("c1", None, Some(1), Some(5), "prayer times algorithm", None)
         .await?;
-    idx.upsert_chunk("c2", None, Some(10), Some(15), "qibla direction calculation", None)
-        .await?;
+    idx.upsert_chunk(
+        "c2",
+        None,
+        Some(10),
+        Some(15),
+        "qibla direction calculation",
+        None,
+    )
+    .await?;
     let results = idx.fts_query("prayer", 10).await?;
     assert!(
         !results.is_empty(),
         "FTS query for 'prayer' should return at least one hit"
     );
     let ids: Vec<&str> = results.iter().map(|(id, _)| id.as_str()).collect();
-    assert!(ids.contains(&"c1"), "c1 must appear in results for 'prayer'");
+    assert!(
+        ids.contains(&"c1"),
+        "c1 must appear in results for 'prayer'"
+    );
     Ok(())
 }
 
@@ -155,7 +177,8 @@ async fn index_upsert_and_fts_query() -> Result<()> {
 async fn index_health_reflects_chunk_count() -> Result<()> {
     let tmp = tempdir();
     let idx = RagIndex::open(tmp.join("health.db")).await?;
-    idx.upsert_chunk("h1", None, None, None, "test chunk", None).await?;
+    idx.upsert_chunk("h1", None, None, None, "test chunk", None)
+        .await?;
     let health = idx.health().await?;
     assert_eq!(health.total_chunks, 1, "health should report 1 chunk");
     Ok(())
@@ -167,12 +190,20 @@ async fn index_health_reflects_chunk_count() -> Result<()> {
 async fn rrf_retriever_fts_only_returns_hits() -> Result<()> {
     let tmp = tempdir();
     let idx = Arc::new(RagIndex::open(tmp.join("rrf.db")).await?);
-    idx.upsert_chunk("r1", None, None, None, "solar declination angle", None).await?;
-    idx.upsert_chunk("r2", None, None, None, "moon phase calculation", None).await?;
+    idx.upsert_chunk("r1", None, None, None, "solar declination angle", None)
+        .await?;
+    idx.upsert_chunk("r2", None, None, None, "moon phase calculation", None)
+        .await?;
 
     let retriever = RrfRetriever::fts_only(Arc::clone(&idx));
     let hits = retriever
-        .retrieve("solar", &RetrieveOpts { k: 5, ..Default::default() })
+        .retrieve(
+            "solar",
+            &RetrieveOpts {
+                k: 5,
+                ..Default::default()
+            },
+        )
         .await?;
     // FTS5 may return 0 hits in test environments without porter stemmer support;
     // what matters is that it does not panic or error.
@@ -204,7 +235,14 @@ async fn noop_reranker_preserves_count() -> Result<()> {
         })
         .collect();
     let results = reranker
-        .rerank("query", &candidates, &RerankOpts { top_k: Some(3), min_score: None })
+        .rerank(
+            "query",
+            &candidates,
+            &RerankOpts {
+                top_k: Some(3),
+                min_score: None,
+            },
+        )
         .await?;
     assert_eq!(results.len(), 3, "top_k should limit results to 3");
     for (i, r) in results.iter().enumerate() {
@@ -255,7 +293,10 @@ fn citation_markdown_format() {
     };
     let def = c.to_footnote_def(1);
     assert!(def.contains("[^1]"), "footnote must include number");
-    assert!(def.contains("src/lib.rs"), "footnote must include file path");
+    assert!(
+        def.contains("src/lib.rs"),
+        "footnote must include file path"
+    );
     assert!(def.contains("42"), "footnote must include start line");
 }
 

@@ -4,9 +4,9 @@
 //! queries that are then used to drive retrieval. Different strategies trade
 //! off latency, recall, and precision.
 
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::error::Result;
 
 // ── StrategyKind ──────────────────────────────────────────────────────────────
 

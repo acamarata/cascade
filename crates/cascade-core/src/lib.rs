@@ -52,17 +52,29 @@
 //! # }
 //! ```
 
+pub mod auth_detector;
 pub mod cache;
+pub mod cascade_resolve;
+pub mod compat_gen;
 pub mod derived;
 pub mod discovery;
+pub mod hook_store;
 pub mod inbox;
 pub mod memory;
+pub mod providers_store;
+pub mod quota_aggregator;
+pub mod quota_store;
 pub mod resolution;
+pub mod routing_table;
 pub mod security;
 pub mod symlinks;
+pub mod task_store;
 pub mod watcher;
+pub mod worktree_store;
 
 // Re-export the most commonly used top-level items.
 pub use discovery::{DiscoveredTier, TierDiscovery};
+pub use hook_store::HookStore;
+pub use quota_store::{read_quota_store, write_quota_store};
 pub use resolution::{ResolvedCascade, Resolver};
 pub use watcher::{CascadeChanged, CascadeWatcher};

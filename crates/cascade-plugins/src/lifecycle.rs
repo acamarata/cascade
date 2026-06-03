@@ -70,9 +70,8 @@ impl CrashRecord {
     }
 
     fn prune_old_crashes(&mut self, now: std::time::SystemTime) {
-        self.recent_crashes.retain(|t| {
-            now.duration_since(*t).unwrap_or(Duration::MAX) < Self::WINDOW
-        });
+        self.recent_crashes
+            .retain(|t| now.duration_since(*t).unwrap_or(Duration::MAX) < Self::WINDOW);
     }
 
     /// Returns true if enough time has passed to auto-clear the crash counter.
@@ -250,9 +249,14 @@ mod tests {
     #[test]
     fn normal_lifecycle() {
         let reg = PluginRegistry::new();
-        reg.register("my-plugin", PathBuf::from("/tmp/my-plugin"), Default::default());
+        reg.register(
+            "my-plugin",
+            PathBuf::from("/tmp/my-plugin"),
+            Default::default(),
+        );
 
-        reg.transition("my-plugin", PluginState::Validating).unwrap();
+        reg.transition("my-plugin", PluginState::Validating)
+            .unwrap();
         reg.transition("my-plugin", PluginState::Loading).unwrap();
         reg.transition("my-plugin", PluginState::Active).unwrap();
         assert_eq!(reg.state("my-plugin"), Some(PluginState::Active));
@@ -275,7 +279,10 @@ mod tests {
         reg.transition("crashy", PluginState::Active).unwrap();
 
         // Third crash -> Quarantined.
-        assert_eq!(reg.record_crash("crashy").unwrap(), PluginState::Quarantined);
+        assert_eq!(
+            reg.record_crash("crashy").unwrap(),
+            PluginState::Quarantined
+        );
 
         // Loading while quarantined is blocked.
         let err = reg.transition("crashy", PluginState::Loading).unwrap_err();

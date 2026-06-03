@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use clap::{Args, Subcommand};
 use cascade_types::error::Result;
+use clap::{Args, Subcommand};
 
 use super::Command;
 
@@ -78,14 +78,19 @@ impl Command for InboxListArgs {
         let tiers = cascade_core::discovery::TierDiscovery::new().discover(&cwd)?;
 
         for tier in &tiers {
-            if !tier.is_present {
+            if !tier.is_readable() {
                 continue;
             }
-            let cascade_dir = tier.root.join(".cascade");
-            let messages = cascade_core::inbox::list(&cascade_dir).await?;
+            // WHY: DiscoveredTier.cascade_dir is already the `.cascade/` directory.
+            let messages = cascade_core::inbox::list(&tier.cascade_dir).await?;
             for msg in &messages {
                 let preview = msg.content.lines().next().unwrap_or("(empty)");
-                println!("[{:?}] {} — {}", tier.tier, msg.path.file_name().unwrap_or_default().to_string_lossy(), preview);
+                println!(
+                    "[{:?}] {} — {}",
+                    tier.tier,
+                    msg.path.file_name().unwrap_or_default().to_string_lossy(),
+                    preview
+                );
             }
         }
         Ok(())
@@ -95,7 +100,8 @@ impl Command for InboxListArgs {
 #[async_trait]
 impl Command for InboxSendArgs {
     async fn run(&self) -> Result<()> {
-        let slug = self.subject
+        let slug = self
+            .subject
             .to_lowercase()
             .split_whitespace()
             .take(5)

@@ -1,0 +1,12 @@
+{
+  "name": "@cascade/gnome-extension",
+  "version": "1.0.0",
+  "description": "GNOME Shell extension for cascade quota widget — dev tooling only",
+  "private": true,
+  "scripts": {
+    "lint": "eslint extension.js prefs.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

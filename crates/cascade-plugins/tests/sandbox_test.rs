@@ -49,7 +49,10 @@ fn agent_gets_large_memory_default() {
 #[test]
 fn fd_cap_default_is_32() {
     let limits = ResourceLimits::for_type(PluginType::Chunker);
-    assert_eq!(limits.max_fds, DEFAULT_FD_CAP, "FD cap should default to 32 (H1 fix)");
+    assert_eq!(
+        limits.max_fds, DEFAULT_FD_CAP,
+        "FD cap should default to 32 (H1 fix)"
+    );
 }
 
 #[test]
@@ -105,10 +108,15 @@ fn quarantine_after_threshold_crashes() {
     use std::path::PathBuf;
 
     let reg = PluginRegistry::new();
-    reg.register("test-plugin", PathBuf::from("/tmp/test-plugin"), Default::default());
+    reg.register(
+        "test-plugin",
+        PathBuf::from("/tmp/test-plugin"),
+        Default::default(),
+    );
 
     // Advance to Active state.
-    reg.transition("test-plugin", PluginState::Validating).unwrap();
+    reg.transition("test-plugin", PluginState::Validating)
+        .unwrap();
     reg.transition("test-plugin", PluginState::Loading).unwrap();
     reg.transition("test-plugin", PluginState::Active).unwrap();
 
@@ -125,10 +133,16 @@ fn quarantine_after_threshold_crashes() {
 
     // Third crash in window -> Quarantined.
     let s3 = reg.record_crash("test-plugin").unwrap();
-    assert_eq!(s3, PluginState::Quarantined, "third crash should trigger quarantine");
+    assert_eq!(
+        s3,
+        PluginState::Quarantined,
+        "third crash should trigger quarantine"
+    );
 
     // Loading while quarantined must fail with an actionable error.
-    let err = reg.transition("test-plugin", PluginState::Loading).unwrap_err();
+    let err = reg
+        .transition("test-plugin", PluginState::Loading)
+        .unwrap_err();
     let msg = err.to_string();
     assert!(
         msg.contains("cascade plugin enable"),
@@ -213,7 +227,7 @@ fn input_denied_error_does_not_invoke_wasm() {
     // This test verifies the contract: if InputValidator returns Err, the error
     // kind is PluginError::InputDenied and no WASM execution happens.
     // Full integration (with actual WASM module) is in the sandbox simulator.
-    use cascade_plugins::ipc::{InputValidator, PluginRequest, PluginError};
+    use cascade_plugins::ipc::{InputValidator, PluginError, PluginRequest};
 
     struct AlwaysDenyValidator;
     impl InputValidator for AlwaysDenyValidator {
@@ -238,5 +252,8 @@ fn input_denied_error_does_not_invoke_wasm() {
         reason: validation_result.unwrap_err(),
     };
     let msg = plugin_err.to_string();
-    assert!(msg.contains("input denied"), "error variant should identify as input denied: {msg}");
+    assert!(
+        msg.contains("input denied"),
+        "error variant should identify as input denied: {msg}"
+    );
 }

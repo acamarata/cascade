@@ -60,7 +60,13 @@ impl QueryCache {
     }
 
     /// Look up a cached result.
-    pub fn get(&self, query: &str, strategy: &str, k: usize, project: &str) -> Option<Vec<RetrievalHit>> {
+    pub fn get(
+        &self,
+        query: &str,
+        strategy: &str,
+        k: usize,
+        project: &str,
+    ) -> Option<Vec<RetrievalHit>> {
         let key = QueryKey {
             query: query.to_string(),
             strategy: strategy.to_string(),
@@ -71,7 +77,14 @@ impl QueryCache {
     }
 
     /// Insert a result set.
-    pub fn insert(&self, query: &str, strategy: &str, k: usize, project: &str, hits: Vec<RetrievalHit>) {
+    pub fn insert(
+        &self,
+        query: &str,
+        strategy: &str,
+        k: usize,
+        project: &str,
+        hits: Vec<RetrievalHit>,
+    ) {
         let key = QueryKey {
             query: query.to_string(),
             strategy: strategy.to_string(),
@@ -173,7 +186,9 @@ impl ChunkCache {
 
     /// Retrieve a chunk by ID.
     pub fn get(&self, chunk_id: &str) -> Option<Chunk> {
-        self.inner.lock().ok()?.get(chunk_id).cloned()
+        // WHY to_owned: LruMap<String,_>::get requires &String (the key type);
+        // &str cannot be used directly without an Borrow impl on the handrolled LruMap.
+        self.inner.lock().ok()?.get(&chunk_id.to_owned()).cloned()
     }
 
     /// Cache a chunk.

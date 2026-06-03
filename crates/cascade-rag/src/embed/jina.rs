@@ -9,10 +9,7 @@
 
 use async_trait::async_trait;
 
-use cascade_types::{
-    error::Result,
-    EmbedOpts, Embedding, EmbeddingProvider, ProviderKind,
-};
+use cascade_types::{error::Result, EmbedOpts, Embedding, EmbeddingProvider, ProviderKind};
 
 /// Embedding dimension for Jina Embeddings v3.
 const JINA_DIM: usize = 1024;

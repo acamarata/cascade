@@ -36,7 +36,11 @@ fn no_cascade_dirs_returns_empty() {
         .iter()
         .filter(|t| t.cascade_dir.starts_with(root.path()))
         .collect();
-    assert!(relevant.is_empty(), "expected no tiers under root: {:?}", relevant);
+    assert!(
+        relevant.is_empty(),
+        "expected no tiers under root: {:?}",
+        relevant
+    );
 }
 
 #[test]
@@ -105,11 +109,18 @@ fn is_readable_returns_false_for_deleted_file() {
 
     let discovery = TierDiscovery::new().with_home(root.path().to_path_buf());
     let tiers = discovery.discover(root.path()).unwrap();
-    let gci = tiers.iter().find(|t| t.tier == CascadeTier::Gci).unwrap().clone();
+    let gci = tiers
+        .iter()
+        .find(|t| t.tier == CascadeTier::Gci)
+        .unwrap()
+        .clone();
 
     // Delete the file after discovery.
     fs::remove_file(&gci.cascade_md).unwrap();
-    assert!(!gci.is_readable(), "is_readable should be false after deletion");
+    assert!(
+        !gci.is_readable(),
+        "is_readable should be false after deletion"
+    );
 }
 
 #[test]

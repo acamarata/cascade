@@ -3,8 +3,8 @@
 //! Messages follow the PCI format: `msg-YYYY-MM-DD-{slug}.md` with YAML
 //! frontmatter (Subject, From, To, Priority, Type).
 
-use std::path::{Path, PathBuf};
 use cascade_types::error::{CascadeError, Result};
+use std::path::{Path, PathBuf};
 
 /// A single inbox message.
 #[derive(Debug, Clone)]
@@ -22,11 +22,18 @@ pub async fn list(cascade_dir: &Path) -> Result<Vec<InboxMessage>> {
         return Ok(vec![]);
     }
     let mut messages = Vec::new();
-    let mut entries = tokio::fs::read_dir(&inbox).await
-        .map_err(|e| CascadeError::Io { path: inbox.clone(), operation: "read_dir inbox", source: e })?;
-    while let Some(entry) = entries.next_entry().await
-        .map_err(|e| CascadeError::Io { path: inbox.clone(), operation: "next_entry inbox", source: e })?
-    {
+    let mut entries = tokio::fs::read_dir(&inbox)
+        .await
+        .map_err(|e| CascadeError::Io {
+            path: inbox.clone(),
+            operation: "read_dir inbox",
+            source: e,
+        })?;
+    while let Some(entry) = entries.next_entry().await.map_err(|e| CascadeError::Io {
+        path: inbox.clone(),
+        operation: "next_entry inbox",
+        source: e,
+    })? {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             if let Ok(content) = tokio::fs::read_to_string(&path).await {
@@ -48,8 +55,13 @@ pub async fn send(inbox_dir: &Path, slug: &str, content: &str) -> Result<PathBuf
     let date = format_date(ts);
     let filename = format!("msg-{}-{}.md", date, slug);
     let path = inbox_dir.join(&filename);
-    tokio::fs::write(&path, content).await
-        .map_err(|e| CascadeError::Io { path: path.clone(), operation: "write inbox message", source: e })?;
+    tokio::fs::write(&path, content)
+        .await
+        .map_err(|e| CascadeError::Io {
+            path: path.clone(),
+            operation: "write inbox message",
+            source: e,
+        })?;
     Ok(path)
 }
 
@@ -58,8 +70,13 @@ pub async fn archive(cascade_dir: &Path, msg_path: &Path) -> Result<()> {
     let archive = cascade_dir.join("archive").join("inbox");
     tokio::fs::create_dir_all(&archive).await.ok();
     let dest = archive.join(msg_path.file_name().unwrap_or_default());
-    tokio::fs::rename(msg_path, &dest).await
-        .map_err(|e| CascadeError::Io { path: dest, operation: "archive inbox message", source: e })
+    tokio::fs::rename(msg_path, &dest)
+        .await
+        .map_err(|e| CascadeError::Io {
+            path: dest,
+            operation: "archive inbox message",
+            source: e,
+        })
 }
 
 fn format_date(unix_secs: u64) -> String {

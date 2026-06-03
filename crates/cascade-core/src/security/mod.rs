@@ -49,8 +49,8 @@ pub mod validator;
 
 // Re-export the most-used surface so callers can write
 // `use cascade_core::security::ScanPipeline` etc.
-pub use validator::{ScanPipeline, ValidationContext, ValidationError};
-pub use sanitizer::{OutputSanitizer, SanitizationResult};
 pub use audit::{AuditEvent, AuditLogger};
-pub use keychain::build_key_storage;
 pub use env_allowlist::EnvVarAllowlist;
+pub use keychain::build_key_storage;
+pub use sanitizer::{OutputSanitizer, SanitizationResult};
+pub use validator::{ScanPipeline, ValidationContext, ValidationError};

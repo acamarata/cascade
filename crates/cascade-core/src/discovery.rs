@@ -209,7 +209,9 @@ mod tests {
         let discovery = TierDiscovery::new().with_home(root.path().to_path_buf());
         let tiers = discovery.discover(root.path()).unwrap();
         assert!(!tiers.is_empty());
-        assert!(tiers.iter().any(|t| t.cascade_dir == root.path().join(".cascade")));
+        assert!(tiers
+            .iter()
+            .any(|t| t.cascade_dir == root.path().join(".cascade")));
     }
 
     #[test]

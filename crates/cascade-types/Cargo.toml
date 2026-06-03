@@ -18,8 +18,12 @@ async-trait = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true }
 tracing     = { workspace = true }
+chrono      = { workspace = true }
+uuid        = { workspace = true }
 # TOML is the format for human-edited config files (CRIT-5 policy).
 toml        = "0.8"
+# cron schedule parsing for scheduled_task.rs
+cron        = "0.12"
 
 [dev-dependencies]
 tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }

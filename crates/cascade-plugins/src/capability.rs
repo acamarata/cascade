@@ -77,16 +77,16 @@ impl CapabilitySet {
 
     /// Returns true if the plugin can read `path` (path-scope check with symlink resolution).
     pub fn can_read(&self, path: &Path) -> bool {
-        self.scoped_paths.iter().any(|s| {
-            matches!(s.capability, Capability::FsRead) && s.contains(path)
-        })
+        self.scoped_paths
+            .iter()
+            .any(|s| matches!(s.capability, Capability::FsRead) && s.contains(path))
     }
 
     /// Returns true if the plugin can write `path` (path-scope check with symlink resolution).
     pub fn can_write(&self, path: &Path) -> bool {
-        self.scoped_paths.iter().any(|s| {
-            matches!(s.capability, Capability::FsWrite) && s.contains(path)
-        })
+        self.scoped_paths
+            .iter()
+            .any(|s| matches!(s.capability, Capability::FsWrite) && s.contains(path))
     }
 }
 
@@ -96,7 +96,9 @@ pub enum CapabilityError {
     #[error("capability denied: plugin '{plugin}' does not hold '{cap:?}'")]
     Denied { plugin: String, cap: Capability },
 
-    #[error("path access denied: plugin '{plugin}' cannot access '{path}' (not in declared scope)")]
+    #[error(
+        "path access denied: plugin '{plugin}' cannot access '{path}' (not in declared scope)"
+    )]
     PathDenied { plugin: String, path: PathBuf },
 
     #[error(
@@ -129,10 +131,7 @@ impl DeclaredCapabilities {
     /// # Why intersect with user config
     /// Plugins should only get the minimum they need; user config provides a
     /// deny override so users can restrict even declared capabilities.
-    pub fn resolve(
-        &self,
-        deny_net_outbound: bool,
-    ) -> Result<CapabilitySet, CapabilityError> {
+    pub fn resolve(&self, deny_net_outbound: bool) -> Result<CapabilitySet, CapabilityError> {
         let mut set = CapabilitySet::default();
 
         // Reserved capabilities — emit actionable message if declared.
@@ -210,9 +209,17 @@ mod tests {
             ..Default::default()
         };
         let err = caps.resolve(false).unwrap_err();
-        assert!(matches!(err, CapabilityError::Reserved { cap: Capability::IpcCascade }));
+        assert!(matches!(
+            err,
+            CapabilityError::Reserved {
+                cap: Capability::IpcCascade
+            }
+        ));
         let msg = err.to_string();
-        assert!(msg.contains("v0.2.0"), "error should mention upcoming version: {msg}");
+        assert!(
+            msg.contains("v0.2.0"),
+            "error should mention upcoming version: {msg}"
+        );
     }
 
     #[test]

@@ -83,9 +83,11 @@ impl Resolver {
     pub async fn resolve(&self, cwd: &Path) -> Result<ResolvedCascade> {
         use cascade_types::error::CascadeError;
 
-        let cwd = cwd
-            .canonicalize()
-            .map_err(|e| CascadeError::Io { path: cwd.to_path_buf(), operation: "canonicalize cwd", source: e })?;
+        let cwd = cwd.canonicalize().map_err(|e| CascadeError::Io {
+            path: cwd.to_path_buf(),
+            operation: "canonicalize cwd",
+            source: e,
+        })?;
 
         let mut tier_sources: Vec<TierSource> = Vec::new();
         let mut missing_tiers: Vec<CascadeTier> = Vec::new();
@@ -94,7 +96,8 @@ impl Resolver {
         let candidates = self.discover_tier_paths(&cwd);
 
         for (tier, path) in candidates {
-            let cascade_file = path.join(cascade_types::paths::CASCADE_DIR_NAME)
+            let cascade_file = path
+                .join(cascade_types::paths::CASCADE_DIR_NAME)
                 .join(cascade_types::paths::CASCADE_MD_NAME);
 
             // Follow symlinks: CLAUDE.md / AGENTS.md may point here.
@@ -107,7 +110,11 @@ impl Resolver {
             if resolved_path.exists() {
                 match std::fs::read_to_string(&resolved_path) {
                     Ok(content) => {
-                        tier_sources.push(TierSource { tier, path: resolved_path, content });
+                        tier_sources.push(TierSource {
+                            tier,
+                            path: resolved_path,
+                            content,
+                        });
                     }
                     Err(e) => {
                         return Err(CascadeError::Io {
@@ -125,7 +132,12 @@ impl Resolver {
         // Merge: higher tier (earlier in list) content first.
         let merged_text = self.merge(&tier_sources);
 
-        Ok(ResolvedCascade { merged_text, tier_sources, missing_tiers, cwd })
+        Ok(ResolvedCascade {
+            merged_text,
+            tier_sources,
+            missing_tiers,
+            cwd,
+        })
     }
 
     /// Discover the filesystem paths to check for each cascade tier.
@@ -145,10 +157,7 @@ impl Resolver {
         // Heuristic: grandparent of a git repo root that contains project dirs.
         // For now, walk upward from CWD and record each ancestor that has a
         // .cascade/ directory; assign tiers in reverse-depth order.
-        let mut ancestors: Vec<PathBuf> = cwd
-            .ancestors()
-            .map(|p| p.to_path_buf())
-            .collect();
+        let mut ancestors: Vec<PathBuf> = cwd.ancestors().map(|p| p.to_path_buf()).collect();
         ancestors.reverse(); // root → cwd
 
         // Assign the intermediate tiers (PCI through PAC) to ancestor dirs
@@ -166,7 +175,10 @@ impl Resolver {
             if tier_idx >= tier_sequence.len() {
                 break;
             }
-            if ancestor.join(cascade_types::paths::CASCADE_DIR_NAME).is_dir() {
+            if ancestor
+                .join(cascade_types::paths::CASCADE_DIR_NAME)
+                .is_dir()
+            {
                 results.push((tier_sequence[tier_idx], ancestor.clone()));
                 tier_idx += 1;
             }
@@ -186,7 +198,11 @@ impl Resolver {
                 .collect::<Vec<_>>()
                 .join("\n")
         } else {
-            sources.iter().map(|s| s.content.as_str()).collect::<Vec<_>>().join("\n\n---\n\n")
+            sources
+                .iter()
+                .map(|s| s.content.as_str())
+                .collect::<Vec<_>>()
+                .join("\n\n---\n\n")
         }
     }
 }

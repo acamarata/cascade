@@ -11,9 +11,9 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::parse::CodeParser
 
-use std::path::Path;
 use async_trait::async_trait;
 use serde_json::json;
+use std::path::Path;
 
 use cascade_types::{
     chunker::Document,

@@ -42,11 +42,11 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::index::RagIndex
 
-use std::path::{Path, PathBuf};
-use rusqlite::{Connection, OpenFlags, params};
-use serde_json::Value;
-use tracing::{debug, info, instrument};
 use cascade_types::error::{CascadeError, Result};
+use rusqlite::{params, Connection, OpenFlags};
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+use tracing::{debug, info, instrument};
 
 /// Current schema version.  Increment on every breaking DDL change.
 const SCHEMA_VERSION: u32 = 2;
@@ -127,7 +127,9 @@ impl RagIndex {
             &db_path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )
-        .map_err(|e| CascadeError::RetrievalFailed { detail: format!("open db: {e}") })?;
+        .map_err(|e| CascadeError::RetrievalFailed {
+            detail: format!("open db: {e}"),
+        })?;
         let idx = Self {
             db_path,
             conn: tokio::sync::Mutex::new(conn),
@@ -153,11 +155,18 @@ impl RagIndex {
         let conn = self.conn.lock().await;
         // WAL mode — single writer, unlimited concurrent readers.
         conn.execute_batch("PRAGMA journal_mode=WAL;")
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("wal mode: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("wal mode: {e}"),
+            })?;
         conn.execute_batch("PRAGMA synchronous=NORMAL;")
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("sync pragma: {e}") })?;
-        let stored_ver: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("read user_version: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("sync pragma: {e}"),
+            })?;
+        let stored_ver: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("read user_version: {e}"),
+            })?;
         if stored_ver < SCHEMA_VERSION {
             self.run_migrations(&conn, stored_ver)?;
         }
@@ -186,7 +195,9 @@ impl RagIndex {
                     tokenize='unicode61 remove_diacritics 1'
                 );",
             )
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("migration v1: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("migration v1: {e}"),
+            })?;
             info!("Applied migration v0→v1 (chunks + FTS5)");
         }
         if current_ver < 2 {
@@ -206,7 +217,9 @@ impl RagIndex {
             info!("Applied migration v1→v2 (sqlite-vec)");
         }
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("set user_version: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("set user_version: {e}"),
+            })?;
         Ok(())
     }
 
@@ -241,13 +254,17 @@ impl RagIndex {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![chunk_id, fp, start_line, end_line, text, meta_json, now],
         )
-        .map_err(|e| CascadeError::RetrievalFailed { detail: format!("upsert chunk: {e}") })?;
+        .map_err(|e| CascadeError::RetrievalFailed {
+            detail: format!("upsert chunk: {e}"),
+        })?;
         // Keep FTS5 content table in sync.
         conn.execute(
             "INSERT OR REPLACE INTO fts_chunks(chunk_id, text) VALUES (?1, ?2)",
             params![chunk_id, text],
         )
-        .map_err(|e| CascadeError::RetrievalFailed { detail: format!("upsert fts: {e}") })?;
+        .map_err(|e| CascadeError::RetrievalFailed {
+            detail: format!("upsert fts: {e}"),
+        })?;
         debug!(chunk_id, "chunk upserted");
         Ok(())
     }
@@ -278,10 +295,20 @@ impl RagIndex {
     pub async fn delete_chunk(&self, chunk_id: &str) -> Result<()> {
         let conn = self.conn.lock().await;
         conn.execute("DELETE FROM chunks WHERE chunk_id = ?1", params![chunk_id])
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("delete chunk: {e}") })?;
-        conn.execute("DELETE FROM fts_chunks WHERE chunk_id = ?1", params![chunk_id])
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("delete fts: {e}") })?;
-        let _ = conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?1", params![chunk_id]);
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("delete chunk: {e}"),
+            })?;
+        conn.execute(
+            "DELETE FROM fts_chunks WHERE chunk_id = ?1",
+            params![chunk_id],
+        )
+        .map_err(|e| CascadeError::RetrievalFailed {
+            detail: format!("delete fts: {e}"),
+        })?;
+        let _ = conn.execute(
+            "DELETE FROM vec_chunks WHERE chunk_id = ?1",
+            params![chunk_id],
+        );
         Ok(())
     }
 
@@ -292,17 +319,23 @@ impl RagIndex {
     /// Using a transaction is the primary driver of the ≥500 chunks/sec target.
     pub async fn batch_upsert_fts(&self, batch: &[(&str, &str)]) -> Result<usize> {
         let conn = self.conn.lock().await;
-        let tx = conn.unchecked_transaction()
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("begin tx: {e}") })?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("begin tx: {e}"),
+            })?;
         for (chunk_id, text) in batch {
             tx.execute(
                 "INSERT OR REPLACE INTO fts_chunks(chunk_id, text) VALUES (?1, ?2)",
                 params![chunk_id, text],
             )
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("batch fts insert: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("batch fts insert: {e}"),
+            })?;
         }
-        tx.commit()
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("commit tx: {e}") })?;
+        tx.commit().map_err(|e| CascadeError::RetrievalFailed {
+            detail: format!("commit tx: {e}"),
+        })?;
         Ok(batch.len())
     }
 
@@ -322,12 +355,16 @@ impl RagIndex {
                  ORDER BY score ASC \
                  LIMIT ?2",
             )
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("fts prepare: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("fts prepare: {e}"),
+            })?;
         let results: Vec<(String, f32)> = stmt
             .query_map(params![query, k as i64], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)? as f32))
             })
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("fts query: {e}") })?
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("fts query: {e}"),
+            })?
             .filter_map(|r| r.ok())
             .collect();
         Ok(results)
@@ -338,10 +375,10 @@ impl RagIndex {
     /// Merge all FTS5 segments into one for faster queries.
     pub async fn fts_optimize(&self) -> Result<()> {
         let conn = self.conn.lock().await;
-        conn.execute_batch(
-            "INSERT INTO fts_chunks(fts_chunks) VALUES('optimize');",
-        )
-        .map_err(|e| CascadeError::RetrievalFailed { detail: format!("fts optimize: {e}") })?;
+        conn.execute_batch("INSERT INTO fts_chunks(fts_chunks) VALUES('optimize');")
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("fts optimize: {e}"),
+            })?;
         Ok(())
     }
 
@@ -349,7 +386,9 @@ impl RagIndex {
     pub async fn vacuum(&self) -> Result<()> {
         let conn = self.conn.lock().await;
         conn.execute_batch("VACUUM;")
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("vacuum: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("vacuum: {e}"),
+            })?;
         Ok(())
     }
 
@@ -360,7 +399,9 @@ impl RagIndex {
         let conn = self.conn.lock().await;
         let total: u64 = conn
             .query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0))
-            .map_err(|e| CascadeError::RetrievalFailed { detail: format!("count chunks: {e}") })?;
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("count chunks: {e}"),
+            })?;
         let embedded: u64 = conn
             .query_row("SELECT COUNT(*) FROM vec_chunks", [], |r| r.get(0))
             .unwrap_or(0);

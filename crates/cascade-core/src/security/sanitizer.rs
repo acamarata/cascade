@@ -23,7 +23,7 @@
 //! For MCP-specific outbound scanning see [`super::mcp_envelope`].
 
 use crate::security::audit::{AuditEvent, AuditLogger};
-use crate::security::secrets_scanner::{SecretsScanner, SecretMatch};
+use crate::security::secrets_scanner::{SecretMatch, SecretsScanner};
 
 // ── SanitizationResult ────────────────────────────────────────────────────────
 

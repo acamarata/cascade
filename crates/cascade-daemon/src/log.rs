@@ -16,7 +16,7 @@ use tracing_subscriber::{
     fmt::{self, time::UtcTime},
     layer::SubscriberExt,
     util::SubscriberInitExt,
-    EnvFilter,
+    EnvFilter, Layer,
 };
 
 const LOG_DIR: &str = "logs";
@@ -46,8 +46,8 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .append(true)
         .open(&log_path)?;
 
-    let env_filter = EnvFilter::try_from_env("CASCADE_LOG_LEVEL")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter =
+        EnvFilter::try_from_env("CASCADE_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("info"));
 
     let file_layer = fmt::layer()
         .json()

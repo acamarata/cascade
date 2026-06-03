@@ -19,7 +19,10 @@ use crate::manifest::{ManifestError, PluginManifest};
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
     #[error("failed to read plugin directory '{path}': {source}")]
-    ReadDir { path: PathBuf, source: std::io::Error },
+    ReadDir {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 
     #[error("plugin entry '{path}' has no cascade-plugin.toml; skipping")]
     MissingManifest { path: PathBuf },
@@ -28,10 +31,16 @@ pub enum DiscoveryError {
     MissingWasm { path: PathBuf },
 
     #[error("manifest error in '{path}': {source}")]
-    Manifest { path: PathBuf, source: ManifestError },
+    Manifest {
+        path: PathBuf,
+        source: ManifestError,
+    },
 
     #[error("I/O error reading '{path}': {source}")]
-    Io { path: PathBuf, source: std::io::Error },
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
 /// A plugin discovered on disk, ready to be validated and loaded.
@@ -61,9 +70,7 @@ pub enum PluginOrigin {
 /// Errors for individual plugins are collected and returned alongside successes
 /// rather than aborting the whole scan. The daemon logs errors and skips the
 /// offending plugin, keeping others functional.
-pub fn discover_all(
-    cascade_root: Option<&Path>,
-) -> (Vec<DiscoveredPlugin>, Vec<DiscoveryError>) {
+pub fn discover_all(cascade_root: Option<&Path>) -> (Vec<DiscoveredPlugin>, Vec<DiscoveryError>) {
     let mut plugins = Vec::new();
     let mut errors = Vec::new();
 
@@ -76,9 +83,9 @@ pub fn discover_all(
     }
 
     // Per-cascade plugins: <cascade_root>/.cascade/plugins/
-    let local_root = cascade_root.map(|p| p.to_owned()).unwrap_or_else(|| {
-        std::env::current_dir().unwrap_or_default()
-    });
+    let local_root = cascade_root
+        .map(|p| p.to_owned())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     let local_dir = local_root.join(".cascade").join("plugins");
     let (mut found, mut errs) = scan_plugin_dir(&local_dir, PluginOrigin::Local);
     plugins.append(&mut found);
@@ -91,7 +98,10 @@ pub fn discover_all(
 ///
 /// Non-fatal errors (missing manifest, bad TOML) are collected in the error vec
 /// rather than stopping the scan. This matches the daemon's "skip, don't fail" policy.
-fn scan_plugin_dir(dir: &Path, origin: PluginOrigin) -> (Vec<DiscoveredPlugin>, Vec<DiscoveryError>) {
+fn scan_plugin_dir(
+    dir: &Path,
+    origin: PluginOrigin,
+) -> (Vec<DiscoveredPlugin>, Vec<DiscoveryError>) {
     if !dir.exists() {
         return (vec![], vec![]);
     }
@@ -101,7 +111,10 @@ fn scan_plugin_dir(dir: &Path, origin: PluginOrigin) -> (Vec<DiscoveredPlugin>, 
         Err(source) => {
             return (
                 vec![],
-                vec![DiscoveryError::ReadDir { path: dir.to_owned(), source }],
+                vec![DiscoveryError::ReadDir {
+                    path: dir.to_owned(),
+                    source,
+                }],
             );
         }
     };
@@ -130,7 +143,10 @@ fn scan_plugin_dir(dir: &Path, origin: PluginOrigin) -> (Vec<DiscoveredPlugin>, 
         let manifest_bytes = match std::fs::read(&manifest_path) {
             Ok(b) => b,
             Err(source) => {
-                errors.push(DiscoveryError::Io { path: manifest_path, source });
+                errors.push(DiscoveryError::Io {
+                    path: manifest_path,
+                    source,
+                });
                 continue;
             }
         };
@@ -138,7 +154,10 @@ fn scan_plugin_dir(dir: &Path, origin: PluginOrigin) -> (Vec<DiscoveredPlugin>, 
         let manifest = match PluginManifest::parse(&manifest_bytes) {
             Ok(m) => m,
             Err(source) => {
-                errors.push(DiscoveryError::Manifest { path: plugin_dir, source });
+                errors.push(DiscoveryError::Manifest {
+                    path: plugin_dir,
+                    source,
+                });
                 continue;
             }
         };
@@ -146,7 +165,10 @@ fn scan_plugin_dir(dir: &Path, origin: PluginOrigin) -> (Vec<DiscoveredPlugin>, 
         let wasm_bytes = match std::fs::read(&wasm_path) {
             Ok(b) => b,
             Err(source) => {
-                errors.push(DiscoveryError::Io { path: wasm_path, source });
+                errors.push(DiscoveryError::Io {
+                    path: wasm_path,
+                    source,
+                });
                 continue;
             }
         };
@@ -190,7 +212,12 @@ cascade_version = ">=0.1.0"
         let plugins_dir = tmp.path().join(".cascade").join("plugins");
         fs::create_dir_all(&plugins_dir).unwrap();
         // Write fake WASM bytes (real compilation not needed for discovery tests).
-        write_plugin(&plugins_dir, "test-chunker", VALID_MANIFEST, b"\0asm\x01\0\0\0");
+        write_plugin(
+            &plugins_dir,
+            "test-chunker",
+            VALID_MANIFEST,
+            b"\0asm\x01\0\0\0",
+        );
 
         let (found, errors) = scan_plugin_dir(&plugins_dir, PluginOrigin::Local);
         assert_eq!(errors.len(), 0, "unexpected errors: {errors:?}");

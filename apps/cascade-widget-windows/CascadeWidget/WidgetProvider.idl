@@ -1,0 +1,81 @@
+// WidgetProvider.idl — Cascade Widget Provider
+// Purpose:  MIDL 3 (Windows Runtime IDL) type definition for the cascade widget
+//           provider and widget implementation classes. Consumed by cppwinrt.exe
+//           to generate C++ projection headers used in WidgetProvider.h/.cpp and
+//           CascadeWidgetImpl.h/.cpp.
+// Inputs:   Windows App SDK 1.5 IWidgetProvider interface (imported via SDK headers).
+// Outputs:  CascadeWidget.WidgetProvider and CascadeWidget.CascadeWidgetImpl WinRT
+//           runtime classes.
+// Constraints:
+//   - IWidgetProvider is the Windows App SDK 1.5 interface from
+//     Microsoft.Windows.Widgets.Providers. Do NOT use the deprecated
+//     WinRT WidgetService approach.
+//   - The CLSID on WidgetProvider must match Package.appxmanifest
+//     com:Class/@Id = "A1B2C3D4-E5F6-7890-ABCD-000000000001".
+// SPORT: cascade/apps/cascade-widget-windows
+
+import "CascadeWidgetImpl.idl";
+
+namespace CascadeWidget
+{
+    // ── IWidgetProvider (stub declaration for projection) ────────────────────
+    //
+    // The real IWidgetProvider interface lives in the Windows App SDK and is
+    // imported from Microsoft.Windows.Widgets.Providers. The methods below
+    // match the SDK 1.5 contract exactly.
+    //
+    // Reference:
+    //   https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/
+    //       microsoft.windows.widgets.providers.iwidgetprovider
+
+    /// <summary>
+    /// The IWidgetProvider interface contract, re-declared here so that
+    /// MIDL-generated projections reference the correct vtable shape.
+    ///
+    /// Implementations MUST be colocated out-of-process COM servers registered
+    /// in Package.appxmanifest under the windows.comServer extension.
+    /// </summary>
+    interface IWidgetProvider
+    {
+        // Called by the Widget Board host when a widget context changes
+        // (e.g., the user resizes the tile or navigates to a different page).
+        // Implementations must respond by pushing a fresh Adaptive Card payload
+        // via IWidgetContext::UpdateWidget().
+        void OnWidgetContextChanged(
+            Microsoft.Windows.Widgets.Providers.WidgetContextChangedArgs args);
+
+        // Called when the user clicks a button or link within the widget's
+        // Adaptive Card. The action JSON payload is provided in the args.
+        void OnActionInvoked(
+            Microsoft.Windows.Widgets.Providers.WidgetActionInvokedArgs args);
+
+        // Called when the user opens the widget's customisation panel (the
+        // "..." / settings entry in the Widget Board overflow menu).
+        // Implementations should push a customisation Adaptive Card payload.
+        void OnWidgetCustomizationRequested(
+            Microsoft.Windows.Widgets.Providers.WidgetCustomizationRequestedArgs args);
+    };
+
+    // ── CascadeWidgetProvider ─────────────────────────────────────────────────
+    //
+    // The COM-activatable out-of-process provider registered with the Widget Board.
+    // The Widget Board will call CoCreateInstance(CLSID_CascadeWidgetProvider)
+    // via the class entry in Package.appxmanifest to obtain a provider reference.
+
+    /// <summary>
+    /// COM-activatable widget provider. Implements IWidgetProvider to serve
+    /// the CascadeStatus widget tile to the Windows 11 Widget Board.
+    ///
+    /// Registered as an out-of-process COM server in Package.appxmanifest
+    /// (CLSID A1B2C3D4-E5F6-7890-ABCD-000000000001). The Widget Board host
+    /// calls CreateInstance on this CLSID when it needs to instantiate the
+    /// provider for the first time or after the host process restarts.
+    /// </summary>
+    [activatable("CascadeWidget.CascadeWidgetProvider", "Microsoft.WindowsAppSDK.Foundation.Contract")]
+    runtimeclass CascadeWidgetProvider : IWidgetProvider
+    {
+        // Factory method — used by App.xaml.cpp to register the provider with
+        // WidgetManager.GetDefault() during COM activation.
+        CascadeWidgetProvider();
+    };
+}

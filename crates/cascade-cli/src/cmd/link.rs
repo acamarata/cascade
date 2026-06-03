@@ -14,8 +14,8 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::{CascadeError, Result};
+use clap::Args;
 
 use super::Command;
 
@@ -45,7 +45,10 @@ impl Command for LinkArgs {
 
         if link_path.exists() {
             if !self.force {
-                eprintln!("error: {} already exists. Pass --force to replace.", link_path.display());
+                eprintln!(
+                    "error: {} already exists. Pass --force to replace.",
+                    link_path.display()
+                );
                 std::process::exit(1);
             }
             std::fs::remove_file(&link_path).map_err(|e| CascadeError::Io {

@@ -6,8 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::{CascadeError, Result};
+use clap::Args;
 
 use super::Command;
 

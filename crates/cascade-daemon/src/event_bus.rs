@@ -49,8 +49,7 @@ impl EventBus {
     /// Open (or create) the events database.
     pub async fn new(config_dir: PathBuf) -> Result<Arc<Self>, DaemonError> {
         let db_path = config_dir.join(DB_NAME);
-        let conn = Connection::open(&db_path)
-            .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+        let conn = Connection::open(&db_path).map_err(|e| DaemonError::EventBus(e.to_string()))?;
 
         // WAL mode for concurrent read access from widgets.
         conn.execute_batch("PRAGMA journal_mode=WAL;")
@@ -90,7 +89,11 @@ impl EventBus {
     ///
     /// Inputs: `kind` — event type string, `payload` — arbitrary JSON value.
     /// Outputs: assigned event id.
-    pub async fn publish(&self, kind: &str, payload: serde_json::Value) -> Result<i64, DaemonError> {
+    pub async fn publish(
+        &self,
+        kind: &str,
+        payload: serde_json::Value,
+    ) -> Result<i64, DaemonError> {
         let conn = self.db.lock().await;
         let ts = now_secs();
         let payload_str = serde_json::to_string(&payload).unwrap_or_default();
@@ -121,8 +124,7 @@ impl EventBus {
                 Ok(Event {
                     id: row.get(0)?,
                     kind: row.get(1)?,
-                    payload: serde_json::from_str(&payload_str)
-                        .unwrap_or(serde_json::Value::Null),
+                    payload: serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null),
                     ts: row.get(3)?,
                 })
             })
@@ -157,10 +159,7 @@ impl EventBus {
     // ── IPC helpers ───────────────────────────────────────────────────────
 
     /// Return the last `limit` inbox items for the IPC `inbox_summary` method.
-    pub async fn inbox_summary(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<serde_json::Value>, DaemonError> {
+    pub async fn inbox_summary(&self, limit: usize) -> Result<Vec<serde_json::Value>, DaemonError> {
         let conn = self.db.lock().await;
         let mut stmt = conn
             .prepare(

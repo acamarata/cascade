@@ -12,22 +12,22 @@ use crate::resolution::ResolvedCascade;
 
 /// Write a resolved cascade to the temp cache file for the given root.
 pub async fn write(root: &Path, resolved: &ResolvedCascade) -> Result<()> {
-    use cascade_types::paths::{CASCADE_DIR_NAME, subdirs};
+    use cascade_types::paths::{subdirs, CASCADE_DIR_NAME};
     let temp_dir = root.join(CASCADE_DIR_NAME).join(subdirs::TEMP);
     tokio::fs::create_dir_all(&temp_dir).await.ok();
     let cache_path = temp_dir.join(".resolved-cascade.md");
-    tokio::fs::write(&cache_path, &resolved.merged_text).await.map_err(|e| {
-        cascade_types::error::CascadeError::Io {
+    tokio::fs::write(&cache_path, &resolved.merged_text)
+        .await
+        .map_err(|e| cascade_types::error::CascadeError::Io {
             path: cache_path.clone(),
             operation: "write resolved cascade cache",
             source: e,
-        }
-    })
+        })
 }
 
 /// Read the cached resolved cascade text, if present.
 pub async fn read(root: &Path) -> Option<String> {
-    use cascade_types::paths::{CASCADE_DIR_NAME, subdirs};
+    use cascade_types::paths::{subdirs, CASCADE_DIR_NAME};
     let path = root
         .join(CASCADE_DIR_NAME)
         .join(subdirs::TEMP)

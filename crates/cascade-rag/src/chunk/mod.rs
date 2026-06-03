@@ -98,25 +98,16 @@ impl StrategyChunker {
 #[async_trait]
 impl Chunker for StrategyChunker {
     async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<Chunk>> {
-        let mime = doc
-            .mime_type
-            .as_deref()
-            .unwrap_or("text/plain");
+        let mime = doc.mime_type.as_deref().unwrap_or("text/plain");
 
         // Dispatch based on MIME type.
         if mime == "text/markdown" || mime == "text/x-markdown" {
-            markdown::MarkdownChunker::default()
-                .chunk(doc, opts)
-                .await
+            markdown::MarkdownChunker::default().chunk(doc, opts).await
         } else if mime.starts_with("text/x-") {
-            code::CodeChunker::default()
-                .chunk(doc, opts)
-                .await
+            code::CodeChunker::default().chunk(doc, opts).await
         } else {
             // Fall through to semantic chunker as the default.
-            semantic::SemanticChunker::default()
-                .chunk(doc, opts)
-                .await
+            semantic::SemanticChunker::default().chunk(doc, opts).await
         }
     }
 

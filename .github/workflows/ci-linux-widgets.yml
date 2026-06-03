@@ -1,0 +1,89 @@
+name: CI Linux Widgets
+
+on:
+  push:
+    paths:
+      - 'apps/cascade-widget-linux/**'
+      - '.github/workflows/ci-linux-widgets.yml'
+  pull_request:
+    paths:
+      - 'apps/cascade-widget-linux/**'
+      - '.github/workflows/ci-linux-widgets.yml'
+
+# Cancel in-progress runs on the same branch/PR to avoid wasted runner-minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gnome-extension:
+    name: GNOME Extension (lint + pack + test)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y gjs nodejs
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dev dependencies
+        working-directory: apps/cascade-widget-linux/gnome
+        run: pnpm install
+
+      - name: Lint GJS
+        working-directory: apps/cascade-widget-linux/gnome
+        run: npx eslint extension.js prefs.js
+
+      - name: Pack extension
+        run: bash apps/cascade-widget-linux/gnome/pack.sh
+
+      - name: Validate pack contents
+        run: |
+          unzip -l apps/cascade-widget-linux/gnome/cascade-quota-widget@acamarata.zip \
+            | grep 'extension.js' \
+            || (echo "MISSING: extension.js not found in ZIP" && exit 1)
+          echo "Pack validation passed"
+
+      - name: Fixture test
+        run: node apps/cascade-widget-linux/gnome/test-fixture.mjs
+
+  kde-plasmoid:
+    name: KDE Plasmoid (qmllint + pack + validate)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y qml-qt6 qt6-base-dev qt6-declarative-dev unzip
+
+      - name: Add qmllint to PATH
+        run: echo "/usr/lib/qt6/bin" >> $GITHUB_PATH
+
+      - name: Lint QML files
+        run: |
+          qmllint --ignore-warnings \
+            apps/cascade-widget-linux/kde/contents/ui/main.qml \
+            apps/cascade-widget-linux/kde/contents/ui/CacheModel.qml \
+            apps/cascade-widget-linux/kde/contents/ui/FullRepresentation.qml \
+            apps/cascade-widget-linux/kde/contents/ui/CompactRepresentation.qml
+
+      - name: Validate metadata.json
+        run: |
+          python3 -c "import json; json.load(open('apps/cascade-widget-linux/kde/metadata.json'))"
+          echo "metadata.json is valid JSON"
+
+      - name: Pack plasmoid
+        run: bash apps/cascade-widget-linux/kde/pack.sh
+
+      - name: Validate pack contents
+        run: |
+          unzip -l apps/cascade-widget-linux/kde/cascade-quota-widget.plasmoid \
+            | grep 'metadata.json' \
+            || (echo "MISSING: metadata.json not found in plasmoid archive" && exit 1)
+          echo "Pack validation passed"

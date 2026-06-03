@@ -14,8 +14,8 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::citation
 
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 // ── Citation ──────────────────────────────────────────────────────────────────
 
@@ -103,8 +103,11 @@ impl CitationSet {
         if self.citations.len() <= 1 {
             return;
         }
-        self.citations
-            .sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.start_line.cmp(&b.start_line)));
+        self.citations.sort_by(|a, b| {
+            a.file_path
+                .cmp(&b.file_path)
+                .then(a.start_line.cmp(&b.start_line))
+        });
 
         let mut merged: Vec<Citation> = Vec::with_capacity(self.citations.len());
         for cite in self.citations.drain(..) {
@@ -186,7 +189,7 @@ mod tests {
     fn dedup_overlapping_ranges() {
         let mut set = CitationSet::new(vec![
             cite("src/lib.rs", 1, 20, 0.9),
-            cite("src/lib.rs", 15, 35, 0.8),  // overlaps with first
+            cite("src/lib.rs", 15, 35, 0.8), // overlaps with first
             cite("src/main.rs", 1, 10, 0.7),
         ]);
         set.deduplicate();

@@ -7,8 +7,8 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use clap::{Args, Subcommand};
 use cascade_types::error::Result;
+use clap::{Args, Subcommand};
 
 use super::Command;
 
@@ -89,7 +89,8 @@ impl Command for MemoryWriteArgs {
                 buf
             }
         };
-        let path = cascade_core::memory::write(&cascade_dir, &self.file, &content, self.append).await?;
+        let path =
+            cascade_core::memory::write(&cascade_dir, &self.file, &content, self.append).await?;
         println!("Written: {}", path.display());
         Ok(())
     }

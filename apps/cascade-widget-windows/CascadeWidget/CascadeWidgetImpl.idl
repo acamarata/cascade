@@ -1,0 +1,34 @@
+// CascadeWidgetImpl.idl — Cascade Widget Provider
+// Purpose:  MIDL 3 type definition for a single widget instance. Imported by
+//           WidgetProvider.idl. CascadeWidgetImpl holds per-tile state such as
+//           the last-known WidgetId and size preference.
+// Constraints:
+//   - CascadeWidgetImpl implements Microsoft.Windows.Widgets.Providers.IWidget
+//     and IWidgetOptions from the Windows App SDK 1.5 widget providers namespace.
+// SPORT: cascade/apps/cascade-widget-windows
+
+namespace CascadeWidget
+{
+    /// <summary>
+    /// Represents a single widget tile instance managed by CascadeWidgetProvider.
+    /// Each tile in the Widget Board has its own CascadeWidgetImpl instance
+    /// identified by the WidgetId assigned by the host.
+    ///
+    /// Implements IWidget (status reporting) and IWidgetOptions (size hints).
+    /// </summary>
+    runtimeclass CascadeWidgetImpl :
+        Microsoft.Windows.Widgets.Providers.IWidget,
+        Microsoft.Windows.Widgets.Providers.IWidgetOptions
+    {
+        // Construct a new widget instance for the given WidgetId.
+        // Called by CascadeWidgetProvider.OnWidgetContextChanged when the host
+        // activates a tile that doesn't yet have a corresponding impl entry.
+        CascadeWidgetImpl(String widgetId);
+
+        // The WidgetId assigned by the Windows Widget Board host.
+        String WidgetId { get; };
+
+        // The tile size currently requested by the host (Small or Medium).
+        Microsoft.Windows.Widgets.Providers.WidgetSize CurrentSize { get; set; };
+    };
+}

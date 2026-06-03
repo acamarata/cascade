@@ -23,8 +23,8 @@
 //! SPORT: MASTER-LIBS.md → cascade-rag::chunk::CodeChunker
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 use serde_json::json;
+use std::collections::HashMap;
 use tracing::warn;
 
 use cascade_types::{
@@ -87,7 +87,10 @@ impl Chunker for CodeChunker {
 
         if blocks.is_empty() {
             // Fallback: line-based chunking.
-            warn!(language, "no function blocks detected; falling back to line-based chunking");
+            warn!(
+                language,
+                "no function blocks detected; falling back to line-based chunking"
+            );
             return super::FixedSizeChunker.chunk(doc, opts).await;
         }
 

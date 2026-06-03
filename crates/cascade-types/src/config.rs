@@ -20,11 +20,11 @@
 //!
 //! The resolver merges them: project config wins on conflict.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::cascade_tier::CascadeTier;
 use crate::embedding_provider::ProviderKind;
 use crate::query_strategy::StrategyKind;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── CascadeConfig ─────────────────────────────────────────────────────────────
 
@@ -194,7 +194,7 @@ impl Default for McpConfig {
 // ── PluginConfig ──────────────────────────────────────────────────────────────
 
 /// Plugin subsystem configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "snake_case")]
 pub struct PluginConfig {
     /// Enable the plugin subsystem.
@@ -208,15 +208,7 @@ pub struct PluginConfig {
     pub plugins: HashMap<String, toml::Value>,
 }
 
-impl Default for PluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            plugin_dir: None,
-            plugins: HashMap::new(),
-        }
-    }
-}
+// WHY: Default is derived above — no manual impl needed.
 
 // ── DaemonConfig ─────────────────────────────────────────────────────────────
 

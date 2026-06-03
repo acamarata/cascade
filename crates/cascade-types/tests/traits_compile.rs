@@ -5,7 +5,6 @@
 //! correctly. These tests contain minimal runtime assertions; the primary
 //! purpose is to catch object-safety regressions during `cargo test`.
 
-use std::sync::Arc;
 use cascade_types::{
     agent::{Agent, Context, NoopAgent, Tier},
     chunker::{Chunk, ChunkOpts, Chunker, Document, NoopChunker},
@@ -18,6 +17,7 @@ use cascade_types::{
     retriever::{NoopRetriever, RetrieveOpts, Retriever},
     CascadeTier, InboxTier,
 };
+use std::sync::Arc;
 
 // ── Object-safety: each trait must be boxable ─────────────────────────────────
 
@@ -75,7 +75,10 @@ fn parser_kind_enum_exhaustive() {
         ParserKind::PlainText,
     ];
     for kind in &kinds {
-        assert!(!kind.extensions().is_empty(), "{kind:?} must have at least one extension");
+        assert!(
+            !kind.extensions().is_empty(),
+            "{kind:?} must have at least one extension"
+        );
     }
 }
 
@@ -135,7 +138,7 @@ async fn noop_embedding_provider_returns_zero_vectors() {
 
 #[tokio::test]
 async fn noop_reranker_preserves_count() {
-    use cascade_types::chunker::{ChunkMetadata};
+    use cascade_types::chunker::ChunkMetadata;
     use std::collections::HashMap;
 
     let make_chunk = |i: usize| Chunk {
@@ -199,7 +202,7 @@ async fn noop_agent_echoes_prompt() {
 async fn in_memory_key_storage_round_trip() {
     let store = InMemoryKeyStorage::new();
     store
-        .put("test-key", SecretBytes::from_str("secret-value"))
+        .put("test-key", SecretBytes::from_utf8_str("secret-value"))
         .await
         .unwrap();
     let retrieved = store.get("test-key").await.unwrap();
@@ -207,10 +210,7 @@ async fn in_memory_key_storage_round_trip() {
 
     store.delete("test-key").await.unwrap();
     let result = store.get("test-key").await;
-    assert!(
-        result.is_err(),
-        "key should be gone after delete"
-    );
+    assert!(result.is_err(), "key should be gone after delete");
 }
 
 // ── CascadeTier and InboxTier ─────────────────────────────────────────────────

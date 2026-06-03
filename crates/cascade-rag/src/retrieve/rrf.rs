@@ -32,9 +32,9 @@ use cascade_types::{
     EmbeddingProvider,
 };
 
-use crate::index::RagIndex;
 use super::fts::FtsRetriever;
 use super::vector::VectorRetriever;
+use crate::index::RagIndex;
 
 /// Default RRF smoothing constant.  60 is the canonical default from the
 /// original Cormack et al. 2009 paper.
@@ -161,12 +161,10 @@ impl Retriever for RrfRetriever {
         let k = self.config.k;
 
         for (rank, hit) in fts_hits.iter().enumerate() {
-            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) +=
-                1.0 / (k + (rank + 1) as f32);
+            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f32);
         }
         for (rank, hit) in vec_hits.iter().enumerate() {
-            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) +=
-                1.0 / (k + (rank + 1) as f32);
+            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f32);
         }
 
         // Build a unified hit index from FTS results (text is available there).

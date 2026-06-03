@@ -1,0 +1,63 @@
+[package]
+name = "cascade-tray"
+description = "OS system-tray abstraction for the Cascade daemon — platform-agnostic trait + state types"
+readme = "README.md"
+keywords = ["cascade", "tray", "systray", "daemon"]
+categories = ["api-bindings"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+
+# Platform-specific tray backends — gated so the crate compiles on all OS
+# without pulling in native GUI frameworks unconditionally.
+#
+# WHY conditional: pulling platform tray deps unconditionally would drag in
+# Windows-specific transitive deps (windows-sys, objc, dbus) on every
+# compile target and break cross-compilation. Each platform backend is
+# gated with cfg(target_os) so only the matching platform's deps are
+# compiled. This crate still compiles on all three OS targets.
+#
+# macOS: tray-item 0.9 wraps NSStatusItem via Cocoa/ObjC bindings.
+# Version 0.9 is pinned for API stability (0.10 has breaking changes
+# that require a separate migration ticket). Compiles on both
+# aarch64-apple-darwin and x86_64-apple-darwin without architecture-specific
+# conditional logic.
+[target.'cfg(target_os = "macos")'.dependencies]
+tray-item = "0.9"
+
+# Windows: tray-icon 0.14 wraps Shell_NotifyIconW and provides
+# MenuId/MenuItem/Menu and TrayEvent via a dedicated event pump.
+[target.'cfg(target_os = "windows")'.dependencies]
+tray-icon = "0.14"
+
+# Linux: libappindicator-sys for AppIndicator3 (GNOME/Unity/Cinnamon) and
+# dbus for KsystemTray fallback (KDE Plasma).  Both are gated to Linux only
+# so cross-compilation to macOS/Windows is never affected.
+#
+# WHY libappindicator-sys not optional: build.rs probes pkg-config and emits
+# cargo:rustc-cfg=cascade_tray_appindicator (found) or ..._no_appindicator
+# (absent).  The crate is always listed here but its symbols are only used
+# in #[cfg(cascade_tray_appindicator)] blocks in linux.rs — so on systems
+# without libappindicator3-dev the code compiles but the symbols are not
+# referenced, avoiding linker errors.
+# dbus 0.9 provides the D-Bus connection type used by the ksystemtray fallback.
+[target.'cfg(target_os = "linux")'.dependencies]
+libappindicator-sys = "0.2"
+dbus = "0.9"
+
+[build-dependencies]
+# pkg_config is used in build.rs to probe libappindicator3-0.1 on Linux.
+# Declared unconditionally — pkg_config compiles on all OS targets; build.rs
+# guards execution with CARGO_CFG_TARGET_OS == "linux".
+pkg-config = "0.3"
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -18,9 +18,9 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use clap::Args;
 use cascade_types::error::Result;
 use cascade_types::paths;
+use clap::Args;
 
 use super::Command;
 
@@ -63,20 +63,32 @@ impl Command for DoctorArgs {
         let mut any_fail = false;
 
         // ── Tier health ────────────────────────────────────────────────────
+        // WHY: DiscoveredTier exposes `cascade_dir` (the `.cascade/` path) and
+        // `is_readable()`. `root` and `is_present` are not fields on the struct —
+        // we derive them from `cascade_dir`.
         let tiers = cascade_core::discovery::TierDiscovery::new().discover(&cwd)?;
         for t in &tiers {
-            let name: &'static str = Box::leak(
-                format!("{:?} tier health", t.tier).into_boxed_str()
-            );
-            let issues = cascade_core::symlinks::verify_siblings(
-                &t.root.join(cascade_types::paths::CASCADE_DIR_NAME)
-            );
-            if !t.is_present {
-                checks.push(Check { name, status: CheckStatus::Warn, detail: "CASCADE.md not found".into() });
+            let name: &'static str =
+                Box::leak(format!("{:?} tier health", t.tier).into_boxed_str());
+            let issues = cascade_core::symlinks::verify_siblings(&t.cascade_dir);
+            if !t.is_readable() {
+                checks.push(Check {
+                    name,
+                    status: CheckStatus::Warn,
+                    detail: "CASCADE.md not found or not readable".into(),
+                });
             } else if !issues.is_empty() {
-                checks.push(Check { name, status: CheckStatus::Warn, detail: issues.join("; ") });
+                checks.push(Check {
+                    name,
+                    status: CheckStatus::Warn,
+                    detail: issues.join("; "),
+                });
             } else {
-                checks.push(Check { name, status: CheckStatus::Pass, detail: String::new() });
+                checks.push(Check {
+                    name,
+                    status: CheckStatus::Pass,
+                    detail: String::new(),
+                });
             }
         }
 
@@ -86,9 +98,16 @@ impl Command for DoctorArgs {
             let (status, detail) = if sock.exists() {
                 (CheckStatus::Pass, String::new())
             } else {
-                (CheckStatus::Warn, format!("socket not found at {}", sock.display()))
+                (
+                    CheckStatus::Warn,
+                    format!("socket not found at {}", sock.display()),
+                )
             };
-            checks.push(Check { name: "Daemon socket", status, detail });
+            checks.push(Check {
+                name: "Daemon socket",
+                status,
+                detail,
+            });
         }
 
         // ── Config integrity ───────────────────────────────────────────────
@@ -123,8 +142,7 @@ impl Command for DoctorArgs {
         {
             let mut stale: Vec<String> = Vec::new();
             for t in &tiers {
-                let cascade_dir = t.root.join(cascade_types::paths::CASCADE_DIR_NAME);
-                let issues = cascade_core::symlinks::verify_siblings(&cascade_dir);
+                let issues = cascade_core::symlinks::verify_siblings(&t.cascade_dir);
                 for issue in issues {
                     stale.push(format!("[{:?}] {}", t.tier, issue));
                 }
@@ -134,15 +152,18 @@ impl Command for DoctorArgs {
             } else {
                 (CheckStatus::Warn, stale.join("; "))
             };
-            checks.push(Check { name: "Stale derive-files", status, detail });
+            checks.push(Check {
+                name: "Stale derive-files",
+                status,
+                detail,
+            });
         }
 
         // ── Auto-fix pass ──────────────────────────────────────────────────
         if self.fix {
             for t in &tiers {
-                if t.is_present {
-                    let cascade_dir = t.root.join(cascade_types::paths::CASCADE_DIR_NAME);
-                    if let Err(e) = cascade_core::symlinks::create_siblings(&cascade_dir, false) {
+                if t.is_readable() {
+                    if let Err(e) = cascade_core::symlinks::create_siblings(&t.cascade_dir, false) {
                         eprintln!("fix failed for {:?}: {}", t.tier, e);
                     }
                 }
@@ -153,7 +174,9 @@ impl Command for DoctorArgs {
         println!("{:<40} {:<8} {}", "CHECK", "STATUS", "DETAIL");
         println!("{}", "-".repeat(80));
         for c in &checks {
-            if c.status == CheckStatus::Fail { any_fail = true; }
+            if c.status == CheckStatus::Fail {
+                any_fail = true;
+            }
             println!("{:<40} {:<8} {}", c.name, c.status, c.detail);
         }
 
@@ -176,7 +199,11 @@ fn config_paths(cwd: &std::path::Path) -> Vec<(String, PathBuf)> {
     // Project config (nearest ancestor).
     if let Some(p) = cwd.ancestors().find_map(|a| {
         let c = a.join(".cascade").join("config.toml");
-        if c.exists() { Some(c) } else { None }
+        if c.exists() {
+            Some(c)
+        } else {
+            None
+        }
     }) {
         paths_list.push(("Project config".into(), p));
     }

@@ -29,16 +29,13 @@ pub enum PluginError {
 
     /// A capability the plugin requires was not granted.
     #[error("capability denied for plugin '{plugin}': {capability:?}")]
-    CapabilityDenied {
-        plugin: String,
-        capability: String,
-    },
+    CapabilityDenied { plugin: String, capability: String },
 
     /// A resource limit (memory, fuel, FD cap, timeout) was exceeded.
-    #[error("resource exhausted for plugin '{plugin}': {kind} limit {limit}, actual {actual}")]
+    #[error("resource exhausted for plugin '{plugin}': {resource} limit {limit}, actual {actual}")]
     ResourceExhausted {
         plugin: String,
-        kind: String,
+        resource: String,
         limit: u64,
         actual: u64,
     },

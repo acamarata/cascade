@@ -15,9 +15,9 @@
 //! `SecretBytes` zeroes its memory on drop via [`zeroize`]-compatible patterns.
 //! Callers must not copy the inner bytes into a non-zeroing buffer.
 
+use crate::error::{CascadeError, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::error::{CascadeError, Result};
 
 // ── SecretBytes ───────────────────────────────────────────────────────────────
 
@@ -44,7 +44,10 @@ impl SecretBytes {
     }
 
     /// Construct from a UTF-8 string (e.g. an API key).
-    pub fn from_str(s: &str) -> Self {
+    ///
+    /// WHY renamed from `from_str`: avoids confusion with `std::str::FromStr::from_str`
+    /// (clippy::should_implement_trait). Use `from_utf8_str` for clarity.
+    pub fn from_utf8_str(s: &str) -> Self {
         Self(s.as_bytes().to_vec())
     }
 

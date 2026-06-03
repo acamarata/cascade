@@ -25,8 +25,8 @@
 //!
 //! Sprint ticket: T-P1-E7-S03-01
 
-use std::path::Path;
 use async_trait::async_trait;
+use std::path::Path;
 use tracing::{debug, warn};
 
 use cascade_types::{
@@ -114,11 +114,7 @@ fn which_pdftotext() -> Option<String> {
         "pdftotext",
     ];
     for c in candidates {
-        if std::process::Command::new(c)
-            .arg("-v")
-            .output()
-            .is_ok()
-        {
+        if std::process::Command::new(c).arg("-v").output().is_ok() {
             return Some(c.to_string());
         }
     }

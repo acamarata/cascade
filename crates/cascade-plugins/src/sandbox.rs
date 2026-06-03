@@ -95,7 +95,9 @@ impl ResourceLimits {
     /// Build limits appropriate for the given plugin type.
     pub fn for_type(plugin_type: PluginType) -> Self {
         let memory_mb = match plugin_type {
-            PluginType::Retriever | PluginType::Provider | PluginType::Agent => MEM_LARGE_MB,
+            PluginType::Retriever | PluginType::EmbeddingProvider | PluginType::Agent => {
+                MEM_LARGE_MB
+            }
             _ => MEM_SMALL_MB,
         };
         Self {
@@ -126,6 +128,9 @@ pub struct WasmPlugin {
     limits: ResourceLimits,
     /// Extensions declared by this plugin (for `Parser::supports_extension`).
     extensions: HashSet<String>,
+    /// Embedding dimension declared by the plugin manifest (for EmbeddingProvider).
+    /// `None` if the plugin is not an embedding provider or the manifest omits it.
+    dimension: Option<usize>,
     /// Plugin name for error messages.
     pub name: String,
 }
@@ -137,7 +142,11 @@ impl WasmPlugin {
     /// `Module` compilation is expensive (AOT). `Store` instantiation is cheap.
     /// This pattern amortizes compile cost over the daemon lifetime while giving
     /// each invocation a fresh fuel + memory counter.
-    pub fn load(name: &str, wasm_bytes: &[u8], limits: ResourceLimits) -> Result<Arc<Self>, SandboxError> {
+    pub fn load(
+        name: &str,
+        wasm_bytes: &[u8],
+        limits: ResourceLimits,
+    ) -> Result<Arc<Self>, SandboxError> {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
         let engine = Engine::new(&config)?;
@@ -149,6 +158,7 @@ impl WasmPlugin {
             module,
             limits,
             extensions: HashSet::new(),
+            dimension: None,
             name: name.to_owned(),
         }))
     }
@@ -160,8 +170,8 @@ impl WasmPlugin {
     /// as (ptr, len). The plugin writes its JSON response to a caller-allocated
     /// output buffer. We deserialize and return.
     pub async fn call_export(&self, export: &str, input: &Value) -> Result<Value, SandboxError> {
-        let input_bytes = serde_json::to_vec(input)
-            .map_err(|e| SandboxError::Serialization(e.to_string()))?;
+        let input_bytes =
+            serde_json::to_vec(input).map_err(|e| SandboxError::Serialization(e.to_string()))?;
 
         // Per-invocation store with fresh fuel + memory limits.
         let store_limits = StoreLimitsBuilder::new()
@@ -202,6 +212,14 @@ impl WasmPlugin {
     /// Extensions this plugin handles (populated at load time from manifest metadata).
     pub fn declared_extensions(&self) -> &HashSet<String> {
         &self.extensions
+    }
+
+    /// Embedding vector dimension declared by this plugin (EmbeddingProvider only).
+    ///
+    /// Returns `None` if the plugin is not an embedding provider or did not declare
+    /// a dimension in its manifest. Callers should fall back to a sensible default.
+    pub fn declared_dimension(&self) -> Option<usize> {
+        self.dimension
     }
 }
 

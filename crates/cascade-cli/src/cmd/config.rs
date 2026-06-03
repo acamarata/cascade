@@ -10,8 +10,8 @@
 //! - `list` — table of all active config values with tier source
 
 use async_trait::async_trait;
-use clap::{Args, Subcommand};
 use cascade_types::error::Result;
+use clap::{Args, Subcommand};
 
 use super::Command;
 
@@ -98,26 +98,32 @@ impl Command for ConfigSetArgs {
         } else {
             // Nearest project .cascade/config.toml.
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            find_project_config(&cwd)
-                .unwrap_or_else(|| cwd.join(".cascade").join("config.toml"))
+            find_project_config(&cwd).unwrap_or_else(|| cwd.join(".cascade").join("config.toml"))
         };
 
         // Read → parse → mutate → write.
         let raw = std::fs::read_to_string(&config_path).unwrap_or_default();
-        let mut table: toml_edit::DocumentMut = raw.parse().map_err(|e| {
-            CascadeError::ConfigParse {
-                path: config_path.clone(),
-                detail: e.to_string(),
-            }
-        })?;
+        let mut table: toml_edit::DocumentMut =
+            raw.parse()
+                .map_err(|e: toml_edit::TomlError| CascadeError::ConfigParse {
+                    path: config_path.clone(),
+                    detail: e.to_string(),
+                })?;
 
         set_nested_key(&mut table, &self.key, &self.value);
 
         std::fs::create_dir_all(config_path.parent().unwrap()).ok();
-        std::fs::write(&config_path, table.to_string()).map_err(|e| {
-            CascadeError::Io { path: config_path.clone(), operation: "write config", source: e }
+        std::fs::write(&config_path, table.to_string()).map_err(|e| CascadeError::Io {
+            path: config_path.clone(),
+            operation: "write config",
+            source: e,
         })?;
-        println!("set {key} = {value} in {path}", key = self.key, value = self.value, path = config_path.display());
+        println!(
+            "set {key} = {value} in {path}",
+            key = self.key,
+            value = self.value,
+            path = config_path.display()
+        );
         Ok(())
     }
 }
@@ -158,23 +164,28 @@ async fn load_merged_config() -> Result<FlatConfig> {
 
 async fn load_global_config() -> Result<FlatConfig> {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    let path = std::path::PathBuf::from(home).join(".cascade").join("config.toml");
+    let path = std::path::PathBuf::from(home)
+        .join(".cascade")
+        .join("config.toml");
     parse_toml_flat(&path).await
 }
 
 async fn load_project_config() -> Result<FlatConfig> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let path = find_project_config(&cwd).unwrap_or_else(|| cwd.join(".cascade").join("config.toml"));
+    let path =
+        find_project_config(&cwd).unwrap_or_else(|| cwd.join(".cascade").join("config.toml"));
     parse_toml_flat(&path).await
 }
 
 async fn parse_toml_flat(path: &std::path::Path) -> Result<FlatConfig> {
     use cascade_types::error::CascadeError;
     let raw = tokio::fs::read_to_string(path).await.unwrap_or_default();
-    let table: toml::Value = raw.parse().map_err(|e| CascadeError::ConfigParse {
-        path: path.to_path_buf(),
-        detail: e.to_string(),
-    })?;
+    let table: toml::Value =
+        raw.parse()
+            .map_err(|e: toml::de::Error| CascadeError::ConfigParse {
+                path: path.to_path_buf(),
+                detail: e.to_string(),
+            })?;
     Ok(flatten_toml("", &table))
 }
 
@@ -183,7 +194,11 @@ fn flatten_toml(prefix: &str, value: &toml::Value) -> FlatConfig {
     match value {
         toml::Value::Table(t) => {
             for (k, v) in t {
-                let key = if prefix.is_empty() { k.clone() } else { format!("{}.{}", prefix, k) };
+                let key = if prefix.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{}.{}", prefix, k)
+                };
                 map.extend(flatten_toml(&key, v));
             }
         }
@@ -197,7 +212,11 @@ fn flatten_toml(prefix: &str, value: &toml::Value) -> FlatConfig {
 fn find_project_config(cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     cwd.ancestors().find_map(|p| {
         let c = p.join(".cascade").join("config.toml");
-        if c.exists() { Some(c) } else { None }
+        if c.exists() {
+            Some(c)
+        } else {
+            None
+        }
     })
 }
 

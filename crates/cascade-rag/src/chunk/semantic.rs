@@ -122,7 +122,11 @@ impl Chunker for SemanticChunker {
 
             // Respect max_size by splitting large paragraphs.
             if para.len() > opts.target_size * 2 {
-                debug!(para_idx = idx, len = para.len(), "oversized paragraph — splitting");
+                debug!(
+                    para_idx = idx,
+                    len = para.len(),
+                    "oversized paragraph — splitting"
+                );
             }
 
             chunks.push(Chunk {

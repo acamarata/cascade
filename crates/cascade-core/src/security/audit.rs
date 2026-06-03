@@ -31,6 +31,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -187,9 +188,10 @@ impl SqliteAuditLog {
             })?;
 
             // WAL mode for concurrent readers without blocking writers.
-            conn.execute_batch("PRAGMA journal_mode=WAL;").map_err(|e| {
-                cascade_types::error::CascadeError::Other(format!("audit db WAL: {e}"))
-            })?;
+            conn.execute_batch("PRAGMA journal_mode=WAL;")
+                .map_err(|e| {
+                    cascade_types::error::CascadeError::Other(format!("audit db WAL: {e}"))
+                })?;
 
             // Schema: append-only, no UPDATE/DELETE granted.
             conn.execute_batch(
@@ -216,9 +218,7 @@ impl SqliteAuditLog {
                     .query_row([], |r| Ok((r.get(0)?, r.get(1)?)))
                     .optional()
                     .map_err(|e| {
-                        cascade_types::error::CascadeError::Other(format!(
-                            "audit tip read: {e}"
-                        ))
+                        cascade_types::error::CascadeError::Other(format!("audit tip read: {e}"))
                     })?;
                 match row {
                     Some((seq, hash)) => (seq + 1, hash),
@@ -266,9 +266,7 @@ impl SqliteAuditLog {
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 rusqlite::params![seq, timestamp, actor, event_json, hash],
             )
-            .map_err(|e| {
-                cascade_types::error::CascadeError::Other(format!("audit insert: {e}"))
-            })?;
+            .map_err(|e| cascade_types::error::CascadeError::Other(format!("audit insert: {e}")))?;
 
         self.prev_hash = hash;
         self.next_seq += 1;
@@ -302,9 +300,7 @@ fn sha256_hex(input: &str) -> String {
 ///
 /// Returns `Ok(())` if the chain is intact, or `Err(Vec<i64>)` with the seq
 /// numbers of entries whose hashes do not match.
-pub async fn verify_chain(
-    db_path: &Path,
-) -> cascade_types::error::Result<Result<(), Vec<i64>>> {
+pub async fn verify_chain(db_path: &Path) -> cascade_types::error::Result<Result<(), Vec<i64>>> {
     let path = db_path.to_owned();
     tokio::task::spawn_blocking(move || {
         let conn = rusqlite::Connection::open_with_flags(
@@ -341,9 +337,7 @@ pub async fn verify_chain(
         }
     })
     .await
-    .map_err(|e| {
-        cascade_types::error::CascadeError::Other(format!("spawn_blocking panic: {e}"))
-    })?
+    .map_err(|e| cascade_types::error::CascadeError::Other(format!("spawn_blocking panic: {e}")))?
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

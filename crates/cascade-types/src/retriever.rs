@@ -4,9 +4,9 @@
 //! `RetrievalHit`s from an index. Implementations may use vector search, BM25,
 //! hybrid RRF, or any other strategy — the trait is strategy-agnostic.
 
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::error::Result;
 
 // ── RetrievalHit ──────────────────────────────────────────────────────────────
 

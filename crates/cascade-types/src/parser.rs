@@ -4,11 +4,11 @@
 //! ready for chunking. Each `ParserKind` corresponds to a file format; the
 //! `Parser` trait is the common interface regardless of format.
 
-use std::path::Path;
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use crate::chunker::Document;
 use crate::error::{CascadeError, Result};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 // ── ParserKind ────────────────────────────────────────────────────────────────
 
@@ -58,8 +58,8 @@ impl ParserKind {
         match self {
             Self::Markdown => &["md", "mdx"],
             Self::Code => &[
-                "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "c", "cpp", "h",
-                "hpp", "cs", "rb", "swift", "kt", "dart", "sh", "bash",
+                "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "c", "cpp", "h", "hpp", "cs",
+                "rb", "swift", "kt", "dart", "sh", "bash",
             ],
             Self::Pdf => &["pdf"],
             Self::Html => &["html", "htm", "xhtml"],

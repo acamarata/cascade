@@ -1,0 +1,627 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0571D3578E002AFE2B1DDEAF /* LargeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD237574226DE3FEAE2C5E7E /* LargeView.swift */; };
+		1590037BF2ADB8F615067824 /* Entry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7DC5A8B6020123C6E5F0D8 /* Entry.swift */; };
+		1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */; };
+		3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */; };
+		53907DC960C89A4D6F9997B8 /* CascadeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB538BE3C026816D9226121 /* CascadeWidget.swift */; };
+		5A53E34D50A9565DBF2DEDA1 /* Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE0C9FDFD3F57319DC51032 /* Provider.swift */; };
+		661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6530C23B2A451EC3F95FC7EA /* ContentView.swift */; };
+		6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */; };
+		74C612818047291ECF3847EA /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
+		7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
+		7CBCF0D56C1E576C1A3A67EC /* MediumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE26AC57686229523FF30FB /* MediumView.swift */; };
+		969BB6A87AED736ED3B4F22D /* CascadeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B6C5EC9147DFB7937AAC1F90 /* CascadeAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40776AF9E612F01F99F5721D /* CascadeAppApp.swift */; };
+		C7C1B926FCAD3896F9092E81 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
+		C8BF7B6704FCF6B23EA198E2 /* EntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530BDF78D76259F7CED90C28 /* EntryView.swift */; };
+		CD42F16EC9B2C5D4F7FFBE28 /* SmallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA653CE94840F17719DE2E9 /* SmallView.swift */; };
+		E18514BA80954D8BE94849DC /* CascadeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */; };
+		E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */; };
+		F25DA02DB1F660596A018B8D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */; };
+		FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5C34E8893C25E333C79126 /* MenubarController.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		066DCFC21B2DE9542C3DFF71 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B787B2F5D045E8181F3E8CC3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0AA2191F64FA81052F9C471B;
+			remoteInfo = CascadeWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6E585E0186806B3B1F9597EA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				969BB6A87AED736ED3B4F22D /* CascadeWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonochromeDimModifier.swift; sourceTree = "<group>"; };
+		1102B7280FF31198B0CFD627 /* CascadeWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CascadeWidgetExtension.entitlements; sourceTree = "<group>"; };
+		17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		1BF604E22550C7A037318CCF /* CascadeApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CascadeApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1F7B27FE10A9B0B7808F0E86 /* CascadeApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CascadeApp.entitlements; sourceTree = "<group>"; };
+		1FB538BE3C026816D9226121 /* CascadeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidget.swift; sourceTree = "<group>"; };
+		29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidgetBundle.swift; sourceTree = "<group>"; };
+		3CE26AC57686229523FF30FB /* MediumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediumView.swift; sourceTree = "<group>"; };
+		40776AF9E612F01F99F5721D /* CascadeAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeAppApp.swift; sourceTree = "<group>"; };
+		4743F7749BB7E4086767D953 /* CacheModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheModel.swift; sourceTree = "<group>"; };
+		48194BB83C952802AE115361 /* CascadeWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CascadeWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B7DC5A8B6020123C6E5F0D8 /* Entry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entry.swift; sourceTree = "<group>"; };
+		4EE0C9FDFD3F57319DC51032 /* Provider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Provider.swift; sourceTree = "<group>"; };
+		50FFA755E8A1CA79EAAF14EB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		530BDF78D76259F7CED90C28 /* EntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryView.swift; sourceTree = "<group>"; };
+		6530C23B2A451EC3F95FC7EA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6B5C34E8893C25E333C79126 /* MenubarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarController.swift; sourceTree = "<group>"; };
+		7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarPopoverView.swift; sourceTree = "<group>"; };
+		98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CascadeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9CA653CE94840F17719DE2E9 /* SmallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallView.swift; sourceTree = "<group>"; };
+		B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonIPCClient.swift; sourceTree = "<group>"; };
+		BD237574226DE3FEAE2C5E7E /* LargeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeView.swift; sourceTree = "<group>"; };
+		DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheModelTests.swift; sourceTree = "<group>"; };
+		F63251BBC96DE278824E772F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		422063299C74E40A19BB5078 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F25DA02DB1F660596A018B8D /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2C25EA8BFBD64BEF050225FC /* CascadeWidgetTests */ = {
+			isa = PBXGroup;
+			children = (
+				DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */,
+			);
+			path = CascadeWidgetTests;
+			sourceTree = "<group>";
+		};
+		2CA7087F262C903F1393E802 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				530BDF78D76259F7CED90C28 /* EntryView.swift */,
+				BD237574226DE3FEAE2C5E7E /* LargeView.swift */,
+				3CE26AC57686229523FF30FB /* MediumView.swift */,
+				9CA653CE94840F17719DE2E9 /* SmallView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		30D700A116490F8FCB9BBC1D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1BF604E22550C7A037318CCF /* CascadeApp.app */,
+				98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */,
+				48194BB83C952802AE115361 /* CascadeWidgetTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		35E0CF8CE2652B037C18C91D = {
+			isa = PBXGroup;
+			children = (
+				CA8F03DD35AF1D03DEFB571B /* CascadeApp */,
+				62CB9328C42EDB3EE1A0445A /* CascadeWidgetExtension */,
+				2C25EA8BFBD64BEF050225FC /* CascadeWidgetTests */,
+				8A02C44046E5AA0E3FAD9ED9 /* Frameworks */,
+				30D700A116490F8FCB9BBC1D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		62CB9328C42EDB3EE1A0445A /* CascadeWidgetExtension */ = {
+			isa = PBXGroup;
+			children = (
+				4743F7749BB7E4086767D953 /* CacheModel.swift */,
+				1FB538BE3C026816D9226121 /* CascadeWidget.swift */,
+				29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */,
+				1102B7280FF31198B0CFD627 /* CascadeWidgetExtension.entitlements */,
+				4B7DC5A8B6020123C6E5F0D8 /* Entry.swift */,
+				50FFA755E8A1CA79EAAF14EB /* Info.plist */,
+				4EE0C9FDFD3F57319DC51032 /* Provider.swift */,
+				AA99EAB5DFFFC20D42CBC7AB /* Modifiers */,
+				2CA7087F262C903F1393E802 /* Views */,
+			);
+			path = CascadeWidgetExtension;
+			sourceTree = "<group>";
+		};
+		8A02C44046E5AA0E3FAD9ED9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		AA99EAB5DFFFC20D42CBC7AB /* Modifiers */ = {
+			isa = PBXGroup;
+			children = (
+				087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */,
+			);
+			path = Modifiers;
+			sourceTree = "<group>";
+		};
+		CA8F03DD35AF1D03DEFB571B /* CascadeApp */ = {
+			isa = PBXGroup;
+			children = (
+				1F7B27FE10A9B0B7808F0E86 /* CascadeApp.entitlements */,
+				40776AF9E612F01F99F5721D /* CascadeAppApp.swift */,
+				6530C23B2A451EC3F95FC7EA /* ContentView.swift */,
+				B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */,
+				F63251BBC96DE278824E772F /* Info.plist */,
+				6B5C34E8893C25E333C79126 /* MenubarController.swift */,
+				7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */,
+			);
+			path = CascadeApp;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0AA2191F64FA81052F9C471B /* CascadeWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3927E962BE3970BD31D74CCF /* Build configuration list for PBXNativeTarget "CascadeWidgetExtension" */;
+			buildPhases = (
+				6CEE0EF4B99E2AE4058AF8B9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CascadeWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = CascadeWidgetExtension;
+			productReference = 98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		4BCD1F65BBB6200A57121540 /* CascadeWidgetTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0704008D54D6845CA297930C /* Build configuration list for PBXNativeTarget "CascadeWidgetTests" */;
+			buildPhases = (
+				1AA9D60A4C503C06DDEDFD05 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CascadeWidgetTests;
+			packageProductDependencies = (
+			);
+			productName = CascadeWidgetTests;
+			productReference = 48194BB83C952802AE115361 /* CascadeWidgetTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A76E18BD7C786E3DF56C78A6 /* CascadeApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 336BC32140F186219F600301 /* Build configuration list for PBXNativeTarget "CascadeApp" */;
+			buildPhases = (
+				CD3DD6E99A481775BF99474D /* Sources */,
+				422063299C74E40A19BB5078 /* Frameworks */,
+				6E585E0186806B3B1F9597EA /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6EEC8717FE8FF3E00853150A /* PBXTargetDependency */,
+			);
+			name = CascadeApp;
+			packageProductDependencies = (
+			);
+			productName = CascadeApp;
+			productReference = 1BF604E22550C7A037318CCF /* CascadeApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B787B2F5D045E8181F3E8CC3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0AA2191F64FA81052F9C471B = {
+						DevelopmentTeam = "";
+					};
+					4BCD1F65BBB6200A57121540 = {
+						DevelopmentTeam = "";
+					};
+					A76E18BD7C786E3DF56C78A6 = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = 146620697AB57698E5EEF755 /* Build configuration list for PBXProject "CascadeWidget" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 35E0CF8CE2652B037C18C91D;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 30D700A116490F8FCB9BBC1D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A76E18BD7C786E3DF56C78A6 /* CascadeApp */,
+				0AA2191F64FA81052F9C471B /* CascadeWidgetExtension */,
+				4BCD1F65BBB6200A57121540 /* CascadeWidgetTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1AA9D60A4C503C06DDEDFD05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */,
+				E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6CEE0EF4B99E2AE4058AF8B9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C7C1B926FCAD3896F9092E81 /* CacheModel.swift in Sources */,
+				53907DC960C89A4D6F9997B8 /* CascadeWidget.swift in Sources */,
+				E18514BA80954D8BE94849DC /* CascadeWidgetBundle.swift in Sources */,
+				1590037BF2ADB8F615067824 /* Entry.swift in Sources */,
+				C8BF7B6704FCF6B23EA198E2 /* EntryView.swift in Sources */,
+				0571D3578E002AFE2B1DDEAF /* LargeView.swift in Sources */,
+				7CBCF0D56C1E576C1A3A67EC /* MediumView.swift in Sources */,
+				6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */,
+				5A53E34D50A9565DBF2DEDA1 /* Provider.swift in Sources */,
+				CD42F16EC9B2C5D4F7FFBE28 /* SmallView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CD3DD6E99A481775BF99474D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74C612818047291ECF3847EA /* CacheModel.swift in Sources */,
+				B6C5EC9147DFB7937AAC1F90 /* CascadeAppApp.swift in Sources */,
+				661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */,
+				1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */,
+				FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */,
+				3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6EEC8717FE8FF3E00853150A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0AA2191F64FA81052F9C471B /* CascadeWidgetExtension */;
+			targetProxy = 066DCFC21B2DE9542C3DFF71 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3ED8A9C99AD9D16C6759117E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = CascadeWidgetExtension/CascadeWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = CascadeWidgetExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.app.widgetextension;
+				PRODUCT_NAME = CascadeWidgetExtension;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		431252665E42A04D317F8AEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = CascadeApp/CascadeApp.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = CascadeApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.app;
+				PRODUCT_NAME = CascadeApp;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		4EBAA845F6A377980D78211D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = CascadeApp/CascadeApp.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = CascadeApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.app;
+				PRODUCT_NAME = CascadeApp;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		56C755AF0F874C23209E6B23 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = CascadeWidgetExtension/CascadeWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = CascadeWidgetExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.app.widgetextension;
+				PRODUCT_NAME = CascadeWidgetExtension;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		770B591849E7F01B5CC20749 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.widgetTests;
+				PRODUCT_NAME = CascadeWidgetTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		ACF614E7ABF214EC9CF8456B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.cascade.widgetTests;
+				PRODUCT_NAME = CascadeWidgetTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		D18DF74CDBEF13E91D84DB8F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		DFF1CCECC2B06B93A235BADA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0704008D54D6845CA297930C /* Build configuration list for PBXNativeTarget "CascadeWidgetTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				770B591849E7F01B5CC20749 /* Debug */,
+				ACF614E7ABF214EC9CF8456B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		146620697AB57698E5EEF755 /* Build configuration list for PBXProject "CascadeWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFF1CCECC2B06B93A235BADA /* Debug */,
+				D18DF74CDBEF13E91D84DB8F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		336BC32140F186219F600301 /* Build configuration list for PBXNativeTarget "CascadeApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				431252665E42A04D317F8AEE /* Debug */,
+				4EBAA845F6A377980D78211D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3927E962BE3970BD31D74CCF /* Build configuration list for PBXNativeTarget "CascadeWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				56C755AF0F874C23209E6B23 /* Debug */,
+				3ED8A9C99AD9D16C6759117E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B787B2F5D045E8181F3E8CC3 /* Project object */;
+}

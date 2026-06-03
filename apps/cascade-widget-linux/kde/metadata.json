@@ -1,0 +1,21 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Id": "org.acamarata.cascade.quotawidget",
+    "Name": "Cascade Quota Widget",
+    "Description": "Shows Cascade AI fleet quota and inbox in system tray.",
+    "Version": "1.0",
+    "Authors": [
+      {
+        "Email": "alisalaah@gmail.com",
+        "Name": "Aric Camarata"
+      }
+    ],
+    "License": "MIT",
+    "Website": "https://github.com/acamarata/cascade",
+    "EnabledByDefault": true,
+    "ServiceTypes": [
+      "Plasma/Applet"
+    ]
+  }
+}

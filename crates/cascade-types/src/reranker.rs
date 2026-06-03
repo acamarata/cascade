@@ -5,10 +5,10 @@
 //! relevance score. Reranking is typically called after a cheap first-pass
 //! vector search to improve precision at the top of the list.
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use crate::chunker::Chunk;
 use crate::error::Result;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 // ── RerankResult ──────────────────────────────────────────────────────────────
 

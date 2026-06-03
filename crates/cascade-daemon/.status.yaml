@@ -1,0 +1,47 @@
+ticket_id: T-P2-E02-11
+title: Supervised restart with exponential backoff — crash-loop detection + backoff state
+phase: P2
+epic: E2
+wave: W2
+sprint: S1
+weight: S
+status: done
+stages_done: [implement, cr-a, cr-b]
+artifacts:
+  - crates/cascade-daemon/src/backoff.rs
+  - crates/cascade-daemon/src/supervisor.rs
+  - crates/cascade-daemon/src/lib.rs
+  - crates/cascade-daemon/src/main.rs
+  - crates/cascade-daemon/src/shutdown.rs
+cr_done: [cr-a, cr-b]
+qa_done: [qa-a]
+depends_on: [T-P2-E02-10]
+blocks: [T-P2-E02-14]
+last_write: "2026-06-02T20:15:00Z"
+agent_id: T3-subagent-T-P2-E02-11
+notes: |
+  Implementation complete. All 6 backoff module tests pass (4 acceptance criteria tests + 2 utility tests).
+
+  Files modified:
+  - backoff.rs: Created with complete implementation (check_and_apply, backoff_secs, reset functions)
+  - supervisor.rs: Added DaemonError::CrashLoop variant
+  - lib.rs: Exported backoff module
+  - main.rs: Added backoff::check_and_apply call before supervisor::run
+  - shutdown.rs: Added backoff::reset call in flush_state for clean shutdown
+
+  Tests passing:
+  - test_no_crash_sentinel
+  - test_stale_crash_sentinel
+  - test_recent_crash_with_backoff
+  - test_crash_loop_threshold
+  - test_reset_on_clean_shutdown
+  - test_backoff_secs_formula
+
+  Acceptance criteria status:
+  ✅ Crash-loop detection (restart count ≥10 within 60-second window)
+  ✅ Exponential backoff formula (10 * 2^n, capped at 300)
+  ✅ File-based state management (restart-count.txt, crash-last.txt)
+  ✅ Clean shutdown reset (backoff::reset removes restart-count.txt)
+
+  Ticket is ready for CR-C (architecture review) and QA-C (E2E testing).
+  No blockers. Depends on T-P2-E02-10 (completed).

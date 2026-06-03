@@ -40,12 +40,14 @@ pub mod sandbox;
 pub mod types;
 
 pub use capability::{CapabilityError, CapabilitySet, DeclaredCapabilities};
-pub use discovery::{DiscoveredPlugin, DiscoveryError, PluginOrigin, discover_all};
-pub use ipc::{InputValidator, NoopValidator, PluginError, PluginRequest, PluginResponse, dispatch};
+pub use discovery::{discover_all, DiscoveredPlugin, DiscoveryError, PluginOrigin};
+pub use ipc::{
+    dispatch, InputValidator, NoopValidator, PluginError, PluginRequest, PluginResponse,
+};
 pub use lifecycle::{LifecycleError, PluginRegistry, PluginState};
 pub use manifest::{ManifestError, PluginManifest, PluginType};
 pub use sandbox::{ResourceLimits, SandboxError, WasmPlugin};
 pub use types::{
-    WasmAgent, WasmChunker, WasmEmbeddingProvider, WasmParser, WasmQueryStrategy,
-    WasmReranker, WasmRetriever,
+    WasmAgent, WasmChunker, WasmEmbeddingProvider, WasmParser, WasmQueryStrategy, WasmReranker,
+    WasmRetriever,
 };
