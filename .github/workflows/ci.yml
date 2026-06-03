@@ -316,9 +316,9 @@ jobs:
         with:
           nuget-version: 'latest'
 
-      - name: Restore NuGet packages
+      - name: Restore NuGet packages (PackageReference via MSBuild)
         working-directory: apps/cascade-widget-windows
-        run: nuget restore CascadeWidget.sln
+        run: msbuild -t:restore CascadeWidget.sln
 
       - name: Build CascadeWidget (Release x64)
         working-directory: apps/cascade-widget-windows
