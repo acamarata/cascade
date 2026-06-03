@@ -22,7 +22,7 @@ use std::sync::Arc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::debug;
 
 use crate::supervisor::DaemonError;
 

@@ -224,7 +224,7 @@ impl RagPoisoningScanner {
         };
 
         for &pattern in patterns {
-            if lower.contains(pattern) {
+            if lower.contains(&*pattern.to_lowercase()) {
                 logger
                     .log(AuditEvent::RagContentRejected {
                         source_id: source_id.to_owned(),

@@ -142,7 +142,7 @@ impl Command for DaemonStopArgs {
         }
 
         // Clean up stale files.
-        std::fs::remove_file(&paths::daemon_pid()).ok();
+        std::fs::remove_file(paths::daemon_pid()).ok();
         std::fs::remove_file(&sock).ok();
 
         println!("daemon stopped (pid {})", pid);

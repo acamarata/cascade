@@ -13,8 +13,8 @@ use std::path::Path;
 pub async fn regenerate(cascade_dir: &Path, content: &str) -> Result<()> {
     write_if_changed(&cascade_dir.join(".cursorrules"), content).await?;
     let aider_stub =
-        format!("# Derived from CASCADE.md — do not edit manually.\nread_files:\n  - CASCADE.md\n");
-    write_if_changed(&cascade_dir.join(".aider.conf.yml"), &aider_stub).await?;
+        "# Derived from CASCADE.md — do not edit manually.\nread_files:\n  - CASCADE.md\n";
+    write_if_changed(&cascade_dir.join(".aider.conf.yml"), aider_stub).await?;
     Ok(())
 }
 

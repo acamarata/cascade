@@ -39,7 +39,7 @@
 use async_trait::async_trait;
 use cascade_types::{
     error::{CascadeError, Result},
-    key_storage::{KeyInfo, KeyStorage, SecretBytes},
+    key_storage::{KeyStorage, SecretBytes},
 };
 
 // ── Service name used as the keychain namespace ───────────────────────────────

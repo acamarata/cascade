@@ -88,7 +88,7 @@ async fn main() {
     // Spawn the StatusCache polling task. Sends TrayStateUpdate every 10s
     // after writing the cache file. The polling task runs in the Tokio runtime
     // (not a dedicated OS thread) so it plays nicely with async supervisor tasks.
-    let cache_poller_handle = cache::spawn_status_cache_poller(tray_tx.clone());
+    let _cache_poller_handle = cache::spawn_status_cache_poller(tray_tx.clone());
 
     // Install per-OS signal / stop handlers so the shutdown token is
     // propagated correctly. supervisor::run() drives the actual process

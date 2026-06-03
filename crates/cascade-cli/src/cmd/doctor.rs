@@ -171,7 +171,7 @@ impl Command for DoctorArgs {
         }
 
         // ── Print report ───────────────────────────────────────────────────
-        println!("{:<40} {:<8} {}", "CHECK", "STATUS", "DETAIL");
+        println!("{:<40} {:<8} DETAIL", "CHECK", "STATUS");
         println!("{}", "-".repeat(80));
         for c in &checks {
             if c.status == CheckStatus::Fail {

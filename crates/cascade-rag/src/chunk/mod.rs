@@ -85,13 +85,15 @@ impl Default for ChunkingConfig {
 /// ```
 #[derive(Debug, Default)]
 pub struct StrategyChunker {
-    config: ChunkingConfig,
+    /// Chunking configuration (MIME-type thresholds, size limits).
+    /// Used by `with_config`; not yet read in the dispatch body (future work).
+    _config: ChunkingConfig,
 }
 
 impl StrategyChunker {
     /// Construct with a custom chunking config.
     pub fn with_config(config: ChunkingConfig) -> Self {
-        Self { config }
+        Self { _config: config }
     }
 }
 
@@ -102,9 +104,9 @@ impl Chunker for StrategyChunker {
 
         // Dispatch based on MIME type.
         if mime == "text/markdown" || mime == "text/x-markdown" {
-            markdown::MarkdownChunker::default().chunk(doc, opts).await
+            markdown::MarkdownChunker.chunk(doc, opts).await
         } else if mime.starts_with("text/x-") {
-            code::CodeChunker::default().chunk(doc, opts).await
+            code::CodeChunker.chunk(doc, opts).await
         } else {
             // Fall through to semantic chunker as the default.
             semantic::SemanticChunker::default().chunk(doc, opts).await

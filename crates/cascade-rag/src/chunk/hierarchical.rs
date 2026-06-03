@@ -23,11 +23,10 @@
 
 use async_trait::async_trait;
 use serde_json::json;
-use std::collections::HashMap;
 use tracing::debug;
 
 use cascade_types::{
-    chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document},
+    chunker::{Chunk, ChunkOpts, Chunker, Document},
     error::Result,
 };
 

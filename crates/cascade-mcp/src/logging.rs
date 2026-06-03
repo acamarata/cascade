@@ -20,7 +20,6 @@
 //! is noisy and should be used only for diagnostics.
 
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

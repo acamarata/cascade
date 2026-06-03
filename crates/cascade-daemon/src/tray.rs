@@ -8,9 +8,11 @@
 //! Inputs:
 //!   - `tray_rx: std::sync::mpsc::Receiver<TrayStateUpdate>` — message channel
 //!     from the async runtime into the dedicated tray thread.
+//!
 //! Outputs:
 //!   - `std::thread::JoinHandle<()>` — stored by the daemon so it can join the
 //!     thread on clean shutdown.
+//!
 //! Constraints:
 //!   - MUST run on a dedicated OS thread (not a Tokio task) because many
 //!     platform tray APIs require exclusive access to a specific OS thread
@@ -58,9 +60,11 @@ pub enum TrayStateUpdate {
 /// Inputs:
 ///   - `tray_rx` — receiver end of the `TrayStateUpdate` channel created by
 ///     the caller (daemon main/supervisor).
+///
 /// Outputs:
 ///   - `JoinHandle<()>` — the caller stores this in `DaemonState` (or locally)
 ///     and calls `.join()` during graceful shutdown.
+///
 /// Constraints:
 ///   - If `cascade_tray::new_tray` fails the thread logs the error and returns
 ///     immediately without panicking, leaving the daemon otherwise functional.
@@ -218,17 +222,12 @@ mod tests {
     ) -> std::thread::JoinHandle<()> {
         std::thread::Builder::new()
             .name("cascade-tray-mock".to_string())
-            .spawn(move || loop {
-                match tray_rx.recv() {
-                    Ok(TrayStateUpdate::UpdateState(state)) => {
-                        recorder
-                            .lock()
-                            .expect("recorder mutex poisoned")
-                            .push(state);
-                    }
-                    Ok(TrayStateUpdate::Shutdown) | Err(_) => {
-                        break;
-                    }
+            .spawn(move || {
+                while let Ok(TrayStateUpdate::UpdateState(state)) = tray_rx.recv() {
+                    recorder
+                        .lock()
+                        .expect("recorder mutex poisoned")
+                        .push(state);
                 }
             })
             .expect("failed to spawn mock tray thread")

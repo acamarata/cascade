@@ -140,7 +140,7 @@ impl Command for ConfigListArgs {
         if self.json {
             println!("{}", serde_json::to_string_pretty(&config).unwrap());
         } else {
-            println!("{:<40} {}", "KEY", "VALUE");
+            println!("{:<40} VALUE", "KEY");
             println!("{}", "-".repeat(60));
             for (k, v) in &config {
                 println!("{:<40} {}", k, v);

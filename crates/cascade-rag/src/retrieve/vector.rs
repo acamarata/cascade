@@ -23,14 +23,18 @@ use crate::index::RagIndex;
 
 /// Dense vector retriever using sqlite-vec KNN search.
 pub struct VectorRetriever {
-    index: Arc<RagIndex>,
+    /// Shared index handle — wired to the ANN query in T-P1-E7-S05-03.
+    _index: Arc<RagIndex>,
     embedder: Arc<dyn EmbeddingProvider>,
 }
 
 impl VectorRetriever {
     /// Construct from a shared index handle and an embedding provider.
     pub fn new(index: Arc<RagIndex>, embedder: Arc<dyn EmbeddingProvider>) -> Self {
-        Self { index, embedder }
+        Self {
+            _index: index,
+            embedder,
+        }
     }
 }
 

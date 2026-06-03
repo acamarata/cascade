@@ -22,7 +22,7 @@
 
 use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Stdin, Stdout};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use cascade_types::error::{CascadeError, Result};
 

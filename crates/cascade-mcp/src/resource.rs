@@ -73,7 +73,7 @@ impl ResourceRegistry {
     pub async fn list(&self) -> Result<Value> {
         debug!("resources/list");
 
-        let mut resources = vec![
+        let resources = vec![
             McpResource {
                 uri: "cascade://tiers/gci".into(),
                 name: "GCI — Global Claude Instructions".into(),

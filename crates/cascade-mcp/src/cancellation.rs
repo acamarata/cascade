@@ -38,8 +38,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 use tracing::debug;
 
 // ── CancelToken ───────────────────────────────────────────────────────────────

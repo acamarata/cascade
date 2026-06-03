@@ -59,7 +59,9 @@ impl Default for SseConfig {
 /// Internally, `recv_rx` receives messages forwarded from the POST handler,
 /// and `send_tx` is consumed by the SSE push loop.
 pub struct SseTransport {
-    config: SseConfig,
+    /// SSE configuration (port, host, queue depth).
+    /// Retained for the HTTP server binding layer; not read after construction.
+    _config: SseConfig,
     /// Outbound messages queued for SSE push (server → client).
     send_tx: mpsc::Sender<String>,
     /// Inbound messages from client POSTs (client → server).
@@ -77,7 +79,7 @@ impl SseTransport {
         let (send_tx, send_rx) = mpsc::channel(config.queue_depth);
         let (recv_tx, recv_rx) = mpsc::channel(config.queue_depth);
         let transport = Self {
-            config,
+            _config: config,
             send_tx,
             recv_rx,
         };

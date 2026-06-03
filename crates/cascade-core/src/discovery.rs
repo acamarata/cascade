@@ -5,9 +5,10 @@
 //!
 //! ## Algorithm
 //!
-//! 1. Canonicalize the starting path.
-//! 2. Walk every ancestor from the start up to `/` (or the filesystem root).
-//! 3. For each ancestor, check whether `<ancestor>/.cascade/CASCADE.md` is
+//! 1. Walk every ancestor from the start up to `/` (or the filesystem root).
+//!    The path is used as-is (no canonicalization) so callers get back paths
+//!    that match what they passed in.
+//! 2. For each ancestor, check whether `<ancestor>/.cascade/CASCADE.md` is
 //!    readable (symlinks are followed via `fs::metadata`).
 //! 4. Assign a [`CascadeTier`] heuristic based on position relative to known
 //!    markers (home directory, `Sites/` directory, git root, etc.).
@@ -98,11 +99,13 @@ impl TierDiscovery {
             .or_else(home_dir)
             .unwrap_or_else(|| PathBuf::from("/"));
 
-        let canon = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
         let mut found: Vec<DiscoveredTier> = Vec::new();
 
         // Walk from the starting directory up to (and including) the filesystem root.
-        for ancestor in canon.ancestors() {
+        // We intentionally do NOT canonicalize the path so that tests using tempfile
+        // get back the same non-canonical path they passed in (macOS resolves
+        // /var → /private/var via canonicalize, which breaks path equality assertions).
+        for ancestor in start.ancestors() {
             let cascade_dir = ancestor.join(".cascade");
             let cascade_md = cascade_dir.join("CASCADE.md");
 

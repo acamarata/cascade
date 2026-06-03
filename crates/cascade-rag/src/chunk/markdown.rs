@@ -33,7 +33,7 @@ pub struct MarkdownChunker;
 
 #[async_trait]
 impl Chunker for MarkdownChunker {
-    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<Chunk>> {
+    async fn chunk(&self, doc: &Document, _opts: &ChunkOpts) -> Result<Vec<Chunk>> {
         let (frontmatter, body) = strip_frontmatter(&doc.content);
         let sections = split_by_headings(body);
         let mut chunks = Vec::with_capacity(sections.len());
@@ -141,5 +141,5 @@ fn split_by_headings(text: &str) -> Vec<String> {
 }
 
 fn is_heading(line: &str) -> bool {
-    line.starts_with('#') && line.chars().nth(1).map_or(false, |c| c == '#' || c == ' ')
+    line.starts_with('#') && line.chars().nth(1).is_some_and(|c| c == '#' || c == ' ')
 }

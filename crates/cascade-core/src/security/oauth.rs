@@ -39,7 +39,8 @@ pub struct OAuthCallbackValidator {
     /// HMAC-SHA256 of the state nonce, computed at session start.
     expected_state_hmac: Vec<u8>,
     /// The raw state nonce sent in the authorization request.
-    original_nonce: Vec<u8>,
+    /// Retained for future nonce-tracking / logging; not read in the current stub.
+    _original_nonce: Vec<u8>,
     /// Per-session HMAC signing key (32 bytes, random).
     session_key: Vec<u8>,
     /// Registered redirect URIs (exact match, case-sensitive).
@@ -99,7 +100,7 @@ impl OAuthCallbackValidator {
         let code_challenge = sha256_digest(pkce_verifier);
         Self {
             expected_state_hmac: state_hmac,
-            original_nonce: nonce,
+            _original_nonce: nonce,
             session_key,
             registered_uris: registered_uris.into_iter().collect(),
             code_challenge,

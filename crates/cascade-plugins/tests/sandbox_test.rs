@@ -9,7 +9,7 @@
 
 use cascade_plugins::{
     manifest::PluginType,
-    sandbox::{ResourceLimits, SandboxError, DEFAULT_FD_CAP, MEM_LARGE_MB, MEM_SMALL_MB},
+    sandbox::{ResourceLimits, DEFAULT_FD_CAP, MEM_LARGE_MB, MEM_SMALL_MB},
 };
 
 // ── Resource limit defaults ───────────────────────────────────────────────────
@@ -183,7 +183,7 @@ fn enable_lifts_quarantine() {
 
 #[test]
 fn manifest_missing_schema_version_is_actionable() {
-    use cascade_plugins::manifest::{ManifestError, PluginManifest};
+    use cascade_plugins::manifest::PluginManifest;
 
     let toml = r#"
 name = "x"
@@ -202,7 +202,7 @@ cascade_version = ">=0.1.0"
 
 #[test]
 fn manifest_future_schema_version_names_supported_max() {
-    use cascade_plugins::manifest::{ManifestError, PluginManifest};
+    use cascade_plugins::manifest::PluginManifest;
 
     let toml = r#"
 schema_version = 9999

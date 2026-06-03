@@ -16,52 +16,6 @@
 //! - Unknown method returns -32601
 //! - Bad tool params return -32602
 
-use serde_json::Value;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Build a JSON-RPC 2.0 request string.
-fn request(id: u64, method: &str, params: Value) -> String {
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    })
-    .to_string()
-}
-
-/// Build a JSON-RPC 2.0 notification (no `id`).
-fn notification(method: &str, params: Value) -> String {
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-    })
-    .to_string()
-}
-
-/// Parse a JSON-RPC response and assert it has no error field.
-fn ok_result(raw: &str) -> Value {
-    let resp: Value = serde_json::from_str(raw).expect("valid JSON response");
-    assert!(
-        resp.get("error").is_none(),
-        "expected no error, got: {}",
-        resp.get("error").unwrap_or(&Value::Null)
-    );
-    resp.get("result").cloned().unwrap_or(Value::Null)
-}
-
-/// Parse a JSON-RPC response and return the error object.
-fn err_obj(raw: &str) -> Value {
-    let resp: Value = serde_json::from_str(raw).expect("valid JSON response");
-    resp.get("error").cloned().expect("expected error field")
-}
-
-// ── Server / transport types ──────────────────────────────────────────────────
-
-use cascade_mcp::server::{JsonRpcRequest, JsonRpcResponse, McpServer, McpServerConfig};
-
 // ── Unit tests for protocol types ────────────────────────────────────────────
 
 #[test]
@@ -224,7 +178,7 @@ async fn resources_read_unknown_scheme_returns_error() {
     let err = registry.read(&params).await.unwrap_err();
     // The error message should mention the unknown URI
     let msg = format!("{err}");
-    assert!(msg.contains("Unknown resource URI") || msg.len() > 0);
+    assert!(msg.contains("Unknown resource URI") || !msg.is_empty());
 }
 
 // ── Prompt registry unit tests ────────────────────────────────────────────────

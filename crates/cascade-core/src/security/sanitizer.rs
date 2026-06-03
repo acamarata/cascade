@@ -22,6 +22,8 @@
 //!
 //! For MCP-specific outbound scanning see [`super::mcp_envelope`].
 
+use std::cmp::Reverse;
+
 use crate::security::audit::{AuditEvent, AuditLogger};
 use crate::security::secrets_scanner::{SecretMatch, SecretsScanner};
 
@@ -59,16 +61,9 @@ pub struct SanitizationResult {
 /// assert!(result.was_redacted);
 /// # }
 /// ```
+#[derive(Default)]
 pub struct OutputSanitizer {
     secrets: SecretsScanner,
-}
-
-impl Default for OutputSanitizer {
-    fn default() -> Self {
-        Self {
-            secrets: SecretsScanner::default(),
-        }
-    }
 }
 
 /// Command patterns that should never appear in agent outputs directed at a shell.
@@ -105,7 +100,7 @@ impl OutputSanitizer {
 
         // Redact secrets in reverse order (preserve byte offsets).
         // Sort by start offset descending so replacements do not shift earlier offsets.
-        matches.sort_by(|a, b| b.start.cmp(&a.start));
+        matches.sort_by_key(|m| Reverse(m.start));
         for m in &matches {
             let end = (m.start + m.len).min(redacted.len());
             redacted.replace_range(m.start..end, "[REDACTED]");

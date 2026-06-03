@@ -33,13 +33,9 @@
 //! Sampling requests timeout after `McpServerConfig::sampling_timeout_secs`
 //! (default 30s). On timeout the caller receives a `SamplingError::Timeout`.
 
-use std::time::Duration;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::oneshot;
-use tokio::time::timeout;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use cascade_types::error::{CascadeError, Result};
 
@@ -148,7 +144,9 @@ pub struct SamplingResponse {
 /// a unique correlation ID used to match the response notification to the
 /// waiting future.
 pub struct SamplingClient {
-    timeout_secs: u64,
+    /// Timeout in seconds for `sampling/createMessage` requests.
+    /// Used by the real transport implementation (not yet wired in this stub).
+    _timeout_secs: u64,
     // In the real impl this holds a map of pending request IDs to
     // `oneshot::Sender<SamplingResponse>` channels. The notification
     // handler resolves them when the client's response arrives.
@@ -156,11 +154,13 @@ pub struct SamplingClient {
 
 impl SamplingClient {
     pub fn new() -> Self {
-        Self { timeout_secs: 30 }
+        Self { _timeout_secs: 30 }
     }
 
     pub fn with_timeout(secs: u64) -> Self {
-        Self { timeout_secs: secs }
+        Self {
+            _timeout_secs: secs,
+        }
     }
 
     /// Request a model completion from the MCP client.

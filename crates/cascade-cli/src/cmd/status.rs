@@ -71,10 +71,7 @@ impl Command for StatusArgs {
                 if daemon_ok { "OK" } else { "NOT RUNNING" }
             );
             println!();
-            println!(
-                "{:<8} {:<10} {:<8} {}",
-                "TIER", "STATUS", "SYMLINKS", "PATH"
-            );
+            println!("{:<8} {:<10} {:<8} PATH", "TIER", "STATUS", "SYMLINKS");
             println!("{}", "-".repeat(72));
             for t in &tiers {
                 let present = t.is_readable();

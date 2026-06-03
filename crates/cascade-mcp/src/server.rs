@@ -235,7 +235,8 @@ pub struct McpServer {
     transport: Box<dyn Transport>,
     resources: Arc<ResourceRegistry>,
     tools: Arc<ToolRegistry>,
-    progress: Arc<ProgressEmitter>,
+    /// Progress emitter for long-running tool calls — wired to transport in the run loop.
+    _progress: Arc<ProgressEmitter>,
     cancellation: Arc<CancellationRegistry>,
     sampling: Arc<SamplingClient>,
     logger: Arc<McpLogger>,
@@ -256,7 +257,7 @@ impl McpServer {
             transport,
             resources: Arc::new(ResourceRegistry::new()),
             tools: Arc::new(ToolRegistry::new()),
-            progress: Arc::new(ProgressEmitter::new()),
+            _progress: Arc::new(ProgressEmitter::new()),
             cancellation: Arc::new(CancellationRegistry::new()),
             sampling: Arc::new(SamplingClient::new()),
             logger: Arc::new(McpLogger::new()),

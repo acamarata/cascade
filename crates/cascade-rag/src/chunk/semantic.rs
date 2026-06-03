@@ -53,41 +53,44 @@ impl Default for SemanticChunker {
     }
 }
 
+/// Heuristic sentence splitter for English prose.
+///
+/// Splits on `. `, `! `, `? ` followed by an upper-case character or end
+/// of string.  Does not require NLTK or a language model.
+///
+/// Used by the sliding-window merge pass (T-P1-E7-S06-02) and available
+/// to any crate consumer that needs sentence-level granularity.
+pub fn split_sentences(text: &str) -> Vec<&str> {
+    // Simple but effective: split on sentence terminators followed by whitespace.
+    // Returns the raw slices; joining with a space restores the original.
+    let mut sentences: Vec<&str> = Vec::new();
+    let mut start = 0;
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        if (bytes[i] == b'.' || bytes[i] == b'!' || bytes[i] == b'?')
+            && i + 1 < len
+            && (bytes[i + 1] == b' ' || bytes[i + 1] == b'\n')
+            && i + 2 < len
+            && bytes[i + 2].is_ascii_uppercase()
+        {
+            sentences.push(text[start..=i].trim());
+            start = i + 1;
+        }
+        i += 1;
+    }
+    if start < len {
+        sentences.push(text[start..].trim());
+    }
+    sentences.retain(|s| !s.is_empty());
+    sentences
+}
+
 impl SemanticChunker {
     /// Construct with a custom similarity threshold.
     pub fn with_threshold(threshold: f32) -> Self {
         Self { threshold }
-    }
-
-    /// Heuristic sentence splitter for English prose.
-    ///
-    /// Splits on `. `, `! `, `? ` followed by an upper-case character or end
-    /// of string.  Does not require NLTK or a language model.
-    fn split_sentences(text: &str) -> Vec<&str> {
-        // Simple but effective: split on sentence terminators followed by whitespace.
-        // Returns the raw slices; joining with a space restores the original.
-        let mut sentences: Vec<&str> = Vec::new();
-        let mut start = 0;
-        let bytes = text.as_bytes();
-        let len = bytes.len();
-        let mut i = 0;
-        while i < len {
-            if (bytes[i] == b'.' || bytes[i] == b'!' || bytes[i] == b'?')
-                && i + 1 < len
-                && (bytes[i + 1] == b' ' || bytes[i + 1] == b'\n')
-                && i + 2 < len
-                && bytes[i + 2].is_ascii_uppercase()
-            {
-                sentences.push(text[start..=i].trim());
-                start = i + 1;
-            }
-            i += 1;
-        }
-        if start < len {
-            sentences.push(text[start..].trim());
-        }
-        sentences.retain(|s| !s.is_empty());
-        sentences
     }
 
     /// Paragraph-boundary fallback when embeddings are not available.

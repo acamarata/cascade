@@ -18,13 +18,13 @@ use cascade_rag::{
     citation::{Citation, CitationSet},
     eval::{EvalMetrics, EvalQuery, GroundTruth},
     index::RagIndex,
-    retrieve::rrf::{RrfConfig, RrfRetriever},
+    retrieve::rrf::RrfRetriever,
     TierLevel,
 };
 use cascade_types::{
     chunker::{ChunkOpts, Chunker, Document},
     error::Result,
-    NoopEmbeddingProvider, NoopReranker, RerankOpts, Reranker, RetrieveOpts, Retriever,
+    NoopReranker, RerankOpts, Reranker, RetrieveOpts, Retriever,
 };
 
 // ── TierLevel ─────────────────────────────────────────────────────────────────
@@ -86,8 +86,8 @@ async fn fixed_size_chunker_overlap() -> Result<()> {
     let chunks = chunker.chunk(&doc, &opts).await?;
     // With overlap, consecutive chunks share characters.
     if chunks.len() >= 2 {
-        let tail_first: String = chunks[0].text.chars().rev().take(2).collect();
-        let head_second: String = chunks[1]
+        let _tail_first: String = chunks[0].text.chars().rev().take(2).collect();
+        let _head_second: String = chunks[1]
             .text
             .chars()
             .take(2)

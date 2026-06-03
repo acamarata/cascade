@@ -39,9 +39,11 @@ use crate::tray::TrayStateUpdate;
 /// Inputs:
 ///   - `tray_tx` — the mpsc sender to the tray thread (must be Send + Sync
 ///     across thread boundaries).
+///
 /// Outputs:
 ///   - `JoinHandle<()>` so the supervisor can cancel or join the task
 ///     during shutdown.
+///
 /// Constraints:
 ///   - The task runs forever unless cancelled via the JoinHandle.
 ///   - If tray_tx.send() fails, the task does NOT panic — it logs the
@@ -116,7 +118,6 @@ fn fetch_tray_state_stub() -> TrayState {
 mod tests {
     use super::*;
     use std::sync::{mpsc, Arc, Mutex};
-    use std::time::Instant;
 
     /// Integration test: verify the cache polling loop sends TrayStateUpdate
     /// messages at approximately 10-second intervals using tokio::time::pause.

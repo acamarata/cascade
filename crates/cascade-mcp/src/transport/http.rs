@@ -54,7 +54,9 @@ impl Default for HttpTransportConfig {
 /// Uses mpsc channels internally; the HTTP server wires the channels to the
 /// actual TCP connections.
 pub struct HttpTransport {
-    config: HttpTransportConfig,
+    /// Transport configuration (port, host, chunk size) — used by the HTTP server
+    /// binding layer (not yet wired in this stub transport).
+    _config: HttpTransportConfig,
     send_tx: mpsc::Sender<String>,
     recv_rx: mpsc::Receiver<String>,
 }
@@ -71,7 +73,7 @@ impl HttpTransport {
         let (send_tx, send_rx) = mpsc::channel(128);
         let (recv_tx, recv_rx) = mpsc::channel(128);
         let transport = Self {
-            config,
+            _config: config,
             send_tx,
             recv_rx,
         };

@@ -9,9 +9,8 @@ use cascade_types::{
     agent::{Agent, Context, NoopAgent, Tier},
     chunker::{Chunk, ChunkOpts, Chunker, Document, NoopChunker},
     embedding_provider::{EmbedOpts, EmbeddingProvider, NoopEmbeddingProvider},
-    error::Result,
     key_storage::{InMemoryKeyStorage, KeyStorage, SecretBytes},
-    parser::{ParserKind, PlainTextParser},
+    parser::ParserKind,
     query_strategy::{PureVectorStrategy, QueryStrategy, StrategyKind},
     reranker::{NoopReranker, RerankOpts, Reranker},
     retriever::{NoopRetriever, RetrieveOpts, Retriever},
@@ -181,7 +180,6 @@ async fn pure_vector_strategy_passthrough() {
 
 #[tokio::test]
 async fn noop_agent_echoes_prompt() {
-    use cascade_types::agent::AgentMeta;
     use std::collections::HashMap;
 
     let agent = NoopAgent;

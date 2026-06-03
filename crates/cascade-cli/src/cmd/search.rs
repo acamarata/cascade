@@ -90,7 +90,7 @@ async fn search_inline(query: &str, top: usize, json: bool) -> Result<()> {
         })
         .collect();
 
-    hits.sort_by(|a, b| b.0.cmp(&a.0));
+    hits.sort_by_key(|h| std::cmp::Reverse(h.0));
     hits.truncate(top);
 
     if json {

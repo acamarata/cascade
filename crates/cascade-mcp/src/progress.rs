@@ -31,11 +31,7 @@
 //! (in `_meta.progressToken`). If no token is present, progress notifications
 //! are silently dropped.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::sync::mpsc;
 use tracing::debug;
 

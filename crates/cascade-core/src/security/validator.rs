@@ -339,9 +339,9 @@ impl InputValidator for PromptInjectionScanner {
 /// };
 ///
 /// let pipeline = ScanPipeline::new()
-///     .add(PathTraversalDetector)
-///     .add(CommandInjectionDetector)
-///     .add(PromptInjectionScanner::strict());
+///     .push_validator(PathTraversalDetector)
+///     .push_validator(CommandInjectionDetector)
+///     .push_validator(PromptInjectionScanner::strict());
 ///
 /// let ctx = ValidationContext {
 ///     content: "../../etc/passwd".to_owned(),
@@ -370,7 +370,10 @@ impl ScanPipeline {
     }
 
     /// Append a validator to the end of the pipeline (builder pattern).
-    pub fn add<V: InputValidator + 'static>(mut self, v: V) -> Self {
+    ///
+    /// Named `push_validator` rather than `add` to avoid ambiguity with
+    /// `std::ops::Add::add` (clippy `method_name_collisions`).
+    pub fn push_validator<V: InputValidator + 'static>(mut self, v: V) -> Self {
         self.validators.push(Box::new(v));
         self
     }
@@ -380,9 +383,9 @@ impl ScanPipeline {
     /// Includes path traversal, command injection, and strict prompt injection.
     pub fn standard() -> Self {
         Self::new()
-            .add(PathTraversalDetector)
-            .add(CommandInjectionDetector)
-            .add(PromptInjectionScanner::strict())
+            .push_validator(PathTraversalDetector)
+            .push_validator(CommandInjectionDetector)
+            .push_validator(PromptInjectionScanner::strict())
     }
 
     /// Run all validators in order.

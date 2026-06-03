@@ -89,12 +89,7 @@ fn extract_code_languages(text: &str) -> Vec<String> {
     for line in text.lines() {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("```") {
-            let lang = rest
-                .trim()
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_string();
+            let lang = rest.split_whitespace().next().unwrap_or("").to_string();
             if !lang.is_empty() {
                 langs.push(lang);
             }

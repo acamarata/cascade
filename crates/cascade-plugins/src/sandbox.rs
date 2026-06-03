@@ -10,10 +10,11 @@
 //!   - FD cap default 32 (H1 fix)
 //!   - CPU fuel default 1_000_000_000 per invocation
 //!   - Wall-clock timeout 30 s per invocation
+//!
 //! SPORT: cascade-plugins / sandbox layer
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -183,8 +184,8 @@ impl WasmPlugin {
             &self.engine,
             StoreData {
                 limits: store_limits,
-                fd_count: 0,
-                fd_cap: self.limits.max_fds,
+                _fd_count: 0,
+                _fd_cap: self.limits.max_fds,
             },
         );
         store.limiter(|data| &mut data.limits);
@@ -227,8 +228,12 @@ impl WasmPlugin {
 
 struct StoreData {
     limits: StoreLimits,
-    fd_count: usize,
-    fd_cap: usize,
+    /// Current open-file-descriptor count (incremented/decremented by the ABI layer).
+    /// Retained for the future ABI dispatch implementation; unused in stub form.
+    _fd_count: usize,
+    /// Maximum allowed open file descriptors for this plugin instance.
+    /// Enforced by the ABI layer once implemented; unused in stub form.
+    _fd_cap: usize,
 }
 
 // ── WASM invocation helper ────────────────────────────────────────────────────

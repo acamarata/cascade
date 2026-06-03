@@ -25,12 +25,12 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{debug, instrument};
+use tracing::debug;
 
-use cascade_types::error::{CascadeError, Result};
+use cascade_types::error::Result;
 
 use crate::paths as mcp_paths;
-use crate::server::{JsonRpcError, ERR_INVALID_PARAMS, ERR_NOT_FOUND};
+use crate::server::JsonRpcError;
 
 // ── Tool definition types ─────────────────────────────────────────────────────
 
@@ -322,7 +322,7 @@ async fn handle_search_codebase(args: &Value) -> std::result::Result<Value, Json
 /// `cascade.inbox.list` — list PCI inbox messages.
 async fn handle_inbox_list(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let project = args.get("project").and_then(|v| v.as_str()).unwrap_or("*");
-    let unread_only = args
+    let _unread_only = args
         .get("unread_only")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);

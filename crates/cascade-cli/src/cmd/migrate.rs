@@ -89,7 +89,7 @@ impl Command for MigrateArgs {
         let entries = build_migration_plan(&legacy_root, &dest_cascade, from_tool);
 
         // Print table.
-        println!("{:<55} {:<55} {}", "SOURCE", "DEST", "STATUS");
+        println!("{:<55} {:<55} STATUS", "SOURCE", "DEST");
         println!("{}", "-".repeat(120));
         for e in &entries {
             let status = if e.conflict {

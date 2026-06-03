@@ -7,7 +7,9 @@
 //! Inputs:
 //!   - `spawn_tray_thread` from `cascade_daemon::tray`
 //!   - `TrayStateUpdate`, `TrayAction`, `TrayState` from `cascade_tray`
+//!
 //! Outputs: assertion pass/fail per test case.
+//!
 //! Constraints:
 //!   - No real OS tray APIs are called; all platform calls are intercepted by
 //!     `MockTrayHandle`.
