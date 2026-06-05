@@ -23,6 +23,8 @@ use std::path::{Path, PathBuf};
 use cascade_types::{cascade_tier::CascadeTier, error::Result};
 use serde::{Deserialize, Serialize};
 
+use crate::security::validate_cascade_path;
+
 /// A single tier that contributed to the resolved cascade.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TierSource {
@@ -83,6 +85,41 @@ impl Resolver {
     pub async fn resolve(&self, cwd: &Path) -> Result<ResolvedCascade> {
         use cascade_types::error::CascadeError;
 
+        // Guard: reject null bytes and path traversal in the caller-supplied cwd.
+        // Absolute paths are permitted here — cwd is always a filesystem absolute path.
+        // The AbsolutePath check in validate_cascade_path applies to user-supplied
+        // relative file arguments (e.g. CLI tier paths), not the working directory.
+        // STRIDE: Tampering (T).
+        let cwd_str = cwd.to_string_lossy();
+        if cwd_str.contains('\0') {
+            tracing::warn!(
+                path = %cwd.display(),
+                "null byte in cwd — aborting resolve"
+            );
+            return Err(CascadeError::Io {
+                path: cwd.to_path_buf(),
+                operation: "validate cwd null byte",
+                source: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "null byte in path",
+                ),
+            });
+        }
+        if cwd.components().any(|c| c == std::path::Component::ParentDir) {
+            tracing::warn!(
+                path = %cwd.display(),
+                "path traversal in cwd — aborting resolve"
+            );
+            return Err(CascadeError::Io {
+                path: cwd.to_path_buf(),
+                operation: "validate cwd traversal",
+                source: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "path traversal detected",
+                ),
+            });
+        }
+
         let cwd = cwd.canonicalize().map_err(|e| CascadeError::Io {
             path: cwd.to_path_buf(),
             operation: "canonicalize cwd",
@@ -101,8 +138,36 @@ impl Resolver {
                 .join(cascade_types::paths::CASCADE_MD_NAME);
 
             // Follow symlinks: CLAUDE.md / AGENTS.md may point here.
+            // A symlink target may be a relative path (e.g. `../../etc/passwd`);
+            // such targets are user-influenced and must be guarded against
+            // traversal/null bytes before we resolve them. Absolute targets are
+            // filesystem-absolute and pass through unchanged. STRIDE: Tampering.
             let resolved_path = if cascade_file.is_symlink() {
-                std::fs::read_link(&cascade_file).unwrap_or(cascade_file.clone())
+                let target = std::fs::read_link(&cascade_file).unwrap_or_else(|_| cascade_file.clone());
+                if target.is_relative() {
+                    if let Err(e) = validate_cascade_path(&target) {
+                        tracing::warn!(
+                            path = %target.display(),
+                            error = %e,
+                            "rejected unsafe relative symlink target"
+                        );
+                        return Err(CascadeError::Io {
+                            path: target.clone(),
+                            operation: "validate symlink target",
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                e.to_string(),
+                            ),
+                        });
+                    }
+                    // Resolve the validated relative target against the link's directory.
+                    cascade_file
+                        .parent()
+                        .map(|dir| dir.join(&target))
+                        .unwrap_or(target)
+                } else {
+                    target
+                }
             } else {
                 cascade_file.clone()
             };

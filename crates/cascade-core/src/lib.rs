@@ -64,6 +64,7 @@ pub mod memory;
 pub mod providers_store;
 pub mod quota_aggregator;
 pub mod quota_store;
+pub mod loader;
 pub mod resolution;
 pub mod routing_table;
 pub mod security;

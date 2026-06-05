@@ -30,6 +30,8 @@ rusqlite      = { workspace = true }
 chrono        = { workspace = true }
 uuid          = { workspace = true }
 toml          = "0.8"
+regex         = { version = "1", features = ["std"] }
+once_cell     = "1"
 
 # macOS Keychain (activated by keychain-macos feature + build.rs target detection)
 [target.'cfg(target_os = "macos")'.dependencies]
