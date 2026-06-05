@@ -56,24 +56,22 @@ pub fn spawn_status_cache_poller(
     tokio::spawn(async move {
         info!("cache polling loop: started");
 
-        // Send initial TrayStateUpdate immediately (no delay on daemon start).
-        // WHY: users expect the tray to show the current status right away, not
-        // after the first 10s poll tick.
-        let initial_state = fetch_tray_state_stub();
-        if let Err(e) = tray_tx.send(TrayStateUpdate::UpdateState(initial_state)) {
-            error!(%e, "cache polling loop: initial send failed (tray thread may have exited)");
-            // Continue anyway — the polling loop keeps running in case the
-            // tray thread restarts or reconnects.
-        }
-
-        // Create a 10-second interval. The first tick completes after 10 seconds;
-        // subsequent ticks fire every 10 seconds thereafter.
-        // WHY tokio::time::interval: It's precise and plays nicely with
-        // tokio::select! for shutdown cancellation (future enhancement).
+        // Create a 10-second interval. tokio::time::interval fires its FIRST
+        // tick immediately, so it doubles as the initial update users expect on
+        // daemon start; subsequent ticks fire every 10 seconds thereafter.
+        // WHY rely on the immediate first tick instead of a separate initial
+        // send: a standalone initial send PLUS the interval's immediate first
+        // tick produced two updates at t=0 (a startup double-send). Using the
+        // first tick as the initial update yields exactly one update at t=0,
+        // then one every 10s — which is what the acceptance criteria specify
+        // ("initial update immediate on daemon start").
+        // WHY tokio::time::interval: precise and composes with tokio::select!
+        // for shutdown cancellation (future enhancement).
         let mut interval = time::interval(Duration::from_secs(10));
 
         loop {
-            // Wait for the next 10-second tick.
+            // Wait for the next tick. The first iteration completes immediately
+            // (the initial update); every later iteration waits 10 seconds.
             interval.tick().await;
 
             // Fetch the current cache state (stub until E-03 is done).
@@ -84,7 +82,7 @@ pub fn spawn_status_cache_poller(
             if let Err(e) = tray_tx.send(TrayStateUpdate::UpdateState(state)) {
                 // The tray thread may have exited (e.g. early daemon shutdown,
                 // TrayHandle init failed on headless CI). Log and continue polling.
-                error!(%e, "cache polling loop: send failed at 10s tick (tray thread exited)");
+                error!(%e, "cache polling loop: send failed (tray thread exited)");
                 continue;
             }
         }
@@ -117,7 +115,7 @@ fn fetch_tray_state_stub() -> TrayState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::mpsc;
 
     /// Integration test: verify the cache polling loop sends TrayStateUpdate
     /// messages at approximately 10-second intervals using tokio::time::pause.
@@ -131,64 +129,73 @@ mod tests {
     ///   2. Spawn the poller.
     ///   3. Advance time to 10s + beyond the second tick.
     ///   4. Verify exactly 3 updates were sent:
-    ///      - 1 initial (immediate)
-    ///      - 2 on the first two 10s ticks
+    ///      - 1 initial (the interval's immediate first tick at t=0)
+    ///      - 2 on the next two 10s ticks
     ///
-    /// WHY Arc<Mutex<>>: Same as in tray.rs — we need a Send + Sync container
-    ///   to capture updates from inside the spawned task.
+    /// WHY no spawned drain task: `rx` is a std::sync::mpsc::Receiver whose
+    ///   `recv()` BLOCKS the calling thread. Calling it inside a tokio task on
+    ///   the current-thread runtime (which time::pause() forces) parks the only
+    ///   worker thread and deadlocks the test forever. Instead we drain the
+    ///   channel synchronously with the non-blocking `try_recv()` after
+    ///   advancing time and aborting the poller.
     #[tokio::test]
     async fn cache_poller_sends_updates_every_10s_with_paused_time() {
         // Enable deterministic time so we can fast-forward without sleeping.
         time::pause();
 
-        // Create a channel and wrapped receiver for capturing updates.
         let (tx, rx) = mpsc::channel::<TrayStateUpdate>();
-        let updates: Arc<Mutex<Vec<TrayStateUpdate>>> = Arc::new(Mutex::new(Vec::new()));
-        let updates_clone = Arc::clone(&updates);
 
-        // Spawn a task that drains the receiver into the Arc<Mutex<>>.
-        // This simulates the tray thread receiving and processing updates.
-        let drain_task = tokio::spawn(async move {
-            while let Ok(msg) = rx.recv() {
-                updates_clone.lock().expect("mutex poisoned").push(msg);
-            }
-        });
-
-        // Spawn the cache poller.
+        // Spawn the cache poller. It holds its own clone of the sender.
         let poller_task = spawn_status_cache_poller(tx.clone());
-        drop(tx); // Drop the original sender so the drain task can exit when done.
+        drop(tx); // Drop the original sender; only the poller's clone remains.
 
-        // Allow the initial send to complete (it's immediate, no await needed,
-        // but yield to let the async task run).
-        tokio::task::yield_now().await;
+        let mut recorded = Vec::new();
 
-        // Advance time by 10s + small buffer for the first tick to fire.
+        // Pump the runtime until a specific count of updates has been observed,
+        // or a bounded number of yield rounds elapse. Bounded => cannot hang.
+        // WHY: the current-thread runtime does not guarantee the spawned poller
+        // runs to its next send within a single yield_now(); we pump until the
+        // expected message is drained.
+        async fn pump_until(
+            rx: &mpsc::Receiver<TrayStateUpdate>,
+            recorded: &mut Vec<TrayStateUpdate>,
+            want: usize,
+        ) {
+            for _ in 0..100 {
+                tokio::task::yield_now().await;
+                while let Ok(msg) = rx.try_recv() {
+                    recorded.push(msg);
+                }
+                if recorded.len() >= want {
+                    break;
+                }
+            }
+        }
+
+        // The interval's immediate first tick produces the initial update.
+        pump_until(&rx, &mut recorded, 1).await;
+
+        // Advance time by 10s + small buffer for the second tick to fire.
         time::advance(Duration::from_secs(10) + Duration::from_millis(100)).await;
+        pump_until(&rx, &mut recorded, 2).await;
 
-        // Allow the task to send the first 10s update.
-        tokio::task::yield_now().await;
-
-        // Advance by another 10s for the second tick.
+        // Advance by another 10s for the third tick.
         time::advance(Duration::from_secs(10) + Duration::from_millis(100)).await;
+        pump_until(&rx, &mut recorded, 3).await;
 
-        // Allow the task to send the second 10s update.
-        tokio::task::yield_now().await;
-
-        // Cancel the poller task and drain task to end the test.
+        // Stop the poller, then drain any straggler that slipped in.
         poller_task.abort();
-        drain_task.abort();
-
-        // Small sleep to let any pending sends complete (best-effort).
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        while let Ok(msg) = rx.try_recv() {
+            recorded.push(msg);
+        }
 
         // Verify we got exactly 3 updates:
-        //   1 initial (before first interval)
-        //   2 more (on first and second 10s ticks)
-        let recorded = updates.lock().expect("mutex poisoned").clone();
+        //   1 initial (immediate first tick at t=0)
+        //   2 more (on the next two 10s ticks)
         assert_eq!(
             recorded.len(),
             3,
-            "expected 3 updates (1 initial + 2 at 10s intervals); got {}",
+            "expected 3 updates (initial + 2 at 10s intervals); got {}",
             recorded.len()
         );
 
@@ -212,32 +219,39 @@ mod tests {
     ///
     /// Test strategy:
     ///   1. Spawn the poller with time paused.
-    ///   2. Before advancing time, check if the initial update was sent.
-    ///   3. Verify we got at least 1 update.
+    ///   2. Yield once so the immediate first tick fires (no time advance).
+    ///   3. Drain non-blockingly and verify we got at least 1 update.
     #[tokio::test]
     async fn cache_poller_sends_initial_update_immediately() {
         time::pause();
 
         let (tx, rx) = mpsc::channel::<TrayStateUpdate>();
-        let updates: Arc<Mutex<Vec<TrayStateUpdate>>> = Arc::new(Mutex::new(Vec::new()));
-        let updates_clone = Arc::clone(&updates);
-
-        let drain_task = tokio::spawn(async move {
-            while let Ok(msg) = rx.recv() {
-                updates_clone.lock().expect("mutex poisoned").push(msg);
-            }
-        });
 
         let poller_task = spawn_status_cache_poller(tx.clone());
         drop(tx);
 
-        // Let the initial send complete without advancing time.
-        tokio::task::yield_now().await;
+        // Drive the immediate first tick deterministically. Under
+        // tokio::time::pause(), an interval tick only fires when time ADVANCES
+        // past its deadline — a bare poll never marks it elapsed. The interval's
+        // first deadline is the moment the poller is first polled (registers the
+        // timer), so we interleave: yield (let the poller register/run) + a
+        // tiny advance (fire the now-past first deadline). Bounded to 100 rounds
+        // => cannot hang. Total advance stays far under the 10s period, so ONLY
+        // the immediate first tick fires here, proving immediacy on daemon start.
+        let mut recorded = Vec::new();
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            time::advance(Duration::from_millis(1)).await;
+            while let Ok(msg) = rx.try_recv() {
+                recorded.push(msg);
+            }
+            if !recorded.is_empty() {
+                break;
+            }
+        }
 
         poller_task.abort();
-        drain_task.abort();
 
-        let recorded = updates.lock().expect("mutex poisoned").clone();
         assert!(
             !recorded.is_empty(),
             "expected at least 1 update (the initial one); got 0"

@@ -267,10 +267,13 @@ mod tests {
         assert_eq!(loaded_entry.created_at, "2026-01-01T00:00:00Z");
         assert!(!loaded_entry.stale);
 
-        // Restore original HOME
-        if let Some(h) = original_home {
-            let _guard = home_lock();
-            std::env::set_var("HOME", h);
+        // Restore original HOME. We still hold `_guard` (home_lock) acquired at
+        // the top of the test, so we MUST NOT call home_lock() again here:
+        // std::sync::Mutex is not reentrant and re-locking on the same thread
+        // self-deadlocks. Just restore the env var under the lock we already hold.
+        match original_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
         }
     }
 }
