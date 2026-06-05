@@ -131,7 +131,8 @@ mod tests {
     #[test]
     fn inmemory_set_get_roundtrip() {
         let kc = InMemoryKeychain::new();
-        kc.set_key("dev.cascade", "test-account", "my-secret").unwrap();
+        kc.set_key("dev.cascade", "test-account", "my-secret")
+            .unwrap();
         let val = kc.get_key("dev.cascade", "test-account").unwrap();
         assert_eq!(val, "my-secret");
     }

@@ -11,10 +11,10 @@
 //! # SPORT
 //! MASTER-SECURITY.md: os-keychain-crate / MacOsKeychain
 
+use security_framework::base::Error as SFError;
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
-use security_framework::base::Error as SFError;
 
 use crate::{Keychain, KeychainError};
 
@@ -58,8 +58,7 @@ fn map_sf_error(e: SFError, service: &str, account: &str) -> KeychainError {
         service,
         account,
         os_error_code = code,
-        "macOS Security Framework error"
-        // Note: no secret value logged here.
+        "macOS Security Framework error" // Note: no secret value logged here.
     );
     match code {
         // errSecItemNotFound = -25300
@@ -90,8 +89,7 @@ impl Keychain for MacOsKeychain {
 
     fn delete_key(&self, service: &str, account: &str) -> Result<(), KeychainError> {
         tracing::debug!(service, account, "macOS keychain: delete_key");
-        delete_generic_password(service, account)
-            .map_err(|e| map_sf_error(e, service, account))
+        delete_generic_password(service, account).map_err(|e| map_sf_error(e, service, account))
     }
 
     fn list_keys(&self, service: &str) -> Result<Vec<String>, KeychainError> {
@@ -123,10 +121,7 @@ impl Keychain for MacOsKeychain {
             Ok(items) => {
                 let accounts: Vec<String> = items
                     .into_iter()
-                    .filter_map(|r| {
-                        r.simplify_dict()
-                            .and_then(|m| m.get("acct").cloned())
-                    })
+                    .filter_map(|r| r.simplify_dict().and_then(|m| m.get("acct").cloned()))
                     .collect();
                 Ok(accounts)
             }

@@ -21,8 +21,8 @@ use std::os::windows::ffi::OsStrExt;
 use windows::core::PWSTR;
 use windows::Win32::Foundation::{ERROR_NOT_FOUND, FILETIME};
 use windows::Win32::Security::Credentials::{
-    CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_FLAGS, CRED_PERSIST_LOCAL_MACHINE,
-    CRED_TYPE_GENERIC,
+    CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_FLAGS,
+    CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
 };
 
 use crate::{Keychain, KeychainError};
@@ -96,10 +96,8 @@ impl Keychain for WindowsKeychain {
         // SAFETY: CredReadW succeeded; pcredential is valid; we free it with CredFree.
         let secret = unsafe {
             let cred = &*pcredential;
-            let blob = std::slice::from_raw_parts(
-                cred.CredentialBlob,
-                cred.CredentialBlobSize as usize,
-            );
+            let blob =
+                std::slice::from_raw_parts(cred.CredentialBlob, cred.CredentialBlobSize as usize);
             let result = String::from_utf8(blob.to_vec())
                 .map_err(|_| KeychainError::Other("stored secret is not valid UTF-8".to_owned()));
             CredFree(pcredential as *mut std::ffi::c_void);

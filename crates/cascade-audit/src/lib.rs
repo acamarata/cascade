@@ -35,8 +35,7 @@ use thiserror::Error;
 ///
 /// Purpose: provides a deterministic starting point so the chain begins with a
 /// well-known sentinel that is easy to verify by external tooling.
-pub const GENESIS_HASH: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 // ──────────────────────────────────────────────────────────────────
 // Operation enum
@@ -252,10 +251,7 @@ impl AuditLog {
     /// Constraints: parent directory must already exist.
     pub fn open(path: &Path) -> Result<Self, AuditError> {
         // Create or open the file so we can set permissions.
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
         // Set 0600 on creation (no-op if the file already had these perms).
         file.set_permissions(fs::Permissions::from_mode(0o600))?;
         Ok(Self {
@@ -324,8 +320,7 @@ impl AuditLog {
             hash,
         };
 
-        let mut line =
-            serde_json::to_string(&record).map_err(AuditError::Serialization)?;
+        let mut line = serde_json::to_string(&record).map_err(AuditError::Serialization)?;
         line.push('\n');
 
         let mut file = OpenOptions::new().append(true).open(&self.path)?;
@@ -399,9 +394,7 @@ impl AuditLog {
                     line: idx,
                     stored_hash: record.hash.clone(),
                     recomputed_hash: recomputed.clone(),
-                    reason: format!(
-                        "record[{idx}].hash does not match recomputed value"
-                    ),
+                    reason: format!("record[{idx}].hash does not match recomputed value"),
                 });
                 // Use the recomputed hash so subsequent prev_hash checks use
                 // the "what it should have been" value rather than the corrupted one.
@@ -409,7 +402,6 @@ impl AuditLog {
             } else {
                 prev_computed_hash = record.hash.clone();
             }
-
         }
 
         Ok(violations)
@@ -445,10 +437,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let log = open_log(&dir);
         let violations = log.verify_chain().expect("verify_chain on empty log");
-        assert!(
-            violations.is_empty(),
-            "empty log should have no violations"
-        );
+        assert!(violations.is_empty(), "empty log should have no violations");
     }
 
     #[test]
@@ -511,10 +500,7 @@ mod tests {
         // Leave record1.hash unchanged — this is what a real tamper looks like.
         let tampered_line1 = serde_json::to_string(&record1).unwrap();
 
-        let new_content = format!(
-            "{}\n{}\n{}\n",
-            lines[0], tampered_line1, lines[2]
-        );
+        let new_content = format!("{}\n{}\n{}\n", lines[0], tampered_line1, lines[2]);
         fs::write(&path, new_content).unwrap();
 
         let violations = log.verify_chain().expect("verify_chain should not error");

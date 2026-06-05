@@ -38,9 +38,9 @@ pub struct LinuxKeychain {
 impl LinuxKeychain {
     /// Connect to the default keyring. Returns `Err` if D-Bus / Secret Service is unavailable.
     pub fn new() -> Result<Self, KeychainError> {
-        Keyring::new().map_err(|e| {
-            KeychainError::Unavailable(format!("oo7 keyring unavailable: {e}"))
-        }).map(|keyring| Self { keyring })
+        Keyring::new()
+            .map_err(|e| KeychainError::Unavailable(format!("oo7 keyring unavailable: {e}")))
+            .map(|keyring| Self { keyring })
     }
 }
 
@@ -58,13 +58,14 @@ impl Keychain for LinuxKeychain {
     fn get_key(&self, service: &str, account: &str) -> Result<String, KeychainError> {
         tracing::debug!(service, account, "Linux keychain: get_key");
         let attrs = attrs(service, account);
-        let items = self.keyring.search_items(&attrs).map_err(|e| {
-            KeychainError::Other(format!("oo7 search error: {e}"))
-        })?;
+        let items = self
+            .keyring
+            .search_items(&attrs)
+            .map_err(|e| KeychainError::Other(format!("oo7 search error: {e}")))?;
         let item = items.into_iter().next().ok_or(KeychainError::NotFound)?;
-        let secret_bytes = item.secret().map_err(|e| {
-            KeychainError::Other(format!("oo7 secret retrieval error: {e}"))
-        })?;
+        let secret_bytes = item
+            .secret()
+            .map_err(|e| KeychainError::Other(format!("oo7 secret retrieval error: {e}")))?;
         // Secret returned to caller only — never logged.
         String::from_utf8(secret_bytes.to_vec())
             .map_err(|_| KeychainError::Other("stored secret is not valid UTF-8".to_owned()))
@@ -83,27 +84,28 @@ impl Keychain for LinuxKeychain {
     fn delete_key(&self, service: &str, account: &str) -> Result<(), KeychainError> {
         tracing::debug!(service, account, "Linux keychain: delete_key");
         let attrs = attrs(service, account);
-        let items = self.keyring.search_items(&attrs).map_err(|e| {
-            KeychainError::Other(format!("oo7 search error: {e}"))
-        })?;
+        let items = self
+            .keyring
+            .search_items(&attrs)
+            .map_err(|e| KeychainError::Other(format!("oo7 search error: {e}")))?;
         let item = items.into_iter().next().ok_or(KeychainError::NotFound)?;
-        item.delete().map_err(|e| {
-            KeychainError::Other(format!("oo7 delete error: {e}"))
-        })
+        item.delete()
+            .map_err(|e| KeychainError::Other(format!("oo7 delete error: {e}")))
     }
 
     fn list_keys(&self, service: &str) -> Result<Vec<String>, KeychainError> {
         tracing::debug!(service, "Linux keychain: list_keys");
         let attrs = service_attrs(service);
-        let items = self.keyring.search_items(&attrs).map_err(|e| {
-            KeychainError::Other(format!("oo7 search error: {e}"))
-        })?;
+        let items = self
+            .keyring
+            .search_items(&attrs)
+            .map_err(|e| KeychainError::Other(format!("oo7 search error: {e}")))?;
         let accounts: Vec<String> = items
             .into_iter()
             .filter_map(|item| {
-                item.attributes().ok().and_then(|attrs_map| {
-                    attrs_map.get("account").cloned()
-                })
+                item.attributes()
+                    .ok()
+                    .and_then(|attrs_map| attrs_map.get("account").cloned())
             })
             .collect();
         Ok(accounts)

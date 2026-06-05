@@ -55,9 +55,10 @@ impl Default for InMemoryKeychain {
 
 impl Keychain for InMemoryKeychain {
     fn get_key(&self, service: &str, account: &str) -> Result<String, KeychainError> {
-        let store = self.store.lock().map_err(|e| {
-            KeychainError::Other(format!("lock poisoned: {e}"))
-        })?;
+        let store = self
+            .store
+            .lock()
+            .map_err(|e| KeychainError::Other(format!("lock poisoned: {e}")))?;
         store
             .get(&(service.to_owned(), account.to_owned()))
             .cloned()
@@ -66,9 +67,10 @@ impl Keychain for InMemoryKeychain {
     }
 
     fn set_key(&self, service: &str, account: &str, secret: &str) -> Result<(), KeychainError> {
-        let mut store = self.store.lock().map_err(|e| {
-            KeychainError::Other(format!("lock poisoned: {e}"))
-        })?;
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|e| KeychainError::Other(format!("lock poisoned: {e}")))?;
         // Log only service/account — never the secret value.
         tracing::debug!(service, account, "in-memory keychain: set_key");
         store.insert((service.to_owned(), account.to_owned()), secret.to_owned());
@@ -76,10 +78,14 @@ impl Keychain for InMemoryKeychain {
     }
 
     fn delete_key(&self, service: &str, account: &str) -> Result<(), KeychainError> {
-        let mut store = self.store.lock().map_err(|e| {
-            KeychainError::Other(format!("lock poisoned: {e}"))
-        })?;
-        if store.remove(&(service.to_owned(), account.to_owned())).is_some() {
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|e| KeychainError::Other(format!("lock poisoned: {e}")))?;
+        if store
+            .remove(&(service.to_owned(), account.to_owned()))
+            .is_some()
+        {
             tracing::debug!(service, account, "in-memory keychain: deleted key");
             Ok(())
         } else {
@@ -88,9 +94,10 @@ impl Keychain for InMemoryKeychain {
     }
 
     fn list_keys(&self, service: &str) -> Result<Vec<String>, KeychainError> {
-        let store = self.store.lock().map_err(|e| {
-            KeychainError::Other(format!("lock poisoned: {e}"))
-        })?;
+        let store = self
+            .store
+            .lock()
+            .map_err(|e| KeychainError::Other(format!("lock poisoned: {e}")))?;
         let accounts: Vec<String> = store
             .keys()
             .filter(|(svc, _)| svc == service)
