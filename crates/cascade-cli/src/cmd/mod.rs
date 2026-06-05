@@ -15,6 +15,7 @@ pub mod init;
 pub mod link;
 pub mod memory;
 pub mod migrate;
+pub mod migrate_keys;
 pub mod ping;
 pub mod resolve;
 pub mod search;
@@ -66,6 +67,8 @@ pub enum Commands {
     Unlink(unlink::UnlinkArgs),
     /// Migrate a legacy `.claude/` or `.opencode/` directory to `.cascade/`.
     Migrate(migrate::MigrateArgs),
+    /// Move `GEMINI_API_KEY_*` secrets from vault.env into the OS keychain.
+    MigrateKeys(migrate_keys::MigrateKeysArgs),
     /// Diagnose cascade health and report issues.
     Doctor(doctor::DoctorArgs),
     /// Control the cascade background daemon.
@@ -96,6 +99,7 @@ impl Commands {
             Commands::Link(args) => args.run().await,
             Commands::Unlink(args) => args.run().await,
             Commands::Migrate(args) => args.run().await,
+            Commands::MigrateKeys(args) => args.run().await,
             Commands::Doctor(args) => args.run().await,
             Commands::Daemon(args) => args.run().await,
             Commands::Completions(args) => args.run().await,

@@ -24,6 +24,7 @@ mod hook_runner;
 mod ipc;
 mod ipc_handlers;
 mod key_index;
+mod key_loader;
 mod log;
 mod quota_poller;
 mod regen;
@@ -81,6 +82,23 @@ async fn main() {
     // status/stop` can find us. shutdown::flush_state removes it on clean exit.
     if let Err(e) = shutdown::write_pid(&config_dir).await {
         error!(%e, "failed to write daemon.pid");
+    }
+
+    // Load API keys from the OS keychain (primary) or vault.env (fallback).
+    // load_api_keys() logs the count + source at INFO and never logs key values
+    // (keys are held as zeroize-on-drop SecretString). Proxy consumption of these
+    // keys is wired via providers.json/rebuild_task today; routing the in-memory
+    // SecretString set through the proxy credentials_map is a follow-up (P3).
+    let _api_keys = key_loader::load_api_keys();
+
+    // First-start advisory: if keys are still only in vault.env, nudge the user
+    // to migrate them into the OS keychain. Non-interactive (stderr only) — the
+    // user runs `cascade migrate-keys` manually; the daemon never blocks on stdin.
+    if key_loader::should_advise_migration() {
+        eprintln!(
+            "[cascade] API keys found in vault.env. Run 'cascade migrate-keys' to move them \
+             to the OS keychain for improved security."
+        );
     }
 
     // ── Tray thread setup ─────────────────────────────────────────────────
