@@ -159,6 +159,13 @@ impl Command for DoctorArgs {
             });
         }
 
+        // ── Audit log + security tokens (T-P2-E07-18) ─────────────────────
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let cascade_dir = home.join(".cascade");
+            checks.extend(check_audit_log(&cascade_dir.join("audit.log")));
+            checks.extend(check_security_tokens(&cascade_dir));
+        }
+
         // ── Auto-fix pass ──────────────────────────────────────────────────
         if self.fix {
             for t in &tiers {
@@ -187,6 +194,167 @@ impl Command for DoctorArgs {
     }
 }
 
+/// Audit-log health checks (T-P2-E07-18): existence, 0600 permissions, hash-chain
+/// integrity, and an entry-count/last-timestamp summary.
+///
+/// Purpose: surface tamper-evidence status of `~/.cascade/audit.log` in `cascade
+///   doctor`. Read-only: never repairs or creates the log.
+/// Inputs: `audit_path` — the audit log file path.
+/// Outputs: a `Vec<Check>`; a missing log yields a single FAIL check (no panic).
+/// Constraints: a broken chain is FAIL; permission drift is WARN.
+/// SPORT: MASTER-CLI.md — cascade doctor audit section.
+fn check_audit_log(audit_path: &std::path::Path) -> Vec<Check> {
+    let mut checks = Vec::new();
+
+    if !audit_path.exists() {
+        checks.push(Check {
+            name: "audit.log exists",
+            status: CheckStatus::Fail,
+            detail: format!("not found at {}", audit_path.display()),
+        });
+        return checks;
+    }
+    checks.push(Check {
+        name: "audit.log exists",
+        status: CheckStatus::Pass,
+        detail: String::new(),
+    });
+
+    // Permissions: must be 0600 (owner read/write only). Unix only.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match std::fs::metadata(audit_path) {
+            Ok(meta) => {
+                let mode = meta.permissions().mode() & 0o777;
+                if mode == 0o600 {
+                    checks.push(Check {
+                        name: "audit.log 0600",
+                        status: CheckStatus::Pass,
+                        detail: String::new(),
+                    });
+                } else {
+                    checks.push(Check {
+                        name: "audit.log 0600",
+                        status: CheckStatus::Warn,
+                        detail: format!("mode is 0o{mode:o}, expected 0o600"),
+                    });
+                }
+            }
+            Err(e) => checks.push(Check {
+                name: "audit.log 0600",
+                status: CheckStatus::Warn,
+                detail: format!("cannot stat: {e}"),
+            }),
+        }
+    }
+
+    // Chain integrity via the cascade-audit verifier.
+    match cascade_audit::AuditLog::open(audit_path) {
+        Ok(log) => match log.verify_chain() {
+            Ok(violations) if violations.is_empty() => checks.push(Check {
+                name: "audit chain integrity",
+                status: CheckStatus::Pass,
+                detail: String::new(),
+            }),
+            Ok(violations) => {
+                let lines: Vec<String> = violations.iter().map(|v| v.line.to_string()).collect();
+                checks.push(Check {
+                    name: "audit chain integrity",
+                    status: CheckStatus::Fail,
+                    detail: format!(
+                        "{} violation(s) at line(s) {}",
+                        violations.len(),
+                        lines.join(", ")
+                    ),
+                });
+            }
+            Err(e) => checks.push(Check {
+                name: "audit chain integrity",
+                status: CheckStatus::Fail,
+                detail: format!("verify failed: {e}"),
+            }),
+        },
+        Err(e) => checks.push(Check {
+            name: "audit chain integrity",
+            status: CheckStatus::Fail,
+            detail: format!("cannot open log: {e}"),
+        }),
+    }
+
+    // Entry count + last timestamp (informational).
+    if let Ok(content) = std::fs::read_to_string(audit_path) {
+        let count = content.lines().filter(|l| !l.trim().is_empty()).count();
+        let last_ts = content
+            .lines()
+            .rfind(|l| !l.trim().is_empty())
+            .and_then(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .and_then(|v| v.get("ts").and_then(|t| t.as_str()).map(String::from))
+            .unwrap_or_else(|| "unknown".to_string());
+        checks.push(Check {
+            name: "audit entry count",
+            status: CheckStatus::Pass,
+            detail: format!("{count} entries, last {last_ts}"),
+        });
+    }
+
+    checks
+}
+
+/// Security-token permission checks (T-P2-E07-18): `proxy.token` and
+/// `dashboard.token` must be 0600 when present.
+///
+/// A missing token file is WARN (not yet generated), not FAIL.
+fn check_security_tokens(cascade_dir: &std::path::Path) -> Vec<Check> {
+    let mut checks = Vec::new();
+    for (label, file) in [
+        ("proxy.token 0600", "proxy.token"),
+        ("dashboard.token 0600", "dashboard.token"),
+    ] {
+        let path = cascade_dir.join(file);
+        if !path.exists() {
+            checks.push(Check {
+                name: label,
+                status: CheckStatus::Warn,
+                detail: "not present (not yet generated)".to_string(),
+            });
+            continue;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let status_detail = match std::fs::metadata(&path) {
+                Ok(meta) => {
+                    let mode = meta.permissions().mode() & 0o777;
+                    if mode == 0o600 {
+                        (CheckStatus::Pass, String::new())
+                    } else {
+                        (
+                            CheckStatus::Warn,
+                            format!("mode is 0o{mode:o}, expected 0o600"),
+                        )
+                    }
+                }
+                Err(e) => (CheckStatus::Warn, format!("cannot stat: {e}")),
+            };
+            checks.push(Check {
+                name: label,
+                status: status_detail.0,
+                detail: status_detail.1,
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            checks.push(Check {
+                name: label,
+                status: CheckStatus::Pass,
+                detail: "permission check skipped (non-unix)".to_string(),
+            });
+        }
+    }
+    checks
+}
+
 fn config_paths(cwd: &std::path::Path) -> Vec<(String, PathBuf)> {
     let mut paths_list = Vec::new();
     // Global config.
@@ -208,4 +376,66 @@ fn config_paths(cwd: &std::path::Path) -> Vec<(String, PathBuf)> {
         paths_list.push(("Project config".into(), p));
     }
     paths_list
+}
+
+#[cfg(test)]
+mod audit_checks_tests {
+    use super::*;
+    use cascade_audit::{AuditEntry, AuditLog, AuditOp};
+
+    #[test]
+    fn missing_audit_log_reports_fail_not_panic() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = check_audit_log(&dir.path().join("audit.log"));
+        assert_eq!(checks.len(), 1);
+        assert_eq!(checks[0].status, CheckStatus::Fail);
+    }
+
+    #[test]
+    fn valid_chain_reports_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.log");
+        let log = AuditLog::open(&path).unwrap();
+        log.append(AuditEntry {
+            actor: "cascaded".into(),
+            op: AuditOp::DaemonStart,
+            target: "cascaded".into(),
+            detail: "v0.1.0".into(),
+        })
+        .unwrap();
+        let checks = check_audit_log(&path);
+        let chain = checks
+            .iter()
+            .find(|c| c.name == "audit chain integrity")
+            .expect("chain check present");
+        assert_eq!(chain.status, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn tampered_chain_reports_fail() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.log");
+        let log = AuditLog::open(&path).unwrap();
+        for i in 0..3 {
+            log.append(AuditEntry {
+                actor: "cascaded".into(),
+                op: AuditOp::DaemonStart,
+                target: "cascaded".into(),
+                detail: format!("entry {i}"),
+            })
+            .unwrap();
+        }
+        // Tamper: rewrite the middle record's detail without fixing its hash.
+        let content = std::fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<String> = content.lines().map(String::from).collect();
+        lines[1] = lines[1].replace("entry 1", "TAMPERED");
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+
+        let checks = check_audit_log(&path);
+        let chain = checks
+            .iter()
+            .find(|c| c.name == "audit chain integrity")
+            .expect("chain check present");
+        assert_eq!(chain.status, CheckStatus::Fail, "detail: {}", chain.detail);
+    }
 }

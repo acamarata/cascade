@@ -15,6 +15,7 @@
 // real new issues, not pre-existing scaffolded stubs.
 #![allow(dead_code)]
 
+mod audit;
 mod cache;
 mod config;
 mod event_bus;
@@ -100,6 +101,18 @@ async fn main() {
              to the OS keychain for improved security."
         );
     }
+
+    // Initialise the tamper-evident audit log and record daemon start. Audit
+    // failures are non-fatal (logged at ERROR) and never block startup.
+    if let Err(e) = audit::init(&config_dir.join("audit.log")) {
+        error!(%e, "failed to initialise audit log (continuing without audit)");
+    }
+    audit::record(
+        cascade_audit::AuditOp::DaemonStart,
+        "cascaded",
+        "cascaded",
+        &format!("v{} pid={}", env!("CARGO_PKG_VERSION"), process::id()),
+    );
 
     // ── Tray thread setup ─────────────────────────────────────────────────
     // Create the tray state update channel. The async side (supervisor,
@@ -217,6 +230,14 @@ async fn main() {
     if let Err(e) = tray_handle.join() {
         error!("tray thread panicked during shutdown: {:?}", e);
     }
+
+    // Record daemon stop in the audit log before flushing state. Non-fatal.
+    audit::record(
+        cascade_audit::AuditOp::DaemonStop,
+        "cascaded",
+        "cascaded",
+        "graceful shutdown",
+    );
 
     // Flush state before the process exits so the next start can resume
     // cleanly. Errors here are logged but do not change exit code.
