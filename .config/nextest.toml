@@ -9,3 +9,17 @@
 # integration tests); 3 periods = 90s hard kill.
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 3 }
+
+# Daemon-spawning integration tests (cascade-daemon + cascade-cli `integration`
+# binaries) each fork a real `cascaded` process that binds a socket and races a
+# startup/shutdown deadline. Running many concurrently saturates the machine and
+# pushes individual daemons past their wait deadlines, causing spurious timeouts
+# (e.g. daemon_clean_stop). Serialise them so only one daemon is live at a time —
+# each passes in ~1.5s in isolation, so the wall-clock cost is small and the
+# flakiness is eliminated.
+[test-groups]
+daemon-serial = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary(integration) & (package(cascade-daemon) | package(cascade-cli))'
+test-group = 'daemon-serial'
