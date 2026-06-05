@@ -11,15 +11,19 @@
 #![allow(dead_code)]
 
 pub mod config;
+pub mod dashboard;
 pub mod event_bus;
 pub mod harness_bridge;
 pub mod healthcheck;
 pub mod hook_runner;
 pub mod ipc;
 pub mod ipc_handlers;
+pub mod key_index;
 pub mod log;
+pub mod proxy;
 pub mod shutdown;
 pub mod supervisor;
+pub mod telemetry;
 pub mod tray;
 
 pub use config::Config;

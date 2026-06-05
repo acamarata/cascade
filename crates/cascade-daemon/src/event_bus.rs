@@ -107,6 +107,53 @@ impl EventBus {
         Ok(id)
     }
 
+    /// Fetch unconsumed events of a given kind and mark them consumed atomically.
+    ///
+    /// Inputs:  `kind`  — event type string.
+    ///          `limit` — maximum number of events to consume.
+    /// Outputs: consumed events (empty when none pending).
+    /// Constraints: fetches and marks consumed inside a single Mutex guard to
+    ///   prevent double-delivery across concurrent callers.
+    pub async fn consume(&self, kind: &str, limit: usize) -> Result<Vec<Event>, DaemonError> {
+        let conn = self.db.lock().await;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, kind, payload, ts FROM events
+                 WHERE kind = ?1 AND consumed = 0
+                 ORDER BY ts ASC LIMIT ?2",
+            )
+            .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+
+        let rows = stmt
+            .query_map(params![kind, limit as i64], |row| {
+                let payload_str: String = row.get(2)?;
+                Ok(Event {
+                    id: row.get(0)?,
+                    kind: row.get(1)?,
+                    payload: serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null),
+                    ts: row.get(3)?,
+                })
+            })
+            .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+
+        let events: Vec<Event> = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+
+        if !events.is_empty() {
+            // Mark all fetched events consumed in a single UPDATE.
+            let ids: Vec<String> = events.iter().map(|e| e.id.to_string()).collect();
+            let placeholders = ids.join(",");
+            conn.execute_batch(&format!(
+                "UPDATE events SET consumed = 1 WHERE id IN ({placeholders})"
+            ))
+            .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+            debug!(kind, count = events.len(), "events consumed");
+        }
+
+        Ok(events)
+    }
+
     /// Fetch unconsumed events of a given kind. Does NOT mark them consumed.
     pub async fn peek(&self, kind: &str, limit: usize) -> Result<Vec<Event>, DaemonError> {
         let conn = self.db.lock().await;

@@ -19,6 +19,6 @@
 | Developer Guide | .github/wiki/developer-guide.md | Contributor setup, build, test, release | 🔲 Planned | P4 | T-P4-E05-* |
 | RAG Architecture | .github/wiki/rag-architecture.md | RAG engine design and configuration | 🔲 Planned | P4 | T-P4-E02-* |
 | MCP Server Reference | .github/wiki/mcp-server.md | cascade MCP server endpoints and capabilities | 🔲 Planned | P4 | T-P4-E03-* |
-| Security | .github/wiki/security.md | Security model, threat model, reporting | 🔲 Planned | P2/P3 | T-P2-E07-* |
+| Security | .github/wiki/security.md | Security model, threat model, reporting | ✅ Done | P2/P3 | T-P2-E07-* |
 | Update Protocol | .github/wiki/update-protocol.md | Auto-update mechanism and signature verification | 🔲 Planned | P3 | T-P3-E06-* |
 | Releases | .github/wiki/releases.md | Release notes index | 🔲 Planned | P4 | T-P4-E05-* |

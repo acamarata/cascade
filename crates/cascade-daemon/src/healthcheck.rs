@@ -5,8 +5,12 @@
 //! tasks; read by the IPC `health` method.
 //!
 //! Output shape (matches IPC protocol frozen in S06-FREEZE):
-//!   { "status": "ok", "pid": N, "uptime_secs": N,
-//!     "queue_depth": N, "ram_kb": N, "cpu_pct": f }
+//!   { "status": "ok" }
+//!
+//! NOTE: Detailed stats (pid, uptime_secs, queue_depth, ram_kb, cpu_pct) are no
+//! longer exposed via the health endpoint to minimize security-relevant information
+//! leakage to unauthenticated clients. Detailed stats remain available internally
+//! via the status command and the CLI (authenticated, local only).
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -33,11 +37,6 @@ struct HealthInner {
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthSnapshot {
     pub status: &'static str,
-    pub pid: u32,
-    pub uptime_secs: u64,
-    pub queue_depth: u64,
-    pub ram_kb: u64,
-    pub cpu_pct: f32,
 }
 
 impl HealthState {
@@ -55,27 +54,11 @@ impl HealthState {
 
     /// Capture a point-in-time snapshot. Called from the IPC handler — must
     /// be non-blocking (acquires the RwLock read guard only).
+    ///
+    /// Returns a minimal health snapshot with only the status field to avoid
+    /// exposing internal state to unauthenticated clients.
     pub fn snapshot(&self) -> HealthSnapshot {
-        // Use try_read to avoid blocking the async handler; fall back to zeros
-        // if a write is in progress (extremely brief window).
-        let inner = self
-            .inner
-            .try_read()
-            .map(|g| g.clone())
-            .unwrap_or_else(|_| HealthInner {
-                queue_depth: 0,
-                ram_kb: 0,
-                cpu_pct: 0.0,
-            });
-
-        HealthSnapshot {
-            status: "ok",
-            pid: std::process::id(),
-            uptime_secs: self.start.elapsed().as_secs(),
-            queue_depth: inner.queue_depth,
-            ram_kb: inner.ram_kb,
-            cpu_pct: inner.cpu_pct,
-        }
+        HealthSnapshot { status: "ok" }
     }
 
     /// Update resource metrics. Called by the background sampler task.

@@ -2,3 +2,4 @@
 
 pub mod cmd;
 pub mod ipc_client;
+pub mod proxy_client;

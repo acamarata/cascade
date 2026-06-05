@@ -26,6 +26,7 @@ mod ipc_handlers;
 mod log;
 mod shutdown;
 mod supervisor;
+mod telemetry;
 mod tray;
 
 use std::process;
@@ -46,7 +47,12 @@ async fn main() {
     // Resolve config dir (~/.cascade). Created by `cascade init` but we
     // create it here as a safety net so the daemon never panics on a fresh
     // install where `cascade init` was skipped.
-    let config_dir = match dirs::home_dir() {
+    // Prefer $HOME (honoured on every platform and required for test isolation;
+    // note macOS `dirs::home_dir()` ignores $HOME), then fall back to dirs.
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(dirs::home_dir);
+    let config_dir = match home {
         Some(h) => h.join(".cascade"),
         None => {
             error!("cannot determine home directory");
@@ -58,6 +64,12 @@ async fn main() {
         error!(%e, "failed to create ~/.cascade");
         write_crash_sentinel(&e.to_string());
         process::exit(1);
+    }
+
+    // Write the PID file at startup so supervisors and `cascade daemon
+    // status/stop` can find us. shutdown::flush_state removes it on clean exit.
+    if let Err(e) = shutdown::write_pid(&config_dir).await {
+        error!(%e, "failed to write daemon.pid");
     }
 
     // ── Tray thread setup ─────────────────────────────────────────────────

@@ -14,6 +14,8 @@
 //! SPORT: MASTER-CRATES.md — cascade-daemon logging=✅ structured JSON rolling
 //!        rotation, otel_tracing=✅ optional OTLP/gRPC (CASCADE_OTEL_ENDPOINT)
 
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::{non_blocking, rolling};
@@ -97,6 +99,26 @@ pub fn init_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
 /// already been installed.
 pub fn init_logging(log_dir: &Path, otel_provider: Option<&TracerProvider>) -> WorkerGuard {
     std::fs::create_dir_all(log_dir).expect("cannot create log dir");
+
+    // Bug 4 fix: set a restrictive umask (0o177 → new files get 0o600) for the
+    // duration of the appender build so the rolling appender creates its log
+    // file with 0o600 rather than the process-default umask (typically 0o022,
+    // which yields 0o644).  The umask is restored unconditionally immediately
+    // after build() returns.
+    //
+    // Why here rather than chmodding afterwards: the rolling appender creates
+    // the log file during build(), not on first write.  Calling set_permissions
+    // on entries that pre-exist in log_dir (old code) misses the file just
+    // created by build() because the directory scan runs before build().
+    // Setting the umask around build() is the only race-free approach.
+    #[cfg(unix)]
+    let _prev_umask = {
+        // SAFETY: umask(2) is async-signal-safe and always succeeds.  We
+        // restore the previous value immediately after build() so other code
+        // in this process is not affected.
+        unsafe { libc::umask(0o177) }
+    };
+
     let file_appender = rolling::Builder::new()
         .rotation(rolling::Rotation::DAILY)
         .filename_prefix("cascaded")
@@ -104,6 +126,25 @@ pub fn init_logging(log_dir: &Path, otel_provider: Option<&TracerProvider>) -> W
         .max_log_files(7)
         .build(log_dir)
         .expect("cannot build rolling appender");
+
+    // Restore the previous umask now that the appender file has been created.
+    #[cfg(unix)]
+    unsafe {
+        libc::umask(_prev_umask);
+    }
+
+    // Belt-and-suspenders: chmod any log file in log_dir that was already
+    // present from a prior run (the umask above only covers the file created
+    // by this build() call).
+    if let Ok(entries) = std::fs::read_dir(log_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                let _ = std::fs::set_permissions(&path, Permissions::from_mode(0o600));
+            }
+        }
+    }
+
     let (non_blocking_writer, guard) = non_blocking(file_appender);
     let file_layer = fmt::layer()
         .json()
@@ -153,6 +194,70 @@ mod tests {
         // Rolling appender creates the file on first write, not on construction.
         // The dir exists — that is sufficient for this smoke test.
         let _ = entries;
+    }
+
+    /// Verify that the rolling appender creates its log file with mode 0o600.
+    ///
+    /// The fix (Bug 4): we set umask(0o177) before calling rolling::Builder::build()
+    /// so the newly created log file inherits permissions 0o600.  This test
+    /// replicates the exact umask-around-build pattern from init_logging and
+    /// confirms the resulting file is not world- or group-readable.
+    ///
+    /// We cannot call init_logging() directly (it installs a global subscriber
+    /// which panics on double-init), so we test the underlying file-creation
+    /// mechanic in isolation.
+    #[cfg(unix)]
+    #[test]
+    fn test_log_file_created_with_mode_0600() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path()).unwrap();
+
+        // Mirror the fix: set umask(0o177) → new files get 0o600.
+        let prev = unsafe { libc::umask(0o177) };
+
+        let appender = rolling::Builder::new()
+            .rotation(rolling::Rotation::DAILY)
+            .filename_prefix("test-cascaded")
+            .filename_suffix("log")
+            .max_log_files(7)
+            .build(dir.path())
+            .expect("rolling appender must build");
+
+        // Restore umask immediately (mirrors init_logging).
+        unsafe { libc::umask(prev) };
+
+        // Trigger a write so the appender flushes its buffer and the file
+        // appears on disk.  We use the blocking write path via a short-lived
+        // non-blocking pair so the flush is synchronous enough for the test.
+        {
+            use std::io::Write as _;
+            let (mut writer, _guard) = tracing_appender::non_blocking(appender);
+            writeln!(writer, "{{\"msg\":\"test\"}}").expect("write must succeed");
+            // _guard drops here → background thread flushes and file is visible
+        }
+
+        // Give the non-blocking writer a moment to flush.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Find the log file in the temp dir and check its mode.
+        let mut found = false;
+        for entry in std::fs::read_dir(dir.path()).unwrap().flatten() {
+            let meta = entry.metadata().expect("metadata must be readable");
+            if meta.is_file() {
+                found = true;
+                let mode = meta.mode() & 0o777;
+                assert_eq!(
+                    mode,
+                    0o600,
+                    "log file {} must have mode 0o600, got 0o{:o}",
+                    entry.path().display(),
+                    mode
+                );
+            }
+        }
+        assert!(found, "at least one log file must have been created");
     }
 
     // init_tracing(None) must return None without panicking and without

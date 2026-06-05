@@ -112,9 +112,10 @@ async fn test_ping_returns_response() {
     let _ = tokio::time::timeout(Duration::from_secs(3), handle).await;
 }
 
-/// Health method returns a response (smoke test for a second known method).
+/// Health method returns a minimal response with only "status": "ok".
+/// Verifies that internal state (pid, uptime, queue depth, etc.) is not exposed.
 #[tokio::test]
-async fn test_health_returns_response() {
+async fn test_health_returns_minimal_response() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
 
@@ -122,10 +123,35 @@ async fn test_health_returns_response() {
 
     let resp = send_request(&mut stream, serde_json::json!({ "method": "health" })).await;
 
-    // A successful health response should not be an error object.
+    // The health response must be exactly {"status":"ok"} with no other fields.
     assert!(
-        resp.get("code").is_none() || resp.get("uptime_secs").is_some(),
-        "unexpected error in health response: {resp}"
+        resp.get("code").is_none(),
+        "health response should not contain error code: {resp}"
+    );
+    assert_eq!(
+        resp.get("status"),
+        Some(&serde_json::Value::String("ok".to_string())),
+        "health response status must be \"ok\": {resp}"
+    );
+    assert!(
+        resp.get("pid").is_none(),
+        "health response must not expose pid: {resp}"
+    );
+    assert!(
+        resp.get("uptime_secs").is_none(),
+        "health response must not expose uptime_secs: {resp}"
+    );
+    assert!(
+        resp.get("queue_depth").is_none(),
+        "health response must not expose queue_depth: {resp}"
+    );
+    assert!(
+        resp.get("ram_kb").is_none(),
+        "health response must not expose ram_kb: {resp}"
+    );
+    assert!(
+        resp.get("cpu_pct").is_none(),
+        "health response must not expose cpu_pct: {resp}"
     );
 
     shutdown.cancel();
