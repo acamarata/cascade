@@ -761,7 +761,9 @@ name = "cascade-cli"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "cascade-audit",
  "cascade-core",
+ "cascade-keychain",
  "cascade-types",
  "clap 4.6.1",
  "clap_complete",
@@ -804,7 +806,9 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "axum 0.7.9",
+ "cascade-audit",
  "cascade-core",
+ "cascade-keychain",
  "cascade-tray",
  "cascade-types",
  "chrono",
@@ -819,6 +823,7 @@ dependencies = [
  "rand 0.8.6",
  "reqwest",
  "rusqlite",
+ "secrecy",
  "serde 1.0.228",
  "serde_json 1.0.150",
  "subtle",
@@ -4812,6 +4817,15 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
+]
 
 [[package]]
 name = "secret-service"

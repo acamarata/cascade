@@ -18,6 +18,8 @@ path = "src/main.rs"
 [dependencies]
 cascade-core  = { workspace = true }
 cascade-types = { workspace = true }
+cascade-keychain = { path = "../cascade-keychain" }
+cascade-audit = { path = "../cascade-audit" }
 async-trait   = { workspace = true }
 clap          = { workspace = true }
 serde         = { workspace = true }
