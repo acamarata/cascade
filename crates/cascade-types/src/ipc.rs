@@ -116,6 +116,7 @@ pub enum RequestId {
 /// assert_eq!(back.id, RequestId::Number(1));
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Request<P> {
     /// Always `"2.0"`.
     pub jsonrpc: JsonRpcVersion,
@@ -153,6 +154,7 @@ pub struct Request<P> {
 /// assert_eq!(back.result.unwrap().pong, "hello");
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Response<R> {
     /// Always `"2.0"`.
     pub jsonrpc: JsonRpcVersion,
@@ -168,6 +170,7 @@ pub struct Response<R> {
 
 /// A JSON-RPC 2.0 error object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RpcError {
     /// Numeric error code. Use the `*` constants defined in this module.
     pub code: i32,
@@ -184,6 +187,7 @@ pub struct RpcError {
 
 /// Params for the `config_get` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigGetParams {
     /// Dot-separated config key, e.g. `"daemon.socket_path"`.
     pub key: String,
@@ -191,6 +195,7 @@ pub struct ConfigGetParams {
 
 /// Result for the `config_get` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigGetResult {
     /// The key that was queried.
     pub key: String,
@@ -202,6 +207,7 @@ pub struct ConfigGetResult {
 
 /// Params for the `config_set` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigSetParams {
     /// Dot-separated config key to update.
     pub key: String,
@@ -211,6 +217,7 @@ pub struct ConfigSetParams {
 
 /// Result for the `config_set` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConfigSetResult {
     /// The key that was updated.
     pub key: String,
@@ -223,10 +230,12 @@ pub struct ConfigSetResult {
 
 /// Params for the `daemon_stop` method (no fields; included for type uniformity).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DaemonStopParams {}
 
 /// Result for the `daemon_stop` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DaemonStopResult {
     /// Always `"stopping"`. Clients should not expect further responses.
     pub status: String,
@@ -236,10 +245,12 @@ pub struct DaemonStopResult {
 
 /// Params for the `health` method (no fields).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HealthParams {}
 
 /// A single health check entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HealthCheck {
     /// Short name for the check, e.g. `"sqlite"` or `"rag_index"`.
     pub name: String,
@@ -252,6 +263,7 @@ pub struct HealthCheck {
 
 /// Result for the `health` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HealthResult {
     /// `true` when all checks pass.
     pub ok: bool,
@@ -263,6 +275,7 @@ pub struct HealthResult {
 
 /// Params for the `hotword_lookup` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HotwordLookupParams {
     /// The hotword string to look up in the quota table.
     pub word: String,
@@ -270,6 +283,7 @@ pub struct HotwordLookupParams {
 
 /// Result for the `hotword_lookup` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HotwordLookupResult {
     /// The matching block string, or `None` if not found.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -280,6 +294,7 @@ pub struct HotwordLookupResult {
 
 /// Params for the `inbox_summary` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InboxSummaryParams {
     /// Max number of inbox entries to return. `None` returns all available.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -303,6 +318,7 @@ pub struct InboxItem {
 
 /// Result for the `inbox_summary` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InboxSummaryResult {
     /// Inbox items in reverse chronological order.
     pub items: Vec<InboxItem>,
@@ -312,6 +328,7 @@ pub struct InboxSummaryResult {
 
 /// Params for the `memory_read` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryReadParams {
     /// Project root path or project slug used to locate the `.claude/memory/` dir.
     pub project: String,
@@ -321,6 +338,7 @@ pub struct MemoryReadParams {
 
 /// Result for the `memory_read` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryReadResult {
     /// Full UTF-8 text content of the memory file.
     pub content: String,
@@ -332,6 +350,7 @@ pub struct MemoryReadResult {
 
 /// Params for the `memory_write` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryWriteParams {
     /// Project root path or project slug.
     pub project: String,
@@ -343,6 +362,7 @@ pub struct MemoryWriteParams {
 
 /// Result for the `memory_write` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryWriteResult {
     /// Absolute path of the file that was written.
     pub path: String,
@@ -354,6 +374,7 @@ pub struct MemoryWriteResult {
 
 /// Params for the `ping` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PingParams {
     /// Optional payload echoed back verbatim in the response.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -362,6 +383,7 @@ pub struct PingParams {
 
 /// Result for the `ping` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PingResult {
     /// Echo payload from the request, or an empty string if none was sent.
     pub pong: String,
@@ -371,6 +393,7 @@ pub struct PingResult {
 
 /// Params for the `provider_quota` method (no fields).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProviderQuotaParams {}
 
 /// A single AI provider quota entry.
@@ -387,6 +410,7 @@ pub struct ProviderEntry {
 
 /// Result for the `provider_quota` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProviderQuotaResult {
     /// Quota entries for all configured providers.
     pub providers: Vec<ProviderEntry>,
@@ -396,6 +420,7 @@ pub struct ProviderQuotaResult {
 
 /// Params for the `resolve` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResolveParams {
     /// Target tier slug, e.g. `"gci"`, `"ppi"`, `"pri"`. `None` returns the full cascade.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -407,6 +432,7 @@ pub struct ResolveParams {
 
 /// Result for the `resolve` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResolveResult {
     /// Resolved context content.
     pub content: String,
@@ -420,6 +446,7 @@ pub struct ResolveResult {
 
 /// Params for the `search` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SearchParams {
     /// Natural language query string.
     pub query: String,
@@ -443,6 +470,7 @@ pub struct SearchHit {
 
 /// Result for the `search` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SearchResult {
     /// Ranked search hits, best match first.
     pub hits: Vec<SearchHit>,
@@ -452,10 +480,12 @@ pub struct SearchResult {
 
 /// Params for the `status` method (no fields).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StatusParams {}
 
 /// Result for the `status` method.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StatusResult {
     /// OS process id of the running daemon.
     pub pid: u32,
@@ -470,6 +500,107 @@ pub struct StatusResult {
     /// TCP IPC port if enabled (feature: tcp-ipc). Added schema v1.1 — safe additive.
     #[serde(default)]
     pub tcp_port: Option<u16>,
+}
+
+// ── Schema-validating deserialization (T-P2-E07-11) ────────────────────────────
+
+/// Deserialize a length-prefixed JSON IPC `Request<P>` body, mapping serde
+/// schema violations onto structured [`crate::error::IpcError`] variants.
+///
+/// Purpose: every IPC message type carries `#[serde(deny_unknown_fields)]`, so an
+///   unexpected key or a missing required field fails deserialization. This wrapper
+///   translates the opaque serde error text into an actionable [`crate::error::IpcError`]
+///   the daemon can return to the client as a structured JSON-RPC error.
+/// Inputs: raw JSON bytes of a single request frame.
+/// Outputs: `Ok(Request<P>)`, or `IpcError::UnknownField` / `IpcError::MissingField`
+///   on schema violation, or a generic `IpcError::MalformedFrame` otherwise.
+/// Constraints: pure; does no I/O. The `unknown field` / `missing field` substrings
+///   are part of serde's stable human-readable error format.
+pub fn deserialize_request<P>(bytes: &[u8]) -> Result<Request<P>, crate::error::IpcError>
+where
+    P: serde::de::DeserializeOwned,
+{
+    serde_json::from_slice::<Request<P>>(bytes).map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("unknown field") {
+            crate::error::IpcError::UnknownField(msg)
+        } else if msg.contains("missing field") {
+            crate::error::IpcError::MissingField(msg)
+        } else {
+            crate::error::IpcError::MalformedFrame(msg)
+        }
+    })
+}
+
+// ── Field-value bounds validation (T-P2-E07-12) ─────────────────────────────────
+
+/// Maximum accepted length of a search query string, in characters.
+pub const MAX_QUERY_LEN: usize = 2048;
+
+/// Maximum accepted length of a memory-write content payload, in bytes.
+pub const MAX_CONTENT_LEN: usize = 524_288; // 512 KiB
+
+/// The canonical cascade tier names, mirroring [`crate::cascade_tier::CascadeTier`]'s
+/// `#[serde(rename_all = "lowercase")]` serialization. A `ResolveParams.tier` value
+/// outside this set is rejected.
+pub const VALID_TIERS: &[&str] = &["gci", "pci", "apc", "ppc", "prc", "pac"];
+
+/// Reject a relative path that contains a `..` traversal component or a null byte.
+///
+/// cascade-types cannot depend on cascade-core (that would form a dependency cycle:
+/// cascade-core already depends on cascade-types), so the traversal guard is
+/// inlined here rather than calling `cascade_core::security::validate_cascade_path`.
+/// The check is intentionally identical in spirit: reject `..` and `\0`.
+fn path_field_is_safe(value: &str) -> bool {
+    if value.contains('\0') {
+        return false;
+    }
+    !std::path::Path::new(value)
+        .components()
+        .any(|c| c == std::path::Component::ParentDir)
+}
+
+/// Validate a [`SearchParams`]: the query must not exceed [`MAX_QUERY_LEN`].
+pub fn validate_search_params(p: &SearchParams) -> Result<(), crate::error::IpcError> {
+    if p.query.chars().count() > MAX_QUERY_LEN {
+        return Err(crate::error::IpcError::InvalidFieldValue {
+            field: "query".to_string(),
+            reason: format!("exceeds {MAX_QUERY_LEN} character cap"),
+        });
+    }
+    Ok(())
+}
+
+/// Validate a [`MemoryWriteParams`]: `content` must not exceed [`MAX_CONTENT_LEN`]
+/// bytes, and `project` must not contain a path traversal.
+pub fn validate_memory_write_params(p: &MemoryWriteParams) -> Result<(), crate::error::IpcError> {
+    if p.content.len() > MAX_CONTENT_LEN {
+        return Err(crate::error::IpcError::InvalidFieldValue {
+            field: "content".to_string(),
+            reason: format!("exceeds {MAX_CONTENT_LEN} byte cap"),
+        });
+    }
+    if !path_field_is_safe(&p.project) {
+        return Err(crate::error::IpcError::InvalidFieldValue {
+            field: "project_path".to_string(),
+            reason: "path traversal".to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Validate a [`ResolveParams`]: when `tier` is present it must be one of
+/// [`VALID_TIERS`].
+pub fn validate_resolve_params(p: &ResolveParams) -> Result<(), crate::error::IpcError> {
+    if let Some(tier) = &p.tier {
+        if !VALID_TIERS.contains(&tier.as_str()) {
+            return Err(crate::error::IpcError::InvalidFieldValue {
+                field: "tier".to_string(),
+                reason: format!("`{tier}` is not one of {VALID_TIERS:?}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -799,5 +930,111 @@ mod tests {
         assert_eq!(DAEMON_NOT_RUNNING, -32001);
         assert_eq!(AUTH_FAILED, -32002);
         assert_eq!(RESOURCE_NOT_FOUND, -32003);
+    }
+
+    // ── Schema validation (T-P2-E07-11) ────────────────────────────────────
+
+    #[test]
+    fn deserialize_request_rejects_unknown_field() {
+        // PingParams has #[serde(deny_unknown_fields)]; an extra key must fail.
+        let body = br#"{"jsonrpc":"2.0","id":1,"method":"ping","protocol_version":1,"params":{"echo":"hi","bogus":true}}"#;
+        let err = deserialize_request::<PingParams>(body).unwrap_err();
+        assert!(
+            matches!(err, crate::error::IpcError::UnknownField(_)),
+            "expected UnknownField, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn deserialize_request_rejects_missing_field() {
+        // Request<P> requires `method`; omit it to force a missing-field error.
+        let body = br#"{"jsonrpc":"2.0","id":1,"protocol_version":1,"params":{"echo":"hi"}}"#;
+        let err = deserialize_request::<PingParams>(body).unwrap_err();
+        assert!(
+            matches!(err, crate::error::IpcError::MissingField(_)),
+            "expected MissingField, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn deserialize_request_accepts_valid() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"method":"ping","protocol_version":1,"params":{"echo":"hi"}}"#;
+        let req = deserialize_request::<PingParams>(body).expect("valid request must deserialize");
+        assert_eq!(req.method, "ping");
+    }
+
+    // ── Field-value bounds (T-P2-E07-12) ───────────────────────────────────
+
+    #[test]
+    fn validate_resolve_params_rejects_unknown_tier() {
+        let p = ResolveParams {
+            tier: Some("evil".to_string()),
+            format: None,
+        };
+        match validate_resolve_params(&p) {
+            Err(crate::error::IpcError::InvalidFieldValue { field, .. }) => {
+                assert_eq!(field, "tier");
+            }
+            other => panic!("expected InvalidFieldValue{{tier}}, got {other:?}"),
+        }
+        // A valid tier passes.
+        let ok = ResolveParams {
+            tier: Some("gci".to_string()),
+            format: None,
+        };
+        assert!(validate_resolve_params(&ok).is_ok());
+    }
+
+    #[test]
+    fn validate_search_params_rejects_oversized_query() {
+        let p = SearchParams {
+            query: "x".repeat(MAX_QUERY_LEN + 1),
+            limit: None,
+        };
+        match validate_search_params(&p) {
+            Err(crate::error::IpcError::InvalidFieldValue { field, .. }) => {
+                assert_eq!(field, "query");
+            }
+            other => panic!("expected InvalidFieldValue{{query}}, got {other:?}"),
+        }
+        // Exactly at the cap is allowed.
+        let ok = SearchParams {
+            query: "x".repeat(MAX_QUERY_LEN),
+            limit: None,
+        };
+        assert!(validate_search_params(&ok).is_ok());
+    }
+
+    #[test]
+    fn validate_memory_write_params_rejects_traversal_and_oversize() {
+        let traversal = MemoryWriteParams {
+            project: "../../etc".to_string(),
+            file: "lessons.md".to_string(),
+            content: "ok".to_string(),
+        };
+        match validate_memory_write_params(&traversal) {
+            Err(crate::error::IpcError::InvalidFieldValue { field, .. }) => {
+                assert_eq!(field, "project_path");
+            }
+            other => panic!("expected InvalidFieldValue{{project_path}}, got {other:?}"),
+        }
+        let oversize = MemoryWriteParams {
+            project: "myproj".to_string(),
+            file: "lessons.md".to_string(),
+            content: "x".repeat(MAX_CONTENT_LEN + 1),
+        };
+        match validate_memory_write_params(&oversize) {
+            Err(crate::error::IpcError::InvalidFieldValue { field, .. }) => {
+                assert_eq!(field, "content");
+            }
+            other => panic!("expected InvalidFieldValue{{content}}, got {other:?}"),
+        }
+        // A clean payload passes.
+        let ok = MemoryWriteParams {
+            project: "myproj".to_string(),
+            file: "lessons.md".to_string(),
+            content: "hello".to_string(),
+        };
+        assert!(validate_memory_write_params(&ok).is_ok());
     }
 }

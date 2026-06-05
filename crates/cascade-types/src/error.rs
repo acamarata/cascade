@@ -140,6 +140,51 @@ pub enum CascadeError {
 /// Convenience alias used throughout the crate.
 pub type Result<T> = std::result::Result<T, CascadeError>;
 
+// ── IPC-layer validation errors ───────────────────────────────────────────
+
+/// IPC-layer schema and validation errors.
+///
+/// Returned by the deserialization wrapper and field-value bounds validator
+/// in `cascade-daemon::ipc` *before* a request reaches the dispatch layer.
+/// Kept separate from [`CascadeError`] so callers can pattern-match at a fine
+/// grain without dragging in unrelated I/O or RAG error arms.
+///
+/// # Variants
+/// | Variant | JSON-RPC code | When produced |
+/// |---|---|---|
+/// | `UnknownField` | -32600 | Incoming JSON contains a key absent from the schema |
+/// | `MissingField` | -32600 | A required JSON field is absent |
+/// | `InvalidFieldValue` | -32602 | A field value is outside its permitted range or domain |
+#[derive(Debug, Error)]
+pub enum IpcError {
+    /// The incoming JSON contained a field name not defined in the schema.
+    ///
+    /// # Example
+    /// `{"method":"ping","extra":"oops"}` → `UnknownField("extra")`
+    #[error("unknown field: {0}")]
+    UnknownField(String),
+
+    /// A required field was absent from the incoming JSON.
+    ///
+    /// # Example
+    /// `{"method":"hotword_lookup"}` (missing `word`) → `MissingField("word")`
+    #[error("missing field: {0}")]
+    MissingField(String),
+
+    /// A field value is outside its permitted range or domain.
+    ///
+    /// # Example
+    /// `tier = "invalid"` → `InvalidFieldValue { field: "tier", reason: "..." }`
+    #[error("invalid value for field `{field}`: {reason}")]
+    InvalidFieldValue { field: String, reason: String },
+
+    /// The incoming bytes were not valid JSON, or did not match the request
+    /// envelope shape in a way that is neither a clear unknown nor missing field
+    /// (e.g. a type mismatch or truncated frame).
+    #[error("malformed IPC frame: {0}")]
+    MalformedFrame(String),
+}
+
 impl CascadeError {
     /// Construct an [`Io`](CascadeError::Io) error with context.
     ///

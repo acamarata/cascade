@@ -99,13 +99,13 @@ impl Resolver {
             return Err(CascadeError::Io {
                 path: cwd.to_path_buf(),
                 operation: "validate cwd null byte",
-                source: std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "null byte in path",
-                ),
+                source: std::io::Error::new(std::io::ErrorKind::InvalidInput, "null byte in path"),
             });
         }
-        if cwd.components().any(|c| c == std::path::Component::ParentDir) {
+        if cwd
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
             tracing::warn!(
                 path = %cwd.display(),
                 "path traversal in cwd — aborting resolve"
@@ -143,7 +143,8 @@ impl Resolver {
             // traversal/null bytes before we resolve them. Absolute targets are
             // filesystem-absolute and pass through unchanged. STRIDE: Tampering.
             let resolved_path = if cascade_file.is_symlink() {
-                let target = std::fs::read_link(&cascade_file).unwrap_or_else(|_| cascade_file.clone());
+                let target =
+                    std::fs::read_link(&cascade_file).unwrap_or_else(|_| cascade_file.clone());
                 if target.is_relative() {
                     if let Err(e) = validate_cascade_path(&target) {
                         tracing::warn!(

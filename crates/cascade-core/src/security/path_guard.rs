@@ -91,7 +91,10 @@ mod tests {
     #[test]
     fn rejects_absolute_path() {
         let path = Path::new("/absolute/path");
-        assert_eq!(validate_cascade_path(path), Err(SecurityError::AbsolutePath));
+        assert_eq!(
+            validate_cascade_path(path),
+            Err(SecurityError::AbsolutePath)
+        );
     }
 
     #[test]

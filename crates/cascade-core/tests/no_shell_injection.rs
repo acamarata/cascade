@@ -47,21 +47,26 @@ fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// Strip the contents of `tests/` files from the scan: this guard test itself
 /// names the forbidden patterns in comments/strings and would self-trip.
 fn is_test_support_file(path: &Path) -> bool {
-    path.components()
-        .any(|c| c.as_os_str() == "tests")
+    path.components().any(|c| c.as_os_str() == "tests")
 }
 
 #[test]
 fn no_shell_string_injection_in_workspace() {
     let root = workspace_root();
     let mut files = Vec::new();
-    for crate_dir in fs::read_dir(root.join("crates")).expect("read crates/").flatten() {
+    for crate_dir in fs::read_dir(root.join("crates"))
+        .expect("read crates/")
+        .flatten()
+    {
         let src = crate_dir.path().join("src");
         if src.is_dir() {
             collect_rs_files(&src, &mut files);
         }
     }
-    assert!(!files.is_empty(), "expected to scan at least one source file");
+    assert!(
+        !files.is_empty(),
+        "expected to scan at least one source file"
+    );
 
     let mut violations: Vec<String> = Vec::new();
 

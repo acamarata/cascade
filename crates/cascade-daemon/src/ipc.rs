@@ -36,14 +36,20 @@ const MAX_FRAME_LEN: usize = 1024 * 256; // 256 KiB — prevents runaway allocat
 pub enum Request {
     Health,
     Status,
-    InboxSummary { limit: Option<usize> },
-    HotwordLookup { word: String },
+    InboxSummary {
+        limit: Option<usize>,
+    },
+    HotwordLookup {
+        word: String,
+    },
     ProviderQuota,
     /// Read the persisted quota store (~/.cascade/quota-store.json). Wired per
     /// T-P2-E02-31; handler lives in ipc_handlers::handle_read_quota_store.
     ReadQuotaStore,
     DaemonStop,
-    Ping { echo: Option<String> },
+    Ping {
+        echo: Option<String>,
+    },
 }
 
 /// All IPC response shapes.
