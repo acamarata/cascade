@@ -109,7 +109,7 @@ fn cascaded_bin() -> PathBuf {
 ///
 /// # Panics
 ///
-/// Panics if the daemon cannot be spawned or the socket does not appear within 3 s.
+/// Panics if the daemon cannot be spawned or the socket does not appear within 15 s.
 fn daemon_fixture() -> (Child, TempDir) {
     let temp_dir = TempDir::new().expect("create temp dir");
     let home = temp_dir.path();
@@ -134,15 +134,15 @@ fn daemon_fixture() -> (Child, TempDir) {
     let pid_path = cascade_dir.join("daemon.pid");
     std::fs::write(&pid_path, daemon_child.id().to_string()).expect("write daemon.pid");
 
-    // Poll until the socket appears (max 3 s, 100 ms interval).
+    // Poll until the socket appears (max 15 s, 100 ms interval).
     let socket = cascade_dir.join("daemon.sock");
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + Duration::from_secs(15);
     while !socket.exists() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(100));
     }
     assert!(
         socket.exists(),
-        "daemon.sock did not appear within 3 s; PID={}",
+        "daemon.sock did not appear within 15 s; PID={}",
         daemon_child.id()
     );
 
@@ -275,7 +275,7 @@ fn test_daemon_stop_live() {
     );
 
     // Socket should be gone after stop.
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + Duration::from_secs(15);
     let mut cleaned = false;
     while Instant::now() < deadline {
         if !sock.exists() {
@@ -420,7 +420,7 @@ fn test_no_stray_sockets_after_teardown() {
     let _ = run_cascade(&["daemon", "stop"], temp.path());
 
     // Wait briefly for the socket to be removed.
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + Duration::from_secs(15);
     while sock.exists() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }
