@@ -9,12 +9,27 @@
 //!   Response — JSON object with `result` (success) or `error` (failure)
 //!   Framing  — length-prefixed: 4-byte LE u32 length followed by UTF-8 JSON
 //!
+//! ## Dispatch routing (ADR-P3-001)
+//!
+//! Two-path routing keeps the frozen legacy enum working while enabling
+//! the typed JSON-RPC scaffold for future methods (E-07+):
+//!
+//!   1. **Legacy path** — `serde_json::from_slice::<Request>(&body)` handles
+//!      the 8 frozen P2 methods. If it succeeds, dispatch proceeds unchanged.
+//!   2. **Typed scaffold** — on legacy-parse failure, `try_typed_dispatch` is
+//!      called. It validates the JSON-RPC envelope via
+//!      `cascade_types::ipc::deserialize_request`, checks `protocol_version`,
+//!      and returns `METHOD_NOT_FOUND` for any method not yet implemented.
+//!      Future epics (E-07 settings, etc.) add handlers here without touching
+//!      the frozen `Request` enum.
+//!
 //! IPC schema is FROZEN after S06-FREEZE. Schema changes require a versioning
 //! ticket before any widget (S10-S13) or MCP layer (E7) is updated.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use cascade_types::ipc::{self as typed_ipc, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
@@ -203,17 +218,15 @@ where
             .await
             .map_err(DaemonError::Io)?;
 
-        let request: Request = match serde_json::from_slice(&body) {
-            Ok(r) => r,
-            Err(e) => {
-                debug!(%e, "malformed IPC request");
-                let resp = Response::err(-32700, format!("parse error: {e}"));
-                write_response(&mut writer, &resp).await?;
-                continue;
-            }
+        // Two-path dispatch (ADR-P3-001):
+        // 1. Legacy path — try the frozen 8-method enum first.
+        // 2. Typed scaffold — on legacy-parse failure, validate the JSON-RPC
+        //    envelope via cascade_types and return METHOD_NOT_FOUND (or a
+        //    structured IpcError) until E-07+ handlers are wired.
+        let response = match serde_json::from_slice::<Request>(&body) {
+            Ok(req) => dispatch(&server, req).await,
+            Err(_legacy_err) => try_typed_dispatch(&server, &body),
         };
-
-        let response = dispatch(&server, request).await;
         write_response(&mut writer, &response).await?;
     }
     Ok(())
@@ -269,6 +282,64 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
             // just acknowledge and let the supervisor wind down naturally.
             info!("stop requested via IPC");
             Response::ok(serde_json::json!({ "status": "stopping" }))
+        }
+    }
+}
+
+/// Typed JSON-RPC dispatch scaffold (ADR-P3-001).
+///
+/// Purpose: Validate and route requests that don't match the frozen legacy
+///   `Request` enum. Checks the JSON-RPC envelope for unknown fields and
+///   validates `protocol_version`. Returns `METHOD_NOT_FOUND` for any method
+///   since no typed handlers exist yet (they arrive in E-07+).
+/// Inputs: `server` — IPC server handle; `body` — raw UTF-8 JSON frame bytes
+/// Outputs: `Response::Error` with appropriate JSON-RPC error code
+/// Constraints: body must already be bounds-checked (MAX_FRAME_LEN enforced upstream)
+/// SPORT: MASTER-ENDPOINTS.md — IPC routing note updated to "typed JSON-RPC (ADR-P3-001)"
+pub(crate) fn try_typed_dispatch(_server: &IpcServer, body: &[u8]) -> Response {
+    let raw: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(e) => {
+            debug!(%e, "typed dispatch: not valid JSON");
+            return Response::err(-32700, format!("parse error: {e}"));
+        }
+    };
+
+    let version = raw
+        .get("protocol_version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(PROTOCOL_VERSION as u64) as u8;
+    if version != PROTOCOL_VERSION {
+        warn!(got = version, expected = PROTOCOL_VERSION, "protocol_version mismatch");
+        return Response::err(
+            -32600,
+            format!(
+                "protocol_version mismatch: got {version}, expected {PROTOCOL_VERSION}"
+            ),
+        );
+    }
+
+    match typed_ipc::deserialize_request::<serde_json::Value>(body) {
+        Err(e) => {
+            use cascade_types::error::IpcError;
+            debug!(?e, "typed dispatch: envelope error");
+            let (code, msg) = match e {
+                IpcError::UnknownField(m) => (-32600, format!("unknown field: {m}")),
+                IpcError::MissingField(m) => (-32600, format!("missing field: {m}")),
+                IpcError::MalformedFrame(m) => (-32700, format!("malformed frame: {m}")),
+                IpcError::InvalidFieldValue { field, reason } => (
+                    -32602,
+                    format!("invalid field '{field}': {reason}"),
+                ),
+            };
+            Response::err(code, msg)
+        }
+        Ok(typed_req) => {
+            debug!(method = %typed_req.method, "typed dispatch: METHOD_NOT_FOUND (scaffold)");
+            Response::err(
+                -32601,
+                format!("method not found: {}", typed_req.method),
+            )
         }
     }
 }

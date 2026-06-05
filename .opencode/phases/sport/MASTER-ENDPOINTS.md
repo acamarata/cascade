@@ -2,8 +2,26 @@
 
 **Purpose:** Registry of every HTTP API endpoint served by cascade-daemon.
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-05-31
+**Last updated:** 2026-06-05
 **Source:** Cascade P3/P4 plan
+
+## Daemon IPC (Unix socket — `~/.cascade/daemon.sock`)
+
+**IPC routing:** typed JSON-RPC (ADR-P3-001) — two-path dispatch in `handle_connection`:
+legacy 8-method `Request` enum tried first; unknown methods/fields fall through to
+`try_typed_dispatch` which validates via `cascade_types::ipc::deserialize_request`.
+Implemented in `crates/cascade-daemon/src/ipc.rs` (T-P3-E00-01, resolves E07-11/E07-12).
+
+| IPC Method | Description | Status | Phase |
+|---|---|---|---|
+| ping | Liveness check | ✅ Done | P2 |
+| status | Daemon status | ✅ Done | P2 |
+| context-get | Retrieve context entry | ✅ Done | P2 |
+| context-set | Store context entry | ✅ Done | P2 |
+| context-list | List context keys | ✅ Done | P2 |
+| context-delete | Delete context entry | ✅ Done | P2 |
+| subscribe | Subscribe to event bus | ✅ Done | P2 |
+| unsubscribe | Unsubscribe from event bus | ✅ Done | P2 |
 
 | Endpoint | Method | Description | Status | Phase | Creating tickets |
 |---|---|---|---|---|---|

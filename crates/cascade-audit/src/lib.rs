@@ -13,6 +13,22 @@
 //!
 //! Fields are concatenated **without separators** in the order shown.
 //! `prev_hash` of the first record is the 64-char genesis zero string.
+//!
+//! # Crash safety and multi-process concurrency
+//!
+//! `append()` uses a **tmp+rename** pattern for crash atomicity:
+//! 1. Write the complete serialised record to `<log>.tmp`.
+//! 2. `flush()` + `sync_data()` — bytes reach the OS before rename.
+//! 3. Acquire an **advisory exclusive flock** on the `.tmp` file (via `fs2`).
+//! 4. Re-read `last_hash()` from the canonical log path inside the flock.
+//!    If it changed (another writer committed between our read and our lock),
+//!    clean up `.tmp` and return `Err(AuditError::ChainFork)`.
+//! 5. `fs::rename(<log>.tmp, <log>)` — atomic on POSIX same-filesystem.
+//! 6. Flock releases implicitly when the `.tmp` file handle is dropped.
+//! 7. Update the `.count` sidecar **after** the rename.
+//!
+//! On process startup, `open()` removes any stale `.tmp` left by a prior crash
+//! (file older than 30 seconds), logging a `tracing::warn!` for observability.
 
 use std::{
     fmt,
@@ -20,9 +36,11 @@ use std::{
     io::{self, BufRead, BufReader, Write},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 use chrono::Utc;
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -183,6 +201,11 @@ pub enum AuditError {
     /// Returned by verify_chain when ≥1 hash mismatch is detected.
     #[error("Tamper detected: {count} violation(s)")]
     TamperDetected { count: usize },
+    /// A concurrent writer committed a new record between this writer's
+    /// `last_hash()` read and its exclusive flock acquisition, causing a
+    /// chain fork.  The caller should retry.
+    #[error("chain fork detected: concurrent writer committed between hash read and rename")]
+    ChainFork,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -234,16 +257,23 @@ fn compute_hash(
 ///          all detected violations.
 /// Constraints:
 ///   - File permissions are set to 0600 on creation (macOS/Linux).
-///   - `append` uses a write-then-flush strategy with O_APPEND semantics;
-///     concurrent appends from multiple processes are safe at the OS level
-///     because each write is a single `write(2)` syscall on most POSIX systems.
-///     For stronger guarantees, use an advisory flock (fs2 crate — not included
-///     here to keep deps minimal; add it if concurrent daemon writes are needed).
+///   - `append` uses a crash-atomic tmp+rename strategy:
+///       1. Write the new entry to `<log>.tmp` and call `sync_data()`.
+///       2. Acquire an exclusive advisory flock on `<log>.tmp` (fs2).
+///       3. Re-read `last_hash()` inside the flock; return `Err(ChainFork)` if
+///          a concurrent writer committed between the pre-lock read and now.
+///       4. `fs::rename(<log>.tmp, <log>)` — POSIX-atomic on the same filesystem.
+///       5. Release flock (implicit on file drop).
+///          The in-process Mutex in cascade-daemon serialises all daemon writes; the
+///          advisory flock guards against concurrent CLI processes (e.g. `cascade
+///          audit tail`) racing the daemon on the same file.
+///   - On `open`, any `<log>.tmp` file older than 30 seconds is removed with a
+///     `tracing::warn!` (crash-recovery cleanup).
 ///   - Tail truncation (deleting recent records) is detected via a `<log>.count`
-///     sidecar that records the expected number of entries; `verify_chain`
-///     flags a `found < expected` mismatch. A local admin who can edit BOTH the
-///     log and its sidecar can still erase tracks; the chain does not substitute
-///     for a remote append-only store in high-security deployments.
+///     sidecar; the sidecar is updated **after** the rename.  A local admin who
+///     can edit BOTH the log and its sidecar can still erase tracks; the chain
+///     does not substitute for a remote append-only store in high-security
+///     deployments.
 ///
 /// SPORT: MASTER-COMPONENTS.md § cascade-audit / AuditLog
 pub struct AuditLog {
@@ -261,9 +291,12 @@ impl AuditLog {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
         // Set 0600 on creation (no-op if the file already had these perms).
         file.set_permissions(fs::Permissions::from_mode(0o600))?;
-        Ok(Self {
+        let log = Self {
             path: path.to_path_buf(),
-        })
+        };
+        // Remove any stale .tmp left by a prior crashed append.
+        log.cleanup_tmp();
+        Ok(log)
     }
 
     /// Return the path of the underlying log file (useful for tests / diagnostics).
@@ -276,6 +309,49 @@ impl AuditLog {
         let mut p = self.path.clone().into_os_string();
         p.push(".count");
         PathBuf::from(p)
+    }
+
+    /// Path of the crash-recovery tmp file (`<log>.tmp`).
+    fn tmp_path(&self) -> PathBuf {
+        let mut p = self.path.clone().into_os_string();
+        p.push(".tmp");
+        PathBuf::from(p)
+    }
+
+    /// Remove a stale `<log>.tmp` file if it is older than 30 seconds.
+    ///
+    /// Purpose: crash-recovery cleanup called on every `open()`.
+    /// Constraints: 30-second threshold avoids racing a concurrent in-flight
+    ///   append; a fresh `.tmp` (< 30 s old) is left untouched.
+    fn cleanup_tmp(&self) {
+        let tmp = self.tmp_path();
+        if !tmp.exists() {
+            return;
+        }
+        let stale = tmp
+            .metadata()
+            .and_then(|m| m.modified())
+            .map(|modified| {
+                SystemTime::now()
+                    .duration_since(modified)
+                    .map(|d| d.as_secs() > 30)
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        if stale {
+            if let Err(e) = fs::remove_file(&tmp) {
+                tracing::warn!(
+                    error = %e,
+                    path = %tmp.display(),
+                    "failed to remove stale audit tmp file"
+                );
+            } else {
+                tracing::warn!(
+                    path = %tmp.display(),
+                    "stale audit tmp file removed"
+                );
+            }
+        }
     }
 
     /// Count the non-empty records currently in the log file.
@@ -338,14 +414,21 @@ impl AuditLog {
 
     /// Append one entry to the audit log.
     ///
-    /// Purpose: atomic-append a new tamper-evident record to the JSONL file.
+    /// Purpose: crash-atomic, concurrency-safe tamper-evident append.
     /// Inputs:  `entry` — caller-supplied AuditEntry (actor, op, target, detail).
     /// Outputs: the written AuditRecord (including the computed hash).
     /// Constraints:
     ///   - Timestamp is assigned as Utc::now() inside this call.
-    ///   - Each JSON line is terminated with `\n` and does not contain embedded newlines.
-    ///   - File is opened with O_APPEND; the OS provides atomicity for writes ≤ PIPE_BUF.
+    ///   - Uses tmp+rename: writes to `<log>.tmp`, syncs, acquires exclusive
+    ///     advisory flock (fs2), re-reads `last_hash()` inside the flock to detect
+    ///     chain forks, then renames atomically to the canonical path.
+    ///   - Returns `Err(AuditError::ChainFork)` if a concurrent writer committed
+    ///     between the pre-lock hash read and flock acquisition; the caller should
+    ///     retry (the in-process Mutex in cascade-daemon prevents this in the
+    ///     single-daemon case; the flock guards the multi-process CLI case).
+    ///   - Count sidecar is updated AFTER the rename.
     pub fn append(&self, entry: AuditEntry) -> Result<AuditRecord, AuditError> {
+        // Pre-lock snapshot of the chain tip.
         let prev_hash = self.last_hash()?;
         let ts = Utc::now().to_rfc3339();
         let op_str = entry.op.to_string();
@@ -364,20 +447,53 @@ impl AuditLog {
             actor: entry.actor,
             target: entry.target,
             detail: entry.detail,
-            prev_hash,
+            prev_hash: prev_hash.clone(),
             hash,
         };
 
         let mut line = serde_json::to_string(&record).map_err(AuditError::Serialization)?;
         line.push('\n');
 
-        let mut file = OpenOptions::new().append(true).open(&self.path)?;
-        file.write_all(line.as_bytes())?;
-        file.flush()?;
+        let tmp = self.tmp_path();
 
-        // Update the anti-rollback count sidecar. Non-fatal: a failure here means
-        // verify_chain loses truncation detection for the newest record, but the
-        // record itself is durably written, so we warn rather than fail the append.
+        {
+            // 1. Write entry to <log>.tmp and sync to OS.
+            //    Must copy existing canonical log content first so that rename
+            //    atomically replaces the log with (all prior records + new record),
+            //    rather than replacing the entire log with only the new record.
+            let mut tmp_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&tmp)?;
+            if self.path.exists() {
+                let existing = fs::read(&self.path)?;
+                tmp_file.write_all(&existing)?;
+            }
+            tmp_file.write_all(line.as_bytes())?;
+            tmp_file.flush()?;
+            tmp_file.sync_data()?;
+
+            // 2. Acquire exclusive advisory flock.
+            tmp_file.lock_exclusive()?;
+
+            // 3. Re-read last_hash inside flock — detect chain fork.
+            let current_hash = self.last_hash()?;
+            if current_hash != prev_hash {
+                // A concurrent writer committed; clean up and signal the caller.
+                let _ = fs::remove_file(&tmp);
+                return Err(AuditError::ChainFork);
+            }
+
+            // 4. Atomic rename: <log>.tmp -> canonical log path.
+            //    POSIX guarantees this is atomic when src and dst are on the same
+            //    filesystem — always true here because tmp is derived from log path.
+            fs::rename(&tmp, &self.path)?;
+
+            // 5. Flock releases implicitly when tmp_file is dropped here.
+        }
+
+        // 6. Update the anti-rollback count sidecar AFTER the rename.
         if let Err(e) = self.write_count_sidecar() {
             tracing::warn!(%e, "failed to update audit count sidecar");
         }
