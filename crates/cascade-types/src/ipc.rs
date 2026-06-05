@@ -303,6 +303,7 @@ pub struct InboxSummaryParams {
 
 /// A single inbox item in the summary list.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InboxItem {
     /// Unique message id (filename slug or UUID).
     pub id: String,
@@ -398,6 +399,7 @@ pub struct ProviderQuotaParams {}
 
 /// A single AI provider quota entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProviderEntry {
     /// Provider name, e.g. `"anthropic"`, `"openai"`, `"gemini"`.
     pub name: String,
@@ -457,6 +459,7 @@ pub struct SearchParams {
 
 /// A single search result hit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SearchHit {
     /// Unique chunk or document id.
     pub id: String,

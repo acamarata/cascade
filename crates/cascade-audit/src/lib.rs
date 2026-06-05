@@ -206,7 +206,11 @@ fn compute_hash(
     target: &str,
     detail: &str,
 ) -> String {
-    let input = format!("{prev_hash}{ts}{op}{actor}{target}{detail}");
+    // Fields are joined with the ASCII Unit Separator (0x1F) so that variable
+    // field boundaries cannot collide: without a delimiter, (actor="ab",
+    // target="c") and (actor="a", target="bc") would hash identically. 0x1F
+    // never appears in RFC-3339 timestamps, hashes, or normal text fields.
+    let input = format!("{prev_hash}\u{1f}{ts}\u{1f}{op}\u{1f}{actor}\u{1f}{target}\u{1f}{detail}");
     let digest = Sha256::digest(input.as_bytes());
     // Format each byte as two lowercase hex digits without an external hex crate.
     digest.iter().fold(String::with_capacity(64), |mut s, b| {
@@ -235,7 +239,10 @@ fn compute_hash(
 ///     because each write is a single `write(2)` syscall on most POSIX systems.
 ///     For stronger guarantees, use an advisory flock (fs2 crate — not included
 ///     here to keep deps minimal; add it if concurrent daemon writes are needed).
-///   - A local admin can still truncate the file; the chain does not substitute
+///   - Tail truncation (deleting recent records) is detected via a `<log>.count`
+///     sidecar that records the expected number of entries; `verify_chain`
+///     flags a `found < expected` mismatch. A local admin who can edit BOTH the
+///     log and its sidecar can still erase tracks; the chain does not substitute
 ///     for a remote append-only store in high-security deployments.
 ///
 /// SPORT: MASTER-COMPONENTS.md § cascade-audit / AuditLog
@@ -262,6 +269,47 @@ impl AuditLog {
     /// Return the path of the underlying log file (useful for tests / diagnostics).
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Path of the tamper-evidence count sidecar (`<log>.count`).
+    fn count_path(&self) -> PathBuf {
+        let mut p = self.path.clone().into_os_string();
+        p.push(".count");
+        PathBuf::from(p)
+    }
+
+    /// Count the non-empty records currently in the log file.
+    fn count_records(&self) -> Result<usize, AuditError> {
+        let file = File::open(&self.path)?;
+        let reader = BufReader::new(file);
+        let mut n = 0usize;
+        for line in reader.lines() {
+            if !line?.trim().is_empty() {
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
+    /// Persist the current record count to the `<log>.count` sidecar (0600).
+    ///
+    /// The hash chain detects mutation of existing records but NOT truncation of
+    /// the tail — deleting recent records leaves a still-internally-consistent
+    /// chain. Persisting the expected count lets [`verify_chain`](Self::verify_chain)
+    /// detect such truncation (anti-rollback).
+    fn write_count_sidecar(&self) -> Result<(), AuditError> {
+        let n = self.count_records()?;
+        let cp = self.count_path();
+        fs::write(&cp, n.to_string())?;
+        let _ = fs::set_permissions(&cp, fs::Permissions::from_mode(0o600));
+        Ok(())
+    }
+
+    /// Read the expected record count from the sidecar, if present and parseable.
+    fn expected_count(&self) -> Option<usize> {
+        fs::read_to_string(self.count_path())
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
     }
 
     /// Read the hash of the last record, or GENESIS_HASH if the file is empty.
@@ -327,6 +375,13 @@ impl AuditLog {
         file.write_all(line.as_bytes())?;
         file.flush()?;
 
+        // Update the anti-rollback count sidecar. Non-fatal: a failure here means
+        // verify_chain loses truncation detection for the newest record, but the
+        // record itself is durably written, so we warn rather than fail the append.
+        if let Err(e) = self.write_count_sidecar() {
+            tracing::warn!(%e, "failed to update audit count sidecar");
+        }
+
         tracing::debug!(
             op = %record.op,
             actor = %record.actor,
@@ -354,12 +409,14 @@ impl AuditLog {
         let reader = BufReader::new(file);
         let mut violations = Vec::new();
         let mut prev_computed_hash = GENESIS_HASH.to_string();
+        let mut record_count = 0usize;
 
         for (idx, line_result) in reader.lines().enumerate() {
             let line = line_result?;
             if line.trim().is_empty() {
                 continue;
             }
+            record_count += 1;
             let record: AuditRecord =
                 serde_json::from_str(&line).map_err(|e| AuditError::Deserialization {
                     line: idx,
@@ -404,6 +461,24 @@ impl AuditLog {
             }
         }
 
+        // Anti-rollback / truncation detection. The hash chain alone cannot
+        // detect removal of the tail (the remaining prefix is still internally
+        // consistent). If the count sidecar records MORE entries than are present,
+        // records were deleted — report it. (An empty/missing log against a
+        // sidecar count > 0 surfaces here as `found 0`.)
+        if let Some(expected) = self.expected_count() {
+            if record_count < expected {
+                violations.push(ChainViolation {
+                    line: record_count,
+                    stored_hash: String::new(),
+                    recomputed_hash: String::new(),
+                    reason: format!(
+                        "audit log truncated: expected {expected} records, found {record_count}"
+                    ),
+                });
+            }
+        }
+
         Ok(violations)
     }
 }
@@ -438,6 +513,33 @@ mod tests {
         let log = open_log(&dir);
         let violations = log.verify_chain().expect("verify_chain on empty log");
         assert!(violations.is_empty(), "empty log should have no violations");
+    }
+
+    #[test]
+    fn tail_truncation_is_detected() {
+        let dir = TempDir::new().unwrap();
+        let log = open_log(&dir);
+        log.append(make_entry(AuditOp::DaemonStart)).unwrap();
+        log.append(make_entry(AuditOp::GciWrite)).unwrap();
+        log.append(make_entry(AuditOp::DaemonStop)).unwrap();
+        // Intact chain (3 records, sidecar=3) verifies clean.
+        assert!(log.verify_chain().unwrap().is_empty());
+
+        // Attacker erases the last record from the log but cannot fix the count
+        // sidecar (=3). verify_chain must flag the rollback.
+        let content = std::fs::read_to_string(log.path()).unwrap();
+        let kept: Vec<&str> = content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .take(2)
+            .collect();
+        std::fs::write(log.path(), kept.join("\n") + "\n").unwrap();
+
+        let violations = log.verify_chain().expect("verify_chain should not error");
+        assert!(
+            violations.iter().any(|v| v.reason.contains("truncated")),
+            "tail truncation must be detected; got {violations:?}"
+        );
     }
 
     #[test]

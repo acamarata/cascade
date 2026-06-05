@@ -147,8 +147,15 @@ fn migrate(kc: &dyn Keychain, vault_path: &Path, dry_run: bool) -> Result<usize>
         let tmp = vault_path.with_extension("env.tmp");
         fs::write(&tmp, new_content)
             .map_err(|e| CascadeError::io(tmp.clone(), "write vault.env.tmp", e))?;
-        fs::rename(&tmp, vault_path)
-            .map_err(|e| CascadeError::io(vault_path.to_path_buf(), "replace vault.env", e))?;
+        if let Err(e) = fs::rename(&tmp, vault_path) {
+            // Don't leave the partial .tmp behind on a failed rename.
+            let _ = fs::remove_file(&tmp);
+            return Err(CascadeError::io(
+                vault_path.to_path_buf(),
+                "replace vault.env",
+                e,
+            ));
+        }
     }
 
     println!(

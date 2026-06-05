@@ -137,38 +137,42 @@ impl Resolver {
                 .join(cascade_types::paths::CASCADE_DIR_NAME)
                 .join(cascade_types::paths::CASCADE_MD_NAME);
 
-            // Follow symlinks: CLAUDE.md / AGENTS.md may point here.
-            // A symlink target may be a relative path (e.g. `../../etc/passwd`);
-            // such targets are user-influenced and must be guarded against
-            // traversal/null bytes before we resolve them. Absolute targets are
-            // filesystem-absolute and pass through unchanged. STRIDE: Tampering.
+            // Follow symlinks: CLAUDE.md / AGENTS.md may point here. The only
+            // legitimate pattern is a RELATIVE sibling link (e.g. CLAUDE.md ->
+            // CASCADE.md in the same `.cascade/` dir). A symlink target is
+            // attacker-influenced if an adversary controls a `.cascade/` dir in
+            // the cwd ancestry, so:
+            //   - absolute targets are rejected outright (an absolute link could
+            //     point anywhere, e.g. `/etc/passwd`, and its contents would be
+            //     read as instruction text) — the tier is skipped, not read;
+            //   - relative targets are guarded against `..` traversal / null
+            //     bytes before being resolved against the link's directory.
+            // STRIDE: Tampering / Information disclosure.
             let resolved_path = if cascade_file.is_symlink() {
                 let target =
                     std::fs::read_link(&cascade_file).unwrap_or_else(|_| cascade_file.clone());
-                if target.is_relative() {
-                    if let Err(e) = validate_cascade_path(&target) {
-                        tracing::warn!(
-                            path = %target.display(),
-                            error = %e,
-                            "rejected unsafe relative symlink target"
-                        );
-                        return Err(CascadeError::Io {
-                            path: target.clone(),
-                            operation: "validate symlink target",
-                            source: std::io::Error::new(
-                                std::io::ErrorKind::InvalidInput,
-                                e.to_string(),
-                            ),
-                        });
-                    }
-                    // Resolve the validated relative target against the link's directory.
-                    cascade_file
-                        .parent()
-                        .map(|dir| dir.join(&target))
-                        .unwrap_or(target)
-                } else {
-                    target
+                if target.is_absolute() {
+                    tracing::warn!(
+                        path = %target.display(),
+                        "rejected absolute symlink target for CASCADE.md; skipping tier"
+                    );
+                    missing_tiers.push(tier);
+                    continue;
                 }
+                if let Err(e) = validate_cascade_path(&target) {
+                    tracing::warn!(
+                        path = %target.display(),
+                        error = %e,
+                        "rejected unsafe relative symlink target; skipping tier"
+                    );
+                    missing_tiers.push(tier);
+                    continue;
+                }
+                // Resolve the validated relative target against the link's directory.
+                cascade_file
+                    .parent()
+                    .map(|dir| dir.join(&target))
+                    .unwrap_or(target)
             } else {
                 cascade_file.clone()
             };
