@@ -335,6 +335,62 @@ pub(crate) fn try_typed_dispatch(_server: &IpcServer, body: &[u8]) -> Response {
             Response::err(code, msg)
         }
         Ok(typed_req) => {
+            // Audit hook — fires for all five privileged typed methods before their
+            // implementations land (E-07+).  The hook records a dispatch attempt so
+            // the audit trail captures the actor and target even while the method
+            // still returns METHOD_NOT_FOUND.  Write-then-audit ordering is N/A here
+            // (no operation succeeds yet); the hook records the *attempt*.
+            //
+            // When a real handler is added for one of these methods in a future ticket,
+            // move the audit::record() call to AFTER the operation succeeds (write-then-
+            // audit) and remove the hook entry below for that method.
+            //
+            // SPORT: MASTER-ENDPOINTS.md — audit=hook annotation for these five methods.
+            // Resolves P2 residue E07-17 (hook wired; full instrumentation in E-07+).
+            use cascade_audit::AuditOp;
+            match typed_req.method.as_str() {
+                "gci_write" => {
+                    crate::audit::record(
+                        AuditOp::GciWrite,
+                        "cascaded",
+                        &typed_req.method,
+                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    );
+                }
+                "symlink_create" => {
+                    crate::audit::record(
+                        AuditOp::SymlinkCreate,
+                        "cascaded",
+                        &typed_req.method,
+                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    );
+                }
+                "symlink_delete" => {
+                    crate::audit::record(
+                        AuditOp::SymlinkDelete,
+                        "cascaded",
+                        &typed_req.method,
+                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    );
+                }
+                "cascade_resolve" => {
+                    crate::audit::record(
+                        AuditOp::CascadeResolve,
+                        "cascaded",
+                        &typed_req.method,
+                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    );
+                }
+                "key_rotation" => {
+                    crate::audit::record(
+                        AuditOp::KeyRotation,
+                        "cascaded",
+                        &typed_req.method,
+                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    );
+                }
+                _ => {}
+            }
             debug!(method = %typed_req.method, "typed dispatch: METHOD_NOT_FOUND (scaffold)");
             Response::err(
                 -32601,

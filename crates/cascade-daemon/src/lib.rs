@@ -10,6 +10,7 @@
 // so -D warnings (clippy gate) focuses on new issues, not scaffolded stubs.
 #![allow(dead_code)]
 
+pub mod audit;
 pub mod config;
 pub mod dashboard;
 pub mod event_bus;

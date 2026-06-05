@@ -35,11 +35,13 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
+
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::config::ProxyConfig;
 use crate::event_bus::SharedBus;
@@ -91,7 +93,18 @@ pub struct ProxyState {
     pub table: Arc<Mutex<RoutingTable>>,
     /// `slot_id → api_key` map rebuilt alongside the routing table.
     /// `account_id` from `ProviderEntry` is treated as the Gemini API key.
+    /// Kept as metadata/fallback per ADR-014. When `keychain_keys` has an entry
+    /// for a slot, it takes precedence as the authoritative secret source.
     pub credentials: Arc<Mutex<HashMap<String, String>>>,
+    /// `slot_id → SecretString` map loaded from the OS keychain at startup.
+    ///
+    /// Purpose: authoritative API-key source when present; falls back to
+    /// `credentials` (providers.json metadata) when absent.
+    /// Inputs: populated by `load_api_keys()` + positional slot mapping at init.
+    /// Outputs: `expose_secret()` called ONLY inside `resolve_api_key()`, never logged.
+    /// Constraints: NEVER log the inner value; NEVER store the exposed `&str`.
+    /// SPORT: proxy credential resolution — T-P3-E00-02.
+    pub keychain_keys: Arc<RwLock<HashMap<String, SecretString>>>,
     /// Proxy configuration (immutable after startup).
     pub config: ProxyConfig,
     /// Upstream base URL (override in tests via `GeminiProxy::with_upstream`).
@@ -130,6 +143,30 @@ pub fn build_routing_state(
     }
 }
 
+// ── Credential resolution ─────────────────────────────────────────────────────
+
+/// Resolve the API key for `slot_id`, preferring the OS-keychain entry when
+/// present and falling back to the providers.json credentials map.
+///
+/// Purpose: single authoritative key-lookup path per ADR-014.
+/// Inputs:  `credentials` — providers.json fallback map (slot_id → plaintext).
+///          `keychain_keys` — SecretString map loaded from OS keychain at startup.
+///          `slot_id` — routing slot identifier.
+/// Outputs: resolved API key as an owned `String` (empty string if not found).
+/// Constraints: `expose_secret()` is called ONLY here; the `&str` is never stored
+///              outside this function nor logged at any level.
+/// SPORT: proxy credential resolution — T-P3-E00-02.
+pub(crate) fn resolve_api_key(
+    credentials: &HashMap<String, String>,
+    keychain_keys: &HashMap<String, SecretString>,
+    slot_id: &str,
+) -> String {
+    if let Some(secret) = keychain_keys.get(slot_id) {
+        return secret.expose_secret().to_owned();
+    }
+    credentials.get(slot_id).cloned().unwrap_or_default()
+}
+
 // ── Proxy struct ──────────────────────────────────────────────────────────────
 
 /// Gemini proxy server — listens on `bind_addr`, routes requests via
@@ -159,12 +196,14 @@ impl GeminiProxy {
         bus: SharedBus,
         bind_addr: SocketAddr,
         shutdown: CancellationToken,
+        keychain_keys: HashMap<String, SecretString>,
     ) -> Self {
         let (table, creds) = build_routing_state(&providers_path);
         let upstream_base = Arc::new(GEMINI_UPSTREAM_BASE.to_string());
         let state = ProxyState {
             table: Arc::new(Mutex::new(table)),
             credentials: Arc::new(Mutex::new(creds)),
+            keychain_keys: Arc::new(RwLock::new(keychain_keys)),
             config,
             upstream_base,
         };
@@ -535,10 +574,12 @@ pub async fn dispatch_request(
             }
         };
 
-        // Look up API key from credentials map — release Mutex before await.
+        // Look up API key: prefer OS keychain, fall back to providers.json.
+        // Both guards are released before the .await below.
         let api_key = {
-            let guard = state.credentials.lock().unwrap();
-            guard.get(&slot.slot_id).cloned().unwrap_or_default()
+            let creds_guard = state.credentials.lock().unwrap();
+            let kc_guard = state.keychain_keys.read().unwrap();
+            resolve_api_key(&creds_guard, &kc_guard, &slot.slot_id)
         };
 
         // Build the upstream URL: strip any existing `key=` param and append ours.
@@ -918,6 +959,7 @@ mod tests {
         ProxyState {
             table: Arc::new(Mutex::new(table)),
             credentials: Arc::new(Mutex::new(creds)),
+            keychain_keys: Arc::new(RwLock::new(HashMap::new())),
             config,
             upstream_base: Arc::new(upstream_base.to_string()),
         }
@@ -1170,6 +1212,7 @@ mod tests {
         let state = ProxyState {
             table: Arc::new(Mutex::new(initial_table)),
             credentials: Arc::new(Mutex::new(initial_creds)),
+            keychain_keys: Arc::new(RwLock::new(HashMap::new())),
             config: ProxyConfig::default(),
             upstream_base: Arc::new("http://unused".to_string()),
         };
@@ -1315,5 +1358,39 @@ mod tests {
             content_length > MAX_REQUEST_BODY_SIZE,
             "body size exceeds limit"
         );
+    }
+
+    // ── T-P3-E00-02: resolve_api_key unit tests ───────────────────────────────
+
+    #[test]
+    fn resolve_prefers_keychain_over_providers_json() {
+        let mut creds = HashMap::new();
+        creds.insert("slot-1".to_string(), "providers-key".to_string());
+
+        let mut kc: HashMap<String, SecretString> = HashMap::new();
+        kc.insert("slot-1".to_string(), SecretString::new("keychain-key".into()));
+
+        let result = resolve_api_key(&creds, &kc, "slot-1");
+        assert_eq!(result, "keychain-key", "keychain must take precedence");
+    }
+
+    #[test]
+    fn resolve_falls_back_to_providers_json_when_no_keychain_entry() {
+        let mut creds = HashMap::new();
+        creds.insert("slot-2".to_string(), "providers-fallback".to_string());
+
+        let kc: HashMap<String, SecretString> = HashMap::new();
+
+        let result = resolve_api_key(&creds, &kc, "slot-2");
+        assert_eq!(result, "providers-fallback", "must fall back to providers.json");
+    }
+
+    #[test]
+    fn resolve_returns_empty_when_neither_source_has_slot() {
+        let creds: HashMap<String, String> = HashMap::new();
+        let kc: HashMap<String, SecretString> = HashMap::new();
+
+        let result = resolve_api_key(&creds, &kc, "missing-slot");
+        assert_eq!(result, "", "unknown slot must return empty string");
     }
 }

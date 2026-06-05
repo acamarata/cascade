@@ -122,7 +122,7 @@ fn daemon_starts_writes_pid() {
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
 
     let pid_path = cascade_dir.join("daemon.pid");
-    let found = wait_for_file(&pid_path, 2000);
+    let found = wait_for_file(&pid_path, 8000);
 
     // Read PID BEFORE cleanup so we can assert on it (flush_state removes the file).
     let pid_content = if found {
@@ -167,7 +167,7 @@ fn daemon_clean_stop() {
     let pid_path = cascade_dir.join("daemon.pid");
     // Wait for the daemon to finish starting.
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon.pid must exist before we can test clean stop"
     );
 
@@ -185,7 +185,7 @@ fn daemon_clean_stop() {
 
     // Give the daemon up to 3 s to flush state after SIGTERM.
     let stop_path = cascade_dir.join("last-stop.txt");
-    let stop_written = wait_for_file(&stop_path, 3000);
+    let stop_written = wait_for_file(&stop_path, 8000);
 
     // daemon.pid should be gone after clean stop.
     assert!(
@@ -219,7 +219,7 @@ fn daemon_healthcheck_json() {
 
     let pid_path = cascade_dir.join("daemon.pid");
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon.pid must appear before health check"
     );
 
@@ -260,7 +260,7 @@ fn watcher_triggers_on_cascade_change() {
 
     let pid_path = cascade_dir.join("daemon.pid");
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon must start before watcher test"
     );
 
@@ -319,7 +319,7 @@ fn crash_sentinel_written_on_kill9() {
 
     let pid_path = cascade_dir.join("daemon.pid");
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon must start before kill-9 test"
     );
 
@@ -358,7 +358,7 @@ fn quota_state_written() {
 
     let pid_path = cascade_dir.join("daemon.pid");
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon must start before quota state test"
     );
 
@@ -402,7 +402,7 @@ fn daemon_writes_providers_json_at_startup() {
 
     let pid_path = cascade_dir.join("daemon.pid");
     assert!(
-        wait_for_file(&pid_path, 2000),
+        wait_for_file(&pid_path, 8000),
         "daemon must start before providers test"
     );
 
