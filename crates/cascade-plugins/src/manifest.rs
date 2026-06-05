@@ -194,9 +194,21 @@ cascade_version = ">=0.1.0, <0.2.0"
 
     #[test]
     fn missing_schema_version() {
-        let toml = r#"name = "x" version = "1.0.0" description = "x" plugin_type = "chunker" cascade_version = ">=0.1.0""#;
+        // Valid TOML (one key per line) that simply omits `schema_version`, so
+        // parse() reaches the explicit MissingSchemaVersion check rather than
+        // failing earlier with a TomlParse error on malformed syntax.
+        let toml = r#"
+name = "x"
+version = "1.0.0"
+description = "x"
+plugin_type = "chunker"
+cascade_version = ">=0.1.0"
+"#;
         let err = PluginManifest::parse(toml.as_bytes()).unwrap_err();
-        assert!(matches!(err, ManifestError::MissingSchemaVersion));
+        assert!(
+            matches!(err, ManifestError::MissingSchemaVersion),
+            "expected MissingSchemaVersion, got: {err:?}"
+        );
     }
 
     #[test]

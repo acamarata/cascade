@@ -167,15 +167,22 @@ impl EvalMetrics {
         }
     }
 
-    /// Returns `true` if any metric has degraded by more than `threshold_pct`
-    /// compared to `baseline`.
+    /// Returns `true` if any metric has degraded by at least `threshold_pct`
+    /// relative to `baseline` (boundary-inclusive: an exact `threshold_pct` drop
+    /// IS a regression).
     ///
-    /// Used for regression detection (S20-08).
+    /// Used for regression detection (S20-08). Regression detection is
+    /// deliberately conservative — catching a boundary drop is safer than
+    /// missing it. A small epsilon is added to the comparison so that an exact
+    /// threshold drop fires deterministically despite f32 rounding of
+    /// `baseline * factor` (e.g. `0.7 * 0.9` is not exactly `0.63` in f32).
     pub fn has_regression(&self, baseline: &EvalMetrics, threshold_pct: f32) -> bool {
+        // Relative tolerance for boundary stability under f32 rounding.
+        const EPS: f32 = 1e-5;
         let factor = 1.0 - threshold_pct / 100.0;
-        self.mrr_at_k < baseline.mrr_at_k * factor
-            || self.ndcg_at_k < baseline.ndcg_at_k * factor
-            || self.recall_at_k < baseline.recall_at_k * factor
+        self.mrr_at_k <= baseline.mrr_at_k * factor + EPS
+            || self.ndcg_at_k <= baseline.ndcg_at_k * factor + EPS
+            || self.recall_at_k <= baseline.recall_at_k * factor + EPS
     }
 }
 
