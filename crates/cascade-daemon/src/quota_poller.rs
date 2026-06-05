@@ -248,10 +248,8 @@ mod tests {
 
     // Helper: build a minimal EventBus backed by an in-memory SQLite for tests.
     async fn test_bus(config_dir: &std::path::Path) -> SharedBus {
-        use crate::config::Config;
         use crate::event_bus::EventBus;
-        let cfg = Config::default();
-        EventBus::new(config_dir.to_path_buf(), &cfg)
+        EventBus::new(config_dir.to_path_buf())
             .await
             .expect("test bus creation")
     }

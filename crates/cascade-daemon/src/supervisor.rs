@@ -15,21 +15,210 @@
 //!     This prevents the OS admin prompt hygiene violation described in GCI.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::{event_bus::EventBus, healthcheck::HealthState, ipc::IpcServer};
+use cascade_core::HookStore;
+use cascade_types::hook::HookEvent;
 
-/// Drives the daemon's main loop. Starts the IPC server, health poller, and
-/// event bus, then blocks until `shutdown` fires.
+use crate::config::Config;
+use crate::{
+    event_bus::EventBus, healthcheck::HealthState, hook_runner::HookRunner, ipc::IpcServer,
+};
+
+/// Drives the daemon's main loop. Starts the IPC server, health poller,
+/// event bus, hook engine, quota poller, file watcher, and providers scan,
+/// then blocks until `shutdown` fires.
+///
+/// WHY all startup wiring lives here: supervisor::run() is the single entry
+/// point called from main.rs. Centralising startup here keeps main.rs thin and
+/// allows integration tests that spawn the real binary to observe all startup
+/// artifacts (providers.json, quota-state.json, events.db cascade.changed events,
+/// DaemonStart hook log lines) without needing test-only binary flags.
 pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(), DaemonError> {
     let start_time = std::time::Instant::now();
     info!(config_dir = %config_dir.display(), "supervisor starting");
+
+    // ── Load config ───────────────────────────────────────────────────────────
+    // Config::load returns Config::default() when config.toml is absent —
+    // safe to call unconditionally.
+    let config = Config::load(&config_dir).unwrap_or_default();
 
     let health = HealthState::new(start_time);
     let bus = EventBus::new(config_dir.clone()).await?;
     let ipc = IpcServer::new(config_dir.clone(), health.clone(), bus.clone()).await?;
 
+    // ── HookStore + HookRunner: seed hooks from config.toml [[hooks]] ────────
+    // Create an in-memory SQLite HookStore, seed it from the config's [[hooks]]
+    // array, then fire the DaemonStart event so configured hooks run at startup.
+    //
+    // WHY in-memory: hook definitions are loaded from config.toml each restart;
+    // there is no need for persistence between restarts in P2.
+    let hook_store = match HookStore::in_memory() {
+        Ok(store) => {
+            if !config.hooks.is_empty() {
+                // load_from_config upserts all [[hooks]] entries with tier = "config".
+                match store.load_from_config(config.hooks.clone(), "config") {
+                    Ok(names) => {
+                        info!(count = names.len(), "hooks loaded from config.toml");
+                    }
+                    Err(e) => {
+                        warn!(%e, "failed to load some hooks from config.toml");
+                    }
+                }
+            }
+            Arc::new(store)
+        }
+        Err(e) => {
+            warn!(%e, "failed to create HookStore — hooks disabled");
+            // Create an empty store so HookRunner can still be constructed.
+            Arc::new(HookStore::in_memory().unwrap_or_else(|_| {
+                // Absolute fallback: create an empty store.
+                // SAFETY: in_memory() only fails if SQLite is unavailable
+                // (extremely unlikely). The second call is the same code path;
+                // if it also fails we propagate the error.
+                panic!("HookStore::in_memory failed twice — SQLite unavailable")
+            }))
+        }
+    };
+    let hook_runner = HookRunner::new(hook_store, bus.clone());
+    // Fire DaemonStart hooks — any LogMessage hooks in config.toml [[hooks]] with
+    // event = "DaemonStart" will emit their message to the log here.
+    hook_runner.fire(&HookEvent::DaemonStart).await;
+
+    // ── Providers.json: write at startup ─────────────────────────────────────
+    // detect_harness_accounts + write_providers_store writes providers.json to
+    // config_dir. Even with no harnesses installed the file is written (empty
+    // providers array) so the test assertion that the file exists passes.
+    //
+    // WHY run synchronously before IPC: the widget, CLI, and onboarding wizard
+    // expect providers.json to be present as soon as the daemon is running.
+    {
+        use cascade_core::auth_detector::detect_harness_accounts;
+        use cascade_core::providers_store::{
+            merge_providers, read_providers_store, write_providers_store, ProvidersStore,
+            PROVIDERS_STORE_SCHEMA_VERSION,
+        };
+        use chrono::Utc;
+
+        // Prefer $HOME (respected in test isolation) over dirs::home_dir().
+        let home_dir = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(|| config_dir.parent().unwrap_or(&config_dir).to_path_buf());
+
+        let providers_path = config_dir.join("providers.json");
+        let detected = detect_harness_accounts(&home_dir);
+        info!(
+            count = detected.len(),
+            "harness accounts detected at startup"
+        );
+
+        let mut store = read_providers_store(&providers_path).unwrap_or_else(|_| ProvidersStore {
+            schema_version: PROVIDERS_STORE_SCHEMA_VERSION,
+            updated_at: Utc::now().to_rfc3339(),
+            providers: Vec::new(),
+        });
+        merge_providers(&mut store.providers, &detected);
+        store.updated_at = Utc::now().to_rfc3339();
+
+        if let Err(e) = write_providers_store(&providers_path, &store) {
+            warn!(%e, "failed to write providers.json at startup");
+        } else {
+            info!(path = %providers_path.display(), "providers.json written at startup");
+        }
+    }
+
+    // ── Quota poller ─────────────────────────────────────────────────────────
+    // Spawn the quota poller as a fire-and-forget Tokio task. It polls
+    // localhost:3761/health every interval_secs and writes quota-state.json.
+    // On proxy unavailable it writes an error-state JSON — the file always exists.
+    if config.quota_poller.enabled {
+        use crate::quota_poller::QuotaPoller;
+        use crate::state::DaemonState;
+        use std::sync::Mutex;
+
+        let daemon_state = Arc::new(Mutex::new(DaemonState::new()));
+        let qp_config = config.quota_poller.clone();
+        let qs_config = config.quota_store.clone();
+        let qp_dir = config_dir.clone();
+        let qp_bus = bus.clone();
+        let qp_shutdown = shutdown.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = QuotaPoller::run(
+                qp_config,
+                qs_config,
+                qp_dir,
+                qp_bus,
+                daemon_state,
+                qp_shutdown,
+            )
+            .await
+            {
+                warn!(%e, "quota poller exited with error");
+            }
+        });
+    }
+
+    // ── File watcher: publish cascade.changed events ──────────────────────────
+    // Poll config_dir/CASCADE.md for modification time changes every debounce_ms.
+    // When a change is detected, publish a "cascade.changed" event to the bus.
+    // WHY polling: the notify crate is not in the workspace dependencies for P2;
+    // tokio fs::metadata polling is sufficient for the integration test which
+    // sets debounce_ms=50 ms in test-config.toml.
+    {
+        let watch_path = config_dir.join("CASCADE.md");
+        let watch_bus = bus.clone();
+        let debounce = Duration::from_millis(config.watcher.debounce_ms);
+        let watch_shutdown = shutdown.clone();
+
+        tokio::spawn(async move {
+            let mut last_mtime: Option<std::time::SystemTime> = None;
+
+            // Read initial mtime if file exists.
+            if let Ok(meta) = tokio::fs::metadata(&watch_path).await {
+                last_mtime = meta.modified().ok();
+            }
+
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(debounce) => {}
+                    _ = watch_shutdown.cancelled() => { break; }
+                }
+
+                match tokio::fs::metadata(&watch_path).await {
+                    Ok(meta) => {
+                        let mtime = meta.modified().ok();
+                        if mtime != last_mtime && last_mtime.is_some() {
+                            // File changed — publish the event.
+                            if let Err(e) = watch_bus
+                                .publish(
+                                    "cascade.changed",
+                                    serde_json::json!({ "path": watch_path.to_string_lossy() }),
+                                )
+                                .await
+                            {
+                                warn!(%e, "failed to publish cascade.changed event");
+                            } else {
+                                info!(path = %watch_path.display(), "cascade.changed event published");
+                            }
+                        }
+                        last_mtime = mtime;
+                    }
+                    Err(_) => {
+                        // File doesn't exist yet — reset mtime tracking.
+                        last_mtime = None;
+                    }
+                }
+            }
+        });
+    }
+
+    // ── Main event loop ───────────────────────────────────────────────────────
     tokio::select! {
         result = ipc.serve(shutdown.clone()) => {
             result?;

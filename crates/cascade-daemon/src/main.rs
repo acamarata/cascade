@@ -23,8 +23,12 @@ mod healthcheck;
 mod hook_runner;
 mod ipc;
 mod ipc_handlers;
+mod key_index;
 mod log;
+mod quota_poller;
+mod regen;
 mod shutdown;
+mod state;
 mod supervisor;
 mod telemetry;
 mod tray;
@@ -65,6 +69,13 @@ async fn main() {
         write_crash_sentinel(&e.to_string());
         process::exit(1);
     }
+
+    // Write crash sentinel BEFORE the async event loop so it is present on disk
+    // even if the process is killed with SIGKILL (which prevents all cleanup).
+    // flush_state() removes it during a clean SIGTERM exit.
+    // WHY write here synchronously: SIGKILL cannot be caught — any write that
+    // happens inside the async loop may not execute if the process is force-killed.
+    write_crash_sentinel("unclean startup — daemon did not stop cleanly last time");
 
     // Write the PID file at startup so supervisors and `cascade daemon
     // status/stop` can find us. shutdown::flush_state removes it on clean exit.
@@ -226,6 +237,16 @@ fn open_url(url: &str) -> Result<(), std::io::Error> {
 }
 
 /// Write a one-line crash sentinel so the next start can surface a message.
+///
+/// WHY: SIGKILL prevents any async cleanup. This function is called synchronously
+/// before the async event loop starts so the sentinel is always on disk — if the
+/// process is killed at any point after startup the file exists. flush_state()
+/// removes it on a clean SIGTERM exit.
+///
+/// WHY std::env::var_os("HOME") instead of dirs::home_dir(): on macOS,
+/// dirs::home_dir() ignores the $HOME environment variable and reads from the
+/// system database, breaking test isolation where HOME is overridden per-test.
+///
 /// Never panics — if the write fails, the error is printed to stderr only.
 fn write_crash_sentinel(reason: &str) {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -234,8 +255,12 @@ fn write_crash_sentinel(reason: &str) {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let msg = format!("{ts} {reason}\n");
-    if let Some(home) = dirs::home_dir() {
-        let path = home.join(".cascade").join("crash-last.txt");
+    // Prefer $HOME (respected in test isolation) over dirs::home_dir().
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(dirs::home_dir);
+    if let Some(h) = home {
+        let path = h.join(".cascade").join("crash-last.txt");
         let _ = std::fs::write(path, msg);
     }
 }

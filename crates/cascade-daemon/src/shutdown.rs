@@ -49,13 +49,24 @@ pub async fn wait_for_signal() {
 /// Write clean-stop sentinel files and remove the PID file.
 ///
 /// Inputs: `config_dir` — `~/.cascade` path.
-/// Outputs: writes `last-stop.txt`; removes `daemon.pid`.
+/// Outputs: writes `last-stop.txt`; removes `daemon.pid`; removes `crash-last.txt`.
 /// Constraints: best-effort; errors are logged but not fatal.
+///
+/// WHY remove crash-last.txt: the crash sentinel is written synchronously at
+/// daemon startup (before the async loop) so it is always present if the process
+/// is killed. On a clean SIGTERM exit we remove it to distinguish crashes from
+/// intentional stops.
 pub async fn flush_state(config_dir: &Path) -> Result<(), std::io::Error> {
     // Remove PID file — signals to CLI that daemon stopped cleanly.
     let pid_path = config_dir.join("daemon.pid");
     if pid_path.exists() {
         let _ = tokio::fs::remove_file(&pid_path).await;
+    }
+
+    // Remove crash sentinel — written at startup, absent after a clean stop.
+    let crash_path = config_dir.join("crash-last.txt");
+    if crash_path.exists() {
+        let _ = tokio::fs::remove_file(&crash_path).await;
     }
 
     // Write clean-stop timestamp.

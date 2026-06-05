@@ -245,6 +245,22 @@ impl EventBus {
         }
     }
 
+    /// Record a quota snapshot in the persistent store (no-op stub — full
+    /// implementation lives in P3 EventBus quota_snapshots table).
+    ///
+    /// The quota poller calls this after each successful poll so that quota
+    /// history is durable across restarts. Returns the assigned row id (0 for
+    /// this stub implementation).
+    ///
+    /// SPORT: .claude/docs/MASTER-DAEMON.md — quota_snapshots table (T-P2-E02-09)
+    pub async fn record_quota_snapshot(
+        &self,
+        _snapshot: &serde_json::Value,
+    ) -> Result<i64, DaemonError> {
+        // Stub: returns 0 until the quota_snapshots table is added in P3.
+        Ok(0)
+    }
+
     /// Return provider quota summary from `~/.cascade/provider-quota.yaml`.
     /// The YAML is vendor-neutral — Tier labels only (T0/T1/T2/T3).
     pub async fn provider_quota(&self) -> Result<serde_json::Value, DaemonError> {
