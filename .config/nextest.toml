@@ -1,12 +1,11 @@
-# cargo-nextest configuration for the Cascade workspace.
-# Reference: https://nexte.st/docs/configuration
-
-[profile.ci]
-# Retry failed tests up to 2 times in CI mode
-retries = 2
-
-# Do not stop on first failure — run all tests to get full coverage
-fail-fast = false
-
-# Use system CPU count for test parallelism
-test-threads = "num-cpus"
+# Nextest configuration for the cascade workspace.
+#
+# slow-timeout: warn when a test exceeds `period`, and TERMINATE it after
+# `terminate-after` periods. This is a hard safety net: a deadlocked or
+# blocking-call-in-async test is killed and reported as a failure instead of
+# hanging the whole run indefinitely (a real bug hit during P2 — three tests
+# parked worker threads and stalled `cargo nextest run --workspace` for 39+
+# minutes). 30s is far above the slowest legitimate test (~6s daemon IPC
+# integration tests); 3 periods = 90s hard kill.
+[profile.default]
+slow-timeout = { period = "30s", terminate-after = 3 }

@@ -217,7 +217,12 @@ pub async fn handle_rescan_providers() -> Result<usize, IpcHandlerError> {
 /// Returns the `QuotaStore` containing aggregated quota snapshots across accounts.
 /// If the file does not exist, returns `NotFound` error.
 pub async fn handle_read_quota_store() -> Result<QuotaStore, IpcHandlerError> {
-    let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+    // Prefer $HOME (honoured on every platform and required for test isolation;
+    // macOS `dirs::home_dir()` ignores $HOME), then fall back to dirs.
+    let home_dir = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
     let quota_store_path = home_dir.join(".cascade/quota-store.json");
     read_quota_store(&quota_store_path).map_err(|e| {
         // CascadeError doesn't have a kind() method like io::Error;

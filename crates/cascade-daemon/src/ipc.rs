@@ -39,6 +39,9 @@ pub enum Request {
     InboxSummary { limit: Option<usize> },
     HotwordLookup { word: String },
     ProviderQuota,
+    /// Read the persisted quota store (~/.cascade/quota-store.json). Wired per
+    /// T-P2-E02-31; handler lives in ipc_handlers::handle_read_quota_store.
+    ReadQuotaStore,
     DaemonStop,
     Ping { echo: Option<String> },
 }
@@ -250,6 +253,10 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
         Request::ProviderQuota => match server.bus.provider_quota().await {
             Ok(quota) => Response::ok(quota),
             Err(e) => Response::err(-32003, e.to_string()),
+        },
+        Request::ReadQuotaStore => match crate::ipc_handlers::handle_read_quota_store().await {
+            Ok(store) => Response::ok(store),
+            Err(e) => Response::err(-32004, e.to_string()),
         },
         Request::DaemonStop => {
             // Actual cancellation is handled by the signal handler; here we
