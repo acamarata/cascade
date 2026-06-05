@@ -8,6 +8,8 @@ members = [
     "crates/cascade-mcp",
     "crates/cascade-plugins",
     "crates/cascade-tray",
+    "crates/cascade-keychain",
+    "crates/cascade-audit",
 ]
 resolver = "2"
 
