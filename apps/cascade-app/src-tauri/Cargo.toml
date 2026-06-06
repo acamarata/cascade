@@ -24,10 +24,14 @@ tauri-plugin-fs      = "2"
 tauri-plugin-opener  = "2"
 tauri-plugin-shell   = "2"
 
-# cascade-core and cascade-types are pulled in at P3-E02 when the CascadeCore API
-# is implemented. Until then, commands.rs uses local scaffold stubs.
-# cascade-core  = { path = "../../../crates/cascade-core" }
-# cascade-types = { path = "../../../crates/cascade-types" }
+# cascade-types provides the frozen JSON-RPC 2.0 wire types (T-P2-E03).
+# cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
+cascade-types = { path = "../../../crates/cascade-types" }
+cascade-cli   = { path = "../../../crates/cascade-cli" }
+# cascade-core = { path = "../../../crates/cascade-core" }
+
+# Async runtime (Tauri commands are async; used by daemon_client.rs)
+tokio = { version = "1", features = ["net", "io-util", "rt"] }
 
 # Observability
 tracing            = "0.1"

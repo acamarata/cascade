@@ -867,6 +867,8 @@ dependencies = [
 name = "cascade-app"
 version = "0.1.0"
 dependencies = [
+ "cascade-cli",
+ "cascade-types",
  "serde 1.0.228",
  "serde_json 1.0.150",
  "tauri",
@@ -876,6 +878,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
