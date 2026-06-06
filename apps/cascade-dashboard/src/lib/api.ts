@@ -76,3 +76,80 @@ export interface HookEntry {
 export interface HooksResponse {
   hooks: HookEntry[]
 }
+
+// ── Personal section response shapes ─────────────────────────────────────────
+
+export interface ThreadEntry {
+  name: string
+  path: string
+  modified_at: string
+}
+
+export interface ThreadsResponse {
+  items: ThreadEntry[]
+  total: number
+}
+
+export interface IdeaInboxEntry {
+  name: string
+  path: string
+  type: 'idea' | 'inbox'
+  project: string
+  modified_at: string
+}
+
+export interface IdeasInboxResponse {
+  items: IdeaInboxEntry[]
+  total: number
+}
+
+export interface CrdChain {
+  id: string
+  status: 'active' | 'idle' | 'completed'
+  message_count: number
+  last_updated: string
+  summary: string
+}
+
+export interface CrdChainsResponse {
+  chains: CrdChain[]
+}
+
+export interface ScheduledTask {
+  name: string
+  schedule: string
+  last_run: string | null
+  next_run: string | null
+  status: 'active' | 'paused' | 'error'
+}
+
+export interface ScheduledTasksResponse {
+  tasks: ScheduledTask[]
+}
+
+export interface AccountQuota {
+  account_id: string
+  cc_pct: number
+  oc_pct: number
+  models_available: string[]
+  resets_at: string | null
+}
+
+export interface FleetQuotaResponse {
+  accounts: AccountQuota[]
+  updated_at: string
+}
+
+export interface LedgerEntry {
+  account: string
+  model: string
+  tokens_in: number
+  tokens_out: number
+  cost: number
+  period: string
+}
+
+export interface AccountLedgerResponse {
+  entries: LedgerEntry[]
+  total_cost: number
+}
