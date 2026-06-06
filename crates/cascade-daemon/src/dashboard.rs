@@ -238,11 +238,19 @@ pub fn build_router(state: DashboardState) -> Router {
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([axum::http::header::CONTENT_TYPE, AUTHORIZATION]);
 
-    Router::new()
+    let mut app = Router::new()
         .route("/health", get(health))
-        .nest("/api/gci", gci_router)
-        .layer(cors)
-        .with_state(state)
+        .nest("/api/gci", gci_router);
+
+    // Mount the browser dashboard SPA (ADR-P3-002): when CASCADE_DASHBOARD_DIST
+    // points at a built dist/, merge the static-file router so http://127.0.0.1:9761
+    // serves the dashboard. Explicit routes above (/health, /api/gci) keep priority
+    // over the static catch-all. Unset (dev/tests) → API-only, unchanged behavior.
+    if let Some(dist) = crate::http::dashboard_dist_dir() {
+        app = app.merge(crate::http::static_handler::static_router(dist));
+    }
+
+    app.layer(cors).with_state(state)
 }
 
 // ── Dashboard server ──────────────────────────────────────────────────────────

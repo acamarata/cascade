@@ -17,6 +17,7 @@ pub mod event_bus;
 pub mod harness_bridge;
 pub mod healthcheck;
 pub mod hook_runner;
+pub mod http;
 pub mod ipc;
 pub mod ipc_handlers;
 pub mod key_index;

@@ -1,0 +1,51 @@
+name: CI — cascade-dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cascade-dashboard/**'
+      - '.github/workflows/ci-dashboard.yml'
+      - 'pnpm-workspace.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/cascade-dashboard/**'
+      - '.github/workflows/ci-dashboard.yml'
+      - 'pnpm-workspace.yaml'
+
+jobs:
+  test:
+    name: Typecheck & Build (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter cascade-dashboard typecheck
+
+      - name: Build
+        run: pnpm --filter cascade-dashboard build
+
+      - name: Verify dist output
+        run: |
+          ls apps/cascade-dashboard/dist/
+          test -f apps/cascade-dashboard/dist/index.html || (echo "MISSING: dist/index.html" && exit 1)
+          echo "Build verification passed"

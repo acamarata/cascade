@@ -110,10 +110,14 @@ message = "Cascade daemon started successfully, hooks are working!"
 
     // Wait for the log message to appear. The hook should fire shortly after
     // daemon startup completes.
+    // 10s ceiling (not 2s) for load tolerance: under a busy machine (concurrent cargo
+    // builds) a cold daemon spawn + first hook fire can exceed 2s. wait_for_log_line
+    // polls and returns as soon as the line appears, so the higher ceiling only matters
+    // when the machine is loaded. (Mirrors the 884132e CLI socket-wait hardening.)
     let found = wait_for_log_line(
         &cascade_dir,
         "Cascade daemon started successfully, hooks are working!",
-        2000,
+        10000,
     );
 
     // Clean up: send SIGTERM to gracefully shut down the daemon.
