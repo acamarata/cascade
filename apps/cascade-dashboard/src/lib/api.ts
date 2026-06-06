@@ -153,3 +153,80 @@ export interface AccountLedgerResponse {
   entries: LedgerEntry[]
   total_cost: number
 }
+
+// ── Projects section response shapes ─────────────────────────────────────────
+
+export interface AsiOverview {
+  path: string
+  description: string
+}
+
+export interface ProjectSummary {
+  id: string
+  name: string
+  description: string
+  repo_count: number
+  active_phase_id: string | null
+}
+
+export interface ProjectsResponse {
+  projects: ProjectSummary[]
+  asi_overview: AsiOverview
+}
+
+export interface RepoCard {
+  name: string
+  branch: string
+  last_commit_at: string
+  has_claude_md: boolean
+}
+
+export interface ReposResponse {
+  repos: RepoCard[]
+}
+
+export interface PewsPhaseStatus {
+  phase_id: string
+  phase_status: string
+  pct_done: number
+  tickets_total: number
+  tickets_done: number
+  tickets_blocked: number
+  last_updated: string
+}
+
+export interface ScaffoldTicket {
+  id: string
+  title: string
+  weight: 'XS' | 'S' | 'M' | 'L' | 'XL'
+  status: string
+}
+
+export interface ScaffoldSprint {
+  id: string
+  title: string
+  tickets: ScaffoldTicket[]
+  done: number
+  total: number
+}
+
+export interface ScaffoldWave {
+  id: string
+  title: string
+  sprints: ScaffoldSprint[]
+}
+
+export interface ScaffoldEpic {
+  id: string
+  title: string
+  status: string
+  waves: ScaffoldWave[]
+}
+
+export interface ScaffoldTree {
+  phase_id: string
+  phase_name: string
+  pct_done: number
+  last_updated: string
+  epics: ScaffoldEpic[]
+}
