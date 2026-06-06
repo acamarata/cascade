@@ -8,6 +8,7 @@
 
 pub mod gci_handlers;
 pub mod personal_handlers;
+pub mod projects_handlers;
 pub mod static_handler;
 
 use std::path::PathBuf;

@@ -48,6 +48,7 @@ chrono        = { workspace = true }
 uuid          = { workspace = true }
 toml          = "0.8"
 fs2           = "0.4"
+serde_yaml    = "0.9"
 
 [features]
 tcp-ipc = []

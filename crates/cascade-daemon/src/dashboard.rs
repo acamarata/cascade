@@ -245,7 +245,8 @@ pub fn build_router(state: DashboardState) -> Router {
         // WHY second nest at the same prefix: axum merges both routers; /api/gci/file
         // (auth-protected write) and /api/gci/rules (no-auth read) coexist correctly.
         .nest("/api/gci", crate::http::gci_handlers::gci_read_router())
-        .nest("/api/personal", crate::http::personal_handlers::router());
+        .nest("/api/personal", crate::http::personal_handlers::router())
+        .nest("/api/projects", crate::http::projects_handlers::router());
 
     // Mount the browser dashboard SPA (ADR-P3-002): when CASCADE_DASHBOARD_DIST
     // points at a built dist/, merge the static-file router so http://127.0.0.1:9761
