@@ -1,39 +1,21 @@
 /**
- * Purpose: Root application shell — router, layout, global keyboard shortcuts.
- * Inputs:  None (reads config via TauriContext on mount)
- * Outputs: Rendered <AppLayout> with routes wired to feature panels
- * Constraints: react-router-dom v6 memory router (Tauri has no real URL bar).
- * SPORT: MASTER-COMPONENTS.md — App, AppLayout
+ * Purpose: Root application shell — BrowserRouter, route tree, global keyboard shortcuts.
+ * Inputs:  None (ThemeProvider in main.tsx handles theme; RouterApp owns the route tree).
+ * Outputs: BrowserRouter wrapping RouterApp + CommandPalette portal.
+ * Constraints: BrowserRouter works with Tauri 2 custom protocol (tauri://localhost).
+ *   Theme is applied by ThemeProvider (main.tsx) — no manual useEffect here.
+ *   CommandPalette is a portal rendered above all routes; ⌘K / Ctrl+K opens it.
+ * SPORT: MASTER-COMPONENTS.md — App
  */
 
 import { useEffect } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import { CommandPalette } from "./components/CommandPalette";
-import { AppLayout } from "./components/AppLayout";
-import { CascadeEditor } from "./components/CascadeEditor";
-import { InboxViewer } from "./components/InboxViewer";
-import { RagExplorer } from "./components/RagExplorer";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { StatusPage } from "./components/StatusPage";
+import { RouterApp } from "./routes/index";
 import { useCommandPalette } from "./hooks/useCommandPalette";
-import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
   const { isOpen, open, close } = useCommandPalette();
-  const { theme } = useTheme();
-
-  // Apply theme class to <html> element so Tailwind dark: variants work.
-  // Reads from ~/ .cascade/config.json via Tauri command on first render.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("light", "dark");
-    if (theme === "system") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.add(prefersDark ? "dark" : "light");
-    } else {
-      root.classList.add(theme);
-    }
-  }, [theme]);
 
   // Global keyboard shortcut: ⌘K / Ctrl+K opens command palette.
   useEffect(() => {
@@ -48,19 +30,10 @@ export default function App() {
   }, [open]);
 
   return (
-    <MemoryRouter initialEntries={["/"]} initialIndex={0}>
+    <BrowserRouter>
       {/* Command palette renders as a portal above all routes */}
       <CommandPalette open={isOpen} onClose={close} />
-
-      <Routes>
-        <Route element={<AppLayout onOpenPalette={open} />}>
-          <Route path="/" element={<CascadeEditor />} />
-          <Route path="/status" element={<StatusPage />} />
-          <Route path="/inbox" element={<InboxViewer />} />
-          <Route path="/rag" element={<RagExplorer />} />
-          <Route path="/settings" element={<SettingsPanel />} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
+      <RouterApp />
+    </BrowserRouter>
   );
 }

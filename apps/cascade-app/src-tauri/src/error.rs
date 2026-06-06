@@ -46,6 +46,10 @@ pub enum CascadeError {
     /// The feature is not yet implemented in this phase.
     #[error("not yet implemented: {0}")]
     NotImplemented(String),
+
+    /// A window-management error (open/close/focus failed).
+    #[error("window error: {0}")]
+    Daemon(String),
 }
 
 impl Serialize for CascadeError {
@@ -63,6 +67,7 @@ impl Serialize for CascadeError {
             CascadeError::Rpc { .. } => "rpc_error",
             CascadeError::Transport => "transport_error",
             CascadeError::NotImplemented(_) => "not_implemented",
+            CascadeError::Daemon(_) => "daemon_error",
         };
         map.serialize_entry("kind", kind)?;
         map.serialize_entry("message", &self.to_string())?;

@@ -57,6 +57,10 @@ pub fn run() {
             commands::save_cascade_doc,
             commands::validate_cascade_doc,
             commands::rag_query,
+            // T-P3-E01-17: multi-window commands
+            commands::cascade_open_window,
+            commands::cascade_close_window,
+            commands::cascade_focus_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

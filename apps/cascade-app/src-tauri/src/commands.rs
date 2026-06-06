@@ -22,7 +22,7 @@
 // SPORT: MASTER-COMMANDS.md in .claude/docs — update when adding/removing commands.
 
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use cascade_cli::ipc_client::IpcClient;
 use cascade_types::ipc::{
@@ -369,6 +369,102 @@ pub use cascade_types::ipc::{
     MemoryWriteResult as CascadeMemoryWriteResult, ResolveResult as CascadeResolveResult,
     SearchResult as CascadeSearchResult, StatusResult as CascadeStatusResult,
 };
+
+// ---------------------------------------------------------------------------
+// Multi-window commands (T-P3-E01-17)
+// ---------------------------------------------------------------------------
+
+/// Open a secondary Tauri window, or focus it if already open.
+///
+/// # Purpose
+/// Opens a new WebviewWindow with the given label, route URL, and title. If a
+/// window with that label already exists, focuses it instead of creating a duplicate.
+///
+/// # Inputs
+/// - `app`: Tauri AppHandle for window management.
+/// - `label`: Unique window label (e.g. "settings-panel").
+/// - `url`: App route (e.g. "/settings") — resolved relative to the Tauri app origin.
+/// - `title`: Window title bar text.
+///
+/// # Outputs
+/// `Ok(())` on success or focus. `CascadeError::Daemon` on build failure.
+/// # Constraints
+/// Synchronous; must not block the main thread. Size defaults: 900×700, min 600×400.
+/// # SPORT
+/// MASTER-COMMANDS.md — cascade_open_window
+#[tauri::command]
+pub fn cascade_open_window(
+    app: AppHandle,
+    label: String,
+    url: String,
+    title: String,
+) -> Result<(), crate::error::CascadeError> {
+    if let Some(w) = app.get_webview_window(&label) {
+        w.set_focus()
+            .map_err(|e| crate::error::CascadeError::Daemon(e.to_string()))?;
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        &label,
+        tauri::WebviewUrl::App(url.into()),
+    )
+    .title(&title)
+    .inner_size(900.0, 700.0)
+    .min_inner_size(600.0, 400.0)
+    .build()
+    .map_err(|e| crate::error::CascadeError::Daemon(e.to_string()))?;
+    Ok(())
+}
+
+/// Close a secondary window by label. Silently succeeds if the window is not open.
+///
+/// # Purpose
+/// Closes the Tauri WebviewWindow identified by `label`. No-op if the window does
+/// not exist, preventing JS errors when closing an already-closed window.
+///
+/// # Inputs
+/// - `app`: Tauri AppHandle.
+/// - `label`: Window label to close.
+///
+/// # Outputs
+/// Always `Ok(())`.
+/// # SPORT
+/// MASTER-COMMANDS.md — cascade_close_window
+#[tauri::command]
+pub fn cascade_close_window(
+    app: AppHandle,
+    label: String,
+) -> Result<(), crate::error::CascadeError> {
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.close();
+    }
+    Ok(())
+}
+
+/// Focus an existing secondary window by label. Silently succeeds if not open.
+///
+/// # Purpose
+/// Brings the window identified by `label` to the foreground. No-op if not open.
+///
+/// # Inputs
+/// - `app`: Tauri AppHandle.
+/// - `label`: Window label to focus.
+///
+/// # Outputs
+/// Always `Ok(())`.
+/// # SPORT
+/// MASTER-COMMANDS.md — cascade_focus_window
+#[tauri::command]
+pub fn cascade_focus_window(
+    app: AppHandle,
+    label: String,
+) -> Result<(), crate::error::CascadeError> {
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.set_focus();
+    }
+    Ok(())
+}
 
 // ---------------------------------------------------------------------------
 // Local response types (not in cascade_types)

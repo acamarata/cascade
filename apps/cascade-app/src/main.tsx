@@ -11,6 +11,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/LoadingSpinner";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import "./styles/globals.css";
 
 const root = document.getElementById("root");
@@ -20,7 +21,9 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <ErrorBoundary>
       <Suspense fallback={<LoadingSpinner />}>
-        <App />
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
       </Suspense>
     </ErrorBoundary>
   </React.StrictMode>
