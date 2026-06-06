@@ -24,14 +24,14 @@ tauri-plugin-fs      = "2"
 tauri-plugin-opener  = "2"
 tauri-plugin-shell   = "2"
 
-# cascade-core: the library layer this app surfaces via IPC commands
-# Path relative to this Cargo.toml (src-tauri/) -> workspace root crates/
-cascade-core  = { path = "../../../crates/cascade-core" }
-cascade-types = { path = "../../../crates/cascade-types" }
+# cascade-core and cascade-types are pulled in at P3-E02 when the CascadeCore API
+# is implemented. Until then, commands.rs uses local scaffold stubs.
+# cascade-core  = { path = "../../../crates/cascade-core" }
+# cascade-types = { path = "../../../crates/cascade-types" }
 
 # Observability
 tracing            = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Serialization (Tauri IPC payloads are JSON)
 serde      = { version = "1", features = ["derive"] }

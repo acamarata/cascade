@@ -10,6 +10,7 @@ members = [
     "crates/cascade-tray",
     "crates/cascade-keychain",
     "crates/cascade-audit",
+    "apps/cascade-app/src-tauri",
 ]
 resolver = "2"
 

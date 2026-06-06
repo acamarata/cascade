@@ -95,7 +95,7 @@ export function RagExplorer() {
         {results.length === 0 && query && !isLoading && (
           <li className="text-sm text-muted-foreground">No results found.</li>
         )}
-        {results.map((r, i) => (
+        {results.map((r, _i) => (
           <li
             key={`${r.source_path}-${r.chunk_index}`}
             className="rounded-lg border border-border bg-card p-4 text-sm"

@@ -64,14 +64,6 @@
       "appimage": {
         "bundleMediaFramework": false
       }
-    },
-    "updater": {
-      "active": true,
-      "pubkey": "",
-      "endpoints": [
-        "https://releases.cascade.dev/{{target}}/{{arch}}/{{current_version}}"
-      ],
-      "dialog": true
     }
   }
 }

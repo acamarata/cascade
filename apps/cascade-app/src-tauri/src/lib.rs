@@ -3,12 +3,18 @@
 // Why: Tauri 2 separates the binary entry point (main.rs) from the app logic
 // so the same code can be tested and reused as a library. This crate owns
 // the Tauri Builder configuration, plugin registration, and state injection.
+//
+// Scaffold state (P3-E01 wave 1): CascadeCore is a P3-E02 Rust deliverable.
+// Until that lands, AppState holds a unit placeholder so the app compiles and
+// the frontend can be developed. See commands.rs TODO markers.
 
 mod commands;
 
-use commands::AppState;
-use cascade_core::CascadeCore;
 use tracing_subscriber::{EnvFilter, fmt};
+
+/// Application state managed by Tauri.
+/// Placeholder until cascade_core::CascadeCore is available (P3-E02).
+pub struct AppState;
 
 /// Initialize the tracing subscriber.
 /// JSON output to stderr; level from RUST_LOG env (default: info).
@@ -24,21 +30,15 @@ fn init_tracing() {
 
 /// Tauri app entry point, called from main.rs.
 /// All plugin registration and state injection happens here.
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_tracing();
-
-    let core = CascadeCore::new()
-        .expect("failed to initialize cascade-core");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .manage(AppState {
-            core: std::sync::Mutex::new(core),
-        })
+        .manage(AppState)
         .invoke_handler(tauri::generate_handler![
             commands::get_daemon_status,
             commands::start_daemon,

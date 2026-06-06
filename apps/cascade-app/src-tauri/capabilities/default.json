@@ -20,22 +20,6 @@
     "fs:allow-mkdir",
 
     "opener:allow-open-url",
-    "shell:allow-open",
-
-    {
-      "identifier": "core:ipc:allow-tauri-invoke",
-      "allow": [
-        { "name": "get_daemon_status" },
-        { "name": "start_daemon" },
-        { "name": "stop_daemon" },
-        { "name": "load_cascade_doc" },
-        { "name": "save_cascade_doc" },
-        { "name": "validate_cascade_doc" },
-        { "name": "list_inbox" },
-        { "name": "rag_query" },
-        { "name": "get_config" },
-        { "name": "set_config" }
-      ]
-    }
+    "shell:allow-open"
   ]
 }
