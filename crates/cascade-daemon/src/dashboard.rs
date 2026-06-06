@@ -240,7 +240,11 @@ pub fn build_router(state: DashboardState) -> Router {
 
     let mut app = Router::new()
         .route("/health", get(health))
-        .nest("/api/gci", gci_router);
+        .nest("/api/gci", gci_router)
+        // GCI read API — no auth required; read-only GET routes for the Global panel.
+        // WHY second nest at the same prefix: axum merges both routers; /api/gci/file
+        // (auth-protected write) and /api/gci/rules (no-auth read) coexist correctly.
+        .nest("/api/gci", crate::http::gci_handlers::gci_read_router());
 
     // Mount the browser dashboard SPA (ADR-P3-002): when CASCADE_DASHBOARD_DIST
     // points at a built dist/, merge the static-file router so http://127.0.0.1:9761

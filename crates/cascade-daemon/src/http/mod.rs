@@ -6,6 +6,7 @@
 //!   (falls back to none — API-only — when unset, e.g. in dev or tests).
 //! SPORT: MASTER-ENDPOINTS.md § dashboard HTTP; ADR-P3-002 (src/http/ module)
 
+pub mod gci_handlers;
 pub mod static_handler;
 
 use std::path::PathBuf;
