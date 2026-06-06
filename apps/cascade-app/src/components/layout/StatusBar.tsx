@@ -9,19 +9,19 @@
  * SPORT: MASTER-COMPONENTS.md — StatusBar
  */
 
-import { useDaemonStatus } from '../../store/index';
+import { useDaemonStatus } from '../../store/index'
 
 export function StatusBar() {
-  const { status, lastPing, data } = useDaemonStatus();
+  const { status, lastPing, data } = useDaemonStatus()
 
   const pingText = lastPing
     ? `Last ping: ${new Date(lastPing).toLocaleTimeString()}`
-    : 'No ping yet';
+    : 'No ping yet'
 
   const mcpText =
     status === 'connected' && data && 'mcpPort' in data && data.mcpPort
       ? `MCP :${data.mcpPort}`
-      : null;
+      : null
 
   return (
     <footer
@@ -29,15 +29,12 @@ export function StatusBar() {
       className="flex h-6 shrink-0 items-center gap-4 border-t border-border bg-muted/40 px-4 text-xs text-muted-foreground"
     >
       <span>
-        Daemon:{' '}
-        <span className="capitalize">{status}</span>
+        Daemon: <span className="capitalize">{status}</span>
       </span>
 
       <span aria-label="Last daemon ping">{pingText}</span>
 
-      {mcpText && (
-        <span aria-label="MCP server port">{mcpText}</span>
-      )}
+      {mcpText && <span aria-label="MCP server port">{mcpText}</span>}
     </footer>
-  );
+  )
 }

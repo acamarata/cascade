@@ -31,11 +31,11 @@ export class CascadeIpcError extends Error {
    * Machine-readable error code from the Rust CascadeError serialisation.
    * Examples: "DaemonNotRunning", "IpcTimeout", "NotImplemented", "IpcError".
    */
-  readonly code: string;
+  readonly code: string
 
   constructor(code: string, message: string) {
-    super(message);
-    this.name = 'CascadeIpcError';
-    this.code = code;
+    super(message)
+    this.name = 'CascadeIpcError'
+    this.code = code
   }
 }

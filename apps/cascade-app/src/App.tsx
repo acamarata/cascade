@@ -8,26 +8,26 @@
  * SPORT: MASTER-COMPONENTS.md — App
  */
 
-import { useEffect } from "react";
-import { BrowserRouter } from "react-router-dom";
-import { CommandPalette } from "./components/CommandPalette";
-import { RouterApp } from "./routes/index";
-import { useCommandPalette } from "./hooks/useCommandPalette";
+import { useEffect } from 'react'
+import { BrowserRouter } from 'react-router-dom'
+import { CommandPalette } from './components/CommandPalette'
+import { RouterApp } from './routes/index'
+import { useCommandPalette } from './hooks/useCommandPalette'
 
 export default function App() {
-  const { isOpen, open, close } = useCommandPalette();
+  const { isOpen, open, close } = useCommandPalette()
 
   // Global keyboard shortcut: ⌘K / Ctrl+K opens command palette.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        open();
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        open()
       }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open])
 
   return (
     <BrowserRouter>
@@ -35,5 +35,5 @@ export default function App() {
       <CommandPalette open={isOpen} onClose={close} />
       <RouterApp />
     </BrowserRouter>
-  );
+  )
 }

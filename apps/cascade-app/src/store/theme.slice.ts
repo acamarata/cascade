@@ -9,60 +9,62 @@
  * SPORT: MASTER-HOOKS.md — useTheme, src/store/theme.slice.ts
  */
 
-import type { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand'
 
-export type ThemeToken = 'light' | 'dark' | 'system';
-export type ResolvedTheme = 'light' | 'dark';
+export type ThemeToken = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
 
-const STORAGE_KEY = 'cascade-theme';
+const STORAGE_KEY = 'cascade-theme'
 
 function readStoredTheme(): ThemeToken {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
-      return stored;
+      return stored
     }
   } catch {
     // localStorage unavailable (e.g. sandboxed context).
   }
-  return 'system';
+  return 'system'
 }
 
 function resolveTheme(token: ThemeToken): ResolvedTheme {
-  if (token !== 'system') return token;
+  if (token !== 'system') return token
   try {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   } catch {
-    return 'light';
+    return 'light'
   }
 }
 
 export interface ThemeSlice {
   /** User-selected theme token. */
-  token: ThemeToken;
+  token: ThemeToken
   /** Resolved concrete theme (never 'system'). */
-  resolvedTheme: ResolvedTheme;
+  resolvedTheme: ResolvedTheme
   /** Update the theme token and persist to localStorage. */
-  setTheme: (t: ThemeToken) => void;
+  setTheme: (t: ThemeToken) => void
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const createThemeSlice: StateCreator<any, [['zustand/immer', never]], [], ThemeSlice> = (set) => {
-  const initialToken = readStoredTheme();
+export const createThemeSlice: StateCreator<any, [['zustand/immer', never]], [], ThemeSlice> = (
+  set
+) => {
+  const initialToken = readStoredTheme()
   return {
     token: initialToken,
     resolvedTheme: resolveTheme(initialToken),
 
     setTheme: (t: ThemeToken) => {
       try {
-        localStorage.setItem(STORAGE_KEY, t);
+        localStorage.setItem(STORAGE_KEY, t)
       } catch {
         // Ignore write failure.
       }
       set((draft: ThemeSlice) => {
-        draft.token = t;
-        draft.resolvedTheme = resolveTheme(t);
-      });
+        draft.token = t
+        draft.resolvedTheme = resolveTheme(t)
+      })
     },
-  };
-};
+  }
+}

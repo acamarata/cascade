@@ -7,4 +7,4 @@
  * SPORT: MASTER-HOOKS.md — useDaemonStatus, src/hooks/useDaemonStatus.ts
  */
 
-export { useDaemonStatus } from '../store';
+export { useDaemonStatus } from '../store'

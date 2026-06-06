@@ -7,8 +7,8 @@
  * SPORT: E5-S01-01 — wizard-state.json schema + read/write service
  */
 
-import { invoke } from "@tauri-apps/api/core";
-import { z } from "zod";
+import { invoke } from '@tauri-apps/api/core'
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -22,7 +22,7 @@ export const ProviderConfigSchema = z.record(
     account_hint: z.string().optional(), // masked email / username, never secret
     token_in_keychain: z.boolean().default(false),
   })
-);
+)
 
 export const ToolDiscoverySchema = z.object({
   tool_id: z.string(), // e.g. "claude-code", "opencode", "cursor"
@@ -31,35 +31,35 @@ export const ToolDiscoverySchema = z.object({
   size_bytes: z.number(),
   last_modified: z.string().nullable(),
   detected: z.boolean(),
-});
+})
 
 export const TierClassificationSchema = z.object({
   path: z.string(),
-  tier: z.enum(["GCI", "PCI", "APC", "PPC", "PRC", "PAC"]),
-  confidence: z.enum(["rule", "heuristic", "user_override"]),
-});
+  tier: z.enum(['GCI', 'PCI', 'APC', 'PPC', 'PRC', 'PAC']),
+  confidence: z.enum(['rule', 'heuristic', 'user_override']),
+})
 
 export const ProjectRootSchema = z.object({
   path: z.string(),
   name: z.string(),
   apc_parent: z.string().optional(),
-  tier: z.enum(["PPC", "PRC"]),
+  tier: z.enum(['PPC', 'PRC']),
   template_id: z.string().optional(),
   provider_override: z.string().optional(),
   tiers_merged: z.array(z.string()).default([]),
   archive_choices: z.record(z.string(), z.boolean()).default({}),
   symlinks_created: z.array(z.string()).default([]),
-  status: z.enum(["pending", "in_progress", "complete", "skipped"]).default("pending"),
-});
+  status: z.enum(['pending', 'in_progress', 'complete', 'skipped']).default('pending'),
+})
 
 export const MergeSelectionSchema = z.record(
   z.string(), // section_id
   z.object({
-    action: z.enum(["accept_ai", "use_legacy", "use_template", "edit_manual", "unresolved"]),
+    action: z.enum(['accept_ai', 'use_legacy', 'use_template', 'edit_manual', 'unresolved']),
     ai_confidence: z.number().optional(),
     user_edited: z.boolean().default(false),
   })
-);
+)
 
 export const WizardStateSchema = z.object({
   version: z.literal(1).default(1),
@@ -79,14 +79,16 @@ export const WizardStateSchema = z.object({
   telemetry_endpoint: z.string().optional(),
   pci_root_path: z.string().optional(),
   apc_root_path: z.string().optional(),
-  integration_modes: z.record(z.string(), z.enum(["cascade_managed", "independent", "custom"])).default({}),
+  integration_modes: z
+    .record(z.string(), z.enum(['cascade_managed', 'independent', 'custom']))
+    .default({}),
   last_active_at: z.string().optional(),
   inactivity_timeout_mins: z.number().default(30),
-});
+})
 
-export type WizardState = z.infer<typeof WizardStateSchema>;
-export type ProjectRoot = z.infer<typeof ProjectRootSchema>;
-export type TierClassification = z.infer<typeof TierClassificationSchema>;
+export type WizardState = z.infer<typeof WizardStateSchema>
+export type ProjectRoot = z.infer<typeof ProjectRootSchema>
+export type TierClassification = z.infer<typeof TierClassificationSchema>
 
 // ---------------------------------------------------------------------------
 // Read / Write
@@ -99,17 +101,17 @@ export type TierClassification = z.infer<typeof TierClassificationSchema>;
  */
 export async function loadWizardState(): Promise<WizardState | null> {
   try {
-    const raw: string | null = await invoke("wizard_state_read");
-    if (raw === null) return null;
-    const parsed = JSON.parse(raw);
-    const result = WizardStateSchema.safeParse(parsed);
-    if (result.success) return result.data;
+    const raw: string | null = await invoke('wizard_state_read')
+    if (raw === null) return null
+    const parsed = JSON.parse(raw)
+    const result = WizardStateSchema.safeParse(parsed)
+    if (result.success) return result.data
     // Corrupt but partially valid — attempt recovery with defaults
-    console.warn("wizard-state parse error:", result.error.message);
-    return WizardStateSchema.parse({ ...parsed });
+    console.warn('wizard-state parse error:', result.error.message)
+    return WizardStateSchema.parse({ ...parsed })
   } catch (err) {
     // File exists but is unreadable JSON — surface to caller
-    throw new Error(`wizard-state.json corrupt: ${String(err)}`);
+    throw new Error(`wizard-state.json corrupt: ${String(err)}`)
   }
 }
 
@@ -122,23 +124,23 @@ export async function saveWizardState(state: WizardState): Promise<void> {
   const updated: WizardState = {
     ...state,
     last_active_at: new Date().toISOString(),
-  };
+  }
   if (state.dry_run) {
     // Dry-run: log the would-be write, do not persist
-    await invoke("wizard_dry_run_log", {
-      operation: "WRITE",
-      source: "in-memory",
-      destination: ".cascade/temp/wizard-state.json",
+    await invoke('wizard_dry_run_log', {
+      operation: 'WRITE',
+      source: 'in-memory',
+      destination: '.cascade/temp/wizard-state.json',
       payload: JSON.stringify(updated),
-    });
-    return;
+    })
+    return
   }
-  await invoke("wizard_state_write", { content: JSON.stringify(updated) });
+  await invoke('wizard_state_write', { content: JSON.stringify(updated) })
 }
 
 /** Clears wizard state (--reset flag). Removes file from disk. */
 export async function resetWizardState(): Promise<void> {
-  await invoke("wizard_state_reset");
+  await invoke('wizard_state_reset')
 }
 
 /** Marks a step complete and persists. */
@@ -147,9 +149,9 @@ export async function completeStep(state: WizardState, stepIndex: number): Promi
     ...state,
     step_index: stepIndex + 1,
     completed_steps: Array.from(new Set([...state.completed_steps, stepIndex])),
-  };
-  await saveWizardState(next);
-  return next;
+  }
+  await saveWizardState(next)
+  return next
 }
 
 /** Marks a step skipped and persists. */
@@ -158,7 +160,7 @@ export async function skipStep(state: WizardState, stepIndex: number): Promise<W
     ...state,
     step_index: stepIndex + 1,
     skipped_steps: Array.from(new Set([...state.skipped_steps, stepIndex])),
-  };
-  await saveWizardState(next);
-  return next;
+  }
+  await saveWizardState(next)
+  return next
 }

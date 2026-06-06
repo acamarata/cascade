@@ -9,7 +9,7 @@
  * SPORT: MASTER-COMPONENTS.md — Sidebar
  */
 
-import { useRef, useState } from 'react';
+import { useRef, useState } from 'react'
 import {
   Inbox,
   LayoutDashboard,
@@ -17,21 +17,33 @@ import {
   PanelLeftOpen,
   Search,
   Settings,
-} from 'lucide-react';
-import { useArrowNav } from '../../hooks/useArrowNav';
-import { NavItem } from './NavItem';
+} from 'lucide-react'
+import { useArrowNav } from '../../hooks/useArrowNav'
+import { NavItem } from './NavItem'
 
 const NAV_ITEMS = [
-  { to: '/dashboard', icon: <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />, label: 'Dashboard' },
-  { to: '/inbox',     icon: <Inbox className="h-4 w-4 shrink-0" aria-hidden="true" />,          label: 'Inbox' },
-  { to: '/search',    icon: <Search className="h-4 w-4 shrink-0" aria-hidden="true" />,          label: 'Search' },
-  { to: '/settings',  icon: <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />,        label: 'Settings' },
-] as const;
+  {
+    to: '/dashboard',
+    icon: <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Dashboard',
+  },
+  { to: '/inbox', icon: <Inbox className="h-4 w-4 shrink-0" aria-hidden="true" />, label: 'Inbox' },
+  {
+    to: '/search',
+    icon: <Search className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Search',
+  },
+  {
+    to: '/settings',
+    icon: <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Settings',
+  },
+] as const
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-  const navRef = useRef<HTMLDivElement>(null);
-  useArrowNav(navRef);
+  const [collapsed, setCollapsed] = useState(false)
+  const navRef = useRef<HTMLDivElement>(null)
+  useArrowNav(navRef)
 
   return (
     <nav
@@ -45,9 +57,7 @@ export function Sidebar() {
       {/* Logo / app name */}
       <div className="flex h-12 items-center gap-2 border-b border-border px-3">
         <span className="h-6 w-6 shrink-0 rounded bg-primary" aria-hidden="true" />
-        {!collapsed && (
-          <span className="text-sm font-semibold tracking-tight">Cascade</span>
-        )}
+        {!collapsed && <span className="text-sm font-semibold tracking-tight">Cascade</span>}
       </div>
 
       {/* Nav links */}
@@ -86,5 +96,5 @@ export function Sidebar() {
         </button>
       </div>
     </nav>
-  );
+  )
 }

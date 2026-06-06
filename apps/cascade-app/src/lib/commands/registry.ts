@@ -7,42 +7,42 @@
  * SPORT: MASTER-LIBS.md — CommandRegistry, src/lib/commands/registry.ts
  */
 
-import type { NavigateFunction } from 'react-router-dom';
-import type { ThemeToken } from '../../store/theme.slice';
+import type { NavigateFunction } from 'react-router-dom'
+import type { ThemeToken } from '../../store/theme.slice'
 
 export interface CommandAction {
-  id: string;
-  label: string;
-  group?: string;
-  keywords?: string[];
-  shortcut?: string;
-  onExecute: () => void;
+  id: string
+  label: string
+  group?: string
+  keywords?: string[]
+  shortcut?: string
+  onExecute: () => void
 }
 
 export class CommandRegistry {
-  private actions: CommandAction[] = [];
+  private actions: CommandAction[] = []
 
   register(action: CommandAction): void {
     // Replace if id already registered (idempotent re-registration)
-    const idx = this.actions.findIndex((a) => a.id === action.id);
+    const idx = this.actions.findIndex((a) => a.id === action.id)
     if (idx >= 0) {
-      this.actions[idx] = action;
+      this.actions[idx] = action
     } else {
-      this.actions.push(action);
+      this.actions.push(action)
     }
   }
 
   unregister(id: string): void {
-    this.actions = this.actions.filter((a) => a.id !== id);
+    this.actions = this.actions.filter((a) => a.id !== id)
   }
 
   getAll(): CommandAction[] {
-    return [...this.actions];
+    return [...this.actions]
   }
 }
 
 /** Module-level singleton — import and use directly anywhere in the app. */
-export const globalRegistry = new CommandRegistry();
+export const globalRegistry = new CommandRegistry()
 
 /**
  * Purpose: Build the initial set of app-wide commands (navigation + theme).
@@ -52,7 +52,7 @@ export const globalRegistry = new CommandRegistry();
  */
 export function registerDefaultCommands(
   navigate: NavigateFunction,
-  setTheme: (token: ThemeToken) => void,
+  setTheme: (token: ThemeToken) => void
 ): void {
   const navCommands: CommandAction[] = [
     {
@@ -83,7 +83,7 @@ export function registerDefaultCommands(
       keywords: ['preferences', 'config'],
       onExecute: () => navigate('/settings'),
     },
-  ];
+  ]
 
   const themeCommands: CommandAction[] = [
     {
@@ -107,7 +107,7 @@ export function registerDefaultCommands(
       keywords: ['appearance', 'auto'],
       onExecute: () => setTheme('system'),
     },
-  ];
+  ]
 
-  [...navCommands, ...themeCommands].forEach((cmd) => globalRegistry.register(cmd));
+  ;[...navCommands, ...themeCommands].forEach((cmd) => globalRegistry.register(cmd))
 }

@@ -9,55 +9,55 @@
  * SPORT: MASTER-COMPONENTS.md — CascadeEditor
  */
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { FileText, FolderOpen, Save, Undo, Redo, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { FileText, FolderOpen, Save, Undo, Redo, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Undo/redo history reducer
 // ---------------------------------------------------------------------------
 
 interface EditorState {
-  content: string;
-  past: string[];
-  future: string[];
+  content: string
+  past: string[]
+  future: string[]
 }
 
 type EditorAction =
-  | { type: "SET"; value: string }
-  | { type: "UNDO" }
-  | { type: "REDO" }
-  | { type: "LOAD"; value: string };
+  | { type: 'SET'; value: string }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'LOAD'; value: string }
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
-    case "SET":
+    case 'SET':
       return {
         content: action.value,
         past: [...state.past, state.content].slice(-50), // keep last 50 states
         future: [],
-      };
-    case "UNDO": {
-      if (!state.past.length) return state;
-      const prev = state.past[state.past.length - 1];
+      }
+    case 'UNDO': {
+      if (!state.past.length) return state
+      const prev = state.past[state.past.length - 1]
       return {
         content: prev,
         past: state.past.slice(0, -1),
         future: [state.content, ...state.future],
-      };
+      }
     }
-    case "REDO": {
-      if (!state.future.length) return state;
-      const next = state.future[0];
+    case 'REDO': {
+      if (!state.future.length) return state
+      const next = state.future[0]
       return {
         content: next,
         past: [...state.past, state.content],
         future: state.future.slice(1),
-      };
+      }
     }
-    case "LOAD":
-      return { content: action.value, past: [], future: [] };
+    case 'LOAD':
+      return { content: action.value, past: [], future: [] }
   }
 }
 
@@ -66,9 +66,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 // ---------------------------------------------------------------------------
 
 interface ValidationResult {
-  valid: boolean;
-  errors: Array<{ line: number; message: string }>;
-  warnings: Array<{ line: number; message: string }>;
+  valid: boolean
+  errors: Array<{ line: number; message: string }>
+  warnings: Array<{ line: number; message: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -77,94 +77,94 @@ interface ValidationResult {
 
 export function CascadeEditor() {
   const [state, dispatch] = useReducer(editorReducer, {
-    content: "",
+    content: '',
     past: [],
     future: [],
-  });
-  const [filePath, setFilePath] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const [savedContent, setSavedContent] = useState("");
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  })
+  const [filePath, setFilePath] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+  const [savedContent, setSavedContent] = useState('')
+  const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Track dirty state
   useEffect(() => {
-    setIsDirty(state.content !== savedContent);
-  }, [state.content, savedContent]);
+    setIsDirty(state.content !== savedContent)
+  }, [state.content, savedContent])
 
   // Debounced validation
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!state.content) {
-      setValidation(null);
-      return;
+      setValidation(null)
+      return
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const result = await invoke<ValidationResult>("validate_cascade_doc", {
+        const result = await invoke<ValidationResult>('validate_cascade_doc', {
           content: state.content,
-        });
-        setValidation(result);
+        })
+        setValidation(result)
       } catch {
         // Validation is best-effort; don't block editing on errors.
       }
-    }, 600);
+    }, 600)
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [state.content]);
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [state.content])
 
   const handleOpen = useCallback(async () => {
     const selected = await openDialog({
-      title: "Open CASCADE.md",
-      filters: [{ name: "Markdown", extensions: ["md"] }],
-    });
-    if (!selected || typeof selected !== "string") return;
+      title: 'Open CASCADE.md',
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    })
+    if (!selected || typeof selected !== 'string') return
 
     try {
-      const doc = await invoke<{ content: string }>("load_cascade_doc", {
+      const doc = await invoke<{ content: string }>('load_cascade_doc', {
         path: selected,
-      });
-      dispatch({ type: "LOAD", value: doc.content });
-      setFilePath(selected);
-      setSavedContent(doc.content);
+      })
+      dispatch({ type: 'LOAD', value: doc.content })
+      setFilePath(selected)
+      setSavedContent(doc.content)
     } catch (err) {
-      console.error("Failed to load document:", err);
+      console.error('Failed to load document:', err)
     }
-  }, []);
+  }, [])
 
   const handleSave = useCallback(async () => {
-    if (!filePath) return;
-    setIsSaving(true);
+    if (!filePath) return
+    setIsSaving(true)
     try {
-      await invoke("save_cascade_doc", { path: filePath, content: state.content });
-      setSavedContent(state.content);
+      await invoke('save_cascade_doc', { path: filePath, content: state.content })
+      setSavedContent(state.content)
     } catch (err) {
-      console.error("Failed to save document:", err);
+      console.error('Failed to save document:', err)
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  }, [filePath, state.content]);
+  }, [filePath, state.content])
 
   // Keyboard shortcuts within the editor
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        handleSave();
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        handleSave()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        dispatch({ type: "UNDO" });
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        dispatch({ type: 'UNDO' })
       }
-      if ((e.metaKey || e.ctrlKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-        e.preventDefault();
-        dispatch({ type: "REDO" });
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        dispatch({ type: 'REDO' })
       }
     },
     [handleSave]
-  );
+  )
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -185,17 +185,17 @@ export function CascadeEditor() {
           onClick={handleSave}
           disabled={!filePath || !isDirty || isSaving}
           className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-          aria-label={`Save file (⌘S)${isDirty ? " — unsaved changes" : ""}`}
+          aria-label={`Save file (⌘S)${isDirty ? ' — unsaved changes' : ''}`}
         >
           <Save className="h-4 w-4" aria-hidden="true" />
-          {isSaving ? "Saving…" : "Save"}
+          {isSaving ? 'Saving…' : 'Save'}
         </button>
 
         <div className="h-4 w-px bg-border" aria-hidden="true" />
 
         <button
           type="button"
-          onClick={() => dispatch({ type: "UNDO" })}
+          onClick={() => dispatch({ type: 'UNDO' })}
           disabled={!state.past.length}
           className="rounded-md border border-border bg-background p-1.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           aria-label="Undo (⌘Z)"
@@ -205,7 +205,7 @@ export function CascadeEditor() {
 
         <button
           type="button"
-          onClick={() => dispatch({ type: "REDO" })}
+          onClick={() => dispatch({ type: 'REDO' })}
           disabled={!state.future.length}
           className="rounded-md border border-border bg-background p-1.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           aria-label="Redo (⌘Y)"
@@ -216,8 +216,12 @@ export function CascadeEditor() {
         {filePath && (
           <span className="ml-auto truncate text-xs text-muted-foreground" title={filePath}>
             <FileText className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
-            {filePath.split("/").slice(-2).join("/")}
-            {isDirty && <span className="ml-1 text-warning" aria-label="unsaved changes">●</span>}
+            {filePath.split('/').slice(-2).join('/')}
+            {isDirty && (
+              <span className="ml-1 text-warning" aria-label="unsaved changes">
+                ●
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -252,12 +256,12 @@ export function CascadeEditor() {
       <textarea
         className="flex-1 resize-none rounded-md border border-border bg-background p-3 font-mono text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         value={state.content}
-        onChange={(e) => dispatch({ type: "SET", value: e.target.value })}
+        onChange={(e) => dispatch({ type: 'SET', value: e.target.value })}
         onKeyDown={handleKeyDown}
-        placeholder={filePath ? "" : "Open a CASCADE.md file to start editing…"}
+        placeholder={filePath ? '' : 'Open a CASCADE.md file to start editing…'}
         aria-label="CASCADE.md editor"
         spellCheck={false}
       />
     </div>
-  );
+  )
 }

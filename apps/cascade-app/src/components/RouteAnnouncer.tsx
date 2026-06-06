@@ -12,33 +12,28 @@
  * SPORT: MASTER-COMPONENTS.md — RouteAnnouncer
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 export function RouteAnnouncer() {
-  const location = useLocation();
-  const [message, setMessage] = useState('');
+  const location = useLocation()
+  const [message, setMessage] = useState('')
   // Track whether initial mount has passed so we don't announce on first render.
-  const mounted = useRef(false);
+  const mounted = useRef(false)
 
   useEffect(() => {
     if (!mounted.current) {
-      mounted.current = true;
-      return;
+      mounted.current = true
+      return
     }
     // Use the document title set by react-helmet-async, fall back to path.
-    const title = document.title || location.pathname;
-    setMessage(`Navigated to ${title}`);
-  }, [location]);
+    const title = document.title || location.pathname
+    setMessage(`Navigated to ${title}`)
+  }, [location])
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      className="sr-only"
-    >
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
       {message}
     </div>
-  );
+  )
 }

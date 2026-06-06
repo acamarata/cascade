@@ -6,7 +6,7 @@
  * SPORT: MASTER-ROUTES.md — *
  */
 
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom'
 
 export function NotFoundPage() {
   return (
@@ -17,5 +17,5 @@ export function NotFoundPage() {
         Back to Dashboard
       </Link>
     </main>
-  );
+  )
 }

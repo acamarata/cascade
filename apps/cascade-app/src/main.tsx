@@ -6,16 +6,16 @@
  * SPORT: MASTER-COMPONENTS.md — App root
  */
 
-import React, { Suspense } from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { LoadingSpinner } from "./components/LoadingSpinner";
-import { ThemeProvider } from "./providers/ThemeProvider";
-import "./styles/globals.css";
+import React, { Suspense } from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { LoadingSpinner } from './components/LoadingSpinner'
+import { ThemeProvider } from './providers/ThemeProvider'
+import './styles/globals.css'
 
-const root = document.getElementById("root");
-if (!root) throw new Error("Root element #root not found in DOM");
+const root = document.getElementById('root')
+if (!root) throw new Error('Root element #root not found in DOM')
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
@@ -27,4 +27,4 @@ ReactDOM.createRoot(root).render(
       </Suspense>
     </ErrorBoundary>
   </React.StrictMode>
-);
+)

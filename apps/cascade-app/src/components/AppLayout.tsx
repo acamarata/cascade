@@ -9,28 +9,21 @@
  * SPORT: MASTER-COMPONENTS.md — AppLayout
  */
 
-import { NavLink, Outlet } from "react-router-dom";
-import {
-  Activity,
-  FileText,
-  Inbox,
-  Search,
-  Settings,
-  Zap,
-} from "lucide-react";
-import { DaemonStatusBadge } from "./DaemonStatusBadge";
+import { NavLink, Outlet } from 'react-router-dom'
+import { Activity, FileText, Inbox, Search, Settings, Zap } from 'lucide-react'
+import { DaemonStatusBadge } from './DaemonStatusBadge'
 
 interface AppLayoutProps {
-  onOpenPalette: () => void;
+  onOpenPalette: () => void
 }
 
 const navItems = [
-  { to: "/",        label: "Editor",   icon: FileText,  shortcut: "⌘1" },
-  { to: "/status",  label: "Status",   icon: Activity,  shortcut: "⌘2" },
-  { to: "/inbox",   label: "Inbox",    icon: Inbox,     shortcut: "⌘3" },
-  { to: "/rag",     label: "RAG",      icon: Search,    shortcut: "⌘4" },
-  { to: "/settings",label: "Settings", icon: Settings,  shortcut: "⌘5" },
-] as const;
+  { to: '/', label: 'Editor', icon: FileText, shortcut: '⌘1' },
+  { to: '/status', label: 'Status', icon: Activity, shortcut: '⌘2' },
+  { to: '/inbox', label: 'Inbox', icon: Inbox, shortcut: '⌘3' },
+  { to: '/rag', label: 'RAG', icon: Search, shortcut: '⌘4' },
+  { to: '/settings', label: 'Settings', icon: Settings, shortcut: '⌘5' },
+] as const
 
 export function AppLayout({ onOpenPalette }: AppLayoutProps) {
   return (
@@ -69,15 +62,13 @@ export function AppLayout({ onOpenPalette }: AppLayoutProps) {
             <NavLink
               key={to}
               to={to}
-              end={to === "/"}
+              end={to === '/'}
               className={({ isActive }) =>
                 [
-                  "group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors",
-                  "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground",
-                ].join(" ")
+                  'group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors',
+                  'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+                ].join(' ')
               }
               aria-label={`${label} (${shortcut})`}
             >
@@ -107,5 +98,5 @@ export function AppLayout({ onOpenPalette }: AppLayoutProps) {
         </main>
       </div>
     </div>
-  );
+  )
 }

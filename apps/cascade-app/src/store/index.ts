@@ -9,25 +9,25 @@
  * SPORT: MASTER-HOOKS.md — useAppStore, src/store/index.ts
  */
 
-import { create } from 'zustand';
-import { immer } from 'zustand/middleware/immer';
+import { create } from 'zustand'
+import { immer } from 'zustand/middleware/immer'
 
-import { createDaemonSlice } from './daemon.slice';
-import type { DaemonSlice } from './daemon.slice';
-import { createThemeSlice } from './theme.slice';
-import type { ThemeSlice } from './theme.slice';
-import { createWindowSlice } from './window.slice';
-import type { WindowSlice } from './window.slice';
+import { createDaemonSlice } from './daemon.slice'
+import type { DaemonSlice } from './daemon.slice'
+import { createThemeSlice } from './theme.slice'
+import type { ThemeSlice } from './theme.slice'
+import { createWindowSlice } from './window.slice'
+import type { WindowSlice } from './window.slice'
 
-export type AppStore = DaemonSlice & ThemeSlice & WindowSlice;
+export type AppStore = DaemonSlice & ThemeSlice & WindowSlice
 
 export const useAppStore = create<AppStore>()(
   immer((...a) => ({
     ...createDaemonSlice(...a),
     ...createThemeSlice(...a),
     ...createWindowSlice(...a),
-  })),
-);
+  }))
+)
 
 // ── Typed selector hooks ──────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ export function useDaemonStatus() {
     error: s.error,
     startPolling: s.startPolling,
     stopPolling: s.stopPolling,
-  }));
+  }))
 }
 
 /** Select theme token + resolved theme + setTheme action. */
@@ -49,7 +49,7 @@ export function useThemeStore() {
     token: s.token,
     resolvedTheme: s.resolvedTheme,
     setTheme: s.setTheme,
-  }));
+  }))
 }
 
 /** Select window state + open/close/focus actions. */
@@ -60,5 +60,5 @@ export function useWindowState() {
     openWindow: s.openWindow,
     closeWindow: s.closeWindow,
     focusWindow: s.focusWindow,
-  }));
+  }))
 }

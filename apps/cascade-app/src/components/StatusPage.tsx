@@ -5,50 +5,50 @@
  * SPORT: MASTER-COMPONENTS.md — StatusPage
  */
 
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Activity, Play, Square, RotateCcw } from "lucide-react";
+import { useEffect, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { Activity, Play, Square, RotateCcw } from 'lucide-react'
 
 interface DaemonStatus {
-  running: boolean;
-  pid?: number;
-  uptime_secs?: number;
-  version?: string;
+  running: boolean
+  pid?: number
+  uptime_secs?: number
+  version?: string
 }
 
 function formatUptime(secs: number): string {
-  if (secs < 60) return `${secs}s`;
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
-  return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+  if (secs < 60) return `${secs}s`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`
+  return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`
 }
 
 export function StatusPage() {
-  const [status, setStatus] = useState<DaemonStatus | null>(null);
+  const [status, setStatus] = useState<DaemonStatus | null>(null)
 
   function refresh() {
-    invoke<DaemonStatus>("get_daemon_status")
+    invoke<DaemonStatus>('get_daemon_status')
       .then(setStatus)
-      .catch(() => setStatus({ running: false }));
+      .catch(() => setStatus({ running: false }))
   }
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 5_000);
-    return () => clearInterval(id);
-  }, []);
+    refresh()
+    const id = setInterval(refresh, 5_000)
+    return () => clearInterval(id)
+  }, [])
 
   async function startDaemon() {
-    await invoke("start_daemon").catch(console.error);
-    refresh();
+    await invoke('start_daemon').catch(console.error)
+    refresh()
   }
   async function stopDaemon() {
-    await invoke("stop_daemon").catch(console.error);
-    refresh();
+    await invoke('stop_daemon').catch(console.error)
+    refresh()
   }
   async function restartDaemon() {
-    await invoke("stop_daemon").catch(console.error);
-    await invoke("start_daemon").catch(console.error);
-    refresh();
+    await invoke('stop_daemon').catch(console.error)
+    await invoke('start_daemon').catch(console.error)
+    refresh()
   }
 
   return (
@@ -62,14 +62,17 @@ export function StatusPage() {
         <div className="flex items-center gap-3">
           <span
             className={[
-              "h-3 w-3 rounded-full",
-              status === null ? "bg-muted-foreground animate-pulse" :
-              status.running ? "bg-green-500" : "bg-red-500",
-            ].join(" ")}
+              'h-3 w-3 rounded-full',
+              status === null
+                ? 'bg-muted-foreground animate-pulse'
+                : status.running
+                  ? 'bg-green-500'
+                  : 'bg-red-500',
+            ].join(' ')}
             aria-hidden="true"
           />
           <span className="text-sm font-medium">
-            {status === null ? "Checking…" : status.running ? "Running" : "Stopped"}
+            {status === null ? 'Checking…' : status.running ? 'Running' : 'Stopped'}
           </span>
         </div>
 
@@ -130,5 +133,5 @@ export function StatusPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

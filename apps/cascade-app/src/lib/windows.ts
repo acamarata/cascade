@@ -8,7 +8,7 @@
  * SPORT: MASTER-LIBS.md — windows IPC helpers, src/lib/windows.ts
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core'
 
 /**
  * Open a secondary Tauri window at `url` with `title`, or focus it if already open.
@@ -18,7 +18,7 @@ import { invoke } from '@tauri-apps/api/core';
  * @param title - Window title bar text.
  */
 export async function openWindow(label: string, url: string, title: string): Promise<void> {
-  return invoke('cascade_open_window', { label, url, title });
+  return invoke('cascade_open_window', { label, url, title })
 }
 
 /**
@@ -27,7 +27,7 @@ export async function openWindow(label: string, url: string, title: string): Pro
  * @param label - Tauri window label to close.
  */
 export async function closeWindow(label: string): Promise<void> {
-  return invoke('cascade_close_window', { label });
+  return invoke('cascade_close_window', { label })
 }
 
 /**
@@ -36,5 +36,5 @@ export async function closeWindow(label: string): Promise<void> {
  * @param label - Tauri window label to bring to front.
  */
 export async function focusWindow(label: string): Promise<void> {
-  return invoke('cascade_focus_window', { label });
+  return invoke('cascade_focus_window', { label })
 }

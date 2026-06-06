@@ -7,4 +7,4 @@
  * SPORT: MASTER-HOOKS.md — useTheme
  */
 
-export { useThemeStore as useTheme } from '../store/index';
+export { useThemeStore as useTheme } from '../store/index'

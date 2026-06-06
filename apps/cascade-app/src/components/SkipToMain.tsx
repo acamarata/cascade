@@ -22,5 +22,5 @@ export function SkipToMain() {
     >
       Skip to main content
     </a>
-  );
+  )
 }

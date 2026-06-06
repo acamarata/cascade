@@ -8,29 +8,27 @@
  * SPORT: MASTER-HOOKS.md — useCommandPalette, src/hooks/useCommandPalette.ts
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react'
 
 export function useCommandPalette() {
-  const [isOpen, setIsOpen] = useState(false);
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const [isOpen, setIsOpen] = useState(false)
+  const open = useCallback(() => setIsOpen(true), [])
+  const close = useCallback(() => setIsOpen(false), [])
+  const toggle = useCallback(() => setIsOpen((v) => !v), [])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Cmd+K on macOS, Ctrl+K on Windows/Linux
-      const isMac = navigator.platform.toLowerCase().includes("mac");
-      const triggered = isMac
-        ? e.metaKey && e.key === "k"
-        : e.ctrlKey && e.key === "k";
+      const isMac = navigator.platform.toLowerCase().includes('mac')
+      const triggered = isMac ? e.metaKey && e.key === 'k' : e.ctrlKey && e.key === 'k'
       if (triggered) {
-        e.preventDefault();
-        toggle();
+        e.preventDefault()
+        toggle()
       }
     }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggle]);
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [toggle])
 
-  return { isOpen, open, close, toggle };
+  return { isOpen, open, close, toggle }
 }

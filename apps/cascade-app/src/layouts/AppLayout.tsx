@@ -11,28 +11,28 @@
  * SPORT: MASTER-COMPONENTS.md — AppLayout
  */
 
-import { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
-import { CommandPalette } from '../components/CommandPalette';
-import { RouteAnnouncer } from '../components/RouteAnnouncer';
-import { SkipToMain } from '../components/SkipToMain';
-import { Sidebar } from '../components/layout/Sidebar';
-import { StatusBar } from '../components/layout/StatusBar';
-import { TopBar } from '../components/layout/TopBar';
-import { useCommandPalette } from '../hooks/useCommandPalette';
-import { registerDefaultCommands } from '../lib/commands/registry';
-import { useThemeStore } from '../store';
+import { useEffect } from 'react'
+import { Outlet, useNavigate } from 'react-router-dom'
+import { CommandPalette } from '../components/CommandPalette'
+import { RouteAnnouncer } from '../components/RouteAnnouncer'
+import { SkipToMain } from '../components/SkipToMain'
+import { Sidebar } from '../components/layout/Sidebar'
+import { StatusBar } from '../components/layout/StatusBar'
+import { TopBar } from '../components/layout/TopBar'
+import { useCommandPalette } from '../hooks/useCommandPalette'
+import { registerDefaultCommands } from '../lib/commands/registry'
+import { useThemeStore } from '../store'
 
 export function AppLayout() {
-  const navigate = useNavigate();
-  const { isOpen, close } = useCommandPalette();
-  const { setTheme } = useThemeStore();
+  const navigate = useNavigate()
+  const { isOpen, close } = useCommandPalette()
+  const { setTheme } = useThemeStore()
 
   // Register default nav + theme commands once per mount. Idempotent — re-registration
   // replaces by id so remounts (HMR, StrictMode double-invoke) have no side-effects.
   useEffect(() => {
-    registerDefaultCommands(navigate, setTheme);
-  }, [navigate, setTheme]);
+    registerDefaultCommands(navigate, setTheme)
+  }, [navigate, setTheme])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -57,5 +57,5 @@ export function AppLayout() {
       {/* Global command palette — portal-rendered, triggered by Cmd+K / Ctrl+K */}
       <CommandPalette isOpen={isOpen} onClose={close} />
     </div>
-  );
+  )
 }

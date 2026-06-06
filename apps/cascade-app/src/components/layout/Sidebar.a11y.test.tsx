@@ -8,36 +8,36 @@
  * SPORT: MASTER-COMPONENTS.md — Sidebar, SkipToMain (E01-15 WCAG remediation)
  */
 
-import { render } from "@testing-library/react";
-import "@testing-library/jest-dom";
-import { axe, toHaveNoViolations } from "jest-axe";
-import { MemoryRouter } from "react-router-dom";
-import { Sidebar } from "./Sidebar";
-import { SkipToMain } from "../SkipToMain";
+import { render } from '@testing-library/react'
+import '@testing-library/jest-dom'
+import { axe, toHaveNoViolations } from 'jest-axe'
+import { MemoryRouter } from 'react-router-dom'
+import { Sidebar } from './Sidebar'
+import { SkipToMain } from '../SkipToMain'
 
-expect.extend(toHaveNoViolations);
+expect.extend(toHaveNoViolations)
 
-test("Sidebar nav landmark has no axe violations", async () => {
+test('Sidebar nav landmark has no axe violations', async () => {
   const { container } = render(
     <MemoryRouter>
       <Sidebar />
-    </MemoryRouter>,
-  );
-  const results = await axe(container);
-  expect(results).toHaveNoViolations();
-});
+    </MemoryRouter>
+  )
+  const results = await axe(container)
+  expect(results).toHaveNoViolations()
+})
 
-test("Sidebar exposes a labelled navigation landmark", () => {
+test('Sidebar exposes a labelled navigation landmark', () => {
   const { getByRole } = render(
     <MemoryRouter>
       <Sidebar />
-    </MemoryRouter>,
-  );
-  expect(getByRole("navigation", { name: /main navigation/i })).toBeInTheDocument();
-});
+    </MemoryRouter>
+  )
+  expect(getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument()
+})
 
-test("SkipToMain links to the main-content landmark", () => {
-  const { getByText } = render(<SkipToMain />);
-  const link = getByText(/skip to main content/i);
-  expect(link).toHaveAttribute("href", "#main-content");
-});
+test('SkipToMain links to the main-content landmark', () => {
+  const { getByText } = render(<SkipToMain />)
+  const link = getByText(/skip to main content/i)
+  expect(link).toHaveAttribute('href', '#main-content')
+})

@@ -7,14 +7,14 @@
  * SPORT: MASTER-ROUTES.md — all frontend routes
  */
 
-import { Navigate, Route, Routes } from 'react-router-dom';
-import { AppLayout } from '../layouts/AppLayout';
-import { DashboardPage } from '../pages/DashboardPage';
-import { InboxPage } from '../pages/InboxPage';
-import { NotFoundPage } from '../pages/NotFoundPage';
-import { OnboardingPage } from '../pages/OnboardingPage';
-import { SearchPage } from '../pages/SearchPage';
-import { SettingsPage } from '../pages/SettingsPage';
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AppLayout } from '../layouts/AppLayout'
+import { DashboardPage } from '../pages/DashboardPage'
+import { InboxPage } from '../pages/InboxPage'
+import { NotFoundPage } from '../pages/NotFoundPage'
+import { OnboardingPage } from '../pages/OnboardingPage'
+import { SearchPage } from '../pages/SearchPage'
+import { SettingsPage } from '../pages/SettingsPage'
 
 /**
  * Purpose: Renders the full route tree.
@@ -45,5 +45,5 @@ export function RouterApp() {
       {/* Catch-all */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
-  );
+  )
 }

@@ -7,27 +7,27 @@
  * SPORT: MASTER-COMPONENTS.md — TopBar
  */
 
-import { useDaemonStatus } from '../../store/index';
-import { ThemeToggle } from '../ThemeToggle';
+import { useDaemonStatus } from '../../store/index'
+import { ThemeToggle } from '../ThemeToggle'
 
 const STATUS_DOT: Record<string, string> = {
-  connected:    'bg-green-500',
-  connecting:   'bg-amber-400',
+  connected: 'bg-green-500',
+  connecting: 'bg-amber-400',
   disconnected: 'bg-red-500',
-  error:        'bg-red-500',
-};
+  error: 'bg-red-500',
+}
 
 const STATUS_LABEL: Record<string, string> = {
-  connected:    'Daemon connected',
-  connecting:   'Connecting to daemon',
+  connected: 'Daemon connected',
+  connecting: 'Connecting to daemon',
   disconnected: 'Daemon disconnected',
-  error:        'Daemon error',
-};
+  error: 'Daemon error',
+}
 
 export function TopBar() {
-  const { status } = useDaemonStatus();
-  const dotClass = STATUS_DOT[status] ?? 'bg-muted-foreground';
-  const dotLabel = STATUS_LABEL[status] ?? status;
+  const { status } = useDaemonStatus()
+  const dotClass = STATUS_DOT[status] ?? 'bg-muted-foreground'
+  const dotLabel = STATUS_LABEL[status] ?? status
 
   return (
     <header
@@ -44,19 +44,12 @@ export function TopBar() {
       <div className="flex-1" aria-hidden="true" />
 
       {/* Connection indicator */}
-      <div
-        className="flex items-center gap-1.5"
-        title={dotLabel}
-        aria-label={dotLabel}
-      >
-        <span
-          className={['h-2 w-2 rounded-full', dotClass].join(' ')}
-          aria-hidden="true"
-        />
+      <div className="flex items-center gap-1.5" title={dotLabel} aria-label={dotLabel}>
+        <span className={['h-2 w-2 rounded-full', dotClass].join(' ')} aria-hidden="true" />
       </div>
 
       {/* Theme toggle */}
       <ThemeToggle />
     </header>
-  );
+  )
 }

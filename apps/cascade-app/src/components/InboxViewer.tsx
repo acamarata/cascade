@@ -9,95 +9,92 @@
  * SPORT: MASTER-COMPONENTS.md — InboxViewer
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { get as getConfig } from "../lib/config";
-import { Inbox, RefreshCw, AlertTriangle, ArrowUp, Minus, ArrowDown } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { get as getConfig } from '../lib/config'
+import { Inbox, RefreshCw, AlertTriangle, ArrowUp, Minus, ArrowDown } from 'lucide-react'
 
 interface InboxMessage {
-  id: string;
-  subject: string;
-  from: string;
-  priority: "critical" | "high" | "medium" | "low";
-  message_type: string;
-  created_at: string;
-  body_preview: string;
+  id: string
+  subject: string
+  from: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  message_type: string
+  created_at: string
+  body_preview: string
 }
 
 const priorityMeta: Record<
-  InboxMessage["priority"],
+  InboxMessage['priority'],
   { label: string; className: string; Icon: typeof AlertTriangle }
 > = {
   critical: {
-    label: "Critical",
-    className: "text-red-600 dark:text-red-400",
+    label: 'Critical',
+    className: 'text-red-600 dark:text-red-400',
     Icon: AlertTriangle,
   },
   high: {
-    label: "High",
-    className: "text-orange-600 dark:text-orange-400",
+    label: 'High',
+    className: 'text-orange-600 dark:text-orange-400',
     Icon: ArrowUp,
   },
   medium: {
-    label: "Medium",
-    className: "text-yellow-600 dark:text-yellow-400",
+    label: 'Medium',
+    className: 'text-yellow-600 dark:text-yellow-400',
     Icon: Minus,
   },
   low: {
-    label: "Low",
-    className: "text-muted-foreground",
+    label: 'Low',
+    className: 'text-muted-foreground',
     Icon: ArrowDown,
   },
-};
+}
 
 export function InboxViewer() {
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<InboxMessage | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [messages, setMessages] = useState<InboxMessage[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<InboxMessage | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+    setIsLoading(true)
+    setError(null)
     try {
       // Get registered inbox paths from config, then fetch messages for each.
-      const config = await getConfig();
-      const allMessages: InboxMessage[] = [];
+      const config = await getConfig()
+      const allMessages: InboxMessage[] = []
       for (const path of config.inbox_paths) {
-        const msgs = await invoke<InboxMessage[]>("list_inbox", { inboxPath: path });
-        allMessages.push(...msgs);
+        const msgs = await invoke<InboxMessage[]>('list_inbox', { inboxPath: path })
+        allMessages.push(...msgs)
       }
       // Sort: critical → high → medium → low, then by created_at desc.
-      const order = { critical: 0, high: 1, medium: 2, low: 3 };
+      const order = { critical: 0, high: 1, medium: 2, low: 3 }
       allMessages.sort((a, b) => {
-        const pd = order[a.priority] - order[b.priority];
-        if (pd !== 0) return pd;
-        return b.created_at.localeCompare(a.created_at);
-      });
-      setMessages(allMessages);
+        const pd = order[a.priority] - order[b.priority]
+        if (pd !== 0) return pd
+        return b.created_at.localeCompare(a.created_at)
+      })
+      setMessages(allMessages)
     } catch (err) {
-      setError(String(err));
+      setError(String(err))
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    refresh();
-    intervalRef.current = setInterval(refresh, 30_000);
+    refresh()
+    intervalRef.current = setInterval(refresh, 30_000)
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [refresh]);
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [refresh])
 
   return (
     <div className="flex h-full gap-3">
       {/* Message list */}
-      <section
-        aria-label="Inbox messages"
-        className="flex w-72 shrink-0 flex-col gap-2"
-      >
+      <section aria-label="Inbox messages" className="flex w-72 shrink-0 flex-col gap-2">
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-lg font-semibold">
             <Inbox className="h-5 w-5" aria-hidden="true" />
@@ -116,14 +113,16 @@ export function InboxViewer() {
             aria-label="Refresh inbox"
           >
             <RefreshCw
-              className={["h-4 w-4", isLoading ? "animate-spin" : ""].join(" ")}
+              className={['h-4 w-4', isLoading ? 'animate-spin' : ''].join(' ')}
               aria-hidden="true"
             />
           </button>
         </div>
 
         {error && (
-          <p role="alert" className="text-xs text-destructive">{error}</p>
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
         )}
 
         <ul className="flex flex-col gap-1 overflow-auto" aria-label="Message list">
@@ -131,26 +130,26 @@ export function InboxViewer() {
             <li className="text-sm text-muted-foreground">Inbox is empty.</li>
           )}
           {messages.map((msg) => {
-            const meta = priorityMeta[msg.priority];
-            const PIcon = meta.Icon;
+            const meta = priorityMeta[msg.priority]
+            const PIcon = meta.Icon
             return (
               <li key={msg.id}>
                 <button
                   type="button"
                   onClick={() => setSelected(msg)}
                   className={[
-                    "w-full rounded-md border px-3 py-2.5 text-left text-sm transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    'w-full rounded-md border px-3 py-2.5 text-left text-sm transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected?.id === msg.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-card hover:bg-accent",
-                  ].join(" ")}
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border bg-card hover:bg-accent',
+                  ].join(' ')}
                   aria-pressed={selected?.id === msg.id}
                 >
                   <div className="flex items-center justify-between gap-2 mb-0.5">
                     <span className="truncate font-medium">{msg.subject}</span>
                     <span
-                      className={["flex items-center gap-0.5 text-xs", meta.className].join(" ")}
+                      className={['flex items-center gap-0.5 text-xs', meta.className].join(' ')}
                       aria-label={`Priority: ${meta.label}`}
                     >
                       <PIcon className="h-3 w-3" aria-hidden="true" />
@@ -164,7 +163,7 @@ export function InboxViewer() {
                   </div>
                 </button>
               </li>
-            );
+            )
           })}
         </ul>
       </section>
@@ -193,14 +192,12 @@ export function InboxViewer() {
                 </div>
               </dl>
             </header>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-              {selected.body_preview}
-            </p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{selected.body_preview}</p>
           </article>
         ) : (
           <p className="text-sm text-muted-foreground">Select a message to read it.</p>
         )}
       </section>
     </div>
-  );
+  )
 }

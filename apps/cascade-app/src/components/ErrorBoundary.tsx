@@ -7,48 +7,48 @@
  * SPORT: MASTER-COMPONENTS.md — ErrorBoundary
  */
 
-import React from "react";
-import { Button } from "@/components/ui/button";
+import React from 'react'
+import { Button } from '@/components/ui/button'
 
 interface Props {
-  children: React.ReactNode;
+  children: React.ReactNode
   /** Optional custom reset handler; defaults to window.location.reload() */
-  onReset?: () => void;
+  onReset?: () => void
 }
 
 interface State {
-  hasError: boolean;
-  error: Error | null;
+  hasError: boolean
+  error: Error | null
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false, error: null };
+    super(props)
+    this.state = { hasError: false, error: null }
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     // Log to console so developers can inspect in DevTools.
     // Error reporting service (Sentry etc.) is post-P3 scope.
-    console.error("[ErrorBoundary] Uncaught render error:", error, info.componentStack);
+    console.error('[ErrorBoundary] Uncaught render error:', error, info.componentStack)
   }
 
   private handleReset = () => {
     if (this.props.onReset) {
-      this.props.onReset();
-      this.setState({ hasError: false, error: null });
+      this.props.onReset()
+      this.setState({ hasError: false, error: null })
     } else {
-      window.location.reload();
+      window.location.reload()
     }
-  };
+  }
 
   render() {
     if (!this.state.hasError) {
-      return this.props.children;
+      return this.props.children
     }
 
     return (
@@ -59,14 +59,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
       >
         <h1 className="text-xl font-semibold text-destructive">Something went wrong</h1>
         {this.state.error && (
-          <p className="max-w-md text-sm text-muted-foreground">
-            {this.state.error.message}
-          </p>
+          <p className="max-w-md text-sm text-muted-foreground">{this.state.error.message}</p>
         )}
         <Button variant="outline" onClick={this.handleReset}>
           Reload
         </Button>
       </div>
-    );
+    )
   }
 }

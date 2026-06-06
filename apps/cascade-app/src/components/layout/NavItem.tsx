@@ -11,19 +11,19 @@
  * SPORT: MASTER-COMPONENTS.md — NavItem
  */
 
-import { NavLink, useMatch, useResolvedPath } from 'react-router-dom';
+import { NavLink, useMatch, useResolvedPath } from 'react-router-dom'
 
 interface NavItemProps {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
+  to: string
+  icon: React.ReactNode
+  label: string
 }
 
 export function NavItem({ to, icon, label }: NavItemProps) {
   // Resolve the target path relative to current base, then test if it matches.
   // This mirrors what NavLink does internally for its isActive check.
-  const resolved = useResolvedPath(to);
-  const match = useMatch({ path: resolved.pathname, end: true });
+  const resolved = useResolvedPath(to)
+  const match = useMatch({ path: resolved.pathname, end: true })
 
   return (
     <NavLink
@@ -42,5 +42,5 @@ export function NavItem({ to, icon, label }: NavItemProps) {
       <span aria-hidden="true">{icon}</span>
       <span>{label}</span>
     </NavLink>
-  );
+  )
 }

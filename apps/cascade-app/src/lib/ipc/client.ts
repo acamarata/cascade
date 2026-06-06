@@ -13,9 +13,9 @@
  * SPORT: MASTER-LIBS.md — ipc client, src/lib/ipc/client.ts
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core'
 
-import { CascadeIpcError } from '../../types/errors';
+import { CascadeIpcError } from '../../types/errors'
 import type {
   ConfigGetResult,
   ConfigSetResult,
@@ -26,7 +26,7 @@ import type {
   ResolveResult,
   SearchResult,
   StatusResult,
-} from '../../types/ipc';
+} from '../../types/ipc'
 
 // ── Internal helper ───────────────────────────────────────────────────────────
 
@@ -41,31 +41,31 @@ import type {
  */
 async function call<T>(promise: Promise<T>): Promise<T> {
   try {
-    return await promise;
+    return await promise
   } catch (raw: unknown) {
     // Tauri serialises Rust errors as strings or objects.
     if (typeof raw === 'string') {
       // Attempt structured parse, e.g. '{"code":"DaemonNotRunning","message":"..."}'
       if (raw.trimStart().startsWith('{')) {
         try {
-          const parsed = JSON.parse(raw) as { code?: string; message?: string };
+          const parsed = JSON.parse(raw) as { code?: string; message?: string }
           if (typeof parsed.code === 'string') {
-            throw new CascadeIpcError(parsed.code, parsed.message ?? raw);
+            throw new CascadeIpcError(parsed.code, parsed.message ?? raw)
           }
         } catch (rethrow) {
-          if (rethrow instanceof CascadeIpcError) throw rethrow;
+          if (rethrow instanceof CascadeIpcError) throw rethrow
           // Not valid JSON — fall through to colon-split.
         }
       }
       // Fallback: extract code from "CodeVariant: detail" format.
-      const colonIdx = raw.indexOf(':');
-      const code = colonIdx > 0 ? raw.slice(0, colonIdx).trim() : raw;
-      const message = colonIdx > 0 ? raw.slice(colonIdx + 1).trim() : raw;
-      throw new CascadeIpcError(code, message);
+      const colonIdx = raw.indexOf(':')
+      const code = colonIdx > 0 ? raw.slice(0, colonIdx).trim() : raw
+      const message = colonIdx > 0 ? raw.slice(colonIdx + 1).trim() : raw
+      throw new CascadeIpcError(code, message)
     }
     // Non-string rejection — wrap generically.
-    const message = raw instanceof Error ? raw.message : String(raw);
-    throw new CascadeIpcError('UnknownError', message);
+    const message = raw instanceof Error ? raw.message : String(raw)
+    throw new CascadeIpcError('UnknownError', message)
   }
 }
 
@@ -89,7 +89,7 @@ export const ipc = {
    * SPORT: MASTER-COMMANDS.md — cascade_status
    */
   getStatus(): Promise<StatusResult> {
-    return call(invoke<StatusResult>('cascade_status'));
+    return call(invoke<StatusResult>('cascade_status'))
   },
 
   /**
@@ -101,7 +101,7 @@ export const ipc = {
    * SPORT: MASTER-COMMANDS.md — cascade_resolve
    */
   resolve(tier?: string, format?: string): Promise<ResolveResult> {
-    return call(invoke<ResolveResult>('cascade_resolve', { tier, format }));
+    return call(invoke<ResolveResult>('cascade_resolve', { tier, format }))
   },
 
   /**
@@ -113,7 +113,7 @@ export const ipc = {
    * SPORT: MASTER-COMMANDS.md — cascade_search
    */
   search(query: string, limit?: number): Promise<SearchResult> {
-    return call(invoke<SearchResult>('cascade_search', { query, limit }));
+    return call(invoke<SearchResult>('cascade_search', { query, limit }))
   },
 
   inbox: {
@@ -125,7 +125,7 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_inbox_list
      */
     list(limit?: number): Promise<InboxSummaryResult> {
-      return call(invoke<InboxSummaryResult>('cascade_inbox_list', { limit }));
+      return call(invoke<InboxSummaryResult>('cascade_inbox_list', { limit }))
     },
 
     /**
@@ -140,7 +140,7 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_inbox_send
      */
     send(to: string, subject: string, body: string, priority?: string): Promise<InboxSendAck> {
-      return call(invoke<InboxSendAck>('cascade_inbox_send', { to, subject, body, priority }));
+      return call(invoke<InboxSendAck>('cascade_inbox_send', { to, subject, body, priority }))
     },
   },
 
@@ -154,7 +154,7 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_memory_read
      */
     read(project: string, file: string): Promise<MemoryReadResult> {
-      return call(invoke<MemoryReadResult>('cascade_memory_read', { project, file }));
+      return call(invoke<MemoryReadResult>('cascade_memory_read', { project, file }))
     },
 
     /**
@@ -167,7 +167,7 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_memory_write
      */
     write(project: string, file: string, content: string): Promise<MemoryWriteResult> {
-      return call(invoke<MemoryWriteResult>('cascade_memory_write', { project, file, content }));
+      return call(invoke<MemoryWriteResult>('cascade_memory_write', { project, file, content }))
     },
   },
 
@@ -180,7 +180,7 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_config_get
      */
     get(key: string): Promise<ConfigGetResult> {
-      return call(invoke<ConfigGetResult>('cascade_config_get', { key }));
+      return call(invoke<ConfigGetResult>('cascade_config_get', { key }))
     },
 
     /**
@@ -192,9 +192,9 @@ export const ipc = {
      * SPORT: MASTER-COMMANDS.md — cascade_config_set
      */
     set(key: string, value: unknown): Promise<ConfigSetResult> {
-      return call(invoke<ConfigSetResult>('cascade_config_set', { key, value }));
+      return call(invoke<ConfigSetResult>('cascade_config_set', { key, value }))
     },
   },
-} as const;
+} as const
 
-export type Ipc = typeof ipc;
+export type Ipc = typeof ipc

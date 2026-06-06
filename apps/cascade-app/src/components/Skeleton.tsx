@@ -7,12 +7,12 @@
  * SPORT: MASTER-COMPONENTS.md — Skeleton
  */
 
-import React from "react";
-import { cn } from "@/lib/utils";
+import React from 'react'
+import { cn } from '@/lib/utils'
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Extra Tailwind classes for sizing/shape. */
-  className?: string;
+  className?: string
 }
 
 /**
@@ -23,8 +23,8 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
       aria-busy={true}
-      className={cn("animate-pulse rounded-md bg-muted", className)}
+      className={cn('animate-pulse rounded-md bg-muted', className)}
       {...props}
     />
-  );
+  )
 }

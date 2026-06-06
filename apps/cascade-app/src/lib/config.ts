@@ -4,17 +4,17 @@
  * SPORT: MASTER-LIBS.md — config
  */
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from '@tauri-apps/api/core'
 
 export interface AppConfig {
-  theme: "light" | "dark" | "system";
-  locale: string;
-  update_channel: "stable" | "beta" | "nightly";
-  inbox_paths: string[];
-  rag_index_paths: string[];
-  daemon_autostart: boolean;
+  theme: 'light' | 'dark' | 'system'
+  locale: string
+  update_channel: 'stable' | 'beta' | 'nightly'
+  inbox_paths: string[]
+  rag_index_paths: string[]
+  daemon_autostart: boolean
 }
 
 export async function get(): Promise<AppConfig> {
-  return invoke<AppConfig>("get_config");
+  return invoke<AppConfig>('get_config')
 }

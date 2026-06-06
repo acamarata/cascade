@@ -8,11 +8,11 @@
  * SPORT: MASTER-ROUTES.md — /settings
  */
 
-import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store';
+import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
 
 export function SettingsPage() {
-  const openWindow = useAppStore((s) => s.openWindow);
+  const openWindow = useAppStore((s) => s.openWindow)
 
   return (
     <main className="flex-1 p-6 space-y-4">
@@ -25,5 +25,5 @@ export function SettingsPage() {
         Open in new window
       </Button>
     </main>
-  );
+  )
 }

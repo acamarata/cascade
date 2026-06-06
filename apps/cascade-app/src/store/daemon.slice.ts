@@ -9,43 +9,45 @@
  * SPORT: MASTER-HOOKS.md — useDaemonStatus, src/store/daemon.slice.ts
  */
 
-import type { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand'
 
-import { ipc } from '../lib/ipc/client';
-import type { StatusResult } from '../types/ipc';
-import { CascadeIpcError } from '../types/errors';
+import { ipc } from '../lib/ipc/client'
+import type { StatusResult } from '../types/ipc'
+import { CascadeIpcError } from '../types/errors'
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error'
 
 export interface DaemonSlice {
   /** Current daemon connection status. */
-  status: ConnectionStatus;
+  status: ConnectionStatus
   /** Last successful StatusResult from the daemon, or null if never connected. */
-  data: StatusResult | null;
+  data: StatusResult | null
   /** Unix ms timestamp of the last successful ping, or null. */
-  lastPing: number | null;
+  lastPing: number | null
   /** Last error message, or null. */
-  error: string | null;
+  error: string | null
   /** Start the 5-second polling interval. Idempotent — does nothing if already polling. */
-  startPolling: () => void;
+  startPolling: () => void
   /** Stop the polling interval. Safe to call if not polling. */
-  stopPolling: () => void;
+  stopPolling: () => void
 }
 
 // Interval ref lives outside Zustand state — not serialisable.
 // Exported for test cleanup only; do not use outside tests.
-export let _pollInterval: ReturnType<typeof setInterval> | null = null;
+export let _pollInterval: ReturnType<typeof setInterval> | null = null
 
 /** Reset the module-level interval ref. For test use only. */
 export function _resetPollInterval() {
   if (_pollInterval !== null) {
-    clearInterval(_pollInterval);
-    _pollInterval = null;
+    clearInterval(_pollInterval)
+    _pollInterval = null
   }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const createDaemonSlice: StateCreator<any, [['zustand/immer', never]], [], DaemonSlice> = (set) => ({
+export const createDaemonSlice: StateCreator<any, [['zustand/immer', never]], [], DaemonSlice> = (
+  set
+) => ({
   status: 'disconnected',
   data: null,
   lastPing: null,
@@ -53,38 +55,40 @@ export const createDaemonSlice: StateCreator<any, [['zustand/immer', never]], []
 
   startPolling: () => {
     // Idempotent guard.
-    if (_pollInterval !== null) return;
+    if (_pollInterval !== null) return
 
     // Immediate first poll.
     const poll = () => {
-      set((draft: DaemonSlice) => { draft.status = 'connecting'; });
+      set((draft: DaemonSlice) => {
+        draft.status = 'connecting'
+      })
       ipc
         .getStatus()
         .then((result) => {
           set((draft: DaemonSlice) => {
-            draft.status = 'connected';
-            draft.data = result;
-            draft.lastPing = Date.now();
-            draft.error = null;
-          });
+            draft.status = 'connected'
+            draft.data = result
+            draft.lastPing = Date.now()
+            draft.error = null
+          })
         })
         .catch((err: unknown) => {
-          const msg = err instanceof CascadeIpcError ? err.message : String(err);
+          const msg = err instanceof CascadeIpcError ? err.message : String(err)
           set((draft: DaemonSlice) => {
-            draft.status = 'error';
-            draft.error = msg;
-          });
-        });
-    };
+            draft.status = 'error'
+            draft.error = msg
+          })
+        })
+    }
 
-    poll();
-    _pollInterval = setInterval(poll, 5_000);
+    poll()
+    _pollInterval = setInterval(poll, 5_000)
   },
 
   stopPolling: () => {
     if (_pollInterval !== null) {
-      clearInterval(_pollInterval);
-      _pollInterval = null;
+      clearInterval(_pollInterval)
+      _pollInterval = null
     }
   },
-});
+})

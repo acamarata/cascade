@@ -6,4 +6,4 @@
  * SPORT: MASTER-HOOKS.md — useWindowState, src/hooks/useWindowState.ts
  */
 
-export { useWindowState } from '../store';
+export { useWindowState } from '../store'

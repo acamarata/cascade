@@ -7,30 +7,25 @@
  * SPORT: MASTER-COMPONENTS.md — LoadingSpinner
  */
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
 interface LoadingSpinnerProps {
   /** Accessible label announced by screen readers. */
-  label?: string;
-  className?: string;
+  label?: string
+  className?: string
 }
 
-export function LoadingSpinner({ label = "Loading", className }: LoadingSpinnerProps) {
+export function LoadingSpinner({ label = 'Loading', className }: LoadingSpinnerProps) {
   return (
-    <div
-      className={cn(
-        "flex min-h-screen items-center justify-center",
-        className,
-      )}
-    >
+    <div className={cn('flex min-h-screen items-center justify-center', className)}>
       <div
         role="status"
         aria-label={label}
         className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"
       />
     </div>
-  );
+  )
 }
 
 /** Alias used as a React.Suspense fallback prop. */
-export const SuspenseFallback = LoadingSpinner;
+export const SuspenseFallback = LoadingSpinner

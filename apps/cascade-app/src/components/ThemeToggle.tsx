@@ -7,33 +7,33 @@
  * SPORT: MASTER-COMPONENTS.md — ThemeToggle
  */
 
-import { Monitor, Moon, Sun } from 'lucide-react';
-import { useThemeStore } from '../store/index';
-import type { ThemeToken } from '../store/theme.slice';
+import { Monitor, Moon, Sun } from 'lucide-react'
+import { useThemeStore } from '../store/index'
+import type { ThemeToken } from '../store/theme.slice'
 
 const CYCLE: Record<ThemeToken, ThemeToken> = {
   dark: 'light',
   light: 'system',
   system: 'dark',
-};
+}
 
 const ICON_MAP: Record<ThemeToken, React.ReactNode> = {
   dark: <Moon className="h-4 w-4" aria-hidden="true" />,
   light: <Sun className="h-4 w-4" aria-hidden="true" />,
   system: <Monitor className="h-4 w-4" aria-hidden="true" />,
-};
+}
 
 const LABEL_MAP: Record<ThemeToken, string> = {
   dark: 'Dark theme — click to switch to light',
   light: 'Light theme — click to switch to system',
   system: 'System theme — click to switch to dark',
-};
+}
 
 export function ThemeToggle() {
-  const { token, setTheme } = useThemeStore();
+  const { token, setTheme } = useThemeStore()
 
   function handleClick() {
-    setTheme(CYCLE[token]);
+    setTheme(CYCLE[token])
   }
 
   return (
@@ -46,5 +46,5 @@ export function ThemeToggle() {
     >
       {ICON_MAP[token]}
     </button>
-  );
+  )
 }

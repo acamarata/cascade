@@ -11,39 +11,39 @@
  * SPORT: MASTER-COMPONENTS.md — CommandPalette, src/components/CommandPalette.tsx
  */
 
-import * as Dialog from "@radix-ui/react-dialog";
-import { Command } from "cmdk";
-import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
-import { globalRegistry, type CommandAction } from "../lib/commands/registry";
+import * as Dialog from '@radix-ui/react-dialog'
+import { Command } from 'cmdk'
+import { Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { globalRegistry, type CommandAction } from '../lib/commands/registry'
 
 interface CommandPaletteProps {
   /** Primary prop per T-P3-E01-13 spec. */
-  isOpen?: boolean;
+  isOpen?: boolean
   /** Legacy compat — used until callers are updated to isOpen. */
-  open?: boolean;
-  onClose: () => void;
+  open?: boolean
+  onClose: () => void
 }
 
 export function CommandPalette({ isOpen, open, onClose }: CommandPaletteProps) {
-  const resolvedOpen = isOpen ?? open ?? false;
+  const resolvedOpen = isOpen ?? open ?? false
 
-  const [commands, setCommands] = useState<CommandAction[]>([]);
+  const [commands, setCommands] = useState<CommandAction[]>([])
 
   // Re-read the registry every time the palette opens so we always see fresh commands.
   useEffect(() => {
     if (resolvedOpen) {
-      setCommands(globalRegistry.getAll());
+      setCommands(globalRegistry.getAll())
     }
-  }, [resolvedOpen]);
+  }, [resolvedOpen])
 
   function handleSelect(command: CommandAction) {
-    command.onExecute();
-    onClose();
+    command.onExecute()
+    onClose()
   }
 
   // Derive unique group names in insertion order.
-  const groups = Array.from(new Set(commands.map((c) => c.group ?? "Other")));
+  const groups = Array.from(new Set(commands.map((c) => c.group ?? 'Other')))
 
   return (
     <Dialog.Root open={resolvedOpen} onOpenChange={(v) => !v && onClose()}>
@@ -61,6 +61,7 @@ export function CommandPalette({ isOpen, open, onClose }: CommandPaletteProps) {
               <Command.Input
                 className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="Type a command or search…"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />
             </div>
@@ -77,11 +78,11 @@ export function CommandPalette({ isOpen, open, onClose }: CommandPaletteProps) {
                   className="overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
                 >
                   {commands
-                    .filter((cmd) => (cmd.group ?? "Other") === group)
+                    .filter((cmd) => (cmd.group ?? 'Other') === group)
                     .map((cmd) => (
                       <Command.Item
                         key={cmd.id}
-                        value={[cmd.label, ...(cmd.keywords ?? [])].join(" ")}
+                        value={[cmd.label, ...(cmd.keywords ?? [])].join(' ')}
                         onSelect={() => handleSelect(cmd)}
                         className="relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                       >
@@ -100,5 +101,5 @@ export function CommandPalette({ isOpen, open, onClose }: CommandPaletteProps) {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  );
+  )
 }

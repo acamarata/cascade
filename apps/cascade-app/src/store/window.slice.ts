@@ -10,57 +10,59 @@
  * SPORT: MASTER-HOOKS.md — useWindowState, src/store/window.slice.ts
  */
 
-import type { StateCreator } from 'zustand';
-import * as windowsIpc from '../lib/windows';
+import type { StateCreator } from 'zustand'
+import * as windowsIpc from '../lib/windows'
 
 export interface WindowSlice {
   /** Labels of currently open secondary windows (excludes 'main'). */
-  openWindows: string[];
+  openWindows: string[]
   /** Label of the currently active/focused window. Defaults to 'main'. */
-  activeWindow: string;
+  activeWindow: string
   /**
    * Open (or focus) a secondary Tauri window and register it in state.
    * @param label - Unique Tauri window label.
    * @param url   - App route to load (e.g. "/settings").
    * @param title - Window title bar text.
    */
-  openWindow: (label: string, url: string, title: string) => void;
+  openWindow: (label: string, url: string, title: string) => void
   /** Close a secondary window by label; remove from open list. */
-  closeWindow: (label: string) => void;
+  closeWindow: (label: string) => void
   /** Focus a window by label; update activeWindow. */
-  focusWindow: (label: string) => void;
+  focusWindow: (label: string) => void
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const createWindowSlice: StateCreator<any, [['zustand/immer', never]], [], WindowSlice> = (set) => ({
+export const createWindowSlice: StateCreator<any, [['zustand/immer', never]], [], WindowSlice> = (
+  set
+) => ({
   openWindows: [],
   activeWindow: 'main',
 
   openWindow: (label: string, url: string, title: string) => {
     // Fire-and-forget IPC — check-or-focus handled Rust-side
-    windowsIpc.openWindow(label, url, title).catch(console.error);
+    windowsIpc.openWindow(label, url, title).catch(console.error)
     set((draft: WindowSlice) => {
       if (!draft.openWindows.includes(label)) {
-        draft.openWindows.push(label);
+        draft.openWindows.push(label)
       }
-      draft.activeWindow = label;
-    });
+      draft.activeWindow = label
+    })
   },
 
   closeWindow: (label: string) => {
-    windowsIpc.closeWindow(label).catch(console.error);
+    windowsIpc.closeWindow(label).catch(console.error)
     set((draft: WindowSlice) => {
-      draft.openWindows = draft.openWindows.filter((w: string) => w !== label);
+      draft.openWindows = draft.openWindows.filter((w: string) => w !== label)
       if (draft.activeWindow === label) {
-        draft.activeWindow = 'main';
+        draft.activeWindow = 'main'
       }
-    });
+    })
   },
 
   focusWindow: (label: string) => {
-    windowsIpc.focusWindow(label).catch(console.error);
+    windowsIpc.focusWindow(label).catch(console.error)
     set((draft: WindowSlice) => {
-      draft.activeWindow = label;
-    });
+      draft.activeWindow = label
+    })
   },
-});
+})

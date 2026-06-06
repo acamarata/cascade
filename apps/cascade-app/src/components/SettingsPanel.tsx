@@ -8,37 +8,35 @@
  * SPORT: MASTER-COMPONENTS.md — SettingsPanel
  */
 
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { useTheme } from "../hooks/useTheme";
-import { Sun, Moon, Monitor, RefreshCw } from "lucide-react";
+import { useEffect, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { useTheme } from '../hooks/useTheme'
+import { Sun, Moon, Monitor, RefreshCw } from 'lucide-react'
 
 interface AppConfig {
-  theme: "light" | "dark" | "system";
-  locale: string;
-  update_channel: "stable" | "beta" | "nightly";
-  inbox_paths: string[];
-  rag_index_paths: string[];
-  daemon_autostart: boolean;
+  theme: 'light' | 'dark' | 'system'
+  locale: string
+  update_channel: 'stable' | 'beta' | 'nightly'
+  inbox_paths: string[]
+  rag_index_paths: string[]
+  daemon_autostart: boolean
 }
 
 export function SettingsPanel() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const { setTheme } = useTheme();
+  const [config, setConfig] = useState<AppConfig | null>(null)
+  const { setTheme } = useTheme()
 
   useEffect(() => {
-    invoke<AppConfig>("get_config")
-      .then(setConfig)
-      .catch(console.error);
-  }, []);
+    invoke<AppConfig>('get_config').then(setConfig).catch(console.error)
+  }, [])
 
   async function updateConfig(key: keyof AppConfig, value: unknown) {
     try {
-      await invoke("set_config", { key, value });
-      setConfig((prev) => (prev ? { ...prev, [key]: value } : prev));
-      if (key === "theme") setTheme(value as AppConfig["theme"]);
+      await invoke('set_config', { key, value })
+      setConfig((prev) => (prev ? { ...prev, [key]: value } : prev))
+      if (key === 'theme') setTheme(value as AppConfig['theme'])
     } catch (err) {
-      console.error("Failed to update config:", err);
+      console.error('Failed to update config:', err)
     }
   }
 
@@ -47,7 +45,7 @@ export function SettingsPanel() {
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Loading settings…
       </div>
-    );
+    )
   }
 
   return (
@@ -60,26 +58,26 @@ export function SettingsPanel() {
           Appearance
         </h2>
         <div className="flex gap-2" role="group" aria-label="Theme selection">
-          {(["light", "dark", "system"] as const).map((t) => {
-            const Icon = t === "light" ? Sun : t === "dark" ? Moon : Monitor;
+          {(['light', 'dark', 'system'] as const).map((t) => {
+            const Icon = t === 'light' ? Sun : t === 'dark' ? Moon : Monitor
             return (
               <button
                 key={t}
                 type="button"
-                onClick={() => updateConfig("theme", t)}
+                onClick={() => updateConfig('theme', t)}
                 className={[
-                  "flex items-center gap-2 rounded-md border px-3 py-2 text-sm capitalize transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  'flex items-center gap-2 rounded-md border px-3 py-2 text-sm capitalize transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   config.theme === t
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background hover:bg-accent",
-                ].join(" ")}
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-background hover:bg-accent',
+                ].join(' ')}
                 aria-pressed={config.theme === t}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
                 {t}
               </button>
-            );
+            )
           })}
         </div>
       </section>
@@ -97,7 +95,7 @@ export function SettingsPanel() {
             id="update-channel"
             value={config.update_channel}
             onChange={(e) =>
-              updateConfig("update_channel", e.target.value as AppConfig["update_channel"])
+              updateConfig('update_channel', e.target.value as AppConfig['update_channel'])
             }
             className="rounded-md border border-border bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -125,7 +123,7 @@ export function SettingsPanel() {
           <input
             type="checkbox"
             checked={config.daemon_autostart}
-            onChange={(e) => updateConfig("daemon_autostart", e.target.checked)}
+            onChange={(e) => updateConfig('daemon_autostart', e.target.checked)}
             className="h-4 w-4 rounded border-border focus-visible:ring-2 focus-visible:ring-ring"
           />
           <span className="text-sm">Start daemon automatically on login</span>
@@ -144,7 +142,7 @@ export function SettingsPanel() {
           <select
             id="locale-select"
             value={config.locale}
-            onChange={(e) => updateConfig("locale", e.target.value)}
+            onChange={(e) => updateConfig('locale', e.target.value)}
             className="rounded-md border border-border bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="en-US">English (US)</option>
@@ -153,5 +151,5 @@ export function SettingsPanel() {
         </div>
       </section>
     </div>
-  );
+  )
 }

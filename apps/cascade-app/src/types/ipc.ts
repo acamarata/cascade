@@ -12,17 +12,17 @@
 /** Result returned by cascade_status / cascade.status. Mirrors StatusResult. */
 export interface StatusResult {
   /** OS process id of the running daemon. */
-  pid: number;
+  pid: number
   /** Seconds since the daemon started. */
-  uptime_secs: number;
+  uptime_secs: number
   /** Number of requests currently queued awaiting dispatch. */
-  queue_depth: number;
+  queue_depth: number
   /** Whether the RAG index was last refreshed within its TTL. */
-  rag_index_fresh: boolean;
+  rag_index_fresh: boolean
   /** Daemon version string, e.g. "0.1.0". */
-  version: string;
+  version: string
   /** TCP IPC port if enabled (schema v1.1 additive). */
-  tcp_port?: number | null;
+  tcp_port?: number | null
 }
 
 // ── cascade_resolve ───────────────────────────────────────────────────────────
@@ -30,11 +30,11 @@ export interface StatusResult {
 /** Result returned by cascade_resolve. Mirrors ResolveResult. */
 export interface ResolveResult {
   /** Resolved context content. */
-  content: string;
+  content: string
   /** Format of the returned content: "markdown" or "json". */
-  format: string;
+  format: string
   /** Tier that was resolved, e.g. "gci" or "full". */
-  tier: string;
+  tier: string
 }
 
 // ── cascade_search ────────────────────────────────────────────────────────────
@@ -42,19 +42,19 @@ export interface ResolveResult {
 /** A single search result hit. Mirrors SearchHit. */
 export interface SearchHit {
   /** Unique chunk or document id. */
-  id: string;
+  id: string
   /** Relevance score (higher = more relevant). */
-  score: number;
+  score: number
   /** Short excerpt from the matching document. */
-  excerpt: string;
+  excerpt: string
   /** Source document path or URL. */
-  source: string;
+  source: string
 }
 
 /** Result returned by cascade_search. Mirrors SearchResult. */
 export interface SearchResult {
   /** Ranked search hits, best match first. */
-  hits: SearchHit[];
+  hits: SearchHit[]
 }
 
 // ── cascade_inbox_list / cascade_inbox_send ───────────────────────────────────
@@ -62,29 +62,29 @@ export interface SearchResult {
 /** A single inbox item. Mirrors InboxItem. */
 export interface InboxItem {
   /** Unique message id (filename slug or UUID). */
-  id: string;
+  id: string
   /** Message subject line. */
-  subject: string;
+  subject: string
   /** Sender identity string. */
-  from: string;
+  from: string
   /** Priority label: "critical", "high", "medium", or "low". */
-  priority: string;
+  priority: string
   /** ISO 8601 creation timestamp. */
-  created: string;
+  created: string
 }
 
 /** Result returned by cascade_inbox_list. Mirrors InboxSummaryResult. */
 export interface InboxSummaryResult {
   /** Inbox items in reverse chronological order. */
-  items: InboxItem[];
+  items: InboxItem[]
 }
 
 /** Acknowledgement returned by cascade_inbox_send (pending T-P4-E01). Mirrors InboxSendAck. */
 export interface InboxSendAck {
   /** The file slug of the created inbox message. */
-  id: string;
+  id: string
   /** Absolute path to the written message file. */
-  path: string;
+  path: string
 }
 
 // ── cascade_memory_read / cascade_memory_write ────────────────────────────────
@@ -92,17 +92,17 @@ export interface InboxSendAck {
 /** Result returned by cascade_memory_read. Mirrors MemoryReadResult. */
 export interface MemoryReadResult {
   /** Full UTF-8 text content of the memory file. */
-  content: string;
+  content: string
   /** Absolute path to the file that was read. */
-  path: string;
+  path: string
 }
 
 /** Result returned by cascade_memory_write. Mirrors MemoryWriteResult. */
 export interface MemoryWriteResult {
   /** Absolute path of the file that was written. */
-  path: string;
+  path: string
   /** Number of bytes written. */
-  bytes: number;
+  bytes: number
 }
 
 // ── cascade_config_get / cascade_config_set ───────────────────────────────────
@@ -110,15 +110,15 @@ export interface MemoryWriteResult {
 /** Result returned by cascade_config_get. Mirrors ConfigGetResult. */
 export interface ConfigGetResult {
   /** The key that was queried. */
-  key: string;
+  key: string
   /** Current value; type depends on the key (use JSON.parse if needed). */
-  value: unknown;
+  value: unknown
 }
 
 /** Result returned by cascade_config_set. Mirrors ConfigSetResult. */
 export interface ConfigSetResult {
   /** The key that was updated. */
-  key: string;
+  key: string
   /** Previous value, if any existed. */
-  previous?: unknown;
+  previous?: unknown
 }
