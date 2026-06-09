@@ -30,6 +30,7 @@
 use std::{fs, path::PathBuf, time::Duration};
 
 use cascade_audit::{AuditLog, AuditOp};
+use serial_test::serial;
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
@@ -66,18 +67,35 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
 
 /// Spin up an IpcServer in a temp dir and initialise the global audit log in
 /// that same dir.  Returns (socket_path, audit_log_path, shutdown_token, handle).
+///
+/// audit::init uses a process-global OnceLock — first call wins.  We call init
+/// here (it is a no-op if already set) then read the active path back via
+/// audit::active_log_path() so assertions always target the correct file
+/// regardless of test execution order.
 async fn start_test_server_with_audit(
     tmp: &TempDir,
 ) -> (PathBuf, PathBuf, CancellationToken, tokio::task::JoinHandle<()>) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
-    let audit_path = config_dir.join("audit.log");
+    let candidate_path = config_dir.join("audit.log");
+    // Best-effort init; OnceLock means first call wins, later calls are no-ops.
+    let _ = audit::init(&candidate_path);
+    // Always use whichever path was actually registered.
+    let audit_path = audit::active_log_path()
+        .expect("audit OnceLock must be set after init")
+        .to_path_buf();
 
-    // Initialise the global audit log for this test process.  OnceLock means
-    // only the first call takes effect — each test binary gets its own process
-    // so isolation is guaranteed at the process level.
-    audit::init(&audit_path).expect("audit::init");
+    // If the OnceLock was already set by a prior test whose TempDir was dropped,
+    // the parent directory may no longer exist.  Recreate it so that the audit
+    // log can be written and read by this test.
+    if let Some(parent) = audit_path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    // Ensure the file itself exists (empty is fine) so AuditLog::open succeeds.
+    if !audit_path.exists() {
+        fs::write(&audit_path, b"").unwrap();
+    }
 
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
@@ -123,6 +141,7 @@ fn privileged_request(method: &str) -> serde_json::Value {
 /// should (a) return METHOD_NOT_FOUND and (b) append an audit entry for each,
 /// with verify_chain() returning Ok with zero violations.
 #[tokio::test]
+#[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, audit_path, shutdown, handle) =
@@ -192,6 +211,7 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
 /// Non-privileged typed methods must NOT produce audit entries.
 /// Sending an unknown method name should not grow the audit log.
 #[tokio::test]
+#[serial(global_env)]
 async fn non_privileged_methods_do_not_emit_audit_entries() {
     // Use a second temp dir — OnceLock means this test reuses the global from
     // the other test if run in the same process; that is acceptable because we
@@ -199,11 +219,14 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
     let tmp = TempDir::new().unwrap();
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
-    let audit_path = config_dir.join("audit.log");
+    let candidate_path = config_dir.join("audit.log");
 
-    // Attempt init; if the OnceLock is already set (same test binary), we
-    // open the existing log path for baseline counting.
-    let _ = audit::init(&audit_path);
+    // Best-effort init; always read the active path back so assertions target
+    // the correct file regardless of which test ran first.
+    let _ = audit::init(&candidate_path);
+    let audit_path = audit::active_log_path()
+        .expect("audit OnceLock must be set after init")
+        .to_path_buf();
 
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");

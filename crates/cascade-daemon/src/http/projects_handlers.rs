@@ -621,6 +621,7 @@ pub fn router() -> Router<DashboardState> {
 mod tests {
     use super::*;
     use axum::{body::Body, http::Request};
+    use serial_test::serial;
     use serde_json::Value;
     use tempfile::TempDir;
     use tower::ServiceExt;
@@ -644,6 +645,7 @@ mod tests {
     // ── GET / ─────────────────────────────────────────────────────────────────
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_projects_empty_sites() {
         with_fake_home(|_tmp| {
             // ~/Sites/ does not exist → should return 200 with empty array.
@@ -667,6 +669,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_projects_with_project() {
         with_fake_home(|tmp| {
             // Create ~/Sites/myproject/.claude/CLAUDE.md
@@ -695,6 +698,7 @@ mod tests {
     // ── GET /:id/repos ────────────────────────────────────────────────────────
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_repos_missing_project() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -720,6 +724,7 @@ mod tests {
     // ── GET /:id/phase ────────────────────────────────────────────────────────
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_phase_missing_yaml() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -745,6 +750,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_phase_parses_status_yaml() {
         with_fake_home(|tmp| {
             // Create ~/Sites/cascade/.claude/phases/status.yaml
@@ -785,6 +791,7 @@ mod tests {
     // ── GET /:id/scaffold ─────────────────────────────────────────────────────
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_scaffold_no_phase_dir() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -808,6 +815,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_scaffold_with_fixture_tree() {
         with_fake_home(|tmp| {
             // Build a minimal PEWS tree:

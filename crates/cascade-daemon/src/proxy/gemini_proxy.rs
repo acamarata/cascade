@@ -709,15 +709,6 @@ async fn forward_upstream(
     Ok((status, body))
 }
 
-/// Forward one HTTP request to the Gemini upstream with header whitelist.
-///
-/// Purpose: applies SIEGE HIGH-1 header whitelist — only forward Content-Type,
-/// Authorization, and X-Goog-Api-Key headers; drop Host, Cookie, and other
-/// attacker-injectable headers.
-///
-/// Inputs:  `client` — reqwest client with timeout configured.
-///          `method` — HTTP method string.
-///          `url`    — fully-qualified upstream URL (includes `key=` param).
 /// Extract a specific header value from a raw HTTP header string.
 ///
 /// Parses lines of the form "Header-Name: value" and finds a case-insensitive match.
@@ -734,6 +725,15 @@ fn extract_header(headers_raw: &str, header_name: &str) -> Option<String> {
     None
 }
 
+/// Forward one HTTP request to the Gemini upstream with header whitelist.
+///
+/// Purpose: applies SIEGE HIGH-1 header whitelist — only forward Content-Type,
+/// Authorization, and X-Goog-Api-Key headers; drop Host, Cookie, and other
+/// attacker-injectable headers.
+///
+/// Inputs:  `client` — reqwest client with timeout configured.
+///          `method` — HTTP method string.
+///          `url`    — fully-qualified upstream URL (includes `key=` param).
 ///          `body`   — raw request body bytes (empty for GET).
 ///          `headers_raw` — HTTP headers from the incoming request as a string.
 ///

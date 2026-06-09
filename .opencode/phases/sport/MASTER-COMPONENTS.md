@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every React component in the Cascade dashboard (apps/cascade-app).
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-05-31
+**Last updated:** 2026-06-09
 **Source:** Cascade P3/P4 plan
 
 | Component | Path | Description | Status | Phase | Creating tickets |
@@ -26,7 +26,11 @@
 | HooksEditor | src/components/global/HooksEditor.tsx | CC hooks list/add/edit/delete | 🔲 Planned | P3 | T-P3-E02-* |
 | SettingsSnapshotPanel | src/components/global/SettingsSnapshotPanel.tsx | JSON tree of settings.json (redacted) | 🔲 Planned | P3 | T-P3-E02-* |
 | RAGStatusPanel | src/components/global/RAGStatusPanel.tsx | RAG index status + stats | 🔲 Planned | P3/P4 | T-P3-E06-*, T-P4-E02-* |
-| GPChatPanel | src/components/chat/GPChatPanel.tsx | Floating GP chat panel: open/minimized/closed states | 🔲 Planned | P3 | T-P3-E02-* |
-| CodeBlock | src/components/chat/CodeBlock.tsx | Syntax-highlighted code block in chat messages | 🔲 Planned | P3 | T-P3-E02-* |
+| GPChatButton | src/components/GPChatPanel/GPChatButton.tsx | Floating always-visible chat trigger button | ✅ Done | P3 | T-P3-E02-21 |
+| GPChatPanel | src/components/GPChatPanel/GPChatPanel.tsx | Expandable/resizable/minimizable GP chat panel | ✅ Done | P3 | T-P3-E02-21 |
+| MessageList | src/components/GPChatPanel/MessageList.tsx | User/assistant messages with streaming cursor | ✅ Done | P3 | T-P3-E02-21 |
+| ChatInput | src/components/GPChatPanel/ChatInput.tsx | Textarea + send button for chat | ✅ Done | P3 | T-P3-E02-21 |
+| MarkdownMessage | src/components/GPChatPanel/MarkdownMessage.tsx | react-markdown + syntax highlighting (replaces CodeBlock) | ✅ Done | P3 | T-P3-E02-22 |
+| ToolCard | src/components/GPChatPanel/ToolCard.tsx | Tool-invocation result card in chat | ✅ Done | P3 | T-P3-E02-22 |
 | CommandPalette | src/components/CommandPalette.tsx | Cmd+K command palette with fuzzy search | 🔲 Planned | P3 | T-P3-E01-* |
 | OnboardingWizard | src/components/onboarding/OnboardingWizard.tsx | Multi-step onboarding flow with checkpoint resume | 🔲 Planned | P3 | T-P3-E03-* |

@@ -3,26 +3,18 @@
 use cascade_daemon::ipc_handlers::{
     handle_add_worktree, handle_list_worktrees, handle_remove_worktree, IpcHandlerError,
 };
+use serial_test::serial;
 use std::env;
 use std::fs;
-use std::sync::OnceLock;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
 
-fn home_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-/// Sets up a temporary HOME and ensures the async mutex guard is held for the
-/// duration so parallel tokio tests do not race on `HOME`.
+/// Sets up a temporary HOME for the duration of the test.
+/// Caller must carry #[serial(global_env)] to prevent cross-test HOME races.
 async fn setup_and_run_with_temp_home<F, Fut, T>(f: F) -> T
 where
     F: FnOnce(TempDir, Option<String>) -> Fut,
     Fut: std::future::Future<Output = T>,
 {
-    let guard = home_lock().lock().await;
-
     let temp_home = TempDir::new().expect("failed to create temp home");
     let home_path = temp_home.path().to_string_lossy().to_string();
 
@@ -35,16 +27,16 @@ where
 
     let result = f(temp_home, old_home.clone()).await;
 
-    // Restore HOME while the guard is still held (prevents interference)
+    // Restore HOME
     if let Some(h) = old_home {
         env::set_var("HOME", h);
     }
-    drop(guard);
 
     result
 }
 
 #[tokio::test]
+#[serial(global_env)]
 async fn test_add_list_remove_worktree() {
     setup_and_run_with_temp_home(|_temp_home, _old_home| async {
         // Create a temporary directory to act as the worktree path.
@@ -104,6 +96,7 @@ async fn test_add_list_remove_worktree() {
 }
 
 #[tokio::test]
+#[serial(global_env)]
 async fn test_remove_nonexistent_worktree() {
     setup_and_run_with_temp_home(|_temp_home, _old_home| async {
         // Try to remove a worktree that doesn't exist.
@@ -120,6 +113,7 @@ async fn test_remove_nonexistent_worktree() {
 }
 
 #[tokio::test]
+#[serial(global_env)]
 async fn test_stale_worktree_detection() {
     setup_and_run_with_temp_home(|_temp_home, _old_home| async {
         // Create a temporary directory to act as the worktree path.

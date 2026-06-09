@@ -230,3 +230,28 @@ export interface ScaffoldTree {
   last_updated: string
   epics: ScaffoldEpic[]
 }
+
+// ── GP Chat streaming types ────────────────────────────────────────────────
+
+/** Speaker role for a chat message. */
+export type ChatRole = 'user' | 'assistant'
+
+/** A single message in the /api/chat POST request body. */
+export interface ChatRequestMessage {
+  role: ChatRole
+  content: string
+}
+
+/** POST /api/chat request body. */
+export interface ChatRequest {
+  messages: ChatRequestMessage[]
+  tools?: string[]
+  session_id?: string
+}
+
+/** Union of all SSE event payloads from the /api/chat stream. */
+export type ChatStreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'tool_result'; result: unknown }
+  | { type: 'error'; message: string }
+  | { type: 'done' }

@@ -461,6 +461,7 @@ mod tests {
     use std::path::Path;
 
     use serde_json::json;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     // ── helper: build a small test .cascade/ tree ────────────────────────────
@@ -807,6 +808,7 @@ mod tests {
 
     /// Verifies that `expand_tilde("~/foo")` returns `{$HOME}/foo`.
     #[test]
+    #[serial(global_env)]
     fn expand_tilde_expands_home() {
         // Set HOME for test isolation.
         let fake_home = "/tmp/fake-home-for-test";

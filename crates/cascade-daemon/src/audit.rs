@@ -30,6 +30,8 @@ use cascade_audit::{AuditEntry, AuditLog, AuditOp};
 
 /// Process-global audit log. Set once at daemon startup via [`init`].
 static AUDIT: OnceLock<Mutex<AuditLog>> = OnceLock::new();
+/// Path of the initialised audit log — mirrors AUDIT, set in the same call.
+static AUDIT_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 /// Initialise the global audit log at `path`.
 ///
@@ -39,8 +41,16 @@ static AUDIT: OnceLock<Mutex<AuditLog>> = OnceLock::new();
 pub fn init(path: &Path) -> Result<(), cascade_audit::AuditError> {
     let log = AuditLog::open(path)?;
     // If already initialised, drop the freshly-opened handle; first init wins.
-    let _ = AUDIT.set(Mutex::new(log));
+    if AUDIT.set(Mutex::new(log)).is_ok() {
+        let _ = AUDIT_PATH.set(path.to_path_buf());
+    }
     Ok(())
+}
+
+/// Return the path of the initialised audit log, or `None` if not yet initialised.
+/// Used by integration tests to locate the active log regardless of init order.
+pub fn active_log_path() -> Option<&'static std::path::Path> {
+    AUDIT_PATH.get().map(|p| p.as_path())
 }
 
 /// Append one audit event. NON-FATAL by contract.

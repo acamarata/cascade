@@ -2,8 +2,23 @@
 
 **Purpose:** Registry of every app/surface in the Cascade project.
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-09
 **Source:** Cascade P2/P3/P4 plan
+
+## Hooks (cascade-dashboard)
+
+| Hook | Path | Description | Status | Phase | Creating tickets |
+|---|---|---|---|---|---|
+| useChat | apps/cascade-dashboard/src/hooks/useChat.ts | SSE client for /api/chat streaming | ✅ Done | P3 | T-P3-E02-21 |
+| useChatHistory | apps/cascade-dashboard/src/hooks/useChatHistory.ts | localStorage-backed chat session history | ✅ Done | P3 | T-P3-E02-20 |
+
+## Features
+
+| Feature | Description | Status | Phase | Wave |
+|---|---|---|---|---|
+| GP Chat | Floating chat panel with SSE streaming, 10-tool catalog, markdown + syntax highlighting, tool-invocation cards | ✅ Done | P3 | W-05 |
+
+## Apps
 
 | App | Path | Stack | Description | Status | Phase | Creating tickets |
 |---|---|---|---|---|---|---|

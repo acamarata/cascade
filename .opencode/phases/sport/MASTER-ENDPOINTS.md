@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every HTTP API endpoint served by cascade-daemon.
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-05
+**Last updated:** 2026-06-09
 **Source:** Cascade P3/P4 plan
 
 ## Daemon IPC (Unix socket — `~/.cascade/daemon.sock`)
@@ -52,7 +52,7 @@ Implemented in `crates/cascade-daemon/src/ipc.rs` (T-P3-E00-01, resolves E07-11/
 | /api/projects/:slug/repos | GET | Repos within a project | 🔲 Planned | P3 | T-P3-E02-* |
 | /api/projects/:slug/phase | GET | Active PEWS phase state | 🔲 Planned | P3 | T-P3-E02-* |
 | /api/projects/:slug/scaffold | POST | Scaffold PEWS structure | 🔲 Planned | P3 | T-P3-E02-* |
-| /api/chat | POST | SSE chat stream proxied to AI provider | 🔲 Planned | P3 | T-P3-E02-* |
+| /api/chat | POST | SSE chat stream proxied to Gemini pool (localhost:3761); 10-tool catalog in chat_tools.rs | ✅ Done | P3 | T-P3-E02-18 |
 | /api/chat/history/:id | GET | Chat session history | 🔲 Planned | P3 | T-P3-E02-* |
 | /api/tags | GET | Context/memory tags | 🔲 Planned | P3 | T-P3-E06-* |
 | /api/gci/rag-status | GET | RAG index health + shard count | 🔲 Planned | P4 | T-P4-E02-* |

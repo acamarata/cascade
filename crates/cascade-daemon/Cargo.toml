@@ -38,7 +38,9 @@ tokio-util    = { version = "0.7", features = ["codec"] }
 axum          = { version = "0.7", features = ["json"] }
 tower-http    = { version = "0.5", features = ["cors", "fs"] }
 tower         = { version = "0.5", features = ["util"] }
-reqwest       = { version = "0.12", features = ["json"] }
+reqwest       = { version = "0.12", features = ["json", "stream"] }
+futures-util  = "0.3"
+tokio-stream  = "0.1"
 libc          = "0.2"
 subtle        = "2.5"
 rand          = "0.8"
@@ -54,8 +56,9 @@ serde_yaml    = "0.9"
 tcp-ipc = []
 
 [dev-dependencies]
-assert_cmd = "2"
-tempfile   = "3"
-tokio      = { version = "1", features = ["test-util"] }
-tower      = { version = "0.5", features = ["util"] }
-wiremock   = "0.6"
+assert_cmd  = "2"
+tempfile    = "3"
+serial_test = "3"
+tokio       = { version = "1", features = ["test-util"] }
+tower       = { version = "0.5", features = ["util"] }
+wiremock    = "0.6"

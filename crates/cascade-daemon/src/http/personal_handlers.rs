@@ -546,6 +546,7 @@ pub fn router() -> Router<DashboardState> {
 mod tests {
     use super::*;
     use axum::{body::Body, http::Request};
+    use serial_test::serial;
     use tower::ServiceExt;
     use tempfile::TempDir;
 
@@ -569,6 +570,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_threads_empty() {
         with_fake_home(|_tmp| {
             // No projects dir → should return 200 []
@@ -594,6 +596,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_threads_with_memory() {
         with_fake_home(|tmp| {
             // Create ~/.claude/projects/my-project/MEMORY.md
@@ -624,6 +627,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_ideas_inbox_empty() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -646,6 +650,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_ideas_inbox_with_idea() {
         with_fake_home(|tmp| {
             let ideas_dir = tmp.path().join(".claude").join("ideas");
@@ -675,6 +680,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_crd_chains_no_dir() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -698,6 +704,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_crd_chains_with_chain() {
         with_fake_home(|tmp| {
             let chains_dir = tmp.path().join(".claude-relay").join("chains");
@@ -737,6 +744,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_scheduled_tasks_absent() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -759,6 +767,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_scheduled_tasks_present() {
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
@@ -792,6 +801,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_fleet_quota_missing() {
         with_fake_home(|_tmp| {
             let app = test_router();
@@ -815,6 +825,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_fleet_quota_present() {
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
@@ -859,6 +870,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
     async fn test_personal_account_ledger_missing() {
         with_fake_home(|_tmp| {
             let app = test_router();

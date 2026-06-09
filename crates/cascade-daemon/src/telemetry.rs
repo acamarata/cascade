@@ -173,9 +173,11 @@ pub fn init_logging(log_dir: &Path, otel_provider: Option<&TracerProvider>) -> W
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     #[test]
+    #[serial(global_env)]
     fn test_log_file_created() {
         // NOTE: this test cannot call init_logging because the global subscriber
         // is already set by a prior test run in the same process. We verify the
@@ -208,6 +210,7 @@ mod tests {
     /// mechanic in isolation.
     #[cfg(unix)]
     #[test]
+    #[serial(global_env)]
     fn test_log_file_created_with_mode_0600() {
         use std::os::unix::fs::MetadataExt;
 
@@ -263,6 +266,7 @@ mod tests {
     // init_tracing(None) must return None without panicking and without
     // attempting any network connection.
     #[test]
+    #[serial(global_env)]
     fn test_init_tracing_none_returns_none() {
         let result = init_tracing(None);
         assert!(result.is_none(), "init_tracing(None) must return None");
@@ -274,6 +278,7 @@ mod tests {
     // We do NOT call provider.shutdown() in tests to avoid blocking on a
     // network connection that will never be established in CI.
     #[tokio::test]
+    #[serial(global_env)]
     async fn test_init_tracing_some_returns_some() {
         let result = init_tracing(Some("http://localhost:4317"));
         assert!(

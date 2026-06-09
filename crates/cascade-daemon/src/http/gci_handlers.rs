@@ -575,13 +575,15 @@ pub fn gci_read_router() -> Router<DashboardState> {
 mod tests {
     use super::*;
     use axum::{body::Body, http::Request, Router};
+    use serial_test::serial;
     use tower::ServiceExt;
     use tempfile::TempDir;
 
     // Helper: fake HOME pointing at a tempdir.
+    // Callers must carry #[serial(global_env)] to prevent cross-test HOME races.
     fn with_fake_home<F: FnOnce(&TempDir)>(f: F) {
         let tmp = TempDir::new().unwrap();
-        // Safety: tests run single-threaded in nextest workers; scoped env mutation.
+        // SAFETY: serialised by #[serial(global_env)] on every calling test.
         std::env::set_var("HOME", tmp.path());
         f(&tmp);
     }
@@ -661,6 +663,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(global_env)]
     fn test_settings_snapshot_missing_file_returns_empty() {
         with_fake_home(|tmp| {
             std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
@@ -687,6 +690,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(global_env)]
     fn test_settings_snapshot_redacts_token() {
         with_fake_home(|tmp| {
             let claude_dir = tmp.path().join(".claude");
@@ -722,6 +726,7 @@ mod tests {
     // ── cascade-diagram unit test ─────────────────────────────────────────────
 
     #[test]
+    #[serial(global_env)]
     fn test_cascade_diagram_includes_gci_and_asi() {
         with_fake_home(|tmp| {
             // Minimal: create ~/.claude/ and ~/Sites/.claude/
@@ -763,6 +768,7 @@ mod tests {
     // ── hooks unit test ───────────────────────────────────────────────────────
 
     #[test]
+    #[serial(global_env)]
     fn test_gci_hooks_parses_settings() {
         with_fake_home(|tmp| {
             let claude_dir = tmp.path().join(".claude");

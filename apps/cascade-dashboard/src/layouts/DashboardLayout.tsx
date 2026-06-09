@@ -8,6 +8,7 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/Header'
+import { GPChatButton } from '@/components/GPChatPanel/GPChatButton'
 
 export function DashboardLayout() {
   return (
@@ -22,6 +23,7 @@ export function DashboardLayout() {
         >
           <Outlet />
         </main>
+        <GPChatButton />
       </div>
     </div>
   )
