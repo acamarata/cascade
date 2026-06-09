@@ -7,6 +7,16 @@
  * SPORT: MASTER-COMPONENTS.md — WizardStep / WizardState / WizardCheckpoint types
  */
 
+import type { ToolId } from '@/lib/scanner/types'
+
+/**
+ * Tool mode selection: whether Cascade manages the tool's config via symlinks,
+ * or the tool retains independent control of its own files.
+ */
+export type ToolMode = 'cascade-managed' | 'independent'
+
+export type { ToolId }
+
 /**
  * Wizard step identifiers representing each stage of the onboarding flow.
  * Values are numeric for tight serialization and direct indexing.
@@ -42,8 +52,11 @@ export const enum WizardStep {
  * - `completedSteps`: Set of steps already completed (used to skip forward on resume)
  * - `providerConnected`: true after user authenticates at least one AI provider
  * - `scanResult`: null until ScanLegacy completes; contains file counts from legacy scan
+ * - `detectedToolIds`: null until ScanLegacy completes; array of ToolIds found in the scan
  * - `mergeResult`: null until MergeContent completes; contains merge manifest and conflicts
+ * - `toolModes`: per-tool mode selection (cascade-managed | independent); populated by ToolModes step
  * - `archiveManifestPath`: null until ArchiveLegacy completes; path to the manifest file created
+ * - `symlinkPlanApplied`: true after SymlinkSetup step applies (or skips) the symlink plan
  * - `daemonInstalled`: true after daemon install step completes
  * - `startedAt`: ISO 8601 timestamp when wizard began
  * - `updatedAt`: ISO 8601 timestamp of last state change
@@ -53,8 +66,19 @@ export interface WizardState {
   completedSteps: Set<WizardStep>
   providerConnected: boolean
   scanResult: ScanResult | null
+  /** ToolIds detected by the ScanLegacy step. Null until scan completes. */
+  detectedToolIds: ToolId[] | null
   mergeResult: MergeResult | null
+  /**
+   * Per-tool mode selections from the ToolModes wizard step.
+   * Keys are ToolId values; values are 'cascade-managed' | 'independent'.
+   * Only populated tools are tracked; absent keys imply the default (cascade-managed).
+   * Read by SymlinkSetupPhase (step 8) to determine which tools to symlink.
+   */
+  toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
+  /** True after SymlinkSetup step applies (or skips) the symlink plan. */
+  symlinkPlanApplied: boolean
   daemonInstalled: boolean
   startedAt: string
   updatedAt: string
@@ -94,8 +118,11 @@ export interface WizardCheckpoint {
   completedSteps: number[]
   providerConnected: boolean
   scanResult: ScanResult | null
+  detectedToolIds: ToolId[] | null
   mergeResult: MergeResult | null
+  toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
+  symlinkPlanApplied: boolean
   daemonInstalled: boolean
   startedAt: string
   updatedAt: string
@@ -114,8 +141,11 @@ export function createInitialState(): WizardState {
     completedSteps: new Set<WizardStep>(),
     providerConnected: false,
     scanResult: null,
+    detectedToolIds: null,
     mergeResult: null,
+    toolModes: {},
     archiveManifestPath: null,
+    symlinkPlanApplied: false,
     daemonInstalled: false,
     startedAt: now,
     updatedAt: now,
@@ -137,8 +167,11 @@ export function stateToCheckpoint(state: WizardState): WizardCheckpoint {
     completedSteps: Array.from(state.completedSteps),
     providerConnected: state.providerConnected,
     scanResult: state.scanResult,
+    detectedToolIds: state.detectedToolIds,
     mergeResult: state.mergeResult,
+    toolModes: state.toolModes,
     archiveManifestPath: state.archiveManifestPath,
+    symlinkPlanApplied: state.symlinkPlanApplied,
     daemonInstalled: state.daemonInstalled,
     startedAt: state.startedAt,
     updatedAt: state.updatedAt,
@@ -159,8 +192,11 @@ export function checkpointToState(checkpoint: WizardCheckpoint): WizardState {
     completedSteps: new Set(checkpoint.completedSteps),
     providerConnected: checkpoint.providerConnected,
     scanResult: checkpoint.scanResult,
+    detectedToolIds: checkpoint.detectedToolIds ?? null,
     mergeResult: checkpoint.mergeResult,
+    toolModes: checkpoint.toolModes ?? {},
     archiveManifestPath: checkpoint.archiveManifestPath,
+    symlinkPlanApplied: checkpoint.symlinkPlanApplied ?? false,
     daemonInstalled: checkpoint.daemonInstalled,
     startedAt: checkpoint.startedAt,
     updatedAt: checkpoint.updatedAt,

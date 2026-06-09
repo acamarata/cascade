@@ -14,6 +14,9 @@ import { useWizard } from './WizardContext'
 import { WelcomePhase } from './phases/WelcomePhase'
 import { DaemonInstallPhase } from './phases/DaemonInstallPhase'
 import { DonePhase } from './phases/DonePhase'
+import { ScanLegacyPhase } from './phases/ScanLegacyPhase'
+import { SymlinkSetupPhase } from './phases/SymlinkSetupPhase'
+import { ToolModesPhase } from './phases/ToolModesPhase'
 
 // ---------------------------------------------------------------------------
 // Placeholder component for steps without real content yet
@@ -68,13 +71,13 @@ export function WizardRouter() {
       return <StepPlaceholder step={WizardStep.ProviderConnect} />
 
     case WizardStep.ScanLegacy:
-      return <StepPlaceholder step={WizardStep.ScanLegacy} />
+      return <ScanLegacyPhase />
 
     case WizardStep.MergeContent:
       return <StepPlaceholder step={WizardStep.MergeContent} />
 
     case WizardStep.ToolModes:
-      return <StepPlaceholder step={WizardStep.ToolModes} />
+      return <ToolModesPhase />
 
     case WizardStep.VerifyDiff:
       return <StepPlaceholder step={WizardStep.VerifyDiff} />
@@ -83,7 +86,7 @@ export function WizardRouter() {
       return <StepPlaceholder step={WizardStep.ArchiveLegacy} />
 
     case WizardStep.SymlinkSetup:
-      return <StepPlaceholder step={WizardStep.SymlinkSetup} />
+      return <SymlinkSetupPhase />
 
     case WizardStep.DaemonInstall:
       return <DaemonInstallPhase />

@@ -21,6 +21,10 @@
 //
 // SPORT: MASTER-COMMANDS.md in .claude/docs — update when adding/removing commands.
 
+// Sub-modules added by W-02 (T-P3-E03-09 scaffold):
+pub mod scanner;
+pub mod symlinks;
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use std::path::PathBuf;

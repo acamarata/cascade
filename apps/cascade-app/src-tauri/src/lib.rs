@@ -10,6 +10,7 @@
 
 pub mod commands;
 pub mod error;
+pub mod scanner;
 pub mod state;
 
 use state::AppState;
@@ -77,6 +78,11 @@ pub fn run() {
             // T-P3-E03-08: Daemon install + wizard-complete marker
             commands::install_daemon,
             commands::wizard_mark_complete,
+            // T-P3-E03-10/11: Legacy tool home scanner commands
+            commands::scanner::scan_global_homes,
+            commands::scanner::scan_dev_tree,
+            // T-P3-E03-14: Symlink setup for cascade-managed tools
+            commands::symlinks::setup_symlinks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
