@@ -23,6 +23,7 @@
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use std::path::PathBuf;
 
 use cascade_cli::ipc_client::IpcClient;
 use cascade_types::ipc::{

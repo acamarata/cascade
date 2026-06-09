@@ -50,6 +50,10 @@ pub enum CascadeError {
     /// A window-management error (open/close/focus failed).
     #[error("window error: {0}")]
     Daemon(String),
+
+    /// A custom error message (used by wizard commands for filesystem errors).
+    #[error("{0}")]
+    Custom(String),
 }
 
 impl Serialize for CascadeError {
@@ -68,6 +72,7 @@ impl Serialize for CascadeError {
             CascadeError::Transport => "transport_error",
             CascadeError::NotImplemented(_) => "not_implemented",
             CascadeError::Daemon(_) => "daemon_error",
+            CascadeError::Custom(_) => "custom_error",
         };
         map.serialize_entry("kind", kind)?;
         map.serialize_entry("message", &self.to_string())?;

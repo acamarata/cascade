@@ -61,6 +61,22 @@ pub fn run() {
             commands::cascade_open_window,
             commands::cascade_close_window,
             commands::cascade_focus_window,
+            // T-P3-E03-07: Wizard first-run detection
+            commands::check_wizard_status,
+            // T-P3-E03-03: Wizard checkpoint persistence
+            commands::wizard_save_checkpoint,
+            commands::wizard_load_checkpoint,
+            commands::wizard_clear_checkpoint,
+            // T-P3-E03-43: Audit log format check and rotation
+            commands::wizard_check_audit_format,
+            commands::wizard_rotate_audit_log,
+            // T-P3-E03-06: AI provider connection + Gemini Pool detection
+            commands::detect_gemini_pool,
+            commands::provider_connect,
+            commands::download_local_model,
+            // T-P3-E03-08: Daemon install + wizard-complete marker
+            commands::install_daemon,
+            commands::wizard_mark_complete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

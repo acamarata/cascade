@@ -867,8 +867,10 @@ dependencies = [
 name = "cascade-app"
 version = "0.1.0"
 dependencies = [
+ "cascade-audit",
  "cascade-cli",
  "cascade-types",
+ "reqwest 0.12.28",
  "serde 1.0.228",
  "serde_json 1.0.150",
  "tauri",

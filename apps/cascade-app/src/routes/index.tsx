@@ -4,6 +4,8 @@
  * Outputs: Array of RouteObject plus a RouterApp helper component.
  * Constraints: /onboarding is NOT wrapped in AppLayout (standalone wizard).
  *   Navigate redirect uses replace=true to avoid stacking history entries.
+ *   RouterApp receives isLoading and launchWizard from App so the wizard redirect
+ *   happens inside Router context (avoids Navigate-outside-Router invariant violation).
  * SPORT: MASTER-ROUTES.md — all frontend routes
  */
 
@@ -12,27 +14,51 @@ import { AppLayout } from '../layouts/AppLayout'
 import { DashboardPage } from '../pages/DashboardPage'
 import { InboxPage } from '../pages/InboxPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
-import { OnboardingPage } from '../pages/OnboardingPage'
 import { SearchPage } from '../pages/SearchPage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { WizardLayout } from '../features/onboarding/WizardLayout'
+
+interface RouterAppProps {
+  /** True while the wizard status check is in-flight. */
+  isLoading: boolean
+  /** True when the wizard should be shown (NeverRun or InProgress status). */
+  launchWizard: boolean
+}
 
 /**
- * Purpose: Renders the full route tree.
+ * Purpose: Renders the full route tree inside the parent BrowserRouter.
  *   Authenticated pages are wrapped in AppLayout (chrome).
  *   /onboarding is standalone — no sidebar/topbar.
- * Inputs:  None (reads router context from parent BrowserRouter).
- * Outputs: <Routes> element with 7 routes.
+ *   Wizard routing guard lives here (inside Router context) so Navigate is valid.
+ * Inputs:  isLoading, launchWizard flags from App (derived from useWizardLaunch).
+ * Outputs: <Routes> element with 7 routes + loading / wizard redirect guards.
  * Constraints: Must be rendered inside a Router provider.
  * SPORT: MASTER-ROUTES.md
  */
-export function RouterApp() {
+export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
+  // Show loading screen while checking wizard status — rendered inside Router
+  // context so any child hooks that need Router (e.g. useLocation) still work.
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-lg text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
   return (
     <Routes>
+      {/*
+       * Wizard guard: if wizard is NeverRun or InProgress, redirect all traffic
+       * to /onboarding. This Navigate runs inside Router context — safe.
+       */}
+      {launchWizard && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
+
       {/* Root → redirect to dashboard */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
       {/* Standalone routes — no app chrome */}
-      <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/onboarding" element={<WizardLayout />} />
 
       {/* Authenticated routes — wrapped in persistent app chrome */}
       <Route element={<AppLayout />}>

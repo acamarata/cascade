@@ -28,10 +28,14 @@ tauri-plugin-shell   = "2"
 # cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
 cascade-types = { path = "../../../crates/cascade-types" }
 cascade-cli   = { path = "../../../crates/cascade-cli" }
+cascade-audit = { path = "../../../crates/cascade-audit" }
 # cascade-core = { path = "../../../crates/cascade-core" }
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)
 tokio = { version = "1", features = ["net", "io-util", "rt"] }
+
+# HTTP client for detect_gemini_pool (T-P3-E03-06) — thin, tokio-runtime backed
+reqwest = { version = "0.12", features = ["json"], default-features = false }
 
 # Observability
 tracing            = "0.1"
