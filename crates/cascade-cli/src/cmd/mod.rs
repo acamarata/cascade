@@ -18,6 +18,7 @@ pub mod migrate;
 pub mod migrate_keys;
 pub mod ping;
 pub mod resolve;
+pub mod restore;
 pub mod search;
 pub mod status;
 pub mod unlink;
@@ -77,6 +78,8 @@ pub enum Commands {
     Completions(completions::CompletionsArgs),
     /// Backup snapshots (list/restore).
     Backup(backup::BackupArgs),
+    /// Restore an archived tool's files to their original paths.
+    Restore(restore::RestoreArgs),
     /// Show AI harness detection status.
     #[command(hide = true)]
     Harness(harness::HarnessArgs),
@@ -104,6 +107,7 @@ impl Commands {
             Commands::Daemon(args) => args.run().await,
             Commands::Completions(args) => args.run().await,
             Commands::Backup(args) => args.run().await,
+            Commands::Restore(args) => args.run().await,
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
         }

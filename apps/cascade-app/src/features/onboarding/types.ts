@@ -56,6 +56,7 @@ export const enum WizardStep {
  * - `mergeResult`: null until MergeContent completes; contains merge manifest and conflicts
  * - `toolModes`: per-tool mode selection (cascade-managed | independent); populated by ToolModes step
  * - `archiveManifestPath`: null until ArchiveLegacy completes; path to the manifest file created
+ * - `archivedTools`: map of toolId → archived flag; populated by Phase 7 after each success
  * - `symlinkPlanApplied`: true after SymlinkSetup step applies (or skips) the symlink plan
  * - `daemonInstalled`: true after daemon install step completes
  * - `startedAt`: ISO 8601 timestamp when wizard began
@@ -77,6 +78,15 @@ export interface WizardState {
    */
   toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
+  /**
+   * Per-tool archive completion tracking.
+   * Set to `true` for a toolId after `archive_legacy_tools` succeeds in Phase 7.
+   * Read by Phase 8 (SymlinkSetup) to know which tools were archived this session.
+   * Uses `Partial<>` so absent keys are equivalent to `false`.
+   *
+   * Task: T-P3-E03-21
+   */
+  archivedTools: Partial<Record<ToolId, boolean>>
   /** True after SymlinkSetup step applies (or skips) the symlink plan. */
   symlinkPlanApplied: boolean
   daemonInstalled: boolean
@@ -122,6 +132,8 @@ export interface WizardCheckpoint {
   mergeResult: MergeResult | null
   toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
+  /** Serialized form of WizardState.archivedTools (same shape — JSON-safe). */
+  archivedTools: Partial<Record<ToolId, boolean>>
   symlinkPlanApplied: boolean
   daemonInstalled: boolean
   startedAt: string
@@ -145,6 +157,7 @@ export function createInitialState(): WizardState {
     mergeResult: null,
     toolModes: {},
     archiveManifestPath: null,
+    archivedTools: {},
     symlinkPlanApplied: false,
     daemonInstalled: false,
     startedAt: now,
@@ -171,6 +184,7 @@ export function stateToCheckpoint(state: WizardState): WizardCheckpoint {
     mergeResult: state.mergeResult,
     toolModes: state.toolModes,
     archiveManifestPath: state.archiveManifestPath,
+    archivedTools: state.archivedTools,
     symlinkPlanApplied: state.symlinkPlanApplied,
     daemonInstalled: state.daemonInstalled,
     startedAt: state.startedAt,
@@ -196,6 +210,7 @@ export function checkpointToState(checkpoint: WizardCheckpoint): WizardState {
     mergeResult: checkpoint.mergeResult,
     toolModes: checkpoint.toolModes ?? {},
     archiveManifestPath: checkpoint.archiveManifestPath,
+    archivedTools: checkpoint.archivedTools ?? {},
     symlinkPlanApplied: checkpoint.symlinkPlanApplied ?? false,
     daemonInstalled: checkpoint.daemonInstalled,
     startedAt: checkpoint.startedAt,

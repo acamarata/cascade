@@ -80,6 +80,7 @@ export function useCheckpoint() {
         mergeResult: state.mergeResult,
         toolModes: state.toolModes,
         archiveManifestPath: state.archiveManifestPath,
+        archivedTools: state.archivedTools,
         symlinkPlanApplied: state.symlinkPlanApplied,
         daemonInstalled: state.daemonInstalled,
         startedAt: state.startedAt,

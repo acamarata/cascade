@@ -8,6 +8,7 @@
 // env or the canonical ~/.cascade/daemon.sock). T-P3-E01-06 wires this through
 // to every command handler via tauri::State<AppState>.
 
+pub mod archive;
 pub mod commands;
 pub mod error;
 pub mod scanner;
@@ -83,6 +84,12 @@ pub fn run() {
             commands::scanner::scan_dev_tree,
             // T-P3-E03-14: Symlink setup for cascade-managed tools
             commands::symlinks::setup_symlinks,
+            // T-P3-E03-16..19: Archive / restore subsystem
+            commands::archive::archive_legacy_tools,
+            commands::archive::read_archive_manifest,
+            commands::archive::list_archived_tools,
+            commands::archive::archive_preflight,
+            commands::archive::restore_tool,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

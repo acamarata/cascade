@@ -12,6 +12,7 @@ import { WizardStep } from './types'
 import { STEP_LABELS } from './stepLabels'
 import { useWizard } from './WizardContext'
 import { WelcomePhase } from './phases/WelcomePhase'
+import { ArchiveLegacyPhase } from './phases/ArchiveLegacyPhase'
 import { DaemonInstallPhase } from './phases/DaemonInstallPhase'
 import { DonePhase } from './phases/DonePhase'
 import { ScanLegacyPhase } from './phases/ScanLegacyPhase'
@@ -83,7 +84,7 @@ export function WizardRouter() {
       return <StepPlaceholder step={WizardStep.VerifyDiff} />
 
     case WizardStep.ArchiveLegacy:
-      return <StepPlaceholder step={WizardStep.ArchiveLegacy} />
+      return <ArchiveLegacyPhase />
 
     case WizardStep.SymlinkSetup:
       return <SymlinkSetupPhase />

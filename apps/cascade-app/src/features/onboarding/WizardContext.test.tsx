@@ -23,6 +23,7 @@ function createTestState(overrides?: Partial<WizardState>): WizardState {
     mergeResult: null,
     toolModes: {},
     archiveManifestPath: null,
+    archivedTools: {},
     symlinkPlanApplied: false,
     daemonInstalled: false,
     startedAt: now,
@@ -91,6 +92,47 @@ describe('wizardReducer', () => {
     expect(result.providerConnected).toBe(true)
     expect(result.daemonInstalled).toBe(true)
     expect(result.step).toBe(initial.step)
+  })
+
+  // Test T-21-a: UPDATE_ARCHIVE_STATUS sets archivedTools[toolId] = true
+  it('UPDATE_ARCHIVE_STATUS should mark a tool as archived', () => {
+    const initial = createTestState()
+    const result = wizardReducer(initial, {
+      type: 'UPDATE_ARCHIVE_STATUS',
+      payload: { toolId: 'claude-code', archived: true },
+    })
+    expect(result.archivedTools['claude-code']).toBe(true)
+    // Other tools untouched
+    expect(result.archivedTools['opencode']).toBeUndefined()
+    // Step unchanged
+    expect(result.step).toBe(initial.step)
+  })
+
+  // Test T-21-b: UPDATE_ARCHIVE_STATUS can set archived = false
+  it('UPDATE_ARCHIVE_STATUS should be able to mark a tool as NOT archived', () => {
+    const initial = createTestState({ archivedTools: { 'claude-code': true } })
+    const result = wizardReducer(initial, {
+      type: 'UPDATE_ARCHIVE_STATUS',
+      payload: { toolId: 'claude-code', archived: false },
+    })
+    expect(result.archivedTools['claude-code']).toBe(false)
+  })
+
+  // Test T-21-c: UPDATE_ARCHIVE_STATUS merges multiple tools independently
+  it('UPDATE_ARCHIVE_STATUS should preserve existing archivedTools entries', () => {
+    const initial = createTestState({ archivedTools: { 'opencode': true } })
+    const result = wizardReducer(initial, {
+      type: 'UPDATE_ARCHIVE_STATUS',
+      payload: { toolId: 'cursor', archived: true },
+    })
+    expect(result.archivedTools['opencode']).toBe(true)
+    expect(result.archivedTools['cursor']).toBe(true)
+  })
+
+  // Test T-21-d: initial state has empty archivedTools
+  it('initial state should have empty archivedTools', () => {
+    const initial = createTestState()
+    expect(initial.archivedTools).toEqual({})
   })
 })
 

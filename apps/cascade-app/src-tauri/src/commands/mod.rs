@@ -24,6 +24,8 @@
 // Sub-modules added by W-02 (T-P3-E03-09 scaffold):
 pub mod scanner;
 pub mod symlinks;
+// Sub-module added by W-03 (T-P3-E03-15 scaffold):
+pub mod archive;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
