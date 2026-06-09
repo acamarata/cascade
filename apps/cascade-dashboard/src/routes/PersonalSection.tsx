@@ -1,10 +1,10 @@
 /**
  * Purpose: Personal section route — per-user activity (threads, ideas/inbox, CRD chains,
- *   scheduled tasks) and usage (fleet quota, account ledger). Composes the E02-12/13 panels.
+ *   scheduled tasks) and usage (fleet quota, account ledger, analytics chart).
  * Inputs: none.
  * Outputs: Tabbed page: Activity tab + Usage tab, each rendering its panels.
  * Constraints: Tab state is local. Panels self-fetch their /api/personal/* endpoints.
- * SPORT: T-P3-E02-12, T-P3-E02-13 — Personal Section React
+ * SPORT: T-P3-E02-12, T-P3-E02-13, T-P3-E02-24 — Personal Section React
  */
 import { useState } from 'react'
 import { ThreadsPanel } from '@/components/personal/ThreadsPanel'
@@ -13,6 +13,7 @@ import { CRDChainsPanel } from '@/components/personal/CRDChainsPanel'
 import { ScheduledTasksPanel } from '@/components/personal/ScheduledTasksPanel'
 import { FleetQuotaPanel } from '@/components/personal/FleetQuotaPanel'
 import { AccountLedgerPanel } from '@/components/personal/AccountLedgerPanel'
+import { WeeklyUsageChart } from '@/components/Analytics/WeeklyUsageChart'
 
 type Tab = 'activity' | 'usage'
 
@@ -62,6 +63,7 @@ export function PersonalSection() {
         <div className="flex flex-col gap-4">
           <FleetQuotaPanel />
           <AccountLedgerPanel />
+          <WeeklyUsageChart />
         </div>
       )}
     </div>

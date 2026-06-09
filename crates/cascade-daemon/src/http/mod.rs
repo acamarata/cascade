@@ -9,6 +9,10 @@
 pub mod chat_handlers;
 pub mod chat_tools;
 pub mod gci_handlers;
+pub mod harness;
+pub mod hooks_write;
+pub mod rag_status;
+pub mod usage_history;
 pub mod personal_handlers;
 pub mod projects_handlers;
 pub mod static_handler;

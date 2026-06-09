@@ -15,6 +15,8 @@ import { SkillsPanel } from '@/components/global/SkillsPanel'
 import { SettingsSnapshotPanel } from '@/components/global/SettingsSnapshotPanel'
 import { CascadeDiagramPanel } from '@/components/global/CascadeDiagramPanel'
 import { HooksInspectorPanel } from '@/components/global/HooksInspectorPanel'
+import { HooksList } from '@/components/HooksEditor/HooksList'
+import { HarnessPanel } from '@/components/HarnessPanel/HarnessPanel'
 
 type Tab = 'files' | 'config'
 
@@ -72,6 +74,16 @@ export function GlobalSection() {
           <CascadeDiagramPanel />
           <div className="md:col-span-2">
             <HooksInspectorPanel />
+          </div>
+          {/* T-P3-E02-27: Hooks editor — add/edit/delete hooks without hand-editing settings.json */}
+          <div className="md:col-span-2">
+            <section id="hooks-editor">
+              <HooksList />
+            </section>
+          </div>
+          {/* T-P3-E02-28: Harness augmentation panel — CC/OC integration status + regenerate */}
+          <div className="md:col-span-2">
+            <HarnessPanel />
           </div>
         </div>
       )}

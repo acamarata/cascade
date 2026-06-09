@@ -21,11 +21,20 @@
 | IdeasPanel | src/components/personal/IdeasPanel.tsx | Personal ideas browser | 🔲 Planned | P3 | T-P3-E02-* |
 | InboxPanel | src/components/personal/InboxPanel.tsx | PCI inbox messages list | 🔲 Planned | P3 | T-P3-E02-* |
 | UsageHistoryChart | src/components/personal/UsageHistoryChart.tsx | Weekly usage bar chart (Recharts) | 🔲 Planned | P3 | T-P3-E02-* |
+| WeeklyUsageChart | apps/cascade-dashboard/src/components/Analytics/WeeklyUsageChart.tsx | Weekly usage bar chart (Recharts) | ✅ Done | P3 | T-P3-E02-24/25 |
+| UsageSummaryRow | src/components/Analytics/UsageSummaryRow.tsx | Per-account usage summary row | ✅ Done | P3 | T-P3-E02-24 |
+| AccountLedger | src/components/Analytics/AccountLedger.tsx | Account ledger table with totals | ✅ Done | P3 | T-P3-E02-25 |
 | RulesPanel | src/components/global/RulesPanel.tsx | GCI rules list with search | 🔲 Planned | P3 | T-P3-E02-* |
 | ReferencesPanel | src/components/global/ReferencesPanel.tsx | GCI references browser | 🔲 Planned | P3 | T-P3-E02-* |
 | HooksEditor | src/components/global/HooksEditor.tsx | CC hooks list/add/edit/delete | 🔲 Planned | P3 | T-P3-E02-* |
+| HooksList | src/components/HooksEditor/HooksList.tsx | Rendered list of CC hooks | ✅ Done | P3 | T-P3-E02-27 |
+| HookForm | src/components/HooksEditor/HookForm.tsx | Add/edit hook form | ✅ Done | P3 | T-P3-E02-27 |
+| DeleteConfirm | src/components/HooksEditor/DeleteConfirm.tsx | Hook delete confirmation dialog | ✅ Done | P3 | T-P3-E02-27 |
 | SettingsSnapshotPanel | src/components/global/SettingsSnapshotPanel.tsx | JSON tree of settings.json (redacted) | 🔲 Planned | P3 | T-P3-E02-* |
 | RAGStatusPanel | src/components/global/RAGStatusPanel.tsx | RAG index status + stats | 🔲 Planned | P3/P4 | T-P3-E06-*, T-P4-E02-* |
+| HarnessPanel | src/components/HarnessPanel/HarnessPanel.tsx | Harness integration status panel | ✅ Done | P3 | T-P3-E02-28 |
+| RagStatusCard | src/components/HarnessPanel/RagStatusCard.tsx | RAG/RRF status card (P3 stub) | ✅ Done | P3 | T-P3-E02-29 |
+| useUsageHistory | src/hooks/useUsageHistory.ts | Hook: fetch historical usage aggregates | ✅ Done | P3 | T-P3-E02-24 |
 | GPChatButton | src/components/GPChatPanel/GPChatButton.tsx | Floating always-visible chat trigger button | ✅ Done | P3 | T-P3-E02-21 |
 | GPChatPanel | src/components/GPChatPanel/GPChatPanel.tsx | Expandable/resizable/minimizable GP chat panel | ✅ Done | P3 | T-P3-E02-21 |
 | MessageList | src/components/GPChatPanel/MessageList.tsx | User/assistant messages with streaming cursor | ✅ Done | P3 | T-P3-E02-21 |

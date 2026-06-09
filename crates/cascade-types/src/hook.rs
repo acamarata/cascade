@@ -251,6 +251,42 @@ impl TryFrom<HookConfigEntry> for HookDef {
     }
 }
 
+// ── Write-API request types (T-P3-E02-26) ────────────────────────────────────
+
+/// Request body for POST /api/gci/hooks-write.
+///
+/// Adds or appends a hook entry under `hooks[event]` in ~/.claude/settings.json.
+/// The `event` field must be one of the Claude Code hook event names (allow-listed
+/// in hooks_write.rs). The `command` field must not be empty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HookWriteRequest {
+    /// Claude Code hook event name, e.g. "PreToolUse", "PostToolUse".
+    pub event: String,
+
+    /// Shell command string to register. Must not be empty.
+    pub command: String,
+
+    /// Optional human-readable label (stored in the hook entry as `label`).
+    #[serde(default)]
+    pub label: String,
+
+    /// Optional tool matcher (for PreToolUse / PostToolUse events).
+    #[serde(default)]
+    pub matcher: Option<String>,
+}
+
+/// Request body / path params for DELETE /api/gci/hooks-write/:hook_id.
+///
+/// Identifies a hook by event name and 0-based index within that event's array.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HookDeleteRequest {
+    /// Claude Code hook event name matching the key in settings.json `hooks` object.
+    pub event: String,
+
+    /// 0-based index of the hook within the event's array.
+    pub index: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

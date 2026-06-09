@@ -71,9 +71,12 @@ pub mod paths;
 pub mod query_strategy;
 pub mod quota_store;
 pub mod reranker;
+pub mod harness;
+pub mod rag;
 pub mod retriever;
 pub mod scheduled_task;
 pub mod tiers;
+pub mod usage;
 
 // ── Top-level re-exports ──────────────────────────────────────────────────────
 //
