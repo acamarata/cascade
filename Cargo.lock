@@ -536,6 +536,7 @@ checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
  "axum-core 0.4.5",
+ "axum-macros",
  "bytes",
  "futures-util",
  "http 1.4.1",
@@ -598,6 +599,17 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d123550fa8d071b7255cb0cc04dc302baa6c8c4a79f55701552684d8399bce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1049,10 +1061,13 @@ dependencies = [
  "cascade-audit",
  "cascade-core",
  "cascade-keychain",
+ "cascade-mcp",
  "cascade-types",
+ "chrono",
  "clap 4.6.1",
  "clap_complete",
  "libc",
+ "notify",
  "serde 1.0.228",
  "serde_json 1.0.150",
  "serial_test",
@@ -1184,20 +1199,30 @@ name = "cascade-mcp"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum 0.7.9",
  "base64ct",
+ "bytes",
  "cascade-providers",
  "cascade-types",
  "futures-core",
+ "futures-util",
  "hmac",
  "rand 0.8.6",
+ "reqwest 0.12.28",
  "serde 1.0.228",
  "serde_json 1.0.150",
+ "serial_test",
  "sha2",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

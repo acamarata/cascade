@@ -18,6 +18,9 @@
 //! | `cascade://memory/{project}/{file}` | A project memory file |
 //! | `cascade://inbox/{project}` | Inbox messages as JSON array |
 //! | `cascade://master-list/{project}/{kind}` | Project master-list document |
+//! | `cascade://project_state` | PEWS phase status + active tasks (JSON) |
+//! | `cascade://quota_state` | CC/OC quota levels from quota-state.json |
+//! | `cascade://instructions/{tier}` | Resolved instruction text for a tier |
 //!
 //! ## Pagination
 //!
@@ -176,6 +179,33 @@ impl ContentBackend for FsContentBackend {
             return read_file_optional(path).await;
         }
 
+        if uri == "cascade://project_state" {
+            return read_project_state().await;
+        }
+
+        if uri == "cascade://quota_state" {
+            return read_quota_state().await;
+        }
+
+        if let Some(tier) = uri.strip_prefix("cascade://instructions/") {
+            if !is_safe_segment(tier) {
+                return Err(McpServerError::InvalidParams {
+                    detail: format!("unsafe tier segment in instructions URI: {tier}"),
+                });
+            }
+            const VALID_TIERS: &[&str] = &["gci", "pci", "apc", "ppc", "prc", "pac"];
+            if !VALID_TIERS.contains(&tier) {
+                return Err(McpServerError::InvalidParams {
+                    detail: format!(
+                        "unknown tier '{tier}'; valid values: gci, pci, apc, ppc, prc, pac"
+                    ),
+                });
+            }
+            // Reuse the tier_file path resolution — same files as cascade://tier/{name}
+            let path = mcp_paths::tier_file(tier);
+            return read_file_optional(path).await;
+        }
+
         // Unknown scheme
         Err(McpServerError::InvalidParams {
             detail: format!("unknown cascade:// URI scheme: {uri}"),
@@ -261,6 +291,97 @@ async fn read_inbox_as_json(inbox: PathBuf) -> Result<Option<String>, McpServerE
     Ok(Some(serde_json::to_string(&messages).unwrap_or_else(|_| "[]".into())))
 }
 
+/// Read `~/.claude/temp/quota-state.json` and return its content.
+/// Returns `Ok(Some("{}"))` if the file does not exist (graceful empty).
+async fn read_quota_state() -> Result<Option<String>, McpServerError> {
+    let path = mcp_paths::quota_state_file();
+    match tokio::fs::read_to_string(&path).await {
+        Ok(content) => Ok(Some(content)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Some("{}".into())),
+        Err(e) => Err(McpServerError::Internal {
+            detail: format!("I/O error reading quota-state: {e}"),
+        }),
+    }
+}
+
+/// Read the active phase status from `.claude/phases/current/p{N}/status.yaml`
+/// for the current working directory and return a compact JSON summary.
+///
+/// Scans `phases_current_dir(cwd)` for phase subdirs whose status.yaml does NOT
+/// contain `phase_status: done`. Returns a bounded summary object.
+async fn read_project_state() -> Result<Option<String>, McpServerError> {
+    // Resolve CWD; fall back gracefully if unavailable.
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(_) => return Ok(Some(serde_json::json!({"error": "cwd unavailable"}).to_string())),
+    };
+    let phases_dir = mcp_paths::phases_current_dir(&cwd);
+
+    if !phases_dir.exists() {
+        return Ok(Some(
+            serde_json::json!({
+                "project": cwd.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"),
+                "phases_found": 0,
+                "active_phases": [],
+                "note": "no .claude/phases/current/ directory"
+            })
+            .to_string(),
+        ));
+    }
+
+    let mut phases = Vec::new();
+    let mut read_dir = tokio::fs::read_dir(&phases_dir).await.map_err(|e| {
+        McpServerError::Internal {
+            detail: format!("read_dir {}: {e}", phases_dir.display()),
+        }
+    })?;
+
+    while let Some(entry) = read_dir.next_entry().await.map_err(|e| McpServerError::Internal {
+        detail: format!("next_entry phases: {e}"),
+    })? {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let phase_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        // Only phase dirs that look like "p1", "p2", etc.
+        if !phase_name.starts_with('p') {
+            continue;
+        }
+        let status_file = path.join("status.yaml");
+        let status_text = match tokio::fs::read_to_string(&status_file).await {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        // Parse status: skip phases marked done (simple text check to stay dep-free)
+        let is_done = status_text
+            .lines()
+            .any(|l| l.trim().starts_with("phase_status:") && l.contains("done"));
+        if is_done {
+            continue;
+        }
+
+        // Collect a bounded summary (first 20 lines of status.yaml)
+        let summary_lines: Vec<&str> = status_text.lines().take(20).collect();
+        phases.push(serde_json::json!({
+            "phase": phase_name,
+            "status_summary": summary_lines.join("\n"),
+        }));
+    }
+
+    let result = serde_json::json!({
+        "project": cwd.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"),
+        "cwd": cwd.to_string_lossy(),
+        "phases_found": phases.len(),
+        "active_phases": phases,
+    });
+    Ok(Some(result.to_string()))
+}
+
 // ── Static resource catalog ───────────────────────────────────────────────────
 
 /// Build the full static resource catalog.
@@ -283,6 +404,28 @@ fn build_catalog() -> Vec<McpResource> {
             uri: format!("cascade://tier/{tier}"),
             name: name.to_string(),
             description: Some(desc.to_string()),
+            mime_type: Some("text/markdown".into()),
+        });
+    }
+
+    // State resources
+    catalog.push(McpResource {
+        uri: "cascade://project_state".into(),
+        name: "Project State".into(),
+        description: Some("Active PEWS phase status, ticket counts, and task summary for the current project".into()),
+        mime_type: Some("application/json".into()),
+    });
+    catalog.push(McpResource {
+        uri: "cascade://quota_state".into(),
+        name: "Quota State".into(),
+        description: Some("CC/OC quota levels, available accounts, and reset timestamps".into()),
+        mime_type: Some("application/json".into()),
+    });
+    for tier in &["gci", "pci", "apc", "ppc", "prc", "pac"] {
+        catalog.push(McpResource {
+            uri: format!("cascade://instructions/{tier}"),
+            name: format!("Instructions — {}", tier.to_uppercase()),
+            description: Some(format!("Resolved instruction text for the {tier} cascade tier")),
             mime_type: Some("text/markdown".into()),
         });
     }
@@ -462,7 +605,10 @@ impl ResourceRegistry {
         debug!(uri, "resources/read");
 
         // Determine mime type from URI scheme before calling backend
-        let mime_type = if uri.starts_with("cascade://inbox/") {
+        let mime_type = if uri.starts_with("cascade://inbox/")
+            || uri == "cascade://project_state"
+            || uri == "cascade://quota_state"
+        {
             "application/json"
         } else {
             "text/markdown"
@@ -894,6 +1040,125 @@ mod tests {
         let params = serde_json::json!({ "uri": "cascade://tier/gci" });
         let result = handler.handle(Some(params)).await.unwrap();
         assert!(result["contents"].is_array());
+    }
+
+    // ── T-P4-E02-30: new resources ──────────────────────────────────────────
+
+    /// MockContentBackend that supports the three new URI patterns.
+    struct NewResourcesMock {
+        quota_content: Option<String>,
+    }
+
+    #[async_trait]
+    impl ContentBackend for NewResourcesMock {
+        async fn read_uri(&self, uri: &str) -> Result<Option<String>, McpServerError> {
+            validate_uri_safety(uri)?;
+            match uri {
+                "cascade://quota_state" => Ok(Some(
+                    self.quota_content
+                        .clone()
+                        .unwrap_or_else(|| "{}".into()),
+                )),
+                "cascade://project_state" => Ok(Some(
+                    r#"{"project":"test","phases_found":1,"active_phases":[]}"#.into(),
+                )),
+                u if u.starts_with("cascade://instructions/") => {
+                    let tier = u.trim_start_matches("cascade://instructions/");
+                    const VALID: &[&str] = &["gci", "pci", "apc", "ppc", "prc", "pac"];
+                    if !VALID.contains(&tier) {
+                        return Err(McpServerError::InvalidParams {
+                            detail: format!("unknown tier '{tier}'"),
+                        });
+                    }
+                    Ok(Some(format!("# {} instructions\n\nContent for {tier}.", tier.to_uppercase())))
+                }
+                _ => Err(McpServerError::InvalidParams {
+                    detail: format!("unknown URI: {uri}"),
+                }),
+            }
+        }
+    }
+
+    fn new_resources_registry(quota: Option<&str>) -> ResourceRegistry {
+        ResourceRegistry::with_backend(Arc::new(NewResourcesMock {
+            quota_content: quota.map(|s| s.to_string()),
+        }))
+    }
+
+    #[tokio::test]
+    async fn quota_state_returns_json_mime() {
+        let reg = new_resources_registry(Some(r#"{"cc":{"quota_hit":false}}"#));
+        let params = serde_json::json!({ "uri": "cascade://quota_state" });
+        let result = reg.read(Some(&params)).await.unwrap();
+        let mime = result["contents"][0]["mimeType"].as_str().unwrap();
+        assert_eq!(mime, "application/json");
+        let text = result["contents"][0]["text"].as_str().unwrap();
+        assert!(text.contains("quota_hit"), "quota content missing");
+    }
+
+    #[tokio::test]
+    async fn quota_state_returns_empty_object_when_missing() {
+        let reg = new_resources_registry(None);
+        let params = serde_json::json!({ "uri": "cascade://quota_state" });
+        let result = reg.read(Some(&params)).await.unwrap();
+        let text = result["contents"][0]["text"].as_str().unwrap();
+        assert_eq!(text, "{}", "missing quota-state must return {{}}");
+    }
+
+    #[tokio::test]
+    async fn project_state_returns_json_mime() {
+        let reg = new_resources_registry(None);
+        let params = serde_json::json!({ "uri": "cascade://project_state" });
+        let result = reg.read(Some(&params)).await.unwrap();
+        let mime = result["contents"][0]["mimeType"].as_str().unwrap();
+        assert_eq!(mime, "application/json");
+        let text = result["contents"][0]["text"].as_str().unwrap();
+        // Must be valid JSON
+        serde_json::from_str::<serde_json::Value>(text)
+            .expect("project_state must return valid JSON");
+    }
+
+    #[tokio::test]
+    async fn instructions_ppc_returns_markdown() {
+        let reg = new_resources_registry(None);
+        let params = serde_json::json!({ "uri": "cascade://instructions/ppc" });
+        let result = reg.read(Some(&params)).await.unwrap();
+        let mime = result["contents"][0]["mimeType"].as_str().unwrap();
+        assert_eq!(mime, "text/markdown");
+        let text = result["contents"][0]["text"].as_str().unwrap();
+        assert!(text.contains("PPC"), "instructions must mention tier");
+    }
+
+    #[tokio::test]
+    async fn instructions_invalid_tier_returns_error() {
+        let reg = new_resources_registry(None);
+        let params = serde_json::json!({ "uri": "cascade://instructions/invalid" });
+        let err = reg.read(Some(&params)).await.unwrap_err();
+        assert!(
+            matches!(err, McpServerError::InvalidParams { .. }),
+            "invalid tier must return InvalidParams, got: {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn catalog_contains_new_resource_uris() {
+        let reg = new_resources_registry(None);
+        let result = reg.list(None).await.unwrap();
+        let resources = result["resources"].as_array().unwrap();
+        let uris: Vec<&str> = resources
+            .iter()
+            .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
+            .collect();
+        assert!(uris.contains(&"cascade://project_state"), "catalog must contain project_state");
+        assert!(uris.contains(&"cascade://quota_state"), "catalog must contain quota_state");
+        assert!(
+            uris.contains(&"cascade://instructions/gci"),
+            "catalog must contain instructions/gci"
+        );
+        assert!(
+            uris.contains(&"cascade://instructions/ppc"),
+            "catalog must contain instructions/ppc"
+        );
     }
 
     // ── is_safe_segment ─────────────────────────────────────────────────────

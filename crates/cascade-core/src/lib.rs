@@ -54,6 +54,7 @@
 
 pub mod auth_detector;
 pub mod cache;
+pub mod cascade_resolution;
 pub mod cascade_resolve;
 pub mod compat_gen;
 pub mod config;

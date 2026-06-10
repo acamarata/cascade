@@ -80,6 +80,27 @@ pub fn inbox_dir(project: &str) -> PathBuf {
     }
 }
 
+// ── Quota state ───────────────────────────────────────────────────────────────
+
+/// Resolve the quota-state JSON file written by the Claw Fleet / Gemini proxy:
+/// `~/.claude/temp/quota-state.json`.
+///
+/// Returns an absolute path. The file may not exist; callers must handle
+/// `io::Error` on read.
+pub fn quota_state_file() -> PathBuf {
+    home_dir().join(".claude").join("temp").join("quota-state.json")
+}
+
+// ── Phase status ──────────────────────────────────────────────────────────────
+
+/// Resolve the phase status directory for a project.
+///
+/// `project_root` is the absolute path to the project (git repo root).
+/// Returns: `{project_root}/.claude/phases/current/`
+pub fn phases_current_dir(project_root: &std::path::Path) -> PathBuf {
+    project_root.join(".claude").join("phases").join("current")
+}
+
 // ── Docs / master lists ───────────────────────────────────────────────────────
 
 /// Resolve a project docs file path (used for master lists).

@@ -71,7 +71,7 @@ pub struct GetPromptResult {
 
 // ── Static prompt catalogue ───────────────────────────────────────────────────
 
-/// The three built-in Cascade prompts.
+/// The built-in Cascade prompts (four entries).
 static PROMPTS: &[(&str, &str, &[(&str, &str, bool)])] = &[
     (
         "cascade-context",
@@ -99,6 +99,16 @@ static PROMPTS: &[(&str, &str, &[(&str, &str, bool)])] = &[
          standards and provide structured feedback.",
         &[
             ("diff", "The git diff to review (output of `git diff HEAD` or similar).", true),
+        ],
+    ),
+    (
+        "cascade.harness_setup",
+        "Returns step-by-step instructions for configuring this harness to use the \
+         Cascade MCP server. Generates the exact commands to run based on which \
+         cascade tiers are present on this machine.",
+        &[
+            ("harness", "Target harness: cc or oc", true),
+            ("tier", "Cascade tier to configure: gci|pci|apc|ppc|prc|pac", false),
         ],
     ),
 ];
@@ -158,6 +168,7 @@ impl PromptsHandler {
             "cascade-context" => self.get_cascade_context(&args),
             "cascade-search" => self.get_cascade_search(&args),
             "cascade-commit-review" => self.get_cascade_commit_review(&args),
+            "cascade.harness_setup" => self.get_harness_setup(&args),
             _ => Err(JsonRpcError::method_not_found(format!("Prompt not found: {name}"))),
         }?;
 
@@ -217,6 +228,143 @@ impl PromptsHandler {
         Ok(GetPromptResult {
             description,
             messages: vec![user_message(text)],
+        })
+    }
+
+    /// Handle `cascade.harness_setup`.
+    ///
+    /// Returns a `GetPromptResult` with a system message and a user message
+    /// containing markdown-formatted step-by-step configuration instructions.
+    ///
+    /// Arguments:
+    /// - `harness` (required): "cc" or "oc"
+    /// - `tier` (optional): specific tier to configure; defaults to all
+    fn get_harness_setup(&self, args: &Value) -> Result<GetPromptResult, JsonRpcError> {
+        let harness = args
+            .get("harness")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                JsonRpcError::invalid_params(
+                    "missing required argument 'harness' for cascade.harness_setup",
+                )
+            })?;
+
+        // Validate harness value
+        if harness != "cc" && harness != "oc" {
+            return Err(JsonRpcError::invalid_params(format!(
+                "unknown harness '{}'; valid values: cc, oc",
+                harness
+            )));
+        }
+
+        let tier_filter = args.get("tier").and_then(|v| v.as_str());
+
+        // Validate optional tier
+        if let Some(t) = tier_filter {
+            const VALID_TIERS: &[&str] = &["gci", "pci", "apc", "ppc", "prc", "pac"];
+            if !VALID_TIERS.contains(&t) {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "unknown tier '{}'; valid values: gci, pci, apc, ppc, prc, pac",
+                    t
+                )));
+            }
+        }
+
+        let harness_label = match harness {
+            "cc" => "Claude Code",
+            "oc" => "OpenCode",
+            _ => harness,
+        };
+
+        // Discover which tiers are present on this machine
+        let all_tiers: &[&str] = &["gci", "pci", "apc", "ppc", "prc", "pac"];
+        let tiers_to_configure: Vec<&str> = match tier_filter {
+            Some(t) => vec![t],
+            None => all_tiers
+                .iter()
+                .copied()
+                .filter(|t| {
+                    let path = crate::paths::tier_file(t);
+                    path.exists()
+                })
+                .collect(),
+        };
+
+        let description = format!(
+            "Cascade harness setup instructions for {harness_label}{}",
+            tier_filter
+                .map(|t| format!(" (tier: {t})"))
+                .unwrap_or_default()
+        );
+
+        // Build the step-by-step instructions
+        let mut steps = Vec::new();
+        steps.push(format!(
+            "## Configuring {harness_label} to Use Cascade\n\n\
+             Run the following commands to generate Cascade instruction files for your harness.\n"
+        ));
+
+        if tiers_to_configure.is_empty() {
+            steps.push(
+                "No cascade tier directories were found on this machine. \
+                 Create a `.cascade/` directory at the appropriate tier level first, \
+                 then re-run this prompt.\n"
+                    .into(),
+            );
+        } else {
+            steps.push("### Step 1: Generate Instruction Files\n".into());
+            for tier in &tiers_to_configure {
+                steps.push(format!(
+                    "```sh\ncascade generate-instructions --harness {harness} --tier {tier}\n```\n"
+                ));
+            }
+            steps.push("\n### Step 2: Verify Resources Are Available\n".into());
+            steps.push(
+                "```sh\ncascade mcp list-resources\n```\n\
+                 You should see entries for `cascade://instructions/gci` and other configured tiers.\n"
+                    .into(),
+            );
+            steps.push("\n### Step 3: Verify Cascade Resolution\n".into());
+            steps.push(
+                "```sh\ncascade cascade-resolve\n```\n\
+                 This shows which tiers are active and what instruction files they resolve to.\n"
+                    .into(),
+            );
+            steps.push("\n### Step 4: Confirm in Your Harness\n".into());
+            steps.push(match harness {
+                "cc" => {
+                    "In Claude Code, open a new session and run:\n\
+                     ```sh\n/mcp\n```\n\
+                     You should see `cascade` in the connected MCP servers list with \
+                     `resources/list` showing the configured tier resources.\n"
+                        .into()
+                }
+                "oc" => {
+                    "In OpenCode, confirm the MCP server is running:\n\
+                     ```sh\noc mcp status cascade\n```\n\
+                     Then read a resource to confirm resolution:\n\
+                     ```sh\noc mcp read cascade://instructions/gci\n```\n"
+                        .into()
+                }
+                _ => "Confirm the harness MCP client sees the cascade server resources.\n".into(),
+            });
+        }
+
+        let user_text = steps.join("");
+
+        let system_msg = PromptMessage {
+            role: "system".into(),
+            content: PromptTextContent {
+                kind: "text".into(),
+                text: "You are helping the user configure their AI harness to use the \
+                       Cascade local knowledge base."
+                    .into(),
+            },
+        };
+
+        Ok(GetPromptResult {
+            description,
+            messages: vec![system_msg, user_message(user_text)],
         })
     }
 
@@ -280,11 +428,11 @@ mod tests {
     // ── prompts/list ──────────────────────────────────────────────────────────
 
     #[test]
-    fn list_returns_exactly_3_prompts() {
+    fn list_returns_exactly_4_prompts() {
         let h = handler();
         let result = h.list().unwrap();
         let prompts = result["prompts"].as_array().expect("prompts must be an array");
-        assert_eq!(prompts.len(), 3, "expected exactly 3 prompts, got {}", prompts.len());
+        assert_eq!(prompts.len(), 4, "expected exactly 4 prompts, got {}", prompts.len());
     }
 
     #[test]
@@ -299,6 +447,7 @@ mod tests {
         assert!(names.contains(&"cascade-context"), "missing cascade-context");
         assert!(names.contains(&"cascade-search"), "missing cascade-search");
         assert!(names.contains(&"cascade-commit-review"), "missing cascade-commit-review");
+        assert!(names.contains(&"cascade.harness_setup"), "missing cascade.harness_setup");
     }
 
     #[test]
@@ -404,6 +553,137 @@ mod tests {
         let err = h.get(&params).unwrap_err();
         assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS);
         assert!(err.message.contains("diff"));
+    }
+
+    // ── prompts/get — cascade.harness_setup ─────────────────────────────────
+
+    #[test]
+    fn get_harness_setup_cc_returns_two_messages() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cc" }
+        });
+        let result = h.get(&params).unwrap();
+        let messages = result["messages"].as_array().expect("messages must be array");
+        assert_eq!(messages.len(), 2, "harness_setup must return exactly 2 messages");
+        assert_eq!(messages[0]["role"].as_str().unwrap(), "system");
+        assert_eq!(messages[1]["role"].as_str().unwrap(), "user");
+    }
+
+    #[test]
+    fn get_harness_setup_user_message_contains_generate_instructions() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cc" }
+        });
+        let result = h.get(&params).unwrap();
+        let user_text = result["messages"][1]["content"]["text"].as_str().unwrap();
+        assert!(
+            user_text.contains("cascade generate-instructions") || user_text.contains("No cascade tier"),
+            "user message must reference generate-instructions or no-tiers fallback"
+        );
+    }
+
+    #[test]
+    fn get_harness_setup_user_message_contains_list_resources_verification() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "oc" }
+        });
+        let result = h.get(&params).unwrap();
+        let user_text = result["messages"][1]["content"]["text"].as_str().unwrap();
+        // Must contain verification step or no-tiers fallback
+        let has_verification = user_text.contains("cascade mcp list-resources")
+            || user_text.contains("No cascade tier");
+        assert!(has_verification, "user message must contain list-resources verification step");
+    }
+
+    #[test]
+    fn get_harness_setup_system_message_about_cascade() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cc" }
+        });
+        let result = h.get(&params).unwrap();
+        let system_text = result["messages"][0]["content"]["text"].as_str().unwrap();
+        assert!(
+            system_text.contains("Cascade"),
+            "system message must mention Cascade"
+        );
+    }
+
+    #[test]
+    fn get_harness_setup_missing_harness_returns_invalid_params() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": {}
+        });
+        let err = h.get(&params).unwrap_err();
+        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS, "missing harness must return -32602");
+        assert!(err.message.contains("harness"), "error must mention missing field");
+    }
+
+    #[test]
+    fn get_harness_setup_unknown_harness_returns_invalid_params() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cursor" }
+        });
+        let err = h.get(&params).unwrap_err();
+        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS, "unknown harness must return -32602");
+    }
+
+    #[test]
+    fn get_harness_setup_with_tier_arg() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cc", "tier": "ppc" }
+        });
+        // Should succeed (tier may or may not be present on this machine)
+        let result = h.get(&params).unwrap();
+        let messages = result["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn get_harness_setup_invalid_tier_returns_invalid_params() {
+        let h = handler();
+        let params = serde_json::json!({
+            "name": "cascade.harness_setup",
+            "arguments": { "harness": "cc", "tier": "bad-tier" }
+        });
+        let err = h.get(&params).unwrap_err();
+        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS);
+    }
+
+    #[test]
+    fn get_harness_setup_list_contains_prompt() {
+        let h = handler();
+        let result = h.list().unwrap();
+        let prompts = result["prompts"].as_array().unwrap();
+        let found = prompts
+            .iter()
+            .any(|p| p["name"].as_str() == Some("cascade.harness_setup"));
+        assert!(found, "prompts/list must include cascade.harness_setup");
+        // Verify argument metadata
+        let prompt = prompts
+            .iter()
+            .find(|p| p["name"].as_str() == Some("cascade.harness_setup"))
+            .unwrap();
+        let args = prompt["arguments"].as_array().unwrap();
+        let harness_arg = args.iter().find(|a| a["name"].as_str() == Some("harness"));
+        assert!(harness_arg.is_some(), "cascade.harness_setup must have 'harness' argument");
+        assert!(
+            harness_arg.unwrap()["required"].as_bool().unwrap_or(false),
+            "harness argument must be required"
+        );
     }
 
     // ── prompts/get — unknown prompt ─────────────────────────────────────────

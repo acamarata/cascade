@@ -83,3 +83,5 @@ pub use error::McpServerError;
 pub use handler::{HandlerRegistry, McpHandler};
 pub use notification::NotificationBus;
 pub use server::{McpServer, McpServerConfig};
+pub use transport::McpTransport;
+pub use transport::connection::{ConnectionContext, SubscriptionSet, MAX_FRAME_BYTES};

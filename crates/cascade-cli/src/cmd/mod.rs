@@ -8,13 +8,18 @@ pub mod backup;
 pub mod completions;
 pub mod config;
 pub mod daemon;
+pub mod dispatch;
 pub mod doctor;
+pub mod generate_instructions;
 pub mod harness;
 pub mod inbox;
 pub mod init;
 pub mod link;
+pub mod mcp;
 pub mod memory;
 pub mod migrate;
+pub mod monitor_oc;
+pub mod setup_oc;
 pub mod migrate_keys;
 pub mod ping;
 pub mod resolve;
@@ -86,6 +91,16 @@ pub enum Commands {
     Restore(restore::RestoreArgs),
     /// Manage Cascade context templates (list, apply, diff, upgrade).
     Template(template::TemplateArgs),
+    /// MCP server token and client setup.
+    Mcp(mcp::McpArgs),
+    /// Generate harness-native instruction files (CLAUDE.md, AGENTS.md, settings.json).
+    GenerateInstructions(generate_instructions::GenerateInstructionsArgs),
+    /// Configure OpenCode: MCP wiring + per-project instructions injection.
+    SetupOc(setup_oc::SetupOcArgs),
+    /// Launch a CC or OC subprocess targeting a repo with optional context injection.
+    Dispatch(dispatch::DispatchArgs),
+    /// Watch OpenCode session logs and append assistant turns to .cascade/oc-session-log.md.
+    MonitorOc(monitor_oc::MonitorOcArgs),
     /// Show AI harness detection status.
     #[command(hide = true)]
     Harness(harness::HarnessArgs),
@@ -116,6 +131,11 @@ impl Commands {
             Commands::Backup(args) => args.run().await,
             Commands::Restore(args) => args.run().await,
             Commands::Template(args) => args.run().await,
+            Commands::Mcp(args) => args.run().await,
+            Commands::GenerateInstructions(args) => args.run().await,
+            Commands::SetupOc(args) => args.run().await,
+            Commands::Dispatch(args) => args.run().await,
+            Commands::MonitorOc(args) => args.run().await,
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
         }
