@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useTheme } from '../hooks/useTheme'
 import { Sun, Moon, Monitor, RefreshCw } from 'lucide-react'
 import { RestoreToolSection } from '../features/settings/RestoreToolSection'
+import { ToolModeSection } from '../features/settings/ToolModeSection'
 
 interface AppConfig {
   theme: 'light' | 'dark' | 'system'
@@ -151,6 +152,9 @@ export function SettingsPanel() {
           </select>
         </div>
       </section>
+
+      {/* Tool Mode — T-P3-E03-37 */}
+      <ToolModeSection />
 
       {/* Tool Restore — T-P3-E03-22 */}
       <RestoreToolSection />

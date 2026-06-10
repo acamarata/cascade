@@ -74,10 +74,15 @@ export function useCheckpoint() {
       const checkpoint: WizardCheckpoint = {
         step: state.step,
         completedSteps: Array.from(state.completedSteps),
+        // T-P3-E03-42: persist skipped steps so wizard resumes correctly after app close.
+        skippedSteps: Array.from(state.skippedSteps),
         providerConnected: state.providerConnected,
         scanResult: state.scanResult,
         detectedToolIds: state.detectedToolIds,
         mergeResult: state.mergeResult,
+        // T-P3-E03-33: persist per-tier AI merge results so phase 4 can resume after app close.
+        // RichMergeResult is JSON-safe — sections carry status + editedContent inline.
+        mergeResults: state.mergeResults,
         toolModes: state.toolModes,
         archiveManifestPath: state.archiveManifestPath,
         archivedTools: state.archivedTools,

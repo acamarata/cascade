@@ -11,6 +11,7 @@
 pub mod archive;
 pub mod commands;
 pub mod error;
+pub mod merge;
 pub mod scanner;
 pub mod state;
 
@@ -84,12 +85,32 @@ pub fn run() {
             commands::scanner::scan_dev_tree,
             // T-P3-E03-14: Symlink setup for cascade-managed tools
             commands::symlinks::setup_symlinks,
+            // T-P3-E03-37: Per-tool mode flip — unlink (Independent) / link (Cascade-managed)
+            commands::symlinks::cascade_unlink_tool,
             // T-P3-E03-16..19: Archive / restore subsystem
             commands::archive::archive_legacy_tools,
             commands::archive::read_archive_manifest,
             commands::archive::list_archived_tools,
             commands::archive::archive_preflight,
             commands::archive::restore_tool,
+            // T-P3-E03-23..30: AI merge engine
+            commands::merge::read_legacy_content,
+            commands::merge::run_ai_merge,
+            commands::merge::write_cascade_content,
+            commands::merge::detect_merge_conflicts,
+            commands::merge::get_merge_prompts,
+            // T-P3-E03-39b: GCP provisioning commands
+            commands::provision::cascade_provision_google_start,
+            commands::provision::cascade_provision_google_status,
+            commands::provision::cascade_provision_google_cancel,
+            // T-P3-E03-40: Gemini Pool registration
+            commands::provision::cascade_pool_register_key,
+            commands::provision::cascade_pool_deregister_key,
+            // T-P3-E03-41: Auto-auth scan + import
+            commands::provision::cascade_auto_auth_scan,
+            commands::provision::cascade_auto_auth_import,
+            // T-P3-E03-42: AI-optional provider health check
+            commands::provision::cascade_providers_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

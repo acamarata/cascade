@@ -12,6 +12,10 @@
 
 pub mod audit;
 pub mod config;
+// W-05 scaffold IPC handlers (T-P3-E03-39b / T-P3-E03-40 / T-P3-E03-41)
+pub mod ipc_auto_auth;
+pub mod ipc_pool_register;
+pub mod ipc_provision;
 pub mod dashboard;
 pub mod event_bus;
 pub mod harness_bridge;

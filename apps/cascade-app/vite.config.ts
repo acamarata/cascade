@@ -36,6 +36,9 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: [],
+    // Include src unit tests + e2e integration tests; exclude binary-requiring .e2e.ts files
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "e2e/**/*.integration.test.{ts,tsx}"],
+    exclude: ["e2e/**/*.e2e.ts", "e2e/wdio.conf.ts"],
   },
 
   build: {

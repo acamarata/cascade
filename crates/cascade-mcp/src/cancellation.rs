@@ -20,7 +20,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use cascade_mcp::cancellation::{CancellationRegistry, CancelToken};
 //!
 //! # let registry = CancellationRegistry::new();

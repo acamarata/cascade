@@ -26,6 +26,10 @@ pub mod scanner;
 pub mod symlinks;
 // Sub-module added by W-03 (T-P3-E03-15 scaffold):
 pub mod archive;
+// Sub-module added by W-04 (T-P3-E03-23 scaffold):
+pub mod merge;
+// Sub-module added by W-05 (T-P3-E03-39/39b/40/41/42 scaffold):
+pub mod provision;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -556,6 +560,11 @@ pub struct WizardCheckpoint {
     pub daemon_installed: bool,
     pub started_at: String,
     pub updated_at: String,
+    /// Forward-compatible passthrough: preserves wizard-state fields added on the
+    /// TS side (mergeResults, toolModes, archivedTools, detectedToolIds, ...) through
+    /// the save/load round-trip without requiring a Rust struct change per field.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Result of the legacy config scan (wizard phase 3).
@@ -1117,6 +1126,7 @@ mod tests {
             daemon_installed: false,
             started_at: "2026-06-09T00:00:00Z".to_string(),
             updated_at: "2026-06-09T00:01:00Z".to_string(),
+            extra: serde_json::Map::new(),
         };
 
         let json = serde_json::to_string(&original).expect("serialization failed");

@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every `cascade` CLI subcommand.
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-05-31
+**Last updated:** 2026-06-09 (E-03 complete)
 **Source:** Cascade P2/P3/P4 plan
 
 | Command | Description | Status | Phase | Creating tickets |
@@ -29,6 +29,7 @@
 | cascade monitor-oc | Monitor OpenCode session | 🔲 Planned | P3 | T-P3-E04-* |
 | cascade rollback | Rollback to prior cascade version | 🔲 Planned | P3 | T-P3-E06-* |
 | cascade update | Self-update cascade binary | 🔲 Planned | P3 | T-P3-E06-* |
-| cascade uninstall | Uninstall cascade and clean up | 🔲 Planned | P4 | T-P4-E05-* |
+| cascade restore --tool | Restore a single archived legacy tool from ~/.cascade/archive | ✅ Done | P3 | T-P3-E03-33 |
+| cascade uninstall --full \| --keep-cascade | Uninstall cascade (optionally preserve cascade config) | ✅ Done | P3 | T-P3-E03-35..42 |
 | cascade dispatch | Dispatch a task to the daemon | 🔲 Planned | P3 | T-P3-E06-* |
 | cascade cache | Manage local instruction/context cache | 🔲 Planned | P3 | T-P3-E01-* |

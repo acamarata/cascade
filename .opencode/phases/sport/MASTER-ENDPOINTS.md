@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every HTTP API endpoint served by cascade-daemon.
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-09
+**Last updated:** 2026-06-09 (E-03 complete)
 **Source:** Cascade P3/P4 plan
 
 ## Daemon IPC (Unix socket — `~/.cascade/daemon.sock`)
@@ -59,3 +59,39 @@ Implemented in `crates/cascade-daemon/src/ipc.rs` (T-P3-E00-01, resolves E07-11/
 | /api/chat/history/:id | GET | Chat session history | 🔲 Planned | P3 | T-P3-E02-* |
 | /api/tags | GET | Context/memory tags | 🔲 Planned | P3 | T-P3-E06-* |
 | /api/gci/rag-status | GET | RAG/RRF serve status, P3 stub | ✅ Done | P3 | T-P3-E02-29 |
+
+## Tauri Commands (cascade-app — `invoke()`)
+
+| Command | Description | Status | Phase | Creating tickets |
+|---|---|---|---|---|
+| check_wizard_status | Check if onboarding wizard has been completed | ✅ Done | P3 | T-P3-E03-01 |
+| wizard_save_checkpoint | Persist wizard phase + state to disk | ✅ Done | P3 | T-P3-E03-02 |
+| wizard_load_checkpoint | Load previously saved wizard checkpoint | ✅ Done | P3 | T-P3-E03-02 |
+| wizard_clear_checkpoint | Delete wizard checkpoint (reset) | ✅ Done | P3 | T-P3-E03-02 |
+| wizard_mark_complete | Mark wizard as completed in config | ✅ Done | P3 | T-P3-E03-03 |
+| detect_gemini_pool | Detect existing Gemini API keys in vault | ✅ Done | P3 | T-P3-E03-04 |
+| provider_connect | Connect an AI provider with given credentials | ✅ Done | P3 | T-P3-E03-05 |
+| download_local_model | Download a local Ollama model | ✅ Done | P3 | T-P3-E03-06 |
+| install_daemon | Install + start cascaded as launchd user agent | ✅ Done | P3 | T-P3-E03-29 |
+| scan_global_homes | Scan ~/.claude and related dirs for legacy configs | ✅ Done | P3 | T-P3-E03-14 |
+| scan_dev_tree | Scan ~/Sites dev tree for per-project .claude dirs | ✅ Done | P3 | T-P3-E03-15 |
+| setup_symlinks | Create ~/.cascade symlinks for harness tool names | ✅ Done | P3 | T-P3-E03-27 |
+| cascade_unlink_tool | Remove a symlink for a specific tool | ✅ Done | P3 | T-P3-E03-28 |
+| archive_legacy_tools | Archive legacy tool directories to ~/.cascade/archive | ✅ Done | P3 | T-P3-E03-25 |
+| read_archive_manifest | Read ~/.cascade/archive/manifest.json | ✅ Done | P3 | T-P3-E03-26 |
+| list_archived_tools | List all tools recorded in the archive manifest | ✅ Done | P3 | T-P3-E03-26 |
+| archive_preflight | Dry-run archive check: what would be archived | ✅ Done | P3 | T-P3-E03-24 |
+| restore_tool | Restore an archived tool from ~/.cascade/archive | ✅ Done | P3 | T-P3-E03-33 |
+| read_legacy_content | Read raw content from a scanned legacy file | ✅ Done | P3 | T-P3-E03-17 |
+| run_ai_merge | Run AI-assisted merge for a content section | ✅ Done | P3 | T-P3-E03-18 |
+| write_cascade_content | Write merged content to cascade config path | ✅ Done | P3 | T-P3-E03-21 |
+| detect_merge_conflicts | Detect conflicts in proposed merged content | ✅ Done | P3 | T-P3-E03-19 |
+| get_merge_prompts | Get AI merge prompt templates for a section type | ✅ Done | P3 | T-P3-E03-20 |
+| cascade_provision_google_start | Start Google OAuth provision flow (returns device code) | ✅ Done | P3 | T-P3-E03-08 |
+| cascade_provision_google_status | Poll OAuth provision status | ✅ Done | P3 | T-P3-E03-08 |
+| cascade_provision_google_cancel | Cancel in-progress OAuth provision | ✅ Done | P3 | T-P3-E03-08 |
+| cascade_pool_register_key | Register an API key in the Gemini pool | ✅ Done | P3 | T-P3-E03-05 |
+| cascade_pool_deregister_key | Remove an API key from the Gemini pool | ✅ Done | P3 | T-P3-E03-05 |
+| cascade_auto_auth_scan | Scan filesystem for importable auto-auth tokens | ✅ Done | P3 | T-P3-E03-07 |
+| cascade_auto_auth_import | Import discovered auto-auth tokens into cascade | ✅ Done | P3 | T-P3-E03-07 |
+| cascade_providers_health | Get health status of all configured AI providers | ✅ Done | P3 | T-P3-E03-08,43 |

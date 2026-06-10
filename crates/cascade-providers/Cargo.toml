@@ -1,0 +1,39 @@
+[package]
+name = "cascade-providers"
+description = "Provider provisioning, OAuth, and auto-auth import for the Cascade AI context framework"
+readme = "README.md"
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+cascade-types    = { workspace = true }
+cascade-keychain = { path = "../cascade-keychain" }
+
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true }
+tracing     = { workspace = true }
+chrono      = { workspace = true }
+dirs        = "5"
+base64      = "0.22"
+
+# HTTP client for OAuth token exchange and API key validation (T-P3-E03-39)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# PKCE challenge generation — cryptographically random (T-P3-E03-39)
+pkce = "0.2"
+
+# Random-port selection for OAuth callback server (T-P3-E03-39)
+portpicker = "0.1"
+rand = "0.10.1"
+
+[dev-dependencies]
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock    = "0.6.5"
+tempfile    = "3"
+serial_test = "3"

@@ -143,7 +143,7 @@ pub struct KeyInfo {
 ///         let val = std::env::var(key_id).map_err(|_| {
 ///             cascade_types::error::CascadeError::KeyNotFound { key_id: key_id.into() }
 ///         })?;
-///         Ok(SecretBytes::from_str(&val))
+///         Ok(SecretBytes::from_utf8_str(&val))
 ///     }
 ///
 ///     async fn put(&self, _key_id: &str, _bytes: SecretBytes) -> Result<()> {

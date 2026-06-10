@@ -11,7 +11,23 @@
 // Constraints: no mutex required; socket_path is read-only after construction.
 // SPORT: MASTER-COMPONENTS.md: AppState | src-tauri/src/state.rs | Tauri managed state
 
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use cascade_types::paths::daemon_socket;
+
+/// Per-email provision status (local to Tauri app; mirrors daemon state).
+#[derive(Debug, Clone, Default)]
+pub struct EmailProvStatus {
+    pub status: String,
+    pub done: bool,
+    pub error: Option<String>,
+    pub cancel: bool,
+}
+
+/// Shared provision state map type alias.
+pub type ProvisionStateMap = Arc<Mutex<HashMap<String, EmailProvStatus>>>;
 
 /// Managed Tauri application state.
 ///
@@ -23,6 +39,12 @@ pub struct AppState {
     /// Defaults to `$HOME/.cascade/daemon.sock`.
     /// Override with the `CASCADE_SOCKET` environment variable at launch.
     pub socket_path: String,
+
+    /// Per-email provision operation status (T-P3-E03-39b).
+    ///
+    /// Keyed by account_email; updated by cascade_provision_google_start and
+    /// polled by cascade_provision_google_status.
+    pub provision_state: ProvisionStateMap,
 }
 
 impl AppState {
@@ -33,6 +55,9 @@ impl AppState {
     pub fn from_env() -> Self {
         let socket_path = std::env::var("CASCADE_SOCKET")
             .unwrap_or_else(|_| daemon_socket().to_string_lossy().into_owned());
-        Self { socket_path }
+        Self {
+            socket_path,
+            provision_state: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }

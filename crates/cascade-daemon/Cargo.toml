@@ -15,11 +15,12 @@ name = "cascaded"
 path = "src/main.rs"
 
 [dependencies]
-cascade-core  = { workspace = true }
-cascade-types = { workspace = true }
-cascade-tray  = { workspace = true }
-cascade-keychain = { path = "../cascade-keychain" }
-cascade-audit = { path = "../cascade-audit" }
+cascade-core      = { workspace = true }
+cascade-types     = { workspace = true }
+cascade-tray      = { workspace = true }
+cascade-keychain  = { path = "../cascade-keychain" }
+cascade-audit     = { path = "../cascade-audit" }
+cascade-providers = { workspace = true }
 secrecy       = "0.8"
 tokio         = { workspace = true }
 tracing       = { workspace = true }

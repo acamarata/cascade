@@ -110,10 +110,22 @@ struct ArchiveManifest {
 }
 
 /// Summary of a restore operation.
-struct RestoreResult {
-    restored_files: usize,
-    skipped_conflicts: usize,
-    errors: Vec<String>,
+pub struct RestoreResult {
+    pub restored_files: usize,
+    pub skipped_conflicts: usize,
+    pub errors: Vec<String>,
+}
+
+/// Public wrapper around [`restore_from_manifest`] for use by `uninstall.rs`.
+///
+/// Called by `cascade uninstall --full` to restore each archived tool before
+/// removing `~/.cascade/`. Returns `Err(String)` on hard failure.
+pub fn restore_from_manifest_pub(
+    tool_id: &str,
+    overwrite_existing: bool,
+    manifest_path: &Path,
+) -> std::result::Result<RestoreResult, String> {
+    restore_from_manifest(tool_id, overwrite_existing, manifest_path)
 }
 
 // ---------------------------------------------------------------------------

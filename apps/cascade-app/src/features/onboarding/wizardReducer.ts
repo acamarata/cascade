@@ -9,6 +9,7 @@
 
 import type { WizardState } from './types'
 import { WizardStep } from './types'
+import type { MergeResult as RichMergeResult, SectionStatus } from './merge/types'
 
 /**
  * Discriminated union of all possible wizard actions.
@@ -18,14 +19,39 @@ import { WizardStep } from './types'
  * each successful archive_legacy_tools call. Updates archivedTools map so
  * downstream phases (symlink setup) know which tools were archived.
  * Task: T-P3-E03-21
+ *
+ * SET_MERGE_RESULT: stores (or replaces) the full AI merge result for a given tier id.
+ * Called by mergeService.mergeForTier() after each tier completes (T-P3-E03-27).
+ * Supports incremental streaming: each section can be upserted without full replacement.
+ *
+ * UPDATE_SECTION_STATUS: updates the status (and optionally editedContent) of a single
+ * section within a tier's MergeResult. Used by approve/reject/edit section actions.
+ * Immutable: creates new section objects, never mutates existing ones.
+ * T-P3-E03-27 constraint: editedContent may only be set when status === 'edited'.
  */
 export type WizardAction =
   | { type: 'NEXT' }
   | { type: 'BACK' }
   | { type: 'JUMP_TO'; payload: WizardStep }
   | { type: 'MARK_COMPLETE'; payload: WizardStep }
+  /**
+   * SKIP_STEP: marks a wizard step as skipped (AI-optional gate, T-P3-E03-42).
+   * Records the step in skippedSteps (persisted as wizard-state.json) and advances
+   * to the next step. Skipped steps do not block phase completion.
+   */
+  | { type: 'SKIP_STEP'; payload: WizardStep }
   | { type: 'UPDATE_STATE'; payload: Partial<WizardState> }
   | { type: 'UPDATE_ARCHIVE_STATUS'; payload: { toolId: string; archived: boolean } }
+  | { type: 'SET_MERGE_RESULT'; payload: { tier: string; result: RichMergeResult } }
+  | {
+      type: 'UPDATE_SECTION_STATUS'
+      payload: {
+        tier: string
+        sectionId: string
+        status: SectionStatus
+        editedContent?: string
+      }
+    }
 
 /**
  * wizardReducer: Pure state reducer for wizard navigation and status updates.
@@ -93,6 +119,22 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       }
     }
 
+    case 'SKIP_STEP': {
+      // Mark a step as skipped (AI-optional, T-P3-E03-42) and advance.
+      // Step is recorded in skippedSteps (persisted as status='skipped').
+      // Skipped steps do not block phase completion — wizard advances normally.
+      const stepToSkip = action.payload
+      const updatedSkipped = new Set(state.skippedSteps)
+      updatedSkipped.add(stepToSkip)
+      const nextStep = Math.min(stepToSkip + 1, WizardStep.Done) as WizardStep
+      return {
+        ...state,
+        step: nextStep,
+        skippedSteps: updatedSkipped,
+        updatedAt: now,
+      }
+    }
+
     case 'UPDATE_STATE': {
       // Merge partial state update
       const updated: WizardState = {
@@ -117,6 +159,55 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         archivedTools: {
           ...state.archivedTools,
           [toolId]: archived,
+        },
+        updatedAt: now,
+      }
+    }
+
+    case 'SET_MERGE_RESULT': {
+      // Store or replace the AI merge result for a tier.
+      // Keyed by tier id string ('global', 'project', etc.).
+      // T-P3-E03-27: called by mergeService after each tier completes.
+      const { tier, result } = action.payload
+      return {
+        ...state,
+        mergeResults: {
+          ...state.mergeResults,
+          [tier]: result,
+        },
+        updatedAt: now,
+      }
+    }
+
+    case 'UPDATE_SECTION_STATUS': {
+      // Immutable update of a single section's status within a tier's MergeResult.
+      // T-P3-E03-27: editedContent constraint — only set when status === 'edited'.
+      const { tier, sectionId, status, editedContent } = action.payload
+      const tierResult = state.mergeResults[tier]
+      if (!tierResult) {
+        // No merge result for this tier yet — no-op
+        return state
+      }
+      const updatedSections = tierResult.sections.map((section) => {
+        if (section.id !== sectionId) return section
+        // Build new section immutably
+        const updated = { ...section, status }
+        if (status === 'edited' && editedContent !== undefined) {
+          updated.editedContent = editedContent
+        } else if (status !== 'edited') {
+          // Clear editedContent when reverting away from 'edited'
+          delete updated.editedContent
+        }
+        return updated
+      })
+      return {
+        ...state,
+        mergeResults: {
+          ...state.mergeResults,
+          [tier]: {
+            ...tierResult,
+            sections: updatedSections,
+          },
         },
         updatedAt: now,
       }

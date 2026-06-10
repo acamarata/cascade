@@ -22,6 +22,7 @@
  * Tasks: T-P3-E03-20
  */
 
+import { useCallback, useEffect, useRef } from 'react'
 import { Archive } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -74,6 +75,57 @@ export function ArchiveConfirmDialog({
   onConfirm,
   onCancel,
 }: ArchiveConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  // Focus management: move into dialog on open, restore on close
+  useEffect(() => {
+    if (open) {
+      previousFocusRef.current = document.activeElement as HTMLElement
+      const raf = requestAnimationFrame(() => {
+        const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        )
+        ;(firstFocusable ?? dialogRef.current)?.focus()
+      })
+      return () => cancelAnimationFrame(raf)
+    } else {
+      previousFocusRef.current?.focus()
+    }
+  }, [open])
+
+  // Focus trap + Esc closes
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusableSelectors =
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelectors) ?? [],
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    },
+    [onCancel],
+  )
+
   if (!open) return null
 
   const displayTool = toolId
@@ -92,11 +144,14 @@ export function ArchiveConfirmDialog({
 
       {/* Dialog */}
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="archive-confirm-title"
         aria-describedby="archive-confirm-desc"
-        className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-6 shadow-xl"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-6 shadow-xl focus:outline-none"
       >
         {/* Icon + title */}
         <div className="mb-4 flex items-center gap-3">

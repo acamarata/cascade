@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every React component in the Cascade dashboard (apps/cascade-app).
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-09
+**Last updated:** 2026-06-09 (E-03 complete)
 **Source:** Cascade P3/P4 plan
 
 | Component | Path | Description | Status | Phase | Creating tickets |
@@ -42,4 +42,33 @@
 | MarkdownMessage | src/components/GPChatPanel/MarkdownMessage.tsx | react-markdown + syntax highlighting (replaces CodeBlock) | ✅ Done | P3 | T-P3-E02-22 |
 | ToolCard | src/components/GPChatPanel/ToolCard.tsx | Tool-invocation result card in chat | ✅ Done | P3 | T-P3-E02-22 |
 | CommandPalette | src/components/CommandPalette.tsx | Cmd+K command palette with fuzzy search | 🔲 Planned | P3 | T-P3-E01-* |
-| OnboardingWizard | src/components/onboarding/OnboardingWizard.tsx | Multi-step onboarding flow with checkpoint resume | 🔲 Planned | P3 | T-P3-E03-* |
+| WizardRouter | apps/cascade-app/src/components/onboarding/WizardRouter.tsx | State-machine router for 10-phase wizard; reads checkpoint, dispatches to phase components | ✅ Done | P3 | T-P3-E03-01..08 |
+| WelcomePhase | apps/cascade-app/src/components/onboarding/phases/Welcome.tsx | Step 0: intro screen + start/resume | ✅ Done | P3 | T-P3-E03-01 |
+| ProviderConnectPhase | apps/cascade-app/src/components/onboarding/phases/ProviderConnect.tsx | Step 1: AI provider connection (Gemini pool + auto-auth) | ✅ Done | P3 | T-P3-E03-08,43 |
+| ScanLegacyPhase | apps/cascade-app/src/components/onboarding/phases/ScanLegacyPhase.tsx | Step 2: scan ~/.claude and ~/Sites for legacy configs | ✅ Done | P3 | T-P3-E03-14..16 |
+| MergeContentPhase | apps/cascade-app/src/components/onboarding/phases/MergeContentPhase.tsx | Step 3: AI-assisted merge of legacy content into cascade format | ✅ Done | P3 | T-P3-E03-17..20 |
+| ToolModesPhase | apps/cascade-app/src/components/onboarding/phases/ToolModesPhase.tsx | Step 4: configure tool modes (symlink vs archive) | ✅ Done | P3 | T-P3-E03-21..22 |
+| VerifyDiffPhase | apps/cascade-app/src/components/onboarding/phases/VerifyDiffPhase.tsx | Step 5: review diff of proposed changes before apply | ✅ Done | P3 | T-P3-E03-23 |
+| ArchiveLegacyPhase | apps/cascade-app/src/components/onboarding/phases/ArchiveLegacyPhase.tsx | Step 6: archive legacy tools (preflight + execute) | ✅ Done | P3 | T-P3-E03-24..26 |
+| SymlinkSetupPhase | apps/cascade-app/src/components/onboarding/phases/SymlinkSetupPhase.tsx | Step 7: create ~/.cascade symlinks for harness tools | ✅ Done | P3 | T-P3-E03-27..28 |
+| DaemonInstallPhase | apps/cascade-app/src/components/onboarding/phases/DaemonInstallPhase.tsx | Step 8: install + start cascaded daemon | ✅ Done | P3 | T-P3-E03-29..30 |
+| DonePhase | apps/cascade-app/src/components/onboarding/phases/DonePhase.tsx | Step 9: completion screen + TutorialOverlay trigger | ✅ Done | P3 | T-P3-E03-31 |
+| TutorialOverlay | apps/cascade-app/src/components/onboarding/TutorialOverlay.tsx | Post-wizard feature tour overlay | ✅ Done | P3 | T-P3-E03-32 |
+| DiffPanel | apps/cascade-app/src/components/merge-engine/DiffPanel.tsx | Side-by-side diff: legacy source vs proposed cascade section | ✅ Done | P3 | T-P3-E03-19 |
+| SectionTabs | apps/cascade-app/src/components/merge-engine/SectionTabs.tsx | Tab nav for multi-section merge review | ✅ Done | P3 | T-P3-E03-19 |
+| SourceFileList | apps/cascade-app/src/components/merge-engine/SourceFileList.tsx | Scanned legacy source files list | ✅ Done | P3 | T-P3-E03-17 |
+| ProposedContent | apps/cascade-app/src/components/merge-engine/ProposedContent.tsx | Editable proposed cascade content for each section | ✅ Done | P3 | T-P3-E03-18 |
+| RerunMergeDialog | apps/cascade-app/src/components/merge-engine/RerunMergeDialog.tsx | Confirm dialog to re-run AI merge on a section | ✅ Done | P3 | T-P3-E03-20 |
+| GeminiPoolStep | apps/cascade-app/src/components/onboarding/steps/GeminiPoolStep.tsx | Sub-step: detect + register Gemini pool keys | ✅ Done | P3 | T-P3-E03-04..06 |
+| AutoAuthStep | apps/cascade-app/src/components/onboarding/steps/AutoAuthStep.tsx | Sub-step: scan + import auto-auth tokens | ✅ Done | P3 | T-P3-E03-07 |
+| ProvisionCard | apps/cascade-app/src/components/wizard/ProvisionCard.tsx | OAuth provision progress card (start/poll/cancel) | ✅ Done | P3 | T-P3-E03-08 |
+| AIGatedStep | apps/cascade-app/src/components/wizard/AIGatedStep.tsx | Wrapper that gates step execution behind a connected AI provider | ✅ Done | P3 | T-P3-E03-08 |
+| RestoreToolSection | apps/cascade-app/src/components/settings/RestoreToolSection.tsx | Settings: restore an archived legacy tool | ✅ Done | P3 | T-P3-E03-33 |
+| ToolModeSection | apps/cascade-app/src/components/settings/ToolModeSection.tsx | Settings: change tool mode (symlink/archive) with dialogs | ✅ Done | P3 | T-P3-E03-33 |
+| useCheckpoint | apps/cascade-app/src/hooks/useCheckpoint.ts | Hook: save/load/clear wizard checkpoint via Tauri commands | ✅ Done | P3 | T-P3-E03-02 |
+| useProviderConnected | apps/cascade-app/src/hooks/useProviderConnected.ts | Hook: poll provider health until connected | ✅ Done | P3 | T-P3-E03-08 |
+| OnboardingWizard | src/components/onboarding/OnboardingWizard.tsx | Multi-step onboarding flow with checkpoint resume | ✅ Done | P3 | T-P3-E03-01..43 |
+| wizard E2E test suite | e2e/wizard.integration.test.tsx | Full-flow integration test (20 tests, all 10 wizard phases, all commands mocked) | ✅ Done | P3 | T-P3-E03-34 |
+| wizard WDIO E2E scaffold | e2e/wizard.e2e.ts + e2e/wdio.conf.ts | WebdriverIO spec for Tauri binary E2E (@ci-with-display, scaffolded) | ✅ Done | P3 | T-P3-E03-34 |
+| tauriMocks | e2e/mocks/tauriMocks.ts | Mock layer for @tauri-apps/api/core invoke (all wizard commands) | ✅ Done | P3 | T-P3-E03-34 |
+| wizard.helpers | e2e/helpers/wizard.helpers.ts | renderWizard() factory + step assertion helpers | ✅ Done | P3 | T-P3-E03-34 |

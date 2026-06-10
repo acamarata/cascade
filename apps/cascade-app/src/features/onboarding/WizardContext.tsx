@@ -5,6 +5,8 @@
  * Constraints: useWizard must be called within WizardProvider (throws if outside).
  *   State changes are synchronous; checkpoint persistence is caller's responsibility.
  * SPORT: E5-S01-02 — WizardContext + useWizard hook
+ *   T-P3-E03-27: mergeResults helpers (getMergeResult, approveSection, rejectSection,
+ *     editSection, setMergeResult) added to context value and useWizard() hook.
  */
 
 import {
@@ -17,20 +19,41 @@ import {
 import type { WizardState } from './types'
 import { WizardStep, createInitialState } from './types'
 import { wizardReducer, type WizardAction } from './wizardReducer'
+import type { MergeResult as RichMergeResult } from './merge/types'
 
 /**
  * WizardContextValue: The shape of data exposed by the context.
+ *
+ * Merge section helpers (T-P3-E03-27):
+ *   getMergeResult(tier)         — retrieve the full MergeResult for a tier (undefined if absent)
+ *   setMergeResult(tier, result) — store/replace the AI merge result for a tier
+ *   approveSection(tier, id)     — set section status to 'approved'
+ *   rejectSection(tier, id)      — set section status to 'rejected'
+ *   editSection(tier, id, text)  — set section status to 'edited' and store editedContent
  */
 interface WizardContextValue {
   state: WizardState
   dispatch: (action: WizardAction) => void
   currentStep: WizardStep
   completedSteps: Set<WizardStep>
+  /** Steps the user explicitly skipped (AI-optional gate). T-P3-E03-42. */
+  skippedSteps: Set<WizardStep>
   goNext: () => void
   goBack: () => void
   jumpTo: (step: WizardStep) => void
   markComplete: (step: WizardStep) => void
+  /**
+   * skipStep: marks a step as skipped and advances to next step.
+   * T-P3-E03-42: used by AIGatedStep "Skip for now" button.
+   */
+  skipStep: (step: WizardStep) => void
   updateState: (partial: Partial<WizardState>) => void
+  // Merge section helpers — T-P3-E03-27
+  getMergeResult: (tier: string) => RichMergeResult | undefined
+  setMergeResult: (tier: string, result: RichMergeResult) => void
+  approveSection: (tier: string, sectionId: string) => void
+  rejectSection: (tier: string, sectionId: string) => void
+  editSection: (tier: string, sectionId: string, content: string) => void
 }
 
 /**
@@ -65,20 +88,83 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'MARK_COMPLETE', payload: step })
   }, [])
 
+  const skipStep = useCallback((step: WizardStep) => {
+    dispatch({ type: 'SKIP_STEP', payload: step })
+  }, [])
+
   const updateState = useCallback((partial: Partial<WizardState>) => {
     dispatch({ type: 'UPDATE_STATE', payload: partial })
   }, [])
+
+  // Merge section helpers — T-P3-E03-27
+
+  /** Retrieve the AI merge result for a tier by tier id string ('global', 'project', etc.). */
+  const getMergeResult = useCallback(
+    (tier: string): RichMergeResult | undefined => state.mergeResults[tier],
+    [state.mergeResults],
+  )
+
+  /** Store or replace the full AI merge result for a tier. */
+  const setMergeResult = useCallback(
+    (tier: string, result: RichMergeResult) => {
+      dispatch({ type: 'SET_MERGE_RESULT', payload: { tier, result } })
+    },
+    [],
+  )
+
+  /** Set a section's status to 'approved'. */
+  const approveSection = useCallback(
+    (tier: string, sectionId: string) => {
+      dispatch({
+        type: 'UPDATE_SECTION_STATUS',
+        payload: { tier, sectionId, status: 'approved' },
+      })
+    },
+    [],
+  )
+
+  /** Set a section's status to 'rejected'. */
+  const rejectSection = useCallback(
+    (tier: string, sectionId: string) => {
+      dispatch({
+        type: 'UPDATE_SECTION_STATUS',
+        payload: { tier, sectionId, status: 'rejected' },
+      })
+    },
+    [],
+  )
+
+  /**
+   * Set a section's status to 'edited' and store the edited content.
+   * @param content — The user-modified content for this section.
+   */
+  const editSection = useCallback(
+    (tier: string, sectionId: string, content: string) => {
+      dispatch({
+        type: 'UPDATE_SECTION_STATUS',
+        payload: { tier, sectionId, status: 'edited', editedContent: content },
+      })
+    },
+    [],
+  )
 
   const value: WizardContextValue = {
     state,
     dispatch,
     currentStep: state.step,
     completedSteps: state.completedSteps,
+    skippedSteps: state.skippedSteps,
     goNext,
     goBack,
     jumpTo,
     markComplete,
+    skipStep,
     updateState,
+    getMergeResult,
+    setMergeResult,
+    approveSection,
+    rejectSection,
+    editSection,
   }
 
   return (

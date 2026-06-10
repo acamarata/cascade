@@ -57,6 +57,7 @@
 // ── Module declarations ───────────────────────────────────────────────────────
 
 pub mod agent;
+pub mod auto_auth;
 pub mod cascade_tier;
 pub mod chunker;
 pub mod codec;
@@ -68,6 +69,8 @@ pub mod ipc;
 pub mod key_storage;
 pub mod parser;
 pub mod paths;
+pub mod pool;
+pub mod provision;
 pub mod query_strategy;
 pub mod quota_store;
 pub mod reranker;

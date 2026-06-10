@@ -21,6 +21,7 @@ pub mod resolve;
 pub mod restore;
 pub mod search;
 pub mod status;
+pub mod uninstall;
 pub mod unlink;
 
 use async_trait::async_trait;
@@ -66,6 +67,8 @@ pub enum Commands {
     Link(link::LinkArgs),
     /// Remove a tool-specific symlink.
     Unlink(unlink::UnlinkArgs),
+    /// Remove cascade artifacts; optionally restore archived tools and delete ~/.cascade/.
+    Uninstall(uninstall::UninstallArgs),
     /// Migrate a legacy `.claude/` or `.opencode/` directory to `.cascade/`.
     Migrate(migrate::MigrateArgs),
     /// Move `GEMINI_API_KEY_*` secrets from vault.env into the OS keychain.
@@ -101,6 +104,7 @@ impl Commands {
             Commands::Config(args) => args.run().await,
             Commands::Link(args) => args.run().await,
             Commands::Unlink(args) => args.run().await,
+            Commands::Uninstall(args) => args.run().await,
             Commands::Migrate(args) => args.run().await,
             Commands::MigrateKeys(args) => args.run().await,
             Commands::Doctor(args) => args.run().await,

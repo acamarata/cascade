@@ -433,7 +433,7 @@ mod tests {
 }
 
 // ---------------------------------------------------------------------------
-// Tauri command
+// Tauri command — setup_symlinks
 // ---------------------------------------------------------------------------
 
 /// Create symlinks for all cascade-managed tools as specified by `plan`.
@@ -450,4 +450,203 @@ mod tests {
 #[tauri::command]
 pub fn setup_symlinks(plan: SymlinkPlan) -> Result<Vec<SymlinkResult>, String> {
     Ok(apply_symlink_plan(&plan))
+}
+
+// ---------------------------------------------------------------------------
+// cascade_unlink_tool — T-P3-E03-37
+// ---------------------------------------------------------------------------
+
+/// Sibling filenames that each tool uses for symlink-based cascade integration.
+///
+/// Must stay in sync with `TOOL_SIBLING_FILES` in `wizard/lib/symlinks.ts`.
+fn tool_sibling_files(tool_id: &str) -> &'static [&'static str] {
+    match tool_id {
+        "claude-code" => &["CLAUDE.md", "AGENTS.md"],
+        "opencode"    => &["AGENTS.md"],
+        "cursor"      => &[".cursorrules"],
+        "aider"       => &[".aider.conf.yml"],
+        "windsurf"    => &[".windsurf"],
+        "antigravity" => &[".antigravity"],
+        "codex"       => &["CODEX.md"],
+        _             => &[],
+    }
+}
+
+/// Result of a cascade_unlink_tool command.
+///
+/// `removed` — absolute paths of symlinks that were removed.
+/// `skipped` — paths that existed but were real files (not symlinks); left untouched.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlinkResult {
+    pub removed: Vec<String>,
+    pub skipped: Vec<String>,
+}
+
+/// Remove all sibling symlinks pointing to CASCADE.md for a given tool.
+///
+/// # Purpose
+/// Switches a tool from Cascade-managed to Independent by removing the symlinks
+/// that were created by setup_symlinks / cascade_link_tool. Never removes a real
+/// (non-symlink) file — those are placed in `skipped`.
+///
+/// # Inputs
+/// - `tool_id`: kebab-case tool identifier, e.g. `"claude-code"`.
+///
+/// # Outputs
+/// `UnlinkResult { removed, skipped }` — lists every path examined.
+///
+/// # Constraints
+/// - All paths are confined to HOME (same policy as setup_symlinks).
+/// - Non-symlink files are never removed; they appear in `skipped`.
+/// - Only symlinks whose name matches a known sibling filename for the tool
+///   are considered, regardless of what they point to.
+/// - Returns `Err(String)` only when HOME cannot be resolved.
+///
+/// # SPORT
+/// MASTER-COMMANDS.md — cascade_unlink_tool — T-P3-E03-37
+#[tauri::command]
+pub fn cascade_unlink_tool(tool_id: String) -> Result<UnlinkResult, String> {
+    cascade_unlink_tool_with_home(&tool_id, None)
+}
+
+/// Internal implementation accepting an optional HOME override for testing.
+pub(crate) fn cascade_unlink_tool_with_home(
+    tool_id: &str,
+    home_override: Option<&std::path::Path>,
+) -> Result<UnlinkResult, String> {
+    use std::path::Path;
+
+    let home_buf: std::path::PathBuf;
+    let home: &Path = if let Some(h) = home_override {
+        h
+    } else {
+        match home_dir() {
+            Some(h) => match h.canonicalize() {
+                Ok(c) => {
+                    home_buf = c;
+                    &home_buf
+                }
+                Err(e) => return Err(format!("cannot resolve HOME: {e}")),
+            },
+            None => return Err("HOME environment variable is not set".to_string()),
+        }
+    };
+
+    let siblings = tool_sibling_files(tool_id);
+    let mut removed: Vec<String> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+
+    // Walk the standard Cascade tier directories under HOME.
+    // Each tier is a directory that may contain sibling symlinks.
+    let cascade_root = home.join(".cascade");
+    let tier_dirs = [
+        cascade_root.join("gci"),
+        cascade_root.join("pci"),
+        cascade_root.join("apc"),
+        cascade_root.join("ppc"),
+        cascade_root.join("prc"),
+        cascade_root.join("pac"),
+    ];
+
+    for tier_dir in &tier_dirs {
+        if !tier_dir.exists() {
+            continue;
+        }
+        for filename in siblings {
+            let candidate = tier_dir.join(filename);
+            match std::fs::symlink_metadata(&candidate) {
+                Ok(meta) => {
+                    if meta.file_type().is_symlink() {
+                        match std::fs::remove_file(&candidate) {
+                            Ok(()) => removed.push(candidate.to_string_lossy().into_owned()),
+                            Err(e) => skipped.push(format!(
+                                "{} (remove failed: {e})",
+                                candidate.to_string_lossy()
+                            )),
+                        }
+                    } else {
+                        // Real file — skip; never destroy user data.
+                        skipped.push(candidate.to_string_lossy().into_owned());
+                    }
+                }
+                // File does not exist — nothing to remove.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => skipped.push(format!(
+                    "{} (stat failed: {e})",
+                    candidate.to_string_lossy()
+                )),
+            }
+        }
+    }
+
+    Ok(UnlinkResult { removed, skipped })
+}
+
+// ---------------------------------------------------------------------------
+// Tests — cascade_unlink_tool (T-P3-E03-37)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod unlink_tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    fn setup_cascade_tier(home: &std::path::Path, tier: &str) -> std::path::PathBuf {
+        let dir = home.join(".cascade").join(tier);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn test_unlink_removes_symlinks() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+
+        // Create a fake CASCADE.md target.
+        let cascade_md = home.join("CASCADE.md");
+        std::fs::write(&cascade_md, "# cascade").unwrap();
+
+        // Create a GCI tier dir with a CLAUDE.md symlink.
+        let gci = setup_cascade_tier(&home, "gci");
+        symlink(&cascade_md, gci.join("CLAUDE.md")).unwrap();
+        symlink(&cascade_md, gci.join("AGENTS.md")).unwrap();
+
+        let result = cascade_unlink_tool_with_home("claude-code", Some(&home)).unwrap();
+        assert_eq!(result.removed.len(), 2, "should remove 2 symlinks");
+        assert!(result.skipped.is_empty(), "should skip nothing");
+
+        // Verify symlinks are gone.
+        assert!(!gci.join("CLAUDE.md").exists());
+        assert!(!gci.join("AGENTS.md").exists());
+    }
+
+    #[test]
+    fn test_unlink_skips_real_files() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+
+        // Create a GCI tier dir with a real CLAUDE.md (not a symlink).
+        let gci = setup_cascade_tier(&home, "gci");
+        std::fs::write(gci.join("CLAUDE.md"), "real file — do not delete").unwrap();
+
+        let result = cascade_unlink_tool_with_home("claude-code", Some(&home)).unwrap();
+        assert!(result.removed.is_empty(), "real file must not be removed");
+        assert_eq!(result.skipped.len(), 1, "real file should appear in skipped");
+
+        // File must still exist with its original content.
+        let content = std::fs::read_to_string(gci.join("CLAUDE.md")).unwrap();
+        assert_eq!(content, "real file — do not delete");
+    }
+
+    #[test]
+    fn test_unlink_unknown_tool_is_noop() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+
+        let result = cascade_unlink_tool_with_home("not-a-real-tool", Some(&home)).unwrap();
+        assert!(result.removed.is_empty());
+        assert!(result.skipped.is_empty());
+    }
 }

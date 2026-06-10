@@ -5,9 +5,15 @@
  * Constraints: No React, Tauri, or external imports. Strict TS (no any). Enum values are numeric.
  *   WizardState.completedSteps is a Set, serialized as number[] in WizardCheckpoint.
  * SPORT: MASTER-COMPONENTS.md — WizardStep / WizardState / WizardCheckpoint types
+ *   T-P3-E03-27: mergeResults (Partial<Record<string, MergeResult>>) added for section approval
+ *   T-P3-E03-33: mergeResults included in WizardCheckpoint for persistence/resume
  */
 
 import type { ToolId } from '@/lib/scanner/types'
+import type { MergeResult as RichMergeResult, SectionStatus } from './merge/types'
+
+// Re-export for consumers that need it without importing merge/types directly
+export type { RichMergeResult as WizardMergeResult, SectionStatus }
 
 /**
  * Tool mode selection: whether Cascade manages the tool's config via symlinks,
@@ -54,6 +60,10 @@ export const enum WizardStep {
  * - `scanResult`: null until ScanLegacy completes; contains file counts from legacy scan
  * - `detectedToolIds`: null until ScanLegacy completes; array of ToolIds found in the scan
  * - `mergeResult`: null until MergeContent completes; contains merge manifest and conflicts
+ * - `mergeResults`: per-tier AI merge results keyed by tier id string ('global', 'project', etc.);
+ *   populated incrementally as sections arrive (T-P3-E03-27). Each value holds the full
+ *   RichMergeResult including sections and their approval status. Keyed by tier id string
+ *   (not WizardStep number) because tiers have semantic names in the UI.
  * - `toolModes`: per-tool mode selection (cascade-managed | independent); populated by ToolModes step
  * - `archiveManifestPath`: null until ArchiveLegacy completes; path to the manifest file created
  * - `archivedTools`: map of toolId → archived flag; populated by Phase 7 after each success
@@ -65,11 +75,25 @@ export const enum WizardStep {
 export interface WizardState {
   step: WizardStep
   completedSteps: Set<WizardStep>
+  /**
+   * Steps the user explicitly skipped (e.g. AI-gated steps with no provider connected).
+   * A skipped step is still counted as traversed and will not block phase completion.
+   * T-P3-E03-42: skipped steps appear in wizard-state.json as skipped status.
+   */
+  skippedSteps: Set<WizardStep>
   providerConnected: boolean
   scanResult: ScanResult | null
   /** ToolIds detected by the ScanLegacy step. Null until scan completes. */
   detectedToolIds: ToolId[] | null
   mergeResult: MergeResult | null
+  /**
+   * Per-tier AI merge results keyed by tier id string ('global', 'project', etc.).
+   * Populated incrementally as each tier's AI merge completes. Each entry holds the full
+   * RichMergeResult (sections, status, etc.) for that tier.
+   * T-P3-E03-27: section approval actions (SET_MERGE_RESULT, UPDATE_SECTION_STATUS) write here.
+   * T-P3-E03-33: persisted to checkpoint for resume-after-close.
+   */
+  mergeResults: Partial<Record<string, RichMergeResult>>
   /**
    * Per-tool mode selections from the ToolModes wizard step.
    * Keys are ToolId values; values are 'cascade-managed' | 'independent'.
@@ -126,10 +150,24 @@ export interface MergeResult {
 export interface WizardCheckpoint {
   step: WizardStep
   completedSteps: number[]
+  /**
+   * Skipped steps serialized as number array for JSON compatibility.
+   * T-P3-E03-42: AI-gated steps skipped by user (status='skipped').
+   */
+  skippedSteps: number[]
   providerConnected: boolean
   scanResult: ScanResult | null
   detectedToolIds: ToolId[] | null
   mergeResult: MergeResult | null
+  /**
+   * Per-tier AI merge results, serialized from WizardState.mergeResults.
+   * RichMergeResult is JSON-safe (no functions, no circular refs).
+   * T-P3-E03-33: persisted so phase 4 can resume after app close.
+   * NOTE: If the Rust WizardCheckpoint struct is extended to persist mergeResults,
+   * add a field: merge_results: Option<HashMap<String, serde_json::Value>> (camelCase via
+   * serde rename_all = "camelCase"). Until then this field is written/read by the TS layer only.
+   */
+  mergeResults: Partial<Record<string, RichMergeResult>>
   toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
   /** Serialized form of WizardState.archivedTools (same shape — JSON-safe). */
@@ -151,10 +189,12 @@ export function createInitialState(): WizardState {
   return {
     step: WizardStep.Welcome,
     completedSteps: new Set<WizardStep>(),
+    skippedSteps: new Set<WizardStep>(),
     providerConnected: false,
     scanResult: null,
     detectedToolIds: null,
     mergeResult: null,
+    mergeResults: {},
     toolModes: {},
     archiveManifestPath: null,
     archivedTools: {},
@@ -178,10 +218,12 @@ export function stateToCheckpoint(state: WizardState): WizardCheckpoint {
   return {
     step: state.step,
     completedSteps: Array.from(state.completedSteps),
+    skippedSteps: Array.from(state.skippedSteps),
     providerConnected: state.providerConnected,
     scanResult: state.scanResult,
     detectedToolIds: state.detectedToolIds,
     mergeResult: state.mergeResult,
+    mergeResults: state.mergeResults,
     toolModes: state.toolModes,
     archiveManifestPath: state.archiveManifestPath,
     archivedTools: state.archivedTools,
@@ -204,10 +246,12 @@ export function checkpointToState(checkpoint: WizardCheckpoint): WizardState {
   return {
     step: checkpoint.step,
     completedSteps: new Set(checkpoint.completedSteps),
+    skippedSteps: new Set(checkpoint.skippedSteps ?? []),
     providerConnected: checkpoint.providerConnected,
     scanResult: checkpoint.scanResult,
     detectedToolIds: checkpoint.detectedToolIds ?? null,
     mergeResult: checkpoint.mergeResult,
+    mergeResults: checkpoint.mergeResults ?? {},
     toolModes: checkpoint.toolModes ?? {},
     archiveManifestPath: checkpoint.archiveManifestPath,
     archivedTools: checkpoint.archivedTools ?? {},

@@ -10,6 +10,7 @@ members = [
     "crates/cascade-tray",
     "crates/cascade-keychain",
     "crates/cascade-audit",
+    "crates/cascade-providers",
     "apps/cascade-app/src-tauri",
 ]
 resolver = "2"
@@ -23,9 +24,10 @@ repository = "https://github.com/acamarata/cascade"
 
 [workspace.dependencies]
 # Shared deps — crates pin to workspace version to avoid drift
-cascade-types = { path = "crates/cascade-types" }
-cascade-core  = { path = "crates/cascade-core" }
-cascade-tray  = { path = "crates/cascade-tray" }
+cascade-types     = { path = "crates/cascade-types" }
+cascade-core      = { path = "crates/cascade-core" }
+cascade-tray      = { path = "crates/cascade-tray" }
+cascade-providers = { path = "crates/cascade-providers" }
 
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
