@@ -13,17 +13,22 @@ repository.workspace = true
 cascade-types    = { workspace = true }
 cascade-keychain = { path = "../cascade-keychain" }
 
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
-tokio       = { workspace = true }
-tracing     = { workspace = true }
-chrono      = { workspace = true }
-dirs        = "5"
-base64      = "0.22"
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+thiserror    = { workspace = true }
+tokio        = { workspace = true }
+tracing      = { workspace = true }
+chrono       = { workspace = true }
+async-trait  = { workspace = true }
+dirs         = "5"
+base64       = "0.22"
+futures-core = "0.3"
+futures      = "0.3"
+tokio-stream = "0.1"
 
 # HTTP client for OAuth token exchange and API key validation (T-P3-E03-39)
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+bytes    = "1"
 
 # PKCE challenge generation — cryptographically random (T-P3-E03-39)
 pkce = "0.2"
@@ -33,7 +38,8 @@ portpicker = "0.1"
 rand = "0.10.1"
 
 [dev-dependencies]
-tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# test-util enables tokio::time::pause() for instant-sleep retry tests (T-P3-E04-06)
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 wiremock    = "0.6.5"
 tempfile    = "3"
 serial_test = "3"

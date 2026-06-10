@@ -869,6 +869,7 @@ version = "0.1.0"
 dependencies = [
  "cascade-audit",
  "cascade-cli",
+ "cascade-core",
  "cascade-providers",
  "cascade-types",
  "chrono",
@@ -1048,11 +1049,15 @@ dependencies = [
 name = "cascade-providers"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
+ "bytes",
  "cascade-keychain",
  "cascade-types",
  "chrono",
  "dirs 5.0.1",
+ "futures",
+ "futures-core",
  "pkce",
  "portpicker",
  "rand 0.10.1",
@@ -1063,6 +1068,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tracing",
  "wiremock",
 ]

@@ -16,6 +16,8 @@ pub mod config;
 pub mod ipc_auto_auth;
 pub mod ipc_pool_register;
 pub mod ipc_provision;
+// T-P3-E04-15: provider health-check background task + cached HealthState
+pub mod provider_health;
 pub mod dashboard;
 pub mod event_bus;
 pub mod harness_bridge;

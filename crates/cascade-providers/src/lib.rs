@@ -1,12 +1,19 @@
 //! # cascade-providers
 //!
-//! Provider provisioning, OAuth PKCE flows, and auto-auth import for the
-//! Cascade AI context framework.
+//! Provider provisioning, OAuth PKCE flows, auto-auth import, and the core
+//! `ProviderAdapter` trait for the Cascade AI context framework.
 //!
 //! ## Modules
 //!
 //! | Module | Ticket | Purpose |
 //! |--------|--------|---------|
+//! | [`adapter`] | T-P3-E04-01 | `ProviderAdapter` trait + `NoopProvider` stub |
+//! | [`types`] | T-P3-E04-02 | `CompletionRequest`, `CompletionResponse`, shared wire types |
+//! | [`provider_info`] | T-P3-E04-03 | `ProviderInfo`, `ProviderCapabilities`, `TaskType`, `AuthMethod` |
+//! | [`error`] | T-P3-E04-04 | `ProviderError` enum — all failure variants |
+//! | [`registry`] | T-P3-E04-05 | `ProviderRegistry` + `RoutingTable` — thread-safe adapter store |
+//! | [`http_client`] | T-P3-E04-06 | `CascadeHttpClient` — shared reqwest wrapper + retry logic |
+//! | [`cost`] | T-P3-E04-14 | `CostTable`, `ModelPricing`, `compute_cost()` — static pricing table |
 //! | [`google_oauth`] | T-P3-E03-39 | Google OAuth PKCE client + Gemini key validation |
 //! | [`google_provision`] | T-P3-E03-39b | GCP project + API key provisioning engine |
 //! | [`auto_auth_import`] | T-P3-E03-41 | Detect and import accounts from installed harnesses |
@@ -20,13 +27,39 @@
 //! 3. **Keychain-backed storage.** All provisioned credentials are stored via
 //!    `cascade-keychain`; this crate never writes secrets to disk directly.
 
+// ── E-04 core type-system modules ────────────────────────────────────────────
+pub mod adapter;
+pub mod adapters;
+pub mod cost;
+pub mod error;
+pub mod http_client;
+pub mod provider_info;
+pub mod registry;
+pub mod types;
+
+// ── E-04-06 test helpers (test builds only) ───────────────────────────────────
+#[cfg(test)]
+pub mod test_helpers;
+
+// ── E-03 provisioning modules ─────────────────────────────────────────────────
 pub mod auto_auth_import;
 pub mod google_oauth;
 pub mod google_provision;
 
 // ── Top-level re-exports ──────────────────────────────────────────────────────
 
-// auto_auth types live in cascade-types; re-export for convenience.
+// E-04 exports — adapter trait, types, error, registry
+pub use adapter::{NoopProvider, ProviderAdapter};
+pub use cost::{compute_cost, CostTable, ModelPricing};
+pub use error::ProviderError;
+pub use provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo, TaskType};
+pub use registry::{ProviderRegistry, RoutingTable};
+pub use types::{
+    CompletionRequest, CompletionResponse, Message, MessageRole, ModelInfo, StreamChunk,
+    TokenUsage,
+};
+
+// E-03 exports — auto_auth types live in cascade-types; re-export for convenience.
 pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, ImportResult};
 pub use auto_auth_import::scan_all;
 

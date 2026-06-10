@@ -338,17 +338,24 @@ pub async fn cascade_auto_auth_import(
 ///
 /// # Purpose
 /// Used by `useProviderConnected` hook and `AIGatedStep` to determine whether
-/// AI-powered wizard steps can be shown. Returns empty list (anyConnected=false)
-/// when the daemon is not running or no providers are configured.
+/// AI-powered wizard steps can be shown. Returns the IDs of all currently-healthy
+/// providers.  Returns empty list when no providers are configured or all checks fail.
 ///
 /// JS: `invoke("cascade_providers_health")`
-/// FILL: T-P3-E04-25 — real provider health polling; for now returns empty list.
+/// T-P3-E04-15: reads from AppState.provider_health cache populated by
+/// the background health-check task spawned in lib.rs setup().
+/// Note: T-P3-E04-25 may later replace this with a live daemon IPC query.
 #[tauri::command]
 pub async fn cascade_providers_health(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<String>, CascadeError> {
-    // FILL: T-P3-E04-25 — query daemon for connected providers list.
-    Ok(vec![])
+    let map = state.provider_health.read().await;
+    let ids: Vec<String> = map
+        .iter()
+        .filter(|(_, h)| h.ok)
+        .map(|(id, _)| id.clone())
+        .collect();
+    Ok(ids)
 }
 
 // ---------------------------------------------------------------------------

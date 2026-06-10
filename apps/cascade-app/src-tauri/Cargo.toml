@@ -31,10 +31,10 @@ cascade-cli       = { path = "../../../crates/cascade-cli" }
 cascade-audit     = { path = "../../../crates/cascade-audit" }
 # T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
 cascade-providers = { path = "../../../crates/cascade-providers" }
-# cascade-core = { path = "../../../crates/cascade-core" }
+cascade-core  = { path = "../../../crates/cascade-core" }    # T-P3-E04-15: read_providers_store
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)
-tokio = { version = "1", features = ["net", "io-util", "rt"] }
+tokio = { version = "1", features = ["net", "io-util", "rt", "time", "sync"] }
 
 # HTTP client for detect_gemini_pool (T-P3-E03-06) and run_ai_merge (T-P3-E03-25)
 reqwest = { version = "0.12", features = ["json", "blocking"], default-features = false }

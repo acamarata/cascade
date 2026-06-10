@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"The "}],"role":"model"},"finishReason":""}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":1,"totalTokenCount":8}}
+
+data: {"candidates":[{"content":{"parts":[{"text":"capital "}],"role":"model"},"finishReason":""}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":2,"totalTokenCount":9}}
+
+data: {"candidates":[{"content":{"parts":[{"text":"of France is Paris."}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":7,"totalTokenCount":14}}
+

@@ -7,6 +7,10 @@
 // State: AppState now holds the daemon socket path (resolved from CASCADE_SOCKET
 // env or the canonical ~/.cascade/daemon.sock). T-P3-E01-06 wires this through
 // to every command handler via tauri::State<AppState>.
+//
+// T-P3-E04-15: AppState.provider_health is populated by a background health-check
+// task spawned in the Tauri setup hook.  `cascade_providers_health` reads from
+// this cache.
 
 pub mod archive;
 pub mod commands;
@@ -15,8 +19,17 @@ pub mod merge;
 pub mod scanner;
 pub mod state;
 
-use state::AppState;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use state::{AppProviderHealth, AppState};
+use tauri::Manager;
+use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
+
+use cascade_core::providers_store::read_providers_store;
+use cascade_providers::{NoopProvider, ProviderRegistry};
+use cascade_types::paths::global_cascade_dir;
 
 /// Initialize the tracing subscriber.
 /// JSON output to stderr; level from RUST_LOG env (default: info).
@@ -35,12 +48,48 @@ fn init_tracing() {
 pub fn run() {
     init_tracing();
 
+    let app_state = AppState::from_env();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .manage(AppState::from_env())
+        .manage(app_state)
+        // T-P3-E04-15: spawn provider health-check background task after state is managed.
+        .setup(|app| {
+            let health_map = app
+                .state::<AppState>()
+                .provider_health
+                .clone();
+
+            // Build ProviderRegistry from providers.json (NoopProvider placeholders;
+            // concrete adapters land in P4).
+            let registry = Arc::new(ProviderRegistry::new());
+            let config_dir = global_cascade_dir();
+            let providers_path = config_dir.join("providers.json");
+
+            {
+                let entries = read_providers_store(&providers_path)
+                    .map(|s| s.providers)
+                    .unwrap_or_default();
+                for entry in entries.into_iter().filter(|p| p.enabled) {
+                    let id = entry.id.clone();
+                    if let Err(e) =
+                        registry.register(id.clone(), Arc::new(NoopProvider))
+                    {
+                        warn!(provider_id = %id, error = %e, "app: failed to register provider");
+                    }
+                }
+            }
+
+            // Spawn the background health task.  Fire-and-forget: Tauri manages
+            // its own async runtime so we use tokio::spawn directly.
+            tokio::spawn(run_app_health_task(registry, health_map));
+            info!("app provider health-check task spawned");
+
+            Ok(())
+        })
         // T-P3-E01-06: 9 required daemon-bridge commands
         .invoke_handler(tauri::generate_handler![
             commands::cascade_status,
@@ -114,4 +163,62 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ── Provider health background task (T-P3-E04-15) ────────────────────────────
+
+/// Background health-check loop for the Tauri app process.
+///
+/// Purpose: Runs health_check_all() on the local ProviderRegistry every 5
+/// minutes, caches results in AppState.provider_health.  First sweep fires
+/// immediately; refresh repeats on a 5-minute interval.  Never panics on an
+/// empty registry — empty sweep produces empty state.
+///
+/// Inputs: `registry` — shared registry (NoopProvider placeholders in P3).
+///         `health_map` — AppState.provider_health shared via Arc.
+/// Outputs: writes AppProviderHealth entries into health_map after each sweep.
+/// Constraints: non-blocking from caller; spawned via tokio::spawn in setup().
+async fn run_app_health_task(
+    registry: Arc<ProviderRegistry>,
+    health_map: state::ProviderHealthMap,
+) {
+    let interval = Duration::from_secs(300); // 5 minutes
+
+    // First sweep fires immediately.
+    app_health_sweep(&registry, &health_map).await;
+
+    let mut ticker = tokio::time::interval(interval);
+    ticker.tick().await; // consume the immediate first tick
+
+    loop {
+        ticker.tick().await;
+        app_health_sweep(&registry, &health_map).await;
+    }
+}
+
+/// Run one health sweep: call health_check_all, update AppState cache.
+async fn app_health_sweep(
+    registry: &ProviderRegistry,
+    health_map: &state::ProviderHealthMap,
+) {
+    let results = registry.health_check_all().await;
+    let mut map = health_map.write().await;
+    for (id, result) in &results {
+        let ok = result.is_ok();
+        let error_msg = result.as_ref().err().map(|e| e.to_string());
+        if !ok {
+            warn!(provider_id = %id, "app provider health check failed");
+        }
+        map.insert(
+            id.clone(),
+            AppProviderHealth {
+                ok,
+                checked_at: Instant::now(),
+                error_msg,
+            },
+        );
+    }
+    let total = results.len();
+    let healthy = results.values().filter(|r| r.is_ok()).count();
+    info!(total, healthy, "app provider health sweep complete");
 }

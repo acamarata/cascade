@@ -27,6 +27,7 @@ mod ipc_handlers;
 mod key_index;
 mod key_loader;
 mod log;
+mod provider_health;
 mod quota_poller;
 mod regen;
 mod shutdown;
@@ -37,10 +38,14 @@ mod tray;
 
 use std::collections::HashMap;
 use std::process;
+use std::sync::Arc;
 use std::sync::mpsc;
 use secrecy::SecretString;
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use cascade_core::providers_store::read_providers_store;
+use cascade_providers::ProviderRegistry;
 
 #[tokio::main]
 async fn main() {
@@ -138,6 +143,45 @@ async fn main() {
         "cascaded",
         &format!("v{} pid={}", env!("CARGO_PKG_VERSION"), process::id()),
     );
+
+    // ── Provider health-check task (T-P3-E04-15) ─────────────────────────
+    // Build a ProviderRegistry from configured providers (presence in
+    // providers.json is sufficient — real adapters are P4+ scope; for now
+    // all enabled entries are registered as NoopProvider placeholders so the
+    // health-check task wires cleanly without depending on concrete adapters).
+    //
+    // WHY NoopProvider here: concrete adapter implementations land in P4.
+    // The task wiring (state caching, WARN logging, refresh interval) is
+    // fully testable today with the existing NoopProvider stub.
+    //
+    // Unhealthy providers emit WARN logs but NEVER block daemon startup.
+    let provider_registry = Arc::new(ProviderRegistry::new());
+    let provider_health_state: provider_health::HealthState =
+        Arc::new(RwLock::new(std::collections::HashMap::new()));
+    let health_shutdown = CancellationToken::new();
+
+    // Register enabled providers from providers.json as NoopProvider placeholders.
+    // Real adapter wiring lands in P4 (concrete provider tickets).
+    {
+        use cascade_providers::NoopProvider;
+        let entries = read_providers_store(&providers_path)
+            .map(|s| s.providers)
+            .unwrap_or_default();
+        for entry in entries.into_iter().filter(|p| p.enabled) {
+            let id = entry.id.clone();
+            if let Err(e) = provider_registry.register(id.clone(), Arc::new(NoopProvider)) {
+                warn!(provider_id = %id, error = %e, "failed to register provider (skipping)");
+            }
+        }
+    }
+
+    let _provider_health_handle = provider_health::spawn_health_check_task(
+        provider_registry.clone(),
+        provider_health_state.clone(),
+        std::time::Duration::from_secs(300), // 5-minute refresh interval
+        health_shutdown.clone(),
+    );
+    info!("provider health-check task spawned (non-blocking)");
 
     // ── Tray thread setup ─────────────────────────────────────────────────
     // Create the tray state update channel. The async side (supervisor,
@@ -244,6 +288,9 @@ async fn main() {
             shutdown_token.cancel();
         }
     }
+
+    // ── Provider health task shutdown ─────────────────────────────────────
+    health_shutdown.cancel();
 
     // ── Tray thread shutdown ───────────────────────────────────────────────
     // Send the Shutdown signal so the tray thread removes the icon from the

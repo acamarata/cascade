@@ -1,0 +1,23 @@
+{
+  "id": "cmpl-8a7b3c2d1e4f5a6b7c8d9e0f",
+  "object": "chat.completion",
+  "created": 1722000000,
+  "model": "mistral-large-2411",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris.",
+        "tool_calls": null
+      },
+      "finish_reason": "stop",
+      "logprobs": null
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 14,
+    "completion_tokens": 9,
+    "total_tokens": 23
+  }
+}

@@ -7,13 +7,14 @@
 // on process-env reads inside every command handler.
 //
 // Inputs: $HOME (resolved at startup); CASCADE_SOCKET env var override.
-// Outputs: AppState { socket_path } — Send + Sync so Tauri can share it.
-// Constraints: no mutex required; socket_path is read-only after construction.
+// Outputs: AppState { socket_path, provision_state, provider_health } — Send + Sync.
+// Constraints: no mutex on socket_path (read-only after construction).
 // SPORT: MASTER-COMPONENTS.md: AppState | src-tauri/src/state.rs | Tauri managed state
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Instant;
+use tokio::sync::{Mutex, RwLock};
 
 use cascade_types::paths::daemon_socket;
 
@@ -28,6 +29,22 @@ pub struct EmailProvStatus {
 
 /// Shared provision state map type alias.
 pub type ProvisionStateMap = Arc<Mutex<HashMap<String, EmailProvStatus>>>;
+
+/// Per-provider health snapshot cached in Tauri app state.
+///
+/// Mirrors `cascade_daemon::provider_health::ProviderHealth`.  Defined here to
+/// avoid a cascade-daemon dev-dependency in the Tauri app crate.
+#[derive(Debug, Clone)]
+pub struct AppProviderHealth {
+    pub ok: bool,
+    pub checked_at: Instant,
+    pub error_msg: Option<String>,
+}
+
+/// Shared provider health cache type alias.
+///
+/// Keyed by stable provider ID (matches `ProviderEntry.id` in providers.json).
+pub type ProviderHealthMap = Arc<RwLock<HashMap<String, AppProviderHealth>>>;
 
 /// Managed Tauri application state.
 ///
@@ -45,6 +62,13 @@ pub struct AppState {
     /// Keyed by account_email; updated by cascade_provision_google_start and
     /// polled by cascade_provision_google_status.
     pub provision_state: ProvisionStateMap,
+
+    /// Cached provider health results (T-P3-E04-15).
+    ///
+    /// Populated by the background health-check task spawned in
+    /// [`crate::run()`].  Keyed by provider ID; read by
+    /// [`crate::commands::provision::cascade_providers_health`].
+    pub provider_health: ProviderHealthMap,
 }
 
 impl AppState {
@@ -58,6 +82,7 @@ impl AppState {
         Self {
             socket_path,
             provision_state: Arc::new(Mutex::new(HashMap::new())),
+            provider_health: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
