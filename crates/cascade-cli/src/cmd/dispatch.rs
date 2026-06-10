@@ -38,10 +38,12 @@ use std::{
 };
 
 use async_trait::async_trait;
+use cascade_harness::policy::dispatch::evaluate_before_dispatch;
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::{
     error::{CascadeError, Result},
     paths::home_dir,
+    policy::PolicyAction,
 };
 use chrono::Utc;
 use clap::Args;
@@ -153,10 +155,28 @@ impl Command for DispatchArgs {
         })?;
         validate_home_confined(&repo)?;
 
-        // 2. Locate harness binary.
+        // 2. Policy check — evaluate the dispatch action before proceeding.
+        //    If the policy engine denies the action, block immediately with reason.
+        let dispatch_action = PolicyAction::new(
+            "dispatch",
+            serde_json::json!({
+                "harness": self.harness.as_str(),
+                "prompt": &self.prompt,
+                "repo": repo.to_string_lossy().as_ref(),
+            }),
+        );
+        let policy_result = evaluate_before_dispatch(&dispatch_action);
+        if policy_result.is_deny() {
+            return Err(CascadeError::Other(format!(
+                "dispatch blocked by policy `{}`: {}",
+                policy_result.policy_id, policy_result.reason
+            )));
+        }
+
+        // 3. Locate harness binary.
         let binary = self.resolve_binary()?;
 
-        // 3. Optionally fetch context slice via ContextOptimizer (T-P4-E04-20).
+        // 4. Optionally fetch context slice via ContextOptimizer (T-P4-E04-20).
         //    In the CLI dispatch path we do not have a live RAG index connection,
         //    so we use the optimizer in "shell-only" mode: the query is echoed as
         //    a header and the budget is noted. A full RAG-backed slice requires the
@@ -167,25 +187,25 @@ impl Command for DispatchArgs {
             None
         };
 
-        // 4. Compose full prompt.
+        // 5. Compose full prompt.
         let full_prompt = compose_prompt(context_block.as_deref(), &self.prompt);
 
-        // 5. Resolve MCP socket path.
+        // 6. Resolve MCP socket path.
         let mcp_socket = self
             .mcp_socket
             .clone()
             .unwrap_or_else(|| cascade_types::paths::daemon_socket());
 
-        // 6. Build argv.
+        // 7. Build argv.
         let (bin_path, args) = self.harness.build_argv(&binary, &full_prompt);
 
-        // 7. Dry-run: print and exit.
+        // 8. Dry-run: print and exit.
         if self.dry_run {
             print_dry_run(&bin_path, &args, &mcp_socket, &repo, &full_prompt);
             return Ok(());
         }
 
-        // 8. Spawn subprocess and wait (with timeout).
+        // 9. Spawn subprocess and wait (with timeout).
         let exit_code = run_subprocess(
             &bin_path,
             &args,

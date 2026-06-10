@@ -6,6 +6,7 @@ members = [
     "crates/cascade-daemon",
     "crates/cascade-rag",
     "crates/cascade-mcp",
+    "crates/cascade-harness",
     "crates/cascade-plugins",
     "crates/cascade-tray",
     "crates/cascade-keychain",
@@ -39,6 +40,7 @@ repository = "https://github.com/acamarata/cascade"
 # Shared deps — crates pin to workspace version to avoid drift
 cascade-types     = { path = "crates/cascade-types" }
 cascade-core      = { path = "crates/cascade-core" }
+cascade-harness   = { path = "crates/cascade-harness" }
 cascade-tray      = { path = "crates/cascade-tray" }
 cascade-providers = { path = "crates/cascade-providers" }
 cascade-local-llm = { path = "crates/cascade-local-llm" }

@@ -18,7 +18,52 @@
 //! SPORT: T-P3-E02-28 — MASTER-ROUTES.md: /api/gci/harness-status,
 //!   /api/gci/harness-regenerate; MASTER-COMPONENTS.md: HarnessPanel
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+
+// ── Codex harness types ───────────────────────────────────────────────────────
+
+/// Detection result for the OpenAI Codex CLI harness.
+///
+/// Purpose: Carries the resolved binary path, version string, and config
+///   directory for the Codex CLI when it is detected on the host system.
+///   Importable from cascade-types without depending on cascade-harness.
+///
+/// Inputs:  populated by `cascade_harness::codex::detect::detect_codex()`.
+/// Outputs: consumed by scaffold_codex_config, CLI status, and the daemon.
+///
+/// Constraints:
+///   - `path` is an absolute, already-confirmed-executable path.
+///   - `version` is the first line of `codex --version` output.
+///   - `config_dir` is `$XDG_CONFIG_HOME/codex` or `~/.config/codex`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CodexInfo {
+    /// Absolute path to the `codex` binary.
+    pub path: PathBuf,
+    /// Version string from `codex --version` (first line).
+    pub version: String,
+    /// Path to the Codex config directory.
+    pub config_dir: PathBuf,
+}
+
+/// A single Codex session snapshot captured by the session monitor.
+///
+/// Purpose: Records a live Codex process observed by `CodexMonitor::snapshot()`.
+///
+/// Constraints:
+///   - `pid` matches the OS process ID at snapshot time (may recycle).
+///   - `started_at` is a Unix epoch second timestamp.
+///   - `workspace` is the process working-directory, if determinable.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CodexSession {
+    /// OS process ID.
+    pub pid: u32,
+    /// Unix epoch seconds when the process started (as reported by sysinfo).
+    pub started_at: i64,
+    /// Working directory of the process, if readable.
+    pub workspace: Option<PathBuf>,
+}
 
 /// A single harness entry in the status response.
 ///

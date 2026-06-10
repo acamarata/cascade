@@ -59,6 +59,11 @@ pub enum McpSubcmd {
     Status(McpStatusArgs),
     /// Configure an AI client tool to connect to the cascade MCP server.
     Setup(McpSetupArgs),
+    /// Start the MCP server in stdio mode (for Codex and other subprocess clients).
+    ///
+    /// Reads JSON-RPC messages from stdin and writes responses to stdout.
+    /// This is the entry point configured by `cascade harness codex install`.
+    Stdio(McpStdioArgs),
 }
 
 // ── Token ─────────────────────────────────────────────────────────────────────
@@ -695,7 +700,55 @@ impl Command for McpArgs {
             McpSubcmd::Token(args) => args.run().await,
             McpSubcmd::Status(args) => args.run().await,
             McpSubcmd::Setup(args) => args.run().await,
+            McpSubcmd::Stdio(args) => args.run().await,
         }
+    }
+}
+
+// ── Stdio subcommand ──────────────────────────────────────────────────────────
+
+/// Arguments for `cascade mcp stdio`.
+///
+/// Starts the MCP server in stdio mode, reading JSON-RPC from stdin and
+/// writing responses to stdout. No auth required — the subprocess boundary
+/// provides isolation. This is the transport configured by Codex via
+/// `codex/config.yaml → mcp.servers[name=cascade]`.
+#[derive(Debug, Args)]
+pub struct McpStdioArgs {
+    /// Override the socket path for daemon connection (for testing).
+    #[arg(long, value_name = "PATH")]
+    pub socket: Option<PathBuf>,
+}
+
+#[async_trait]
+impl Command for McpStdioArgs {
+    async fn run(&self) -> Result<()> {
+        // McpServer holds !Send types (Box<dyn Transport>). We run it on a
+        // dedicated single-threaded Tokio runtime in a blocking thread so the
+        // outer multi-threaded runtime's Send constraint is satisfied.
+        tokio::task::spawn_blocking(|| {
+            use cascade_mcp::{McpServer, McpServerConfig};
+            use cascade_mcp::transport::stdio::StdioTransport;
+            use tokio::task::LocalSet;
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| CascadeError::Other(format!("runtime build error: {e}").into()))?;
+
+            let local = LocalSet::new();
+            rt.block_on(local.run_until(async {
+                let config = McpServerConfig::default();
+                let transport = StdioTransport::new();
+                let server = McpServer::new(config, Box::new(transport));
+                tokio::task::spawn_local(server.run())
+                    .await
+                    .map_err(|e| CascadeError::Other(format!("MCP stdio join error: {e}").into()))?
+                    .map_err(|e| CascadeError::Other(format!("MCP stdio server error: {e}").into()))
+            }))
+        })
+        .await
+        .map_err(|e| CascadeError::Other(format!("spawn_blocking join error: {e}").into()))?
     }
 }
 

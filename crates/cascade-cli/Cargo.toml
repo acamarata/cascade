@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 cascade-core    = { workspace = true }
 cascade-types   = { workspace = true }
+cascade-harness = { workspace = true }
 cascade-rag     = { path = "../cascade-rag" }
 cascade-plugins = { path = "../cascade-plugins" }
 cascade-mcp     = { path = "../cascade-mcp" }

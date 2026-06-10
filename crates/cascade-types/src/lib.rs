@@ -61,6 +61,7 @@ pub mod auto_auth;
 pub mod cascade_tier;
 pub mod mcp;
 pub mod chunker;
+pub mod policy;
 pub mod codec;
 pub mod config;
 pub mod embedding_provider;
@@ -111,6 +112,7 @@ pub use query_strategy::{
 pub use quota_store::{
     AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
 };
+pub use policy::{Decision, PolicyAction, PolicyResult};
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
 pub use template::{

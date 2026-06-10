@@ -171,13 +171,10 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
 
-        // Expected version:
-        //   5 — base (vec or blob path), no rag-multivec feature.
-        //   6 — base + rag_token_embeddings migration, rag-multivec feature enabled.
-        #[cfg(not(feature = "rag-multivec"))]
-        assert_eq!(version, 5, "expected user_version=5 (no rag-multivec)");
-        #[cfg(feature = "rag-multivec")]
-        assert_eq!(version, 6, "expected user_version=6 (rag-multivec enabled)");
+        // Migrations 0007 (index_state) and 0008 (context_fingerprints) run
+        // unconditionally, so every configuration lands on user_version=8.
+        // (Migration 6 is rag-multivec-only; versions may skip it.)
+        assert_eq!(version, 8, "expected final user_version=8");
     }
 
     // --- db::migrations::idempotent ------------------------------------------
@@ -190,10 +187,7 @@ mod tests {
         let version: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        #[cfg(not(feature = "rag-multivec"))]
-        assert_eq!(version, 5, "idempotent: user_version=5");
-        #[cfg(feature = "rag-multivec")]
-        assert_eq!(version, 6, "idempotent: user_version=6 with rag-multivec");
+        assert_eq!(version, 8, "idempotent: final user_version=8");
     }
 
     // --- db::migrations::tables_exist ----------------------------------------

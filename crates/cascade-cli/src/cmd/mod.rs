@@ -7,6 +7,8 @@
 pub mod backup;
 // T-P4-E04-11: cascade cache stats + cache clear
 pub mod cache;
+// T-P4-E06-13: cascade policy eval/list/add/remove + dispatch enforcement
+pub mod policy;
 // T-P4-E04-21: cascade context clear-session / cleanup-expired
 pub mod context;
 // T-P4-E04-15: cascade rollback list/apply
@@ -126,6 +128,8 @@ pub enum Commands {
     Update(update::UpdateArgs),
     /// Manage context fingerprints for cross-session dedup (T-P4-E04-21).
     Context(context::ContextArgs),
+    /// Manage guardrail policies (eval / list / add / remove).
+    Policy(policy::PolicyArgs),
 }
 
 impl Commands {
@@ -162,6 +166,7 @@ impl Commands {
             Commands::Rollback(args) => args.run().await,
             Commands::Update(args) => args.run().await,
             Commands::Context(args) => args.run().await,
+            Commands::Policy(args) => args.run().await,
         }
     }
 }
