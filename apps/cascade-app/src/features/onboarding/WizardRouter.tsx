@@ -22,8 +22,9 @@ import { ToolModesPhase } from './phases/ToolModesPhase'
 import { VerifyDiffPhase } from './phases/VerifyDiffPhase'
 // T-P3-E03-42: AI-optional gate — wraps AI-dependent steps
 import { AIGatedStep } from '../../components/wizard/AIGatedStep'
-// T-P3-E03-39b / T-P3-E03-40: Gemini Pool provisioning wizard step
-import { GeminiPoolStep } from './steps/GeminiPoolStep'
+// T-P3-E04-25: Real provider-connect step (Phase 2 of wizard — replaces GeminiPoolStep stub for step 2)
+// GeminiPoolStep is retained in steps/ for Settings-page pool provisioning (non-wizard context).
+import { WizardProviderStep } from '../../components/wizard/WizardProviderStep'
 
 // ---------------------------------------------------------------------------
 // Placeholder component for steps without real content yet
@@ -77,8 +78,9 @@ export function WizardRouter() {
       return <WelcomePhase />
 
     case WizardStep.ProviderConnect:
-      // T-P3-E03-39b / T-P3-E03-40: Provision Gemini API keys into pool
-      return <GeminiPoolStep />
+      // T-P3-E04-25: Real provider-connect step (Phase 2 — connects cloud + local providers).
+      // GeminiPoolStep retained for Settings/standalone pool provisioning use.
+      return <WizardProviderStep />
 
     case WizardStep.ScanLegacy:
       return <ScanLegacyPhase />

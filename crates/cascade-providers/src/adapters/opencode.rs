@@ -98,8 +98,9 @@ impl OpenCodeAdapter {
 
     /// Construct a test adapter with an injected base URL and token.
     ///
-    /// Used by unit tests to point the adapter at a `wiremock` mock server.
-    #[cfg(test)]
+    /// Used by unit tests and integration tests to point the adapter at a
+    /// `wiremock` mock server.  Gated behind `test` or `integration_tests`.
+    #[cfg(any(test, feature = "integration_tests"))]
     pub fn with_base_url(base_url: impl Into<String>, access_token: impl Into<String>) -> Self {
         Self {
             http: CascadeHttpClient::new(),

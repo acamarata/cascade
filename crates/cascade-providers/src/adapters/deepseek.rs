@@ -132,7 +132,9 @@ impl DeepSeekAdapter {
     }
 
     /// Construct a test adapter with an injected base URL and key.
-    #[cfg(test)]
+    ///
+    /// Gated behind `test` or `integration_tests` — not compiled in production.
+    #[cfg(any(test, feature = "integration_tests"))]
     pub fn with_base_url(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
         Self {
             http: CascadeHttpClient::new(),

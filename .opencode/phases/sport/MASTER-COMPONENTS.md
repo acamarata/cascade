@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every React component in the Cascade dashboard (apps/cascade-app).
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-09 (E-03 complete)
+**Last updated:** 2026-06-09 (E-04 T-P3-E04-25 WizardProviderStep)
 **Source:** Cascade P3/P4 plan
 
 | Component | Path | Description | Status | Phase | Creating tickets |
@@ -72,3 +72,4 @@
 | wizard WDIO E2E scaffold | e2e/wizard.e2e.ts + e2e/wdio.conf.ts | WebdriverIO spec for Tauri binary E2E (@ci-with-display, scaffolded) | ✅ Done | P3 | T-P3-E03-34 |
 | tauriMocks | e2e/mocks/tauriMocks.ts | Mock layer for @tauri-apps/api/core invoke (all wizard commands) | ✅ Done | P3 | T-P3-E03-34 |
 | wizard.helpers | e2e/helpers/wizard.helpers.ts | renderWizard() factory + step assertion helpers | ✅ Done | P3 | T-P3-E03-34 |
+| WizardProviderStep | apps/cascade-app/src/components/wizard/WizardProviderStep.tsx | Step 2 real provider-connect: 4 quick-connect cards, GFP auto-detect banner, skip-for-now alert, cascade_providers_list gate | ✅ Done | P3 | T-P3-E04-25 |

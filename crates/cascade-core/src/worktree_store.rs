@@ -134,6 +134,7 @@ pub fn read_worktree_store() -> std::io::Result<WorktreeStore> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use super::*;
     use std::sync::{Mutex, MutexGuard, OnceLock};
     use tempfile::TempDir;
@@ -149,6 +150,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(global_env)]
     fn test_add_remove() {
         let mut store = WorktreeStore::new();
 
@@ -187,6 +189,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(global_env)]
     fn test_stale_scan() {
         let mut store = WorktreeStore::new();
 
@@ -222,6 +225,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(global_env)]
     fn test_roundtrip() {
         let tmpdir = TempDir::new().expect("create tempdir");
         let home = tmpdir.path().to_string_lossy().to_string();

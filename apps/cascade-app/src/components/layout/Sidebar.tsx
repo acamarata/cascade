@@ -11,6 +11,7 @@
 
 import { useRef, useState } from 'react'
 import {
+  BarChart2,
   Inbox,
   LayoutDashboard,
   PanelLeftClose,
@@ -32,6 +33,11 @@ const NAV_ITEMS = [
     to: '/search',
     icon: <Search className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Search',
+  },
+  {
+    to: '/usage',
+    icon: <BarChart2 className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Usage',
   },
   {
     to: '/settings',

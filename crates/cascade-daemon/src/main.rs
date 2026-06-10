@@ -24,6 +24,8 @@ mod healthcheck;
 mod hook_runner;
 mod ipc;
 mod ipc_handlers;
+// T-P3-E04-29: usage analytics IPC handlers (wired in ipc.rs try_typed_dispatch)
+mod ipc_usage_analytics;
 mod key_index;
 mod key_loader;
 mod log;

@@ -122,3 +122,93 @@ export interface ConfigSetResult {
   /** Previous value, if any existed. */
   previous?: unknown
 }
+
+// ── cascade_usage_summary / cascade_usage_history / cascade_usage_ledger ──────
+// T-P3-E04-29: mirrors cascade-types/src/usage_analytics.rs (camelCase serde).
+
+/** Granularity of a UsagePeriod. */
+export type UsagePeriodKind = 'day' | 'week' | 'month'
+
+/** Selects which calendar window a summary covers.  offset=0 = current window. */
+export interface UsagePeriod {
+  /** Calendar window granularity. */
+  kind: UsagePeriodKind
+  /** Steps back from the current window (0 = current, negative = past). */
+  offset: number
+}
+
+/** Token and cost usage attributed to one model. */
+export interface ModelUsageStat {
+  /** Model identifier, e.g. "claude-sonnet-4-6". */
+  model: string
+  /** Total tokens (prompt + completion). */
+  tokens: number
+  /** Estimated USD cost. */
+  costUsd: number
+}
+
+/** Token and cost usage attributed to one account. */
+export interface AccountUsageStat {
+  /** Account email address. */
+  email: string
+  /** Total tokens (prompt + completion). */
+  tokens: number
+  /** Estimated USD cost. */
+  costUsd: number
+}
+
+/** Aggregated usage for a single UsagePeriod.  Returned by cascade_usage_summary. */
+export interface UsageSummary {
+  /** Total tokens across all models and accounts in the period. */
+  totalTokens: number
+  /** Total estimated USD cost in the period. */
+  totalCostUsd: number
+  /** Per-model breakdown, sorted by tokens desc. */
+  byModel: ModelUsageStat[]
+  /** Per-account breakdown, sorted by tokens desc. */
+  byAccount: AccountUsageStat[]
+  /** Human-readable label, e.g. "Week of Jun 02, 2026". */
+  periodLabel: string
+  /** ISO-8601 date of the first day included (YYYY-MM-DD). */
+  periodStart: string
+  /** ISO-8601 date of the last day included (YYYY-MM-DD). */
+  periodEnd: string
+}
+
+/** Usage totals for one calendar month.  One entry in the cascade_usage_history array. */
+export interface MonthlyUsage {
+  /** Display label, e.g. "Jun 2026". */
+  monthLabel: string
+  /** Total tokens for the month. */
+  tokens: number
+  /** Total estimated USD cost for the month. */
+  costUsd: number
+  /** Per-model breakdown for the month. */
+  byModel: ModelUsageStat[]
+}
+
+/** A single completion event in the usage ledger. */
+export interface LedgerEntry {
+  /** ISO-8601 timestamp of the completion (UTC). */
+  timestamp: string
+  /** Model identifier. */
+  model: string
+  /** Prompt (input) token count. */
+  promptTokens: number
+  /** Completion (output) token count. */
+  completionTokens: number
+  /** Estimated USD cost for this call. */
+  costUsd: number
+  /** Provider identifier, e.g. "anthropic". */
+  provider: string
+  /** Account email (optional; redundant with AccountLedger.account). */
+  account?: string
+}
+
+/** All ledger entries for one account in a given period.  Returned by cascade_usage_ledger. */
+export interface AccountLedger {
+  /** Account email address used as the query key. */
+  account: string
+  /** Ledger entries in ascending timestamp order. */
+  entries: LedgerEntry[]
+}

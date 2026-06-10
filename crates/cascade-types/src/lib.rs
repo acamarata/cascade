@@ -80,6 +80,7 @@ pub mod retriever;
 pub mod scheduled_task;
 pub mod tiers;
 pub mod usage;
+pub mod usage_analytics;
 
 // ── Top-level re-exports ──────────────────────────────────────────────────────
 //

@@ -37,6 +37,10 @@ use tracing::{debug, error, info, warn};
 
 use crate::event_bus::EventBus;
 use crate::healthcheck::HealthState;
+use crate::ipc_usage_analytics::{
+    handle_usage_history, handle_usage_ledger, handle_usage_summary, new_summary_cache,
+    SummaryCache,
+};
 use crate::supervisor::DaemonError;
 
 const SOCKET_NAME: &str = "daemon.sock";
@@ -93,6 +97,8 @@ pub struct IpcServer {
     socket_path: PathBuf,
     health: Arc<HealthState>,
     bus: Arc<EventBus>,
+    /// In-memory 60-second summary cache for cascade_usage_summary (T-P3-E04-29).
+    usage_summary_cache: SummaryCache,
 }
 
 impl IpcServer {
@@ -106,6 +112,7 @@ impl IpcServer {
             socket_path,
             health,
             bus,
+            usage_summary_cache: new_summary_cache(),
         })
     }
 
@@ -296,7 +303,7 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
 /// Outputs: `Response::Error` with appropriate JSON-RPC error code
 /// Constraints: body must already be bounds-checked (MAX_FRAME_LEN enforced upstream)
 /// SPORT: MASTER-ENDPOINTS.md — IPC routing note updated to "typed JSON-RPC (ADR-P3-001)"
-pub(crate) fn try_typed_dispatch(_server: &IpcServer, body: &[u8]) -> Response {
+pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
     let raw: serde_json::Value = match serde_json::from_slice(body) {
         Ok(v) => v,
         Err(e) => {
@@ -347,6 +354,60 @@ pub(crate) fn try_typed_dispatch(_server: &IpcServer, body: &[u8]) -> Response {
             //
             // SPORT: MASTER-ENDPOINTS.md — audit=hook annotation for these five methods.
             // Resolves P2 residue E07-17 (hook wired; full instrumentation in E-07+).
+            // ── Usage analytics methods (T-P3-E04-29) ────────────────────
+            // These are fully implemented handlers; wire them before the
+            // audit-hook scaffold so they return real data, not NOT_FOUND.
+            match typed_req.method.as_str() {
+                "cascade_usage_summary" => {
+                    use cascade_types::usage_analytics::UsagePeriod;
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    match serde_json::from_value::<UsagePeriod>(params_val) {
+                        Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                        Ok(period) => {
+                            return match handle_usage_summary(period, &server.usage_summary_cache) {
+                                Ok(summary) => Response::ok(summary),
+                                Err(e) => Response::err(-32001, e),
+                            };
+                        }
+                    }
+                }
+                "cascade_usage_history" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let months_back = params_val
+                        .get("monthsBack")
+                        .or_else(|| params_val.get("months_back"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(6) as u32;
+                    return match handle_usage_history(months_back) {
+                        Ok(history) => Response::ok(history),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                "cascade_usage_ledger" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let account_email = params_val
+                        .get("accountEmail")
+                        .or_else(|| params_val.get("account_email"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    use cascade_types::usage_analytics::UsagePeriod;
+                    let period_val = params_val
+                        .get("period")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
+                    let period: UsagePeriod = match serde_json::from_value(period_val) {
+                        Ok(p) => p,
+                        Err(e) => return Response::err(-32602, format!("invalid period: {e}")),
+                    };
+                    return match handle_usage_ledger(account_email, period) {
+                        Ok(ledger) => Response::ok(ledger),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                _ => {}
+            }
+
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {

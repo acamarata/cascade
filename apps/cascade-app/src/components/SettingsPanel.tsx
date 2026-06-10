@@ -14,6 +14,7 @@ import { useTheme } from '../hooks/useTheme'
 import { Sun, Moon, Monitor, RefreshCw } from 'lucide-react'
 import { RestoreToolSection } from '../features/settings/RestoreToolSection'
 import { ToolModeSection } from '../features/settings/ToolModeSection'
+import { ProviderSettingsSection } from '../features/settings/providers/ProviderSettingsSection'
 
 interface AppConfig {
   theme: 'light' | 'dark' | 'system'
@@ -152,6 +153,9 @@ export function SettingsPanel() {
           </select>
         </div>
       </section>
+
+      {/* AI Providers — T-P3-E04-23/24 */}
+      <ProviderSettingsSection />
 
       {/* Tool Mode — T-P3-E03-37 */}
       <ToolModeSection />

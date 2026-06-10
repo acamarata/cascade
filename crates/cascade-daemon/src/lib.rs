@@ -16,6 +16,12 @@ pub mod config;
 pub mod ipc_auto_auth;
 pub mod ipc_pool_register;
 pub mod ipc_provision;
+// T-P3-E04-26: provider IPC command handlers
+pub mod ipc_providers;
+// T-P3-E04-27: token usage accumulator
+pub mod usage;
+// T-P3-E04-29: usage analytics IPC handlers
+pub mod ipc_usage_analytics;
 // T-P3-E04-15: provider health-check background task + cached HealthState
 pub mod provider_health;
 pub mod dashboard;

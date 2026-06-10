@@ -1049,6 +1049,7 @@ dependencies = [
  "security-framework 2.11.1",
  "serde 1.0.228",
  "serde_json 1.0.150",
+ "serial_test",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",

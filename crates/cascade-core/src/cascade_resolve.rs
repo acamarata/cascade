@@ -275,6 +275,7 @@ fn days_since_epoch_to_ymd(mut days: u64) -> (u64, u64, u64) {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use super::*;
     use std::fs;
     use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -315,6 +316,7 @@ mod tests {
 
     /// resolve_cascade returns Ok when a single tier dir exists with config.toml.
     #[test]
+    #[serial(global_env)]
     fn single_tier_config_toml() {
         let tmp = TempDir::new().unwrap();
         let cascade_dir = make_tier_dir(tmp.path());
@@ -333,6 +335,7 @@ mod tests {
 
     /// GCI instructions override PPC instructions when both are present.
     #[test]
+    #[serial(global_env)]
     fn higher_tier_wins_on_instructions() {
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
@@ -360,6 +363,7 @@ mod tests {
 
     /// resolve_cascade returns Ok even when only one tier dir exists.
     #[test]
+    #[serial(global_env)]
     fn missing_tiers_silently_skipped() {
         let tmp = TempDir::new().unwrap();
         // Only project-level .cascade exists; GCI/PCI/APC are not present.
@@ -381,6 +385,7 @@ mod tests {
 
     /// When config.toml has no `instructions` key, CASCADE.md is used as fallback.
     #[test]
+    #[serial(global_env)]
     fn cascade_md_fallback() {
         let tmp = TempDir::new().unwrap();
         let cascade_dir = make_tier_dir(tmp.path());
@@ -401,6 +406,7 @@ mod tests {
 
     /// Rules from all tiers are accumulated, GCI rules appear first.
     #[test]
+    #[serial(global_env)]
     fn rules_accumulated_gci_first() {
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
@@ -430,6 +436,7 @@ mod tests {
 
     /// resolve_all_tiers: all 6 tiers supply different instructions; GCI wins.
     #[test]
+    #[serial(global_env)]
     fn resolve_all_tiers() {
         // We cannot easily set up all 6 tiers in isolation because PPC/PRC/PAC
         // all resolve to `project_root/.cascade`. Instead, test GCI + PPC (2 tiers)
@@ -484,6 +491,7 @@ rules = ["project-rule-1"]
 
     /// resolve_cascade returns Ok(ResolvedContext::default) when no tiers exist.
     #[test]
+    #[serial(global_env)]
     fn empty_project_no_tiers() {
         let fake_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
@@ -505,6 +513,7 @@ rules = ["project-rule-1"]
 
     /// resolved_at is a non-empty string that looks like an ISO-8601 timestamp.
     #[test]
+    #[serial(global_env)]
     fn resolved_at_is_set() {
         let fake_home = TempDir::new().unwrap();
         let tmp = TempDir::new().unwrap();
@@ -533,6 +542,7 @@ rules = ["project-rule-1"]
     // ── test 9: utc_timestamp_now format check ────────────────────────────────
 
     #[test]
+    #[serial(global_env)]
     fn utc_timestamp_format() {
         let ts = utc_timestamp_now();
         // Format: "YYYY-MM-DDTHH:MM:SSZ" — 20 chars
@@ -545,6 +555,7 @@ rules = ["project-rule-1"]
 
     /// A malformed config.toml should be treated as an empty tier (no panic/error).
     #[test]
+    #[serial(global_env)]
     fn malformed_config_toml_is_non_fatal() {
         let tmp = TempDir::new().unwrap();
         let cascade_dir = make_tier_dir(tmp.path());

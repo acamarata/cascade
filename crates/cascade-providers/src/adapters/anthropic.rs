@@ -152,8 +152,10 @@ impl AnthropicAdapter {
         }
     }
 
-    /// Construct with a custom base URL — used exclusively in tests.
-    #[cfg(test)]
+    /// Construct with a custom base URL — used in unit tests and integration tests.
+    ///
+    /// Gated behind `test` or `integration_tests` — not compiled in production.
+    #[cfg(any(test, feature = "integration_tests"))]
     pub fn new_with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
             api_key: api_key.into(),

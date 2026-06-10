@@ -49,5 +49,6 @@ secret-service = { version = "3", optional = true }
 # on macOS/Linux CI without a Windows-only dep.
 
 [dev-dependencies]
+serial_test = "3"
 tempfile = "3"
 tokio    = { workspace = true }

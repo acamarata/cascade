@@ -16,6 +16,8 @@ import { InboxPage } from '../pages/InboxPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { SearchPage } from '../pages/SearchPage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { ProviderSettings } from '../pages/ProviderSettings'
+import { UsagePage } from '../pages/UsagePage'
 import { WizardLayout } from '../features/onboarding/WizardLayout'
 
 interface RouterAppProps {
@@ -66,6 +68,10 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        {/* T-P3-E04-23: Provider Settings page */}
+        <Route path="/settings/providers" element={<ProviderSettings />} />
+        {/* T-P3-E04-30: Usage analytics page */}
+        <Route path="/usage" element={<UsagePage />} />
       </Route>
 
       {/* Catch-all */}

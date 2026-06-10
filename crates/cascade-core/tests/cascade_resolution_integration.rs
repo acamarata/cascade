@@ -8,6 +8,7 @@
 //! and that the compat-file generator produces CLAUDE.md + AGENTS.md files
 //! correctly at each tier directory.
 
+use serial_test::serial;
 use cascade_core::cascade_resolve::resolve_cascade;
 use cascade_core::compat_gen::generate_all;
 use std::fs;
@@ -43,6 +44,7 @@ fn create_tier_fixture(dir: &Path, tier_name: &str, instructions: &str, rules: &
 
 /// Test 1: Six-tier fixture verifies GCI instructions override all lower tiers.
 #[test]
+#[serial(global_env)]
 fn test_six_tier_priority() {
     let root = TempDir::new().unwrap();
     let root_path = root.path();
@@ -101,6 +103,7 @@ fn test_six_tier_priority() {
 
 /// Test 2: Rules accumulation with GCI entries appearing first.
 #[test]
+#[serial(global_env)]
 fn test_rules_accumulation() {
     let root = TempDir::new().unwrap();
     let root_path = root.path();
@@ -152,6 +155,7 @@ fn test_rules_accumulation() {
 
 /// Test 3: Missing tiers are silently skipped without panic.
 #[test]
+#[serial(global_env)]
 fn test_missing_tiers_skipped() {
     let root = TempDir::new().unwrap();
     let root_path = root.path();
@@ -181,6 +185,7 @@ fn test_missing_tiers_skipped() {
 
 /// Test 4: compat_gen writes CLAUDE.md and AGENTS.md files at each tier.
 #[test]
+#[serial(global_env)]
 fn test_compat_files_written() {
     let root = TempDir::new().unwrap();
     let root_path = root.path();
@@ -221,6 +226,7 @@ fn test_compat_files_written() {
 
 /// Test 5: compat_gen is idempotent (calling twice succeeds without errors).
 #[test]
+#[serial(global_env)]
 fn test_compat_idempotent() {
     let root = TempDir::new().unwrap();
     let root_path = root.path();

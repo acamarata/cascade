@@ -30,6 +30,10 @@ pub mod archive;
 pub mod merge;
 // Sub-module added by W-05 (T-P3-E03-39/39b/40/41/42 scaffold):
 pub mod provision;
+// T-P3-E04-26/27: Provider IPC commands + usage today
+pub mod providers;
+// T-P3-E04-30: Usage analytics IPC commands
+pub mod usage;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};

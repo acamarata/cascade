@@ -108,6 +108,30 @@ jobs:
         if: matrix.use-cross == false
         run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
 
+  # ── integration-tests ────────────────────────────────────────────────────
+  # Run the cascade-providers integration test suite (all adapters via
+  # wiremock fixture servers, no live API calls).  Gated behind
+  # --features integration_tests so normal `cargo test` skips them.
+  # Runs on Linux x86_64 only — the tests are pure Rust + loopback TCP,
+  # platform-independent.
+  integration-tests:
+    name: integration-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Run cascade-providers integration tests
+        run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
+
   # ── clippy ────────────────────────────────────────────────────────────────
   # Run clippy with -D warnings across the full matrix.
   # Linux aarch64 uses cross-rs for the cross-target lint.
@@ -357,7 +381,7 @@ jobs:
   # you only need one entry in the required-checks list.
   ci-gate:
     name: ci-gate
-    needs: [test, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows]
+    needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows]
     runs-on: ubuntu-24.04
     if: always()
     steps:
@@ -365,6 +389,10 @@ jobs:
         run: |
           if [[ "${{ needs.test.result }}" != "success" ]]; then
             echo "test failed: ${{ needs.test.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+            echo "integration-tests failed: ${{ needs.integration-tests.result }}"
             exit 1
           fi
           if [[ "${{ needs.clippy.result }}" != "success" ]]; then

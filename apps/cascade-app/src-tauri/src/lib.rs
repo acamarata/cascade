@@ -160,6 +160,22 @@ pub fn run() {
             commands::provision::cascade_auto_auth_import,
             // T-P3-E03-42: AI-optional provider health check
             commands::provision::cascade_providers_health,
+            // T-P3-E04-26: Provider IPC commands (list/test/remove/add-key/oauth/generic)
+            commands::providers::cascade_providers_list,
+            commands::providers::cascade_providers_test,
+            commands::providers::cascade_providers_remove,
+            commands::providers::cascade_providers_add_apikey,
+            commands::providers::cascade_providers_oauth_start,
+            commands::providers::cascade_providers_oauth_status,
+            commands::providers::cascade_providers_add_generic,
+            // T-P3-E04-27: Usage today IPC endpoint
+            commands::providers::cascade_providers_usage_today,
+            // T-P3-E04-26: GFP proxy health probe
+            commands::providers::cascade_check_gfp_proxy,
+            // T-P3-E04-30: Usage analytics
+            commands::usage::cascade_usage_summary,
+            commands::usage::cascade_usage_history,
+            commands::usage::cascade_usage_ledger,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

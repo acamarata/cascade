@@ -37,9 +37,17 @@ pkce = "0.2"
 portpicker = "0.1"
 rand = "0.10.1"
 
+[features]
+# Gate the integration test suite behind a feature flag so normal `cargo test`
+# skips them (they require the wiremock server — zero live API calls, but they
+# do start TCP listeners on loopback).  Run with:
+#   cargo test -p cascade-providers --features integration_tests
+integration_tests = []
+
 [dev-dependencies]
 # test-util enables tokio::time::pause() for instant-sleep retry tests (T-P3-E04-06)
 tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 wiremock    = "0.6.5"
 tempfile    = "3"
 serial_test = "3"
+futures     = "0.3"
