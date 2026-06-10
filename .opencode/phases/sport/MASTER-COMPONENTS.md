@@ -76,3 +76,15 @@
 | TemplatePickerCompact | apps/cascade-app/src/components/template/TemplatePickerCompact.tsx | Compact multi-select template picker for wizard Phase 4 pre-scaffold; search + tier/stack chips + scrollable card list | ✅ Done | P3 | T-P3-E05-19 |
 | memoryAggregator | apps/cascade-app/src/services/vault/memoryAggregator.ts | Cross-project memory aggregator: scans decisions/lessons/patterns/ideas/inbox across registered projects; returns MemoryEntry[] sorted by mtime desc | ✅ Done | P3 | T-P3-E06-11 |
 | MemoryEntry | apps/cascade-app/src/types/vault.ts | Type: {project, type: MemoryEntryKind, title, excerpt, path, mtime} — normalised memory artifact entry | ✅ Done | P3 | T-P3-E06-11 |
+| context_pack | crates/cascade-core/src/context_pack/ | Rust module: context session CRUD (types/reader/writer) for .cascade/contexts/ YAML store | ✅ Done | P3 | T-P3-E07-08 |
+| context IPC commands | apps/cascade-app/src-tauri/src/commands/context.rs | Tauri IPC: context_list / context_get / context_upsert / context_delete (4 commands) | ✅ Done | P3 | T-P3-E07-08 |
+| packer | crates/cascade-core/src/context_pack/packer.rs | Rust module: repomix-style pack_codebase(root, extra_excludes) — ASCII tree + file sections, binary skip, 2MB cap, .gitignore via ignore crate | ✅ Done | P3 | T-P3-E07-09 |
+| pack_codebase IPC | apps/cascade-app/src-tauri/src/commands/context.rs#pack_codebase_cmd | Tauri IPC: pack_codebase_cmd(root, excludes?) → temp file path | ✅ Done | P3 | T-P3-E07-09 |
+| cascade-core::maps | crates/cascade-core/src/maps/ (mod.rs + project.rs + cascade_tiers.rs + pews_dag.rs) | Three data providers: project graph (~/Sites scan), cascade tier tree (6-tier chain), PEWS DAG (ticket yaml walk). GraphData + TierEntry types. | ✅ Done | P3 | T-P3-E07-12 |
+| maps TS types | apps/cascade-app/src/types/maps.ts | TypeScript types (GraphNode, GraphEdge, GraphData, TierEntry) + typed invoke wrappers for all three IPC commands | ✅ Done | P3 | T-P3-E07-12 |
+| ProjectMapPanel | apps/cascade-app/src/features/project-map/ProjectMapPanel.tsx | Three-tab maps panel: Project Graph / Cascade Tiers / PEWS DAG; project selector; lazy-loads graph views | ✅ Done | P3 | T-P3-E07-13 |
+| ProjectGraph | apps/cascade-app/src/features/project-map/ProjectGraph.tsx | ReactFlow canvas: project→repo→app hierarchy; custom ProjectNode with path popover + Open in Finder | ✅ Done | P3 | T-P3-E07-13 |
+| CascadeTierTree | apps/cascade-app/src/features/project-map/CascadeTierTree.tsx | CSS vertical list: 6-tier cascade chain; green/gray by exists; Create button for missing tiers | ✅ Done | P3 | T-P3-E07-13 |
+| PewsDag | apps/cascade-app/src/features/project-map/PewsDag.tsx | ReactFlow LR DAG: PEWS tickets coloured by status; status legend strip; topological layout | ✅ Done | P3 | T-P3-E07-13 |
+| mapTransforms | apps/cascade-app/src/features/project-map/mapTransforms.ts | Pure data-transform helpers: projectGraphToFlow, pewsDagToFlow, tierExists, tierLabel (29 unit tests) | ✅ Done | P3 | T-P3-E07-13 |
+| ProjectMapPage | apps/cascade-app/src/pages/ProjectMapPage.tsx | /project-map route page — wraps ProjectMapPanel | ✅ Done | P3 | T-P3-E07-13 |

@@ -12,7 +12,10 @@
 import { useRef, useState } from 'react'
 import {
   BarChart2,
+  BookOpen,
   Brain,
+  ClipboardList,
+  GitFork,
   Inbox,
   LayoutDashboard,
   LayoutGrid,
@@ -41,6 +44,21 @@ const NAV_ITEMS = [
     to: '/templates',
     icon: <LayoutGrid className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Templates',
+  },
+  {
+    to: '/library',
+    icon: <BookOpen className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Library',
+  },
+  {
+    to: '/context',
+    icon: <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Context',
+  },
+  {
+    to: '/project-map',
+    icon: <GitFork className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Project Map',
   },
   {
     to: '/vault',

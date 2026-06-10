@@ -189,6 +189,28 @@ pub fn run() {
             commands::vault::vault_watch,
             // T-P3-E06-09: Vault full-text search via ripgrep
             commands::vault::vault_search,
+            // T-P3-E07-00: Application settings IPC commands
+            commands::settings::get_settings,
+            commands::settings::update_settings,
+            // T-P3-E07-02: Library read IPC commands
+            commands::library::list_library_items,
+            commands::library::get_library_item,
+            // T-P3-E07-03: Library write IPC commands
+            commands::library::upsert_library_item,
+            commands::library::delete_library_item,
+            // T-P3-E07-07: Library injection IPC command
+            commands::library::inject_library_item,
+            // T-P3-E07-08: Context session IPC commands
+            commands::context::context_list,
+            commands::context::context_get,
+            commands::context::context_upsert,
+            commands::context::context_delete,
+            // T-P3-E07-09: Codebase packing (repomix-style)
+            commands::context::pack_codebase_cmd,
+            // T-P3-E07-12: Project maps data providers
+            commands::maps::get_project_graph,
+            commands::maps::get_cascade_tier_tree,
+            commands::maps::get_pews_dag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

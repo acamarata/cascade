@@ -23,6 +23,9 @@ import { WizardLayout } from '../features/onboarding/WizardLayout'
 import { VaultPage } from '../pages/VaultPage'
 import { VaultGraphPage } from '../pages/VaultGraphPage'
 import { MemoryPage } from '../pages/MemoryPage'
+import { LibraryPanel } from '../features/library/LibraryPanel'
+import { ContextPanel } from '../features/context/ContextPanel'
+import { ProjectMapPage } from '../pages/ProjectMapPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -84,6 +87,12 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/vault/graph" element={<VaultGraphPage />} />
         {/* T-P3-E06-12: Memory browser */}
         <Route path="/vault/memory" element={<MemoryPage />} />
+        {/* T-P3-E07-04: Library panel */}
+        <Route path="/library" element={<LibraryPanel />} />
+        {/* T-P3-E07-10/11: Context panel */}
+        <Route path="/context" element={<ContextPanel />} />
+        {/* T-P3-E07-13: Project map panel */}
+        <Route path="/project-map" element={<ProjectMapPage />} />
       </Route>
 
       {/* Catch-all */}

@@ -54,8 +54,10 @@
 
 pub mod auth_detector;
 pub mod cache;
+pub mod context_pack;
 pub mod config;
 pub mod cascade_resolve;
+pub mod maps;
 pub mod compat_gen;
 pub mod derived;
 pub mod discovery;
@@ -68,7 +70,9 @@ pub mod quota_aggregator;
 pub mod quota_store;
 pub mod resolution;
 pub mod routing_table;
+pub mod library;
 pub mod security;
+pub mod settings;
 pub mod symlinks;
 pub mod task_store;
 pub mod templates;

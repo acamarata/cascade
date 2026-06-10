@@ -15,3 +15,4 @@ node_modules/
 .gemini/
 .codeium/
 target/
+.cascade/

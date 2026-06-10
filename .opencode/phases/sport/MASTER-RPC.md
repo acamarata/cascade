@@ -14,3 +14,6 @@
 | get_daemon_status | Tauri IPC | Get daemon health + uptime via IPC | 🔲 Planned | P3 | T-P3-E01-* |
 | open_project | Tauri IPC | Open a project directory in the OS file browser | 🔲 Planned | P3 | T-P3-E01-* |
 | get_window_state | Tauri IPC | Get/set Tauri window size, position | 🔲 Planned | P3 | T-P3-E01-* |
+| get_project_graph | Tauri IPC | Scan ~/Sites for cascade dirs; return project/repo/app graph (GraphData) | ✅ Done | P3 | T-P3-E07-12 |
+| get_cascade_tier_tree | Tauri IPC | Return 6-tier cascade chain (GCI→PAC) with exists flags for a given root | ✅ Done | P3 | T-P3-E07-12 |
+| get_pews_dag | Tauri IPC | Read PEWS ticket YAMLs under phase_root; return ticket dependency DAG (GraphData) | ✅ Done | P3 | T-P3-E07-12 |

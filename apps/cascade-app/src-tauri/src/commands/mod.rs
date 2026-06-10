@@ -38,6 +38,14 @@ pub mod usage;
 pub mod templates;
 // T-P3-E06-01: Vault file-system IPC commands (list/read/write/watch)
 pub mod vault;
+// T-P3-E07-00: Application settings IPC commands (get/update)
+pub mod settings;
+// T-P3-E07-02/03: Library item IPC commands (list/get/upsert/delete)
+pub mod library;
+// T-P3-E07-08: Context session IPC commands (list/get/upsert/delete)
+pub mod context;
+// T-P3-E07-12: Project maps data providers (project graph, cascade tier tree, PEWS DAG)
+pub mod maps;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
