@@ -18,6 +18,7 @@ import { SearchPage } from '../pages/SearchPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { ProviderSettings } from '../pages/ProviderSettings'
 import { UsagePage } from '../pages/UsagePage'
+import { TemplateBrowser } from '../pages/TemplateBrowser'
 import { WizardLayout } from '../features/onboarding/WizardLayout'
 
 interface RouterAppProps {
@@ -72,6 +73,8 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/settings/providers" element={<ProviderSettings />} />
         {/* T-P3-E04-30: Usage analytics page */}
         <Route path="/usage" element={<UsagePage />} />
+        {/* T-P3-E05-14: Template browser */}
+        <Route path="/templates" element={<TemplateBrowser />} />
       </Route>
 
       {/* Catch-all */}

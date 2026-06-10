@@ -73,3 +73,4 @@
 | tauriMocks | e2e/mocks/tauriMocks.ts | Mock layer for @tauri-apps/api/core invoke (all wizard commands) | ✅ Done | P3 | T-P3-E03-34 |
 | wizard.helpers | e2e/helpers/wizard.helpers.ts | renderWizard() factory + step assertion helpers | ✅ Done | P3 | T-P3-E03-34 |
 | WizardProviderStep | apps/cascade-app/src/components/wizard/WizardProviderStep.tsx | Step 2 real provider-connect: 4 quick-connect cards, GFP auto-detect banner, skip-for-now alert, cascade_providers_list gate | ✅ Done | P3 | T-P3-E04-25 |
+| TemplatePickerCompact | apps/cascade-app/src/components/template/TemplatePickerCompact.tsx | Compact multi-select template picker for wizard Phase 4 pre-scaffold; search + tier/stack chips + scrollable card list | ✅ Done | P3 | T-P3-E05-19 |

@@ -71,6 +71,7 @@ pub mod routing_table;
 pub mod security;
 pub mod symlinks;
 pub mod task_store;
+pub mod templates;
 pub mod watcher;
 pub mod worktree_store;
 

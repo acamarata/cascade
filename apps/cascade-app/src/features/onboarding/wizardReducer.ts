@@ -43,6 +43,11 @@ export type WizardAction =
   | { type: 'UPDATE_STATE'; payload: Partial<WizardState> }
   | { type: 'UPDATE_ARCHIVE_STATUS'; payload: { toolId: string; archived: boolean } }
   | { type: 'SET_MERGE_RESULT'; payload: { tier: string; result: RichMergeResult } }
+  /**
+   * SET_SELECTED_TEMPLATES: stores the user's template picker selection from Phase 4.
+   * T-P3-E05-19: called by TemplatePickerCompact onChange handler via MergeContentPhase.
+   */
+  | { type: 'SET_SELECTED_TEMPLATES'; payload: string[] }
   | {
       type: 'UPDATE_SECTION_STATUS'
       payload: {
@@ -175,6 +180,15 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
           ...state.mergeResults,
           [tier]: result,
         },
+        updatedAt: now,
+      }
+    }
+
+    case 'SET_SELECTED_TEMPLATES': {
+      // Store the user's template selection from the Phase 4 picker. T-P3-E05-19.
+      return {
+        ...state,
+        selectedTemplates: action.payload,
         updatedAt: now,
       }
     }

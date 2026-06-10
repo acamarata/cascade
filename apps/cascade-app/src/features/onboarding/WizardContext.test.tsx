@@ -24,6 +24,7 @@ function createTestState(overrides?: Partial<WizardState>): WizardState {
     detectedToolIds: null,
     mergeResult: null,
     mergeResults: {},
+    selectedTemplates: [],
     toolModes: {},
     archiveManifestPath: null,
     archivedTools: {},

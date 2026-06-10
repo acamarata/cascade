@@ -14,6 +14,7 @@ import {
   BarChart2,
   Inbox,
   LayoutDashboard,
+  LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -33,6 +34,11 @@ const NAV_ITEMS = [
     to: '/search',
     icon: <Search className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Search',
+  },
+  {
+    to: '/templates',
+    icon: <LayoutGrid className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Templates',
   },
   {
     to: '/usage',

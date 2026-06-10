@@ -21,6 +21,7 @@ pub mod resolve;
 pub mod restore;
 pub mod search;
 pub mod status;
+pub mod template;
 pub mod uninstall;
 pub mod unlink;
 
@@ -83,6 +84,8 @@ pub enum Commands {
     Backup(backup::BackupArgs),
     /// Restore an archived tool's files to their original paths.
     Restore(restore::RestoreArgs),
+    /// Manage Cascade context templates (list, apply, diff, upgrade).
+    Template(template::TemplateArgs),
     /// Show AI harness detection status.
     #[command(hide = true)]
     Harness(harness::HarnessArgs),
@@ -112,6 +115,7 @@ impl Commands {
             Commands::Completions(args) => args.run().await,
             Commands::Backup(args) => args.run().await,
             Commands::Restore(args) => args.run().await,
+            Commands::Template(args) => args.run().await,
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
         }

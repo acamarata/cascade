@@ -176,6 +176,12 @@ pub fn run() {
             commands::usage::cascade_usage_summary,
             commands::usage::cascade_usage_history,
             commands::usage::cascade_usage_ledger,
+            // T-P3-E05-15: Template engine IPC (list / apply / diff)
+            commands::templates::template_list,
+            commands::templates::template_apply,
+            commands::templates::template_diff,
+            // T-P3-E05-17: Template upgrade IPC
+            commands::templates::template_upgrade,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

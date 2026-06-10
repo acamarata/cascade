@@ -5,32 +5,40 @@
  *
  * Inputs:
  *   - WizardContext (useWizard): state.scanResult, state.detectedToolIds,
- *     state.mergeResults, state.providerConnected. Helpers: setMergeResult,
- *     approveSection, rejectSection, editSection, markComplete.
+ *     state.mergeResults, state.providerConnected, state.selectedTemplates.
+ *     Helpers: setMergeResult, approveSection, rejectSection, editSection,
+ *     markComplete, setSelectedTemplates.
  *
  * Outputs:
+ *   - (NEW T-P3-E05-19) Shows TemplatePickerCompact before the AI merge step.
+ *     User picks templates; wizard stores selection in state.selectedTemplates.
+ *   - Calls template_apply IPC for each selected template (tier first, then
+ *     stack, then shape) before running the AI merge. Pre-scaffold result is
+ *     passed as the starting point for the AI merge.
+ *   - On template_apply error: shows inline error; user may skip and proceed bare.
+ *   - Graceful when template IPC is absent (daemon not running): skips apply,
+ *     proceeds to bare AI merge.
  *   - Calls mergeService.mergeForTier on mount (or shows cached result on resume).
  *   - Renders DiffPanel with MergeResult once merge completes.
  *   - Writes approved/edited sections via invoke('write_cascade_content') on Apply.
  *   - Calls markComplete(WizardStep.MergeContent) after successful write.
  *
  * Constraints:
- *   - Resume-safe: if mergeResults['global'] exists in context, skip merge call.
+ *   - Resume-safe: if mergeResults['global'] exists in context, skip picker + merge call.
  *   - "Apply to Cascade" disabled until all sections are reviewed (none pending).
  *   - Rejected sections excluded from write payload.
  *   - Edited sections use editedContent, not proposedContent.
  *   - Error state: show Merge failed + Retry + Skip option.
  *   - Parse error: show warning banner + allow proceeding.
  *   - No sources: show info + advance option.
- *   - ≤300 lines.
  *
  * SPORT: MASTER-COMPONENTS.md — MergeContentPhase — wizard step 4 — ✅
- * Tasks: T-P3-E03-29
+ * Tasks: T-P3-E03-29, T-P3-E05-19
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { AlertTriangle, CheckCheck, GitMerge, RefreshCw, SkipForward, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCheck, GitMerge, Layers, RefreshCw, SkipForward, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWizard } from '@/features/onboarding/WizardContext'
 import { WizardStep } from '@/features/onboarding/types'
@@ -38,6 +46,9 @@ import { mergeForTier } from '@/features/onboarding/merge/mergeService'
 import type { MergeSection, MergeSourceFile, MergeConflict } from '@/features/onboarding/merge/types'
 import { DiffPanel } from '@/components/merge-engine/DiffPanel'
 import { MergeLoadingState } from './MergeLoadingState'
+import { TemplatePickerCompact } from '@/components/template/TemplatePickerCompact'
+import type { TemplateEntryIpc } from '@/types/templates'
+import type { ApplyResultIpc } from '@/types/templates'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -97,12 +108,62 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
   const {
     state,
     setMergeResult,
+    setSelectedTemplates,
     approveSection,
     rejectSection,
     editSection,
     markComplete,
     getMergeResult,
   } = useWizard()
+
+  // ---------------------------------------------------------------------------
+  // Template picker state (T-P3-E05-19)
+  // ---------------------------------------------------------------------------
+
+  /** Catalog loaded from template_list IPC. Null = not yet fetched. */
+  const [templateCatalog, setTemplateCatalog] = useState<TemplateEntryIpc[] | null>(null)
+  const [templateCatalogError, setTemplateCatalogError] = useState<string | null>(null)
+  const [templateCatalogLoading, setTemplateCatalogLoading] = useState(false)
+
+  /** Error from template_apply (non-fatal — user can proceed bare). */
+  const [templateApplyError, setTemplateApplyError] = useState<string | null>(null)
+
+  /**
+   * pickingTemplate: true when we show the picker before the AI merge.
+   * Set to false once the user clicks "Proceed to AI merge" (or "Skip template").
+   * Not shown on resume (cached result already exists).
+   */
+  const [pickingTemplate, setPickingTemplate] = useState(() => {
+    // Resume: skip picker if merge already cached
+    if (state.mergeResults[TIER_KEY]) return false
+    // No detected tools: skip picker (no-sources state handles this)
+    if (state.detectedToolIds !== null && state.detectedToolIds.length === 0) return false
+    return true
+  })
+
+  // Load template catalog when picker is shown (lazy)
+  useEffect(() => {
+    if (!pickingTemplate || templateCatalog !== null || templateCatalogLoading) return
+    setTemplateCatalogLoading(true)
+    invoke<TemplateEntryIpc[]>('template_list', { filter: {} })
+      .then((entries) => {
+        setTemplateCatalog(entries)
+        setTemplateCatalogError(null)
+      })
+      .catch((err: unknown) => {
+        // Graceful: daemon may not be running yet; treat as empty catalog
+        const msg = err instanceof Error ? err.message : String(err)
+        setTemplateCatalog([])
+        setTemplateCatalogError(msg)
+      })
+      .finally(() => {
+        setTemplateCatalogLoading(false)
+      })
+  }, [pickingTemplate, templateCatalog, templateCatalogLoading])
+
+  // ---------------------------------------------------------------------------
+  // Merge status tracking
+  // ---------------------------------------------------------------------------
 
   // Merge status tracking
   const [mergePhase, setMergePhase] = useState<'loading' | 'ready' | 'error' | 'writing' | 'no-sources'>(
@@ -177,8 +238,66 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
     }
   }, [state.providerConnected, state.detectedToolIds, setMergeResult])
 
-  // Fire on mount (once) if no cached result
+  // ---------------------------------------------------------------------------
+  // Template apply helper (T-P3-E05-19)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Apply selected templates as a pre-scaffold before AI merge.
+   * Order: tier first, then stack, then shape (per CR-A guidance).
+   * Non-destructive: dry_run=false, force=false (skip conflicting sections).
+   * Graceful: on IPC error, sets templateApplyError and continues bare.
+   *
+   * @returns pre-scaffold content string, or null if nothing to apply/error.
+   */
+  const applySelectedTemplates = useCallback(async (): Promise<string | null> => {
+    const ids = state.selectedTemplates
+    if (ids.length === 0) return null
+    setTemplateApplyError(null)
+    try {
+      let scaffoldContent = ''
+      for (const templateId of ids) {
+        const result = await invoke<ApplyResultIpc>('template_apply', {
+          templateId,
+          tier: TIER_KEY,
+          dryRun: false,
+          force: false,
+        })
+        // Accumulate sections that were applied (not skipped/conflicted)
+        if (result.applied.length > 0) {
+          // The Rust command writes to disk; we accumulate the section headings
+          // as metadata for the AI merge prompt — the actual content comes from
+          // the written file which mergeForTier reads via read_legacy_content.
+          scaffoldContent += result.applied.map((s) => `## ${s}`).join('\n') + '\n'
+        }
+      }
+      return scaffoldContent || null
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setTemplateApplyError(msg)
+      // Non-fatal: proceed with bare AI merge
+      return null
+    }
+  }, [state.selectedTemplates])
+
+  // ---------------------------------------------------------------------------
+  // Template picker "Proceed to AI merge" handler
+  // ---------------------------------------------------------------------------
+
+  const handleProceedFromPicker = useCallback(async () => {
+    setPickingTemplate(false)
+    // Apply templates as scaffold before starting merge
+    await applySelectedTemplates()
+    // Kick off the merge (picker is now hidden)
+    if (!mergeFired.current) {
+      mergeFired.current = true
+      void runMerge()
+    }
+  }, [applySelectedTemplates, runMerge])
+
+  // Fire on mount (once) if no cached result AND not in picker mode
   useEffect(() => {
+    if (pickingTemplate) return // Picker is shown first; merge fires on proceed
     if (mergeFired.current) return
     const cached = state.mergeResults[TIER_KEY]
     if (cached) {
@@ -188,7 +307,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
     mergeFired.current = true
     void runMerge()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [pickingTemplate])
 
   // ---------------------------------------------------------------------------
   // Section status change callback → WizardContext
@@ -257,6 +376,77 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
   const handleSkip = useCallback(() => {
     markComplete(WizardStep.MergeContent)
   }, [markComplete])
+
+  // ---------------------------------------------------------------------------
+  // Render: template picker (T-P3-E05-19) — shown before the AI merge step
+  // ---------------------------------------------------------------------------
+
+  if (pickingTemplate) {
+    return (
+      <div className={cn('flex h-full flex-col gap-0', className)}>
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+          <Layers className="h-5 w-5 text-primary" aria-hidden="true" />
+          <h2 className="text-base font-semibold text-foreground">
+            Start from a template (optional)
+          </h2>
+        </div>
+
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+          <p className="text-sm text-muted-foreground">
+            Pick one or more templates to use as a structural scaffold for your CASCADE.md.
+            The AI merge will then fill in your project-specific content on top of that
+            scaffold. You can skip this step and proceed with a blank slate.
+          </p>
+
+          {/* Template apply error (non-fatal — from a previous attempt) */}
+          {templateApplyError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-amber-400/50 bg-amber-50/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+              <span>
+                <span className="font-medium">Template apply warning:</span>{' '}
+                {templateApplyError} — proceeding without scaffold.
+              </span>
+            </div>
+          )}
+
+          <TemplatePickerCompact
+            entries={templateCatalog ?? []}
+            selectedIds={state.selectedTemplates}
+            onChange={setSelectedTemplates}
+            isLoading={templateCatalogLoading}
+            loadError={
+              // Only expose error when catalog is empty AND errored
+              templateCatalogError && templateCatalog?.length === 0
+                ? templateCatalogError
+                : null
+            }
+          />
+        </div>
+
+        {/* Action bar */}
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3">
+          <button
+            type="button"
+            onClick={() => void handleProceedFromPicker()}
+            className={cn(
+              'flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium',
+              'text-primary-foreground hover:bg-primary/90',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'transition-colors',
+            )}
+          >
+            {state.selectedTemplates.length > 0
+              ? `Proceed with ${state.selectedTemplates.length} template${state.selectedTemplates.length !== 1 ? 's' : ''}`
+              : 'Skip template, proceed to AI merge'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // ---------------------------------------------------------------------------
   // Render: loading

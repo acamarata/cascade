@@ -34,6 +34,8 @@ pub mod provision;
 pub mod providers;
 // T-P3-E04-30: Usage analytics IPC commands
 pub mod usage;
+// T-P3-E05-15/17: Template engine IPC commands (list/apply/diff/upgrade)
+pub mod templates;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};

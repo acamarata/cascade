@@ -1,0 +1,352 @@
+{
+  "version": "1",
+  "templates": [
+    {
+      "id": "gci-default",
+      "file": "tier/gci-default.md",
+      "version": "1.0.0",
+      "tier": "gci",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the Global Cascade tier."
+    },
+    {
+      "id": "pci-default",
+      "file": "tier/pci-default.md",
+      "version": "1.0.0",
+      "tier": "pci",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the Personal Cascade Instructions tier."
+    },
+    {
+      "id": "apc-default",
+      "file": "tier/apc-default.md",
+      "version": "1.0.0",
+      "tier": "apc",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the All-Projects Cascade tier."
+    },
+    {
+      "id": "ppc-default",
+      "file": "tier/ppc-default.md",
+      "version": "1.0.0",
+      "tier": "ppc",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the Per-Project Cascade tier."
+    },
+    {
+      "id": "prc-default",
+      "file": "tier/prc-default.md",
+      "version": "1.0.0",
+      "tier": "prc",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the Per-Repo Cascade tier."
+    },
+    {
+      "id": "pac-default",
+      "file": "tier/pac-default.md",
+      "version": "1.0.0",
+      "tier": "pac",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Vendor-neutral default instructions for the Per-App Cascade tier."
+    },
+    {
+      "id": "go-module",
+      "file": "stack/go-module.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "go"
+      ],
+      "project_shapes": [],
+      "description": "Go module layout with golangci-lint and testify \u2014 Go 1.22+"
+    },
+    {
+      "id": "python-lib",
+      "file": "stack/python-lib.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "python"
+      ],
+      "project_shapes": [
+        "lib"
+      ],
+      "description": "Python library: src layout, pyproject.toml, pytest, ruff, mypy strict"
+    },
+    {
+      "id": "python-fastapi",
+      "file": "stack/python-fastapi.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "python",
+        "fastapi"
+      ],
+      "project_shapes": [],
+      "description": "FastAPI service: Pydantic v2, Alembic, pytest-asyncio, uvicorn"
+    },
+    {
+      "id": "node-express",
+      "file": "stack/node-express.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "node",
+        "express",
+        "typescript"
+      ],
+      "project_shapes": [],
+      "description": "Node/Express service: TypeScript, Vitest, ESLint/Prettier"
+    },
+    {
+      "id": "swift-app",
+      "file": "stack/swift-app.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "swift",
+        "swiftui",
+        "ios",
+        "macos"
+      ],
+      "project_shapes": [],
+      "description": "Swift 5.10+ SwiftUI app: ViewModel/View split, XCTest, SwiftLint"
+    },
+    {
+      "id": "kotlin-app",
+      "file": "stack/kotlin-app.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "kotlin",
+        "android",
+        "gradle"
+      ],
+      "project_shapes": [],
+      "description": "Kotlin 2.x Android/JVM app: Gradle, JUnit 5, ktlint"
+    },
+    {
+      "id": "unity-game",
+      "file": "stack/unity-game.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "unity",
+        "csharp"
+      ],
+      "project_shapes": [],
+      "description": "Unity 6+ game project: C#, Assembly Definitions, NUnit, Scene/Prefab conventions"
+    },
+    {
+      "id": "django",
+      "file": "stack/django.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [
+        "python",
+        "django"
+      ],
+      "project_shapes": [],
+      "description": "Django 5.x + DRF service: pytest-django, Black, isort, Alembic-style migrations"
+    },
+    {
+      "id": "personal-npm-package",
+      "file": "shape/personal-npm-package.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "personal-npm-package"
+      ],
+      "description": "A single maintainer's public npm package \u2014 minimal overhead, high automation."
+    },
+    {
+      "id": "multi-repo-product",
+      "file": "shape/multi-repo-product.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "multi-repo-product"
+      ],
+      "description": "A product built from several independent git repositories under one project umbrella."
+    },
+    {
+      "id": "single-repo-monorepo",
+      "file": "shape/single-repo-monorepo.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "single-repo-monorepo"
+      ],
+      "description": "All packages and apps for a product live in one git repository."
+    },
+    {
+      "id": "solo-developer",
+      "file": "shape/solo-developer.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "solo-developer"
+      ],
+      "description": "One person writes, reviews, and ships everything. Optimize for speed, not ceremony."
+    },
+    {
+      "id": "team-project",
+      "file": "shape/team-project.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "team-project"
+      ],
+      "description": "Two or more people collaborate on a shared codebase with explicit coordination norms."
+    },
+    {
+      "id": "open-source-library",
+      "file": "shape/open-source-library.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "open-source-library"
+      ],
+      "description": "A publicly available library with external contributors, published to a package registry."
+    },
+    {
+      "id": "saas-product",
+      "file": "shape/saas-product.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "saas-product"
+      ],
+      "description": "A hosted product with paying users, continuous deployment, and operational concerns."
+    },
+    {
+      "id": "cli-tool",
+      "file": "shape/cli-tool.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "cli-tool"
+      ],
+      "description": "A command-line interface tool distributed as a binary or script, invoked by users in a terminal."
+    },
+    {
+      "id": "hardware-iot",
+      "file": "shape/hardware-iot.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "hardware-iot"
+      ],
+      "description": "Software for embedded hardware or IoT devices with real-world physical constraints."
+    },
+    {
+      "id": "data-science",
+      "file": "shape/data-science.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "data-science"
+      ],
+      "description": "Data analysis, ML, or research workflows where reproducibility and experiment tracking matter."
+    },
+    {
+      "id": "acamarata-packages",
+      "file": "shape/acamarata-packages.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [
+        "acamarata-packages"
+      ],
+      "description": "The specific conventions used by the acamarata org for its public npm and pub.dev packages."
+    },
+    {
+      "id": "nextjs",
+      "file": "stack/nextjs.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["nextjs"],
+      "project_shapes": [],
+      "description": "Next.js App Router conventions: layout, testing, build tooling, lint, and common pitfalls."
+    },
+    {
+      "id": "react-vite",
+      "file": "stack/react-vite.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["react-vite"],
+      "project_shapes": [],
+      "description": "React 18 + Vite 5 SPA conventions: file layout, testing, build tooling, shadcn/ui, lint, and common pitfalls."
+    },
+    {
+      "id": "astro",
+      "file": "stack/astro.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["astro"],
+      "project_shapes": [],
+      "description": "Astro 4+ conventions: islands, MDX, TypeScript, content collections, build tooling, and common pitfalls."
+    },
+    {
+      "id": "tauri-2",
+      "file": "stack/tauri-2.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["tauri-2"],
+      "project_shapes": [],
+      "description": "Tauri 2 conventions: Rust backend, React+Vite frontend, IPC patterns, capability model, and common pitfalls."
+    },
+    {
+      "id": "react-native",
+      "file": "stack/react-native.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["react-native"],
+      "project_shapes": [],
+      "description": "React Native with Expo SDK conventions: file layout, EAS, testing, and common pitfalls."
+    },
+    {
+      "id": "flutter",
+      "file": "stack/flutter.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["flutter"],
+      "project_shapes": [],
+      "description": "Flutter + Dart conventions: BLoC architecture, file layout, testing, and common pitfalls."
+    },
+    {
+      "id": "rust-crate",
+      "file": "stack/rust-crate.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["rust-crate"],
+      "project_shapes": [],
+      "description": "Rust library crate conventions: doc-tests, public API design, no_std compatibility, and common pitfalls."
+    },
+    {
+      "id": "rust-binary",
+      "file": "stack/rust-binary.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["rust-binary"],
+      "project_shapes": [],
+      "description": "Rust binary crate conventions: Clap v4, tracing, Tokio async runtime, file layout, and common pitfalls."
+    }
+  ]
+}

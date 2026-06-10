@@ -25,6 +25,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 
 **Reference**
 - [CLI Reference](CLI-Reference.md)
+- [Templates](templates.md)
 - [Configuration Reference](Configuration-Reference.md)
 - [RAG Setup](RAG-Setup.md)
 - [MCP Server](MCP-Server.md)

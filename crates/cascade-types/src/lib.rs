@@ -78,6 +78,7 @@ pub mod harness;
 pub mod rag;
 pub mod retriever;
 pub mod scheduled_task;
+pub mod template;
 pub mod tiers;
 pub mod usage;
 pub mod usage_analytics;
@@ -111,3 +112,4 @@ pub use quota_store::{
 };
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
+pub use template::{ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult};

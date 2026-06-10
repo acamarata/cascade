@@ -54,6 +54,9 @@ interface WizardContextValue {
   approveSection: (tier: string, sectionId: string) => void
   rejectSection: (tier: string, sectionId: string) => void
   editSection: (tier: string, sectionId: string, content: string) => void
+  // Template picker helpers — T-P3-E05-19
+  /** Set the selected template ids for Phase 4 pre-scaffold. */
+  setSelectedTemplates: (ids: string[]) => void
 }
 
 /**
@@ -148,6 +151,14 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // Template picker helper — T-P3-E05-19
+  const setSelectedTemplates = useCallback(
+    (ids: string[]) => {
+      dispatch({ type: 'SET_SELECTED_TEMPLATES', payload: ids })
+    },
+    [],
+  )
+
   const value: WizardContextValue = {
     state,
     dispatch,
@@ -165,6 +176,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     approveSection,
     rejectSection,
     editSection,
+    setSelectedTemplates,
   }
 
   return (

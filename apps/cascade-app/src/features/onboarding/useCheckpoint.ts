@@ -83,6 +83,8 @@ export function useCheckpoint() {
         // T-P3-E03-33: persist per-tier AI merge results so phase 4 can resume after app close.
         // RichMergeResult is JSON-safe — sections carry status + editedContent inline.
         mergeResults: state.mergeResults,
+        // T-P3-E05-19: persist template picker selections for resume.
+        selectedTemplates: state.selectedTemplates,
         toolModes: state.toolModes,
         archiveManifestPath: state.archiveManifestPath,
         archivedTools: state.archivedTools,

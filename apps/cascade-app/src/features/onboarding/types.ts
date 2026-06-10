@@ -7,6 +7,7 @@
  * SPORT: MASTER-COMPONENTS.md — WizardStep / WizardState / WizardCheckpoint types
  *   T-P3-E03-27: mergeResults (Partial<Record<string, MergeResult>>) added for section approval
  *   T-P3-E03-33: mergeResults included in WizardCheckpoint for persistence/resume
+ *   T-P3-E05-19: selectedTemplates string[] added for template picker pre-scaffold step
  */
 
 import type { ToolId } from '@/lib/scanner/types'
@@ -95,6 +96,13 @@ export interface WizardState {
    */
   mergeResults: Partial<Record<string, RichMergeResult>>
   /**
+   * Template ids selected in the TemplatePickerCompact during Phase 4.
+   * Applied as structural scaffold before the AI merge step.
+   * Empty array = fall back to blank-slate AI merge (no pre-scaffold).
+   * T-P3-E05-19
+   */
+  selectedTemplates: string[]
+  /**
    * Per-tool mode selections from the ToolModes wizard step.
    * Keys are ToolId values; values are 'cascade-managed' | 'independent'.
    * Only populated tools are tracked; absent keys imply the default (cascade-managed).
@@ -168,6 +176,8 @@ export interface WizardCheckpoint {
    * serde rename_all = "camelCase"). Until then this field is written/read by the TS layer only.
    */
   mergeResults: Partial<Record<string, RichMergeResult>>
+  /** T-P3-E05-19: serialized form of WizardState.selectedTemplates */
+  selectedTemplates: string[]
   toolModes: Partial<Record<ToolId, ToolMode>>
   archiveManifestPath: string | null
   /** Serialized form of WizardState.archivedTools (same shape — JSON-safe). */
@@ -195,6 +205,7 @@ export function createInitialState(): WizardState {
     detectedToolIds: null,
     mergeResult: null,
     mergeResults: {},
+    selectedTemplates: [],
     toolModes: {},
     archiveManifestPath: null,
     archivedTools: {},
@@ -224,6 +235,7 @@ export function stateToCheckpoint(state: WizardState): WizardCheckpoint {
     detectedToolIds: state.detectedToolIds,
     mergeResult: state.mergeResult,
     mergeResults: state.mergeResults,
+    selectedTemplates: state.selectedTemplates,
     toolModes: state.toolModes,
     archiveManifestPath: state.archiveManifestPath,
     archivedTools: state.archivedTools,
@@ -252,6 +264,7 @@ export function checkpointToState(checkpoint: WizardCheckpoint): WizardState {
     detectedToolIds: checkpoint.detectedToolIds ?? null,
     mergeResult: checkpoint.mergeResult,
     mergeResults: checkpoint.mergeResults ?? {},
+    selectedTemplates: checkpoint.selectedTemplates ?? [],
     toolModes: checkpoint.toolModes ?? {},
     archiveManifestPath: checkpoint.archiveManifestPath,
     archivedTools: checkpoint.archivedTools ?? {},
