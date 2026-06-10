@@ -1,0 +1,27 @@
+{
+  "id": "chatcmpl-groq-example-1234567890",
+  "object": "chat.completion",
+  "created": 1722000000,
+  "model": "llama-3.1-70b-versatile",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 14,
+    "completion_tokens": 9,
+    "total_tokens": 23,
+    "prompt_time": 0.002,
+    "completion_time": 0.004,
+    "total_time": 0.006
+  },
+  "x_groq": {
+    "id": "req_example12345"
+  }
+}

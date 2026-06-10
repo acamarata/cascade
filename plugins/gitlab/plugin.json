@@ -1,0 +1,23 @@
+{
+  "id": "com.cascade.gitlab",
+  "name": "GitLab",
+  "version": "0.1.0",
+  "description": "Fetches GitLab project issues via GraphQL API with cursor-based pagination and normalises them into DataItems for RAG ingestion.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "gitlab.wasm",
+  "kind": "DataSource",
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"],
+  "capabilities": ["net_outbound", "env_read"],
+  "permissions": {
+    "fs": [],
+    "net": [{"host": "gitlab.com", "ports": [443]}],
+    "env": [
+      {"name": "GITLAB_TOKEN"},
+      {"name": "GITLAB_URL"},
+      {"name": "GITLAB_PROJECT_PATH"},
+      {"name": "GITLAB_STATE"}
+    ]
+  }
+}

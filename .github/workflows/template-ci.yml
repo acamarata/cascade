@@ -1,0 +1,117 @@
+name: Template CI
+
+# Validates all bundled templates on every push/PR that touches:
+# - data/templates/   (template files or index)
+# - the cascade-core template module
+# - this workflow file itself
+#
+# Runs independently of the main CI workflow. Fast (<60s target).
+
+on:
+  push:
+    branches: [main, wip/rust-rewrite]
+    paths:
+      - "data/templates/**"
+      - "crates/cascade-core/src/templates/**"
+      - "crates/cascade-core/tests/template_validation.rs"
+      - ".github/workflows/template-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "data/templates/**"
+      - "crates/cascade-core/src/templates/**"
+      - "crates/cascade-core/tests/template_validation.rs"
+      - ".github/workflows/template-ci.yml"
+
+concurrency:
+  group: template-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-D warnings"
+  RUSTC_WRAPPER: sccache
+
+jobs:
+  validate:
+    name: validate-templates
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Step 1: JSON Schema validation via ajv-cli ──────────────────────────
+      # Validates data/templates/index.json against index.schema.json.
+      # Must pass before the Rust step to catch schema regressions early.
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli@5
+
+      - name: Validate index.json against schema
+        run: |
+          ajv validate \
+            -s data/templates/schema/index.schema.json \
+            -d data/templates/index.json \
+            --spec=draft7 \
+            --strict=false
+          echo "index.json schema check passed"
+
+      # ── Step 2: Verify index.json file references exist ─────────────────────
+      # Inline node script: reads index.json, checks each "file" entry exists.
+
+      - name: Check index.json file references exist
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const index = JSON.parse(fs.readFileSync('data/templates/index.json', 'utf8'));
+          const missing = [];
+          for (const entry of index.templates || []) {
+            const full = path.join('data/templates', entry.file);
+            if (!fs.existsSync(full)) missing.push(entry.file);
+          }
+          if (missing.length > 0) {
+            console.error('index.json references missing files:', missing);
+            process.exit(1);
+          }
+          console.log('All', (index.templates || []).length, 'index.json file references exist.');
+          "
+
+      # ── Step 3: Rust toolchain + sccache ────────────────────────────────────
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      # ── Step 4: Cargo integration test ──────────────────────────────────────
+      # Loads all .md files from data/templates/ via TemplateRegistry and asserts
+      # every file parses cleanly. Also checks index.json file entries exist.
+
+      - name: Run template validation tests
+        run: cargo test -p cascade-core --test template_validation
+
+      # ── Step 5: Summary ─────────────────────────────────────────────────────
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Template CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          TMPL_COUNT=$(find data/templates -name '*.md' | wc -l | tr -d ' ')
+          INDEX_COUNT=$(node -e "const i=JSON.parse(require('fs').readFileSync('data/templates/index.json','utf8')); console.log((i.templates||[]).length)")
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| .md files in data/templates/ | \`${TMPL_COUNT}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| index.json entries | \`${INDEX_COUNT}\` |" >> $GITHUB_STEP_SUMMARY

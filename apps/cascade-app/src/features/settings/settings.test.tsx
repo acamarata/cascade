@@ -1,0 +1,280 @@
+// @vitest-environment jsdom
+/**
+ * Purpose: Unit tests for settings panel helpers and tab smoke tests.
+ *   Tests: cron validation, env/args parsing, isSectionDirty, tab renders.
+ * Inputs:  None — pure unit tests; no real IPC calls (Tauri mocked).
+ * Constraints: No real Tauri context required. Vitest jsdom environment.
+ * SPORT: MASTER-COMPONENTS.md — settings tests — T-P3-E07-15/16
+ */
+
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import '@testing-library/jest-dom'
+
+// ---------------------------------------------------------------------------
+// Mocks — must come before any import that touches @tauri-apps/api/core
+// ---------------------------------------------------------------------------
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi
+    .fn()
+    .mockResolvedValue({
+      schemaVersion: '2',
+      library: { defaultHarnessTargets: [] },
+      context: {},
+      projectMap: {},
+      providers: { google: [] },
+      geminiPool: { keys: [], proxyPort: 3761, enabled: false },
+      harnessBridges: {},
+      hooks: [],
+      scheduledTasks: [],
+      plugins: { enabled: [], config: {} },
+      widgets: { positions: {} },
+      mcpServers: [],
+      vaultDisplay: { showMasked: false },
+      telemetry: { enabled: false },
+    }),
+}))
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  open: vi.fn().mockResolvedValue(undefined),
+}))
+
+// ---------------------------------------------------------------------------
+// Imports (after mocks)
+// ---------------------------------------------------------------------------
+
+import { isValidCron } from './ScheduledTasksTab'
+import { envToText, textToEnv, argsToText, textToArgs } from './McpServersTab'
+import { isSectionDirty, defaultSettings } from './useSettings'
+import { HOOK_EVENTS } from './HooksTab'
+
+// ---------------------------------------------------------------------------
+// isValidCron
+// ---------------------------------------------------------------------------
+
+describe('isValidCron', () => {
+  it('accepts standard 5-field expression', () => {
+    expect(isValidCron('0 2 * * *')).toBe(true)
+  })
+
+  it('accepts 6-field expression', () => {
+    expect(isValidCron('0 0 2 * * *')).toBe(true)
+  })
+
+  it('accepts step values', () => {
+    expect(isValidCron('*/5 * * * *')).toBe(true)
+  })
+
+  it('rejects alphabetic fields', () => {
+    expect(isValidCron('foo * * * *')).toBe(false)
+  })
+
+  it('rejects too few fields', () => {
+    expect(isValidCron('* * * *')).toBe(false)
+  })
+
+  it('rejects too many fields', () => {
+    expect(isValidCron('0 0 * * * * *')).toBe(false)
+  })
+
+  it('rejects empty string', () => {
+    expect(isValidCron('')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// envToText / textToEnv round-trip
+// ---------------------------------------------------------------------------
+
+describe('envToText / textToEnv', () => {
+  it('round-trips a simple env record', () => {
+    const env = { HOME: '/root', NODE_ENV: 'production' }
+    const text = envToText(env)
+    expect(textToEnv(text)).toEqual(env)
+  })
+
+  it('handles values containing "="', () => {
+    const env = { URL: 'http://example.com?a=1&b=2' }
+    expect(textToEnv(envToText(env))).toEqual(env)
+  })
+
+  it('skips lines without "="', () => {
+    expect(textToEnv('VALID=ok\nnot-a-pair\nALSO=yes')).toEqual({ VALID: 'ok', ALSO: 'yes' })
+  })
+
+  it('produces empty object from empty string', () => {
+    expect(textToEnv('')).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// argsToText / textToArgs round-trip
+// ---------------------------------------------------------------------------
+
+describe('argsToText / textToArgs', () => {
+  it('round-trips an args array', () => {
+    const args = ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
+    expect(textToArgs(argsToText(args))).toEqual(args)
+  })
+
+  it('filters empty segments', () => {
+    expect(textToArgs(',foo,,bar,')).toEqual(['foo', 'bar'])
+  })
+
+  it('trims whitespace', () => {
+    expect(textToArgs('  a ,  b  , c  ')).toEqual(['a', 'b', 'c'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isSectionDirty
+// ---------------------------------------------------------------------------
+
+describe('isSectionDirty', () => {
+  const base = defaultSettings()
+
+  it('returns false when section unchanged', () => {
+    expect(isSectionDirty(base, base, 'providers')).toBe(false)
+  })
+
+  it('returns true when providers section mutated', () => {
+    const mutated = { ...base, providers: { ...base.providers, anthropic: 'sk-ant-test' } }
+    expect(isSectionDirty(base, mutated, 'providers')).toBe(true)
+  })
+
+  it('returns false when different section mutated', () => {
+    const mutated = {
+      ...base,
+      hooks: [{ id: '1', event: 'SessionStart', command: 'echo', enabled: true }],
+    }
+    expect(isSectionDirty(base, mutated, 'providers')).toBe(false)
+  })
+
+  it('returns false when either is null', () => {
+    expect(isSectionDirty(null, base, 'providers')).toBe(false)
+    expect(isSectionDirty(base, null, 'providers')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HOOK_EVENTS
+// ---------------------------------------------------------------------------
+
+describe('HOOK_EVENTS', () => {
+  it('contains all five lifecycle events', () => {
+    expect(HOOK_EVENTS).toContain('SessionStart')
+    expect(HOOK_EVENTS).toContain('UserPromptSubmit')
+    expect(HOOK_EVENTS).toContain('PreToolUse')
+    expect(HOOK_EVENTS).toContain('PostToolUse')
+    expect(HOOK_EVENTS).toContain('Stop')
+    expect(HOOK_EVENTS).toHaveLength(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ProvidersTab smoke test
+// ---------------------------------------------------------------------------
+
+describe('ProvidersTab', () => {
+  it('renders Anthropic / OpenAI / Codex inputs', async () => {
+    const { ProvidersTab } = await import('./ProvidersTab')
+    const draft = defaultSettings().providers
+    render(
+      <ProvidersTab
+        draft={draft}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    // Use getAllByRole to find the text inputs (password type) by their ids.
+    expect(document.getElementById('anthropic-key')).toBeInTheDocument()
+    expect(document.getElementById('openai-key')).toBeInTheDocument()
+    expect(document.getElementById('codex-key')).toBeInTheDocument()
+  })
+
+  it('uses type=password for API key inputs (no logging)', async () => {
+    const { ProvidersTab } = await import('./ProvidersTab')
+    render(
+      <ProvidersTab
+        draft={defaultSettings().providers}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const anthropicInput = document.getElementById('anthropic-key')
+    expect(anthropicInput).toHaveAttribute('type', 'password')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HooksTab smoke test
+// ---------------------------------------------------------------------------
+
+describe('HooksTab', () => {
+  it('renders empty state message', async () => {
+    const { HooksTab } = await import('./HooksTab')
+    render(
+      <HooksTab
+        draft={[]}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/no hooks configured/i)).toBeInTheDocument()
+  })
+
+  it('calls onUpdate with new row on Add click', async () => {
+    const { HooksTab } = await import('./HooksTab')
+    const onUpdate = vi.fn()
+    render(
+      <HooksTab
+        draft={[]}
+        isSaving={false}
+        error={null}
+        onUpdate={onUpdate}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText(/add hook/i))
+    expect(onUpdate).toHaveBeenCalledOnce()
+    const arg = onUpdate.mock.calls[0][0] as unknown[]
+    expect(Array.isArray(arg)).toBe(true)
+    expect(arg).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// McpServersTab smoke — env parsing edge cases
+// ---------------------------------------------------------------------------
+
+describe('McpServersTab smoke', () => {
+  it('renders empty state message', async () => {
+    const { McpServersTab } = await import('./McpServersTab')
+    render(
+      <McpServersTab
+        draft={[]}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/no mcp servers configured/i)).toBeInTheDocument()
+  })
+})

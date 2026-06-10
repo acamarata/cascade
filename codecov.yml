@@ -1,0 +1,20 @@
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+comment:
+  layout: "reach,diff,flags,components"
+
+flags:
+  cascade-types:
+    target: 90%
+    threshold: 5%
+  cascade-core:
+    target: 80%
+    threshold: 5%
+  cascade-rag:
+    target: 75%
+    threshold: 5%
+  cascade-daemon:
+    informational: true

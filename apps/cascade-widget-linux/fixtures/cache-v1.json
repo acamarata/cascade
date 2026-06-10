@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-31T12:00:00Z",
+  "quota": {
+    "t0": {
+      "pct_used": 42,
+      "model": "gemini-flash"
+    },
+    "t1": {
+      "pct_used": 15,
+      "model": "gpt-5.5"
+    },
+    "t2": {
+      "pct_used": 67,
+      "model": "sonnet"
+    },
+    "t3": {
+      "pct_used": 8,
+      "model": "haiku"
+    }
+  },
+  "inbox": {
+    "unread": 3
+  },
+  "agents": {
+    "active": 2
+  }
+}

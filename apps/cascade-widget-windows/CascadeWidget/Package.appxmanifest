@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Package.appxmanifest — Cascade Widget Provider
+  Purpose:  Declares the Windows Widget Board provider extension, app identity,
+            and required capabilities for the CascadeWidget WinUI 3 app.
+  Constraints:
+    - Identity/@Name MUST be "dev.cascade.widget" — T-P2-E06-08 Adaptive Card
+      registration uses this exact AppId.
+    - WidgetProvider/@Id must match the AppId used by the Widget Board host.
+    - Capabilities: runFullTrust required for COM out-of-process server;
+      UserAccountInformation allows reading display name for personalised labels.
+  SPORT: cascade/apps/cascade-widget-windows
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  IgnorableNamespaces="mp uap3 uap10 rescap com">
+
+  <Identity
+    Name="dev.cascade.widget"
+    Publisher="CN=Aric Camarata, O=acamarata, C=US"
+    Version="1.0.0.0" />
+
+  <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000"
+                    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
+  <Properties>
+    <DisplayName>Cascade</DisplayName>
+    <PublisherDisplayName>acamarata</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="$targetentrypoint$">
+
+      <uap:VisualElements
+        DisplayName="Cascade"
+        Description="AI fleet status for the Windows Widget Board."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+
+        <!--
+          Windows Widget Board provider extension.
+          Id MUST equal "dev.cascade.widget" — used as the AppId in the
+          Adaptive Card template (T-P2-E06-08) and in WidgetProvider registration.
+
+          DisplayName / Description are shown in the widget picker and "Add widgets" panel.
+
+          Widget/@Id "CascadeStatus" is the identifier the Widget Board uses to
+          distinguish this widget type from others provided by the same provider.
+          Size Small (2×2 grid) and Size Medium (4×2 grid) are the minimum required
+          sizes for a useful status display; Large is optional.
+        -->
+        <uap3:Extension Category="windows.widgetProvider">
+          <uap3:WidgetProvider>
+            <uap3:WidgetProviderIcons>
+              <uap3:Icon Path="Assets\cascade-icon.png" />
+            </uap3:WidgetProviderIcons>
+            <uap3:Widgets>
+              <uap3:Widget
+                Id="dev.cascade.widget"
+                DisplayName="Cascade"
+                Description="Shows live AI-fleet quota and tier status from the cascade daemon.">
+                <uap3:Capabilities>
+                  <uap3:Capability>
+                    <uap3:Size Name="Small" />
+                  </uap3:Capability>
+                  <uap3:Capability>
+                    <uap3:Size Name="Medium" />
+                  </uap3:Capability>
+                </uap3:Capabilities>
+              </uap3:Widget>
+            </uap3:Widgets>
+          </uap3:WidgetProvider>
+        </uap3:Extension>
+
+        <!--
+          COM server registration for the OOP widget provider.
+          The Widget Board host activates this CLSID when it needs a widget instance.
+          ClassId must match the value returned by CascadeWidgetProvider::GetProviderId().
+        -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="CascadeWidget.exe"
+                           DisplayName="Cascade Widget Provider"
+                           LaunchAndActivationPermission="...">
+              <com:Class Id="A1B2C3D4-E5F6-7890-ABCD-000000000001"
+                         DisplayName="CascadeWidgetProvider" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+
+      </Extensions>
+
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Required for WinUI 3 desktop apps packaged with MSIX -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- Allows reading the signed-in account display name for personalisation -->
+    <uap:Capability Name="userAccountInformation" />
+  </Capabilities>
+
+</Package>

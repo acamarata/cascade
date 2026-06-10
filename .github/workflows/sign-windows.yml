@@ -1,0 +1,49 @@
+name: Sign Windows (Authenticode via SignPath.io)
+
+# Purpose: Reusable workflow that submits a Windows MSI artifact to SignPath.io
+#          for Authenticode signing. Called by release.yml when SIGNPATH_API_TOKEN
+#          is set in repository secrets (gated — skipped in open-source forks).
+# Inputs:
+#   artifact-name: the GitHub Actions artifact name containing the MSI (default: cascade-windows-msi)
+# Secrets required (set via `gh secret set`):
+#   SIGNPATH_API_TOKEN           - SignPath project API token
+#   SIGNPATH_ORGANIZATION_ID     - SignPath organization ID (UUID)
+# See: .github/docs/code-signing.md § Windows (Authenticode)
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: "GitHub artifact name containing the MSI to sign"
+        type: string
+        default: "cascade-windows-msi"
+    secrets:
+      SIGNPATH_API_TOKEN:
+        required: true
+      SIGNPATH_ORGANIZATION_ID:
+        required: true
+
+jobs:
+  sign-windows:
+    name: Authenticode sign (SignPath.io)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Submit signing request to SignPath.io
+        # signpath/github-action-submit-signing-request@v1.1
+        # Authenticode-signs the MSI via the SignPath FOSS free tier.
+        # The action uploads the artifact, waits for approval + signing, and
+        # downloads the signed artifact back into the workspace.
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          # artifact-configuration-slug must match the configuration created in
+          # the SignPath project for Cascade (see .github/signpath-policy.yml).
+          artifact-configuration-slug: cascade-msi
+          # signing-policy-slug must match a policy configured in the SignPath project.
+          # "release-signing" is the conventional slug for production release policies.
+          signing-policy-slug: release-signing
+          github-artifact-name: ${{ inputs.artifact-name }}
+          wait-for-completion: true
+          output-artifact-directory: signed-msi

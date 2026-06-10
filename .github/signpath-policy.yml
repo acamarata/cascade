@@ -1,0 +1,43 @@
+# signpath-policy.yml — SignPath.io artifact configuration for Cascade
+#
+# Purpose: Documents the artifact configuration that must be created in the
+#          SignPath project "cascade" to match the MSI produced by release.yml.
+#          This file is a reference/spec — the actual configuration lives in
+#          the SignPath dashboard (https://app.signpath.io).
+#
+# The artifact-configuration-slug referenced in sign-windows.yml is: cascade-msi
+# The signing-policy-slug referenced in sign-windows.yml is: release-signing
+#
+# SignPath FOSS program enrollment: see .github/docs/code-signing.md § Windows
+#
+# How to create this configuration in SignPath:
+#   1. Log in to https://app.signpath.io
+#   2. Select your organization → Projects → cascade
+#   3. Go to Artifact Configurations → New
+#   4. Set slug: cascade-msi
+#   5. Set the artifact file pattern to match the MSI filename produced by
+#      the Tauri bundler:
+#        - File pattern: *.msi
+#        - Signing method: Authenticode
+#   6. Save and publish the configuration.
+#
+# Expected MSI artifact path pattern (Tauri 2 Windows bundler output):
+#   target/release/bundle/msi/Cascade_*.msi
+#
+# Artifact configuration (logical spec — replicate in SignPath dashboard):
+
+artifact_configuration:
+  slug: cascade-msi
+  description: "Cascade Windows installer (MSI) — Authenticode signing"
+  files:
+    - pattern: "*.msi"
+      signing_method: authenticode
+      # Authenticode signature uses SHA-256 digest algorithm.
+      # A timestamp is embedded from a trusted RFC 3161 timestamp authority.
+
+signing_policy:
+  slug: release-signing
+  description: "Production release signing policy for Cascade"
+  # The release-signing policy requires an approver in the SignPath project.
+  # For FOSS tier: the project owner is the approver.
+  # Signing is triggered automatically when the GitHub Actions workflow submits.

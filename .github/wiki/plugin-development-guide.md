@@ -1,0 +1,677 @@
+# Plugin Development Guide
+
+Cascade plugins are compiled to WebAssembly (WASM) and run inside the Cascade host's sandbox. They extend Cascade with new data sources, AI tools, GUI widgets, embedding providers, and autonomous agents.
+
+This guide takes you from a blank directory to a tested, installed plugin.
+
+---
+
+## Overview
+
+Every plugin is a `.wasm` binary paired with a `plugin.json` manifest. The host loads the binary into a wasmtime sandbox at startup and calls into it via a JSON-string ABI. Plugins never access the host process directly. They request capabilities in the manifest; anything not declared is denied.
+
+The Plugin Development Kit (`cascade-pdk`) provides the guest-side types, the `#[cascade_plugin]` macro, and ergonomic wrappers for the host-import functions.
+
+---
+
+## Plugin Types
+
+There are five plugin kinds. Each maps to one capability surface on the `Plugin` trait.
+
+| Kind | Trait method to override | What the host uses it for |
+|---|---|---|
+| `DataSource` | `fetch_items()` | Feed documents into the RAG pipeline (e.g. GitHub issues, Linear tickets, Notion pages) |
+| `ChatTool` | `on_tool_call()` | Expose a callable tool to the AI assistant |
+| `Widget` | `render()` | Render a read-only panel in the Cascade desktop GUI |
+| `Provider` | `embed()` | Replace or augment the built-in BGE-M3 embedding model |
+| `Agent` | `run_agent()` | Run a sub-agent step within a Cascade agent workflow |
+
+You override exactly the methods your kind needs. All other methods default to `Err(PluginError::NotImplemented)`.
+
+---
+
+## Prerequisites
+
+You need:
+
+- **Rust toolchain** (`rustup`): [rustup.rs](https://rustup.rs)
+- **wasm32-wasip1 target:**
+  ```bash
+  rustup target add wasm32-wasip1
+  ```
+- **Cascade CLI:**
+  ```bash
+  cargo install cascade-cli
+  ```
+
+Check everything is in place:
+
+```bash
+rustc --version
+cascade --version
+rustup target list --installed | grep wasm32
+```
+
+---
+
+## Quick Start
+
+Five commands take you from zero to a loaded plugin.
+
+```bash
+# 1. Scaffold a new plugin project
+cascade plugin new my-tool --kind ChatTool
+
+# 2. Move into the generated directory
+cd my-tool
+
+# 3. Build the WASM binary
+./build.sh
+
+# 4. Run the test suite
+cascade plugin test
+
+# 5. Install and verify
+cascade plugin enable com.example.my-tool
+cascade plugin list
+```
+
+The scaffolded project already contains a working plugin that compiles and passes its tests. Replace the `on_tool_call` body with your own logic.
+
+### What the scaffold generates
+
+```
+my-tool/
+  Cargo.toml          # Workspace-compatible crate with cdylib crate-type
+  build.sh            # cargo build --target wasm32-wasip1
+  plugin.json         # Manifest — edit id, description, permissions
+  src/
+    lib.rs            # Plugin struct + impl Plugin
+```
+
+The `plugin.json` uses `com.example.my-tool` as the placeholder `id`. Change this to a reverse-domain ID you own before distributing the plugin.
+
+---
+
+## plugin.json Reference
+
+Every plugin directory must contain `plugin.json`. The host reads this file before loading the WASM binary. Missing or invalid fields cause a load error with an actionable message.
+
+### Complete example
+
+```json
+{
+  "$schema": "https://cascade.dev/schemas/plugin/v1",
+  "id": "com.example.my-tool",
+  "name": "my-tool",
+  "version": "0.1.0",
+  "description": "A short one-line description of what this plugin does.",
+  "author": "Your Name",
+  "license": "MIT",
+  "entry_wasm": "target/wasm32-wasip1/debug/my_tool.wasm",
+  "kind": "ChatTool",
+  "min_cascade_version": ">=0.1.0",
+  "permissions": {
+    "fs": [],
+    "net": [],
+    "env": []
+  },
+  "capabilities": [],
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"]
+}
+```
+
+### All fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Reverse-domain identifier. Pattern: `^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$`. Must be unique in the plugin registry. |
+| `name` | string | yes | Display name shown in `cascade plugin list`. |
+| `version` | string | yes | Semver string, e.g. `"1.2.3"`. |
+| `description` | string | yes | One-line description (shown in the plugin browser). |
+| `author` | string | yes | Author name or email. |
+| `license` | string | yes | SPDX identifier, e.g. `"MIT"` or `"Apache-2.0"`. |
+| `entry_wasm` | string | yes | Relative path from the plugin directory to the compiled `.wasm` file. Absolute paths are rejected. |
+| `kind` | string | yes | One of `DataSource`, `ChatTool`, `Widget`, `Provider`, `Agent`. |
+| `min_cascade_version` | string | yes | Semver requirement, e.g. `">=0.1.0"`. |
+| `permissions` | object | no | Declared permissions (see Permissions Model below). Defaults to all-empty (deny all). |
+| `capabilities` | array | no | Capability token list (subset of `fs_read`, `fs_write`, `net_outbound`, `env_read`). |
+| `exports` | array | no | WASM export names. Normally `["cascade_plugin_call", "alloc", "dealloc"]`. Generated by `#[cascade_plugin]`. |
+
+---
+
+## Permissions Model
+
+All permissions are **deny-by-default**. A plugin with an empty `permissions` block gets no filesystem access, no network access, and no environment variable access.
+
+You request each access type explicitly in `plugin.json`. The host enforces these limits inside the wasmtime sandbox. A plugin that tries to open a socket to a host not listed in `net` will receive an error — there is no way to bypass this from guest code.
+
+### Filesystem permissions
+
+```json
+"permissions": {
+  "fs": [
+    { "path": "data/", "read": true, "write": false },
+    { "path": "$HOME/.config/cascade", "read": true, "write": true }
+  ]
+}
+```
+
+- `path` must be a relative path or one of the explicit tokens `$HOME`, `$XDG_DATA_HOME`.
+- Absolute paths (e.g. `/etc`) are rejected at load time.
+- `read` and `write` are independent; a plugin can get read-only access to a directory.
+
+### Network permissions
+
+```json
+"permissions": {
+  "net": [
+    { "host": "api.github.com", "ports": [443] },
+    { "host": "api.linear.app", "ports": [] }
+  ]
+}
+```
+
+- Declare each host individually. Wildcards (`"*"`) are rejected.
+- `ports`: an explicit list of allowed ports. An empty list means all ports on that host.
+- Requests to undeclared hosts fail inside the sandbox.
+
+### Environment variable permissions
+
+```json
+"permissions": {
+  "env": [
+    { "name": "GITHUB_TOKEN" },
+    { "name": "HOME" }
+  ]
+}
+```
+
+- Declare each variable by name.
+- The plugin can read declared variables via `std::env::var` on non-wasm targets, or via a `kv_get` call if injected by the host at startup.
+
+### Capability tokens
+
+The `capabilities` array is a supplementary list of string tokens. Valid tokens:
+
+| Token | Meaning |
+|---|---|
+| `fs_read` | Plugin reads from declared `fs` paths |
+| `fs_write` | Plugin writes to declared `fs` paths |
+| `net_outbound` | Plugin makes outbound HTTP requests to declared `net` hosts |
+| `env_read` | Plugin reads declared `env` variables |
+
+Tokens not in the allowed vocabulary cause a load error.
+
+---
+
+## PDK API Reference
+
+Add `cascade-pdk` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+cascade-pdk = "0.1"
+
+[lib]
+crate-type = ["cdylib"]
+```
+
+### The `#[cascade_plugin]` macro
+
+Apply this attribute to your plugin struct. It generates:
+
+- `cascade_plugin_call(method_ptr, method_len, payload_ptr, payload_len) -> i64` — the primary WASM entry point the host calls.
+- `alloc(len: usize) -> *mut u8` — lets the host allocate guest memory before passing a JSON argument string.
+- `dealloc(ptr: *mut u8, len: usize)` — lets the host free the return value after it has read it.
+
+You never call these functions directly. The host and the macro wire them together.
+
+```rust
+use cascade_pdk::{cascade_plugin, Plugin, PluginKind};
+
+#[cascade_plugin]
+pub struct MyPlugin;
+
+impl Plugin for MyPlugin {
+    fn name(&self) -> &str { "my-plugin" }
+    fn kind(&self) -> PluginKind { PluginKind::ChatTool }
+    // ...
+}
+```
+
+### The `Plugin` trait
+
+The full trait signature:
+
+```rust
+pub trait Plugin {
+    fn name(&self) -> &str;
+    fn kind(&self) -> PluginKind;
+    fn version(&self) -> &str { "0.1.0" }
+
+    // DataSource
+    fn fetch_items(&self, args: DataSourceFetchArgs)
+        -> Result<DataSourcePage, PluginError>;
+
+    // ChatTool
+    fn on_tool_call(&self, call: ToolCall)
+        -> Result<ToolResult, PluginError>;
+
+    // Widget
+    fn render(&self)
+        -> Result<WidgetData, PluginError>;
+
+    // Provider
+    fn embed(&self, texts: Vec<String>, opts: EmbedOpts)
+        -> Result<Vec<Embedding>, PluginError>;
+
+    // Agent
+    fn run_agent(&self, ctx: AgentContext)
+        -> Result<AgentResponse, PluginError>;
+
+    // Chunker (RAG override)
+    fn chunk_document(&self, doc: Document, opts: ChunkOpts)
+        -> Result<Vec<Chunk>, PluginError>;
+
+    // Retriever (RAG override)
+    fn retrieve(&self, query: String, opts: RetrieveOpts)
+        -> Result<Vec<RetrievalResult>, PluginError>;
+}
+```
+
+All methods except `name()` and `kind()` have default implementations that return `Err(PluginError::NotImplemented)`. Override only the methods your kind uses.
+
+### Host imports
+
+The host exposes three functions to guest plugins via the `cascade:plugins/host` import module. The PDK provides safe wrappers in `cascade_pdk::host_imports`.
+
+#### Logging
+
+```rust
+use cascade_pdk::host_imports::{log_info, log_debug, log_warn};
+
+log_info("Fetching items from API");
+log_debug("cursor = None, first page");
+log_warn("rate limit approaching");
+```
+
+Log output appears in the Cascade host log stream and in `cascade plugin test` output. On non-wasm32 targets (unit tests) these calls are no-ops.
+
+#### KV store
+
+Each plugin has a scoped key-value store. Keys and values are UTF-8 strings.
+
+```rust
+use cascade_pdk::host_imports::{kv_get, kv_set};
+
+// Write
+kv_set("last-sync", "2026-01-01T00:00:00Z");
+
+// Read (returns Option<String>)
+if let Some(ts) = kv_get("last-sync") {
+    log_info(&format!("Last sync: {ts}"));
+}
+```
+
+The KV store is scoped to the plugin's `id`. It persists across host restarts and is backed by SQLite.
+
+#### HTTP fetch
+
+Outbound HTTP is gated by the `net` permission block. Call `http_fetch` (available via the host import module on wasm32 targets):
+
+```rust
+// Example (requires `net_outbound` capability + host declared in plugin.json)
+let response = cascade_pdk::http::fetch("https://api.example.com/v1/items")?;
+```
+
+On non-wasm32 targets, the PDK test harness provides a stub that returns configurable fixture data.
+
+---
+
+## ABI Notes
+
+- The JSON-string ABI passes all arguments and return values as UTF-8 JSON strings via host-managed linear memory.
+- The host calls `alloc(n)` to reserve `n` bytes in guest memory, writes the JSON argument there, calls `cascade_plugin_call`, then calls `dealloc` after reading the return value.
+- Guest code must not retain pointers beyond the call boundary.
+- The `#[cascade_plugin]` macro handles all of this. You never write `unsafe` ABI code directly.
+- The host can execute multiple plugin calls in sequence on the same WASM instance but does not run plugin calls in parallel on the same instance.
+
+---
+
+## Sandbox and Security Model
+
+Cascade runs each plugin in a wasmtime instance with:
+
+- **Fuel limit**: a per-call instruction budget (default: 10 million instructions). Plugins that exceed the budget receive a `PluginError::FuelExhausted`. Long-running work should page across multiple calls via the cursor mechanism.
+- **WASI gating**: WASI syscalls are allowed only for the categories declared in the plugin's manifest. Network and filesystem access outside declared permissions fail at the WASI level, not at the Rust level.
+- **No ambient authority**: plugins cannot call back into the host except via the declared host imports (`log`, `kv_get`, `kv_set`, `http_fetch`).
+- **Memory isolation**: each plugin instance gets its own linear memory. A crash in one plugin does not affect the host or other plugins.
+- **Absolute paths rejected**: `entry_wasm` and `fs.path` must be relative. Absolute paths are rejected at manifest load time.
+
+---
+
+## Data Source Plugin Walkthrough
+
+The four first-party data source plugins in `plugins/` are the best code references for real-world DataSource plugins:
+
+| Plugin | Source | What it demonstrates |
+|---|---|---|
+| `github-issues` | `plugins/github-issues/` | Paginated GitHub REST API, `GITHUB_TOKEN` env permission |
+| `linear` | `plugins/linear/` | GraphQL API, `LINEAR_API_KEY` env permission, cursor pagination |
+| `gitlab` | `plugins/gitlab/` | GraphQL + wildcard host pattern (`*.gitlab.com`) |
+| `jira` | `plugins/jira/` | REST API v3, JQL queries, nested JSON mapping |
+
+### Minimal DataSource
+
+A DataSource plugin implements `fetch_items()`. The host calls it in a loop, passing the `next_cursor` from each response as the next `args.cursor`, until `next_cursor` is `None`.
+
+```rust
+use cascade_pdk::{
+    cascade_plugin, Plugin, PluginKind,
+    DataItem, DataSourceFetchArgs, DataSourcePage, PluginError,
+};
+
+#[cascade_plugin]
+pub struct MySource;
+
+impl Plugin for MySource {
+    fn name(&self) -> &str { "my-source" }
+    fn kind(&self) -> PluginKind { PluginKind::DataSource }
+
+    fn fetch_items(&self, args: DataSourceFetchArgs)
+        -> Result<DataSourcePage, PluginError>
+    {
+        // args.cursor: Option<String> — None on the first call.
+        // Use it to resume pagination (store a page token or offset).
+
+        let items = vec![DataItem {
+            id: "item-1".into(),
+            title: "My document title".into(),
+            body: "Document content goes here.".into(),
+            url: "https://example.com/item-1".into(),
+            labels: vec!["example".into()],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            source: "my-source:example".into(),
+            extra_json: "{}".into(),
+        }];
+
+        Ok(DataSourcePage {
+            items,
+            next_cursor: None, // None = no more pages
+        })
+    }
+}
+```
+
+### Pagination pattern
+
+```rust
+fn fetch_items(&self, args: DataSourceFetchArgs)
+    -> Result<DataSourcePage, PluginError>
+{
+    let page: u32 = args.cursor
+        .as_deref()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+
+    let items = fetch_page_from_api(page)?;
+    let next = if items.len() == PAGE_SIZE {
+        Some((page + 1).to_string())
+    } else {
+        None // last page
+    };
+
+    Ok(DataSourcePage { items, next_cursor: next })
+}
+```
+
+---
+
+## ChatTool Plugin
+
+A ChatTool plugin exposes a function the AI assistant can call. The host passes `call.args_json` (a JSON string matching your tool's schema) and returns `result.output` to the assistant.
+
+```rust
+use cascade_pdk::{
+    cascade_plugin, Plugin, PluginKind,
+    ToolCall, ToolResult, PluginError,
+};
+
+#[cascade_plugin]
+pub struct GreetTool;
+
+impl Plugin for GreetTool {
+    fn name(&self) -> &str { "greet" }
+    fn kind(&self) -> PluginKind { PluginKind::ChatTool }
+
+    fn on_tool_call(&self, call: ToolCall) -> Result<ToolResult, PluginError> {
+        // call.args_json: a JSON string the AI assembled from the tool schema.
+        // Deserialize with serde_json if your tool takes structured arguments.
+        let name = extract_name(&call.args_json).unwrap_or("World");
+        Ok(ToolResult {
+            call_id: call.call_id,
+            output: format!("Hello, {name}!"),
+            data_json: None, // optional structured data alongside the text output
+        })
+    }
+}
+```
+
+The `echo-tool` example (`examples/plugins/echo-tool/`) is a fully annotated reference with tests.
+
+---
+
+## Widget Plugin
+
+Widget plugins render read-only panels in the Cascade desktop GUI. The host polls `render()` on its own schedule (typically every few seconds).
+
+```rust
+use cascade_pdk::{cascade_plugin, Plugin, PluginKind, WidgetData, PluginError};
+
+#[cascade_plugin]
+pub struct StatusWidget;
+
+impl Plugin for StatusWidget {
+    fn name(&self) -> &str { "status-widget" }
+    fn kind(&self) -> PluginKind { PluginKind::Widget }
+
+    fn render(&self) -> Result<WidgetData, PluginError> {
+        Ok(WidgetData {
+            title: "Status".into(),
+            body: "All systems operational.".into(),
+            metadata: "{}".into(),
+        })
+    }
+}
+```
+
+Keep `render()` fast. No blocking I/O. If you need fresh data, read it from the KV store (populated by a background DataSource plugin, for example).
+
+The `clock-widget` example (`examples/plugins/clock-widget/`) shows the WASI clock pattern.
+
+---
+
+## Development Workflow
+
+### Hot-reload
+
+When `cascaded` is running, you can reload a plugin without restarting the daemon:
+
+```bash
+# Rebuild
+./build.sh
+
+# Copy the updated WASM into place
+cp target/wasm32-wasip1/debug/my_tool.wasm ~/.cascade/plugins/com.example.my-tool/
+
+# The daemon detects the file change and reloads the plugin automatically.
+# Check the log to confirm:
+cascade plugin info com.example.my-tool
+```
+
+The daemon watches `~/.cascade/plugins/` with inotify/FSEvents. Any `.wasm` file change in an enabled plugin directory triggers a reload within one second.
+
+### Build script
+
+`build.sh` (generated by `cascade plugin new`) runs:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --target wasm32-wasip1
+```
+
+Pass `--release` for a smaller binary:
+
+```bash
+cargo build --target wasm32-wasip1 --release
+```
+
+Release builds can be 3-10x smaller and 2-5x faster due to LLVM optimizations.
+
+### Testing
+
+`cascade plugin test` runs two checks in sequence:
+
+1. `cargo build --target wasm32-wasip1` — verifies the plugin compiles for the WASM target.
+2. `cargo test` — runs the unit tests on the host target (no WASM sandbox overhead).
+
+```bash
+cascade plugin test
+# Output:
+# Building wasm32-wasip1...  OK
+# Running tests...
+#   test plugin_name_is_correct ... ok
+#   test plugin_kind_is_correct ... ok
+# PASS (2 tests)
+```
+
+Pass `--release` to build in release mode:
+
+```bash
+cascade plugin test --release
+```
+
+Pass `--skip-build` to skip the WASM build step when you only want to run unit tests:
+
+```bash
+cascade plugin test --skip-build
+```
+
+### Managing plugins
+
+```bash
+# List all installed plugins with their status
+cascade plugin list
+
+# Show detailed manifest info for one plugin
+cascade plugin info com.example.my-tool
+
+# Enable a disabled plugin
+cascade plugin enable com.example.my-tool
+
+# Disable without uninstalling (writes a .disabled marker file)
+cascade plugin disable com.example.my-tool
+
+# Override the plugins directory (useful in CI)
+cascade plugin list --plugins-dir ./test-plugins/
+```
+
+---
+
+## Installing a Plugin
+
+The plugin directory structure the host expects:
+
+```
+~/.cascade/plugins/
+  com.example.my-tool/
+    plugin.json
+    my_tool.wasm       # value of entry_wasm in plugin.json
+```
+
+The directory name does not have to match the `id` field, but using the `id` is the convention and avoids collisions.
+
+```bash
+# Create the plugin directory
+mkdir -p ~/.cascade/plugins/com.example.my-tool
+
+# Copy the built WASM and manifest
+cp target/wasm32-wasip1/debug/my_tool.wasm ~/.cascade/plugins/com.example.my-tool/
+cp plugin.json ~/.cascade/plugins/com.example.my-tool/
+
+# Confirm the host sees it
+cascade plugin list
+```
+
+---
+
+## Troubleshooting
+
+### `error: target wasm32-wasip1 not installed`
+
+Run `rustup target add wasm32-wasip1`. If that fails, update your Rust toolchain first: `rustup update stable`.
+
+### `ManifestError: id must match pattern`
+
+Plugin IDs must be reverse-domain format with at least two components (`com.example.my-plugin`). A bare name like `my-plugin` is not valid. Update the `id` field in `plugin.json`.
+
+### `ManifestError: absolute path in entry_wasm`
+
+`entry_wasm` must be a relative path from the plugin directory. Change `/home/user/.cascade/plugins/foo/foo.wasm` to just `foo.wasm`.
+
+### `ManifestError: schema version N is not supported`
+
+The plugin was compiled against a newer version of the PDK than your Cascade installation supports. Update Cascade: `cargo install cascade-cli --force`.
+
+### `ManifestError: unknown capability token`
+
+The `capabilities` array contains a token that is not in the allowed vocabulary. Valid tokens: `fs_read`, `fs_write`, `net_outbound`, `env_read`. Check for typos.
+
+### `PluginError::FuelExhausted`
+
+The plugin exceeded its per-call instruction budget. Split work into smaller pages via the cursor mechanism in `fetch_items`, or reduce per-call computation.
+
+### Plugin does not appear in `cascade plugin list`
+
+Check that `plugin.json` is valid JSON (`jq . plugin.json`). Check that `entry_wasm` points to an existing file. Check that the plugin directory is inside `~/.cascade/plugins/` (or the directory passed via `--plugins-dir`).
+
+### Unit tests pass but the WASM build fails
+
+Common causes:
+
+- `std::fs` or `std::net` used directly. These are not available in the WASM sandbox. Use the PDK host imports instead.
+- `std::thread` or `std::sync::Mutex` used. WASM is single-threaded. Remove threading.
+- A transitive dependency uses `proc_macro` in a way that requires the host target. Check `cargo build --target wasm32-wasip1 2>&1` for the specific crate.
+
+### `cascade plugin test` prints `wasm32-wasip1 toolchain absent — skipping WASM build`
+
+This means `cargo build --target wasm32-wasip1` exited because the target is not installed. Run `rustup target add wasm32-wasip1` and retry.
+
+---
+
+## Examples
+
+| Example | Path | Kind |
+|---|---|---|
+| hello-world | `examples/plugins/hello-world/` | DataSource |
+| echo-tool | `examples/plugins/echo-tool/` | ChatTool |
+| clock-widget | `examples/plugins/clock-widget/` | Widget |
+| github-issues | `plugins/github-issues/` | DataSource (first-party) |
+| linear | `plugins/linear/` | DataSource (first-party) |
+| gitlab | `plugins/gitlab/` | DataSource (first-party) |
+| jira | `plugins/jira/` | DataSource (first-party) |
+
+The three `examples/plugins/` directories are annotated line by line and are the best starting point for new plugin authors. The four `plugins/` directories are production code with full test suites and serve as references for real-world patterns (pagination, environment variables, GraphQL, REST).
+
+---
+
+## Further Reading
+
+- [Architecture](Architecture.md) — how the plugin loader fits into the daemon stack
+- [Security](Security.md) — sandbox model, WASI gating, and threat model
+- PDK source: `crates/cascade-pdk/`
+- Plugin manifest schema: `crates/cascade-plugins/src/manifest.rs`
+- CLI source: `crates/cascade-cli/src/cmd/plugin.rs`

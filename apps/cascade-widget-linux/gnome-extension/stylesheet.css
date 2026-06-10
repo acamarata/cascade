@@ -1,0 +1,74 @@
+/* Cascade Fleet Dashboard — GNOME Shell extension styles */
+
+.cascade-panel-button {
+  padding: 0 6px;
+  spacing: 4px;
+}
+
+.cascade-panel-label {
+  font-size: 11px;
+  color: #ffffff;
+}
+
+.cascade-panel-label.warning {
+  color: #f9c74f;
+}
+
+.cascade-panel-label.critical {
+  color: #f94144;
+}
+
+.cascade-popup {
+  min-width: 280px;
+  padding: 12px;
+}
+
+.cascade-popup-title {
+  font-weight: bold;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.cascade-tier-row {
+  spacing: 8px;
+  padding: 4px 0;
+}
+
+.cascade-tier-label {
+  min-width: 32px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.cascade-bar-bg {
+  height: 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.15);
+  min-width: 160px;
+}
+
+.cascade-bar-fill {
+  height: 8px;
+  border-radius: 4px;
+  background-color: #4cc9f0;
+}
+
+.cascade-bar-fill.warning {
+  background-color: #f9c74f;
+}
+
+.cascade-bar-fill.critical {
+  background-color: #f94144;
+}
+
+.cascade-pct-label {
+  font-size: 11px;
+  min-width: 40px;
+  text-align: right;
+}
+
+.cascade-footer {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 8px;
+}

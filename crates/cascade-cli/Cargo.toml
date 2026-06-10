@@ -1,0 +1,55 @@
+[package]
+name = "cascade-cli"
+description = "CLI for Cascade — unified AI instruction manager for coding agents"
+readme = "README.md"
+keywords = ["cascade", "ai", "claude", "instructions", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+homepage = "https://github.com/acamarata/cascade"
+documentation = "https://github.com/acamarata/cascade/wiki/CLI-Reference"
+publish = true
+default-run = "cascade"
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[[bin]]
+name = "cascade"
+path = "src/main.rs"
+
+[dependencies]
+cascade-core    = { workspace = true }
+cascade-types   = { workspace = true }
+cascade-harness = { workspace = true }
+cascade-rag     = { path = "../cascade-rag", version = "1.0.0" }
+cascade-plugins = { path = "../cascade-plugins", version = "1.0.0" }
+cascade-mcp     = { path = "../cascade-mcp", version = "1.0.0" }
+cascade-keychain = { path = "../cascade-keychain", version = "1.0.0" }
+cascade-audit = { path = "../cascade-audit", version = "1.0.0" }
+rusqlite      = { workspace = true }
+async-trait   = { workspace = true }
+clap          = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+tokio         = { workspace = true }
+toml          = "0.8"
+toml_edit     = "0.22"
+tracing       = { workspace = true }
+tracing-subscriber = { workspace = true }
+notify        = { workspace = true }
+chrono        = { workspace = true }
+dirs          = "5"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile    = "3"
+serial_test = "3"
+wat         = "1"
+
+[build-dependencies]
+clap          = { version = "4", features = ["derive"] }
+clap_complete = "4"

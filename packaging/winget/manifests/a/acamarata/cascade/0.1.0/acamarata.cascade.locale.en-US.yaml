@@ -1,0 +1,21 @@
+PackageIdentifier: acamarata.cascade
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Aric Camarata
+PublisherUrl: https://github.com/acamarata
+PublisherSupportUrl: https://github.com/acamarata/cascade/issues
+PackageName: Cascade
+PackageUrl: https://github.com/acamarata/cascade
+License: MIT
+LicenseUrl: https://github.com/acamarata/cascade/blob/main/LICENSE
+Copyright: Copyright (c) Aric Camarata
+ShortDescription: Unified AI instruction cascade manager for coding agents
+Description: Cascade consolidates AI tool instruction files (CLAUDE.md, AGENTS.md, .cursorrules) into a single tiered hierarchy that every tool reads automatically. Includes cascaded daemon, cascade CLI, and optional Tauri GUI.
+Tags:
+  - ai
+  - claude
+  - developer-tools
+  - instructions
+  - cascade
+ManifestType: locale
+ManifestVersion: 1.6.0

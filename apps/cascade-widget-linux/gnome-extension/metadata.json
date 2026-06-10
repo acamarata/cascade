@@ -1,0 +1,10 @@
+{
+  "name": "Cascade Fleet Dashboard",
+  "description": "Live AI fleet utilization dashboard for the Cascade relay system.",
+  "uuid": "cascade-widget@acamarata.github.io",
+  "version": 1,
+  "shell-version": ["45", "46", "47"],
+  "url": "https://github.com/acamarata/cascade",
+  "settings-schema": "org.gnome.shell.extensions.cascade-widget",
+  "gettext-domain": "cascade-widget"
+}

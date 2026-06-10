@@ -1,0 +1,21 @@
+{
+  "id": "com.cascade.jira",
+  "name": "Jira",
+  "version": "0.1.0",
+  "description": "Fetches Jira Cloud issues via REST API v3 (JQL queries) and normalises them into DataItems for RAG ingestion.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "cascade_plugin_jira.wasm",
+  "kind": "DataSource",
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"],
+  "capabilities": ["net_outbound", "env_read"],
+  "permissions": {
+    "fs": [],
+    "net": [{"host": "atlassian.net", "ports": [443]}],
+    "env": [
+      {"name": "JIRA_EMAIL"},
+      {"name": "JIRA_TOKEN"}
+    ]
+  }
+}

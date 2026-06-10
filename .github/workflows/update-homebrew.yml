@@ -1,0 +1,62 @@
+name: Update Homebrew Cask
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cascade repo
+        uses: actions/checkout@v4
+
+      - name: Get release tag and DMG URL
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          DMG_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/Cascade_${VERSION}_macos_universal.dmg"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "dmg_url=${DMG_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Download DMG and compute SHA256
+        id: sha256
+        run: |
+          curl -sSL "${{ steps.release.outputs.dmg_url }}" -o cascade.dmg
+          SHA256=$(sha256sum cascade.dmg | awk '{print $1}')
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-cascade tap
+        uses: actions/checkout@v4
+        with:
+          repository: acamarata/homebrew-cascade
+          path: homebrew-cascade
+          token: ${{ secrets.TAP_UPDATE_TOKEN }}
+
+      - name: Update Casks/cascade.rb
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          SHA256="${{ steps.sha256.outputs.sha256 }}"
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" homebrew-cascade/Casks/cascade.rb
+          sed -i "s/sha256 .*/sha256 \"${SHA256}\"/" homebrew-cascade/Casks/cascade.rb
+
+      - name: Open PR in tap repo
+        working-directory: homebrew-cascade
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
+        run: |
+          git config user.name "cascade-release-bot"
+          git config user.email "bot@cascade.dev"
+          BRANCH="bump/cascade-${{ steps.release.outputs.version }}"
+          git checkout -b "${BRANCH}"
+          git add Casks/cascade.rb
+          git commit -m "chore: bump cascade to ${{ steps.release.outputs.version }}"
+          git push origin "${BRANCH}"
+          gh pr create \
+            --repo acamarata/homebrew-cascade \
+            --title "Bump cascade to ${{ steps.release.outputs.version }}" \
+            --body "Automated version bump from the cascade release workflow." \
+            --base main \
+            --head "${BRANCH}"

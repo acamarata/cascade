@@ -1,0 +1,17 @@
+{
+  "$schema": "https://cascade.dev/schemas/plugin/v1",
+  "id": "com.example.{{plugin_name}}",
+  "name": "{{plugin_name}}",
+  "version": "0.1.0",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "plugin_type": "{{plugin_type | downcase}}",
+  "cascade_version": ">=0.1.0",
+  "wasm": "target/wasm32-wasip1/debug/{{plugin_name | underscored}}.wasm",
+  "permissions": {
+    "fs": false,
+    "net": false,
+    "env": []
+  },
+  "capabilities": []
+}

@@ -1,0 +1,30 @@
+{
+  "version": "0.1.0",
+  "description": "Unified AI instruction cascade manager for coding agents",
+  "homepage": "https://github.com/acamarata/cascade",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/acamarata/cascade/releases/download/v0.1.0/cascade_0.1.0_windows_x64.zip",
+      "hash": "PLACEHOLDER_SHA256"
+    }
+  },
+  "bin": [
+    "cascade.exe",
+    "cascaded.exe"
+  ],
+  "shortcuts": [
+    ["Cascade.exe", "Cascade"]
+  ],
+  "persist": ".cascade",
+  "checkver": {
+    "github": "https://github.com/acamarata/cascade"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/acamarata/cascade/releases/download/v$version/cascade_$version_windows_x64.zip"
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cascade.dev/schemas/template-index/v1",
+  "title": "Cascade Template Index",
+  "description": "Registry index listing all bundled templates. Validated on every PR by template-ci.yml.",
+  "type": "object",
+  "required": ["version", "templates"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version string (currently '1').",
+      "enum": ["1"]
+    },
+    "templates": {
+      "type": "array",
+      "description": "Ordered list of template entries.",
+      "items": { "$ref": "#/$defs/TemplateEntry" }
+    }
+  },
+  "$defs": {
+    "TemplateEntry": {
+      "type": "object",
+      "required": ["id", "file", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique template id; must match the 'id' field in the template's TOML frontmatter.",
+          "minLength": 1
+        },
+        "file": {
+          "type": "string",
+          "description": "Path to the .md template file relative to data/templates/.",
+          "pattern": "^[a-z0-9/_-]+\\.md$"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semver version string for this template (e.g. '1.0.0').",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"
+        },
+        "tier": {
+          "type": "string",
+          "description": "Cascade tier this template targets.",
+          "enum": ["gci", "pci", "apc", "ppc", "prc", "pac", "any"]
+        },
+        "stacks": {
+          "type": "array",
+          "description": "Technology stack tags.",
+          "items": { "type": "string" }
+        },
+        "project_shapes": {
+          "type": "array",
+          "description": "Project shape tags.",
+          "items": { "type": "string" }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description shown in the template browser."
+        }
+      }
+    }
+  }
+}

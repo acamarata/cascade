@@ -6,6 +6,77 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-11
+
+First stable release. Cascade is a FOSS context manager for AI coding
+agents: one place to keep instructions, knowledge, and guardrails that
+every AI tool you use can read.
+
+### Added
+
+- Six-tier instruction cascade (GCI > PCI > APC > PPC > PRC > PAC) with a
+  resolution engine, provenance tracking, and harness-native instruction
+  file generation (CLAUDE.md, AGENTS.md) for five AI coding tools.
+- `cascaded` daemon (Tokio): JSON-RPC IPC, browser dashboard on
+  127.0.0.1:9761 (token-auth writes), Gemini key-pool proxy with
+  round-robin rotation, provider health sweeps, usage analytics,
+  signed delta self-updates with snapshots and rollback.
+- `cascade` CLI: resolve, search, status, template
+  (list/apply/diff/upgrade/create/validate/export), mcp (token/setup for
+  five client tools), plugin (new/test/list/enable/disable), policy
+  (eval/list/add), dispatch (cross-repo agent launcher with policy
+  enforcement), docs (inject/list/evict), restore, uninstall, update,
+  rollback, cache, context.
+- Desktop app (Tauri 2 + React): ten-step onboarding wizard (legacy tool
+  scan, AI-assisted config merge, non-destructive archive with restore,
+  symlink management, provider connection, Gemini pool provisioning),
+  knowledge vault (markdown editor, wikilinks, backlinks, graph view,
+  tags, full-text search, daily notes), template browser, persona/prompt
+  library with harness injection, context curation with codebase packing,
+  project maps (graph, tier tree, PEWS DAG), usage analytics, fleet
+  quota gauges, settings for every subsystem.
+- Local RAG engine: SQLite + FTS5 keyword index, dense/sparse embeddings
+  (fastembed ONNX), optional sqlite-vec KNN and ColBERT-style multivector
+  modes, four chunkers (semantic, hierarchical, markdown, tree-sitter
+  code-aware), ten document parsers, hybrid RRF retrieval with
+  cross-encoder reranking, citations, idempotent ingest, incremental
+  indexing, parallel embedding workers, query/embedding caches, eval
+  harness (MRR, NDCG, precision/recall@k).
+- MCP server (2025-03 spec): resources, tools, prompts, sampling, and
+  logging over five transports (unix socket, stdio, HTTP, SSE, TCP
+  loopback) with HMAC-SHA256 auth; client auto-setup for five tools;
+  token-budgeted context_slice tool.
+- WASM plugin system: wasmtime sandbox with fuel metering, memory limits,
+  and capability-gated WASI; six plugin kinds; PDK with proc macro,
+  project template, and test harness; first-party GitHub/Linear/Jira/
+  GitLab data-source plugins and example plugins.
+- AI provider layer: twelve cloud adapters behind one trait (streaming,
+  fixture-tested), local LLM runners (gemma-2-2b, llama-3.2-3b,
+  phi-3-mini via candle), Ollama bridge, OAuth 2.0 PKCE flows with
+  keychain token storage, per-task routing, cost estimation.
+- Template system: 33 bundled templates (6 tier, 16 stack, 11 shape),
+  section-aware apply with provenance stamps, inheritance, semver
+  upgrades that preserve user edits.
+- Policy guardrails: native deny-list defaults plus WASM policy host;
+  dispatch pre-launch enforcement.
+- Security: OS keychain storage, loopback-only services, HMAC tokens,
+  path traversal guards everywhere user paths flow, ed25519-signed
+  updates, SIEGE adversarial test suites.
+- Distribution: signed release pipeline (macOS notarization, Windows
+  Authenticode via SignPath, Linux GPG), packaging manifests for
+  Homebrew, AUR, winget, Chocolatey, Scoop, Snap, Flatpak, Nix, and
+  cargo install.
+
+### Known notes
+
+- BGE-M3 dense/sparse use nearest fastembed equivalents until upstream
+  ships native BGE-M3; swap is config-only.
+- Apple notarization and SignPath signing activate once the maintainer
+  completes the one-time enrollments (documented in
+  .github/docs/code-signing.md); unsigned builds work everywhere today.
+- The legacy shell proxy/dashboard remain in src/ until the Rust daemon
+  has shipped one stable release (non-destructive sequencing policy).
+
 ## [0.1.0] - 2026-05-28
 
 ### Added

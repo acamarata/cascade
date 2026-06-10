@@ -1,0 +1,58 @@
+name: Update Chocolatey Package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get release info
+        id: release
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          MSI_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_windows_x64.msi"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "msi_url=${MSI_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Download MSI and compute SHA256
+        id: sha256
+        shell: pwsh
+        run: |
+          $msiUrl = "${{ steps.release.outputs.msi_url }}"
+          Invoke-WebRequest -Uri $msiUrl -OutFile cascade.msi
+          $hash = (Get-FileHash cascade.msi -Algorithm SHA256).Hash.ToLower()
+          echo "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Update nuspec and install script
+        shell: pwsh
+        run: |
+          $version = "${{ steps.release.outputs.version }}"
+          $msiUrl = "${{ steps.release.outputs.msi_url }}"
+          $sha256 = "${{ steps.sha256.outputs.sha256 }}"
+
+          # Update version in nuspec
+          (Get-Content packaging/chocolatey/cascade/cascade.nuspec) `
+            -replace '<version>.*</version>', "<version>$version</version>" |
+            Set-Content packaging/chocolatey/cascade/cascade.nuspec
+
+          # Update URL and checksum in install script
+          (Get-Content packaging/chocolatey/cascade/tools/chocolateyInstall.ps1) `
+            -replace "url64bit\s*=\s*'[^']*'", "url64bit = '$msiUrl'" `
+            -replace "checksum64\s*=\s*'[^']*'", "checksum64 = '$sha256'" |
+            Set-Content packaging/chocolatey/cascade/tools/chocolateyInstall.ps1
+
+      - name: Pack Chocolatey package
+        working-directory: packaging/chocolatey/cascade
+        run: choco pack
+
+      - name: Upload .nupkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chocolatey-package
+          path: packaging/chocolatey/cascade/*.nupkg

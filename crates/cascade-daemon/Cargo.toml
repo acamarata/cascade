@@ -1,0 +1,79 @@
+[package]
+name = "cascade-daemon"
+description = "Background daemon that runs the Cascade context engine and exposes a local IPC socket"
+readme = "README.md"
+keywords = ["cascade", "daemon", "ai", "ipc"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[[bin]]
+name = "cascaded"
+path = "src/main.rs"
+
+[dependencies]
+cascade-core      = { workspace = true }
+cascade-rag       = { path = "../cascade-rag" }
+cascade-types     = { workspace = true }
+cascade-tray      = { workspace = true }
+cascade-keychain  = { path = "../cascade-keychain" }
+cascade-audit     = { path = "../cascade-audit" }
+cascade-providers = { workspace = true }
+secrecy       = "0.8"
+tokio         = { workspace = true }
+tracing       = { workspace = true }
+tracing-subscriber    = { workspace = true, features = ["env-filter", "json"] }
+tracing-appender      = "0.2"
+tracing-opentelemetry = "0.24"
+opentelemetry         = { version = "0.23", features = ["trace"] }
+opentelemetry-otlp    = { version = "0.16", features = ["tonic", "grpc-tonic"] }
+opentelemetry_sdk     = { version = "0.23", features = ["trace", "rt-tokio"] }
+opentelemetry-semantic-conventions = "0.15"
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+thiserror     = { workspace = true }
+rusqlite      = { workspace = true }
+tokio-util    = { version = "0.7", features = ["codec"] }
+axum          = { version = "0.7", features = ["json"] }
+tower-http    = { version = "0.5", features = ["cors", "fs"] }
+tower         = { version = "0.5", features = ["util"] }
+reqwest       = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util  = "0.3"
+tokio-stream  = "0.1"
+libc          = "0.2"
+subtle        = "2.5"
+rand          = "0.8"
+hex           = "0.4"
+dirs          = "5"
+chrono        = { workspace = true }
+uuid          = { workspace = true }
+toml          = "0.8"
+fs2           = "0.4"
+serde_yaml    = "0.9"
+notify        = { workspace = true }
+# T-P4-E04-12: delta bundle format (tar.gz extraction)
+tar           = "0.4"
+flate2        = "1"
+# T-P4-E04-13: Ed25519 signature verification + blake3 file hash
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+sha2          = "0.10"
+base64        = "0.22"
+blake3        = "1"
+# T-P4-E04-14: download delta bundles to a temp file before apply
+tempfile      = "3"
+
+[features]
+tcp-ipc = []
+
+[build-dependencies]
+base64 = "0.22"
+
+[dev-dependencies]
+assert_cmd  = "2"
+serial_test = "3"
+tokio       = { version = "1", features = ["test-util"] }
+tower       = { version = "0.5", features = ["util"] }
+wiremock    = "0.6"

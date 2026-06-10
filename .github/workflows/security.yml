@@ -1,0 +1,150 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**/Cargo.toml"
+      - ".github/workflows/security.yml"
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily at 03:17 UTC — offset from midnight to reduce load on GitHub's runners.
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+  security-events: write # Required for uploading SARIF results.
+
+jobs:
+  # ── cargo-audit ────────────────────────────────────────────────────────────
+  # Checks Cargo.lock against the RustSec Advisory Database (RUSTSEC).
+  # Any advisory with severity >= high causes the job to fail, blocking merge.
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo-audit
+        # --deny warnings turns all advisories into errors (not just high/critical).
+        # Adjust to `--deny unsound --deny yanked` if you want to allow informational
+        # advisories through while still blocking unsound and yanked crates.
+        run: cargo audit --deny warnings
+
+  # ── cargo-deny ─────────────────────────────────────────────────────────────
+  # License compliance + duplicate dependency detection + banned crate check.
+  # Config lives in deny.toml at the workspace root.
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          # deny.toml at workspace root governs licenses, bans, and advisories.
+          config: deny.toml
+          # Fail on any license violation or banned crate.
+          arguments: --all-features check licenses bans advisories sources
+
+  # ── gitleaks ───────────────────────────────────────────────────────────────
+  # Scans the repository history for accidentally committed secrets.
+  # Runs on push and PR to catch leaks before they are merged.
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history so gitleaks can scan all commits in the PR.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE is required for private repos on the free tier.
+          # Set it in repo secrets if running on a private repository.
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ── npm-audit ──────────────────────────────────────────────────────────────
+  # Checks the Tauri frontend dependencies (apps/tauri/package.json).
+  # Skipped if there is no package.json in the apps/ directory.
+  npm-audit:
+    name: npm-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for package.json
+        id: check-npm
+        run: |
+          if [ -f "apps/tauri/package.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node 24
+        if: steps.check-npm.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable corepack
+        if: steps.check-npm.outputs.exists == 'true'
+        run: corepack enable
+
+      - name: npm audit
+        if: steps.check-npm.outputs.exists == 'true'
+        working-directory: apps/tauri
+        # --audit-level high: fail only on high and critical advisories.
+        run: npm audit --audit-level high
+
+  # ── Summary ────────────────────────────────────────────────────────────────
+  # A single required status check that depends on all security jobs.
+  # Set this as the required check in branch protection rules.
+  security-gate:
+    name: security-gate
+    needs: [cargo-audit, cargo-deny, gitleaks, npm-audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all security jobs passed
+        run: |
+          # npm-audit uses 'skipped' when no package.json exists — that counts as passing.
+          if [[ "${{ needs.cargo-audit.result }}" != "success" ]]; then
+            echo "cargo-audit failed"
+            exit 1
+          fi
+          if [[ "${{ needs.cargo-deny.result }}" != "success" ]]; then
+            echo "cargo-deny failed"
+            exit 1
+          fi
+          if [[ "${{ needs.gitleaks.result }}" != "success" ]]; then
+            echo "gitleaks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.npm-audit.result }}" != "success" && "${{ needs.npm-audit.result }}" != "skipped" ]]; then
+            echo "npm-audit failed"
+            exit 1
+          fi
+          echo "All security checks passed."

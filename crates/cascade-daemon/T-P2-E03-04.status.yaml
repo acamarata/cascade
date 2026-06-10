@@ -1,0 +1,9 @@
+ticket_id: T-P2-E03-04
+status: done
+stages_done: [implement, cr-a, cr-b, qa-a, qa-b]
+artifacts: [src/ipc.rs, src/supervisor.rs, tests/ipc_auth.rs, Cargo.toml]
+cr_done: [cr-a, cr-b]
+qa_done: [qa-a, qa-b]
+last_write: "2026-06-02T21:37:00Z"
+agent_id: claude
+notes: "TCP IPC listener feature complete. Feature-gated with tcp-ipc Cargo feature flag. TCP listener binds to 127.0.0.1:3762 only when enabled. StatusResult protocol extended with tcp_port field (Option<u16>, backward-compatible). All 9 unit tests pass when feature enabled; 7 tests pass when disabled. clippy clean with -D warnings. IpcServer::new() signature conditionally compiled to accept tcp_enabled parameter only when feature enabled."

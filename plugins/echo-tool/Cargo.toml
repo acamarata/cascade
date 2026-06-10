@@ -1,0 +1,19 @@
+[package]
+name        = "echo-tool"
+version     = "0.1.0"
+edition     = "2021"
+description = "Minimal ChatTool plugin that returns its input JSON arguments unchanged — reference implementation for ToolIntegration plugins."
+authors     = ["Aric Camarata"]
+license     = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cascade-pdk = { path = "../../crates/cascade-pdk" }
+serde       = { version = "1", features = ["derive"] }
+serde_json  = { version = "1" }
+
+[dev-dependencies]
+cascade-pdk = { path = "../../crates/cascade-pdk", features = ["test-harness"] }
+serde_json  = "1"

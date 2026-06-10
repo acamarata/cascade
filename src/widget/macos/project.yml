@@ -1,0 +1,70 @@
+name: CascadeWidget
+options:
+  bundleIdPrefix: io.cascade
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  CascadeApp:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: CascadeApp
+      - path: CascadeWidgetExtension/CacheModel.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cascade.app
+        PRODUCT_NAME: CascadeApp
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: CascadeApp/CascadeApp.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.io.cascade
+    dependencies:
+      - target: CascadeWidgetExtension
+        embed: true
+      - sdk: WidgetKit.framework
+  CascadeWidgetExtension:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: CascadeWidgetExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cascade.app.widgetextension
+        PRODUCT_NAME: CascadeWidgetExtension
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: CascadeWidgetExtension/CascadeWidgetExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.io.cascade
+  CascadeWidgetTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: CascadeWidgetTests
+      - path: CascadeWidgetExtension/CacheModel.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.cascade.widgetTests
+        PRODUCT_NAME: CascadeWidgetTests
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        DEVELOPMENT_TEAM: ""

@@ -1,0 +1,75 @@
+[package]
+name = "cascade-app"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.85"
+# Tauri requires this specific crate structure — do not add to workspace members.
+# cascade-core is consumed here as a path dep, not published to crates.io.
+
+[lib]
+name = "cascade_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "cascade-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri 2 runtime + plugins
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog  = "2"
+tauri-plugin-fs      = "2"
+tauri-plugin-opener  = "2"
+tauri-plugin-shell   = "2"
+
+# cascade-types provides the frozen JSON-RPC 2.0 wire types (T-P2-E03).
+# cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
+cascade-types     = { path = "../../../crates/cascade-types" }
+cascade-cli       = { path = "../../../crates/cascade-cli" }
+cascade-audit     = { path = "../../../crates/cascade-audit" }
+# T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
+cascade-providers = { path = "../../../crates/cascade-providers" }
+cascade-core  = { path = "../../../crates/cascade-core" }    # T-P3-E04-15: read_providers_store
+
+# Async runtime (Tauri commands are async; used by daemon_client.rs)
+tokio = { version = "1", features = ["net", "io-util", "rt", "time", "sync"] }
+
+# HTTP client for detect_gemini_pool (T-P3-E03-06) and run_ai_merge (T-P3-E03-25)
+reqwest = { version = "0.12", features = ["json", "blocking"], default-features = false }
+# SHA-256 for prompt_hash in MergeResult (T-P3-E03-25)
+sha2 = { version = "0.10", default-features = false }
+
+# Observability
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Serialization (Tauri IPC payloads are JSON)
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror  = "1"
+walkdir    = "2"
+notify     = "6"
+libc       = "0.2"
+dirs       = "5"
+chrono     = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile    = "3"
+serial_test = "3"
+
+# Bundle metadata — Tauri 2 reads these from tauri.conf.json, not here.
+# Listed for reference so tooling (cargo-bundle, auditing) can locate them.
+# Canonical source: tauri.conf.json § bundle
+# identifier = "dev.cascade.app"
+# category   = "Utility"
+# copyright  = "2026 Aric Camarata"
+# icons      = ["icons/32x32.png","icons/128x128.png","icons/128x128@2x.png","icons/icon.icns","icons/icon.ico"]
+[package.metadata.bundle]
+identifier = "dev.cascade.app"
+category   = "Utility"
+copyright  = "2026 Aric Camarata"
+icon       = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+

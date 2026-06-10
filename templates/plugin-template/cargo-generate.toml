@@ -1,0 +1,23 @@
+[template]
+description = "Cascade WASM plugin scaffold"
+
+[placeholders.plugin_name]
+type        = "string"
+prompt      = "Plugin name (kebab-case, e.g. my-tool)"
+regex       = "^[a-z][a-z0-9-]*$"
+
+[placeholders.plugin_type]
+type    = "string"
+prompt  = "Plugin kind"
+choices = ["ChatTool", "Chunker", "Retriever", "Provider", "Agent"]
+default = "ChatTool"
+
+[placeholders.author]
+type    = "string"
+prompt  = "Author name"
+default = "Cascade Plugin Author"
+
+[placeholders.description]
+type    = "string"
+prompt  = "Short description of this plugin"
+default = "A Cascade WASM plugin"

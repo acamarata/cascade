@@ -1,0 +1,28 @@
+[package]
+name        = "jira"
+version     = "0.1.0"
+edition     = "2021"
+description = "Cascade DataSource plugin — fetches Jira Cloud issues via REST API v3"
+authors     = ["Aric Camarata"]
+license     = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+[dependencies]
+cascade-pdk = { path = "../../crates/cascade-pdk" }
+serde       = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json  = { version = "1", default-features = false, features = ["alloc"] }
+base64      = { version = "0.22", default-features = false, features = ["alloc"] }
+
+# ── Dev / test (host-side, feature-gated) ────────────────────────────────────
+[dev-dependencies]
+cascade-pdk = { path = "../../crates/cascade-pdk", features = ["test-harness"] }
+serde_json  = "1"
+
+# ── Build target ─────────────────────────────────────────────────────────────
+# Plugin crates default to wasm32-wasip1 via the workspace .cargo/config.toml.
+# Unit tests (cargo test --lib) run on the host target; cargo check also works
+# on the host target. wasm32-wasip1 cross-compilation requires the target to be
+# installed: rustup target add wasm32-wasip1

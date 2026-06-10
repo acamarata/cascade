@@ -1,0 +1,24 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "LIN-050",
+          "title": "Paginated issue example",
+          "description": "Part of a large result set.",
+          "url": "https://linear.app/team/issue/LIN-050",
+          "priority": 3,
+          "state": { "name": "Todo" },
+          "labels": { "nodes": [] },
+          "assignee": null,
+          "createdAt": "2024-03-10T08:00:00.000Z",
+          "updatedAt": "2024-03-11T08:00:00.000Z"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "endCursor": "cursor-abc-xyz"
+      }
+    }
+  }
+}

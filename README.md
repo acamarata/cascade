@@ -1,95 +1,109 @@
-# cascade
+# Cascade
 
-Cascading fleet dashboard and Gemini proxy relay for multi-agent Claude / OpenCode sessions.
+[![CI](https://img.shields.io/github/actions/workflow/status/acamarata/cascade/ci.yml?branch=main&label=CI)](https://github.com/acamarata/cascade/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![crates.io](https://img.shields.io/crates/v/cascade-cli.svg)](https://crates.io/crates/cascade-cli)
+[![GitHub release](https://img.shields.io/github/v/release/acamarata/cascade)](https://github.com/acamarata/cascade/releases/latest)
 
-Absorbed from `claw-fleet` (Gemini proxy daemon) and `claw-dash` (fleet dashboard) — merged into a single unified tool in May 2026.
+A local-first AI context manager for coding agents. Write your rules once, at the right scope, and every tool picks them up automatically.
 
-## What it does
+---
 
-- **Gemini proxy** (`src/bin/cascade-gemini-proxy`): runs on `localhost:3761`, rotates across 28 Gemini API keys from vault, writes utilization to `~/.claude/temp/quota-state.json`
-- **Fleet dashboard** (`src/web/`): reads `quota-state.json`, renders per-account utilization as a web UI on `localhost:9761`
-- **launchd agents**: both services run as user launchd agents, auto-start on login, restart on crash
+## What is a cascade?
 
-## Ports
+Most AI coding agents read instruction files: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and others. As soon as you work across multiple repos and multiple tools, those files multiply and drift. You end up with the same rules in ten places, tools seeing different subsets, and no clear answer for what wins when files conflict.
 
-| Service | Port | Protocol | Purpose |
-|---|---|---|---|
-| `cascade-gemini-proxy` | 3761 | HTTP | Gemini API relay + quota tracking |
-| `cascade-dashboard` | 9761 | HTTP | Fleet utilization dashboard |
+A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each tier inherits from the one above. When Cascade resolves instructions for a given working directory, it walks the hierarchy from global down to the narrowest scope, merges the result, and writes the tool-specific files each agent expects. One source of truth, always consistent.
 
-## Install
+## Features
 
-```bash
-bash install.sh
-```
+- Resolves a 6-tier instruction hierarchy (GCI → PCI → APC → PPC → PRC → PAC) for any working directory
+- Generates harness-native files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and more) from a single source
+- Local RAG index over your instruction corpus: FTS5 + dense embeddings + RRF reranking, no cloud required
+- MCP server with 5 transports, exposing your cascade as context to any MCP-compatible tool
+- WASM plugin system (wasmtime, capability-gated) with a PDK and `cargo-generate` template
 
-## Uninstall
+## Platform support
 
-```bash
-bash uninstall.sh
-```
+| Platform | Install command |
+|---|---|
+| macOS | `brew install acamarata/tap/cascade` |
+| Linux (AUR) | `yay -S cascade-bin` |
+| Linux (Snap) | `snap install cascade` |
+| Linux (Flatpak) | `flatpak install flathub dev.camarata.Cascade` |
+| Windows (Winget) | `winget install acamarata.cascade` |
+| Windows (Chocolatey) | `choco install cascade` |
+| Windows (Scoop) | `scoop install cascade` |
+| Nix | `nix run github:acamarata/cascade` |
+| Any (cargo) | `cargo install cascade-cli` |
 
-## launchd agents
-
-cascade runs three persistent user launchd agents (no admin required, auto-start on login, restart on crash).
-
-| Label | Service | Port | Log |
-|---|---|---|---|
-| `io.cascade.gemini-proxy` | Gemini API relay | 3761 | `~/Library/Logs/cascade-gemini-proxy.log` |
-| `io.cascade.dashboard` | Fleet dashboard | 9761 | `~/Library/Logs/cascade-dashboard.log` |
-| `io.cascade.refresh` | Quota poller (every 15s) | — | `~/Library/Logs/cascade-dash-refresh.log` |
-
-### Status
+## Quick start
 
 ```bash
-launchctl list | grep cascade
+# 1. Install (macOS example)
+brew install acamarata/tap/cascade
+
+# 2. Run the setup wizard: detects your tools, creates your first hierarchy
+cascade init
+
+# 3. Edit your global rules
+cascade edit --tier gci
+
+# 4. Sync derived files to all connected tools
+cascade sync
+
+# 5. Search your indexed rule base
+cascade search "authentication"
 ```
 
-### Manual start / stop
-
-```bash
-# start individual agent
-launchctl load ~/Library/LaunchAgents/io.cascade.gemini-proxy.plist
-launchctl load ~/Library/LaunchAgents/io.cascade.dashboard.plist
-launchctl load ~/Library/LaunchAgents/io.cascade.refresh.plist
-
-# stop individual agent
-launchctl unload ~/Library/LaunchAgents/io.cascade.gemini-proxy.plist
-launchctl unload ~/Library/LaunchAgents/io.cascade.dashboard.plist
-launchctl unload ~/Library/LaunchAgents/io.cascade.refresh.plist
-```
-
-### Log files
-
-```bash
-tail -f ~/Library/Logs/cascade-gemini-proxy.log
-tail -f ~/Library/Logs/cascade-dashboard.log
-tail -f ~/Library/Logs/cascade-dash-refresh.log
-```
+Full documentation: [the wiki](../../wiki) | [CLI reference](../../wiki/CLI-Reference) | [quickstart guide](../../wiki/Quickstart)
 
 ## Architecture
 
 ```
-vault.env (28 Gemini keys, G1-G8)
-    └─ cascade-gemini-proxy (localhost:3761)
-           └─ quota-state.json (~/.claude/temp/)
-                  └─ cascade-dashboard (localhost:9761)
+┌──────────────────────────────────────────┐
+│              Cascade.app (Tauri 2)        │
+│  Onboarding wizard · Knowledge vault     │
+│  Template browser · Persona library      │
+│  Project maps · Settings                 │
+└─────────────────┬────────────────────────┘
+                  │ JSON-RPC / HTTP
+┌─────────────────▼────────────────────────┐
+│              cascaded (daemon)            │
+│  Cascade resolver · RAG indexer          │
+│  MCP server · WASM plugin host           │
+│  Context optimizer · Policy guardrails   │
+│  Gemini key-pool proxy                   │
+│       127.0.0.1:9761 dashboard           │
+└──────┬──────────┬───────────┬────────────┘
+       │          │           │
+  ┌────▼───┐ ┌───▼────┐ ┌────▼──────────┐
+  │cascade │ │OS tray │ │  AI tools     │
+  │  CLI   │ │widget  │ │  CC · OC      │
+  │        │ │        │ │  Cursor·Aider │
+  └────────┘ └────────┘ └───────────────┘
 ```
 
-## Data flow
+## Distribution channels
 
-The cascade pipeline has four stages:
+| Channel | Package | Notes |
+|---|---|---|
+| Homebrew Cask | `acamarata/tap/cascade` | macOS GUI + CLI |
+| AUR | `cascade-bin` | Linux, pre-built binary |
+| Winget | `acamarata.cascade` | Windows |
+| Chocolatey | `cascade` | Windows |
+| Scoop | `cascade` | Windows |
+| Snap | `cascade` | Linux |
+| Flatpak | `dev.camarata.Cascade` | Linux |
+| Nix | `github:acamarata/cascade` | NixOS + flakes |
+| crates.io | `cascade-cli` | `cargo install cascade-cli` |
 
-1. **cascade-gemini-proxy** (localhost:3761) reads 28 Gemini API keys from `~/.claude/vault.env` and rotates them round-robin across requests, auto-retrying on HTTP 429. Writes quota utilization data to `~/.claude/temp/quota-state.json`.
+## Contributing
 
-2. **cascade-refresh** (called by launchd every 5 minutes) polls Anthropic and OpenCode APIs for quota usage, aggregates per-account data, and writes the complete quota state to `~/.claude/temp/quota-state.json`. Also generates a human-readable summary to `/tmp/cascade-summary.txt`.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Contributing wiki page](../../wiki/Contributing).
 
-3. **cascade-dash-server** (localhost:9761) runs as a user launchd agent. On startup, it locates the static web directory, finds a free port (starting at 9761), and begins serving HTTP. Requests to `/api/cache` read and serve the quota state from `~/.claude/temp/quota-state.json`. Requests to other paths serve the static web files from `src/web/`.
+## License
 
-4. **Dashboard UI** (cascade/src/web/) polls cascade-dash-server every N seconds, fetches the quota state via `/api/cache`, and renders utilization tables and charts showing per-account Gemini API status.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Migration history
-
-Absorbed from two prior repos in E12 (2026-05-29):
-- `claw-fleet` — Gemini proxy daemon + launchd agents (local snapshot, GitHub deleted 2026-05-27)
-- `claw-dash` — fleet dashboard web UI + widget (GitHub: acamarata/claw-dash, archived 2026-05-29)
+MIT. See [LICENSE](LICENSE).

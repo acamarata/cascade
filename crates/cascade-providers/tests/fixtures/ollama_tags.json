@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "name": "qwen2.5-coder:7b",
+      "modified_at": "2026-01-01T00:00:00Z",
+      "size": 4680000000
+    },
+    {
+      "name": "llama3.2:3b",
+      "modified_at": "2026-01-01T00:00:00Z",
+      "size": 2020000000
+    }
+  ]
+}

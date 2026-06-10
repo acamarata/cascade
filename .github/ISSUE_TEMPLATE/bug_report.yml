@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a bug in Cascade
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Fill in as much detail as you can.
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. macOS 15.2, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Cascade version
+      placeholder: "e.g. 0.4.1 — run `cascade --version` to check"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A minimal, reproducible sequence of commands or actions.
+      placeholder: |
+        1. Run `cascade ...`
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include any error output or stack traces.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Log files, config snippets, or anything else that might help.
+    validations:
+      required: false

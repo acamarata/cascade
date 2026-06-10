@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>cascade</id>
+    <version>0.1.0</version>
+    <title>Cascade</title>
+    <authors>Aric Camarata</authors>
+    <projectUrl>https://github.com/acamarata/cascade</projectUrl>
+    <licenseUrl>https://github.com/acamarata/cascade/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/acamarata/cascade</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/acamarata/cascade/issues</bugTrackerUrl>
+    <tags>ai claude instructions cascade developer-tools</tags>
+    <summary>Unified AI instruction cascade manager for coding agents</summary>
+    <description><![CDATA[
+Cascade consolidates AI tool instruction files (CLAUDE.md, AGENTS.md, .cursorrules, and others)
+into a single tiered hierarchy that every tool reads automatically.
+
+Write your rules once at the right scope and every AI coding tool picks them up consistently.
+Includes the cascaded background daemon, cascade CLI, and an optional Tauri desktop GUI.
+
+Features:
+- 6-tier instruction hierarchy (GCI to PAC) for any working directory
+- Local RAG index over your instruction corpus (FTS5 + embeddings + RRF), no cloud required
+- MCP server exposing your cascade as context to any MCP-compatible tool
+- WASM plugin system with a PDK and cargo-generate template
+    ]]></description>
+    <releaseNotes>https://github.com/acamarata/cascade/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

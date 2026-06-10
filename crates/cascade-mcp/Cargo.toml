@@ -1,0 +1,48 @@
+[package]
+name = "cascade-mcp"
+description = "Model Context Protocol (MCP) server implementation for Cascade"
+readme = "README.md"
+keywords = ["cascade", "mcp", "context-protocol", "ai"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+cascade-types      = { workspace = true }
+cascade-providers  = { workspace = true }
+# context_slice tool wires directly into cascade-rag (T-P4-E04-22: no IPC double-serialization)
+cascade-rag        = { path = "../cascade-rag" }
+tokio              = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+thiserror          = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait        = { workspace = true }
+# Auth token scheme (T-P4-E02-06)
+hmac          = "0.12"
+sha2          = "0.10"
+base64ct      = { version = "1", features = ["alloc"] }
+rand          = "0.8"
+# Transport layer (T-P4-E02-13..18)
+uuid          = { version = "1", features = ["v4"] }
+tokio-util    = { version = "0.7", features = ["codec"] }
+tokio-stream  = { version = "0.1", features = ["sync"] }
+axum          = { version = "0.7", features = ["macros"] }
+tower         = "0.4"
+tower-http    = { version = "0.5", features = ["limit", "timeout", "cors"] }
+futures-util  = "0.3"
+bytes         = "1"
+
+[dev-dependencies]
+tempfile     = "3"
+tokio        = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+futures-core = "0.3"
+async-trait  = { workspace = true }
+axum         = { version = "0.7", features = ["macros"] }
+tower        = { version = "0.4", features = ["util"] }
+reqwest      = { version = "0.12", features = ["json"] }
+serial_test  = "3"

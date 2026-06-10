@@ -1,0 +1,13 @@
+{
+  "tier_counts_total": 5,
+  "tier_counts": {
+    "GCI": 2,
+    "PCI": 1,
+    "PPC": 1,
+    "PRC": 1
+  },
+  "rag_freshness": "fresh (30s ago)",
+  "active_agents": 2,
+  "inbox_unread": 1,
+  "daemon_status": "Running"
+}

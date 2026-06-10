@@ -1,0 +1,154 @@
+name: App CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/cascade-app/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-app.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/cascade-app/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-app.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── typecheck ────────────────────────────────────────────────────────────
+  # TypeScript strict-mode check on ubuntu only (not OS-sensitive).
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Typecheck
+        run: pnpm --filter @cascade/app run typecheck
+
+  # ── lint ─────────────────────────────────────────────────────────────────
+  # ESLint check on ubuntu only (not OS-sensitive).
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm --filter @cascade/app run lint
+
+  # ── build-matrix ─────────────────────────────────────────────────────────
+  # Frontend Vite build + Tauri debug build on all three platforms.
+  # No code signing at this stage — post-P3 concern.
+  build-matrix:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/cascade-app/src-tauri/target
+          key: ${{ runner.os }}-cargo-app-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Linux Tauri prerequisites
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend (Vite)
+        run: pnpm --filter @cascade/app run build
+
+      - name: Build Tauri app (debug)
+        run: cargo tauri build --debug --manifest-path apps/cascade-app/src-tauri/Cargo.toml
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+
+      - name: Upload macOS artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-app-macos
+          path: apps/cascade-app/src-tauri/target/debug/bundle/macos/Cascade.app
+          retention-days: 7
+
+      - name: Upload Linux artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-app-linux
+          path: apps/cascade-app/src-tauri/target/debug/cascade-app
+          retention-days: 7
+
+      - name: Upload Windows artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-app-windows
+          path: apps/cascade-app/src-tauri/target/debug/cascade-app.exe
+          retention-days: 7

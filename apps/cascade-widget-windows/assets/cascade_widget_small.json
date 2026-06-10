@@ -1,0 +1,63 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "ColumnSet",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "Cascade",
+              "weight": "Bolder",
+              "size": "Small",
+              "wrap": false
+            },
+            {
+              "type": "TextBlock",
+              "text": "${daemon_status}",
+              "color": "${if(daemon_status == 'Running', 'Good', 'Warning')}",
+              "size": "Small",
+              "wrap": false
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "auto",
+          "horizontalAlignment": "Right",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${string(tier_counts_total)}",
+              "size": "ExtraLarge",
+              "weight": "Bolder",
+              "horizontalAlignment": "Right",
+              "wrap": false
+            },
+            {
+              "type": "TextBlock",
+              "text": "rules",
+              "size": "Small",
+              "color": "Accent",
+              "horizontalAlignment": "Right",
+              "wrap": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "${rag_freshness}",
+      "size": "Small",
+      "isSubtle": true,
+      "wrap": false,
+      "spacing": "Small"
+    }
+  ]
+}

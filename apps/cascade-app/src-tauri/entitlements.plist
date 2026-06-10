@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  entitlements.plist — macOS hardened-runtime entitlements for Cascade.app
+  Purpose: declare OS-level capabilities required by the Tauri 2 app bundle.
+  Constraints:
+    - app-sandbox MUST be false: the daemon uses a Unix domain socket that
+      the app accesses via IPC; sandboxing would block cross-process socket
+      connections to cascaded running outside the sandbox.
+    - network.client: required for AI provider HTTP calls and MCP transports.
+    - files.user-selected.read-write: required for the file-picker dialogs
+      used by context-attachment and RAG ingestion.
+  See: https://tauri.app/distribute/sign/macos/
+       https://developer.apple.com/documentation/bundleresources/entitlements
+-->
+<plist version="1.0">
+<dict>
+  <!-- Sandbox MUST be false: cascaded daemon IPC socket requires cross-process access. -->
+  <key>com.apple.security.app-sandbox</key>
+  <false/>
+
+  <!-- Allow outbound TCP/UDP connections (AI provider APIs, MCP transports). -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!-- Allow read/write access to files the user explicitly selects. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+</dict>
+</plist>

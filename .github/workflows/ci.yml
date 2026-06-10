@@ -1,0 +1,541 @@
+name: CI
+
+on:
+  push:
+    branches: [main, wip/rust-rewrite]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".cargo/**"
+      - ".config/**"
+      - ".github/workflows/ci.yml"
+      - "src/widget/macos/**"
+      - "apps/cascade-widget-windows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".cargo/**"
+      - ".config/**"
+      - ".github/workflows/ci.yml"
+      - "src/widget/macos/**"
+      - "apps/cascade-widget-windows/**"
+
+# Cancel in-progress runs on the same branch/PR to avoid wasted runner-minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation for CI — sccache provides equivalent savings.
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-D warnings"
+  # sccache: point RUSTC_WRAPPER at the sccache binary; the sccache-action sets
+  # the binary path and starts the server before any cargo invocation.
+  RUSTC_WRAPPER: sccache
+
+jobs:
+  # ── test ─────────────────────────────────────────────────────────────────
+  # Run the full test suite across 5 target triples.
+  # Linux aarch64 uses cross-rs (no native GitHub aarch64 Linux runner available).
+  # All others use cargo-nextest natively.
+  test:
+    name: test (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Apple Silicon (native arm64)
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            use-cross: false
+
+          # macOS Intel (native x86_64)
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            use-cross: false
+
+          # Linux x86_64 (native)
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+
+          # Linux aarch64 — cross-compile via cross-rs (no native runner available)
+          - runner: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            use-cross: true
+
+          # Windows x86_64 (native MSVC)
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            use-cross: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-nextest
+        run: cargo binstall --no-confirm cargo-nextest
+
+      - name: Install cross-rs (Linux aarch64 only)
+        if: matrix.use-cross == true
+        run: cargo binstall --no-confirm cross
+
+      - name: Run tests via cross (Linux aarch64)
+        if: matrix.use-cross == true
+        run: cross nextest run --workspace --target ${{ matrix.target }}
+
+      - name: Run tests via nextest (native)
+        if: matrix.use-cross == false
+        run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
+
+  # ── integration-tests ────────────────────────────────────────────────────
+  # Run the cascade-providers integration test suite (all adapters via
+  # wiremock fixture servers, no live API calls).  Gated behind
+  # --features integration_tests so normal `cargo test` skips them.
+  # Runs on Linux x86_64 only — the tests are pure Rust + loopback TCP,
+  # platform-independent.
+  integration-tests:
+    name: integration-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Run cascade-providers integration tests
+        run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
+
+  # ── clippy ────────────────────────────────────────────────────────────────
+  # Run clippy with -D warnings across the full matrix.
+  # Linux aarch64 uses cross-rs for the cross-target lint.
+  clippy:
+    name: clippy (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            use-cross: false
+
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            use-cross: false
+
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+
+          - runner: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            use-cross: true
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            use-cross: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + target + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cross-rs (Linux aarch64 only)
+        if: matrix.use-cross == true
+        run: cargo binstall --no-confirm cross
+
+      - name: Run clippy via cross (Linux aarch64)
+        if: matrix.use-cross == true
+        run: cross clippy --workspace --target ${{ matrix.target }} -- -D warnings
+
+      - name: Run clippy natively
+        if: matrix.use-cross == false
+        run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
+
+  # ── fmt ───────────────────────────────────────────────────────────────────
+  # Format check runs once on Linux x86_64 only — formatting is
+  # platform-independent so running it on every matrix entry is redundant.
+  fmt:
+    name: fmt
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + rustfmt)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --check --all
+
+  # ── deny ──────────────────────────────────────────────────────────────────
+  # License compliance and banned-crate check via cargo-deny.
+  # Runs on Linux x86_64 only — deny.toml applies to the workspace graph
+  # regardless of target platform.
+  deny:
+    name: deny
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-deny
+        run: cargo binstall --no-confirm cargo-deny
+
+      - name: Run cargo deny
+        run: cargo deny check
+
+  # ── coverage ──────────────────────────────────────────────────────────────
+  # Coverage measurement via cargo-llvm-cov + nextest, uploaded to Codecov.
+  # Runs on Linux x86_64 only (lcov output is platform-independent).
+  # Depends on the coverage alias defined in .cargo/config.toml:
+  #   coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + llvm-tools-preview)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-llvm-cov
+        run: cargo binstall --no-confirm cargo-llvm-cov
+
+      - name: Install cargo-nextest
+        run: cargo binstall --no-confirm cargo-nextest
+
+      - name: Run coverage
+        # Uses the cargo alias defined in .cargo/config.toml:
+        # coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
+        run: cargo coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: target/coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Do not fail CI if the upload itself errors (network issues, etc.).
+          # Codecov enforces threshold gates via its own PR check.
+          fail_ci_if_error: false
+
+  # ── widget-macos ──────────────────────────────────────────────────────────
+  # Build the CascadeApp + CascadeWidgetExtension Xcode project and run
+  # CascadeWidgetTests on a macos-14 runner (Apple Silicon, WidgetKit support).
+  # Runs only when src/widget/macos/** or the workflow file changes to avoid
+  # burning macOS runner minutes (~10x cost vs Linux) on unrelated commits.
+  widget-macos:
+    name: widget-macos
+    runs-on: macos-14
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: src/widget/macos
+        run: xcodegen generate
+
+      - name: Build CascadeApp
+        working-directory: src/widget/macos
+        run: |
+          xcodebuild build \
+            -project CascadeWidget.xcodeproj \
+            -scheme CascadeApp \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Run widget tests
+        working-directory: src/widget/macos
+        run: |
+          xcodebuild test \
+            -project CascadeWidget.xcodeproj \
+            -scheme CascadeWidgetTests \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            | grep -E "Test Suite|Test Case|PASSED|FAILED|error:"
+
+  # ── widget-windows ────────────────────────────────────────────────────────
+  # Builds the WinUI 3 / Windows App SDK 1.5 widget provider project.
+  # Uses MSBuild (Visual Studio 2022) on windows-latest.
+  # Triggers only when the widget-windows project files change or when the
+  # workflow file itself changes, to avoid burning Windows runner minutes on
+  # unrelated commits.
+  widget-windows:
+    name: widget-windows
+    runs-on: windows-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+        with:
+          nuget-version: 'latest'
+
+      - name: Restore NuGet packages (PackageReference via MSBuild)
+        working-directory: apps/cascade-widget-windows
+        run: msbuild -t:restore CascadeWidget.sln
+
+      - name: Build CascadeWidget (Release x64)
+        working-directory: apps/cascade-widget-windows
+        run: |
+          msbuild CascadeWidget.sln `
+            /t:Build `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /m `
+            /verbosity:minimal
+
+  # ── tray-windows ──────────────────────────────────────────────────────────
+  # Targeted Windows x64 build for cascade-tray platform-specific code.
+  # Builds only the cascade-tray crate for x86_64-pc-windows-msvc to catch
+  # Windows-specific compilation errors early.
+  tray-windows:
+    name: tray-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + Windows MSVC target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Build cascade-tray for Windows x64
+        run: cargo build -p cascade-tray --target x86_64-pc-windows-msvc
+
+  # ── bench-check ───────────────────────────────────────────────────────────
+  # Runs the cascade-rag benchmark suite on pull_request events and compares
+  # results against bench/baselines.json.  Any benchmark that regresses by
+  # more than 20% (throughput drop or latency increase) fails the job.
+  #
+  # Runs only on pull requests to avoid false positives from commit-to-commit
+  # noise on the main branch.  The baseline file (bench/baselines.json) was
+  # recorded on an Apple M-series machine; CI runs on ubuntu-latest x86_64.
+  # The 20% threshold is wide enough to absorb cross-hardware variance while
+  # still catching meaningful regressions introduced by a PR.
+  #
+  # To update baselines after an intentional performance change, run
+  # scripts/record_baselines.sh locally, commit bench/baselines.json, and
+  # include that commit in the PR.
+  bench-check:
+    name: bench-check
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Run benchmarks
+        # Run without --save-baseline so no Criterion baseline files accumulate
+        # in the runner.  We compare against bench/baselines.json using the
+        # Python script below instead of Criterion's built-in --baseline flag,
+        # which requires a saved baseline from a prior run on the same machine.
+        run: cargo bench -p cascade-rag 2>&1 | tee /tmp/bench-output.txt
+
+      - name: Check for regressions vs baselines.json
+        # Parse Criterion's stdout (lines like "bench_name  time: [...median...]")
+        # and compare each p50 against the value in bench/baselines.json.
+        # Fails with exit 1 if any benchmark regresses by more than 20%.
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import re
+          import sys
+
+          THRESHOLD = 0.20  # 20% regression threshold
+
+          with open("bench/baselines.json") as f:
+              baselines = json.load(f)
+
+          # Parse bench output for lines with timing data.
+          # Criterion prints: "bench_name   time:   [low  median  high]"
+          time_re = re.compile(
+              r"^([\w/=]+)\s+time:\s+\[\S+\s+(\S+)\s+(\S+)\s+\S+\]"
+          )
+
+          def parse_ns(val: str) -> float:
+              val = val.strip()
+              if val.endswith("ns"):
+                  return float(val[:-2])
+              if val.endswith("µs"):
+                  return float(val[:-2]) * 1_000
+              if val.endswith("ms"):
+                  return float(val[:-2]) * 1_000_000
+              if val.endswith("s"):
+                  return float(val[:-1]) * 1_000_000_000
+              raise ValueError(f"Unknown time unit: {val}")
+
+          measured: dict[str, float] = {}
+          with open("/tmp/bench-output.txt") as f:
+              for line in f:
+                  m = time_re.match(line.strip())
+                  if m:
+                      key = m.group(1)
+                      median_str = m.group(2)
+                      measured[key] = parse_ns(median_str)
+
+          regressions = []
+          for key, baseline in baselines.items():
+              if key.startswith("_"):
+                  continue
+              if key not in measured:
+                  continue
+              base_ns = baseline.get("p50_ns")
+              if base_ns is None:
+                  continue
+              actual_ns = measured[key]
+              ratio = (actual_ns - base_ns) / base_ns
+              if ratio > THRESHOLD:
+                  pct = ratio * 100
+                  regressions.append(
+                      f"  REGRESSION {key}: baseline={base_ns:.0f}ns "
+                      f"actual={actual_ns:.0f}ns (+{pct:.1f}%)"
+                  )
+
+          if regressions:
+              print("Benchmark regressions detected (threshold: 20%):")
+              for r in regressions:
+                  print(r)
+              print()
+              print("If this is intentional, run scripts/record_baselines.sh,")
+              print("commit bench/baselines.json, and include it in the PR.")
+              sys.exit(1)
+
+          print(f"bench-check passed: {len(measured)} benchmarks measured, none regressed >20%.")
+          PYEOF
+
+  # ── ci-gate ───────────────────────────────────────────────────────────────
+  # A single required status check that depends on all CI jobs.
+  # Configure this as the required check in branch protection rules so that
+  # you only need one entry in the required-checks list.
+  ci-gate:
+    name: ci-gate
+    needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows, bench-check]
+    runs-on: ubuntu-24.04
+    if: always()
+    steps:
+      - name: Check all CI jobs passed
+        run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "test failed: ${{ needs.test.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+            echo "integration-tests failed: ${{ needs.integration-tests.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.clippy.result }}" != "success" ]]; then
+            echo "clippy failed: ${{ needs.clippy.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.fmt.result }}" != "success" ]]; then
+            echo "fmt failed: ${{ needs.fmt.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.deny.result }}" != "success" ]]; then
+            echo "deny failed: ${{ needs.deny.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.coverage.result }}" != "success" ]]; then
+            echo "coverage failed: ${{ needs.coverage.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.widget-macos.result }}" != "success" ]]; then
+            echo "widget-macos failed: ${{ needs.widget-macos.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.widget-windows.result }}" != "success" ]]; then
+            echo "widget-windows failed: ${{ needs.widget-windows.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.tray-windows.result }}" != "success" ]]; then
+            echo "tray-windows failed: ${{ needs.tray-windows.result }}"
+            exit 1
+          fi
+          # bench-check only runs on pull_request events; on push it is skipped.
+          # A skipped result is acceptable here — a failure is not.
+          if [[ "${{ needs.bench-check.result }}" == "failure" ]]; then
+            echo "bench-check failed: ${{ needs.bench-check.result }}"
+            exit 1
+          fi
+          echo "All CI jobs passed."

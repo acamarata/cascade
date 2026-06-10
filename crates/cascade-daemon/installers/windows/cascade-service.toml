@@ -1,0 +1,55 @@
+# cascade-service.toml — Windows Service configuration for cascaded.
+#
+# This file documents the sc.exe registration parameters used by
+# `cascade daemon install` on Windows. It is NOT read at runtime — the
+# daemon is registered via sc.exe in supervisor.rs::install_windows().
+#
+# Idempotency: install_windows() checks SCM for "CascadeDaemon" before
+# calling sc.exe; a second install call is a no-op (exit code 1073).
+#
+# No UAC elevation: the service is registered as type=userown which runs
+# under the calling user's session without requiring administrator rights.
+#
+# Named Pipe: the daemon binds \\.\pipe\cascade-daemon on startup.
+# The Windows widget (apps/cascade-widget-windows/) connects here.
+
+[service]
+# Service name used for sc.exe create / start / stop commands.
+name = "CascadeDaemon"
+
+# Display name shown in Services management console.
+display_name = "Cascade AI Context Daemon"
+
+# Brief description.
+description = "Background process that runs the Cascade context engine and exposes a local Named Pipe IPC socket."
+
+# Startup type. auto = starts at user login.
+start_type = "auto"
+
+# Service type. "userown" = user-session, no elevation required.
+service_type = "userown"
+
+[binary]
+# Substituted at install time by `cascade daemon install`.
+path = "__CASCADE_BIN_PATH__"
+
+[environment]
+CASCADE_LOG_FORMAT = "json"
+CASCADE_LOG_LEVEL  = "info"
+
+[restart_policy]
+# Failure action 1: restart after 1000ms
+failure_1_action = "restart"
+failure_1_delay_ms = 1000
+# Failure action 2: restart after 5000ms
+failure_2_action = "restart"
+failure_2_delay_ms = 5000
+# Subsequent failures: restart after 60000ms (exponential backoff cap)
+failure_subsequent_action = "restart"
+failure_subsequent_delay_ms = 60000
+# Reset the failure counter after 1 day of clean uptime.
+reset_period_secs = 86400
+
+[named_pipe]
+# IPC pipe name — matches the name in ipc.rs and ipc-protocol.md.
+name = "\\\\.\\pipe\\cascade-daemon"

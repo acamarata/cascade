@@ -1,90 +1,104 @@
-# Cascade — macOS Native Widget: Xcode Project Setup
+# Cascade macOS Native Widget: Xcode Project Setup
 
-The Swift source files are ready. You need to create the Xcode project manually
-(the `project.pbxproj` format is too complex to generate by hand).
+The Swift source files and xcodegen project spec are ready. The Xcode project is generated
+from `project.yml` using [xcodegen](https://github.com/yonaskolb/XcodeGen).
 
-## One-time setup (10 minutes)
+## One-time setup
 
-### 1. Create the container app
+### 1. Install xcodegen (if not already installed)
 
-1. Open Xcode → File → New → Project
-2. Choose: macOS → App
-3. Name: `CascadeApp`, Bundle ID: `io.cascade.app`
-4. Language: Swift, Interface: SwiftUI
-5. Save into this directory: `src/widget/macos/`
+```bash
+brew install xcodegen
+```
 
-### 2. Add the widget extension
+### 2. Generate the Xcode project
 
-1. File → New → Target
-2. Choose: macOS → Widget Extension
-3. Name: `CascadeWidgetExtension`
-4. Bundle ID: `io.cascade.widgetextension`
-5. Uncheck "Include Configuration Intent" (static widget)
-6. Activate the new scheme when prompted
+```bash
+cd src/widget/macos
+xcodegen generate
+```
 
-### 3. Enable the App Group on both targets
+This creates `CascadeWidget.xcodeproj` from `project.yml`. The project includes two targets:
 
-For each target (CascadeApp and CascadeWidgetExtension):
+- **CascadeApp**: macOS container app (deployment target: 14.0)
+- **CascadeWidgetExtension**: WidgetKit extension (deployment target: 14.0)
 
-1. Select the target → Signing & Capabilities
-2. Click "+ Capability" → App Groups
-3. Add group: `group.io.cascade`
+Both targets use App Group `group.io.cascade` for shared container access. The entitlement
+files (`CascadeApp/CascadeApp.entitlements` and
+`CascadeWidgetExtension/CascadeWidgetExtension.entitlements`) are generated automatically
+by xcodegen from `project.yml`.
 
-This allows the widget to read `cache.json` from the shared container.
-
-### 4. Replace the generated Swift files
-
-Delete Xcode's auto-generated stubs and replace with the files in this directory:
-
-**CascadeWidgetExtension target — add these files:**
-- `CascadeWidgetExtension/CacheModel.swift`
-- `CascadeWidgetExtension/Entry.swift`
-- `CascadeWidgetExtension/Provider.swift`
-- `CascadeWidgetExtension/CascadeWidget.swift`
-- `CascadeWidgetExtension/CascadeWidgetBundle.swift`
-- `CascadeWidgetExtension/Views/EntryView.swift`
-- `CascadeWidgetExtension/Views/SmallView.swift`
-- `CascadeWidgetExtension/Views/MediumView.swift`
-- `CascadeWidgetExtension/Views/LargeView.swift`
-
-**CascadeApp target — add these files:**
-- `CascadeApp/CascadeAppApp.swift`
-- `CascadeApp/ContentView.swift`
-
-Note: `CacheModel.swift` is referenced by both ContentView and the extension.
-Add it to both targets in Xcode (select the file, check both targets in the
-File Inspector on the right panel).
-
-### 5. Set deployment target
-
-Both targets: macOS 14.0+
-
-### 6. Build and run
+### 3. Build and run
 
 ```bash
 ./build.sh
-# or just press Cmd+R in Xcode with CascadeApp scheme selected
+# or press Cmd+R in Xcode with CascadeApp scheme selected
 ```
 
-Then open Cascade.app, right-click the Desktop → Edit Widgets, and add the widget.
+Then open `CascadeApp.app`, right-click the Desktop, choose Edit Widgets, and add the widget.
+
+## Project structure
+
+```
+src/widget/macos/
+├── project.yml                          # xcodegen spec. Edit this, not the .xcodeproj
+├── CascadeWidget.xcodeproj/             # generated. Do not edit by hand
+├── CascadeApp/
+│   ├── CascadeApp.entitlements          # App Group group.io.cascade (generated)
+│   ├── CascadeAppApp.swift
+│   ├── ContentView.swift
+│   └── Info.plist
+├── CascadeWidgetExtension/
+│   ├── CascadeWidgetExtension.entitlements  # App Group group.io.cascade (generated)
+│   ├── CacheModel.swift
+│   ├── Entry.swift
+│   ├── Provider.swift
+│   ├── CascadeWidget.swift
+│   ├── CascadeWidgetBundle.swift
+│   ├── Info.plist
+│   └── Views/
+├── build.sh
+└── ExportOptions.plist
+```
 
 ## Data flow
 
 ```
-cascade-dash LaunchAgent
+cascade daemon
   → writes ~/Library/Group Containers/group.io.cascade/cache.json
-  → WidgetKit reads it every 5 minutes via CascadeProvider
+  → WidgetKit reads it every 5 minutes via CascadeWidgetProvider
   → renders SmallView / MediumView / LargeView
 ```
 
 ## Troubleshooting
 
 **Widget shows placeholder data:** the App Group entitlement is not enabled or the
-cache file doesn't exist yet. Run `cascade-dash refresh` to create the cache.
+cache file does not exist yet. Run `cascade refresh` to create the cache.
 
 **"group.io.cascade" container not found:** both targets need the App Group capability
-enabled and signed with the same Team ID.
+enabled and signed with the same Team ID. For local dev, ad-hoc signing (`-`) is
+configured in `project.yml`. No provisioning profile required.
 
-**Widget doesn't update:** WidgetKit on macOS can throttle refresh frequency.
-For immediate refresh during dev, run `WidgetKit Simulator` or use
-`notifyWidgetKitSimulator` from the cascade-dash CLI.
+**Widget does not update:** WidgetKit on macOS can throttle refresh frequency.
+For immediate refresh during dev, use `notifyWidgetKitSimulator` or run the
+WidgetKit Simulator in Xcode's Debug menu.
+
+**Regenerating the project:** if you change `project.yml`, re-run `xcodegen generate`
+from `src/widget/macos/`. The entitlement files are regenerated automatically.
+
+## Apple Developer Account (Optional, for Distribution Only)
+
+Local development works with ad-hoc signing (no Apple Developer account needed):
+```bash
+xcodebuild ... CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO
+```
+
+For distributable builds you need:
+- Apple Developer account at developer.apple.com ($99/year)
+- Create App Group "group.io.cascade" in Identifiers > App Groups
+- Create App IDs "io.cascade.app" and "io.cascade.app.widgetextension"
+- Download provisioning profiles and add to Xcode targets
+- Run: `xcodebuild ... -allowProvisioningUpdates`
+
+This step requires your Apple ID and is NOT automated.
+See: https://developer.apple.com/documentation/xcode/configuring-app-groups

@@ -1,0 +1,43 @@
+[package]
+name = "cascade-harness"
+description = "AI coding harness detection, configuration, and session monitoring for Cascade"
+readme = "README.md"
+keywords = ["cascade", "harness", "codex", "mcp", "ai"]
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[features]
+## Enable WASM-based policy evaluation via wasmtime.
+wasm-policy         = ["wasmtime"]
+## Bundle the pre-built default-deny-dangerous.wasm artifact.
+bundled-policy-wasm = ["wasm-policy"]
+
+[dependencies]
+cascade-types   = { workspace = true }
+cascade-core    = { workspace = true }
+cascade-rag     = { path = "../cascade-rag" }
+cascade-mcp     = { path = "../cascade-mcp" }
+async-trait     = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+serde_yaml      = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { workspace = true }
+tracing         = { workspace = true }
+chrono          = { workspace = true }
+sysinfo         = "0.31"
+dirs            = "5"
+wasmtime        = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile    = "3"
+serial_test = "3"
+tokio       = { workspace = true }
+wat         = "1"
