@@ -11,10 +11,23 @@ authors.workspace    = true
 repository.workspace = true
 
 [dependencies]
-cascade-types = { workspace = true }
-tokio         = { workspace = true }
-serde         = { workspace = true }
-serde_json    = { workspace = true }
-thiserror     = { workspace = true }
-tracing       = { workspace = true }
-async-trait   = { workspace = true }
+cascade-types      = { workspace = true }
+cascade-providers  = { workspace = true }
+tokio              = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+thiserror          = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-trait        = { workspace = true }
+# Auth token scheme (T-P4-E02-06)
+hmac          = "0.12"
+sha2          = "0.10"
+base64ct      = { version = "1", features = ["alloc"] }
+rand          = "0.8"
+
+[dev-dependencies]
+tempfile     = "3"
+tokio        = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+futures-core = "0.3"
+async-trait  = { workspace = true }

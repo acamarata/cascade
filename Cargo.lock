@@ -619,6 +619,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64ct"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
 name = "bindgen"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1178,12 +1184,20 @@ name = "cascade-mcp"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64ct",
+ "cascade-providers",
  "cascade-types",
+ "futures-core",
+ "hmac",
+ "rand 0.8.6",
  "serde 1.0.228",
  "serde_json 1.0.150",
+ "sha2",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

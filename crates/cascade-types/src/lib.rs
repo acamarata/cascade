@@ -59,6 +59,7 @@
 pub mod agent;
 pub mod auto_auth;
 pub mod cascade_tier;
+pub mod mcp;
 pub mod chunker;
 pub mod codec;
 pub mod config;

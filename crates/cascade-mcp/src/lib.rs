@@ -59,8 +59,13 @@
 
 // ── Module declarations ───────────────────────────────────────────────────────
 
+pub mod auth;
 pub mod cancellation;
+pub mod error;
+pub mod handler;
+pub mod handlers;
 pub mod logging;
+pub mod notification;
 pub mod paths;
 pub mod progress;
 pub mod prompt;
@@ -68,8 +73,13 @@ pub mod resource;
 pub mod sampling;
 pub mod server;
 pub mod tool;
+pub mod tracing_layer;
 pub mod transport;
 
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
+pub use auth::{AuthError, McpAuth, McpSecretManager};
+pub use error::McpServerError;
+pub use handler::{HandlerRegistry, McpHandler};
+pub use notification::NotificationBus;
 pub use server::{McpServer, McpServerConfig};

@@ -108,8 +108,11 @@ async fn tools_call_search_without_query_returns_invalid_params() {
     use cascade_mcp::tool::ToolRegistry;
     let registry = ToolRegistry::new();
     let params = serde_json::json!({ "name": "cascade.search", "arguments": {} });
-    let err = registry.call(&params).await.unwrap_err();
-    assert_eq!(err.code, cascade_mcp::server::ERR_INVALID_PARAMS);
+    // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
+    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
+    assert_eq!(result["isError"], true, "missing 'query' must yield isError:true");
+    let text = result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(text.contains("query"), "error text should mention missing field: {text}");
 }
 
 #[tokio::test]
@@ -134,10 +137,13 @@ async fn tools_call_inbox_send_missing_fields() {
     let params = serde_json::json!({
         "name": "cascade.inbox.send",
         "arguments": { "project": "nself" }
-        // missing 'subject' and 'body'
+        // missing 'target', 'subject', 'body', etc.
     });
-    let err = registry.call(&params).await.unwrap_err();
-    assert_eq!(err.code, cascade_mcp::server::ERR_INVALID_PARAMS);
+    // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
+    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
+    assert_eq!(result["isError"], true, "missing required fields must yield isError:true");
+    let text = result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(!text.is_empty(), "error text should describe the missing field: {text}");
 }
 
 #[tokio::test]
@@ -148,8 +154,11 @@ async fn tools_call_master_lists_unknown_kind() {
         "name": "cascade.master_lists",
         "arguments": { "project": "nself", "kind": "bogus" }
     });
-    let err = registry.call(&params).await.unwrap_err();
-    assert_eq!(err.code, cascade_mcp::server::ERR_INVALID_PARAMS);
+    // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
+    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
+    assert_eq!(result["isError"], true, "unknown 'kind' must yield isError:true");
+    let text = result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(text.contains("bogus"), "error text should mention the invalid kind value: {text}");
 }
 
 // ── Resource registry unit tests ──────────────────────────────────────────────
@@ -158,15 +167,15 @@ async fn tools_call_master_lists_unknown_kind() {
 async fn resources_list_includes_gci_tier() {
     use cascade_mcp::resource::ResourceRegistry;
     let registry = ResourceRegistry::new();
-    let result = registry.list().await.unwrap();
+    let result = registry.list(None).await.unwrap();
     let resources = result.get("resources").and_then(|v| v.as_array()).unwrap();
     let uris: Vec<&str> = resources
         .iter()
         .filter_map(|r| r.get("uri").and_then(|v| v.as_str()))
         .collect();
     assert!(
-        uris.contains(&"cascade://tiers/gci"),
-        "GCI tier not in resource list"
+        uris.contains(&"cascade://tier/gci"),
+        "GCI tier not in resource list; got: {uris:?}"
     );
 }
 
@@ -175,10 +184,10 @@ async fn resources_read_unknown_scheme_returns_error() {
     use cascade_mcp::resource::ResourceRegistry;
     let registry = ResourceRegistry::new();
     let params = serde_json::json!({ "uri": "unknown://foo/bar" });
-    let err = registry.read(&params).await.unwrap_err();
+    let err = registry.read(Some(&params)).await.unwrap_err();
     // The error message should mention the unknown URI
     let msg = format!("{err}");
-    assert!(msg.contains("Unknown resource URI") || !msg.is_empty());
+    assert!(!msg.is_empty(), "error message must not be empty");
 }
 
 // ── Prompt registry unit tests ────────────────────────────────────────────────
