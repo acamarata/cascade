@@ -16,6 +16,7 @@ pub mod archive;
 pub mod commands;
 pub mod error;
 pub mod merge;
+pub mod rag_commands;
 pub mod scanner;
 pub mod state;
 
@@ -205,6 +206,11 @@ pub fn run() {
             commands::maps::get_project_graph,
             commands::maps::get_cascade_tier_tree,
             commands::maps::get_pews_dag,
+            // T-P4-E01-27: RAG Explorer IPC stubs
+            rag_commands::rag_list_sources,
+            rag_commands::rag_ingest_file,
+            rag_commands::rag_index_stats,
+            rag_commands::rag_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

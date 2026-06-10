@@ -29,6 +29,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use cascade_rag::embed::MockEmbedModel;
+use cascade_rag::index_manager::IndexRegistry;
 use cascade_types::ipc::{self as typed_ipc, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -41,6 +43,7 @@ use crate::ipc_usage_analytics::{
     handle_usage_history, handle_usage_ledger, handle_usage_summary, new_summary_cache,
     SummaryCache,
 };
+use crate::search_handler::{dispatch_rag, RagSearchHandler};
 use crate::supervisor::DaemonError;
 
 const SOCKET_NAME: &str = "daemon.sock";
@@ -99,6 +102,10 @@ pub struct IpcServer {
     bus: Arc<EventBus>,
     /// In-memory 60-second summary cache for cascade_usage_summary (T-P3-E04-29).
     usage_summary_cache: SummaryCache,
+    /// RAG IPC method handlers (rag.search / rag.ingest_file / rag.list_sources /
+    /// rag.index_stats). Wired per T-P4-E01-29.  Uses MockEmbedModel until a
+    /// real BGE-M3 embedder is injected in a later ticket.
+    rag_handler: Arc<RagSearchHandler>,
 }
 
 impl IpcServer {
@@ -108,11 +115,17 @@ impl IpcServer {
         bus: Arc<EventBus>,
     ) -> Result<Self, DaemonError> {
         let socket_path = config_dir.join(SOCKET_NAME);
+        // RAG handler: lazy IndexRegistry + MockEmbedModel (real BGE-M3 injected later).
+        let rag_handler = RagSearchHandler::new(
+            IndexRegistry::new(),
+            Arc::new(MockEmbedModel::new(1024)),
+        );
         Ok(Self {
             socket_path,
             health,
             bus,
             usage_summary_cache: new_summary_cache(),
+            rag_handler,
         })
     }
 
@@ -232,7 +245,7 @@ where
         //    structured IpcError) until E-07+ handlers are wired.
         let response = match serde_json::from_slice::<Request>(&body) {
             Ok(req) => dispatch(&server, req).await,
-            Err(_legacy_err) => try_typed_dispatch(&server, &body),
+            Err(_legacy_err) => try_typed_dispatch(&server, &body).await,
         };
         write_response(&mut writer, &response).await?;
     }
@@ -303,7 +316,7 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
 /// Outputs: `Response::Error` with appropriate JSON-RPC error code
 /// Constraints: body must already be bounds-checked (MAX_FRAME_LEN enforced upstream)
 /// SPORT: MASTER-ENDPOINTS.md — IPC routing note updated to "typed JSON-RPC (ADR-P3-001)"
-pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
+pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
     let raw: serde_json::Value = match serde_json::from_slice(body) {
         Ok(v) => v,
         Err(e) => {
@@ -407,6 +420,22 @@ pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
                     };
                 }
                 _ => {}
+            }
+
+            // ── RAG methods (T-P4-E01-29) ─────────────────────────────────
+            // Dispatched to RagSearchHandler; must be done before the audit-hook
+            // scaffold so they return real data rather than METHOD_NOT_FOUND.
+            if typed_req.method.starts_with("rag.") {
+                return match dispatch_rag(
+                    &server.rag_handler,
+                    &typed_req.method,
+                    typed_req.params.clone(),
+                )
+                .await
+                {
+                    Ok(value) => Response::ok(value),
+                    Err((code, msg)) => Response::err(code, msg),
+                };
             }
 
             use cascade_audit::AuditOp;

@@ -26,6 +26,7 @@ import { MemoryPage } from '../pages/MemoryPage'
 import { LibraryPanel } from '../features/library/LibraryPanel'
 import { ContextPanel } from '../features/context/ContextPanel'
 import { ProjectMapPage } from '../pages/ProjectMapPage'
+import { RagExplorerPage } from '../pages/RagExplorerPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -93,6 +94,8 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/context" element={<ContextPanel />} />
         {/* T-P3-E07-13: Project map panel */}
         <Route path="/project-map" element={<ProjectMapPage />} />
+        {/* T-P4-E01-27: RAG Explorer panel */}
+        <Route path="/rag-explorer" element={<RagExplorerPage />} />
       </Route>
 
       {/* Catch-all */}

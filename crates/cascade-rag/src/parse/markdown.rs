@@ -17,6 +17,7 @@
 
 use async_trait::async_trait;
 use serde_json::json;
+use std::collections::HashMap;
 use std::path::Path;
 
 use cascade_types::{
@@ -24,6 +25,8 @@ use cascade_types::{
     error::{CascadeError, Result},
     parser::{Parser, ParserKind},
 };
+
+use super::{DocumentParser, DocumentText};
 
 /// Markdown parser.
 #[derive(Debug, Default)]
@@ -63,6 +66,120 @@ impl Parser for MarkdownParser {
         })
     }
 }
+
+// ── DocumentParser impl ───────────────────────────────────────────────────────
+
+/// Synchronous [`DocumentParser`] adapter for Markdown files.
+///
+/// Strips YAML front-matter, extracts the first H1 as the title, and returns
+/// the body as plain text. Uses lossy UTF-8 conversion so binary or
+/// mis-encoded files do not cause a hard error.
+///
+/// SPORT: MASTER-LIBS.md → cascade-rag::parse::MarkdownDocParser
+///
+/// # Ticket
+/// T-P4-E01-14
+pub struct MarkdownDocParser;
+
+impl DocumentParser for MarkdownDocParser {
+    fn can_parse(&self, path: &Path) -> bool {
+        matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("md") | Some("mdx") | Some("markdown")
+        )
+    }
+
+    fn parse(&self, path: &Path) -> Result<DocumentText> {
+        // Lossy UTF-8: never fails on binary content.
+        let bytes = std::fs::read(path).map_err(|e| CascadeError::ParseFailed {
+            path: path.to_path_buf(),
+            detail: format!("read failed: {e}"),
+        })?;
+        let raw = String::from_utf8_lossy(&bytes).into_owned();
+
+        let (_frontmatter, body) = strip_frontmatter(&raw);
+        let title = extract_title(body).map(String::from);
+
+        let mut metadata = HashMap::new();
+        if let Some(ref fm) = _frontmatter {
+            metadata.insert("frontmatter".to_string(), fm.clone());
+        }
+
+        Ok(DocumentText {
+            source_path: path.to_path_buf(),
+            text: body.to_string(),
+            title,
+            metadata,
+            parser_name: self.parser_name().to_string(),
+        })
+    }
+
+    fn parser_name(&self) -> &str {
+        "markdown"
+    }
+}
+
+// ── Tests (T-P4-E01-14) ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod doc_parser_tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn strips_frontmatter_and_extracts_title() {
+        let mut f = NamedTempFile::with_suffix(".md").unwrap();
+        write!(
+            f,
+            "---\nauthor: test\n---\n# My Title\n\nHello world."
+        )
+        .unwrap();
+        let parser = MarkdownDocParser;
+        assert!(parser.can_parse(f.path()));
+        let doc = parser.parse(f.path()).unwrap();
+        assert_eq!(doc.parser_name, "markdown");
+        assert_eq!(doc.title.as_deref(), Some("My Title"));
+        assert!(!doc.text.contains("author: test"), "front-matter must be stripped");
+        assert!(doc.text.contains("Hello world."));
+    }
+
+    #[test]
+    fn no_frontmatter_still_works() {
+        let mut f = NamedTempFile::with_suffix(".md").unwrap();
+        write!(f, "# Just a heading\nsome content").unwrap();
+        let parser = MarkdownDocParser;
+        let doc = parser.parse(f.path()).unwrap();
+        assert_eq!(doc.title.as_deref(), Some("Just a heading"));
+        assert!(doc.text.contains("some content"));
+    }
+
+    #[test]
+    fn can_parse_extension_table() {
+        let parser = MarkdownDocParser;
+        assert!(parser.can_parse(Path::new("README.md")));
+        assert!(parser.can_parse(Path::new("page.mdx")));
+        assert!(parser.can_parse(Path::new("notes.markdown")));
+        assert!(!parser.can_parse(Path::new("main.rs")));
+        assert!(!parser.can_parse(Path::new("data.txt")));
+    }
+
+    #[test]
+    fn lossy_fallback_non_utf8() {
+        let mut f = NamedTempFile::with_suffix(".md").unwrap();
+        // Write some invalid UTF-8 bytes surrounded by valid text.
+        let mut content = b"# Title\n".to_vec();
+        content.extend_from_slice(&[0xFF, 0xFE]);
+        content.extend_from_slice(b"\nvalid after");
+        f.write_all(&content).unwrap();
+        let parser = MarkdownDocParser;
+        let doc = parser.parse(f.path()).unwrap(); // must not error
+        assert_eq!(doc.title.as_deref(), Some("Title"));
+        assert!(doc.text.contains("valid after"));
+    }
+}
+
+// ── Async Parser impl (existing, unchanged) ───────────────────────────────────
 
 fn strip_frontmatter(text: &str) -> (Option<String>, &str) {
     let t = text.trim_start();

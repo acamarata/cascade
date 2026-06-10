@@ -15,10 +15,15 @@ cascade-types = { workspace = true }
 async-trait   = { workspace = true }
 serde         = { workspace = true }
 serde_json    = { workspace = true }
+serde_yaml    = { workspace = true }
+toml          = { workspace = true }
 thiserror     = { workspace = true }
 tokio         = { workspace = true }
 tracing       = { workspace = true }
 rusqlite      = { workspace = true }
+
+# SHA-256 for ingest content-hash idempotency (T-P4-E01-22; MIT)
+sha2 = "0.10"
 
 # Home directory resolution for model cache path (lightweight, MIT)
 dirs = "5"
@@ -37,10 +42,38 @@ tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-python     = { workspace = true, optional = true }
 tree-sitter-javascript = { workspace = true, optional = true }
 
+# Optional: HTML parsing and tag stripping (feature = "html-parser")
+scraper = { version = "0.20", optional = true }
+
+# Optional: pure-Rust PDF text-layer extraction (feature = "pdf-parser")
+# T-P4-E01-17: pdf-extract 0.7 (MIT, no native deps)
+pdf-extract = { version = "0.7", optional = true }
+
+# Optional: DOCX paragraph text extraction (feature = "docx-parser")
+# T-P4-E01-18: docx-rs 0.4 (MIT, pure Rust). Exposes read_docx() for reading.
+docx-rs = { version = "0.4", optional = true }
+
+# Optional: XLSX/XLS spreadsheet text extraction (feature = "xlsx-parser")
+# T-P4-E01-19: calamine 0.24 (MIT, pure Rust reader for Excel formats).
+calamine = { version = "0.24", optional = true }
+
 [features]
 default = []
 fastembed    = ["dep:fastembed"]
+# reranker: enables bge-reranker-base ONNX cross-encoder via fastembed TextRerank.
+# Requires ~350 MB RAM at runtime. Implies the fastembed feature.
+# Gate: TierLevel::Reranker or higher in cascade.toml.
+reranker     = ["dep:fastembed"]
 vec          = ["dep:sqlite-vec"]
+# rag-multivec: enables BGE-M3 multi-vector (ColBERT-style) late-interaction indexing.
+# OFF by default. Adds ~3-4x disk usage (rag_token_embeddings table).
+# Opt in via cascade.toml: [rag] multi_vec = true
+# Requires the rag-multivec feature to be compiled in.
+rag-multivec = []
+html-parser  = ["dep:scraper"]
+pdf-parser   = ["dep:pdf-extract"]
+docx-parser  = ["dep:docx-rs"]
+xlsx-parser  = ["dep:calamine"]
 code-chunker = [
     "dep:tree-sitter",
     "dep:tree-sitter-rust",
@@ -50,4 +83,5 @@ code-chunker = [
 ]
 
 [dev-dependencies]
-tempfile = "3"
+tempfile    = "3"
+serial_test = "3"

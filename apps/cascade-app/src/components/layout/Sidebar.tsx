@@ -15,6 +15,7 @@ import {
   BookOpen,
   Brain,
   ClipboardList,
+  Database,
   GitFork,
   Inbox,
   LayoutDashboard,
@@ -69,6 +70,11 @@ const NAV_ITEMS = [
     to: '/vault/memory',
     icon: <Brain className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Memory',
+  },
+  {
+    to: '/rag-explorer',
+    icon: <Database className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'RAG Explorer',
   },
   {
     to: '/usage',

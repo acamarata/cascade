@@ -1,0 +1,77 @@
+[
+  {
+    "query": "cascade instruction cascade tiers GCI ASI PPI",
+    "relevant_chunk_ids": ["CLAUDE.md-1", "CLAUDE.md-2", "CLAUDE.md-3"],
+    "notes": "Core cascade concept — tiered instruction resolution"
+  },
+  {
+    "query": "destructive deny list rm rf force push",
+    "relevant_chunk_ids": ["rules/destructive-deny-list.md-1", "rules/destructive-deny-list.md-2"],
+    "notes": "Safety rules for destructive operations"
+  },
+  {
+    "query": "pbd plan build phase based development PEWS",
+    "relevant_chunk_ids": ["references/rules/phase-based-development.md-1", "references/rules/pews-unit-completeness.md-1"],
+    "notes": "Phase-based development workflow — multi-word phrase"
+  },
+  {
+    "query": "multi agent protocol delegation subagent spawn",
+    "relevant_chunk_ids": ["references/rules/multi-agent-protocol.md-1", "references/rules/delegation-mandate.md-1"],
+    "notes": "Agent orchestration and delegation — multi-word phrase"
+  },
+  {
+    "query": "RAG retrieval augmented generation BGE-M3 FTS5 RRF",
+    "relevant_chunk_ids": ["cascade/CLAUDE.md-1", "cascade/CLAUDE.md-2"],
+    "notes": "RAG pipeline technology stack"
+  },
+  {
+    "query": "bypassPermissions autonomous operation zero prompts",
+    "relevant_chunk_ids": ["rules/destructive-deny-list.md-3", "rules/autonomous-verification.md-1"],
+    "notes": "Autonomous operation configuration"
+  },
+  {
+    "query": "output conciseness TLDR numbered questions structure",
+    "relevant_chunk_ids": ["rules/output-conciseness-and-structure.md-1", "rules/output-conciseness-and-structure.md-2"],
+    "notes": "Response formatting rules — multi-word phrase"
+  },
+  {
+    "query": "model tier Sonnet Haiku Opus T1 T2 T3",
+    "relevant_chunk_ids": ["references/rules/model-strategy.md-1", "references/model-registry.md-1"],
+    "notes": "Model selection strategy"
+  },
+  {
+    "query": "claude file ops claude-write claude-edit scripts",
+    "relevant_chunk_ids": ["rules/claude-file-ops.md-1", "rules/claude-file-ops.md-2"],
+    "notes": "File operation scripts for .claude/ paths"
+  },
+  {
+    "query": "cascade Rust workspace Tauri daemon cascaded crates",
+    "relevant_chunk_ids": ["cascade/CLAUDE.md-3", "cascade/CLAUDE.md-4"],
+    "notes": "Cascade Rust target architecture"
+  },
+  {
+    "query": "ingest pipeline parse chunk embed store idempotent",
+    "relevant_chunk_ids": ["cascade/ingest.md-1", "cascade/CLAUDE.md-5"],
+    "notes": "Ingest pipeline steps — multi-word phrase"
+  },
+  {
+    "query": "FTS5 BM25 keyword search retrieval ranking",
+    "relevant_chunk_ids": ["cascade/search.md-1", "cascade/CLAUDE.md-6"],
+    "notes": "FTS5 BM25 ranking"
+  },
+  {
+    "query": "RRF reciprocal rank fusion score merge",
+    "relevant_chunk_ids": ["cascade/search.md-2"],
+    "notes": "RRF fusion math — multi-word phrase"
+  },
+  {
+    "query": "pnpm workspace typescript strict dependency management",
+    "relevant_chunk_ids": ["references/frontend-conventions.md-1"],
+    "notes": "pnpm and TypeScript conventions"
+  },
+  {
+    "query": "prayer times qibla hijri calendar moon sighting",
+    "relevant_chunk_ids": ["acamarata/CLAUDE.md-1", "acamarata/ppi-detail.md-1"],
+    "notes": "Islamic calendar domain — multi-word phrase"
+  }
+]

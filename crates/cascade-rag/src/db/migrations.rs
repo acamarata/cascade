@@ -8,17 +8,19 @@
 //! `include_str!`. Re-running on an already-migrated DB is a no-op (idempotent).
 //!
 //! ## Version map
-//! | user_version | migration applied              | feature gate |
-//! |-------------|--------------------------------|--------------|
-//! | 0           | (initial state, no tables)    | —            |
-//! | 1           | 0001_sources.sql              | always       |
-//! | 2           | 0002_chunks.sql               | always       |
-//! | 3           | 0003_citations.sql            | always       |
-//! | 4           | 0005_fts5.sql                 | always       |
-//! | 5           | 0004_embeddings.sql (vec0)    | `vec`        |
-//! | 5           | 0004_embeddings_blob.sql      | no `vec`     |
+//! | user_version | migration applied              | feature gate  |
+//! |-------------|--------------------------------|---------------|
+//! | 0           | (initial state, no tables)    | —             |
+//! | 1           | 0001_sources.sql              | always        |
+//! | 2           | 0002_chunks.sql               | always        |
+//! | 3           | 0003_citations.sql            | always        |
+//! | 4           | 0005_fts5.sql                 | always        |
+//! | 5           | 0004_embeddings.sql (vec0)    | `vec`         |
+//! | 5           | 0004_embeddings_blob.sql      | no `vec`      |
+//! | 6           | 0006_token_embeddings.sql     | `rag-multivec`|
 //!
 //! Both paths (vec and blob) advance to `user_version=5`.
+//! Migration 6 advances to `user_version=6` only when `rag-multivec` is enabled.
 //!
 //! SPORT: MASTER-TABLES.md → rag_sources, rag_chunks, rag_citations, rag_fts5,
 //!        rag_embeddings, rag_sparse_embeddings
@@ -36,6 +38,9 @@ const SQL_0004: &str = include_str!("../../migrations/0004_embeddings.sql");
 #[cfg(not(feature = "vec"))]
 const SQL_0004_BLOB: &str = include_str!("../../migrations/0004_embeddings_blob.sql");
 const SQL_0005: &str = include_str!("../../migrations/0005_fts5.sql");
+// 0006: per-token ColBERT-style embedding table (requires `rag-multivec` feature).
+#[cfg(feature = "rag-multivec")]
+const SQL_0006: &str = include_str!("../../migrations/0006_token_embeddings.sql");
 
 /// Apply all pending migrations to `conn`.
 ///
@@ -79,6 +84,14 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 5 {
         apply(conn, SQL_0004_BLOB)?;
         set_user_version(conn, 5)?;
+    }
+
+    // Migration 6: per-token ColBERT embedding table. Only when `rag-multivec` is enabled.
+    // Disk usage is ~3-4x the dense embedding table — warn users via cascade.toml docs.
+    #[cfg(feature = "rag-multivec")]
+    if version < 6 {
+        apply(conn, SQL_0006)?;
+        set_user_version(conn, 6)?;
     }
 
     Ok(())
@@ -138,10 +151,13 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
 
-        // Both feature paths now advance to user_version=5.
-        // Without vec: blob fallback migration applied (0004_embeddings_blob.sql).
-        // With vec:    sqlite-vec migration applied (0004_embeddings.sql).
-        assert_eq!(version, 5, "expected user_version=5 (both vec and no-vec paths)");
+        // Expected version:
+        //   5 — base (vec or blob path), no rag-multivec feature.
+        //   6 — base + rag_token_embeddings migration, rag-multivec feature enabled.
+        #[cfg(not(feature = "rag-multivec"))]
+        assert_eq!(version, 5, "expected user_version=5 (no rag-multivec)");
+        #[cfg(feature = "rag-multivec")]
+        assert_eq!(version, 6, "expected user_version=6 (rag-multivec enabled)");
     }
 
     // --- db::migrations::idempotent ------------------------------------------
@@ -154,7 +170,10 @@ mod tests {
         let version: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        #[cfg(not(feature = "rag-multivec"))]
+        assert_eq!(version, 5, "idempotent: user_version=5");
+        #[cfg(feature = "rag-multivec")]
+        assert_eq!(version, 6, "idempotent: user_version=6 with rag-multivec");
     }
 
     // --- db::migrations::tables_exist ----------------------------------------

@@ -370,19 +370,89 @@ pub async fn validate_cascade_doc(
 }
 
 // ---------------------------------------------------------------------------
-// RAG commands (T-P4-E01 scope — typed stub)
+// RAG commands (T-P4-E01-29: wired to daemon rag.search endpoint)
 // ---------------------------------------------------------------------------
 
-/// Run a RAG query against the indexed knowledge base (P4 scope).
-/// JS: `invoke("rag_query", { query, topK })`
-/// TODO(T-P4-E01): delegate to cascade_rag::RagEngine::query()
+/// Params forwarded to the daemon's `rag.search` JSON-RPC method.
+///
+/// Matches `cascade_daemon::search_handler::RagSearchParams` without requiring
+/// cascade-daemon as a direct dependency.
+#[derive(Debug, Serialize)]
+struct RagSearchIpcParams<'a> {
+    query: &'a str,
+    project_root: String,
+    k: u32,
+}
+
+/// Daemon `rag.search` response shape (mirrors `RagSearchResponse`).
+///
+/// We only deserialize the fields we need for mapping to `RagResult`.
+#[derive(Debug, Deserialize)]
+struct RagSearchIpcResponse {
+    citations: Vec<RagCitationIpc>,
+}
+
+/// Minimal citation shape from `cascade_rag::citation::RagCitation` (camelCase).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RagCitationIpc {
+    source_path: String,
+    snippet: String,
+    rrf_score: f64,
+    line_start: usize,
+}
+
+/// Run a RAG search query against the daemon's indexed knowledge base.
+///
+/// # Purpose
+/// Delegates to the daemon's `rag.search` IPC method (T-P4-E01-29).
+/// Returns a mapped `Vec<RagResult>` ordered by descending relevance score.
+///
+/// # JS
+/// `invoke("rag_query", { query, topK })`
+///
+/// # Inputs
+/// - `query`: User search string.
+/// - `top_k`: Max results (defaults to 10).
+///
+/// # Outputs
+/// Ordered list of RAG results. Returns empty vec if daemon returns no hits.
 #[tauri::command]
 pub async fn rag_query(
-    _query: String,
-    _top_k: Option<usize>,
+    query: String,
+    top_k: Option<usize>,
     _state: State<'_, AppState>,
 ) -> Result<Vec<RagResult>, String> {
-    Ok(vec![])
+    let client = make_client().map_err(|e| e.to_string())?;
+
+    // Resolve the project root from the environment (same as other commands).
+    let project_root = std::env::var("CASCADE_PROJECT_ROOT")
+        .or_else(|_| std::env::current_dir().map(|p| p.display().to_string()))
+        .unwrap_or_default();
+
+    let params = RagSearchIpcParams {
+        query: &query,
+        project_root,
+        k: top_k.unwrap_or(10) as u32,
+    };
+
+    let resp: RagSearchIpcResponse = client
+        .send("rag.search", &params)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let results = resp
+        .citations
+        .into_iter()
+        .map(|c| RagResult {
+            content: c.snippet,
+            score: c.rrf_score as f32,
+            source_path: c.source_path,
+            chunk_index: c.line_start,
+        })
+        .collect();
+
+    Ok(results)
 }
 
 // ---------------------------------------------------------------------------

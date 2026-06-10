@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 cascade-core      = { workspace = true }
+cascade-rag       = { path = "../cascade-rag" }
 cascade-types     = { workspace = true }
 cascade-tray      = { workspace = true }
 cascade-keychain  = { path = "../cascade-keychain" }
@@ -52,6 +53,7 @@ uuid          = { workspace = true }
 toml          = "0.8"
 fs2           = "0.4"
 serde_yaml    = "0.9"
+notify        = { workspace = true }
 
 [features]
 tcp-ipc = []

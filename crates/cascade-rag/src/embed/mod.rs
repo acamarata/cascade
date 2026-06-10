@@ -308,6 +308,14 @@ pub mod model_cache;
 pub mod nomic;
 pub mod store;
 
+/// Multi-vector (ColBERT-style) token-level embedding support.
+///
+/// Gated behind the `rag-multivec` feature (OFF by default). Enables the
+/// BGE-M3 multi-vector tier: per-token vector storage + MaxSim late-interaction
+/// scoring. See `multivector` module docs for the proxy caveat on fastembed.
+#[cfg(feature = "rag-multivec")]
+pub mod multivector;
+
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use cascade_types::{EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind};

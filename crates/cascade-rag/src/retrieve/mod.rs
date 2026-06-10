@@ -26,4 +26,12 @@ pub mod hyde;
 pub mod rrf;
 pub mod vector;
 
+/// Multi-vector (ColBERT-style) MaxSim retriever.
+///
+/// Gated behind the `rag-multivec` feature (OFF by default). When enabled,
+/// adds a fourth retrieval channel to the RRF pipeline using BGE-M3
+/// per-token late-interaction scoring.
+#[cfg(feature = "rag-multivec")]
+pub mod multivec;
+
 pub use cascade_types::{RetrievalHit, RetrieveOpts, Retriever};

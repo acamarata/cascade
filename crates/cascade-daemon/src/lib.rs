@@ -36,7 +36,13 @@ pub mod log;
 pub mod provider_health;
 pub mod proxy;
 pub mod quota_poller;
+// T-P4-E01-26: auto-RAG file watcher (notify-based)
+pub mod rag_watcher;
+// T-P4-E01-29: IPC search endpoint (rag.* JSON-RPC methods)
+pub mod search_handler;
 pub mod regen;
+// T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
+pub mod volume_watcher;
 pub mod shutdown;
 pub mod state;
 pub mod supervisor;
