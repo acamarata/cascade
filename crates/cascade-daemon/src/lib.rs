@@ -11,7 +11,11 @@
 #![allow(dead_code)]
 
 pub mod audit;
+// T-P4-E04-10: in-memory mtime-validated chunk cache for cascade file reads
+pub mod chunk_cache;
 pub mod config;
+// T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
+pub mod loader;
 // W-05 scaffold IPC handlers (T-P3-E03-39b / T-P3-E03-40 / T-P3-E03-41)
 pub mod ipc_auto_auth;
 pub mod ipc_pool_register;
@@ -38,6 +42,8 @@ pub mod proxy;
 pub mod quota_poller;
 // T-P4-E01-26: auto-RAG file watcher (notify-based)
 pub mod rag_watcher;
+// T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)
+pub mod indexer;
 // T-P4-E01-29: IPC search endpoint (rag.* JSON-RPC methods)
 pub mod search_handler;
 pub mod regen;
@@ -48,5 +54,8 @@ pub mod state;
 pub mod supervisor;
 pub mod telemetry;
 pub mod tray;
+
+// T-P4-E04-12/13: delta bundle format, snapshot layout, Ed25519 verification
+pub mod updates;
 
 pub use config::Config;

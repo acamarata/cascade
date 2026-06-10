@@ -59,7 +59,8 @@ async fn tools_list_returns_eight_tools() {
     let registry = ToolRegistry::new();
     let result = registry.list().await.unwrap();
     let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
-    assert_eq!(tools.len(), 8, "expected 8 tools, got {}", tools.len());
+    // 9 tools: 8 original + cascade.context_slice (T-P4-E04-22)
+    assert_eq!(tools.len(), 9, "expected 9 tools, got {}", tools.len());
 
     let names: Vec<&str> = tools
         .iter()

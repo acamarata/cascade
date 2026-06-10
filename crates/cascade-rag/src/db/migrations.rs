@@ -18,12 +18,16 @@
 //! | 5           | 0004_embeddings.sql (vec0)    | `vec`         |
 //! | 5           | 0004_embeddings_blob.sql      | no `vec`      |
 //! | 6           | 0006_token_embeddings.sql     | `rag-multivec`|
+//! | 7           | 0007_index_state.sql          | always        |
+//! | 8           | 0008_context_fingerprints.sql | always        |
 //!
 //! Both paths (vec and blob) advance to `user_version=5`.
 //! Migration 6 advances to `user_version=6` only when `rag-multivec` is enabled.
+//! Migration 7 advances to `user_version=7` (index_state).
+//! Migration 8 advances to `user_version=8` (context_fingerprints — T-P4-E04-21).
 //!
 //! SPORT: MASTER-TABLES.md → rag_sources, rag_chunks, rag_citations, rag_fts5,
-//!        rag_embeddings, rag_sparse_embeddings
+//!        rag_embeddings, rag_sparse_embeddings, index_state, context_fingerprints
 
 use rusqlite::{Connection, Result};
 
@@ -41,6 +45,10 @@ const SQL_0005: &str = include_str!("../../migrations/0005_fts5.sql");
 // 0006: per-token ColBERT-style embedding table (requires `rag-multivec` feature).
 #[cfg(feature = "rag-multivec")]
 const SQL_0006: &str = include_str!("../../migrations/0006_token_embeddings.sql");
+// 0007: index_state table for incremental indexing delta detection.
+const SQL_0007: &str = include_str!("../../migrations/0007_index_state.sql");
+// 0008: context_fingerprints table for cross-session chunk dedup (T-P4-E04-21).
+const SQL_0008: &str = include_str!("../../migrations/0008_context_fingerprints.sql");
 
 /// Apply all pending migrations to `conn`.
 ///
@@ -92,6 +100,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 6 {
         apply(conn, SQL_0006)?;
         set_user_version(conn, 6)?;
+    }
+
+    // Migration 7: index_state for incremental-indexing delta detection.
+    if version < 7 {
+        apply(conn, SQL_0007)?;
+        set_user_version(conn, 7)?;
+    }
+
+    // Migration 8: context_fingerprints for cross-session chunk dedup (T-P4-E04-21).
+    if version < 8 {
+        apply(conn, SQL_0008)?;
+        set_user_version(conn, 8)?;
     }
 
     Ok(())

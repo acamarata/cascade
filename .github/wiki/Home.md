@@ -29,6 +29,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 - [Configuration Reference](Configuration-Reference.md)
 - [RAG Setup](RAG-Setup.md)
 - [MCP Server](MCP-Server.md)
+- [Performance](cascade-performance.md)
 
 **Tool integrations**
 - [Claude Code](Integration-Claude-Code.md) · [OpenCode](Integration-OpenCode.md) · [Codex](Integration-Codex.md)

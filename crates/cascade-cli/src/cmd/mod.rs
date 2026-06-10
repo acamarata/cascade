@@ -5,6 +5,14 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// T-P4-E04-11: cascade cache stats + cache clear
+pub mod cache;
+// T-P4-E04-21: cascade context clear-session / cleanup-expired
+pub mod context;
+// T-P4-E04-15: cascade rollback list/apply
+pub mod rollback;
+// T-P4-E04-16: cascade update check/apply/auto
+pub mod update;
 pub mod completions;
 pub mod config;
 pub mod plugin;
@@ -110,6 +118,14 @@ pub enum Commands {
     Ping(ping::PingArgs),
     /// Manage installed WASM plugins.
     Plugin(plugin::PluginArgs),
+    /// Inspect and clear daemon caches.
+    Cache(cache::CacheArgs),
+    /// Manage pre-update snapshots (list, apply).
+    Rollback(rollback::RollbackArgs),
+    /// Check for and apply daemon updates.
+    Update(update::UpdateArgs),
+    /// Manage context fingerprints for cross-session dedup (T-P4-E04-21).
+    Context(context::ContextArgs),
 }
 
 impl Commands {
@@ -142,6 +158,10 @@ impl Commands {
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
             Commands::Plugin(args) => args.run().await,
+            Commands::Cache(args) => args.run().await,
+            Commands::Rollback(args) => args.run().await,
+            Commands::Update(args) => args.run().await,
+            Commands::Context(args) => args.run().await,
         }
     }
 }

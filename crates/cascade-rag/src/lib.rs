@@ -43,6 +43,7 @@
 pub mod cache;
 pub mod chunk;
 pub mod citation;
+pub mod context;
 pub mod db;
 pub mod embed;
 pub mod eval;
@@ -53,6 +54,7 @@ pub mod parse;
 pub mod rerank;
 pub mod retrieve;
 pub mod search;
+pub mod workers;
 
 // Feature-gated placeholder modules — logic wired in subsequent tickets
 #[cfg(feature = "vec")]
@@ -107,13 +109,17 @@ impl TierLevel {
 
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
-pub use cache::{ChunkCache, EmbedCache, QueryCache};
+pub use cache::{CachedEmbedModel, ChunkCache, EmbedCache, EmbedCacheError, LegacyQueryCache, QueryCache};
+pub use context::{ContextOptimizer, ContextResult};
+pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
 pub use index_manager::{IndexManager, IndexRegistry, SourceInfo, resolve_db_path};
 pub use citation::{Citation, CitationSet, RagCitation, citations_from_chunk_ids};
 pub use eval::{EvalConfig, EvalHarness, EvalMetrics, EvalQuery, EvalReport, GroundTruth, QueryResult, SearchFn};
-pub use index::RagIndex;
+pub use index::{CachedIndex, RagIndex};
+pub use index::sharding::{EmbedResult as ShardEmbedResult, SearchHit as ShardSearchHit, ShardedIndex, shard_for};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
 pub use retrieve::rrf::RrfRetriever;
 pub use search::{search, SearchConfig};
-pub use ingest::{IngestPipeline, IngestConfig, IngestResult};
+pub use ingest::{IngestPipeline, IngestConfig, IngestResult, IngestStats};
+pub use index::state::{IndexStateStore, ChangeKind};
 pub use db::run_migrations;

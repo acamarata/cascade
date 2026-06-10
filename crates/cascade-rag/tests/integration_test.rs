@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use cascade_rag::{
-    cache::QueryCache,
+    cache::LegacyQueryCache,
     chunk::FixedSizeChunker,
     citation::{Citation, CitationSet},
     eval::{EvalMetrics, EvalQuery, GroundTruth},
@@ -357,7 +357,9 @@ fn eval_regression_detection() {
 
 #[test]
 fn query_cache_lru_eviction() {
-    let cache = QueryCache::new(2);
+    // Uses LegacyQueryCache (query+strategy+k+project → Vec<RetrievalHit>).
+    // New code should use QueryCache + CachedIndex (T-P4-E04-07).
+    let cache = LegacyQueryCache::new(2);
     cache.insert("q1", "rrf", 10, "proj", vec![]);
     cache.insert("q2", "rrf", 10, "proj", vec![]);
     cache.insert("q3", "rrf", 10, "proj", vec![]);

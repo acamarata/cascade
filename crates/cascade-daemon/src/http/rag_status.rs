@@ -38,12 +38,18 @@ pub fn router() -> Router<DashboardState> {
 ///
 /// The RagStatusCard renders this as a yellow "No index" status pill.
 async fn rag_status_handler() -> Json<RagStatusResponse> {
+    // P3 stub: all values are defaults.
+    // T-P4-E04-08: query_cache_* fields are 0 until CachedIndex is wired into
+    // DaemonState and passed through StatusBuilder (P4 scope).
     Json(RagStatusResponse {
         serving: false,
         index_count: 0,
         last_indexed: None,
         index_size_bytes: 0,
         serve_endpoint: "localhost:9762/rag (P4)".to_string(),
+        query_cache_hits: 0,
+        query_cache_misses: 0,
+        query_cache_size: 0,
     })
 }
 

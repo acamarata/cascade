@@ -11,11 +11,16 @@
 //! SPORT: .claude/docs/MASTER-DAEMON.md — DaemonState (T-P2-E02-31)
 
 use std::collections::VecDeque;
+use std::sync::Arc;
+
+use cascade_rag::workers::WorkerPool;
 
 /// In-memory daemon state.
 ///
 /// Holds quota snapshots in a bounded ring buffer so the quota poller can
 /// aggregate recent history without reading a file on every poll cycle.
+/// Also holds the parallel embedding worker pool so the indexing pipeline
+/// and health-check handler can share a single pool instance.
 ///
 /// The snapshot type is a JSON value to remain agnostic to how quota polling
 /// results are structured.
@@ -26,13 +31,43 @@ pub struct DaemonState {
     /// The quota poller pushes new snapshots here and prunes excess entries.
     /// Stored as serde_json::Value to remain schema-flexible across harnesses.
     pub snapshot_ring: VecDeque<serde_json::Value>,
+
+    /// Parallel embedding worker pool for the RAG indexing pipeline.
+    ///
+    /// `None` until the daemon initialises RAG (requires a project root).
+    /// Set by the supervisor after the first project is opened.
+    /// Call `drain_and_shutdown()` on SIGTERM before dropping.
+    ///
+    /// SPORT: MASTER-COMPONENTS.md → WorkerPool (T-P4-E04-03)
+    pub worker_pool: Option<Arc<WorkerPool>>,
 }
 
 impl DaemonState {
-    /// Create a new DaemonState with an empty snapshot ring.
+    /// Create a new DaemonState with an empty snapshot ring and no worker pool.
     pub fn new() -> Self {
         Self {
             snapshot_ring: VecDeque::new(),
+            worker_pool: None,
+        }
+    }
+
+    /// Returns the current RAG worker queue depth, or 0 if no pool is active.
+    ///
+    /// Used by the `cascade status` JSON output (`rag.worker_queue_depth`).
+    pub fn worker_queue_depth(&self) -> usize {
+        self.worker_pool
+            .as_ref()
+            .map(|p| p.queue_depth())
+            .unwrap_or(0)
+    }
+
+    /// Gracefully drain and shut down the worker pool.
+    ///
+    /// Must be called on SIGTERM/SIGINT before dropping `DaemonState` to ensure
+    /// all in-flight embedding batches complete before the process exits.
+    pub fn drain_worker_pool(&self) {
+        if let Some(ref pool) = self.worker_pool {
+            pool.drain_and_shutdown();
         }
     }
 

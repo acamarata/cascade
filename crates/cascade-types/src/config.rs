@@ -141,6 +141,15 @@ pub struct RagConfig {
     /// Directory where the vector index is persisted.
     /// Default: `.cascade/index/`
     pub index_dir: Option<std::path::PathBuf>,
+
+    /// Number of SQLite shards for the dense vector index.
+    ///
+    /// Each document is assigned to shard `fnv1a(doc_id) % shard_count`.
+    /// KNN fan-outs query all shards in parallel and merge by score.
+    ///
+    /// Changing this value on an existing index requires a full re-index.
+    /// Default: 4.
+    pub shard_count: usize,
 }
 
 impl Default for RagConfig {
@@ -156,6 +165,7 @@ impl Default for RagConfig {
             chunk_size: 512,
             chunk_overlap: 64,
             index_dir: None,
+            shard_count: 4,
         }
     }
 }

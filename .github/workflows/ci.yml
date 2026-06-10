@@ -375,13 +375,122 @@ jobs:
       - name: Build cascade-tray for Windows x64
         run: cargo build -p cascade-tray --target x86_64-pc-windows-msvc
 
+  # ── bench-check ───────────────────────────────────────────────────────────
+  # Runs the cascade-rag benchmark suite on pull_request events and compares
+  # results against bench/baselines.json.  Any benchmark that regresses by
+  # more than 20% (throughput drop or latency increase) fails the job.
+  #
+  # Runs only on pull requests to avoid false positives from commit-to-commit
+  # noise on the main branch.  The baseline file (bench/baselines.json) was
+  # recorded on an Apple M-series machine; CI runs on ubuntu-latest x86_64.
+  # The 20% threshold is wide enough to absorb cross-hardware variance while
+  # still catching meaningful regressions introduced by a PR.
+  #
+  # To update baselines after an intentional performance change, run
+  # scripts/record_baselines.sh locally, commit bench/baselines.json, and
+  # include that commit in the PR.
+  bench-check:
+    name: bench-check
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux tray system deps
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Run benchmarks
+        # Run without --save-baseline so no Criterion baseline files accumulate
+        # in the runner.  We compare against bench/baselines.json using the
+        # Python script below instead of Criterion's built-in --baseline flag,
+        # which requires a saved baseline from a prior run on the same machine.
+        run: cargo bench -p cascade-rag 2>&1 | tee /tmp/bench-output.txt
+
+      - name: Check for regressions vs baselines.json
+        # Parse Criterion's stdout (lines like "bench_name  time: [...median...]")
+        # and compare each p50 against the value in bench/baselines.json.
+        # Fails with exit 1 if any benchmark regresses by more than 20%.
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import re
+          import sys
+
+          THRESHOLD = 0.20  # 20% regression threshold
+
+          with open("bench/baselines.json") as f:
+              baselines = json.load(f)
+
+          # Parse bench output for lines with timing data.
+          # Criterion prints: "bench_name   time:   [low  median  high]"
+          time_re = re.compile(
+              r"^([\w/=]+)\s+time:\s+\[\S+\s+(\S+)\s+(\S+)\s+\S+\]"
+          )
+
+          def parse_ns(val: str) -> float:
+              val = val.strip()
+              if val.endswith("ns"):
+                  return float(val[:-2])
+              if val.endswith("µs"):
+                  return float(val[:-2]) * 1_000
+              if val.endswith("ms"):
+                  return float(val[:-2]) * 1_000_000
+              if val.endswith("s"):
+                  return float(val[:-1]) * 1_000_000_000
+              raise ValueError(f"Unknown time unit: {val}")
+
+          measured: dict[str, float] = {}
+          with open("/tmp/bench-output.txt") as f:
+              for line in f:
+                  m = time_re.match(line.strip())
+                  if m:
+                      key = m.group(1)
+                      median_str = m.group(2)
+                      measured[key] = parse_ns(median_str)
+
+          regressions = []
+          for key, baseline in baselines.items():
+              if key.startswith("_"):
+                  continue
+              if key not in measured:
+                  continue
+              base_ns = baseline.get("p50_ns")
+              if base_ns is None:
+                  continue
+              actual_ns = measured[key]
+              ratio = (actual_ns - base_ns) / base_ns
+              if ratio > THRESHOLD:
+                  pct = ratio * 100
+                  regressions.append(
+                      f"  REGRESSION {key}: baseline={base_ns:.0f}ns "
+                      f"actual={actual_ns:.0f}ns (+{pct:.1f}%)"
+                  )
+
+          if regressions:
+              print("Benchmark regressions detected (threshold: 20%):")
+              for r in regressions:
+                  print(r)
+              print()
+              print("If this is intentional, run scripts/record_baselines.sh,")
+              print("commit bench/baselines.json, and include it in the PR.")
+              sys.exit(1)
+
+          print(f"bench-check passed: {len(measured)} benchmarks measured, none regressed >20%.")
+          PYEOF
+
   # ── ci-gate ───────────────────────────────────────────────────────────────
   # A single required status check that depends on all CI jobs.
   # Configure this as the required check in branch protection rules so that
   # you only need one entry in the required-checks list.
   ci-gate:
     name: ci-gate
-    needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows]
+    needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows, bench-check]
     runs-on: ubuntu-24.04
     if: always()
     steps:
@@ -421,6 +530,12 @@ jobs:
           fi
           if [[ "${{ needs.tray-windows.result }}" != "success" ]]; then
             echo "tray-windows failed: ${{ needs.tray-windows.result }}"
+            exit 1
+          fi
+          # bench-check only runs on pull_request events; on push it is skipped.
+          # A skipped result is acceptable here — a failure is not.
+          if [[ "${{ needs.bench-check.result }}" == "failure" ]]; then
+            echo "bench-check failed: ${{ needs.bench-check.result }}"
             exit 1
           fi
           echo "All CI jobs passed."

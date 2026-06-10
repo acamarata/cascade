@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "recorded_at": "2026-06-10",
+    "hardware": "Apple M-series (aarch64-apple-darwin, developer laptop)",
+    "baseline_label": "p4-e04",
+    "note": "Criterion --quick run. Numbers are median (p50) wall-clock times and derived throughputs. CI runners (ubuntu-latest x86_64) will differ; the regression gate uses a 20% threshold to absorb cross-hardware variance.",
+    "criterion_version": "0.5"
+  },
+  "embed_batch/parallel/100": {
+    "throughput_docs_per_sec": 578840,
+    "p50_ns": 172760
+  },
+  "embed_batch/single_thread/100": {
+    "throughput_docs_per_sec": 523040,
+    "p50_ns": 191190
+  },
+  "embed_batch/parallel/1000": {
+    "throughput_docs_per_sec": 1538200,
+    "p50_ns": 650120
+  },
+  "embed_batch/single_thread/1000": {
+    "throughput_docs_per_sec": 494320,
+    "p50_ns": 2023000
+  },
+  "embed_batch/parallel/5000": {
+    "throughput_docs_per_sec": 1592900,
+    "p50_ns": 3138900
+  },
+  "embed_batch/single_thread/5000": {
+    "throughput_docs_per_sec": 475320,
+    "p50_ns": 10519000
+  },
+  "sharded_search/shards=1/top_k=5": {
+    "p50_ns": 16523000
+  },
+  "sharded_search/shards=1/top_k=20": {
+    "p50_ns": 16257000
+  },
+  "sharded_search/shards=1/top_k=50": {
+    "p50_ns": 16213000
+  },
+  "sharded_search/shards=4/top_k=5": {
+    "p50_ns": 6536500
+  },
+  "sharded_search/shards=4/top_k=20": {
+    "p50_ns": 6516600
+  },
+  "sharded_search/shards=4/top_k=50": {
+    "p50_ns": 6531500
+  },
+  "sharded_search/shards=8/top_k=5": {
+    "p50_ns": 14422000
+  },
+  "sharded_search/shards=8/top_k=20": {
+    "p50_ns": 14453000
+  },
+  "sharded_search/shards=8/top_k=50": {
+    "p50_ns": 14436000
+  },
+  "query_cache/hit": {
+    "p50_ns": 4248
+  },
+  "query_cache/miss": {
+    "p50_ns": 950840
+  },
+  "rrf_merge/two_lists/100": {
+    "throughput_items_per_sec": 10528000,
+    "p50_ns": 9498
+  },
+  "rrf_merge/two_lists/1000": {
+    "throughput_items_per_sec": 9814500,
+    "p50_ns": 101890
+  },
+  "chunking/semantic/50": {
+    "p50_ns": 823
+  },
+  "chunking/semantic/200": {
+    "p50_ns": 2292
+  },
+  "chunking/semantic/1000": {
+    "p50_ns": 24446
+  },
+  "chunking/markdown/50": {
+    "p50_ns": 2892
+  },
+  "chunking/markdown/200": {
+    "p50_ns": 9600
+  },
+  "chunking/markdown/1000": {
+    "p50_ns": 25620
+  },
+  "chunking/hierarchical/50": {
+    "p50_ns": 348
+  },
+  "chunking/hierarchical/200": {
+    "p50_ns": 816
+  },
+  "chunking/hierarchical/1000": {
+    "p50_ns": 21639
+  }
+}

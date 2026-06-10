@@ -505,6 +505,123 @@ pub struct StatusResult {
     pub tcp_port: Option<u16>,
 }
 
+// --- update_check (T-P4-E04-14/16) ---
+
+/// Params for the `update_check` method (no fields — daemon uses its own current version).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateCheckParams {}
+
+/// Result for the `update_check` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateCheckResult {
+    /// Whether a newer version is available.
+    pub update_available: bool,
+    /// Current installed version string, e.g. `"0.1.2"`.
+    pub current_version: String,
+    /// Latest available version, if newer than current.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_version: Option<String>,
+}
+
+// --- update_apply (T-P4-E04-14/16) ---
+
+/// Params for the `update_apply` method.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateApplyParams {}
+
+/// Result for the `update_apply` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateApplyResult {
+    /// Whether the update was applied successfully.
+    pub ok: bool,
+    /// Version that was installed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_version: Option<String>,
+    /// Snapshot id created before applying (used for rollback).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_id: Option<String>,
+    /// Error message if `ok` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+// --- update_auto (T-P4-E04-16) ---
+
+/// Params for the `update_auto` method — toggle auto-update in config.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateAutoParams {
+    /// Set to `true` to enable auto-update, `false` to disable.
+    pub enable: bool,
+}
+
+/// Result for the `update_auto` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateAutoResult {
+    /// New value of `auto_update` after this call.
+    pub auto_update: bool,
+}
+
+// --- rollback_list (T-P4-E04-15) ---
+
+/// Params for the `rollback_list` method (no fields).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RollbackListParams {}
+
+/// A single rollback snapshot entry for display.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotEntry {
+    /// Snapshot id, e.g. `"snapshot-1717200000"`.
+    pub id: String,
+    /// ISO 8601 creation timestamp.
+    pub created: String,
+    /// Cascade version recorded at snapshot time.
+    pub cascade_version: String,
+    /// Number of files in the snapshot.
+    pub file_count: usize,
+    /// Total bytes across all snapshot files.
+    pub total_bytes: u64,
+}
+
+/// Result for the `rollback_list` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RollbackListResult {
+    /// All available snapshots, oldest first.
+    pub snapshots: Vec<SnapshotEntry>,
+}
+
+// --- rollback_apply (T-P4-E04-15) ---
+
+/// Params for the `rollback_apply` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RollbackApplyParams {
+    /// Snapshot id to restore (e.g., `"snapshot-1717200000"`).
+    pub snapshot_id: String,
+}
+
+/// Result for the `rollback_apply` method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RollbackApplyResult {
+    /// Whether the rollback completed successfully.
+    pub ok: bool,
+    /// Cascade version restored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restored_version: Option<String>,
+    /// Error message if `ok` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 // ── Schema-validating deserialization (T-P2-E07-11) ────────────────────────────
 
 /// Deserialize a length-prefixed JSON IPC `Request<P>` body, mapping serde

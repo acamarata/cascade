@@ -18,10 +18,12 @@ path = "src/main.rs"
 [dependencies]
 cascade-core    = { workspace = true }
 cascade-types   = { workspace = true }
+cascade-rag     = { path = "../cascade-rag" }
 cascade-plugins = { path = "../cascade-plugins" }
 cascade-mcp     = { path = "../cascade-mcp" }
 cascade-keychain = { path = "../cascade-keychain" }
 cascade-audit = { path = "../cascade-audit" }
+rusqlite      = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }
 serde         = { workspace = true }

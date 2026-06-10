@@ -142,8 +142,22 @@ fn seed_fixture_files(base: &Path) -> Vec<PathBuf> {
     vec![claude_md, lib_rs, config_json]
 }
 
+/// Register the sqlite-vec extension so vec0 virtual tables resolve in
+/// migrations (no-op without the `vec` feature).
+#[cfg(feature = "vec")]
+fn load_vec_extension() {
+    use rusqlite::ffi::sqlite3_auto_extension;
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    }
+}
+
 /// Build a file-backed DB at `path` and run migrations.
 fn open_file_db(path: &Path) -> Arc<Mutex<Connection>> {
+    #[cfg(feature = "vec")]
+    load_vec_extension();
     let conn = Connection::open(path).expect("open db");
     run_migrations(&conn).expect("migrations");
     Arc::new(Mutex::new(conn))
@@ -483,6 +497,8 @@ async fn rerank_seam_exercised() {
 #[tokio::test]
 async fn synthetic_100_chunks_five_queries() {
     // ── Build in-memory DB with 100 synthetic chunks ──────────────────────────
+    #[cfg(feature = "vec")]
+    load_vec_extension();
     let conn = Connection::open_in_memory().expect("in-memory db");
     run_migrations(&conn).expect("migrations");
 

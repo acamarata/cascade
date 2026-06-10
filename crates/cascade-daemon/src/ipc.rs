@@ -37,6 +37,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
+use crate::chunk_cache::ChunkCache;
 use crate::event_bus::EventBus;
 use crate::healthcheck::HealthState;
 use crate::ipc_usage_analytics::{
@@ -106,6 +107,15 @@ pub struct IpcServer {
     /// rag.index_stats). Wired per T-P4-E01-29.  Uses MockEmbedModel until a
     /// real BGE-M3 embedder is injected in a later ticket.
     rag_handler: Arc<RagSearchHandler>,
+    /// In-memory mtime-validated chunk cache (T-P4-E04-10).
+    /// Surfaced via `cache.stats` and cleared via `cache.clear --chunk`.
+    file_chunk_cache: Arc<ChunkCache>,
+    /// RAG query result LRU cache (T-P4-E04-07 / T-P4-E04-11).
+    /// Shared with the RAG pipeline; surfaced via `cache.stats`.
+    query_cache: Arc<cascade_rag::cache::QueryCache>,
+    /// RAG embedding SQLite cache (T-P4-E04-09 / T-P4-E04-11).
+    /// Shared with the RAG pipeline; surfaced via `cache.stats`.
+    embed_cache: Arc<cascade_rag::cache::EmbedCache>,
 }
 
 impl IpcServer {
@@ -120,12 +130,29 @@ impl IpcServer {
             IndexRegistry::new(),
             Arc::new(MockEmbedModel::new(1024)),
         );
+        // Caches (T-P4-E04-10/11): chunk cache with default capacity; RAG caches
+        // with default capacities. These are shared via Arc so future tickets can
+        // pass them into the RAG pipeline without cloning.
+        let file_chunk_cache = Arc::new(ChunkCache::new(256));
+        let query_cache = Arc::new(cascade_rag::cache::QueryCache::default());
+        // EmbedCache: open with disabled=true until a real BGE-M3 model is
+        // injected (T-P4-E04-09). A disabled cache returns count()=0 and is
+        // surfaced in stats as "embedding (disabled)".
+        let embed_cache_dir = config_dir.join("embed-cache");
+        let _ = std::fs::create_dir_all(&embed_cache_dir);
+        let embed_cache = Arc::new(
+            cascade_rag::cache::EmbedCache::open(&embed_cache_dir, "bge-m3", "1.0", false)
+                .unwrap_or_else(|_| cascade_rag::cache::EmbedCache::disabled()),
+        );
         Ok(Self {
             socket_path,
             health,
             bus,
             usage_summary_cache: new_summary_cache(),
             rag_handler,
+            file_chunk_cache,
+            query_cache,
+            embed_cache,
         })
     }
 
@@ -422,6 +449,11 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 _ => {}
             }
 
+            // ── Cache methods (T-P4-E04-11) ───────────────────────────────
+            if typed_req.method.starts_with("cache.") {
+                return dispatch_cache(server, &typed_req.method, typed_req.params).await;
+            }
+
             // ── RAG methods (T-P4-E01-29) ─────────────────────────────────
             // Dispatched to RagSearchHandler; must be done before the audit-hook
             // scaffold so they return real data rather than METHOD_NOT_FOUND.
@@ -485,5 +517,132 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
             debug!(method = %typed_req.method, "typed dispatch: METHOD_NOT_FOUND (scaffold)");
             Response::err(-32601, format!("method not found: {}", typed_req.method))
         }
+    }
+}
+
+// ── Cache IPC (T-P4-E04-11) ───────────────────────────────────────────────────
+
+/// Stats snapshot for a single cache (returned by `cache.stats`).
+#[derive(Debug, Serialize)]
+pub struct CacheStat {
+    pub name: String,
+    pub entries: usize,
+    pub hits: Option<u64>,
+    pub misses: Option<u64>,
+}
+
+/// Response body for `cache.stats`.
+#[derive(Debug, Serialize)]
+pub struct CacheStatsResponse {
+    pub caches: Vec<CacheStat>,
+}
+
+/// Params for `cache.clear`.
+#[derive(Debug, Deserialize)]
+pub struct CacheClearParams {
+    /// Clear the query LRU cache.
+    #[serde(default)]
+    pub query: bool,
+    /// Clear the embedding cache (in-memory scaffold; disk deletion handled
+    /// by the CLI before sending this message).
+    #[serde(default)]
+    pub embed: bool,
+    /// Clear the chunk cache.
+    #[serde(default)]
+    pub chunk: bool,
+    /// Clear all three caches.
+    #[serde(default)]
+    pub all: bool,
+}
+
+/// Dispatch `cache.*` IPC methods.
+///
+/// Purpose: implement `cascade cache stats` and `cascade cache clear`
+///   without touching the frozen legacy Request enum.
+/// Constraints: `cache.clear --embed` only clears the in-memory embed cache
+///   here; the CLI is responsible for deleting the on-disk embed-cache database
+///   before sending this message.
+///
+/// SPORT: MASTER-ENDPOINTS.md → cache.stats + cache.clear (T-P4-E04-11)
+async fn dispatch_cache(
+    server: &IpcServer,
+    method: &str,
+    params: Option<serde_json::Value>,
+) -> Response {
+    match method {
+        "cache.stats" => {
+            // QueryCache: uses `stats()` → (hits, misses) and `len()`.
+            let (q_hits, q_misses) = server.query_cache.stats();
+            let q_entries = server.query_cache.len();
+
+            // EmbedCache: count() gives entries; hits/misses not tracked.
+            let e_entries = server.embed_cache.count();
+
+            // File ChunkCache (T-P4-E04-10): mtime-keyed, daemon-level.
+            let fc = server.file_chunk_cache.counters();
+
+            let resp = CacheStatsResponse {
+                caches: vec![
+                    CacheStat {
+                        name: "query".into(),
+                        entries: q_entries,
+                        hits: Some(q_hits),
+                        misses: Some(q_misses),
+                    },
+                    CacheStat {
+                        name: "embedding".into(),
+                        entries: e_entries,
+                        hits: None, // EmbedCache is SQLite-backed; hits/misses not tracked
+                        misses: None,
+                    },
+                    CacheStat {
+                        name: "chunk".into(),
+                        entries: fc.entries,
+                        hits: Some(fc.hits),
+                        misses: Some(fc.misses),
+                    },
+                ],
+            };
+            Response::ok(resp)
+        }
+        "cache.clear" => {
+            let p: CacheClearParams = match params
+                .map(serde_json::from_value)
+                .transpose()
+            {
+                Ok(Some(p)) => p,
+                Ok(None) => CacheClearParams {
+                    query: false,
+                    embed: false,
+                    chunk: false,
+                    all: false,
+                },
+                Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+            };
+
+            let clear_all = p.all;
+            if p.query || clear_all {
+                server.query_cache.clear();
+            }
+            if p.embed || clear_all {
+                // In-memory portion; CLI deletes the on-disk .db before sending this.
+                server.embed_cache.clear();
+            }
+            if p.chunk || clear_all {
+                server.file_chunk_cache.clear();
+            }
+
+            let cleared: Vec<&str> = {
+                let mut v = Vec::new();
+                if p.query || clear_all { v.push("query"); }
+                if p.embed || clear_all { v.push("embedding"); }
+                if p.chunk || clear_all { v.push("chunk"); }
+                v
+            };
+
+            info!(cleared = ?cleared, "cache.clear: caches evicted");
+            Response::ok(serde_json::json!({ "cleared": cleared }))
+        }
+        other => Response::err(-32601, format!("method not found: {other}")),
     }
 }

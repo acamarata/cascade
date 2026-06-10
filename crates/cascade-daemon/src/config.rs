@@ -53,6 +53,11 @@ pub struct DaemonConfig {
     pub health_sample_interval_secs: u64,
     /// How often the event bus is flushed (seconds); default 60.
     pub event_bus_flush_interval_secs: u64,
+    /// Maximum number of entries in the in-memory chunk cache (T-P4-E04-10).
+    /// Each entry holds the parsed + chunked content for one cascade file.
+    /// Default 256 (one entry per file; typical cascade trees have < 100 files).
+    /// Range 1..=65536; values outside range are clamped to the nearest bound.
+    pub chunk_cache_capacity: usize,
 }
 
 impl Default for DaemonConfig {
@@ -63,6 +68,7 @@ impl Default for DaemonConfig {
             socket_path: String::new(),
             health_sample_interval_secs: 30,
             event_bus_flush_interval_secs: 60,
+            chunk_cache_capacity: 256,
         }
     }
 }

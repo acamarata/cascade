@@ -220,11 +220,39 @@ fn find_project_config(cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     })
 }
 
+/// Parse `value` as a typed TOML item: boolean → bool, integer → i64,
+/// float → f64, else string.  This ensures `rag.shard_count 8` stores an
+/// integer and `rag.incremental false` stores a bool in config.toml.
+fn typed_toml_value(value: &str) -> toml_edit::Value {
+    // Boolean
+    if value == "true" {
+        return toml_edit::Value::from(true);
+    }
+    if value == "false" {
+        return toml_edit::Value::from(false);
+    }
+    // Integer
+    if let Ok(i) = value.parse::<i64>() {
+        return toml_edit::Value::from(i);
+    }
+    // Float
+    if let Ok(f) = value.parse::<f64>() {
+        return toml_edit::Value::from(f);
+    }
+    // String fallback
+    toml_edit::Value::from(value)
+}
+
 fn set_nested_key(doc: &mut toml_edit::DocumentMut, key: &str, value: &str) {
+    let typed = typed_toml_value(value);
     let parts: Vec<&str> = key.splitn(2, '.').collect();
     if parts.len() == 1 {
-        doc[key] = toml_edit::value(value);
+        doc[key] = toml_edit::Item::Value(typed);
     } else {
-        doc[parts[0]][parts[1]] = toml_edit::value(value);
+        // Ensure the parent table exists.
+        if doc.get(parts[0]).is_none() {
+            doc[parts[0]] = toml_edit::Item::Table(toml_edit::Table::new());
+        }
+        doc[parts[0]][parts[1]] = toml_edit::Item::Value(typed);
     }
 }

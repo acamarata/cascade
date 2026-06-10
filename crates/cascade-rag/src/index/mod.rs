@@ -42,6 +42,9 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::index::RagIndex
 
+pub mod sharding;
+pub mod state;
+
 use cascade_types::error::{CascadeError, Result};
 use rusqlite::{params, Connection, OpenFlags};
 use serde_json::Value;
@@ -441,4 +444,223 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+// ── CachedIndex ───────────────────────────────────────────────────────────────
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use crate::cache::QueryCache;
+use crate::index::sharding::{EmbedResult, SearchHit, ShardedIndex};
+use crate::index::sharding::Result as ShardResult;
+
+/// Newtype wrapping [`ShardedIndex`] with an LRU + TTL [`QueryCache`].
+///
+/// # Purpose
+///
+/// `CachedIndex` is the public search entry point for callers that want
+/// query-result caching.  Identical `(query, top_k)` calls within the TTL
+/// window are served from memory without touching SQLite or computing cosine
+/// distances.
+///
+/// # Cache invalidation
+///
+/// Any call to [`upsert`] or [`delete`] clears the entire cache.  WHY full
+/// clear: the query key space is unbounded; selective invalidation would
+/// require O(capacity) reverse-index lookups.  Full clear is O(1) and safe —
+/// the default capacity (512) repopulates within seconds of normal query
+/// traffic.
+///
+/// # Thread safety
+///
+/// Both [`ShardedIndex`] and [`QueryCache`] are `Send + Sync`; wrapping in
+/// `Arc<CachedIndex>` is safe across tokio tasks.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # use cascade_rag::index::CachedIndex;
+/// # use cascade_rag::index::sharding::ShardedIndex;
+/// # use std::time::Duration;
+/// # fn example() -> cascade_rag::index::sharding::Result<()> {
+/// let shard_idx = ShardedIndex::new("/tmp/rag", 4, 1024)?;
+/// let cached = CachedIndex::new(shard_idx, 512, Duration::from_secs(60));
+/// # Ok(())
+/// # }
+/// ```
+///
+/// SPORT: MASTER-COMPONENTS.md → cascade-rag::index::CachedIndex
+pub struct CachedIndex {
+    inner: ShardedIndex,
+    cache: Arc<QueryCache>,
+}
+
+impl CachedIndex {
+    /// Wrap `inner` with a query cache of the given `capacity` and `ttl`.
+    ///
+    /// # Inputs
+    ///
+    /// - `inner`: the underlying [`ShardedIndex`] to delegate real searches to.
+    /// - `capacity`: max LRU entries (clamped to 1; default 512).
+    /// - `ttl`: entry lifetime before re-query (default 60 s).
+    pub fn new(inner: ShardedIndex, capacity: usize, ttl: Duration) -> Self {
+        Self {
+            inner,
+            cache: Arc::new(QueryCache::new(capacity, ttl)),
+        }
+    }
+
+    /// Construct with default cache settings (capacity=512, TTL=60 s).
+    pub fn with_defaults(inner: ShardedIndex) -> Self {
+        Self::new(inner, 512, Duration::from_secs(60))
+    }
+
+    /// Return a shared handle to the underlying [`QueryCache`].
+    ///
+    /// Used by `cascade status` to read hit/miss/size metrics.
+    pub fn cache(&self) -> Arc<QueryCache> {
+        Arc::clone(&self.cache)
+    }
+
+    /// Search the index, consulting the cache first.
+    ///
+    /// # Cache behaviour
+    ///
+    /// 1. Key = `(query, top_k)`.
+    /// 2. Cache hit (non-expired) → return cached result, increment hit counter.
+    /// 3. Cache miss (absent or TTL-expired) → delegate to [`ShardedIndex::search`],
+    ///    populate cache, increment miss counter.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`ShardError`] from the underlying shard fan-out.
+    ///
+    /// [`ShardError`]: crate::index::sharding::ShardError
+    pub fn search(&self, query_vec: &[f32], top_k: usize) -> ShardResult<Vec<SearchHit>> {
+        // Build a string fingerprint for the cache key.
+        // WHY hash-as-string: the lru cache key must be Eq+Hash; a float slice is
+        // neither stable-comparable nor directly hashable without copying.  We use
+        // a lightweight FNV-1a over the raw bytes — identical to what ShardedIndex
+        // already does for routing.  Collisions are astronomically unlikely for the
+        // 512-entry default capacity.
+        let key_str = vec_fingerprint(query_vec);
+
+        if let Some(cached) = self.cache.get(&key_str, top_k) {
+            return Ok(cached);
+        }
+
+        let result = self.inner.search(query_vec, top_k)?;
+        self.cache.set(key_str, top_k, result.clone());
+        Ok(result)
+    }
+
+    /// Insert or replace a dense embedding, then clear the query cache.
+    ///
+    /// Cache is cleared because the search result set for any query may have
+    /// changed after an upsert.
+    pub fn upsert(&self, doc: &EmbedResult) -> ShardResult<()> {
+        let result = self.inner.upsert(doc)?;
+        self.cache.clear();
+        Ok(result)
+    }
+
+    /// Delete a chunk from the sharded index, then clear the query cache.
+    ///
+    /// Same invalidation rationale as [`upsert`].
+    pub fn delete(&self, doc_id: &str) -> ShardResult<()> {
+        let result = self.inner.delete(doc_id)?;
+        self.cache.clear();
+        Ok(result)
+    }
+
+    /// Delegate to the underlying [`ShardedIndex::shard_count`].
+    pub fn shard_count(&self) -> usize {
+        self.inner.shard_count()
+    }
+
+    /// Delegate to the underlying [`ShardedIndex::embed_dim`].
+    pub fn embed_dim(&self) -> usize {
+        self.inner.embed_dim()
+    }
+
+    /// Delegate to the underlying [`ShardedIndex::total_count`].
+    pub fn total_count(&self) -> usize {
+        self.inner.total_count()
+    }
+}
+
+/// Compute a short string fingerprint of a float vector for use as a cache key.
+///
+/// Uses FNV-1a 64-bit over the raw bytes of the slice.  This is deterministic,
+/// fast, and produces a uniform distribution sufficient for a 512-entry LRU.
+fn vec_fingerprint(v: &[f32]) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in v.iter().flat_map(|f| f.to_le_bytes()) {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x00000100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
+// ── CachedIndex tests ─────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod cached_index_tests {
+    use super::*;
+    use crate::index::sharding::{EmbedResult, ShardedIndex};
+
+    fn make_embed(doc_id: &str, dim: usize) -> EmbedResult {
+        EmbedResult {
+            doc_id: doc_id.to_string(),
+            embedding: vec![0.1_f32; dim],
+        }
+    }
+
+    #[test]
+    fn upsert_clears_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let shard = ShardedIndex::new(dir.path(), 1, 4).unwrap();
+        let cached = CachedIndex::with_defaults(shard);
+
+        let query = vec![0.1_f32; 4];
+
+        // Populate cache via a search (miss → populate).
+        let _ = cached.search(&query, 5).unwrap();
+        assert_eq!(cached.cache().stats(), (0, 1), "first search must be a miss");
+
+        // Hit on second search.
+        let _ = cached.search(&query, 5).unwrap();
+        assert_eq!(cached.cache().stats(), (1, 1), "second search must be a hit");
+
+        // Upsert clears cache.
+        cached.upsert(&make_embed("doc1", 4)).unwrap();
+        assert_eq!(cached.cache().len(), 0, "cache must be empty after upsert");
+
+        // Next search is a miss again.
+        let _ = cached.search(&query, 5).unwrap();
+        assert_eq!(cached.cache().stats(), (1, 2), "post-upsert search must be a miss");
+    }
+
+    #[test]
+    fn ten_searches_produce_one_miss_nine_hits() {
+        let dir = tempfile::tempdir().unwrap();
+        let shard = ShardedIndex::new(dir.path(), 1, 4).unwrap();
+        let cached = CachedIndex::with_defaults(shard);
+
+        let query = vec![0.5_f32; 4];
+
+        for i in 0..10 {
+            let result = cached.search(&query, 3).unwrap();
+            // Empty index returns empty results — that's fine.
+            let _ = result;
+            if i == 0 {
+                assert_eq!(cached.cache().stats(), (0, 1), "first call must miss");
+            }
+        }
+
+        let (hits, misses) = cached.cache().stats();
+        assert_eq!(hits, 9, "expected 9 cache hits");
+        assert_eq!(misses, 1, "expected 1 cache miss (cold)");
+    }
 }

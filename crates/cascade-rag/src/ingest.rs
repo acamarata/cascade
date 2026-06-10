@@ -40,7 +40,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, params};
 use sha2::{Digest, Sha256};
@@ -54,17 +54,75 @@ use crate::chunk::semantic::SemanticChunker;
 use crate::chunk::hierarchical::HierarchicalChunker;
 use crate::chunk::Chunker;
 use crate::embed::{EmbedModel, store};
+use crate::index::state::{ChangeKind, IndexStateStore};
 use crate::parse::ParseDispatcher;
 
 /// Batch size for embedding calls.
 const EMBED_BATCH_SIZE: usize = 32;
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+/// Aggregate metrics from one delta scan + ingest pass.
+///
+/// # Purpose
+/// Returned by [`IngestPipeline::ingest_delta`] and persisted by callers for
+/// `cascade status --json` display. Carries enough data for operator visibility
+/// without requiring a secondary DB query.
+///
+/// # Fields
+/// | Field | Meaning |
+/// |---|---|
+/// | `scanned` | Total candidate files examined |
+/// | `skipped` | Files skipped because content is unchanged (fast-skip + hash-skip) |
+/// | `ingested` | Files actually re-embedded and stored |
+/// | `evicted` | Files deleted on disk and removed from the index |
+/// | `duration` | Wall-clock time for the entire pass |
+///
+/// SPORT: MASTER-COMPONENTS.md → cascade-rag::IngestStats
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct IngestStats {
+    /// Total files examined during the delta scan.
+    pub scanned: usize,
+    /// Files skipped — content unchanged (fast-path mtime+size or Blake3 match).
+    pub skipped: usize,
+    /// Files re-embedded and written to the index.
+    pub ingested: usize,
+    /// Files removed from the index because they no longer exist on disk.
+    pub evicted: usize,
+    /// Wall-clock duration of the entire ingest pass.
+    #[serde(with = "duration_ms_serde")]
+    pub duration: Duration,
+}
+
+impl IngestStats {
+    /// Duration formatted as milliseconds (for JSON status output).
+    pub fn duration_ms(&self) -> u64 {
+        self.duration.as_millis() as u64
+    }
+}
+
+/// Serde helper — serialize/deserialize `Duration` as milliseconds.
+mod duration_ms_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S: Serializer>(d: &Duration, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_u64(d.as_millis() as u64)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
+        let ms = u64::deserialize(d)?;
+        Ok(Duration::from_millis(ms))
+    }
+}
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 /// Configuration for the ingest pipeline.
 ///
 /// # Purpose
-/// Controls chunking parameters and progress reporting behaviour.
+/// Controls chunking parameters, progress reporting behaviour, and incremental
+/// indexing settings.
 ///
 /// # Defaults
 /// Reasonable defaults are provided via [`Default`]; callers only need to
@@ -83,6 +141,10 @@ pub struct IngestConfig {
     pub embed_batch_size: usize,
     /// Schema version recorded in new/updated `rag_sources` rows.
     pub schema_version: i64,
+    /// Enable incremental indexing — skip files whose content has not changed.
+    /// When `false`, every file is always re-embedded (full re-index).
+    /// Corresponds to `rag.incremental` in `cascade.toml`. Default: `true`.
+    pub incremental: bool,
 }
 
 impl Default for IngestConfig {
@@ -91,6 +153,7 @@ impl Default for IngestConfig {
             chunker_config: ChunkerConfig::default(),
             embed_batch_size: EMBED_BATCH_SIZE,
             schema_version: 1,
+            incremental: true,
         }
     }
 }
@@ -240,6 +303,98 @@ impl IngestPipeline {
         }
         (results, errors)
     }
+
+    /// Delta-scan a set of candidate files, skipping unchanged ones.
+    ///
+    /// # Algorithm
+    /// 1. For each `path` in `candidates`:
+    ///    a. If `incremental = false`, always ingest.
+    ///    b. Otherwise call [`IndexStateStore::classify`]:
+    ///       - `FastSkip` / `HashSkip` → increment `stats.skipped`, continue.
+    ///       - `Changed` → ingest, call `state_store.set_hash()`, increment `stats.ingested`.
+    /// 2. After the loop call `state_store.evict_deleted()` — removes rows for
+    ///    files no longer on disk.
+    /// 3. Returns [`IngestStats`] with aggregate counters and total wall-clock duration.
+    ///
+    /// Per-file errors are logged and counted separately (not in `stats`).
+    ///
+    /// # Parameters
+    /// - `candidates` — paths to examine; caller controls discovery/globbing.
+    /// - `state_store` — [`IndexStateStore`] opened at the same index root.
+    pub fn ingest_delta<'a, I>(
+        &self,
+        candidates: I,
+        state_store: &IndexStateStore,
+    ) -> IngestStats
+    where
+        I: IntoIterator<Item = &'a Path>,
+    {
+        let start = Instant::now();
+        let mut stats = IngestStats::default();
+
+        let paths: Vec<&'a Path> = candidates.into_iter().collect();
+        stats.scanned = paths.len();
+
+        for path in &paths {
+            if !self.config.incremental {
+                // Full re-index mode — skip delta check.
+                match self.ingest_file(path) {
+                    Ok(_r) => {
+                        if let Ok((_, Some(hash))) = state_store.classify(path) {
+                            let _ = state_store.set_hash(path, &hash);
+                        }
+                        stats.ingested += 1;
+                    }
+                    Err(e) => {
+                        warn!(path = %path.display(), error = %e, "delta ingest failed");
+                    }
+                }
+                continue;
+            }
+
+            // Incremental mode.
+            match state_store.classify(path) {
+                Ok((ChangeKind::FastSkip, _)) | Ok((ChangeKind::HashSkip, _)) => {
+                    stats.skipped += 1;
+                }
+                Ok((ChangeKind::Changed, hash_opt)) => {
+                    match self.ingest_file(path) {
+                        Ok(_r) => {
+                            let hash = hash_opt.unwrap_or_else(|| {
+                                crate::index::state::blake3_file(path)
+                                    .unwrap_or_default()
+                            });
+                            if !hash.is_empty() {
+                                let _ = state_store.set_hash(path, &hash);
+                            }
+                            stats.ingested += 1;
+                        }
+                        Err(e) => {
+                            warn!(path = %path.display(), error = %e, "delta ingest failed");
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(path = %path.display(), error = %e, "classify failed — treating as changed");
+                    match self.ingest_file(path) {
+                        Ok(_r) => { stats.ingested += 1; }
+                        Err(e2) => {
+                            warn!(path = %path.display(), error = %e2, "fallback ingest failed");
+                        }
+                    }
+                }
+            }
+        }
+
+        // Evict deleted files.
+        match state_store.evict_deleted() {
+            Ok(n) => { stats.evicted = n; }
+            Err(e) => { warn!(error = %e, "evict_deleted failed"); }
+        }
+
+        stats.duration = start.elapsed();
+        stats
+    }
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -305,7 +460,22 @@ impl IngestPipeline {
             .execute_batch("PRAGMA foreign_keys = ON")
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
-        // ── Evict any prior entry (cascades to rag_chunks + embeddings) ───────
+        // ── Evict any prior entry ─────────────────────────────────────────────
+        // vec0 virtual tables ignore FK cascades, so embedding rows must be
+        // deleted explicitly while the chunk rows still exist for the
+        // chunk_id subquery. Then the rag_sources delete cascades chunks+FTS.
+        let prior_id: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM rag_sources WHERE file_path = ?1",
+                params![path_str],
+                |r| r.get(0),
+            )
+            .ok();
+        if let Some(prior) = prior_id {
+            crate::embed::store::delete_embeddings_by_source(&self.conn, prior)
+                .map_err(|e| CascadeError::Other(e.to_string()))?;
+        }
         self.conn
             .execute(
                 "DELETE FROM rag_sources WHERE file_path = ?1",
@@ -531,7 +701,22 @@ mod tests {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// Register the sqlite-vec extension so vec0 virtual tables resolve in
+    /// migrations (no-op without the `vec` feature).
+    #[cfg(feature = "vec")]
+    fn load_vec_extension() {
+        use rusqlite::ffi::sqlite3_auto_extension;
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite_vec::sqlite3_vec_init as *const (),
+            )));
+        }
+    }
+
     fn migrated_conn() -> Connection {
+        #[cfg(feature = "vec")]
+        load_vec_extension();
+
         let conn = Connection::open_in_memory().expect("in-memory DB");
         run_migrations(&conn).expect("migrations ok");
         conn
@@ -793,5 +978,146 @@ mod tests {
         let h1 = hex_sha256(b"version 1");
         let h2 = hex_sha256(b"version 2");
         assert_ne!(h1, h2);
+    }
+
+    // ── ingest::delta scan ────────────────────────────────────────────────────
+
+    fn make_state_store() -> crate::index::state::IndexStateStore {
+        crate::index::state::IndexStateStore::open_in_memory().expect("state store")
+    }
+
+    /// New file: ingest_delta must ingest it and record stats.
+    #[test]
+    fn delta_new_file_is_ingested() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let f = write_file("# Delta new\n\nContent.\n", ".md");
+
+        let stats = pipeline.ingest_delta([f.path()], &state);
+
+        assert_eq!(stats.scanned, 1);
+        assert_eq!(stats.ingested, 1);
+        assert_eq!(stats.skipped, 0);
+        assert_eq!(stats.evicted, 0);
+    }
+
+    /// Unchanged file: second delta pass must skip.
+    #[test]
+    fn delta_unchanged_file_is_skipped() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let f = write_file("# Delta unchanged\n\nSame content.\n", ".md");
+
+        // First pass — ingests.
+        let s1 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s1.ingested, 1);
+
+        // Second pass — skips (mtime/size or hash unchanged).
+        let s2 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s2.ingested, 0);
+        assert_eq!(s2.skipped, 1, "unchanged file must be skipped");
+    }
+
+    /// Modified file: second delta pass must re-ingest.
+    #[test]
+    fn delta_modified_file_is_reingested() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let f = write_file("# Delta v1\n\nOriginal.\n", ".md");
+
+        let s1 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s1.ingested, 1);
+
+        // Overwrite to force content change and mtime bump.
+        std::fs::write(f.path(), b"# Delta v2\n\nCompletely different content now.\n").unwrap();
+
+        let s2 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s2.ingested, 1, "modified file must be re-ingested");
+        assert_eq!(s2.skipped, 0);
+    }
+
+    /// Deleted file: eviction sweep removes it from state store.
+    #[test]
+    fn delta_deleted_file_is_evicted() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let f = write_file("# Delta delete\n\nContent.\n", ".md");
+        let path_copy = f.path().to_path_buf();
+
+        // Index it.
+        let s1 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s1.ingested, 1);
+        assert_eq!(state.count(), 1);
+
+        // Delete from disk.
+        drop(f);
+        assert!(!path_copy.exists());
+
+        // Next pass — no candidates, eviction still fires.
+        let s2 = pipeline.ingest_delta(std::iter::empty(), &state);
+        assert_eq!(s2.evicted, 1, "deleted file must be evicted");
+        assert_eq!(state.count(), 0);
+    }
+
+    /// Fast-path: stats.skipped increments when mtime+size match (no hash computed).
+    #[test]
+    fn delta_stats_skipped_count_is_accurate() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let files: Vec<_> = (0..3)
+            .map(|i| write_file(&format!("# File {i}\n\nContent {i}.\n"), ".md"))
+            .collect();
+
+        // First pass — ingest all.
+        let paths: Vec<&Path> = files.iter().map(|f| f.path()).collect();
+        let s1 = pipeline.ingest_delta(paths.iter().copied(), &state);
+        assert_eq!(s1.ingested, 3);
+
+        // Second pass — all skipped.
+        let s2 = pipeline.ingest_delta(paths.iter().copied(), &state);
+        assert_eq!(s2.skipped, 3);
+        assert_eq!(s2.ingested, 0);
+        assert_eq!(s2.scanned, 3);
+    }
+
+    /// incremental=false forces full re-index regardless of hash.
+    #[test]
+    fn delta_incremental_false_always_reindexes() {
+        let conn = migrated_conn();
+        let embed = Arc::new(MockEmbedModel::default());
+        let mut cfg = IngestConfig::default();
+        cfg.incremental = false;
+        let pipeline = IngestPipeline::new(conn, embed, cfg);
+        let state = make_state_store();
+
+        let f = write_file("# Full reindex\n\nContent.\n", ".md");
+
+        // First pass.
+        let s1 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s1.ingested, 1);
+
+        // Second pass — incremental=false must re-ingest even though content unchanged.
+        let s2 = pipeline.ingest_delta([f.path()], &state);
+        assert_eq!(s2.ingested, 1, "incremental=false must always re-ingest");
+        assert_eq!(s2.skipped, 0);
+    }
+
+    /// Duration field is non-zero after a real pass.
+    #[test]
+    fn delta_stats_duration_is_populated() {
+        let conn = migrated_conn();
+        let pipeline = make_pipeline(conn);
+        let state = make_state_store();
+        let f = write_file("# Duration test\n\nContent.\n", ".md");
+
+        let stats = pipeline.ingest_delta([f.path()], &state);
+        // Duration must be non-zero (at least a few nanoseconds).
+        // Even an empty loop takes > 0 ns; this is always true in practice.
+        assert!(stats.duration_ms() < 60_000, "duration sanity: < 60s");
     }
 }

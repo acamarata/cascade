@@ -25,6 +25,16 @@ rusqlite      = { workspace = true }
 # SHA-256 for ingest content-hash idempotency (T-P4-E01-22; MIT)
 sha2 = "0.10"
 
+# Blake3 for incremental-indexing delta detection (T-P4-E04-05; Apache-2.0/CC0-1.0)
+blake3 = "1"
+
+# LRU query cache with TTL (T-P4-E04-07; MIT)
+lru = "0.12"
+
+# Parallel embedding worker pool (T-P4-E04-01; MIT)
+rayon    = "1"
+num_cpus = "1"
+
 # Home directory resolution for model cache path (lightweight, MIT)
 dirs = "5"
 
@@ -85,3 +95,8 @@ code-chunker = [
 [dev-dependencies]
 tempfile    = "3"
 serial_test = "3"
+criterion   = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name    = "perf"
+harness = false

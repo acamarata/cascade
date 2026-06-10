@@ -14,6 +14,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// P3 stub: serving=false, index_count=0, index_size_bytes=0, last_indexed=None.
 /// P4 will populate real values from the BGE-M3 + FTS5 + sqlite-vec pipeline.
+///
+/// ## Query cache fields (T-P4-E04-08)
+///
+/// `query_cache_hits`, `query_cache_misses`, `query_cache_size` are populated
+/// by [`cascade_rag::index::CachedIndex`] via `cascade status` JSON output.
+/// All three are 0 until a `CachedIndex` instance is live and wired into the
+/// status builder (P4 scope).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RagStatusResponse {
     /// Whether the RAG/RRF context-serving engine is running with a loaded index.
@@ -34,4 +41,19 @@ pub struct RagStatusResponse {
     /// The HTTP endpoint the RAG serve layer listens on.
     /// P3 stub returns the planned P4 address; real binding confirmed in P4.
     pub serve_endpoint: String,
+
+    /// Cumulative query cache hits since daemon start.
+    /// 0 until CachedIndex is wired into the status builder (P4).
+    #[serde(default)]
+    pub query_cache_hits: u64,
+
+    /// Cumulative query cache misses since daemon start.
+    /// 0 until CachedIndex is wired into the status builder (P4).
+    #[serde(default)]
+    pub query_cache_misses: u64,
+
+    /// Current number of entries in the LRU query cache.
+    /// 0 until CachedIndex is wired into the status builder (P4).
+    #[serde(default)]
+    pub query_cache_size: u64,
 }

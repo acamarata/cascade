@@ -437,7 +437,8 @@ async fn tools_list_returns_8_tools() {
 
             assert!(val.get("result").is_some(), "tools/list must return result: {val}");
             let tools = val["result"]["tools"].as_array().expect("tools array");
-            assert_eq!(tools.len(), 8, "expected exactly 8 tools, got {}", tools.len());
+            // 9 tools: 8 original + cascade.context_slice (T-P4-E04-22)
+            assert_eq!(tools.len(), 9, "expected exactly 9 tools, got {}", tools.len());
 
             let names: Vec<&str> = tools
                 .iter()
@@ -452,6 +453,7 @@ async fn tools_list_returns_8_tools() {
                 "cascade.master_lists",
                 "cascade.memory.read",
                 "cascade.memory.write",
+                "cascade.context_slice",
             ] {
                 assert!(names.contains(expected), "missing tool '{expected}'; got: {names:?}");
             }

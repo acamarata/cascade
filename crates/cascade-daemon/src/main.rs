@@ -17,6 +17,8 @@
 
 mod audit;
 mod cache;
+// T-P4-E04-10: in-memory mtime-validated chunk cache for cascade file reads
+mod chunk_cache;
 mod config;
 mod event_bus;
 mod harness_bridge;
@@ -37,6 +39,8 @@ mod state;
 mod supervisor;
 mod telemetry;
 mod tray;
+// T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
+mod loader;
 // T-P4-E01-29: IPC search endpoint (rag.* JSON-RPC methods)
 mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing

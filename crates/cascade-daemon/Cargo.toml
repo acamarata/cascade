@@ -40,7 +40,7 @@ tokio-util    = { version = "0.7", features = ["codec"] }
 axum          = { version = "0.7", features = ["json"] }
 tower-http    = { version = "0.5", features = ["cors", "fs"] }
 tower         = { version = "0.5", features = ["util"] }
-reqwest       = { version = "0.12", features = ["json", "stream"] }
+reqwest       = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 futures-util  = "0.3"
 tokio-stream  = "0.1"
 libc          = "0.2"
@@ -54,13 +54,25 @@ toml          = "0.8"
 fs2           = "0.4"
 serde_yaml    = "0.9"
 notify        = { workspace = true }
+# T-P4-E04-12: delta bundle format (tar.gz extraction)
+tar           = "0.4"
+flate2        = "1"
+# T-P4-E04-13: Ed25519 signature verification + blake3 file hash
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+sha2          = "0.10"
+base64        = "0.22"
+blake3        = "1"
+# T-P4-E04-14: download delta bundles to a temp file before apply
+tempfile      = "3"
 
 [features]
 tcp-ipc = []
 
+[build-dependencies]
+base64 = "0.22"
+
 [dev-dependencies]
 assert_cmd  = "2"
-tempfile    = "3"
 serial_test = "3"
 tokio       = { version = "1", features = ["test-util"] }
 tower       = { version = "0.5", features = ["util"] }
