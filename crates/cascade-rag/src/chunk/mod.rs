@@ -1,10 +1,15 @@
 //! Chunking strategy implementations.
 //!
-//! Each strategy implements [`cascade_types::Chunker`].  The pipeline
-//! orchestrator in this module selects a strategy based on the document's
-//! MIME type and the active [`crate::TierLevel`].
+//! ## Local RAG types
 //!
-//! ## Strategy selection
+//! This module defines two parallel type families:
+//!
+//! 1. **Local RAG types** ([`Chunk`], [`ChunkerConfig`], [`Chunker`]) — DB-mapped,
+//!    sync, used by the sliding-window pipeline and stored in `rag_chunks`.
+//! 2. **cascade-types async pipeline** ([`StrategyChunker`], [`FixedSizeChunker`]) —
+//!    async, MIME-dispatched, implements `cascade_types::Chunker`.
+//!
+//! ## Strategy selection (async pipeline)
 //!
 //! | MIME type | Default strategy |
 //! |-----------|-----------------|
@@ -27,9 +32,134 @@ pub mod semantic;
 
 use async_trait::async_trait;
 use cascade_types::{
-    chunker::{Chunk, ChunkOpts, Chunker, Document},
+    chunker::{Chunk as TypesChunk, ChunkOpts, Chunker as TypesChunker, Document},
     error::Result,
 };
+
+// ── Local RAG types (T-P4-E01-08) ────────────────────────────────────────────
+//
+// These types are DB-mapped (see rag_chunks schema in T-P4-E01-02).
+// They are separate from the cascade-types Chunk used by the async pipeline.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+/// A chunk stored in the `rag_chunks` table.
+///
+/// Fields map 1-to-1 to the `rag_chunks` DB columns from T-P4-E01-02.
+/// `chunk_id` is `None` before a DB insert and populated after.
+///
+/// # Example
+///
+/// ```rust
+/// use cascade_rag::chunk::Chunk;
+/// use std::path::PathBuf;
+/// let c = Chunk {
+///     chunk_id: None,
+///     source_path: PathBuf::from("file.md"),
+///     chunk_index: 0,
+///     text: "hello world".into(),
+///     char_start: 0,
+///     char_end: 11,
+///     line_start: 1,
+///     line_end: 1,
+///     parent_chunk_id: None,
+///     heading_path: None,
+///     metadata: std::collections::HashMap::new(),
+/// };
+/// let json = serde_json::to_string(&c).unwrap();
+/// let back: Chunk = serde_json::from_str(&json).unwrap();
+/// assert_eq!(back.text, "hello world");
+/// ```
+///
+/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::Chunk
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct Chunk {
+    /// Set after DB insert; `None` during chunking.
+    pub chunk_id: Option<i64>,
+    /// Absolute path to the source file.
+    pub source_path: PathBuf,
+    /// 0-based index of this chunk within its source document.
+    pub chunk_index: usize,
+    /// Full text content of this chunk (UTF-8).
+    pub text: String,
+    /// Byte offset (inclusive) in the source where this chunk starts.
+    pub char_start: usize,
+    /// Byte offset (exclusive) in the source where this chunk ends.
+    pub char_end: usize,
+    /// 1-based line number where the chunk starts.
+    pub line_start: usize,
+    /// 1-based line number (inclusive) where the chunk ends.
+    pub line_end: usize,
+    /// ID of the parent chunk for hierarchical chunking; `None` for top-level.
+    pub parent_chunk_id: Option<i64>,
+    /// Heading path for structured documents, e.g. `"## Section > ### Sub"`.
+    pub heading_path: Option<String>,
+    /// Extensible key-value metadata attached by the chunker.
+    pub metadata: HashMap<String, String>,
+}
+
+impl Chunk {
+    /// Returns `"<line_start>-<line_end>"` for citation display.
+    pub fn line_range(&self) -> String {
+        format!("{}-{}", self.line_start, self.line_end)
+    }
+}
+
+/// Configuration for local RAG chunkers.
+///
+/// Defaults: `max_chunk_chars = 2000`, `overlap_chars = 200`, `min_chunk_chars = 50`.
+///
+/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::ChunkerConfig
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ChunkerConfig {
+    /// Soft maximum character count per chunk.
+    pub max_chunk_chars: usize,
+    /// Characters of overlap carried from the previous chunk into the next.
+    pub overlap_chars: usize,
+    /// Minimum character count; chunks smaller than this are merged forward.
+    pub min_chunk_chars: usize,
+}
+
+impl Default for ChunkerConfig {
+    fn default() -> Self {
+        Self {
+            max_chunk_chars: 2000,
+            overlap_chars: 200,
+            min_chunk_chars: 50,
+        }
+    }
+}
+
+/// Sync, object-safe chunker trait for the local RAG pipeline.
+///
+/// Implementations split the text of a source file into [`Chunk`]s ready for
+/// DB insertion.  This trait is intentionally sync (no `async`) so it can be
+/// used as a `dyn Chunker` without an async runtime.
+///
+/// # Object safety
+///
+/// No generic methods — this trait is object-safe and can be stored as
+/// `Box<dyn Chunker>`.
+///
+/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::Chunker
+pub trait Chunker: Send + Sync {
+    /// Split `text` (read from `source_path`) into ordered chunks.
+    ///
+    /// `source_path` is stored on each returned [`Chunk`] and used for DB
+    /// foreign-key linking.
+    fn chunk(&self, source_path: &Path, text: &str) -> cascade_types::error::Result<Vec<Chunk>>;
+
+    /// Human-readable strategy name used in logs and the `rag_chunks.strategy`
+    /// column.
+    fn strategy_name(&self) -> &str;
+}
+
+// Object-safety assertion — compile-time only.
+fn _assert_object_safe(_: &dyn Chunker) {}
 
 // ── ChunkingConfig ────────────────────────────────────────────────────────────
 
@@ -98,18 +228,18 @@ impl StrategyChunker {
 }
 
 #[async_trait]
-impl Chunker for StrategyChunker {
-    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<Chunk>> {
+impl TypesChunker for StrategyChunker {
+    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<TypesChunk>> {
         let mime = doc.mime_type.as_deref().unwrap_or("text/plain");
 
         // Dispatch based on MIME type.
         if mime == "text/markdown" || mime == "text/x-markdown" {
-            markdown::MarkdownChunker.chunk(doc, opts).await
+            TypesChunker::chunk(&markdown::MarkdownChunker, doc, opts).await
         } else if mime.starts_with("text/x-") {
-            code::CodeChunker.chunk(doc, opts).await
+            TypesChunker::chunk(&code::AsyncCodeChunker, doc, opts).await
         } else {
-            // Fall through to semantic chunker as the default.
-            semantic::SemanticChunker::default().chunk(doc, opts).await
+            // Fall through to semantic chunker as the default (async pipeline).
+            TypesChunker::chunk(&semantic::SemanticChunker::default(), doc, opts).await
         }
     }
 
@@ -136,10 +266,9 @@ impl Chunker for StrategyChunker {
 pub struct FixedSizeChunker;
 
 #[async_trait]
-impl Chunker for FixedSizeChunker {
-    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<Chunk>> {
+impl TypesChunker for FixedSizeChunker {
+    async fn chunk(&self, doc: &Document, opts: &ChunkOpts) -> Result<Vec<TypesChunk>> {
         use cascade_types::chunker::ChunkMetadata;
-        use std::collections::HashMap;
 
         let text = &doc.content;
         if text.is_empty() {
@@ -158,7 +287,7 @@ impl Chunker for FixedSizeChunker {
             // Compute byte offsets from character offsets.
             let byte_start: usize = chars[..start].iter().map(|c| c.len_utf8()).sum();
             let byte_end: usize = chars[..end].iter().map(|c| c.len_utf8()).sum();
-            chunks.push(Chunk {
+            chunks.push(TypesChunk {
                 id: format!(
                     "{}-{byte_start}",
                     doc.source_path
@@ -175,7 +304,7 @@ impl Chunker for FixedSizeChunker {
                     end_line: None,
                     chunk_index: idx,
                     total_chunks: 0, // patched below
-                    extra: HashMap::new(),
+                    extra: std::collections::HashMap::new(),
                 },
             });
             idx += 1;
@@ -194,5 +323,80 @@ impl Chunker for FixedSizeChunker {
 
     fn name(&self) -> &str {
         "fixed-size"
+    }
+}
+
+// ── Tests (T-P4-E01-08) ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_chunk(text: &str, char_start: usize, char_end: usize, line_start: usize, line_end: usize) -> Chunk {
+        Chunk {
+            chunk_id: None,
+            source_path: PathBuf::from("test.md"),
+            chunk_index: 0,
+            text: text.to_string(),
+            char_start,
+            char_end,
+            line_start,
+            line_end,
+            parent_chunk_id: None,
+            heading_path: None,
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn chunk_roundtrip_json() {
+        let c = make_chunk("hello world", 0, 11, 1, 1);
+        let json = serde_json::to_string(&c).expect("serialize");
+        let back: Chunk = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.text, "hello world");
+        assert_eq!(back.char_start, 0);
+        assert_eq!(back.char_end, 11);
+        assert_eq!(back.line_start, 1);
+        assert_eq!(back.line_end, 1);
+        assert!(back.chunk_id.is_none());
+        assert!(back.parent_chunk_id.is_none());
+    }
+
+    #[test]
+    fn chunk_line_range() {
+        let c = make_chunk("line one\nline two", 0, 17, 3, 7);
+        assert_eq!(c.line_range(), "3-7");
+    }
+
+    #[test]
+    fn chunker_config_defaults() {
+        let cfg = ChunkerConfig::default();
+        assert_eq!(cfg.max_chunk_chars, 2000);
+        assert_eq!(cfg.overlap_chars, 200);
+        assert_eq!(cfg.min_chunk_chars, 50);
+    }
+
+    #[test]
+    fn chunk_all_fields_present() {
+        // Verify all 10 spec fields exist and are accessible.
+        let mut meta = HashMap::new();
+        meta.insert("lang".to_string(), "rust".to_string());
+        let c = Chunk {
+            chunk_id: Some(42),
+            source_path: PathBuf::from("src/lib.rs"),
+            chunk_index: 3,
+            text: "fn foo() {}".to_string(),
+            char_start: 100,
+            char_end: 111,
+            line_start: 5,
+            line_end: 5,
+            parent_chunk_id: Some(1),
+            heading_path: Some("## Functions".to_string()),
+            metadata: meta,
+        };
+        assert_eq!(c.chunk_id, Some(42));
+        assert_eq!(c.chunk_index, 3);
+        assert_eq!(c.metadata.get("lang").map(|s| s.as_str()), Some("rust"));
+        assert_eq!(c.heading_path.as_deref(), Some("## Functions"));
     }
 }

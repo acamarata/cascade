@@ -26,7 +26,9 @@
 //!
 //! | Flag | What it enables |
 //! |------|-----------------|
-//! | `fastembed` | BGE-M3, Nomic, Jina local ONNX inference via fastembed-rs |
+//! | `fastembed`    | BGE-M3, Nomic, Jina local ONNX inference via fastembed-rs |
+//! | `vec`          | sqlite-vec vec0 virtual table for dense vector search |
+//! | `code-chunker` | tree-sitter code-aware chunking for Rust/TS/Python/JS |
 //!
 //! ## Design constraints
 //!
@@ -41,12 +43,20 @@
 pub mod cache;
 pub mod chunk;
 pub mod citation;
+pub mod db;
 pub mod embed;
 pub mod eval;
 pub mod index;
 pub mod parse;
 pub mod rerank;
 pub mod retrieve;
+
+// Feature-gated placeholder modules — logic wired in subsequent tickets
+#[cfg(feature = "vec")]
+mod vec_index;
+
+#[cfg(feature = "code-chunker")]
+mod code_chunk;
 
 // ── Tier configuration ───────────────────────────────────────────────────────
 
