@@ -1,0 +1,64 @@
+[package]
+name = "cascade-local-llm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Local LLM runner for Cascade — candle-rs gemma-2-2b CPU/METAL inference"
+
+# ---------- features -----------------------------------------------------------
+# `metal`  — enable Apple Silicon GPU acceleration (macOS ARM only).
+#             Off by default so CI stays CPU-only and lightweight.
+#             Gate: cargo check --features metal  (macOS arm64 only).
+[features]
+default = []
+metal = ["candle-core/metal"]
+
+# ---------- dependencies -------------------------------------------------------
+[dependencies]
+# Workspace shared types
+cascade-providers = { workspace = true }
+
+# candle-rs — CPU inference by default; metal accelerated via feature flag.
+# Pinned to 0.8 per spec guide line 1.
+candle-core         = { version = "0.8", default-features = false }
+candle-nn           = { version = "0.8", default-features = false }
+candle-transformers = { version = "0.8", default-features = false }
+
+# Tokenizer — SentencePiece / HuggingFace tokenizers
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+
+# Async runtime / streams
+async-trait  = { workspace = true }
+tokio        = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-core = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
+
+# Error handling / serialisation
+thiserror  = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+# Home directory resolution (replaces dirs_next)
+dirs = "5"
+
+# Tracing
+tracing = { workspace = true }
+
+# ── Downloader (T-P3-E04-18) ──────────────────────────────────────────────────
+# HTTP streaming download via reqwest
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+# SHA-256 checksum verification
+sha2 = "0.10"
+digest = "0.10"
+# Disk-space pre-check (Unix: statvfs)
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["fs"] }
+
+[dev-dependencies]
+tokio    = { workspace = true }
+tempfile = "3"
+# Mock HTTP server for downloader tests
+wiremock = "0.6"

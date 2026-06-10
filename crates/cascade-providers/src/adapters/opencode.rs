@@ -38,6 +38,7 @@ use crate::{
     cost::compute_cost,
     error::ProviderError,
     http_client::CascadeHttpClient,
+    oauth::client::{OAuthClient, OAuthProviderConfig},
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
     types::{CompletionRequest, CompletionResponse, ModelInfo, StreamChunk},
 };
@@ -77,6 +78,10 @@ pub struct OpenCodeAdapter {
     base_url: String,
     /// Injected access token for tests; `None` means "read from keychain".
     access_token: Option<String>,
+    /// OAuth provider config for token refresh on 401.
+    oauth_config: Option<OAuthProviderConfig>,
+    /// OAuth refresh token — used in `refresh_once` on 401.
+    oauth_refresh_token: Option<String>,
 }
 
 impl OpenCodeAdapter {
@@ -86,6 +91,8 @@ impl OpenCodeAdapter {
             http: CascadeHttpClient::new(),
             base_url: OPENCODE_BASE_URL.to_owned(),
             access_token: None,
+            oauth_config: None,
+            oauth_refresh_token: None,
         }
     }
 
@@ -98,7 +105,49 @@ impl OpenCodeAdapter {
             http: CascadeHttpClient::new(),
             base_url: base_url.into(),
             access_token: Some(access_token.into()),
+            oauth_config: None,
+            oauth_refresh_token: None,
         }
+    }
+
+    /// Construct an adapter with full OAuth refresh support (access + refresh token).
+    ///
+    /// Used when the daemon has both tokens and wants 401-retry-with-refresh behaviour.
+    ///
+    /// ## Inputs
+    /// - `base_url`: API endpoint (prod or mock).
+    /// - `access_token`: current access token.
+    /// - `refresh_token`: refresh token for 401 recovery.
+    /// - `oauth_config`: provider config for `OAuthClient::refresh_token`.
+    #[cfg(test)]
+    pub fn with_oauth_refresh(
+        base_url: impl Into<String>,
+        access_token: impl Into<String>,
+        refresh_token: impl Into<String>,
+        oauth_config: OAuthProviderConfig,
+    ) -> Self {
+        Self {
+            http: CascadeHttpClient::new(),
+            base_url: base_url.into(),
+            access_token: Some(access_token.into()),
+            oauth_config: Some(oauth_config),
+            oauth_refresh_token: Some(refresh_token.into()),
+        }
+    }
+
+    /// Attempt one OAuth token refresh.
+    async fn refresh_once(&self) -> Result<String, ProviderError> {
+        let cfg = self.oauth_config.as_ref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
+        })?;
+        let rt = self.oauth_refresh_token.as_deref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
+        })?;
+        OAuthClient::new(cfg.clone())
+            .refresh_token(rt)
+            .await
+            .map(|t| t.access_token)
+            .map_err(|_| ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() })
     }
 
     /// Retrieve the OAuth2 access token — from the injected field (tests) or
@@ -155,8 +204,10 @@ impl Default for OpenCodeAdapter {
 impl ProviderAdapter for OpenCodeAdapter {
     /// Send a non-streaming completion request.
     ///
-    /// On a 401 response the HTTP client returns `AuthFailed`; `map_auth_error`
-    /// converts that to `OAuthExpired` so the daemon can trigger re-auth.
+    /// On a 401 response the HTTP client returns `AuthFailed`.  When an
+    /// `oauth_config` is configured the adapter attempts one token refresh
+    /// and retries before returning `OAuthExpired`.  Without an `oauth_config`
+    /// the 401 is mapped directly to `OAuthExpired` (daemon triggers re-auth).
     async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let token = self.access_token()?;
         let body = OaiRequest::from_request(&req);
@@ -168,13 +219,32 @@ impl ProviderAdapter for OpenCodeAdapter {
             "sending completion request"
         );
 
-        let resp: OaiResponse = self
+        let first: Result<OaiResponse, ProviderError> = self
             .http
             .post_json(&url, &body, move |b| {
                 CascadeHttpClient::apply_bearer(b, &token)
             })
-            .await
-            .map_err(Self::map_auth_error)?;
+            .await;
+
+        let resp: OaiResponse = match first {
+            Ok(r) => r,
+            Err(ProviderError::AuthFailed(_)) if self.oauth_config.is_some() => {
+                // Refresh once and retry.
+                let new_token = self.refresh_once().await?;
+                self.http
+                    .post_json(&url, &body, move |b| {
+                        CascadeHttpClient::apply_bearer(b, &new_token)
+                    })
+                    .await
+                    .map_err(|e| match e {
+                        ProviderError::AuthFailed(_) => {
+                            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
+                        }
+                        other => other,
+                    })?
+            }
+            Err(e) => return Err(Self::map_auth_error(e)),
+        };
 
         let mut completion = map_response(resp).ok_or_else(|| {
             ProviderError::InvalidResponse("no choices in opencode response".into())
@@ -490,6 +560,112 @@ mod tests {
         assert!(
             matches!(mapped, ProviderError::NetworkError(_)),
             "expected NetworkError, got {mapped:?}"
+        );
+    }
+
+    // ── OAuth 401 + refresh + retry ───────────────────────────────────────────
+
+    /// 401 triggers refresh + retry; second request returns Ok.
+    #[tokio::test]
+    async fn opencode_oauth_401_triggers_refresh_and_retry() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{body_string_contains, method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        // First API call: 401.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .up_to_n_times(1)
+            .mount(&api_server)
+            .await;
+
+        // Second API call: 200 with valid fixture-style response.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("opencode_complete")))
+            .mount(&api_server)
+            .await;
+
+        // Token server returns a new access token.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .and(body_string_contains("refresh_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "refreshed-opencode-token",
+                "expires_in": 3600,
+                "token_type": "Bearer"
+            })))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "test-client".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://opencode.ai/oauth/authorize".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["api:read".to_owned(), "api:write".to_owned()],
+        };
+
+        let adapter = OpenCodeAdapter::with_oauth_refresh(
+            api_server.uri(),
+            "initial-token",
+            "refresh-token-xyz",
+            oauth_cfg,
+        );
+
+        let req = CompletionRequest::simple("kimi-k2", "hello");
+        let result = adapter.complete(req).await;
+        assert!(result.is_ok(), "expected Ok after refresh+retry: {:?}", result);
+    }
+
+    /// Double 401 (refresh also fails): returns OAuthExpired.
+    #[tokio::test]
+    async fn opencode_oauth_double_401_returns_oauth_expired() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&api_server)
+            .await;
+
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "tc".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://opencode.ai/oauth/authorize".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["api:read".to_owned()],
+        };
+
+        let adapter = OpenCodeAdapter::with_oauth_refresh(
+            api_server.uri(),
+            "bad-token",
+            "bad-rt",
+            oauth_cfg,
+        );
+
+        let err = adapter
+            .complete(CompletionRequest::simple("kimi-k2", "hi"))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "opencode"),
+            "expected OAuthExpired(opencode), got: {err:?}"
         );
     }
 }

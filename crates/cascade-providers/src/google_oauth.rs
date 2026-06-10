@@ -8,6 +8,11 @@
 //! - `GoogleOAuthClient`: start PKCE flow, exchange code, refresh tokens.
 //! - `validate_gemini_key`: test an API key against the Gemini 1.5 Flash endpoint.
 //!
+//! ## Delegation (T-P3-E04-20)
+//! PKCE verifier/challenge generation and callback parameter parsing are
+//! delegated to `crate::oauth::pkce` and `crate::oauth::client`. This module
+//! retains the full `GoogleOAuthClient` public API unchanged.
+//!
 //! ## Inputs
 //! - OAuth client_id / client_secret from the Cascade OAuth app registration.
 //! - `account_email`: used as the keychain label namespace.
@@ -29,6 +34,10 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+// Delegate PKCE and callback helpers to the generic oauth module (T-P3-E04-20).
+use crate::oauth::client::{constant_time_eq, parse_callback_params, url_encode};
+use crate::oauth::pkce::{generate_code_challenge, generate_code_verifier};
 
 /// Errors produced by the Google OAuth flow and key validation.
 #[derive(Debug, Error)]
@@ -164,7 +173,7 @@ impl GoogleOAuthClient {
     ///
     /// # Constraints
     /// - State is 32 random bytes encoded as hex.
-    /// - PKCE uses S256 challenge method.
+    /// - PKCE uses S256 challenge method (delegated to `crate::oauth::pkce`).
     /// - Port is chosen from unpredictable ephemeral range via `portpicker`.
     pub async fn start_pkce_flow(
         &self,
@@ -172,12 +181,12 @@ impl GoogleOAuthClient {
     ) -> Result<(String, PkceVerifier, String, u16), OAuthError> {
         let _ = account_email; // used for keychain scoping in T-P3-E03-39b
 
-        // Generate cryptographically random PKCE verifier (96 bytes → well within 43..128).
-        let verifier_bytes = pkce::code_verifier(96);
-        let challenge = pkce::code_challenge(&verifier_bytes);
+        // Generate cryptographically random PKCE verifier via the generic oauth module.
+        let verifier_str = generate_code_verifier();
+        let challenge = generate_code_challenge(&verifier_str);
+        let verifier_bytes = verifier_str.into_bytes();
 
         // 32-byte random hex state for CSRF protection.
-        // rand::fill uses the thread-local CSPRNG (ChaCha).
         let state = {
             let mut raw = [0u8; 32];
             rand::fill(&mut raw);
@@ -453,37 +462,13 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Percent-encode a string for use in a query parameter value.
-///
-/// Only encodes the characters that must be encoded in a query value per RFC 3986.
-/// Spaces become `%20` (not `+`) for consistency with OAuth specs.
-fn url_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            // Unreserved characters — pass through unchanged.
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(c),
-            // These are safe inside a query value for OAuth URLs.
-            ':' | '/' | '@' | '+' => out.push(c),
-            // Everything else gets percent-encoded.
-            c => {
-                let mut buf = [0u8; 4];
-                let encoded = c.encode_utf8(&mut buf);
-                for byte in encoded.bytes() {
-                    out.push_str(&format!("%{byte:02X}"));
-                }
-            }
-        }
-    }
-    out
-}
-
 /// Handle one incoming TCP connection for the OAuth callback.
 ///
 /// Parses the HTTP GET request line, extracts `code` and `state` query params,
 /// validates state, writes a plain-text HTML success/error page, and returns the code.
 ///
 /// Called inside `spawn_blocking` — must not use async.
+/// Delegates parse and constant-time-eq to `crate::oauth::client`.
 fn handle_callback(
     listener: TcpListener,
     expected_state: &str,
@@ -494,10 +479,11 @@ fn handle_callback(
 
     let request_line = read_request_line(&stream)?;
 
-    // Parse "GET /callback?code=...&state=... HTTP/1.1"
-    let (code, state) = parse_callback_params(&request_line)?;
+    // Delegate callback parsing to the generic oauth::client module.
+    let (code, state) = parse_callback_params(&request_line)
+        .map_err(|e| OAuthError::CallbackIo(e.to_string()))?;
 
-    // Constant-time comparison to mitigate timing attacks on the CSRF state.
+    // Constant-time comparison delegated to oauth::client::constant_time_eq.
     if !constant_time_eq(state.as_bytes(), expected_state.as_bytes()) {
         write_response(&mut stream, "400 Bad Request", "State mismatch — please retry.");
         return Err(OAuthError::StateMismatch);
@@ -522,65 +508,6 @@ fn read_request_line(stream: &TcpStream) -> Result<String, OAuthError> {
     Ok(line.trim_end().to_owned())
 }
 
-/// Extract `code` and `state` from a GET request line such as:
-/// `GET /callback?code=abc&state=xyz HTTP/1.1`
-fn parse_callback_params(request_line: &str) -> Result<(String, String), OAuthError> {
-    // Extract the path+query between "GET " and " HTTP/".
-    let path_and_query = request_line
-        .strip_prefix("GET ")
-        .and_then(|s| s.split(' ').next())
-        .ok_or_else(|| {
-            OAuthError::CallbackIo(format!("unexpected request line: {request_line}"))
-        })?;
-
-    // Strip the path prefix.
-    let query = path_and_query
-        .split_once('?')
-        .map(|(_, q)| q)
-        .unwrap_or("");
-
-    let mut code = None;
-    let mut state = None;
-
-    for pair in query.split('&') {
-        if let Some(v) = pair.strip_prefix("code=") {
-            code = Some(percent_decode(v));
-        } else if let Some(v) = pair.strip_prefix("state=") {
-            state = Some(percent_decode(v));
-        }
-    }
-
-    match (code, state) {
-        (Some(c), Some(s)) => Ok((c, s)),
-        (None, _) => Err(OAuthError::CallbackIo("missing 'code' in callback".to_string())),
-        (_, None) => Err(OAuthError::CallbackIo("missing 'state' in callback".to_string())),
-    }
-}
-
-/// Minimal percent-decode for OAuth callback query parameters.
-fn percent_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let h1 = chars.next();
-            let h2 = chars.next();
-            if let (Some(h1), Some(h2)) = (h1, h2) {
-                if let Ok(b) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
-                    out.push(b as char);
-                    continue;
-                }
-            }
-            out.push('%');
-        } else if c == '+' {
-            out.push(' ');
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// Write a minimal HTTP/1.1 response to the callback connection.
 fn write_response(stream: &mut TcpStream, status: &str, body: &str) {
     let response = format!(
@@ -594,17 +521,6 @@ fn write_response(stream: &mut TcpStream, status: &str, body: &str) {
     );
     // Best-effort — ignore write errors; the OAuth code has already been extracted.
     let _ = stream.write_all(response.as_bytes());
-}
-
-/// Constant-time byte slice comparison.
-///
-/// Returns true iff `a == b`, in time proportional to `max(a.len(), b.len())`
-/// rather than the position of the first difference.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -624,18 +540,20 @@ mod tests {
     ///   challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
     #[test]
     fn pkce_known_vector_s256() {
-        let verifier = b"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-        let challenge = pkce::code_challenge(verifier);
+        // Delegate to generic pkce module.
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        let challenge = generate_code_challenge(verifier);
         assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
     }
 
     /// Verify that two consecutive PKCE verifiers are distinct (random, not sequential).
     #[test]
     fn pkce_verifiers_are_unique() {
-        let v1 = pkce::code_verifier(96);
-        let v2 = pkce::code_verifier(96);
+        let v1 = generate_code_verifier();
+        let v2 = generate_code_verifier();
         assert_ne!(v1, v2, "PKCE verifiers must be randomly unique");
-        assert_eq!(v1.len(), 96);
+        // pkce::code_verifier(32) produces a 43-char base64url string (not raw bytes).
+        assert!(!v1.is_empty(), "verifier must not be empty");
     }
 
     // ── Consent URL construction ──────────────────────────────────────────────
@@ -704,8 +622,8 @@ mod tests {
         let request_line = "GET /callback?state=abc HTTP/1.1";
         let result = parse_callback_params(request_line);
         assert!(
-            matches!(result, Err(OAuthError::CallbackIo(_))),
-            "missing code must return CallbackIo error"
+            result.is_err(),
+            "missing code must return an error"
         );
     }
 

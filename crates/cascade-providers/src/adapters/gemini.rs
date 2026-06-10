@@ -41,6 +41,7 @@ use crate::{
     cost::compute_cost,
     error::ProviderError,
     http_client::CascadeHttpClient,
+    oauth::client::{OAuthClient, OAuthProviderConfig},
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
     types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
 };
@@ -130,12 +131,29 @@ impl Default for GeminiConfig {
 /// Create via [`GeminiAdapter::new`].  One instance per adapter seat in the
 /// `ProviderRegistry`.
 ///
+/// ## Authentication modes
+///
+/// - **API key** (default): key passed as `?key=` query parameter.
+/// - **OAuth bearer**: `access_token` set via `with_oauth_token` or keychain.
+///   When an OAuth token is present it takes precedence over the API key and is
+///   sent as `Authorization: Bearer <token>`.  On a 401 response the adapter
+///   attempts one token refresh via `OAuthClient`, updates the stored token, and
+///   retries the request.  A second 401 returns `ProviderError::OAuthExpired`.
+///
 /// ## Thread safety
 ///
 /// `GeminiAdapter` is `Send + Sync`; safe to wrap in `Arc`.
 pub struct GeminiAdapter {
     config: GeminiConfig,
     http: CascadeHttpClient,
+    /// OAuth access token — takes precedence over `config.api_key` when present.
+    /// Never logged.
+    access_token: Option<String>,
+    /// OAuth provider config used for token refresh on 401.  `None` in API-key mode.
+    oauth_config: Option<OAuthProviderConfig>,
+    /// Current refresh token — used by `refresh_once` to obtain a new access token.
+    /// `None` in API-key mode or when no refresh token is available.
+    refresh_token: Option<String>,
 }
 
 impl GeminiAdapter {
@@ -144,15 +162,74 @@ impl GeminiAdapter {
         Self {
             config,
             http: CascadeHttpClient::new(),
+            access_token: None,
+            oauth_config: None,
+            refresh_token: None,
         }
+    }
+
+    /// Construct an OAuth-authenticated adapter.
+    ///
+    /// When `access_token` is present the adapter uses `Authorization: Bearer`
+    /// instead of `?key=`.  On a 401 response it calls `OAuthClient::refresh_token`
+    /// with `oauth_config` and retries once before returning `OAuthExpired`.
+    ///
+    /// ## Inputs
+    /// - `config`: base Gemini config (base_url, model).
+    /// - `access_token`: current OAuth access token from keychain.
+    /// - `refresh_token`: OAuth refresh token for 401 retry.
+    /// - `oauth_config`: provider config used to build the `OAuthClient` for refresh.
+    pub fn with_oauth_token(
+        config: GeminiConfig,
+        access_token: impl Into<String>,
+        refresh_token: impl Into<String>,
+        oauth_config: OAuthProviderConfig,
+    ) -> Self {
+        Self {
+            config,
+            http: CascadeHttpClient::new(),
+            access_token: Some(access_token.into()),
+            oauth_config: Some(oauth_config),
+            refresh_token: Some(refresh_token.into()),
+        }
+    }
+
+    /// Attempt one OAuth token refresh.  Returns the new access token, or
+    /// `Err(OAuthExpired)` if the refresh endpoint also fails.
+    async fn refresh_once(&self) -> Result<String, ProviderError> {
+        let oauth_cfg = self.oauth_config.as_ref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
+        })?;
+        let rt = self.refresh_token.as_deref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
+        })?;
+        let client = OAuthClient::new(oauth_cfg.clone());
+        let tokens = client.refresh_token(rt).await.map_err(|_| {
+            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
+        })?;
+        Ok(tokens.access_token)
+    }
+
+    /// Return an auth closure appropriate for the current auth mode.
+    ///
+    /// - OAuth mode: adds `Authorization: Bearer <token>`.
+    /// - API-key / proxy mode: no-op (key is in the URL query string).
+    fn auth_for_token<'a>(
+        token: &'a str,
+    ) -> impl Fn(reqwest::RequestBuilder) -> reqwest::RequestBuilder + 'a {
+        move |b| CascadeHttpClient::apply_bearer(b, token)
     }
 
     // ── URL builders ──────────────────────────────────────────────────────────
 
-    /// Build the `generateContent` URL.  Appends `?key=` only in direct mode.
+    /// Build the `generateContent` URL.
+    ///
+    /// - Proxy mode: no key.
+    /// - OAuth mode: no key (auth is `Authorization: Bearer`).
+    /// - API-key mode: appends `?key=`.
     fn complete_url(&self, model: &str) -> String {
         let base = &self.config.base_url;
-        if self.config.use_gfp_proxy {
+        if self.config.use_gfp_proxy || self.access_token.is_some() {
             format!("{base}/v1beta/models/{model}:generateContent")
         } else {
             let key = self.config.api_key.as_deref().unwrap_or("");
@@ -163,7 +240,7 @@ impl GeminiAdapter {
     /// Build the `streamGenerateContent` URL with `alt=sse`.
     fn stream_url(&self, model: &str) -> String {
         let base = &self.config.base_url;
-        if self.config.use_gfp_proxy {
+        if self.config.use_gfp_proxy || self.access_token.is_some() {
             format!("{base}/v1beta/models/{model}:streamGenerateContent?alt=sse")
         } else {
             let key = self.config.api_key.as_deref().unwrap_or("");
@@ -251,6 +328,50 @@ impl ProviderAdapter for GeminiAdapter {
         debug!(model, url_path = "/v1beta/models/…:generateContent", "gemini complete");
 
         let wire_req = self.map_request(&req);
+
+        // ── OAuth bearer mode: attempt refresh once on AuthFailed (401) ──────
+        if let Some(ref token) = self.access_token {
+            let first: Result<GeminiResponse, ProviderError> = self
+                .http
+                .post_json(&url, &wire_req, Self::auth_for_token(token))
+                .await;
+
+            let raw: GeminiResponse = match first {
+                Ok(r) => r,
+                Err(ProviderError::AuthFailed(_)) => {
+                    // Attempt one token refresh.
+                    let new_token = self.refresh_once().await?;
+                    self.http
+                        .post_json(&url, &wire_req, Self::auth_for_token(&new_token))
+                        .await
+                        .map_err(|e| match e {
+                            ProviderError::AuthFailed(_) => {
+                                ProviderError::OAuthExpired { provider: "gemini".to_owned() }
+                            }
+                            other => other,
+                        })?
+                }
+                Err(e) => return Err(e),
+            };
+
+            let content = raw
+                .candidates
+                .first()
+                .and_then(|c| c.content.parts.first())
+                .map(|p| p.text.clone())
+                .unwrap_or_default();
+
+            let usage = TokenUsage {
+                prompt_tokens: raw.usage_metadata.as_ref().map(|u| u.prompt_token_count).unwrap_or(0),
+                completion_tokens: raw.usage_metadata.as_ref().map(|u| u.candidates_token_count).unwrap_or(0),
+                total_tokens: raw.usage_metadata.as_ref().map(|u| u.total_token_count).unwrap_or(0),
+            };
+            let response_model = raw.model_version.unwrap_or_else(|| model.to_string());
+            let cost_usd = compute_cost("google-gemini", &response_model, &usage);
+            return Ok(CompletionResponse { content, model: response_model, usage, cost_usd });
+        }
+
+        // ── API-key / proxy mode (existing path) ──────────────────────────────
         let raw: GeminiResponse = self
             .http
             .post_json(&url, &wire_req, Self::auth_noop())
@@ -801,5 +922,118 @@ mod tests {
         let payload = r#"{"candidates":[{"content":{"parts":[{"text":""}]}}]}"#;
         let result = parse_gemini_stream_event(payload).unwrap();
         assert!(result.is_none());
+    }
+
+    // ── OAuth 401 + refresh + retry ───────────────────────────────────────────
+
+    /// 401 from Gemini triggers refresh + retry; second call returns Ok.
+    #[tokio::test]
+    async fn oauth_401_triggers_refresh_and_retry() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{body_string_contains, method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        // First call: 401 (expired token).
+        // Second call: 200 (after refresh).
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .up_to_n_times(1)
+            .mount(&api_server)
+            .await;
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")),
+            )
+            .mount(&api_server)
+            .await;
+
+        // Token server returns a new access token on refresh.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .and(body_string_contains("refresh_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "refreshed-gemini-token",
+                "expires_in": 3600,
+                "token_type": "Bearer"
+            })))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "test-client".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["https://www.googleapis.com/auth/generative-language.retriever".to_owned()],
+        };
+
+        let mut config = GeminiConfig::default();
+        config.base_url = api_server.uri();
+
+        let adapter = GeminiAdapter::with_oauth_token(
+            config,
+            "initial-token",
+            "refresh-token-xyz",
+            oauth_cfg,
+        );
+
+        let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
+        let result = adapter.complete(req).await;
+        assert!(result.is_ok(), "expected Ok after refresh+retry, got: {:?}", result);
+    }
+
+    /// Double 401 (refresh also fails): returns OAuthExpired.
+    #[tokio::test]
+    async fn oauth_double_401_returns_oauth_expired() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        // All API calls return 401.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&api_server)
+            .await;
+
+        // Token server also returns 400 (refresh fails).
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "test-client".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["https://www.googleapis.com/auth/generative-language.retriever".to_owned()],
+        };
+
+        let mut config = GeminiConfig::default();
+        config.base_url = api_server.uri();
+
+        let adapter = GeminiAdapter::with_oauth_token(
+            config,
+            "bad-token",
+            "bad-refresh-token",
+            oauth_cfg,
+        );
+
+        let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
+        let err = adapter.complete(req).await.unwrap_err();
+        assert!(
+            matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "gemini"),
+            "expected OAuthExpired(gemini), got: {err:?}"
+        );
     }
 }

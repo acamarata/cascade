@@ -41,6 +41,7 @@ use crate::{
     cost::compute_cost,
     error::ProviderError,
     http_client::CascadeHttpClient,
+    oauth::client::{OAuthClient, OAuthProviderConfig},
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
     types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
 };
@@ -153,12 +154,19 @@ struct OaiModelList {
 /// ## Construction
 ///
 /// ```rust,ignore
-/// // Default endpoint (api.openai.com)
+/// // Default endpoint (api.openai.com) with API key
 /// let adapter = OpenAIAdapter::new("sk-...", None::<String>);
+///
+/// // OAuth bearer token (loaded from keychain "cascade.oauth.openai")
+/// let oauth = OpenAIAdapter::with_oauth_token("access-token", "refresh-token", oauth_cfg, None::<String>);
 ///
 /// // Azure OpenAI or compatible endpoint
 /// let azure = OpenAIAdapter::new("sk-...", Some("https://my-tenant.openai.azure.com"));
 /// ```
+///
+/// ## Auth precedence
+///
+/// OAuth token wins over API key when both are present.
 ///
 /// ## Thread safety
 ///
@@ -170,6 +178,12 @@ pub struct OpenAIAdapter {
     base_url: String,
     /// Shared HTTP client (`Arc`-backed, clone-cheap).
     http: CascadeHttpClient,
+    /// OAuth access token — wins over `api_key` when present.  Never logged.
+    oauth_access_token: Option<String>,
+    /// OAuth provider config for token refresh on 401.
+    oauth_config: Option<OAuthProviderConfig>,
+    /// OAuth refresh token for 401 retry.
+    oauth_refresh_token: Option<String>,
 }
 
 impl OpenAIAdapter {
@@ -181,7 +195,57 @@ impl OpenAIAdapter {
                 .map(Into::into)
                 .unwrap_or_else(|| DEFAULT_BASE_URL.to_owned()),
             http: CascadeHttpClient::new(),
+            oauth_access_token: None,
+            oauth_config: None,
+            oauth_refresh_token: None,
         }
+    }
+
+    /// Create an OAuth-authenticated adapter.  OAuth token takes precedence over
+    /// any API key.  On a 401 response the adapter attempts one token refresh via
+    /// `OAuthClient`, then retries.  A second 401 returns `OAuthExpired`.
+    ///
+    /// ## Inputs
+    /// - `access_token`: current OAuth access token (loaded from keychain).
+    /// - `refresh_token`: OAuth refresh token.
+    /// - `oauth_config`: provider config for `OAuthClient::refresh_token`.
+    /// - `base_url`: optional endpoint override.
+    pub fn with_oauth_token(
+        access_token: impl Into<String>,
+        refresh_token: impl Into<String>,
+        oauth_config: OAuthProviderConfig,
+        base_url: Option<impl Into<String>>,
+    ) -> Self {
+        Self {
+            api_key: String::new(), // not used in OAuth mode
+            base_url: base_url
+                .map(Into::into)
+                .unwrap_or_else(|| DEFAULT_BASE_URL.to_owned()),
+            http: CascadeHttpClient::new(),
+            oauth_access_token: Some(access_token.into()),
+            oauth_config: Some(oauth_config),
+            oauth_refresh_token: Some(refresh_token.into()),
+        }
+    }
+
+    /// Attempt one OAuth token refresh, returning the new access token.
+    async fn refresh_once(&self) -> Result<String, ProviderError> {
+        let cfg = self.oauth_config.as_ref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: "openai".to_owned() }
+        })?;
+        let rt = self.oauth_refresh_token.as_deref().ok_or_else(|| {
+            ProviderError::OAuthExpired { provider: "openai".to_owned() }
+        })?;
+        OAuthClient::new(cfg.clone())
+            .refresh_token(rt)
+            .await
+            .map(|t| t.access_token)
+            .map_err(|_| ProviderError::OAuthExpired { provider: "openai".to_owned() })
+    }
+
+    /// Return the effective bearer token: OAuth access token wins over API key.
+    fn effective_token(&self) -> &str {
+        self.oauth_access_token.as_deref().unwrap_or(self.api_key.as_str())
     }
 
     /// Returns `true` when the model id belongs to the o-series quirk family.
@@ -250,14 +314,34 @@ impl ProviderAdapter for OpenAIAdapter {
     async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let url = format!("{}/v1/chat/completions", self.base_url);
         let body = Self::build_request(&req, false);
-        let api_key = self.api_key.clone();
+        let token = self.effective_token().to_owned();
 
-        let resp: OaiResponse = self
+        let first: Result<OaiResponse, ProviderError> = self
             .http
             .post_json(&url, &body, move |b| {
-                CascadeHttpClient::apply_bearer(b, &api_key)
+                CascadeHttpClient::apply_bearer(b, &token)
             })
-            .await?;
+            .await;
+
+        let resp: OaiResponse = match first {
+            Ok(r) => r,
+            Err(ProviderError::AuthFailed(_)) if self.oauth_access_token.is_some() => {
+                // OAuth mode: attempt one refresh then retry.
+                let new_token = self.refresh_once().await?;
+                self.http
+                    .post_json(&url, &body, move |b| {
+                        CascadeHttpClient::apply_bearer(b, &new_token)
+                    })
+                    .await
+                    .map_err(|e| match e {
+                        ProviderError::AuthFailed(_) => {
+                            ProviderError::OAuthExpired { provider: "openai".to_owned() }
+                        }
+                        other => other,
+                    })?
+            }
+            Err(e) => return Err(e),
+        };
 
         let content = resp
             .choices
@@ -293,12 +377,12 @@ impl ProviderAdapter for OpenAIAdapter {
     > {
         let url = format!("{}/v1/chat/completions", self.base_url);
         let body = Self::build_request(&req, true);
-        let api_key = self.api_key.clone();
+        let token = self.effective_token().to_owned();
 
         let response = self
             .http
             .post_sse(&url, &body, move |b| {
-                CascadeHttpClient::apply_bearer(b, &api_key)
+                CascadeHttpClient::apply_bearer(b, &token)
             })
             .await?;
 
@@ -363,12 +447,12 @@ impl ProviderAdapter for OpenAIAdapter {
 
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let url = format!("{}/v1/models", self.base_url);
-        let api_key = self.api_key.clone();
+        let token = self.effective_token().to_owned();
 
         let list: OaiModelList = self
             .http
             .get_json(&url, move |b| {
-                CascadeHttpClient::apply_bearer(b, &api_key)
+                CascadeHttpClient::apply_bearer(b, &token)
             })
             .await?;
 
@@ -391,12 +475,12 @@ impl ProviderAdapter for OpenAIAdapter {
 
     async fn health_check(&self) -> Result<(), ProviderError> {
         let url = format!("{}/v1/models", self.base_url);
-        let api_key = self.api_key.clone();
+        let token = self.effective_token().to_owned();
 
         let _: OaiModelList = self
             .http
             .get_json(&url, move |b| {
-                CascadeHttpClient::apply_bearer(b, &api_key)
+                CascadeHttpClient::apply_bearer(b, &token)
             })
             .await?;
 
@@ -770,5 +854,139 @@ mod tests {
     fn default_base_url_is_api_openai_com() {
         let adapter = OpenAIAdapter::new("sk-k", None::<String>);
         assert_eq!(adapter.provider_info().base_url, DEFAULT_BASE_URL);
+    }
+
+    // ── OAuth effective_token precedence ──────────────────────────────────────
+
+    #[test]
+    fn oauth_token_wins_over_api_key() {
+        use crate::oauth::client::OAuthProviderConfig;
+        let cfg = OAuthProviderConfig {
+            client_id: "cid".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://chat.openai.com/oauth/authorize".to_owned(),
+            token_url: "https://auth.openai.com/oauth/token".to_owned(),
+            scopes: vec!["openid".to_owned()],
+        };
+        let adapter = OpenAIAdapter::with_oauth_token(
+            "oauth-token",
+            "rt",
+            cfg,
+            None::<String>,
+        );
+        assert_eq!(adapter.effective_token(), "oauth-token");
+        assert!(adapter.oauth_access_token.is_some());
+    }
+
+    #[test]
+    fn api_key_used_when_no_oauth_token() {
+        let adapter = OpenAIAdapter::new("sk-test", None::<String>);
+        assert_eq!(adapter.effective_token(), "sk-test");
+        assert!(adapter.oauth_access_token.is_none());
+    }
+
+    // ── OAuth 401 + refresh + retry ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn openai_oauth_401_triggers_refresh_and_retry() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{body_string_contains, method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        // First API call: 401.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .up_to_n_times(1)
+            .mount(&api_server)
+            .await;
+
+        // Second API call: 200.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "model": "gpt-4o",
+                "choices": [{"message": {"content": "hello"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+            })))
+            .mount(&api_server)
+            .await;
+
+        // Token refresh: succeeds.
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .and(body_string_contains("refresh_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "refreshed-openai-token",
+                "expires_in": 3600,
+                "token_type": "Bearer"
+            })))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "test-client".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://chat.openai.com/oauth/authorize".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["openid".to_owned()],
+        };
+
+        let adapter = OpenAIAdapter::with_oauth_token(
+            "initial-token",
+            "refresh-token-xyz",
+            oauth_cfg,
+            Some(api_server.uri()),
+        );
+
+        let req = CompletionRequest::simple("gpt-4o", "hello");
+        let result = adapter.complete(req).await;
+        assert!(result.is_ok(), "expected Ok after refresh+retry: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn openai_oauth_double_401_returns_oauth_expired() {
+        use crate::oauth::client::OAuthProviderConfig;
+        use wiremock::matchers::{method as wm_method, path as wm_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let api_server = MockServer::start().await;
+        let token_server = MockServer::start().await;
+
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+            .mount(&api_server)
+            .await;
+
+        Mock::given(wm_method("POST"))
+            .and(wm_path("/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("invalid_grant"))
+            .mount(&token_server)
+            .await;
+
+        let oauth_cfg = OAuthProviderConfig {
+            client_id: "tc".to_owned(),
+            client_secret: String::new(),
+            auth_url: "https://chat.openai.com/oauth/authorize".to_owned(),
+            token_url: format!("{}/token", token_server.uri()),
+            scopes: vec!["openid".to_owned()],
+        };
+
+        let adapter = OpenAIAdapter::with_oauth_token(
+            "bad-token",
+            "bad-rt",
+            oauth_cfg,
+            Some(api_server.uri()),
+        );
+
+        let err = adapter.complete(CompletionRequest::simple("gpt-4o", "hi")).await.unwrap_err();
+        assert!(
+            matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "openai"),
+            "expected OAuthExpired(openai), got: {err:?}"
+        );
     }
 }

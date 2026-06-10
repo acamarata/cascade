@@ -175,6 +175,12 @@ async fn main() {
         }
     }
 
+    // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
+    // Probe localhost:11434 with a 500 ms timeout. If Ollama is running,
+    // register the adapter as "ollama". If absent, skip silently — the
+    // daemon must never block startup waiting for an optional local LLM.
+    try_register_ollama(&provider_registry).await;
+
     let _provider_health_handle = provider_health::spawn_health_check_task(
         provider_registry.clone(),
         provider_health_state.clone(),
@@ -345,6 +351,30 @@ fn open_url(url: &str) -> Result<(), std::io::Error> {
     };
 
     cmd.arg(url).spawn().map(|_| ())
+}
+
+/// Probe the local Ollama daemon and register `OllamaAdapter` if present.
+///
+/// Fires a single `GET /api/tags` with a 500 ms timeout.  When Ollama
+/// responds, the adapter is registered as `"ollama"` in the registry.
+/// When absent (connection refused / timeout) this is a silent no-op —
+/// an optional local LLM must never block daemon startup.
+///
+/// SPORT: MASTER-RUST-CRATES.md — cascade-daemon: Ollama auto-detect (T-P3-E04-19)
+async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
+    use cascade_providers::adapters::ollama::OllamaAdapter;
+
+    match OllamaAdapter::try_detect().await {
+        Some(adapter) => {
+            match registry.register("ollama".to_owned(), Arc::new(adapter)) {
+                Ok(()) => info!("Ollama detected and registered as provider \"ollama\""),
+                Err(e) => warn!(error = %e, "Ollama detected but registration failed"),
+            }
+        }
+        None => {
+            info!("Ollama not detected on localhost:11434 (skipping registration)");
+        }
+    }
 }
 
 /// Write a one-line crash sentinel so the next start can surface a message.

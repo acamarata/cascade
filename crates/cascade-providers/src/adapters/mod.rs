@@ -13,6 +13,7 @@ pub mod gemini;
 pub mod generic_openai;
 pub mod groq;
 pub mod mistral;
+pub mod ollama;
 pub mod openai;
 pub mod openai_compat;
 pub mod opencode;

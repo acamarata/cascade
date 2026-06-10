@@ -11,6 +11,7 @@ members = [
     "crates/cascade-keychain",
     "crates/cascade-audit",
     "crates/cascade-providers",
+    "crates/cascade-local-llm",
     "apps/cascade-app/src-tauri",
 ]
 resolver = "2"
@@ -28,6 +29,7 @@ cascade-types     = { path = "crates/cascade-types" }
 cascade-core      = { path = "crates/cascade-core" }
 cascade-tray      = { path = "crates/cascade-tray" }
 cascade-providers = { path = "crates/cascade-providers" }
+cascade-local-llm = { path = "crates/cascade-local-llm" }
 
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"

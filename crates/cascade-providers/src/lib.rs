@@ -14,7 +14,8 @@
 //! | [`registry`] | T-P3-E04-05 | `ProviderRegistry` + `RoutingTable` — thread-safe adapter store |
 //! | [`http_client`] | T-P3-E04-06 | `CascadeHttpClient` — shared reqwest wrapper + retry logic |
 //! | [`cost`] | T-P3-E04-14 | `CostTable`, `ModelPricing`, `compute_cost()` — static pricing table |
-//! | [`google_oauth`] | T-P3-E03-39 | Google OAuth PKCE client + Gemini key validation |
+//! | [`oauth`] | T-P3-E04-20 | Generic OAuth 2.0 PKCE foundation: OAuthClient, PKCE helpers, TokenStore |
+//! | [`google_oauth`] | T-P3-E03-39 | Google OAuth PKCE client + Gemini key validation (delegates to `oauth/`) |
 //! | [`google_provision`] | T-P3-E03-39b | GCP project + API key provisioning engine |
 //! | [`auto_auth_import`] | T-P3-E03-41 | Detect and import accounts from installed harnesses |
 //!
@@ -40,6 +41,9 @@ pub mod types;
 // ── E-04-06 test helpers (test builds only) ───────────────────────────────────
 #[cfg(test)]
 pub mod test_helpers;
+
+// ── E-04-20 generic OAuth PKCE foundation ────────────────────────────────────
+pub mod oauth;
 
 // ── E-03 provisioning modules ─────────────────────────────────────────────────
 pub mod auto_auth_import;
