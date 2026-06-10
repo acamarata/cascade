@@ -182,6 +182,13 @@ pub fn run() {
             commands::templates::template_diff,
             // T-P3-E05-17: Template upgrade IPC
             commands::templates::template_upgrade,
+            // T-P3-E06-01: Vault file-system IPC commands
+            commands::vault::vault_list,
+            commands::vault::vault_read,
+            commands::vault::vault_write,
+            commands::vault::vault_watch,
+            // T-P3-E06-09: Vault full-text search via ripgrep
+            commands::vault::vault_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,7 +2,7 @@
 
 **Purpose:** Registry of every React component in the Cascade dashboard (apps/cascade-app).
 **Status legend:** ✅ Done · 🟡 Partial · 🔲 Planned · 🚧 In Progress · 🔒 Blocked · 🚫 Deferred
-**Last updated:** 2026-06-09 (E-04 T-P3-E04-25 WizardProviderStep)
+**Last updated:** 2026-06-10 (E-06 T-P3-E06-11 memoryAggregator)
 **Source:** Cascade P3/P4 plan
 
 | Component | Path | Description | Status | Phase | Creating tickets |
@@ -74,3 +74,5 @@
 | wizard.helpers | e2e/helpers/wizard.helpers.ts | renderWizard() factory + step assertion helpers | ✅ Done | P3 | T-P3-E03-34 |
 | WizardProviderStep | apps/cascade-app/src/components/wizard/WizardProviderStep.tsx | Step 2 real provider-connect: 4 quick-connect cards, GFP auto-detect banner, skip-for-now alert, cascade_providers_list gate | ✅ Done | P3 | T-P3-E04-25 |
 | TemplatePickerCompact | apps/cascade-app/src/components/template/TemplatePickerCompact.tsx | Compact multi-select template picker for wizard Phase 4 pre-scaffold; search + tier/stack chips + scrollable card list | ✅ Done | P3 | T-P3-E05-19 |
+| memoryAggregator | apps/cascade-app/src/services/vault/memoryAggregator.ts | Cross-project memory aggregator: scans decisions/lessons/patterns/ideas/inbox across registered projects; returns MemoryEntry[] sorted by mtime desc | ✅ Done | P3 | T-P3-E06-11 |
+| MemoryEntry | apps/cascade-app/src/types/vault.ts | Type: {project, type: MemoryEntryKind, title, excerpt, path, mtime} — normalised memory artifact entry | ✅ Done | P3 | T-P3-E06-11 |

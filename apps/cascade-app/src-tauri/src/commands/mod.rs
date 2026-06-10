@@ -36,6 +36,8 @@ pub mod providers;
 pub mod usage;
 // T-P3-E05-15/17: Template engine IPC commands (list/apply/diff/upgrade)
 pub mod templates;
+// T-P3-E06-01: Vault file-system IPC commands (list/read/write/watch)
+pub mod vault;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};

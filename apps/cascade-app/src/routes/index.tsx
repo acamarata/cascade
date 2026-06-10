@@ -20,6 +20,9 @@ import { ProviderSettings } from '../pages/ProviderSettings'
 import { UsagePage } from '../pages/UsagePage'
 import { TemplateBrowser } from '../pages/TemplateBrowser'
 import { WizardLayout } from '../features/onboarding/WizardLayout'
+import { VaultPage } from '../pages/VaultPage'
+import { VaultGraphPage } from '../pages/VaultGraphPage'
+import { MemoryPage } from '../pages/MemoryPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -75,6 +78,12 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/usage" element={<UsagePage />} />
         {/* T-P3-E05-14: Template browser */}
         <Route path="/templates" element={<TemplateBrowser />} />
+        {/* T-P3-E06-02: Vault navigator */}
+        <Route path="/vault" element={<VaultPage />} />
+        {/* T-P3-E06-07: Graph view */}
+        <Route path="/vault/graph" element={<VaultGraphPage />} />
+        {/* T-P3-E06-12: Memory browser */}
+        <Route path="/vault/memory" element={<MemoryPage />} />
       </Route>
 
       {/* Catch-all */}
