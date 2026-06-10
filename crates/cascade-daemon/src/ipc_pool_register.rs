@@ -66,8 +66,7 @@ fn read_pool_config(path: &Path) -> Result<GeminiPoolConfig, String> {
 /// Write the pool config atomically via a .tmp file + rename.
 fn write_pool_config_atomic(config: &GeminiPoolConfig, path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create pool dir: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create pool dir: {}", e))?;
     }
     let tmp = pool_config_tmp_path(path);
     let json = serde_json::to_string_pretty(config)
@@ -142,7 +141,11 @@ pub async fn handle_pool_register_key_with_path(
     // Validate key (never log the api_key value).
     match validate_gemini_key(&api_key).await {
         Ok(()) => {}
-        Err(e) => return RegisterResult::InvalidKey { message: e.to_string() },
+        Err(e) => {
+            return RegisterResult::InvalidKey {
+                message: e.to_string(),
+            }
+        }
     }
 
     // Append entry.
@@ -236,10 +239,16 @@ mod tests {
 
         let json = fs::read_to_string(&config_path).unwrap();
         // camelCase serialization from serde rename_all = "camelCase"
-        assert!(json.contains("apiKey") || json.contains("api_key"),
-            "expected apiKey field in JSON: {}", json);
-        assert!(json.contains("addedAt") || json.contains("added_at"),
-            "expected addedAt field in JSON: {}", json);
+        assert!(
+            json.contains("apiKey") || json.contains("api_key"),
+            "expected apiKey field in JSON: {}",
+            json
+        );
+        assert!(
+            json.contains("addedAt") || json.contains("added_at"),
+            "expected addedAt field in JSON: {}",
+            json
+        );
     }
 
     #[tokio::test]

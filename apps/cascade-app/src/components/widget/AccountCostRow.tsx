@@ -49,7 +49,11 @@ export interface AccountCostRowProps {
  *
  * Shows truncated email, formatted cost, and relative last-active time.
  */
-export function AccountCostRow({ email, costUsd, lastActive }: AccountCostRowProps): React.ReactElement {
+export function AccountCostRow({
+  email,
+  costUsd,
+  lastActive,
+}: AccountCostRowProps): React.ReactElement {
   const displayEmail = truncateEmail(email)
   const relTime = toRelativeTime(lastActive)
 

@@ -68,7 +68,11 @@ async function invokeProviderAction(cmd: string, id: string): Promise<string | n
 export function ProviderSettings() {
   const [providers, setProviders] = useState<ProviderListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [feedback, setFeedback] = useState<{ id: string; message: string; kind: 'ok' | 'err' } | null>(null)
+  const [feedback, setFeedback] = useState<{
+    id: string
+    message: string
+    kind: 'ok' | 'err'
+  } | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)

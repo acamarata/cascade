@@ -33,9 +33,7 @@ export function PluginsTab({
   onDiscard,
 }: PluginsTabProps) {
   // Derive full slug list from both enabled[] and config keys.
-  const allSlugs = Array.from(
-    new Set([...draft.enabled, ...Object.keys(draft.config)]),
-  ).sort()
+  const allSlugs = Array.from(new Set([...draft.enabled, ...Object.keys(draft.config)])).sort()
 
   function toggle(slug: string) {
     const isEnabled = draft.enabled.includes(slug)

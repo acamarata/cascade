@@ -57,7 +57,11 @@ fn jaccard(a: &HashSet<[char; 3]>, b: &HashSet<[char; 3]>) -> f64 {
     }
     let intersection = a.intersection(b).count() as f64;
     let union = a.union(b).count() as f64;
-    if union == 0.0 { 0.0 } else { intersection / union }
+    if union == 0.0 {
+        0.0
+    } else {
+        intersection / union
+    }
 }
 
 /// Contradiction keyword pairs.
@@ -152,18 +156,19 @@ pub fn detect_conflicts(result: &MergeResult) -> Vec<MergeConflict> {
             // --- Heuristic 1: Title similarity ---
             let na = &normalised[i];
             let nb = &normalised[j];
-            if !na.is_empty() && !nb.is_empty() {
-                if na.contains(nb.as_str()) || nb.contains(na.as_str()) {
-                    conflicts.push(MergeConflict {
-                        section_a: a.clone(),
-                        section_b: b.clone(),
-                        reason: format!(
-                            "Title similarity: '{}' and '{}' share overlapping text",
-                            a.title, b.title
-                        ),
-                    });
-                    continue; // Only emit one conflict per pair.
-                }
+            if !na.is_empty()
+                && !nb.is_empty()
+                && (na.contains(nb.as_str()) || nb.contains(na.as_str()))
+            {
+                conflicts.push(MergeConflict {
+                    section_a: a.clone(),
+                    section_b: b.clone(),
+                    reason: format!(
+                        "Title similarity: '{}' and '{}' share overlapping text",
+                        a.title, b.title
+                    ),
+                });
+                continue; // Only emit one conflict per pair.
             }
 
             // --- Heuristic 2: Content overlap (Jaccard > 0.40) ---
@@ -191,10 +196,8 @@ pub fn detect_conflicts(result: &MergeResult) -> Vec<MergeConflict> {
             }
 
             // --- Heuristic 4: Source overlap (shared sourceFile path) ---
-            let paths_a: HashSet<&str> =
-                a.source_files.iter().map(|f| f.path.as_str()).collect();
-            let paths_b: HashSet<&str> =
-                b.source_files.iter().map(|f| f.path.as_str()).collect();
+            let paths_a: HashSet<&str> = a.source_files.iter().map(|f| f.path.as_str()).collect();
+            let paths_b: HashSet<&str> = b.source_files.iter().map(|f| f.path.as_str()).collect();
             if !paths_a.is_disjoint(&paths_b) {
                 let shared: Vec<&str> = paths_a.intersection(&paths_b).copied().collect();
                 conflicts.push(MergeConflict {
@@ -258,7 +261,12 @@ mod tests {
     #[test]
     fn no_conflict_for_unrelated_sections() {
         let result = make_result(vec![
-            make_section("a1", "Code Style", "Use 2-space indentation for all files.", None),
+            make_section(
+                "a1",
+                "Code Style",
+                "Use 2-space indentation for all files.",
+                None,
+            ),
             make_section(
                 "a2",
                 "Deployment Pipeline",
@@ -298,7 +306,11 @@ mod tests {
             ),
         ]);
         let conflicts = detect_conflicts(&result);
-        assert_eq!(conflicts.len(), 1, "expected 1 conflict, got: {conflicts:#?}");
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "expected 1 conflict, got: {conflicts:#?}"
+        );
         assert!(
             conflicts[0].reason.contains("Title similarity"),
             "expected title-similarity reason, got: {}",
@@ -318,7 +330,11 @@ mod tests {
             make_section("c2", "DI Rules", near_dup, None),
         ]);
         let conflicts = detect_conflicts(&result);
-        assert_eq!(conflicts.len(), 1, "expected 1 conflict, got: {conflicts:#?}");
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "expected 1 conflict, got: {conflicts:#?}"
+        );
         assert!(
             conflicts[0].reason.contains("trigram similarity"),
             "expected trigram-similarity reason, got: {}",
@@ -345,7 +361,11 @@ mod tests {
             ),
         ]);
         let conflicts = detect_conflicts(&result);
-        assert_eq!(conflicts.len(), 1, "expected 1 conflict, got: {conflicts:#?}");
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "expected 1 conflict, got: {conflicts:#?}"
+        );
         assert!(
             conflicts[0].reason.contains("Source overlap"),
             "expected source-overlap reason, got: {}",
@@ -375,7 +395,11 @@ mod tests {
             ),
         ]);
         let conflicts = detect_conflicts(&result);
-        assert_eq!(conflicts.len(), 1, "expected 1 conflict, got: {conflicts:#?}");
+        assert_eq!(
+            conflicts.len(),
+            1,
+            "expected 1 conflict, got: {conflicts:#?}"
+        );
         assert!(
             conflicts[0].reason.contains("Contradictory"),
             "expected contradiction reason, got: {}",

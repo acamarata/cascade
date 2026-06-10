@@ -18,18 +18,9 @@
 //!   cost_usd is approximated at 0 (no pricing table in P3); left for T-P3-E02-24+.
 //! SPORT: MASTER-ROUTES.md § /api/personal/usage-history (T-P3-E02-23)
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
-use axum::{
-    extract::Query,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use chrono::{DateTime, TimeZone, Utc};
 use serde_json::json;
 
@@ -184,9 +175,8 @@ fn known_accounts(store: &QuotaStore, account_filter: Option<&str>) -> Vec<(Stri
                     continue;
                 }
             }
-            seen.entry(acct.account_id.clone()).or_insert_with(|| {
-                format!("{} / {}", acct.harness, acct.account_id)
-            });
+            seen.entry(acct.account_id.clone())
+                .or_insert_with(|| format!("{} / {}", acct.harness, acct.account_id));
         }
     }
     let mut result: Vec<(String, String)> = seen.into_iter().collect();
@@ -555,7 +545,10 @@ mod tests {
         let dates: Vec<&str> = val.daily_totals.iter().map(|d| d.date.as_str()).collect();
         let mut sorted = dates.clone();
         sorted.sort();
-        assert_eq!(dates, sorted, "daily_totals must be ordered oldest-to-newest");
+        assert_eq!(
+            dates, sorted,
+            "daily_totals must be ordered oldest-to-newest"
+        );
 
         // per_account should have exactly one entry for cc-acct1.
         assert_eq!(val.per_account.len(), 1);

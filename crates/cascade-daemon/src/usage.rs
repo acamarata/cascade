@@ -120,12 +120,7 @@ impl UsageAccumulator {
     /// today + provider_id, one is inserted with the initial values.
     ///
     /// `cost_usd = None` → stored as `0.0`.
-    pub async fn record(
-        &self,
-        provider_id: &str,
-        usage: &TokenUsage,
-        cost_usd: Option<f64>,
-    ) {
+    pub async fn record(&self, provider_id: &str, usage: &TokenUsage, cost_usd: Option<f64>) {
         let cost = cost_usd.unwrap_or(0.0);
         let conn = self.conn.lock().await;
 
@@ -222,9 +217,7 @@ impl UsageAccumulator {
 
         match rows {
             Ok(mapped) => mapped
-                .filter_map(|r| {
-                    r.map_err(|e| error!(%e, "all_today() row error")).ok()
-                })
+                .filter_map(|r| r.map_err(|e| error!(%e, "all_today() row error")).ok())
                 .collect(),
             Err(e) => {
                 error!(%e, "all_today() query_map failed");
@@ -269,9 +262,7 @@ impl UsageAccumulator {
 
         match rows {
             Ok(mapped) => mapped
-                .filter_map(|r| {
-                    r.map_err(|e| error!(%e, "weekly_totals() row error")).ok()
-                })
+                .filter_map(|r| r.map_err(|e| error!(%e, "weekly_totals() row error")).ok())
                 .collect(),
             Err(e) => {
                 error!(%e, "weekly_totals() query_map failed");

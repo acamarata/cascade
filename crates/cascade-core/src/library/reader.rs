@@ -87,9 +87,7 @@ pub fn get_item(
     let file_path = library_root.join(item_type).join(format!("{slug}.yaml"));
 
     if !file_path.exists() {
-        return Err(CascadeError::PathNotFound {
-            path: file_path,
-        });
+        return Err(CascadeError::PathNotFound { path: file_path });
     }
 
     load_yaml_item(&file_path)
@@ -104,10 +102,11 @@ fn load_yaml_item(path: &Path) -> Result<LibraryItem, CascadeError> {
         source: e,
     })?;
 
-    let item: LibraryItem = serde_yaml::from_slice(&bytes).map_err(|e| CascadeError::ConfigParse {
-        path: path.to_path_buf(),
-        detail: e.to_string(),
-    })?;
+    let item: LibraryItem =
+        serde_yaml::from_slice(&bytes).map_err(|e| CascadeError::ConfigParse {
+            path: path.to_path_buf(),
+            detail: e.to_string(),
+        })?;
 
     Ok(item)
 }

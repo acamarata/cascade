@@ -31,7 +31,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::merge::types::{MergeResult, MergeSection, MergeSourceFile, MergeSourceFileRaw, SectionStatus};
+use crate::merge::types::{
+    MergeResult, MergeSection, MergeSourceFile, MergeSourceFileRaw, SectionStatus,
+};
 use crate::scanner::types::ToolId;
 
 // ---------------------------------------------------------------------------
@@ -168,11 +170,9 @@ pub fn call_ai_merge(
 
     // Provider 2–4: Anthropic / OpenAI / Local — stubs; E-04 fills credentials.
     // Return structured Err so the frontend can surface the "no provider" state.
-    Err(
-        "No AI provider available. \
+    Err("No AI provider available. \
          Connect a provider in the wizard (Gemini Pool, Anthropic, OpenAI, or local model)."
-            .to_string(),
-    )
+        .to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -242,13 +242,7 @@ fn call_gemini_pool(
                 };
 
                 let model_text = extract_model_text(&raw_text)?;
-                return parse_ai_output(
-                    tier,
-                    source_files,
-                    &model_text,
-                    MODEL_GEMINI,
-                    prompt_hash,
-                );
+                return parse_ai_output(tier, source_files, &model_text, MODEL_GEMINI, prompt_hash);
             }
             Err(e) => {
                 last_err = format!("network error on attempt {}: {e}", attempt + 1);
@@ -401,10 +395,9 @@ fn build_sections_from_output(
         .filter_map(|(i, s)| {
             let title = s.title.filter(|t| !t.is_empty())?;
             let content = s.content.unwrap_or_default();
-            let id = s
-                .id
-                .filter(|v| !v.is_empty())
-                .unwrap_or_else(|| format!("section-{i}"));
+            let id =
+                s.id.filter(|v| !v.is_empty())
+                    .unwrap_or_else(|| format!("section-{i}"));
 
             Some(MergeSection {
                 id,
@@ -692,10 +685,7 @@ mod tests {
     fn sha256_hex_known_value() {
         // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469346f912ead9a89b9
         let h = sha256_hex("abc");
-        assert!(
-            h.starts_with("ba7816bf"),
-            "unexpected SHA-256 prefix: {h}"
-        );
+        assert!(h.starts_with("ba7816bf"), "unexpected SHA-256 prefix: {h}");
         assert_eq!(h.len(), 64, "SHA-256 hex must be 64 chars");
     }
 

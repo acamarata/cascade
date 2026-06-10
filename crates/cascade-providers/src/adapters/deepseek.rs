@@ -73,7 +73,8 @@ struct OaiResponse {
 #[derive(Debug, Deserialize)]
 struct OaiChoice {
     message: OaiMessage,
-    finish_reason: Option<String>,
+    // finish_reason is present in the wire response but unused in complete().
+    // Serde ignores unknown fields by default.
 }
 
 #[derive(Debug, Deserialize)]
@@ -236,10 +237,8 @@ impl ProviderAdapter for DeepSeekAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let key = self.api_key()?;
         let body = Self::build_request(&req, true);
         let url = self.completions_url();
@@ -344,7 +343,10 @@ mod tests {
 
         assert!(!resp.content.is_empty(), "content must not be empty");
         assert!(!resp.model.is_empty(), "model must not be empty");
-        assert!(resp.usage.prompt_tokens > 0, "prompt_tokens must be positive");
+        assert!(
+            resp.usage.prompt_tokens > 0,
+            "prompt_tokens must be positive"
+        );
     }
 
     #[tokio::test]

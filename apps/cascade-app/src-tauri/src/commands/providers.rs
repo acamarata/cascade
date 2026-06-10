@@ -102,8 +102,7 @@ pub async fn cascade_providers_list(
     _state: State<'_, AppState>,
 ) -> Result<Vec<ProviderListItem>, CascadeError> {
     debug!("cascade_providers_list invoked");
-    daemon_call::<_, Vec<ProviderListItem>>("cascade_providers_list", serde_json::json!({}))
-        .await
+    daemon_call::<_, Vec<ProviderListItem>>("cascade_providers_list", serde_json::json!({})).await
 }
 
 /// Trigger an on-demand health check for one provider.
@@ -216,11 +215,8 @@ pub async fn cascade_providers_usage_today(
     _state: State<'_, AppState>,
 ) -> Result<Vec<ProviderUsageItem>, CascadeError> {
     debug!("cascade_providers_usage_today invoked");
-    daemon_call::<_, Vec<ProviderUsageItem>>(
-        "cascade_providers_usage_today",
-        serde_json::json!({}),
-    )
-    .await
+    daemon_call::<_, Vec<ProviderUsageItem>>("cascade_providers_usage_today", serde_json::json!({}))
+        .await
 }
 
 // ── GFP proxy check ───────────────────────────────────────────────────────────
@@ -231,9 +227,7 @@ pub async fn cascade_providers_usage_today(
 ///
 /// JS: `invoke("cascade_check_gfp_proxy")`
 #[tauri::command]
-pub async fn cascade_check_gfp_proxy(
-    _state: State<'_, AppState>,
-) -> Result<bool, CascadeError> {
+pub async fn cascade_check_gfp_proxy(_state: State<'_, AppState>) -> Result<bool, CascadeError> {
     debug!("cascade_check_gfp_proxy invoked");
     // Ask the daemon; it handles the actual TCP probe with a 200 ms timeout.
     daemon_call::<_, bool>("cascade_check_gfp_proxy", serde_json::json!({})).await

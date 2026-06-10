@@ -85,7 +85,7 @@ function isTauri(): boolean {
  */
 export async function listTemplates(
   vaultRoot: string,
-  templatesFolder: string = 'templates',
+  templatesFolder: string = 'templates'
 ): Promise<TemplateEntry[]> {
   if (!isTauri()) {
     // Dev fixture — return empty list (no IPC in Vitest)
@@ -122,7 +122,7 @@ export async function listTemplates(
  */
 export async function applyTemplateFromPath(
   templatePath: string,
-  vars: TemplateVars,
+  vars: TemplateVars
 ): Promise<string> {
   const content = await invoke<string>('vault_read', { path: templatePath })
   return applyTemplate(content, vars)

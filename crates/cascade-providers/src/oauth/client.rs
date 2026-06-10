@@ -191,7 +191,12 @@ impl OAuthClient {
             state = url_encode(&state),
         );
 
-        Ok(AuthorizeResult { auth_url, verifier, state, port })
+        Ok(AuthorizeResult {
+            auth_url,
+            verifier,
+            state,
+            port,
+        })
     }
 
     /// Await the OAuth callback on `port`, validate CSRF `expected_state`, return auth code.
@@ -275,7 +280,9 @@ impl OAuthClient {
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
             tracing::warn!(status = status.as_u16(), "OAuth code exchange failed");
-            return Err(OAuthClientError::TokenExchange(format!("HTTP {status}: {body}")));
+            return Err(OAuthClientError::TokenExchange(format!(
+                "HTTP {status}: {body}"
+            )));
         }
 
         let tr: TokenResponse = resp
@@ -329,7 +336,9 @@ impl OAuthClient {
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
             tracing::warn!(status = status.as_u16(), "OAuth token refresh failed");
-            return Err(OAuthClientError::TokenExchange(format!("HTTP {status}: {body}")));
+            return Err(OAuthClientError::TokenExchange(format!(
+                "HTTP {status}: {body}"
+            )));
         }
 
         let tr: TokenResponse = resp
@@ -375,8 +384,13 @@ impl OAuthClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            tracing::warn!(status = status.as_u16(), "token revocation failed (non-fatal)");
-            return Err(OAuthClientError::RevocationFailed(format!("HTTP {status}: {body}")));
+            tracing::warn!(
+                status = status.as_u16(),
+                "token revocation failed (non-fatal)"
+            );
+            return Err(OAuthClientError::RevocationFailed(format!(
+                "HTTP {status}: {body}"
+            )));
         }
 
         Ok(())
@@ -410,7 +424,11 @@ fn handle_callback(
     let (code, state) = parse_callback_params(&request_line)?;
 
     if !constant_time_eq(state.as_bytes(), expected_state.as_bytes()) {
-        write_response(&mut stream, "400 Bad Request", "State mismatch — please retry.");
+        write_response(
+            &mut stream,
+            "400 Bad Request",
+            "State mismatch — please retry.",
+        );
         return Err(OAuthClientError::StateMismatch);
     }
 
@@ -460,12 +478,12 @@ pub(crate) fn parse_callback_params(
 
     match (code, state) {
         (Some(c), Some(s)) => Ok((c, s)),
-        (None, _) => {
-            Err(OAuthClientError::CallbackIo("missing 'code' in callback".to_owned()))
-        }
-        (_, None) => {
-            Err(OAuthClientError::CallbackIo("missing 'state' in callback".to_owned()))
-        }
+        (None, _) => Err(OAuthClientError::CallbackIo(
+            "missing 'code' in callback".to_owned(),
+        )),
+        (_, None) => Err(OAuthClientError::CallbackIo(
+            "missing 'state' in callback".to_owned(),
+        )),
     }
 }
 
@@ -532,7 +550,10 @@ pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -567,13 +588,27 @@ mod tests {
         let client = OAuthClient::new(config);
         let result = client.authorize_url().await.unwrap();
 
-        assert!(result.auth_url.starts_with("https://example.com/auth"), "auth_url base");
-        assert!(result.auth_url.contains("client_id=my-client"), "client_id");
-        assert!(result.auth_url.contains("response_type=code"), "response_type");
-        assert!(result.auth_url.contains("code_challenge_method=S256"), "S256 method");
-        assert!(result.auth_url.contains(&format!("state={}", result.state)), "state in url");
         assert!(
-            result.auth_url.contains(&format!("127.0.0.1:{}", result.port)),
+            result.auth_url.starts_with("https://example.com/auth"),
+            "auth_url base"
+        );
+        assert!(result.auth_url.contains("client_id=my-client"), "client_id");
+        assert!(
+            result.auth_url.contains("response_type=code"),
+            "response_type"
+        );
+        assert!(
+            result.auth_url.contains("code_challenge_method=S256"),
+            "S256 method"
+        );
+        assert!(
+            result.auth_url.contains(&format!("state={}", result.state)),
+            "state in url"
+        );
+        assert!(
+            result
+                .auth_url
+                .contains(&format!("127.0.0.1:{}", result.port)),
             "loopback port in url"
         );
         assert!(!result.auth_url.contains("0.0.0.0"), "no 0.0.0.0");
@@ -634,7 +669,10 @@ mod tests {
 
         let token_url = format!("{}/token", mock_server.uri());
         let client = OAuthClient::new(test_config(&token_url));
-        let tokens = client.exchange_code("auth-code", "verifier-xyz", 9999).await.unwrap();
+        let tokens = client
+            .exchange_code("auth-code", "verifier-xyz", 9999)
+            .await
+            .unwrap();
 
         assert_eq!(tokens.access_token, "at-123");
         assert_eq!(tokens.refresh_token.as_deref(), Some("rt-456"));

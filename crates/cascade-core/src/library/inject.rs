@@ -69,7 +69,7 @@ pub enum InjectionTarget {
 
 impl InjectionTarget {
     /// Parse from the lowercase string used in the IPC layer.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_ipc_str(s: &str) -> Option<Self> {
         match s {
             "cc" => Some(Self::CC),
             "oc" => Some(Self::OC),
@@ -310,7 +310,11 @@ fn append_to_file(
 ///
 /// For standalone files (agent / slash-command in CC/OC), the caller should
 /// simply delete the file; this function handles the append-to-main-file case.
-pub fn eject_item(slug: &str, path: &Path, dry_run: bool) -> Result<InjectionOutcome, CascadeError> {
+pub fn eject_item(
+    slug: &str,
+    path: &Path,
+    dry_run: bool,
+) -> Result<InjectionOutcome, CascadeError> {
     if !path.exists() {
         // Nothing to eject
         return Ok(InjectionOutcome::AlreadyPresent);
@@ -511,12 +515,27 @@ mod tests {
         assert_eq!(result, InjectionOutcome::Injected);
 
         let content = fs::read_to_string(&claude_md).unwrap();
-        assert!(content.contains("<!-- cascade:test-persona -->"), "open marker missing");
-        assert!(content.contains("<!-- /cascade:test-persona -->"), "close marker missing");
-        assert!(content.contains("## Persona: Test Persona test-persona"), "header missing");
-        assert!(content.contains("You are a helpful assistant."), "body missing");
+        assert!(
+            content.contains("<!-- cascade:test-persona -->"),
+            "open marker missing"
+        );
+        assert!(
+            content.contains("<!-- /cascade:test-persona -->"),
+            "close marker missing"
+        );
+        assert!(
+            content.contains("## Persona: Test Persona test-persona"),
+            "header missing"
+        );
+        assert!(
+            content.contains("You are a helpful assistant."),
+            "body missing"
+        );
         // Existing content preserved
-        assert!(content.contains("# Existing CLAUDE.md"), "existing content lost");
+        assert!(
+            content.contains("# Existing CLAUDE.md"),
+            "existing content lost"
+        );
     }
 
     /// Injecting a prompt into CC appends the block to ~/.claude/CLAUDE.md
@@ -729,7 +748,10 @@ mod tests {
         assert_eq!(result, InjectionOutcome::Injected);
 
         let after = fs::read_to_string(&claude_md).unwrap();
-        assert!(!after.contains("<!-- cascade:eject-me -->"), "marker still present after eject");
+        assert!(
+            !after.contains("<!-- cascade:eject-me -->"),
+            "marker still present after eject"
+        );
         assert!(after.contains("# Header"), "surrounding content lost");
     }
 
@@ -771,8 +793,14 @@ mod tests {
     fn format_block_contains_markers_and_header() {
         let item = persona_item("marker-test");
         let block = format_block(&item, "Persona");
-        assert!(block.starts_with("<!-- cascade:marker-test -->"), "block must start with open marker");
-        assert!(block.ends_with("<!-- /cascade:marker-test -->"), "block must end with close marker");
+        assert!(
+            block.starts_with("<!-- cascade:marker-test -->"),
+            "block must start with open marker"
+        );
+        assert!(
+            block.ends_with("<!-- /cascade:marker-test -->"),
+            "block must end with close marker"
+        );
         assert!(block.contains("## Persona: Test Persona marker-test"));
         assert!(block.contains("You are a helpful assistant."));
     }

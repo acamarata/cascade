@@ -34,7 +34,9 @@ use tracing::debug;
 
 use crate::{
     adapter::ProviderAdapter,
-    adapters::openai_compat::{map_response, map_stream_chunk, OaiRequest, OaiResponse, OaiStreamChunk},
+    adapters::openai_compat::{
+        map_response, map_stream_chunk, OaiRequest, OaiResponse, OaiStreamChunk,
+    },
     cost::compute_cost,
     error::ProviderError,
     http_client::CascadeHttpClient,
@@ -138,17 +140,25 @@ impl OpenCodeAdapter {
 
     /// Attempt one OAuth token refresh.
     async fn refresh_once(&self) -> Result<String, ProviderError> {
-        let cfg = self.oauth_config.as_ref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
-        })?;
-        let rt = self.oauth_refresh_token.as_deref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
-        })?;
+        let cfg = self
+            .oauth_config
+            .as_ref()
+            .ok_or_else(|| ProviderError::OAuthExpired {
+                provider: PROVIDER_ID.to_owned(),
+            })?;
+        let rt =
+            self.oauth_refresh_token
+                .as_deref()
+                .ok_or_else(|| ProviderError::OAuthExpired {
+                    provider: PROVIDER_ID.to_owned(),
+                })?;
         OAuthClient::new(cfg.clone())
             .refresh_token(rt)
             .await
             .map(|t| t.access_token)
-            .map_err(|_| ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() })
+            .map_err(|_| ProviderError::OAuthExpired {
+                provider: PROVIDER_ID.to_owned(),
+            })
     }
 
     /// Retrieve the OAuth2 access token — from the injected field (tests) or
@@ -238,9 +248,9 @@ impl ProviderAdapter for OpenCodeAdapter {
                     })
                     .await
                     .map_err(|e| match e {
-                        ProviderError::AuthFailed(_) => {
-                            ProviderError::OAuthExpired { provider: PROVIDER_ID.to_owned() }
-                        }
+                        ProviderError::AuthFailed(_) => ProviderError::OAuthExpired {
+                            provider: PROVIDER_ID.to_owned(),
+                        },
                         other => other,
                     })?
             }
@@ -261,10 +271,8 @@ impl ProviderAdapter for OpenCodeAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let token = self.access_token()?;
         let body = OaiRequest::from_request(&req);
         let url = self.completions_url();
@@ -472,7 +480,10 @@ mod tests {
             combined.push_str(&c.delta);
         }
 
-        assert_eq!(combined, "Hello, world!", "concatenated delta: {combined:?}");
+        assert_eq!(
+            combined, "Hello, world!",
+            "concatenated delta: {combined:?}"
+        );
     }
 
     // ── Contract assertions via shared helper ─────────────────────────────────
@@ -587,7 +598,9 @@ mod tests {
         // Second API call: 200 with valid fixture-style response.
         Mock::given(wm_method("POST"))
             .and(wm_path("/v1/chat/completions"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("opencode_complete")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(fixture_json("opencode_complete")),
+            )
             .mount(&api_server)
             .await;
 
@@ -620,7 +633,11 @@ mod tests {
 
         let req = CompletionRequest::simple("kimi-k2", "hello");
         let result = adapter.complete(req).await;
-        assert!(result.is_ok(), "expected Ok after refresh+retry: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected Ok after refresh+retry: {:?}",
+            result
+        );
     }
 
     /// Double 401 (refresh also fails): returns OAuthExpired.
@@ -653,12 +670,8 @@ mod tests {
             scopes: vec!["api:read".to_owned()],
         };
 
-        let adapter = OpenCodeAdapter::with_oauth_refresh(
-            api_server.uri(),
-            "bad-token",
-            "bad-rt",
-            oauth_cfg,
-        );
+        let adapter =
+            OpenCodeAdapter::with_oauth_refresh(api_server.uri(), "bad-token", "bad-rt", oauth_cfg);
 
         let err = adapter
             .complete(CompletionRequest::simple("kimi-k2", "hi"))

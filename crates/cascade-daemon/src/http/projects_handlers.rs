@@ -13,13 +13,7 @@
 //!   serde_yaml parse errors are non-fatal: returns partial/empty data, never 500.
 //! SPORT: MASTER-ENDPOINTS.md § /api/projects; T-P3-E02-14; T-P3-E02-15
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -172,7 +166,12 @@ fn scaffold_cache() -> &'static ScaffoldCache {
 /// Check whether `dir` is a git repository (non-blocking, process spawn).
 fn is_git_repo(dir: &std::path::Path) -> bool {
     std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "rev-parse", "--is-inside-work-tree"])
+        .args([
+            "-C",
+            &dir.to_string_lossy(),
+            "rev-parse",
+            "--is-inside-work-tree",
+        ])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -181,7 +180,13 @@ fn is_git_repo(dir: &std::path::Path) -> bool {
 /// Current branch name for a git repo.
 fn git_branch(dir: &std::path::Path) -> Option<String> {
     let out = std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+        .args([
+            "-C",
+            &dir.to_string_lossy(),
+            "rev-parse",
+            "--abbrev-ref",
+            "HEAD",
+        ])
         .output()
         .ok()?;
     if out.status.success() {
@@ -194,18 +199,16 @@ fn git_branch(dir: &std::path::Path) -> Option<String> {
 /// ISO 8601 timestamp of the last commit in a git repo.
 fn git_last_commit_at(dir: &std::path::Path) -> Option<String> {
     let out = std::process::Command::new("git")
-        .args([
-            "-C",
-            &dir.to_string_lossy(),
-            "log",
-            "-1",
-            "--format=%cI",
-        ])
+        .args(["-C", &dir.to_string_lossy(), "log", "-1", "--format=%cI"])
         .output()
         .ok()?;
     if out.status.success() {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     } else {
         None
     }
@@ -216,7 +219,10 @@ fn git_last_commit_at(dir: &std::path::Path) -> Option<String> {
 /// Read the top-level .claude/phases/status.yaml for a project path.
 /// Returns default struct (all None) on any I/O or parse failure.
 fn read_phase_status(project_path: &std::path::Path) -> PhaseStatus {
-    let status_path = project_path.join(".claude").join("phases").join("status.yaml");
+    let status_path = project_path
+        .join(".claude")
+        .join("phases")
+        .join("status.yaml");
     let phase_dir_base = project_path.join(".claude").join("phases").join("current");
 
     let content = match std::fs::read_to_string(&status_path) {
@@ -230,12 +236,8 @@ fn read_phase_status(project_path: &std::path::Path) -> PhaseStatus {
         Err(_) => return PhaseStatus::default(),
     };
 
-    let get_str = |key: &str| -> Option<String> {
-        val.get(key)?.as_str().map(|s| s.to_string())
-    };
-    let get_f64 = |key: &str| -> Option<f64> {
-        val.get(key)?.as_f64()
-    };
+    let get_str = |key: &str| -> Option<String> { val.get(key)?.as_str().map(|s| s.to_string()) };
+    let get_f64 = |key: &str| -> Option<f64> { val.get(key)?.as_f64() };
     let get_u32 = |key: &str| -> Option<u32> {
         val.get(key)
             .and_then(|v| v.as_u64())
@@ -256,9 +258,10 @@ fn read_phase_status(project_path: &std::path::Path) -> PhaseStatus {
         let dir_name = pid.to_lowercase();
         phase_dir_base.join(dir_name).to_string_lossy().into_owned()
     });
-    let plan_md_exists = phase_dir.as_deref().map(|d| {
-        std::path::Path::new(d).join("plan.md").exists()
-    }).unwrap_or(false);
+    let plan_md_exists = phase_dir
+        .as_deref()
+        .map(|d| std::path::Path::new(d).join("plan.md").exists())
+        .unwrap_or(false);
 
     PhaseStatus {
         phase_id,
@@ -282,12 +285,24 @@ fn read_ticket_summary(path: &std::path::Path) -> TicketSummary {
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(_) => {
-            return TicketSummary { id, title: None, weight: None, status: None }
+            return TicketSummary {
+                id,
+                title: None,
+                weight: None,
+                status: None,
+            }
         }
     };
     let val: serde_yaml::Value = match serde_yaml::from_str(&content) {
         Ok(v) => v,
-        Err(_) => return TicketSummary { id, title: None, weight: None, status: None },
+        Err(_) => {
+            return TicketSummary {
+                id,
+                title: None,
+                weight: None,
+                status: None,
+            }
+        }
     };
     let get = |key: &str| val.get(key)?.as_str().map(|s| s.to_string());
     TicketSummary {
@@ -309,28 +324,27 @@ fn build_scaffold(project_path: &std::path::Path) -> ScaffoldResponse {
     let phase_dir = match phase_id.as_deref() {
         Some(pid) => {
             let d = current_dir.join(pid.to_lowercase());
-            if d.is_dir() { Some(d) } else { None }
+            if d.is_dir() {
+                Some(d)
+            } else {
+                None
+            }
         }
         None => {
             // Fallback: find any p{N} dir.
-            std::fs::read_dir(&current_dir)
-                .ok()
-                .and_then(|rd| {
-                    rd.flatten()
-                        .filter(|e| {
-                            e.file_name()
-                                .to_string_lossy()
-                                .starts_with('p')
-                        })
-                        .min_by_key(|e| e.file_name())
-                        .map(|e| e.path())
-                })
+            std::fs::read_dir(&current_dir).ok().and_then(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_name().to_string_lossy().starts_with('p'))
+                    .min_by_key(|e| e.file_name())
+                    .map(|e| e.path())
+            })
         }
     };
 
     let phase_dir_str = phase_dir.as_ref().map(|d| d.to_string_lossy().into_owned());
 
-    let epics = phase_dir.as_deref()
+    let epics = phase_dir
+        .as_deref()
         .and_then(|pd| {
             let epics_dir = pd.join("epics");
             let rd = std::fs::read_dir(&epics_dir).ok()?;
@@ -356,35 +370,49 @@ fn build_scaffold(project_path: &std::path::Path) -> ScaffoldResponse {
                                                 .flatten()
                                                 .filter(|se| se.path().is_dir())
                                                 .map(|se| {
-                                                    let sprint_id = se.file_name().to_string_lossy().into_owned();
+                                                    let sprint_id = se
+                                                        .file_name()
+                                                        .to_string_lossy()
+                                                        .into_owned();
                                                     let tickets_dir = se.path().join("tickets");
-                                                    let tickets = std::fs::read_dir(&tickets_dir)
-                                                        .ok()
-                                                        .map(|td| {
-                                                            let mut tv: Vec<TicketSummary> = td
-                                                                .flatten()
-                                                                .filter(|te| {
-                                                                    te.path().extension()
+                                                    let tickets =
+                                                        std::fs::read_dir(&tickets_dir)
+                                                            .ok()
+                                                            .map(|td| {
+                                                                let mut tv: Vec<TicketSummary> =
+                                                                    td.flatten()
+                                                                        .filter(|te| {
+                                                                            te.path().extension()
                                                                         .map(|x| x == "yaml")
                                                                         .unwrap_or(false)
                                                                     && !te.file_name()
                                                                         .to_string_lossy()
                                                                         .ends_with(".status.yaml")
-                                                                })
-                                                                .map(|te| read_ticket_summary(&te.path()))
-                                                                .collect();
-                                                            tv.sort_by(|a, b| a.id.cmp(&b.id));
-                                                            tv
-                                                        })
-                                                        .unwrap_or_default();
-                                                    SprintNode { id: sprint_id, tickets }
+                                                                        })
+                                                                        .map(|te| {
+                                                                            read_ticket_summary(
+                                                                                &te.path(),
+                                                                            )
+                                                                        })
+                                                                        .collect();
+                                                                tv.sort_by(|a, b| a.id.cmp(&b.id));
+                                                                tv
+                                                            })
+                                                            .unwrap_or_default();
+                                                    SprintNode {
+                                                        id: sprint_id,
+                                                        tickets,
+                                                    }
                                                 })
                                                 .collect();
                                             sv.sort_by(|a, b| a.id.cmp(&b.id));
                                             sv
                                         })
                                         .unwrap_or_default();
-                                    WaveNode { id: wave_id, sprints }
+                                    WaveNode {
+                                        id: wave_id,
+                                        sprints,
+                                    }
                                 })
                                 .collect();
                             wv.sort_by(|a, b| a.id.cmp(&b.id));
@@ -435,9 +463,7 @@ pub async fn handler_projects() -> impl IntoResponse {
         .ok()
         .map(|rd| {
             rd.flatten()
-                .filter(|e| {
-                    e.path().extension().map(|x| x == "md").unwrap_or(false)
-                })
+                .filter(|e| e.path().extension().map(|x| x == "md").unwrap_or(false))
                 .count() as u32
         })
         .unwrap_or(0);
@@ -621,8 +647,8 @@ pub fn router() -> Router<DashboardState> {
 mod tests {
     use super::*;
     use axum::{body::Body, http::Request};
-    use serial_test::serial;
     use serde_json::Value;
+    use serial_test::serial;
     use tempfile::TempDir;
     use tower::ServiceExt;
 
@@ -820,9 +846,9 @@ mod tests {
         with_fake_home(|tmp| {
             // Build a minimal PEWS tree:
             //   ~/Sites/myproj/.claude/phases/current/p1/epics/E-01/waves/W-01/sprints/S-01/tickets/T-01.yaml
-            let ticket_dir = tmp
-                .path()
-                .join("Sites/myproj/.claude/phases/current/p1/epics/E-01/waves/W-01/sprints/S-01/tickets");
+            let ticket_dir = tmp.path().join(
+                "Sites/myproj/.claude/phases/current/p1/epics/E-01/waves/W-01/sprints/S-01/tickets",
+            );
             std::fs::create_dir_all(&ticket_dir).unwrap();
             std::fs::write(
                 ticket_dir.join("T-01.yaml"),

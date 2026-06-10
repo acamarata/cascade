@@ -33,9 +33,7 @@ use crate::error::CascadeError;
 /// MASTER-COMMANDS.md — get_project_graph
 #[tauri::command]
 pub fn get_project_graph(sites_root: Option<String>) -> Result<serde_json::Value, CascadeError> {
-    let graph = cascade_core::maps::project::get_project_graph(
-        sites_root.as_deref(),
-    );
+    let graph = cascade_core::maps::project::get_project_graph(sites_root.as_deref());
     serde_json::to_value(&graph).map_err(|e| CascadeError::Custom(e.to_string()))
 }
 

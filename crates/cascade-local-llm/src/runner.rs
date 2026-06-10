@@ -34,10 +34,7 @@ use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, info, warn};
 
-use crate::{
-    config::LocalLlmConfig,
-    error::LocalModelError,
-};
+use crate::{config::LocalLlmConfig, error::LocalModelError};
 
 // ── Candle imports (compiled-out at the type level until model is loaded) ──────
 use candle_core::Device;
@@ -174,10 +171,7 @@ impl LocalLlmRunner {
     ///
     /// Errors are logged and the channel is dropped, causing the stream to
     /// end early.  The caller can detect premature end via stream length.
-    pub async fn run(
-        &self,
-        prompt: &str,
-    ) -> Result<ReceiverStream<String>, LocalModelError> {
+    pub async fn run(&self, prompt: &str) -> Result<ReceiverStream<String>, LocalModelError> {
         // Ensure the model is loaded (lazy init).
         self.ensure_loaded().await?;
 
@@ -262,9 +256,7 @@ fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     // ── Tokenizer ──────────────────────────────────────────────────────────
     let tok_path = config.tokenizer_path();
     if !tok_path.exists() {
-        return Err(LocalModelError::WeightsNotFound {
-            path: tok_path,
-        });
+        return Err(LocalModelError::WeightsNotFound { path: tok_path });
     }
 
     let tokenizer = tokenizers::Tokenizer::from_file(&tok_path).map_err(|e| {
@@ -281,9 +273,7 @@ fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     // defaults (which would diverge from actual weights).
     let config_path = config.model_path.join("config.json");
     if !config_path.exists() {
-        return Err(LocalModelError::WeightsNotFound {
-            path: config_path,
-        });
+        return Err(LocalModelError::WeightsNotFound { path: config_path });
     }
     let f = std::fs::File::open(&config_path)
         .map_err(|e| LocalModelError::Candle(format!("config.json open: {e}")))?;
@@ -293,26 +283,27 @@ fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     // ── Weights ────────────────────────────────────────────────────────────
     let weights_path = config.weights_path();
     if !weights_path.exists() {
-        return Err(LocalModelError::WeightsNotFound {
-            path: weights_path,
-        });
+        return Err(LocalModelError::WeightsNotFound { path: weights_path });
     }
 
     let vb = unsafe {
-        candle_nn::VarBuilder::from_mmaped_safetensors(
-            &[weights_path],
-            DType::F32,
-            &device,
-        )
-        .map_err(|e| LocalModelError::Candle(e.to_string()))?
+        candle_nn::VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device)
+            .map_err(|e| LocalModelError::Candle(e.to_string()))?
     };
 
-    let model = Model::new(false, &gemma_config, vb)
-        .map_err(|e| LocalModelError::Candle(e.to_string()))?;
+    let model =
+        Model::new(false, &gemma_config, vb).map_err(|e| LocalModelError::Candle(e.to_string()))?;
 
-    info!("cascade-local-llm: weights loaded from {:?}", config.model_path);
+    info!(
+        "cascade-local-llm: weights loaded from {:?}",
+        config.model_path
+    );
 
-    Ok(LoadedModel { model, tokenizer, device })
+    Ok(LoadedModel {
+        model,
+        tokenizer,
+        device,
+    })
 }
 
 // ── run_inference (blocking) ───────────────────────────────────────────────────
@@ -407,7 +398,10 @@ fn run_inference(
         }
 
         // Check stop sequences
-        if stop_sequences.iter().any(|s| generated.ends_with(s.as_str())) {
+        if stop_sequences
+            .iter()
+            .any(|s| generated.ends_with(s.as_str()))
+        {
             break;
         }
 
@@ -435,7 +429,10 @@ fn run_inference(
 /// `temperature > 0` → softmax sampling.
 ///
 /// `pub(crate)` so llama3 and phi3 runners can reuse the same sampling logic.
-pub(crate) fn sample_token(logits: &candle_core::Tensor, temperature: f32) -> Result<u32, LocalModelError> {
+pub(crate) fn sample_token(
+    logits: &candle_core::Tensor,
+    temperature: f32,
+) -> Result<u32, LocalModelError> {
     use candle_core::D;
 
     if temperature < 1e-4 {
@@ -449,8 +446,8 @@ pub(crate) fn sample_token(logits: &candle_core::Tensor, temperature: f32) -> Re
     }
 
     // Softmax sampling
-    let scaled = (logits / temperature as f64)
-        .map_err(|e| LocalModelError::Candle(e.to_string()))?;
+    let scaled =
+        (logits / temperature as f64).map_err(|e| LocalModelError::Candle(e.to_string()))?;
     let probs = candle_nn::ops::softmax(&scaled, D::Minus1)
         .map_err(|e| LocalModelError::Candle(e.to_string()))?;
 

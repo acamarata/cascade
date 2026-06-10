@@ -10,7 +10,7 @@
 //!   - Command is stored verbatim; never shell-executed in this handler.
 //!   - Atomic write: write to .tmp, then std::fs::rename (POSIX atomic, same filesystem).
 //!   - Localhost-only binding enforced by the daemon's listener (127.0.0.1:9761).
-//! SPORT: T-P3-E02-26; MASTER-ROUTES.md § /api/gci/hooks-write
+//!     SPORT: T-P3-E02-26; MASTER-ROUTES.md § /api/gci/hooks-write
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -76,8 +76,9 @@ pub struct HookEntry {
 /// Read settings.json from `path`.  Missing file returns an empty JSON object.
 fn read_settings(path: &Path) -> io::Result<Value> {
     match std::fs::read_to_string(path) {
-        Ok(s) => serde_json::from_str(&s)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)),
+        Ok(s) => {
+            serde_json::from_str(&s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        }
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Value::Object(Map::new())),
         Err(e) => Err(e),
     }
@@ -116,10 +117,7 @@ fn collect_hooks(settings: &Value) -> Vec<HookEntry> {
                         .get("matcher")
                         .and_then(|v| v.as_str())
                         .map(String::from);
-                    let label = item
-                        .get("label")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
+                    let label = item.get("label").and_then(|v| v.as_str()).map(String::from);
                     entries.push(HookEntry {
                         event: event.clone(),
                         matcher,
@@ -215,9 +213,7 @@ pub struct HookWriteBody {
 ///
 /// Appends a new hook entry to ~/.claude/settings.json and returns the updated
 /// full hook list. Returns 400 if `event` is unknown or `command` is empty.
-pub async fn post_hook_handler(
-    Json(body): Json<HookWriteBody>,
-) -> impl IntoResponse {
+pub async fn post_hook_handler(Json(body): Json<HookWriteBody>) -> impl IntoResponse {
     // Validate event.
     if !is_allowed_event(&body.event) {
         return (
@@ -288,9 +284,7 @@ pub async fn post_hook_handler(
 /// `hook_id` is `{event}:{index}`, e.g. `PreToolUse:0`.
 /// Removes the identified entry from ~/.claude/settings.json.
 /// Returns 404 if the event or index does not exist.
-pub async fn delete_hook_handler(
-    AxumPath(hook_id): AxumPath<String>,
-) -> impl IntoResponse {
+pub async fn delete_hook_handler(AxumPath(hook_id): AxumPath<String>) -> impl IntoResponse {
     // Parse hook_id as "{event}:{index}".
     let (event, index) = match parse_hook_id(&hook_id) {
         Some(v) => v,
@@ -595,9 +589,7 @@ mod tests {
             .method("POST")
             .uri("/hooks-write")
             .header("content-type", "application/json")
-            .body(Body::from(
-                r#"{"event":"Stop","command":"  ","label":""}"#,
-            ))
+            .body(Body::from(r#"{"event":"Stop","command":"  ","label":""}"#))
             .unwrap();
 
         let resp = app.oneshot(req).await.unwrap();

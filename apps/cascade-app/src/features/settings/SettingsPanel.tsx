@@ -136,7 +136,10 @@ export function SettingsPanel() {
           <main className="flex-1 overflow-y-auto p-6 min-w-0">
             {/* Error banner */}
             {error && (
-              <div role="alert" className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              <div
+                role="alert"
+                className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+              >
                 {error}
               </div>
             )}

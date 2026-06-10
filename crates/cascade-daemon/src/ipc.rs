@@ -317,12 +317,14 @@ pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
         .and_then(|v| v.as_u64())
         .unwrap_or(PROTOCOL_VERSION as u64) as u8;
     if version != PROTOCOL_VERSION {
-        warn!(got = version, expected = PROTOCOL_VERSION, "protocol_version mismatch");
+        warn!(
+            got = version,
+            expected = PROTOCOL_VERSION,
+            "protocol_version mismatch"
+        );
         return Response::err(
             -32600,
-            format!(
-                "protocol_version mismatch: got {version}, expected {PROTOCOL_VERSION}"
-            ),
+            format!("protocol_version mismatch: got {version}, expected {PROTOCOL_VERSION}"),
         );
     }
 
@@ -334,10 +336,9 @@ pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
                 IpcError::UnknownField(m) => (-32600, format!("unknown field: {m}")),
                 IpcError::MissingField(m) => (-32600, format!("missing field: {m}")),
                 IpcError::MalformedFrame(m) => (-32700, format!("malformed frame: {m}")),
-                IpcError::InvalidFieldValue { field, reason } => (
-                    -32602,
-                    format!("invalid field '{field}': {reason}"),
-                ),
+                IpcError::InvalidFieldValue { field, reason } => {
+                    (-32602, format!("invalid field '{field}': {reason}"))
+                }
             };
             Response::err(code, msg)
         }
@@ -453,10 +454,7 @@ pub(crate) fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Response {
                 _ => {}
             }
             debug!(method = %typed_req.method, "typed dispatch: METHOD_NOT_FOUND (scaffold)");
-            Response::err(
-                -32601,
-                format!("method not found: {}", typed_req.method),
-            )
+            Response::err(-32601, format!("method not found: {}", typed_req.method))
         }
     }
 }

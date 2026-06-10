@@ -115,10 +115,7 @@ export function TemplatePreview({
                     <MetaRow label="Extends" value={selectedEntry.extends} />
                   )}
                   {selectedEntry.minCascadeVersion && (
-                    <MetaRow
-                      label="Min cascade"
-                      value={selectedEntry.minCascadeVersion}
-                    />
+                    <MetaRow label="Min cascade" value={selectedEntry.minCascadeVersion} />
                   )}
                 </tbody>
               </table>

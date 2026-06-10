@@ -15,14 +15,9 @@
  * Task: T-P3-E03-17
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core'
 
-import type {
-  ArchiveManifest,
-  ArchiveValidation,
-  RestoreResult,
-  ToolArchive,
-} from './types';
+import type { ArchiveManifest, ArchiveValidation, RestoreResult, ToolArchive } from './types'
 
 // ---------------------------------------------------------------------------
 // T-P3-E03-16: archive_legacy_tools
@@ -38,7 +33,7 @@ import type {
  * @throws {string} If the move fails and rollback completes.
  */
 export async function archiveLegacyTools(toolId: string): Promise<ToolArchive> {
-  return invoke<ToolArchive>('archive_legacy_tools', { toolId });
+  return invoke<ToolArchive>('archive_legacy_tools', { toolId })
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +48,7 @@ export async function archiveLegacyTools(toolId: string): Promise<ToolArchive> {
  * - Throws when the file exists but contains corrupt/invalid JSON.
  */
 export async function readArchiveManifest(): Promise<ArchiveManifest | null> {
-  return invoke<ArchiveManifest | null>('read_archive_manifest');
+  return invoke<ArchiveManifest | null>('read_archive_manifest')
 }
 
 /**
@@ -62,7 +57,7 @@ export async function readArchiveManifest(): Promise<ArchiveManifest | null> {
  * Never throws for a missing manifest — only for corrupt JSON.
  */
 export async function listArchivedTools(): Promise<ToolArchive[]> {
-  return invoke<ToolArchive[]>('list_archived_tools');
+  return invoke<ToolArchive[]>('list_archived_tools')
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +74,7 @@ export async function listArchivedTools(): Promise<ToolArchive[]> {
  * @param toolId - Kebab-case tool identifier.
  */
 export async function archivePreflight(toolId: string): Promise<ArchiveValidation> {
-  return invoke<ArchiveValidation>('archive_preflight', { toolId });
+  return invoke<ArchiveValidation>('archive_preflight', { toolId })
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +91,7 @@ export async function archivePreflight(toolId: string): Promise<ArchiveValidatio
  */
 export async function restoreTool(
   toolId: string,
-  overwriteExisting = false,
+  overwriteExisting = false
 ): Promise<RestoreResult> {
-  return invoke<RestoreResult>('restore_tool', { toolId, overwriteExisting });
+  return invoke<RestoreResult>('restore_tool', { toolId, overwriteExisting })
 }

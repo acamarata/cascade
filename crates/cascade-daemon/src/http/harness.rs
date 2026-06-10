@@ -13,7 +13,7 @@
 //! Outputs:
 //!   - GET  → `cascade_types::harness::HarnessStatus` JSON.
 //!   - POST → `cascade_types::harness::RegenerateResponse` JSON, or HTTP 400 on
-//!            bad harness value.
+//!     bad harness value.
 //!
 //! Constraints:
 //!   - Path resolution uses $HOME env var only (repo convention, not dirs crate).
@@ -74,7 +74,7 @@ fn detect_cc(home: &Path) -> bool {
 /// Outputs: `(Option<abs_path_string>, is_linked)`.
 fn cc_instruction_file_status(home: &Path) -> (Option<String>, bool) {
     let claude_md = home.join(".claude").join("CLAUDE.md");
-    if !claude_md.exists() && !claude_md.symlink_metadata().is_ok() {
+    if !claude_md.exists() && claude_md.symlink_metadata().is_err() {
         return (None, false);
     }
     let path_str = claude_md.to_string_lossy().to_string();
@@ -97,7 +97,11 @@ fn cc_instruction_file_status(home: &Path) -> (Option<String>, bool) {
 fn detect_oc(home: &Path) -> bool {
     home.join(".opencode").exists()
         || home.join(".config").join("opencode").exists()
-        || home.join(".config").join("opencode").join("opencode.json").exists()
+        || home
+            .join(".config")
+            .join("opencode")
+            .join("opencode.json")
+            .exists()
 }
 
 /// Check whether the OC instruction file (AGENTS.md) exists at the primary OC
@@ -141,7 +145,11 @@ fn oc_instruction_file_status(home: &Path) -> (Option<String>, bool) {
 ///   - ONLY paths under `home` are returned; no system-wide paths.
 ///   - Directories that do not yet exist are excluded (we do not create dirs).
 fn resolve_tier_paths(harness: &str, home: &Path) -> Vec<(PathBuf, &'static str)> {
-    let symlink_name: &'static str = if harness == "cc" { "CLAUDE.md" } else { "AGENTS.md" };
+    let symlink_name: &'static str = if harness == "cc" {
+        "CLAUDE.md"
+    } else {
+        "AGENTS.md"
+    };
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
@@ -202,14 +210,22 @@ fn regenerate_for_harness(harness: &str, home: &Path) -> u32 {
     for (dir, link_name) in &slots {
         // HOME-confinement double-check (belt + suspenders).
         if !dir.starts_with(home) {
-            warn!("harness-regenerate: refusing to write outside HOME: {}", dir.display());
+            warn!(
+                "harness-regenerate: refusing to write outside HOME: {}",
+                dir.display()
+            );
             continue;
         }
 
         let link_path = dir.join(link_name);
 
         // If a regular (non-symlink) file already exists, skip it.
-        if link_path.exists() && !link_path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+        if link_path.exists()
+            && !link_path
+                .symlink_metadata()
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false)
+        {
             warn!(
                 "harness-regenerate: {} is a regular file, skipping",
                 link_path.display()
@@ -315,9 +331,7 @@ async fn handler_harness_status() -> impl IntoResponse {
 ///   - Returns HTTP 400 if `harness` is not "cc" or "oc".
 ///   - Returns HTTP 500 if $HOME is unset.
 ///   - Only writes within $HOME (enforced by `regenerate_for_harness`).
-async fn handler_harness_regenerate(
-    Json(req): Json<RegenerateRequest>,
-) -> impl IntoResponse {
+async fn handler_harness_regenerate(Json(req): Json<RegenerateRequest>) -> impl IntoResponse {
     // Validate harness argument.
     if req.harness != "cc" && req.harness != "oc" {
         return (
@@ -542,7 +556,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp1.status(), StatusCode::OK);
-        let b1 = axum::body::to_bytes(resp1.into_body(), 65536).await.unwrap();
+        let b1 = axum::body::to_bytes(resp1.into_body(), 65536)
+            .await
+            .unwrap();
         let r1: RegenerateResponse = serde_json::from_slice(&b1).unwrap();
 
         // Second call (idempotent — should not error).
@@ -562,7 +578,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp2.status(), StatusCode::OK);
-        let b2 = axum::body::to_bytes(resp2.into_body(), 65536).await.unwrap();
+        let b2 = axum::body::to_bytes(resp2.into_body(), 65536)
+            .await
+            .unwrap();
         let r2: RegenerateResponse = serde_json::from_slice(&b2).unwrap();
 
         // Both calls must succeed and produce equal counts.

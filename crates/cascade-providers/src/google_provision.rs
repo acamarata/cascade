@@ -184,24 +184,35 @@ impl GoogleProvisionClient {
         let project_id = match self.create_project(&project_id).await {
             Ok(id) => id,
             Err(e) => {
-                return Ok(ProvisionResult::Error { message: format!("Failed to create project: {}", e) });
+                return Ok(ProvisionResult::Error {
+                    message: format!("Failed to create project: {}", e),
+                });
             }
         };
 
         // Step 2: Poll until project is ACTIVE (max 30s, 2s interval).
         if let Err(e) = self.poll_project_active(&project_id).await {
-            return Ok(ProvisionResult::Error { message: format!("Project activation failed: {}", e) });
+            return Ok(ProvisionResult::Error {
+                message: format!("Project activation failed: {}", e),
+            });
         }
 
         // Step 3: Enable generativelanguage API.
         if let Err(e) = self.enable_generativelanguage_api(&project_id).await {
-            return Ok(ProvisionResult::Error { message: format!("Failed to enable API: {}", e) });
+            return Ok(ProvisionResult::Error {
+                message: format!("Failed to enable API: {}", e),
+            });
         }
 
         // Step 4: Create API key restricted to generativelanguage API.
         match self.create_api_key(&project_id).await {
-            Ok(api_key) => Ok(ProvisionResult::Success { api_key, project_id }),
-            Err(e) => Ok(ProvisionResult::Error { message: format!("Failed to create API key: {}", e) }),
+            Ok(api_key) => Ok(ProvisionResult::Success {
+                api_key,
+                project_id,
+            }),
+            Err(e) => Ok(ProvisionResult::Error {
+                message: format!("Failed to create API key: {}", e),
+            }),
         }
     }
 
@@ -248,7 +259,9 @@ impl GoogleProvisionClient {
                 api_key,
                 project_id: String::new(),
             }),
-            Err(e) => Ok(ProvisionResult::Error { message: e.to_string() }),
+            Err(e) => Ok(ProvisionResult::Error {
+                message: e.to_string(),
+            }),
         }
     }
 
@@ -314,10 +327,7 @@ impl GoogleProvisionClient {
     }
 
     /// POST to serviceusage to enable generativelanguage.googleapis.com.
-    async fn enable_generativelanguage_api(
-        &self,
-        project_id: &str,
-    ) -> Result<(), ProvisionError> {
+    async fn enable_generativelanguage_api(&self, project_id: &str) -> Result<(), ProvisionError> {
         let url = format!(
             "{}/v1/projects/{}/services/generativelanguage.googleapis.com:enable",
             self.su_base, project_id
@@ -409,7 +419,7 @@ pub use cascade_types::provision::{ProvisionMode, ProvisionRequest, ProvisionRes
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{bearer_token, method, path, path_regex};
+    use wiremock::matchers::{method, path, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
@@ -472,13 +482,11 @@ mod tests {
         // 1. POST /v1/projects → create project
         Mock::given(method("POST"))
             .and(path("/v1/projects"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "projectId": "cascade-gemini-1",
-                    "lifecycleState": "ACTIVE",
-                    "name": "Cascade Gemini 1"
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-1",
+                "lifecycleState": "ACTIVE",
+                "name": "Cascade Gemini 1"
+            })))
             .expect(1)
             .mount(&server)
             .await;
@@ -486,19 +494,19 @@ mod tests {
         // 2. GET /v1/projects/cascade-gemini-1 → poll → ACTIVE
         Mock::given(method("GET"))
             .and(path("/v1/projects/cascade-gemini-1"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "projectId": "cascade-gemini-1",
-                    "lifecycleState": "ACTIVE"
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-1",
+                "lifecycleState": "ACTIVE"
+            })))
             .expect(1)
             .mount(&server)
             .await;
 
         // 3. POST /v1/projects/cascade-gemini-1/services/...enable
         Mock::given(method("POST"))
-            .and(path_regex(r"/v1/projects/cascade-gemini-1/services/.*:enable"))
+            .and(path_regex(
+                r"/v1/projects/cascade-gemini-1/services/.*:enable",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
             .expect(1)
             .mount(&server)
@@ -506,12 +514,12 @@ mod tests {
 
         // 4. POST /v2/projects/cascade-gemini-1/locations/global/keys → create key
         Mock::given(method("POST"))
-            .and(path_regex(r"/v2/projects/cascade-gemini-1/locations/global/keys"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "name": "projects/cascade-gemini-1/locations/global/keys/test-key-id"
-                })),
-            )
+            .and(path_regex(
+                r"/v2/projects/cascade-gemini-1/locations/global/keys",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "name": "projects/cascade-gemini-1/locations/global/keys/test-key-id"
+            })))
             .expect(1)
             .mount(&server)
             .await;
@@ -519,21 +527,26 @@ mod tests {
         // 5. GET /v2/projects/.../keys/test-key-id/keyString
         Mock::given(method("GET"))
             .and(path_regex(r"/v2/projects/.*/keys/.*/keyString"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "keyString": "AIza-test-provisioned-key"
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "keyString": "AIza-test-provisioned-key"
+            })))
             .expect(1)
             .mount(&server)
             .await;
 
-        let client =
-            GoogleProvisionClient::new_with_bases("access-tok".into(), base.clone(), base.clone(), base.clone());
+        let client = GoogleProvisionClient::new_with_bases(
+            "access-tok".into(),
+            base.clone(),
+            base.clone(),
+            base.clone(),
+        );
         let result = client.full_auto("test@example.com", 1).await.unwrap();
 
         match result {
-            ProvisionResult::Success { api_key, project_id } => {
+            ProvisionResult::Success {
+                api_key,
+                project_id,
+            } => {
                 assert_eq!(project_id, "cascade-gemini-1");
                 assert_eq!(api_key, "AIza-test-provisioned-key");
             }
@@ -550,16 +563,18 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/v1/projects"))
-            .respond_with(
-                ResponseTemplate::new(400).set_body_json(serde_json::json!({
-                    "error": { "message": "Project ID already exists" }
-                })),
-            )
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "error": { "message": "Project ID already exists" }
+            })))
             .mount(&server)
             .await;
 
-        let client =
-            GoogleProvisionClient::new_with_bases("tok".into(), base.clone(), base.clone(), base.clone());
+        let client = GoogleProvisionClient::new_with_bases(
+            "tok".into(),
+            base.clone(),
+            base.clone(),
+            base.clone(),
+        );
         let result = client.full_auto("test@example.com", 1).await.unwrap();
 
         assert!(
@@ -578,24 +593,20 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/v1/projects"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "projectId": "cascade-gemini-2",
-                    "lifecycleState": "CREATING"
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-2",
+                "lifecycleState": "CREATING"
+            })))
             .mount(&server)
             .await;
 
         // Poll always returns CREATING (project never becomes active)
         Mock::given(method("GET"))
             .and(path("/v1/projects/cascade-gemini-2"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "projectId": "cascade-gemini-2",
-                    "lifecycleState": "CREATING"
-                })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-2",
+                "lifecycleState": "CREATING"
+            })))
             .mount(&server)
             .await;
 

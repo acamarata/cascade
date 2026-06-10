@@ -86,7 +86,9 @@ impl ContextError {
 fn contexts_dir(root: Option<String>) -> std::path::PathBuf {
     match root {
         None => global_cascade_dir().join("contexts"),
-        Some(r) => std::path::PathBuf::from(r).join(".cascade").join("contexts"),
+        Some(r) => std::path::PathBuf::from(r)
+            .join(".cascade")
+            .join("contexts"),
     }
 }
 
@@ -117,10 +119,7 @@ pub fn context_get(root: Option<String>, id: String) -> Result<ContextSession, C
 /// Inputs:  `root` — optional project root; `session` — full session payload.
 /// Outputs: unit on success.
 #[tauri::command]
-pub fn context_upsert(
-    root: Option<String>,
-    session: ContextSession,
-) -> Result<(), ContextError> {
+pub fn context_upsert(root: Option<String>, session: ContextSession) -> Result<(), ContextError> {
     let dir = contexts_dir(root);
     upsert_context(&dir, &session).map_err(ContextError::from_cascade)
 }
@@ -161,5 +160,7 @@ pub fn pack_codebase_cmd(
     let extra = excludes.unwrap_or_default();
     pack_codebase(&root_path, &extra)
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| ContextError::Io { message: e.to_string() })
+        .map_err(|e| ContextError::Io {
+            message: e.to_string(),
+        })
 }

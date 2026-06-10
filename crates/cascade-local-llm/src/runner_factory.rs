@@ -32,10 +32,7 @@
 use async_trait::async_trait;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{
-    config::LocalLlmConfig,
-    error::LocalModelError,
-};
+use crate::{config::LocalLlmConfig, error::LocalModelError};
 
 // ── LocalLlmRunnerTrait ────────────────────────────────────────────────────────
 
@@ -58,10 +55,7 @@ pub trait LocalLlmRunnerTrait: Send + Sync {
     ///
     /// - [`LocalModelError::WeightsNotFound`] if weights are absent at load time.
     /// - [`LocalModelError::Candle`] for any tensor operation failure.
-    async fn run(
-        &self,
-        prompt: &str,
-    ) -> Result<ReceiverStream<String>, LocalModelError>;
+    async fn run(&self, prompt: &str) -> Result<ReceiverStream<String>, LocalModelError>;
 }
 
 // ── ModelFamily ───────────────────────────────────────────────────────────────
@@ -159,10 +153,7 @@ struct GemmaRunnerWrapper(crate::runner::LocalLlmRunner);
 
 #[async_trait]
 impl LocalLlmRunnerTrait for GemmaRunnerWrapper {
-    async fn run(
-        &self,
-        prompt: &str,
-    ) -> Result<ReceiverStream<String>, LocalModelError> {
+    async fn run(&self, prompt: &str) -> Result<ReceiverStream<String>, LocalModelError> {
         self.0.run(prompt).await
     }
 }

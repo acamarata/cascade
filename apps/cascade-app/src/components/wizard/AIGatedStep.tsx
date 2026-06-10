@@ -22,14 +22,14 @@
  * SPORT: MASTER-COMPONENTS.md — AIGatedStep
  */
 
-import React from 'react';
-import { useProviderConnected } from '../../hooks/useProviderConnected';
+import React from 'react'
+import { useProviderConnected } from '../../hooks/useProviderConnected'
 
 interface AIGatedStepProps {
-  children: React.ReactNode;
-  ctaText?: string;
-  onSkip?: () => void;
-  onConnectProvider?: () => void;
+  children: React.ReactNode
+  ctaText?: string
+  onSkip?: () => void
+  onConnectProvider?: () => void
 }
 
 /**
@@ -48,10 +48,10 @@ export function AIGatedStep({
   onSkip,
   onConnectProvider,
 }: AIGatedStepProps): React.JSX.Element {
-  const { anyConnected } = useProviderConnected();
+  const { anyConnected } = useProviderConnected()
 
   if (anyConnected) {
-    return <>{children}</>;
+    return <>{children}</>
   }
 
   return (
@@ -103,7 +103,7 @@ export function AIGatedStep({
         )}
       </div>
     </div>
-  );
+  )
 }
 
-export default AIGatedStep;
+export default AIGatedStep

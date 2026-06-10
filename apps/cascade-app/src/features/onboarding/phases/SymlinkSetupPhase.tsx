@@ -88,7 +88,7 @@ function Alert({
         'rounded-md border p-4',
         variant === 'destructive' && 'border-destructive/50 text-destructive',
         variant === 'warning' && 'border-yellow-500/50 text-yellow-700 dark:text-yellow-400',
-        className,
+        className
       )}
     >
       {children}
@@ -182,7 +182,8 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
 
   const hasApplied = results !== null
   const successCount = results?.filter((r) => r.success).length ?? 0
-  const skippedCount = results?.filter((r) => !r.success && deriveStatus(r) === 'skipped').length ?? 0
+  const skippedCount =
+    results?.filter((r) => !r.success && deriveStatus(r) === 'skipped').length ?? 0
   const errorCount = results?.filter((r) => !r.success && deriveStatus(r) === 'error').length ?? 0
 
   async function handleApply() {
@@ -258,7 +259,7 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
                     key={i}
                     className={cn(
                       'border-b border-border last:border-0',
-                      i % 2 === 0 ? 'bg-background' : 'bg-muted/20',
+                      i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
                     )}
                   >
                     <td className="px-4 py-2 font-mono text-xs text-foreground break-all">
@@ -284,18 +285,12 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
           <div className="mb-2 flex items-center gap-3 text-sm font-medium text-foreground">
             <span>Results</span>
             {successCount > 0 && (
-              <span className="text-green-600 dark:text-green-400">
-                {successCount} created
-              </span>
+              <span className="text-green-600 dark:text-green-400">{successCount} created</span>
             )}
             {skippedCount > 0 && (
-              <span className="text-yellow-600 dark:text-yellow-400">
-                {skippedCount} skipped
-              </span>
+              <span className="text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>
             )}
-            {errorCount > 0 && (
-              <span className="text-destructive">{errorCount} failed</span>
-            )}
+            {errorCount > 0 && <span className="text-destructive">{errorCount} failed</span>}
           </div>
           <div className="rounded-md border border-border overflow-hidden">
             <table className="w-full text-sm">
@@ -304,12 +299,8 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
                   <th className="px-4 py-2 text-left font-medium text-muted-foreground">
                     Link location
                   </th>
-                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">
-                    Status
-                  </th>
-                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">
-                    Note
-                  </th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -320,7 +311,7 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
                       key={i}
                       className={cn(
                         'border-b border-border last:border-0',
-                        i % 2 === 0 ? 'bg-background' : 'bg-muted/20',
+                        i % 2 === 0 ? 'bg-background' : 'bg-muted/20'
                       )}
                     >
                       <td className="px-4 py-2 font-mono text-xs text-foreground break-all">
@@ -382,9 +373,8 @@ export function SymlinkSetupPhase({ className }: SymlinkSetupPhaseProps) {
           <AlertTitle>Some links were skipped</AlertTitle>
           <AlertDescription>
             Cascade found existing files at {skippedCount} location
-            {skippedCount === 1 ? '' : 's'} and did not overwrite them. The archive step (Phase
-            7) will move these files to a safe backup, after which you can re-run the symlink
-            step.
+            {skippedCount === 1 ? '' : 's'} and did not overwrite them. The archive step (Phase 7)
+            will move these files to a safe backup, after which you can re-run the symlink step.
           </AlertDescription>
         </Alert>
       )}

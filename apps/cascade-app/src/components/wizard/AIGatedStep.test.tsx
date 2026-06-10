@@ -60,7 +60,11 @@ describe('AIGatedStep', () => {
   it('shows default ctaText when not overridden', () => {
     mockConnected(false)
 
-    render(<AIGatedStep><span>child</span></AIGatedStep>)
+    render(
+      <AIGatedStep>
+        <span>child</span>
+      </AIGatedStep>
+    )
 
     expect(screen.getByText('This step requires a connected AI provider.')).toBeInTheDocument()
   })
@@ -156,7 +160,11 @@ describe('AIGatedStep', () => {
   it('CTA card has accessible role and aria-live', () => {
     mockConnected(false)
 
-    render(<AIGatedStep><span>child</span></AIGatedStep>)
+    render(
+      <AIGatedStep>
+        <span>child</span>
+      </AIGatedStep>
+    )
 
     const cta = screen.getByTestId('ai-gated-step-cta')
     expect(cta).toHaveAttribute('role', 'status')

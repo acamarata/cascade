@@ -38,7 +38,7 @@ import type { ProviderRoutingContext } from '@/features/onboarding/merge/provide
 // ---------------------------------------------------------------------------
 
 const EXAMPLE_HINTS =
-  'Be more concise\nKeep all rules, don\'t deduplicate\nFocus only on file operation rules'
+  "Be more concise\nKeep all rules, don't deduplicate\nFocus only on file operation rules"
 
 // ---------------------------------------------------------------------------
 // Props
@@ -100,7 +100,7 @@ export function RerunMergeDialog({
       // Focus the dialog itself (or first focusable child) after render
       const raf = requestAnimationFrame(() => {
         const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
         ;(firstFocusable ?? dialogRef.current)?.focus()
       })
@@ -110,6 +110,15 @@ export function RerunMergeDialog({
       previousFocusRef.current?.focus()
     }
   }, [open])
+
+  const handleClose = useCallback(() => {
+    // Reset on close
+    setInstruction('')
+    setStatus('idle')
+    setErrorMsg(null)
+    setNewSection(null)
+    onClose()
+  }, [onClose])
 
   // Focus trap: keep Tab/Shift+Tab within the dialog
   const handleDialogKeyDown = useCallback(
@@ -123,7 +132,7 @@ export function RerunMergeDialog({
       const focusableSelectors =
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
       const focusable = Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelectors) ?? [],
+        dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelectors) ?? []
       )
       if (focusable.length === 0) return
       const first = focusable[0]!
@@ -140,8 +149,7 @@ export function RerunMergeDialog({
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [handleClose]
   )
 
   const handleRerun = useCallback(async () => {
@@ -170,15 +178,6 @@ export function RerunMergeDialog({
     onClose()
   }, [newSection, onResult, onClose])
 
-  const handleClose = useCallback(() => {
-    // Reset on close
-    setInstruction('')
-    setStatus('idle')
-    setErrorMsg(null)
-    setNewSection(null)
-    onClose()
-  }, [onClose])
-
   if (!open) return null
 
   const prevContent = section.proposedContent
@@ -186,14 +185,22 @@ export function RerunMergeDialog({
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — aria-hidden so AT skips it; keyboard dismiss handled by dialog onKeyDown.
+          role="button" with tabIndex={-1} satisfies the interactive-element requirement
+          while keeping it out of the tab order. */}
       <div
+        role="button"
+        tabIndex={-1}
         className="fixed inset-0 z-40 bg-black/50"
         aria-hidden="true"
         onClick={handleClose}
+        onKeyDown={() => {
+          /* keyboard dismiss via dialog container onKeyDown */
+        }}
       />
 
-      {/* Dialog */}
+      {/* Dialog — role="dialog" is interactive per WAI-ARIA; onKeyDown handles focus trap */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- dialog role is interactive */}
       <div
         ref={dialogRef}
         role="dialog"
@@ -218,7 +225,7 @@ export function RerunMergeDialog({
             className={cn(
               'rounded-md p-1 text-muted-foreground hover:bg-muted',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
             aria-label="Close dialog"
           >
@@ -257,11 +264,12 @@ export function RerunMergeDialog({
                 'text-foreground placeholder:text-muted-foreground/60',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 'disabled:cursor-not-allowed disabled:opacity-50',
-                'resize-none',
+                'resize-none'
               )}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Tier: <span className="font-medium">{tierId}</span> · Section: {section.id.slice(0, 8)}…
+              Tier: <span className="font-medium">{tierId}</span> · Section:{' '}
+              {section.id.slice(0, 8)}…
             </p>
           </div>
 
@@ -298,7 +306,7 @@ export function RerunMergeDialog({
               'rounded-md border border-border px-4 py-2 text-sm font-medium',
               'text-foreground hover:bg-muted',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             Cancel
@@ -311,7 +319,7 @@ export function RerunMergeDialog({
                 'flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium',
                 'text-primary-foreground hover:bg-primary/90',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                'transition-colors',
+                'transition-colors'
               )}
             >
               Use new content
@@ -326,7 +334,7 @@ export function RerunMergeDialog({
                 'text-primary-foreground hover:bg-primary/90',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 'disabled:cursor-not-allowed disabled:opacity-50',
-                'transition-colors',
+                'transition-colors'
               )}
             >
               {status === 'loading' ? (

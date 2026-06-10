@@ -205,7 +205,9 @@ fn build_plan(home: &Path, cascade_dir: &Path, mode: &UninstallMode) -> Result<P
             .join("LaunchAgents")
             .join("com.acamarata.cascade.plist");
         if plist.exists() {
-            actions.push(Action::UnloadLaunchAgent { plist: plist.clone() });
+            actions.push(Action::UnloadLaunchAgent {
+                plist: plist.clone(),
+            });
             actions.push(Action::RemoveLaunchAgentPlist { plist });
         }
     }
@@ -240,7 +242,9 @@ fn collect_cascade_symlinks(home: &Path, cascade_dir: &Path) -> Vec<PathBuf> {
 
     // Canonicalize cascade_dir once so macOS /var → /private/var symlinks don't
     // confuse the `starts_with` check.
-    let canonical_cascade = cascade_dir.canonicalize().unwrap_or_else(|_| cascade_dir.to_path_buf());
+    let canonical_cascade = cascade_dir
+        .canonicalize()
+        .unwrap_or_else(|_| cascade_dir.to_path_buf());
 
     // Dirs to scan for symlinks owned by cascade.
     let scan_dirs: &[PathBuf] = &[
@@ -265,13 +269,9 @@ fn collect_cascade_symlinks(home: &Path, cascade_dir: &Path) -> Vec<PathBuf> {
                     let abs_target = if target.is_absolute() {
                         target.clone()
                     } else {
-                        path.parent()
-                            .unwrap_or(Path::new("."))
-                            .join(&target)
+                        path.parent().unwrap_or(Path::new(".")).join(&target)
                     };
-                    let canonical = abs_target
-                        .canonicalize()
-                        .unwrap_or(abs_target);
+                    let canonical = abs_target.canonicalize().unwrap_or(abs_target);
                     if canonical.starts_with(&canonical_cascade) {
                         found.push(path);
                     }
@@ -318,12 +318,18 @@ fn execute_plan(plan: Plan, cascade_dir: &Path, _mode: &UninstallMode) -> Execut
         Ok(h) => h,
         Err(e) => {
             errors.push(format!("cannot resolve HOME: {e}"));
-            return ExecuteResult { completed, skipped, errors };
+            return ExecuteResult {
+                completed,
+                skipped,
+                errors,
+            };
         }
     };
 
     // Canonicalize cascade_dir once to survive macOS /var → /private/var.
-    let canonical_cascade = cascade_dir.canonicalize().unwrap_or_else(|_| cascade_dir.to_path_buf());
+    let canonical_cascade = cascade_dir
+        .canonicalize()
+        .unwrap_or_else(|_| cascade_dir.to_path_buf());
 
     for action in plan.actions {
         match action {
@@ -384,10 +390,7 @@ fn execute_plan(plan: Plan, cascade_dir: &Path, _mode: &UninstallMode) -> Execut
             Action::RemoveSymlink { ref path } => {
                 // Safety: only remove if still a symlink pointing into cascade_dir.
                 if !path.is_symlink() {
-                    skipped.push(format!(
-                        "not a symlink (skipped): {}",
-                        path.display()
-                    ));
+                    skipped.push(format!("not a symlink (skipped): {}", path.display()));
                     continue;
                 }
                 // HOME-confinement check.
@@ -422,20 +425,14 @@ fn execute_plan(plan: Plan, cascade_dir: &Path, _mode: &UninstallMode) -> Execut
 
                 match std::fs::remove_file(path) {
                     Ok(()) => completed.push(format!("removed symlink: {}", path.display())),
-                    Err(e) => {
-                        errors.push(format!("remove symlink '{}': {e}", path.display()))
-                    }
+                    Err(e) => errors.push(format!("remove symlink '{}': {e}", path.display())),
                 }
             }
 
             Action::RestoreArchive { ref tool_id } => {
                 // Delegate to restore_from_manifest (inlined from restore.rs).
                 let manifest_path = cascade_dir.join("legacy").join("manifest.json");
-                match super::restore::restore_from_manifest_pub(
-                    tool_id,
-                    false,
-                    &manifest_path,
-                ) {
+                match super::restore::restore_from_manifest_pub(tool_id, false, &manifest_path) {
                     Ok(r) => {
                         completed.push(format!(
                             "restored archive '{}': {} files",
@@ -489,7 +486,11 @@ fn execute_plan(plan: Plan, cascade_dir: &Path, _mode: &UninstallMode) -> Execut
         }
     }
 
-    ExecuteResult { completed, skipped, errors }
+    ExecuteResult {
+        completed,
+        skipped,
+        errors,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -609,7 +610,10 @@ mod tests {
         // Symlink removed.
         assert!(!link.exists(), "symlink should be removed");
         // ~/.cascade/ still present.
-        assert!(cascade_dir.exists(), "~/.cascade/ must survive --keep-cascade");
+        assert!(
+            cascade_dir.exists(),
+            "~/.cascade/ must survive --keep-cascade"
+        );
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
@@ -640,7 +644,10 @@ mod tests {
         // Archived file restored.
         assert!(orig_file.exists(), "original file should be restored");
         // ~/.cascade/ removed.
-        assert!(!cascade_dir.exists(), "~/.cascade/ should be removed after --full");
+        assert!(
+            !cascade_dir.exists(),
+            "~/.cascade/ should be removed after --full"
+        );
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
@@ -697,7 +704,10 @@ mod tests {
 
         // Dry-run: don't execute; verify nothing changed.
         assert!(link.is_symlink(), "dry-run should not remove symlink");
-        assert!(cascade_dir.exists(), "dry-run should not remove ~/.cascade/");
+        assert!(
+            cascade_dir.exists(),
+            "dry-run should not remove ~/.cascade/"
+        );
     }
 
     // ---- full with failed restore does not remove ~/.cascade/ ----

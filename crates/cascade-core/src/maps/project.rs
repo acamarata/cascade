@@ -86,12 +86,16 @@ pub fn get_project_graph(sites_root: Option<&str>) -> GraphData {
     };
 
     if !root.is_dir() {
-        trace!("get_project_graph: sites root {:?} is not a directory", root);
+        trace!(
+            "get_project_graph: sites root {:?} is not a directory",
+            root
+        );
         return GraphData::empty();
     }
 
     let mut data = GraphData::empty();
     walk_dir(&root, &root, 0, None, &home, &mut data);
+    // Note: `_sites_root` is prefixed to suppress the only_used_in_recursion lint.
     data
 }
 
@@ -105,7 +109,7 @@ pub fn get_project_graph(sites_root: Option<&str>) -> GraphData {
 /// `data` — mutable graph being built
 fn walk_dir(
     current: &Path,
-    sites_root: &Path,
+    _sites_root: &Path,
     depth: u32,
     parent_id: Option<&str>,
     home: &Path,
@@ -141,7 +145,7 @@ fn walk_dir(
         if !cascade_dir.is_dir() {
             // Still descend if we are at the sites root level (depth 0).
             if depth == 0 {
-                walk_dir(&path, sites_root, depth + 1, parent_id, home, data);
+                walk_dir(&path, _sites_root, depth + 1, parent_id, home, data);
             }
             continue;
         }
@@ -179,7 +183,14 @@ fn walk_dir(
 
         // Descend one level deeper.
         if depth_from_root < MAX_DEPTH {
-            walk_dir(&path, sites_root, depth_from_root, Some(&node_id), home, data);
+            walk_dir(
+                &path,
+                _sites_root,
+                depth_from_root,
+                Some(&node_id),
+                home,
+                data,
+            );
         }
     }
 }
@@ -217,7 +228,11 @@ mod tests {
             sites.join("proj-a").join("repo-x").join(".cascade"),
             sites.join("proj-b").join(".cascade"),
             sites.join("proj-b").join("repo-y").join(".cascade"),
-            sites.join("proj-b").join("repo-y").join("app-ui").join(".cascade"),
+            sites
+                .join("proj-b")
+                .join("repo-y")
+                .join("app-ui")
+                .join(".cascade"),
         ];
         for d in &dirs {
             fs::create_dir_all(d).unwrap();
@@ -238,19 +253,41 @@ mod tests {
         std::env::remove_var("HOME");
 
         // Nodes: proj-a, repo-x, proj-b, repo-y, app-ui
-        assert_eq!(graph.nodes.len(), 5, "expected 5 nodes, got {:?}", graph.nodes);
+        assert_eq!(
+            graph.nodes.len(),
+            5,
+            "expected 5 nodes, got {:?}",
+            graph.nodes
+        );
 
-        let project_nodes: Vec<_> = graph.nodes.iter().filter(|n| n.node_type == "project").collect();
+        let project_nodes: Vec<_> = graph
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == "project")
+            .collect();
         assert_eq!(project_nodes.len(), 2, "expected 2 project nodes");
 
-        let repo_nodes: Vec<_> = graph.nodes.iter().filter(|n| n.node_type == "repo").collect();
+        let repo_nodes: Vec<_> = graph
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == "repo")
+            .collect();
         assert_eq!(repo_nodes.len(), 2, "expected 2 repo nodes");
 
-        let app_nodes: Vec<_> = graph.nodes.iter().filter(|n| n.node_type == "app").collect();
+        let app_nodes: Vec<_> = graph
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == "app")
+            .collect();
         assert_eq!(app_nodes.len(), 1, "expected 1 app node");
 
         // Edges: proj-a→repo-x, proj-b→repo-y, repo-y→app-ui
-        assert_eq!(graph.edges.len(), 3, "expected 3 edges, got {:?}", graph.edges);
+        assert_eq!(
+            graph.edges.len(),
+            3,
+            "expected 3 edges, got {:?}",
+            graph.edges
+        );
 
         // version is always 1
         assert_eq!(graph.version, 1);
@@ -302,27 +339,9 @@ mod tests {
 
         let sites = tmp.path().join("Sites");
         // Build a 4-deep nesting: proj/repo/app/sub — sub should be ignored.
-        fs::create_dir_all(
-            sites
-                .join("proj")
-                .join(".cascade"),
-        )
-        .unwrap();
-        fs::create_dir_all(
-            sites
-                .join("proj")
-                .join("repo")
-                .join(".cascade"),
-        )
-        .unwrap();
-        fs::create_dir_all(
-            sites
-                .join("proj")
-                .join("repo")
-                .join("app")
-                .join(".cascade"),
-        )
-        .unwrap();
+        fs::create_dir_all(sites.join("proj").join(".cascade")).unwrap();
+        fs::create_dir_all(sites.join("proj").join("repo").join(".cascade")).unwrap();
+        fs::create_dir_all(sites.join("proj").join("repo").join("app").join(".cascade")).unwrap();
         fs::create_dir_all(
             sites
                 .join("proj")
@@ -339,7 +358,14 @@ mod tests {
 
         // Only proj (depth 1), repo (depth 2), app (depth 3) — sub is beyond MAX_DEPTH.
         let types: Vec<_> = graph.nodes.iter().map(|n| n.node_type.as_str()).collect();
-        assert!(!types.contains(&"sub"), "depth-4 node leaked through MAX_DEPTH guard");
-        assert_eq!(graph.nodes.len(), 3, "expected exactly 3 nodes at depths 1-3");
+        assert!(
+            !types.contains(&"sub"),
+            "depth-4 node leaked through MAX_DEPTH guard"
+        );
+        assert_eq!(
+            graph.nodes.len(),
+            3,
+            "expected exactly 3 nodes at depths 1-3"
+        );
     }
 }

@@ -89,11 +89,28 @@ mod tests {
             importable: false,
         };
         let json = serde_json::to_string(&account).unwrap();
-        assert!(json.contains("\"emailOrHint\""), "expected camelCase: {}", json);
-        assert!(json.contains("\"authType\""), "expected camelCase: {}", json);
-        assert!(json.contains("\"claudeCode\""), "expected claudeCode: {}", json);
-        assert!(json.contains("\"oAuthToken\"") || json.contains("\"oauthToken\"") || json.contains("\"oAuthToken\""),
-            "expected OAuthToken serialized: {}", json);
+        assert!(
+            json.contains("\"emailOrHint\""),
+            "expected camelCase: {}",
+            json
+        );
+        assert!(
+            json.contains("\"authType\""),
+            "expected camelCase: {}",
+            json
+        );
+        assert!(
+            json.contains("\"claudeCode\""),
+            "expected claudeCode: {}",
+            json
+        );
+        assert!(
+            json.contains("\"oAuthToken\"")
+                || json.contains("\"oauthToken\"")
+                || json.contains("\"oAuthToken\""),
+            "expected OAuthToken serialized: {}",
+            json
+        );
     }
 
     #[test]

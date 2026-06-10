@@ -23,7 +23,6 @@ pub mod usage;
 // T-P3-E04-29: usage analytics IPC handlers
 pub mod ipc_usage_analytics;
 // T-P3-E04-15: provider health-check background task + cached HealthState
-pub mod provider_health;
 pub mod dashboard;
 pub mod event_bus;
 pub mod harness_bridge;
@@ -34,6 +33,7 @@ pub mod ipc;
 pub mod ipc_handlers;
 pub mod key_index;
 pub mod log;
+pub mod provider_health;
 pub mod proxy;
 pub mod quota_poller;
 pub mod regen;

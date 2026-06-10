@@ -108,7 +108,11 @@ fn collect_md_files(dir: &Path, project: &str) -> Result<Vec<ThreadEntry>, Strin
         let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
         out.push(ThreadEntry {
             project: project.to_string(),
-            name: p.file_name().unwrap_or_default().to_string_lossy().to_string(),
+            name: p
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
             path: p.to_string_lossy().to_string(),
             size_bytes: meta.len(),
             modified_at: fmt_modified(&meta),
@@ -134,7 +138,11 @@ fn collect_idea_files(dir: &Path, project: &str, kind: &str) -> Result<Vec<IdeaE
         out.push(IdeaEntry {
             project: project.to_string(),
             kind: kind.to_string(),
-            name: p.file_name().unwrap_or_default().to_string_lossy().to_string(),
+            name: p
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
             path: p.to_string_lossy().to_string(),
             modified_at: fmt_modified(&meta),
         });
@@ -193,7 +201,10 @@ pub async fn handler_threads() -> impl IntoResponse {
         }
     }
 
-    (StatusCode::OK, Json(serde_json::to_value(entries).unwrap_or(json!([]))))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(entries).unwrap_or(json!([]))),
+    )
         .into_response()
 }
 
@@ -246,7 +257,10 @@ pub async fn handler_ideas_inbox() -> impl IntoResponse {
         }
     }
 
-    (StatusCode::OK, Json(serde_json::to_value(entries).unwrap_or(json!([]))))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(entries).unwrap_or(json!([]))),
+    )
         .into_response()
 }
 
@@ -309,7 +323,10 @@ pub async fn handler_crd_chains() -> impl IntoResponse {
         }
     }
 
-    (StatusCode::OK, Json(serde_json::to_value(chains).unwrap_or(json!([]))))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(chains).unwrap_or(json!([]))),
+    )
         .into_response()
 }
 
@@ -321,7 +338,10 @@ pub async fn handler_scheduled_tasks() -> impl IntoResponse {
         return (StatusCode::OK, Json(json!([]))).into_response();
     };
 
-    let tasks_file = home.join(".claude").join("temp").join("scheduled-tasks.json");
+    let tasks_file = home
+        .join(".claude")
+        .join("temp")
+        .join("scheduled-tasks.json");
     if !tasks_file.exists() {
         return (StatusCode::OK, Json(json!([]))).into_response();
     }
@@ -452,10 +472,7 @@ pub async fn handler_account_ledger() -> impl IntoResponse {
             .into_response();
     };
 
-    let db_path = home
-        .join(".config")
-        .join("claude-usage")
-        .join("usage.db");
+    let db_path = home.join(".config").join("claude-usage").join("usage.db");
 
     if !db_path.exists() {
         return (
@@ -508,9 +525,7 @@ pub async fn handler_account_ledger() -> impl IntoResponse {
     .await;
 
     match result {
-        Ok(Ok(data)) => {
-            (StatusCode::OK, Json(json!({"data": data}))).into_response()
-        }
+        Ok(Ok(data)) => (StatusCode::OK, Json(json!({"data": data}))).into_response(),
         Ok(Err(e)) => {
             // Schema may differ — return informative error, not 500.
             (
@@ -547,8 +562,8 @@ mod tests {
     use super::*;
     use axum::{body::Body, http::Request};
     use serial_test::serial;
-    use tower::ServiceExt;
     use tempfile::TempDir;
+    use tower::ServiceExt;
 
     /// Build a minimal test router (no DashboardState needed — we wrap with Router::new()).
     fn test_router() -> axum::Router {
@@ -600,7 +615,11 @@ mod tests {
     async fn test_personal_threads_with_memory() {
         with_fake_home(|tmp| {
             // Create ~/.claude/projects/my-project/MEMORY.md
-            let proj_dir = tmp.path().join(".claude").join("projects").join("my-project");
+            let proj_dir = tmp
+                .path()
+                .join(".claude")
+                .join("projects")
+                .join("my-project");
             std::fs::create_dir_all(&proj_dir).unwrap();
             std::fs::write(proj_dir.join("MEMORY.md"), "# Memory").unwrap();
 

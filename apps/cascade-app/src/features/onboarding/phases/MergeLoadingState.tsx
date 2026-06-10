@@ -28,8 +28,7 @@ import { cn } from '@/lib/utils'
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
     () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -55,11 +54,7 @@ interface MergeLoadingStateProps {
 // Step labels (per spec T-P3-E03-29)
 // ---------------------------------------------------------------------------
 
-const LOADING_STEPS = [
-  'Reading legacy files',
-  'Merging content',
-  'Structuring sections',
-] as const
+const LOADING_STEPS = ['Reading legacy files', 'Merging content', 'Structuring sections'] as const
 
 const STEP_DURATION_MS = 2_500
 
@@ -103,12 +98,9 @@ export function MergeLoadingState({ toolCount, fileCount }: MergeLoadingStatePro
 
       {/* Title */}
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">
-          Analyzing your configuration…
-        </h2>
+        <h2 className="text-xl font-semibold text-foreground">Analyzing your configuration…</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Merging{' '}
-          <span className="font-medium text-foreground">{fileCount}</span>{' '}
+          Merging <span className="font-medium text-foreground">{fileCount}</span>{' '}
           {fileCount === 1 ? 'file' : 'files'} from{' '}
           <span className="font-medium text-foreground">{toolCount}</span>{' '}
           {toolCount === 1 ? 'tool' : 'tools'}
@@ -127,7 +119,7 @@ export function MergeLoadingState({ toolCount, fileCount }: MergeLoadingStatePro
           <div
             className={cn(
               'h-full rounded-full bg-primary',
-              !reducedMotion && 'transition-all duration-1000 ease-in-out',
+              !reducedMotion && 'transition-all duration-1000 ease-in-out'
             )}
             style={{ width: `${progressPct}%` }}
           />
@@ -145,7 +137,7 @@ export function MergeLoadingState({ toolCount, fileCount }: MergeLoadingStatePro
                 ? 'text-foreground'
                 : idx < stepIndex
                   ? 'text-muted-foreground line-through opacity-50'
-                  : 'text-muted-foreground opacity-40',
+                  : 'text-muted-foreground opacity-40'
             )}
           >
             {idx === stepIndex ? (

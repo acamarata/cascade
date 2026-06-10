@@ -25,8 +25,18 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
 }))
 
 vi.mock('react-router-dom', () => ({
-  Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
-    <a href={to} {...props}>{children}</a>
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode
+    to: string
+    [key: string]: unknown
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
 }))
 
@@ -57,20 +67,16 @@ describe('ProviderStatusBadge', () => {
   })
 
   it('includes error message in aria-label when unhealthy', () => {
-    render(
-      <ProviderStatusBadge status="unhealthy" errorMsg="Connection refused on port 443" />,
-    )
+    render(<ProviderStatusBadge status="unhealthy" errorMsg="Connection refused on port 443" />)
     const badge = screen.getByRole('status')
     expect(badge).toHaveAttribute(
       'aria-label',
-      'Provider status: Error — Connection refused on port 443',
+      'Provider status: Error — Connection refused on port 443'
     )
   })
 
   it('includes title attribute when unhealthy with errorMsg', () => {
-    render(
-      <ProviderStatusBadge status="unhealthy" errorMsg="Timeout after 5000ms" />,
-    )
+    render(<ProviderStatusBadge status="unhealthy" errorMsg="Timeout after 5000ms" />)
     const badge = screen.getByRole('status')
     expect(badge).toHaveAttribute('title', 'Timeout after 5000ms')
   })
@@ -134,24 +140,14 @@ import { ProviderActionsMenu } from '@/components/providers/ProviderActionsMenu'
 describe('ProviderActionsMenu', () => {
   it('renders the trigger button with correct aria-label', () => {
     render(
-      <ProviderActionsMenu
-        providerId="anthropic"
-        onTestConnection={vi.fn()}
-        onRemove={vi.fn()}
-      />,
+      <ProviderActionsMenu providerId="anthropic" onTestConnection={vi.fn()} onRemove={vi.fn()} />
     )
     const trigger = screen.getByRole('button', { name: /Actions for anthropic/i })
     expect(trigger).toBeInTheDocument()
   })
 
   it('renders the trigger button with correct aria-label for different provider', () => {
-    render(
-      <ProviderActionsMenu
-        providerId="groq"
-        onTestConnection={vi.fn()}
-        onRemove={vi.fn()}
-      />,
-    )
+    render(<ProviderActionsMenu providerId="groq" onTestConnection={vi.fn()} onRemove={vi.fn()} />)
     const trigger = screen.getByRole('button', { name: /Actions for groq/i })
     expect(trigger).toBeInTheDocument()
   })
@@ -163,7 +159,7 @@ describe('ProviderActionsMenu', () => {
         onTestConnection={vi.fn()}
         onRemove={vi.fn()}
         disabled
-      />,
+      />
     )
     const trigger = screen.getByRole('button', { name: /Actions for openai/i })
     expect(trigger).toBeDisabled()

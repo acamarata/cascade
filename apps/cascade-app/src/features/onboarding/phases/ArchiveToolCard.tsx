@@ -109,12 +109,14 @@ function ValidationBadge({ validation }: { validation: ArchiveValidation | null 
   }
 
   const fatals = validation.issues.filter(
-    (i) => i.type === 'InsufficientDisk' || i.type === 'PermissionDenied',
+    (i) => i.type === 'InsufficientDisk' || i.type === 'PermissionDenied'
   )
   return (
     <span className="inline-flex items-center gap-1 text-xs text-destructive font-medium">
       <AlertCircle className="h-3 w-3" aria-hidden="true" />
-      {fatals.length > 0 ? `${fatals.length} blocking issue(s)` : `${validation.issues.length} warning(s)`}
+      {fatals.length > 0
+        ? `${fatals.length} blocking issue(s)`
+        : `${validation.issues.length} warning(s)`}
     </span>
   )
 }
@@ -152,9 +154,7 @@ export function ArchiveToolCard({
     validation != null &&
     validation !== undefined &&
     !validation.ok &&
-    validation.issues.some(
-      (i) => i.type === 'InsufficientDisk' || i.type === 'PermissionDenied',
-    )
+    validation.issues.some((i) => i.type === 'InsufficientDisk' || i.type === 'PermissionDenied')
 
   return (
     <div
@@ -163,8 +163,8 @@ export function ArchiveToolCard({
         isDone
           ? 'border-green-200 bg-green-50/40 dark:border-green-900/50 dark:bg-green-900/10'
           : isError
-          ? 'border-destructive/40 bg-destructive/5'
-          : 'border-border bg-background',
+            ? 'border-destructive/40 bg-destructive/5'
+            : 'border-border bg-background'
       )}
     >
       {/* Header row */}
@@ -193,7 +193,9 @@ export function ArchiveToolCard({
 
       {/* Stats + validation */}
       <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span>{fileCount} {fileCount === 1 ? 'file' : 'files'}</span>
+        <span>
+          {fileCount} {fileCount === 1 ? 'file' : 'files'}
+        </span>
         <span>{formatBytes(sizeBytes)}</span>
         <ValidationBadge validation={validation} />
       </div>
@@ -217,7 +219,7 @@ export function ArchiveToolCard({
                 'rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60',
                 choice === 'archive'
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               Archive
@@ -232,7 +234,7 @@ export function ArchiveToolCard({
                 'rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60',
                 choice === 'keep'
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               Keep in place
@@ -265,8 +267,7 @@ export function ArchiveToolCard({
       {/* Destination note (when archive choice selected and not done) */}
       {!isDone && choice === 'archive' && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Files will be moved to{' '}
-          <span className="font-mono">{trimHome(archiveRoot)}</span>
+          Files will be moved to <span className="font-mono">{trimHome(archiveRoot)}</span>
           {' — '}restorable any time.
         </p>
       )}
@@ -279,7 +280,9 @@ export function ArchiveToolCard({
               className="h-4 w-4 flex-shrink-0 text-destructive mt-0.5"
               aria-hidden="true"
             />
-            <p className="text-xs text-destructive break-words">{archiveError ?? 'Archive failed.'}</p>
+            <p className="text-xs text-destructive break-words">
+              {archiveError ?? 'Archive failed.'}
+            </p>
           </div>
           <button
             type="button"

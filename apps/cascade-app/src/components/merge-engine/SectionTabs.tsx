@@ -73,7 +73,7 @@ export function SectionTabs({ sections, activeId, onSelect }: SectionTabsProps) 
         }
       }
     },
-    [sections, onSelect],
+    [sections, onSelect]
   )
 
   return (
@@ -87,7 +87,9 @@ export function SectionTabs({ sections, activeId, onSelect }: SectionTabsProps) 
         return (
           <button
             key={section.id}
-            ref={(el) => { tabRefs.current[index] = el }}
+            ref={(el) => {
+              tabRefs.current[index] = el
+            }}
             type="button"
             role="tab"
             id={`section-tab-${section.id}`}
@@ -102,14 +104,14 @@ export function SectionTabs({ sections, activeId, onSelect }: SectionTabsProps) 
               'transition-colors',
               isActive
                 ? 'border border-b-background border-border bg-background text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             )}
           >
             <span>{section.title}</span>
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-xs font-medium',
-                sectionStatusBadgeClass(section.status),
+                sectionStatusBadgeClass(section.status)
               )}
               aria-label={`Status: ${section.status}`}
             >

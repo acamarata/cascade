@@ -54,10 +54,7 @@ interface BadgeProps {
 }
 
 function StatusBadge({ status }: BadgeProps) {
-  const configs: Record<
-    ConnectionStatus,
-    { label: string; className: string }
-  > = {
+  const configs: Record<ConnectionStatus, { label: string; className: string }> = {
     disconnected: {
       label: 'Not connected',
       className: 'bg-muted text-muted-foreground',
@@ -113,12 +110,7 @@ function StatusBadge({ status }: BadgeProps) {
  *
  * SPORT: MASTER-COMPONENTS.md — ProviderCard
  */
-export function ProviderCard({
-  provider,
-  status,
-  errorMessage,
-  onConnect,
-}: ProviderCardProps) {
+export function ProviderCard({ provider, status, errorMessage, onConnect }: ProviderCardProps) {
   const isConnected = status === 'connected' || status === 'pool_detected'
   const isConnecting = status === 'connecting'
   const buttonDisabled = isConnected || isConnecting
@@ -148,14 +140,10 @@ export function ProviderCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-sm leading-tight">
-              {provider.name}
-            </span>
+            <span className="font-semibold text-sm leading-tight">{provider.name}</span>
             <StatusBadge status={status} />
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
-            {provider.tagline}
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{provider.tagline}</p>
         </div>
       </div>
 

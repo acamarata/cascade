@@ -445,7 +445,11 @@ mod tests {
         drop(t);
 
         let reg = load_registry();
-        assert!(reg.len() >= 2, "expected at least 2 templates, got {}", reg.len());
+        assert!(
+            reg.len() >= 2,
+            "expected at least 2 templates, got {}",
+            reg.len()
+        );
         assert!(reg.get("gci-default").is_some());
         assert!(reg.get("prc-rust").is_some());
     }
@@ -482,7 +486,10 @@ mod tests {
         };
 
         assert!(!entry.body.is_empty(), "body must be populated");
-        assert!(entry.body.contains("preview content"), "body must contain template content");
+        assert!(
+            entry.body.contains("preview content"),
+            "body must contain template content"
+        );
     }
 
     // ── T-15-E: apply dry_run does not write file ─────────────────────────────
@@ -565,10 +572,20 @@ mod tests {
 
         // Now upgrade — same version already applied → all-empty result.
         let result = engine
-            .upgrade_by_id(&registry, "gci-default", &record, &target, false, Some(tmp.path().to_path_buf()))
+            .upgrade_by_id(
+                &registry,
+                "gci-default",
+                &record,
+                &target,
+                false,
+                Some(tmp.path().to_path_buf()),
+            )
             .unwrap();
 
-        assert!(result.upgraded.is_empty(), "already current — no upgrade needed");
+        assert!(
+            result.upgraded.is_empty(),
+            "already current — no upgrade needed"
+        );
         assert!(result.added.is_empty());
         assert!(result.deprecated.is_empty());
     }

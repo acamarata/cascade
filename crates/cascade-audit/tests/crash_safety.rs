@@ -45,7 +45,10 @@ fn stale_tmp_cleaned_up_on_open() {
 
     // Re-open the log — cleanup_tmp() should remove the stale .tmp
     let log2 = AuditLog::open(&log_path).unwrap();
-    assert!(!tmp_path.exists(), ".tmp should be removed on open after 30s threshold");
+    assert!(
+        !tmp_path.exists(),
+        ".tmp should be removed on open after 30s threshold"
+    );
 
     // Canonical log must still be intact
     let violations = log2.verify_chain().unwrap();
@@ -100,7 +103,11 @@ fn concurrent_writer_chain_remains_valid() {
             Err(e) => panic!("unexpected error from concurrent append: {e}"),
         }
     }
-    assert_eq!(successes + forks, 2, "total outcomes must account for both threads");
+    assert_eq!(
+        successes + forks,
+        2,
+        "total outcomes must account for both threads"
+    );
     assert!(successes >= 1, "at least one append must succeed");
 
     // Regardless of whether a fork was detected, the chain must be valid

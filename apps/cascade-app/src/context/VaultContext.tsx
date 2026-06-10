@@ -11,13 +11,7 @@
  * SPORT: MASTER-COMPONENTS.md — VaultContext (T-P3-E06-02)
  */
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { VaultNode, MemoryEntry } from '../types/vault'
 import { openDailyNote as _openDailyNote } from '../services/vault/dailyNotes'
@@ -189,7 +183,9 @@ export function VaultProvider({
   const [currentContent, setCurrentContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [onOpenNote, setOnOpenNote] = useState<((path: string, content: string) => void) | null>(null)
+  const [onOpenNote, setOnOpenNote] = useState<((path: string, content: string) => void) | null>(
+    null
+  )
   // ── Memory index state (T-P3-E06-13 seam A) ─────────────────────────────────
   const [memoryIndex, setMemoryIndex] = useState<MemoryEntry[]>([])
   const [memoryLoading, setMemoryLoading] = useState(false)
@@ -232,7 +228,7 @@ export function VaultProvider({
         setLoading(false)
       }
     },
-    [onOpenNote],
+    [onOpenNote]
   )
 
   // ── Daily notes (T-P3-E06-10) ───────────────────────────────────────────────
@@ -271,7 +267,7 @@ export function VaultProvider({
     return () => {
       cancelled = true
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(projectPaths)])
 
   const value: VaultContextValue = {

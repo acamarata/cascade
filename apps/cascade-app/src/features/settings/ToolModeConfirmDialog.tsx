@@ -74,7 +74,7 @@ export function ToolModeConfirmDialog({
           onClick={onCancel}
           className={cn(
             'absolute right-4 top-4 rounded p-1 text-muted-foreground',
-            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
           )}
           aria-label="Cancel"
         >
@@ -87,7 +87,7 @@ export function ToolModeConfirmDialog({
             <Icon
               className={cn(
                 'h-5 w-5 flex-shrink-0',
-                isManage ? 'text-primary' : 'text-destructive',
+                isManage ? 'text-primary' : 'text-destructive'
               )}
               aria-hidden="true"
             />
@@ -142,11 +142,7 @@ export function ToolModeConfirmDialog({
             <Button variant="outline" size="sm" onClick={onCancel}>
               Cancel
             </Button>
-            <Button
-              size="sm"
-              variant={isManage ? 'default' : 'destructive'}
-              onClick={onConfirm}
-            >
+            <Button size="sm" variant={isManage ? 'default' : 'destructive'} onClick={onConfirm}>
               {isManage ? 'Make Cascade-managed' : 'Restore Independence'}
             </Button>
           </div>

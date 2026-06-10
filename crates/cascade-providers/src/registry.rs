@@ -87,16 +87,10 @@ impl Default for RoutingTable {
         );
 
         // RagEmbed: local embedding models preferred; cloud fallback via openai.
-        table.insert(
-            TaskType::RagEmbed,
-            vec!["local".into(), "openai".into()],
-        );
+        table.insert(TaskType::RagEmbed, vec!["local".into(), "openai".into()]);
 
         // RagRerank: local reranker preferred (latency); cloud fallback.
-        table.insert(
-            TaskType::RagRerank,
-            vec!["local".into(), "openai".into()],
-        );
+        table.insert(TaskType::RagRerank, vec!["local".into(), "openai".into()]);
 
         // LocalFallback: only local models apply.
         table.insert(TaskType::LocalFallback, vec!["local".into()]);
@@ -109,10 +103,7 @@ impl RoutingTable {
     /// Return the ordered priority list for `task`, or an empty slice when
     /// `task` has no entry in the table.
     pub fn priority_list(&self, task: &TaskType) -> &[String] {
-        self.table
-            .get(task)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+        self.table.get(task).map(Vec::as_slice).unwrap_or(&[])
     }
 }
 
@@ -279,13 +270,13 @@ impl ProviderRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_trait::async_trait;
-    use futures_core::Stream;
-    use std::pin::Pin;
     use crate::{
         AuthMethod, CompletionRequest, CompletionResponse, ModelInfo, NoopProvider,
         ProviderCapabilities, StreamChunk,
     };
+    use async_trait::async_trait;
+    use futures_core::Stream;
+    use std::pin::Pin;
 
     /// A minimal mock adapter used in tests only.
     ///
@@ -347,10 +338,15 @@ mod tests {
     #[test]
     fn register_and_get_round_trip() {
         let registry = ProviderRegistry::new();
-        registry.register("alpha".into(), make_mock("alpha")).unwrap();
+        registry
+            .register("alpha".into(), make_mock("alpha"))
+            .unwrap();
 
         let found = registry.get("alpha");
-        assert!(found.is_some(), "adapter should be retrievable after register");
+        assert!(
+            found.is_some(),
+            "adapter should be retrievable after register"
+        );
         let info = found.unwrap().provider_info();
         assert_eq!(info.id, "alpha");
     }
@@ -400,7 +396,11 @@ mod tests {
         registry.register("p2".into(), make_mock("p2")).unwrap();
 
         let results = registry.health_check_all().await;
-        assert_eq!(results.len(), 2, "must have one entry per registered adapter");
+        assert_eq!(
+            results.len(),
+            2,
+            "must have one entry per registered adapter"
+        );
 
         // MockProvider.health_check returns NotImplemented.
         for (id, res) in &results {
@@ -470,7 +470,9 @@ mod tests {
             table: HashMap::new(),
         };
         let registry = ProviderRegistry::with_routing(routing);
-        registry.register("local".into(), make_mock("local")).unwrap();
+        registry
+            .register("local".into(), make_mock("local"))
+            .unwrap();
 
         // No routing entry for any TaskType → always None.
         assert!(registry.default_for_task(&TaskType::Chat).is_none());
@@ -502,7 +504,9 @@ mod tests {
         use tokio::task;
 
         let registry = StdArc::new(ProviderRegistry::new());
-        registry.register("shared".into(), make_mock("shared")).unwrap();
+        registry
+            .register("shared".into(), make_mock("shared"))
+            .unwrap();
 
         let mut handles = Vec::new();
         for _ in 0..10 {

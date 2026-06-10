@@ -56,16 +56,14 @@ fn io_err(path: &Path, operation: &'static str, source: std::io::Error) -> Casca
 pub fn load(path: &Path) -> Result<CascadeSettings, CascadeError> {
     match fs::read(path) {
         Ok(bytes) => {
-            let s: CascadeSettings = serde_json::from_slice(&bytes)
-                .map_err(|e| CascadeError::ConfigParse {
+            let s: CascadeSettings =
+                serde_json::from_slice(&bytes).map_err(|e| CascadeError::ConfigParse {
                     path: path.to_path_buf(),
                     detail: e.to_string(),
                 })?;
             Ok(s)
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            Ok(CascadeSettings::default())
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(CascadeSettings::default()),
         Err(e) => Err(io_err(path, "read", e)),
     }
 }
@@ -86,11 +84,10 @@ pub fn save(path: &Path, settings: &CascadeSettings) -> Result<(), CascadeError>
 
     let tmp = path.with_extension("json.tmp");
 
-    let json = serde_json::to_string_pretty(settings)
-        .map_err(|e| CascadeError::ConfigParse {
-            path: path.to_path_buf(),
-            detail: format!("settings serialize: {e}"),
-        })?;
+    let json = serde_json::to_string_pretty(settings).map_err(|e| CascadeError::ConfigParse {
+        path: path.to_path_buf(),
+        detail: format!("settings serialize: {e}"),
+    })?;
 
     fs::write(&tmp, json.as_bytes()).map_err(|e| io_err(&tmp, "write", e))?;
     fs::rename(&tmp, path).map_err(|e| io_err(path, "rename", e))?;

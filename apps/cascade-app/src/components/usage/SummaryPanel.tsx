@@ -12,15 +12,7 @@
  */
 
 import React from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { RefreshCw } from 'lucide-react'
 import type { UsageSummary, MonthlyUsage, UsagePeriod } from '../../types/ipc'
 import { PeriodSelector } from './PeriodSelector'
@@ -89,9 +81,7 @@ export function SummaryPanel({
           <h2 id="summary-heading" className="text-lg font-semibold">
             Usage Summary
           </h2>
-          {periodLabel && (
-            <p className="text-sm text-muted-foreground">{periodLabel}</p>
-          )}
+          {periodLabel && <p className="text-sm text-muted-foreground">{periodLabel}</p>}
         </div>
         <div className="flex items-center gap-3">
           <PeriodSelector period={period} onChange={onPeriodChange} />
@@ -101,7 +91,10 @@ export function SummaryPanel({
             aria-label="Refresh usage data"
             className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
           >
-            <RefreshCw className={['h-4 w-4', loading ? 'animate-spin' : ''].join(' ')} aria-hidden="true" />
+            <RefreshCw
+              className={['h-4 w-4', loading ? 'animate-spin' : ''].join(' ')}
+              aria-hidden="true"
+            />
           </button>
         </div>
       </div>
@@ -143,7 +136,9 @@ export function SummaryPanel({
                 }}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(value: any, name: any) =>
-                  name === 'tokens' ? [fmtTokens(Number(value) || 0), 'Tokens'] : [fmtCost(Number(value) || 0), 'Cost']
+                  name === 'tokens'
+                    ? [fmtTokens(Number(value) || 0), 'Tokens']
+                    : [fmtCost(Number(value) || 0), 'Cost']
                 }
               />
               <Bar dataKey="tokens" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />

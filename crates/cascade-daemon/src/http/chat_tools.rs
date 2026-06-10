@@ -13,7 +13,7 @@
 //!   - send_pci: spawns ~/bin/pci-send with discrete .arg() values — NEVER bash -c
 //!     with string interpolation (no shell injection surface).
 //!   - All disk access via std::fs only (dirs::home_dir() for home).
-//! SPORT: T-P3-E02-19 · MASTER-ENDPOINTS.md § GP Chat tool catalog
+//!     SPORT: T-P3-E02-19 · MASTER-ENDPOINTS.md § GP Chat tool catalog
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -85,10 +85,10 @@ fn known_projects(sites_dir: &Path) -> HashSet<String> {
 /// compare, so any traversal attempt results in a path that no longer starts
 /// with the allowed prefix.
 fn safe_canonicalize(target: &Path, allowed_base: &Path) -> Result<PathBuf, String> {
-    let canonical = std::fs::canonicalize(target)
-        .map_err(|e| format!("cannot resolve path: {e}"))?;
-    let canonical_base = std::fs::canonicalize(allowed_base)
-        .map_err(|e| format!("cannot resolve base: {e}"))?;
+    let canonical =
+        std::fs::canonicalize(target).map_err(|e| format!("cannot resolve path: {e}"))?;
+    let canonical_base =
+        std::fs::canonicalize(allowed_base).map_err(|e| format!("cannot resolve base: {e}"))?;
     if canonical.starts_with(&canonical_base) {
         Ok(canonical)
     } else {
@@ -105,16 +105,16 @@ fn safe_canonicalize(target: &Path, allowed_base: &Path) -> Result<PathBuf, Stri
 /// current implementations are synchronous filesystem operations.
 pub async fn dispatch(name: &str, args: &Value) -> ToolResult {
     match name {
-        "list_projects"     => tool_list_projects(),
-        "list_tasks"        => tool_list_tasks(args),
-        "read_file"         => tool_read_file(args),
-        "read_memory"       => tool_read_memory(args),
-        "read_inbox"        => tool_read_inbox(args),
-        "read_cache_quota"  => tool_read_cache_quota(),
+        "list_projects" => tool_list_projects(),
+        "list_tasks" => tool_list_tasks(args),
+        "read_file" => tool_read_file(args),
+        "read_memory" => tool_read_memory(args),
+        "read_inbox" => tool_read_inbox(args),
+        "read_cache_quota" => tool_read_cache_quota(),
         "read_phase_status" => tool_read_phase_status(args),
-        "write_idea"        => tool_write_idea(args),
-        "send_pci"          => tool_send_pci(args),
-        "open_dashboard_tab"=> tool_open_dashboard_tab(args),
+        "write_idea" => tool_write_idea(args),
+        "send_pci" => tool_send_pci(args),
+        "open_dashboard_tab" => tool_open_dashboard_tab(args),
         _ => ToolResult::err(name, format!("unknown tool: {name}")),
     }
 }
@@ -182,7 +182,10 @@ fn tool_list_tasks(args: &Value) -> ToolResult {
         .filter(|l| l.starts_with("- [ ]") || l.starts_with("- [x]"))
         .map(|l| {
             let done = l.starts_with("- [x]");
-            let text = l.trim_start_matches("- [ ]").trim_start_matches("- [x]").trim();
+            let text = l
+                .trim_start_matches("- [ ]")
+                .trim_start_matches("- [x]")
+                .trim();
             json!({ "done": done, "text": text })
         })
         .collect();
@@ -216,7 +219,9 @@ fn tool_read_file(args: &Value) -> ToolResult {
         Ok(c) => c,
         Err(_) => match safe_canonicalize(target, &claude_dir) {
             Ok(c) => c,
-            Err(_) => return ToolResult::err(name, "access denied: path outside ~/Sites and ~/.claude"),
+            Err(_) => {
+                return ToolResult::err(name, "access denied: path outside ~/Sites and ~/.claude")
+            }
         },
     };
 
@@ -225,7 +230,10 @@ fn tool_read_file(args: &Value) -> ToolResult {
         Err(e) => return ToolResult::err(name, format!("cannot read file: {e}")),
     };
 
-    ToolResult::ok(name, json!({ "path": canonical.to_string_lossy(), "contents": contents }))
+    ToolResult::ok(
+        name,
+        json!({ "path": canonical.to_string_lossy(), "contents": contents }),
+    )
 }
 
 // ── Tool 4: read_memory ───────────────────────────────────────────────────────
@@ -252,7 +260,11 @@ fn tool_read_memory(args: &Value) -> ToolResult {
         None => return ToolResult::err(name, "HOME not set"),
     };
 
-    let memory_dir = home.join("Sites").join(project).join(".claude").join("memory");
+    let memory_dir = home
+        .join("Sites")
+        .join(project)
+        .join(".claude")
+        .join("memory");
     let target = memory_dir.join(file);
 
     let canonical = match safe_canonicalize(&target, &memory_dir) {
@@ -265,7 +277,10 @@ fn tool_read_memory(args: &Value) -> ToolResult {
         Err(e) => return ToolResult::err(name, format!("cannot read memory file: {e}")),
     };
 
-    ToolResult::ok(name, json!({ "file": canonical.to_string_lossy(), "contents": contents }))
+    ToolResult::ok(
+        name,
+        json!({ "file": canonical.to_string_lossy(), "contents": contents }),
+    )
 }
 
 // ── Tool 5: read_inbox ────────────────────────────────────────────────────────
@@ -283,7 +298,10 @@ fn tool_read_inbox(args: &Value) -> ToolResult {
         if project.is_empty() || project.contains('/') || project.contains("..") {
             return ToolResult::err(name, "invalid project name");
         }
-        home.join("Sites").join(project).join(".claude").join("inbox")
+        home.join("Sites")
+            .join(project)
+            .join(".claude")
+            .join("inbox")
     } else {
         home.join(".claude").join("inbox")
     };
@@ -297,7 +315,11 @@ fn tool_read_inbox(args: &Value) -> ToolResult {
                     let fname = e.file_name().to_string_lossy().into_owned();
                     let first_line = std::fs::read_to_string(e.path())
                         .ok()
-                        .and_then(|c| c.lines().find(|l| !l.trim().is_empty()).map(|l| l.to_string()))
+                        .and_then(|c| {
+                            c.lines()
+                                .find(|l| !l.trim().is_empty())
+                                .map(|l| l.to_string())
+                        })
                         .unwrap_or_default();
                     json!({ "name": fname, "first_line": first_line })
                 })
@@ -305,7 +327,10 @@ fn tool_read_inbox(args: &Value) -> ToolResult {
         })
         .unwrap_or_default();
 
-    ToolResult::ok(name, json!({ "inbox_dir": inbox_dir.to_string_lossy(), "files": entries }))
+    ToolResult::ok(
+        name,
+        json!({ "inbox_dir": inbox_dir.to_string_lossy(), "files": entries }),
+    )
 }
 
 // ── Tool 6: read_cache_quota ──────────────────────────────────────────────────
@@ -358,18 +383,16 @@ fn tool_read_phase_status(args: &Value) -> ToolResult {
         .join("current");
 
     // Find first p* sub-dir with a status.yaml.
-    let status_file = std::fs::read_dir(&phases_dir)
-        .ok()
-        .and_then(|rd| {
-            rd.flatten()
-                .filter(|e| {
-                    let n = e.file_name();
-                    let s = n.to_string_lossy();
-                    e.path().is_dir() && s.starts_with('p')
-                })
-                .map(|e| e.path().join("status.yaml"))
-                .find(|p| p.exists())
-        });
+    let status_file = std::fs::read_dir(&phases_dir).ok().and_then(|rd| {
+        rd.flatten()
+            .filter(|e| {
+                let n = e.file_name();
+                let s = n.to_string_lossy();
+                e.path().is_dir() && s.starts_with('p')
+            })
+            .map(|e| e.path().join("status.yaml"))
+            .find(|p| p.exists())
+    });
 
     let status_path = match status_file {
         Some(p) => p,
@@ -381,10 +404,12 @@ fn tool_read_phase_status(args: &Value) -> ToolResult {
         Err(e) => return ToolResult::err(name, format!("cannot read status.yaml: {e}")),
     };
 
-    let parsed: Value = serde_yaml::from_str(&contents)
-        .unwrap_or(Value::Null);
+    let parsed: Value = serde_yaml::from_str(&contents).unwrap_or(Value::Null);
 
-    ToolResult::ok(name, json!({ "file": status_path.to_string_lossy(), "status": parsed }))
+    ToolResult::ok(
+        name,
+        json!({ "file": status_path.to_string_lossy(), "status": parsed }),
+    )
 }
 
 // ── Tool 8: write_idea ────────────────────────────────────────────────────────
@@ -412,8 +437,14 @@ fn tool_write_idea(args: &Value) -> ToolResult {
         return ToolResult::err(name, "invalid project name");
     }
     // Slug: only alphanumeric, hyphens, underscores.
-    if !slug.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return ToolResult::err(name, "slug must contain only alphanumeric, '-', '_' characters");
+    if !slug
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return ToolResult::err(
+            name,
+            "slug must contain only alphanumeric, '-', '_' characters",
+        );
     }
 
     let home = match home_dir() {
@@ -425,11 +456,14 @@ fn tool_write_idea(args: &Value) -> ToolResult {
     // Validate project against allow-list (actual dirs under ~/Sites).
     let allowed = known_projects(&sites_dir);
     if !allowed.contains(project) {
-        return ToolResult::err(name, format!("unknown project '{project}'; must be one of: {}", {
-            let mut v: Vec<&String> = allowed.iter().collect();
-            v.sort();
-            v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-        }));
+        return ToolResult::err(
+            name,
+            format!("unknown project '{project}'; must be one of: {}", {
+                let mut v: Vec<&String> = allowed.iter().collect();
+                v.sort();
+                v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            }),
+        );
     }
 
     let ideas_dir = sites_dir.join(project).join(".claude").join("ideas");
@@ -465,11 +499,26 @@ fn tool_write_idea(args: &Value) -> ToolResult {
 /// Expected args: project, slug, priority, type, subject.
 fn tool_send_pci(args: &Value) -> ToolResult {
     let name = "send_pci";
-    let project  = match args["project"].as_str()  { Some(s) if !s.is_empty() => s, _ => return ToolResult::err(name, "missing 'project'") };
-    let slug     = match args["slug"].as_str()     { Some(s) if !s.is_empty() => s, _ => return ToolResult::err(name, "missing 'slug'") };
-    let priority = match args["priority"].as_str() { Some(s) if !s.is_empty() => s, _ => return ToolResult::err(name, "missing 'priority'") };
-    let pci_type = match args["type"].as_str()     { Some(s) if !s.is_empty() => s, _ => return ToolResult::err(name, "missing 'type'") };
-    let subject  = match args["subject"].as_str()  { Some(s) if !s.is_empty() => s, _ => return ToolResult::err(name, "missing 'subject'") };
+    let project = match args["project"].as_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return ToolResult::err(name, "missing 'project'"),
+    };
+    let slug = match args["slug"].as_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return ToolResult::err(name, "missing 'slug'"),
+    };
+    let priority = match args["priority"].as_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return ToolResult::err(name, "missing 'priority'"),
+    };
+    let pci_type = match args["type"].as_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return ToolResult::err(name, "missing 'type'"),
+    };
+    let subject = match args["subject"].as_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return ToolResult::err(name, "missing 'subject'"),
+    };
 
     // Basic sanity: no newlines in any arg (avoid CRLF injection in the file).
     for arg in &[project, slug, priority, pci_type, subject] {
@@ -506,11 +555,14 @@ fn tool_send_pci(args: &Value) -> ToolResult {
         return ToolResult::err(name, format!("pci-send exited non-zero: {stderr}"));
     }
 
-    ToolResult::ok(name, json!({
-        "stdout": stdout,
-        "stderr": stderr,
-        "exit_code": output.status.code()
-    }))
+    ToolResult::ok(
+        name,
+        json!({
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": output.status.code()
+        }),
+    )
 }
 
 // ── Tool 10: open_dashboard_tab ───────────────────────────────────────────────
@@ -562,7 +614,7 @@ mod tests {
         unsafe {
             match old {
                 Some(v) => std::env::set_var("HOME", v),
-                None    => std::env::remove_var("HOME"),
+                None => std::env::remove_var("HOME"),
             }
         }
         result
@@ -576,9 +628,7 @@ mod tests {
         let tmp = fake_home();
         let h = tmp.path();
 
-        let result = with_home(h, || {
-            tool_read_file(&json!({ "path": "/etc/passwd" }))
-        });
+        let result = with_home(h, || tool_read_file(&json!({ "path": "/etc/passwd" })));
 
         assert!(result.error.is_some(), "expected error, got: {:?}", result);
         let err = result.error.unwrap();
@@ -596,7 +646,13 @@ mod tests {
         // Create a file inside Sites so canonicalization works for the base.
         fs::create_dir_all(h.join("Sites").join("proj")).unwrap();
         // Attempt to escape via ..
-        let evil = h.join("Sites").join("proj").join("..").join("..").join("etc").join("passwd");
+        let evil = h
+            .join("Sites")
+            .join("proj")
+            .join("..")
+            .join("..")
+            .join("etc")
+            .join("passwd");
 
         let result = with_home(h, || {
             tool_read_file(&json!({ "path": evil.to_string_lossy() }))
@@ -604,7 +660,10 @@ mod tests {
 
         // The file /etc/passwd doesn't exist under tmp, but even if it did the
         // resolved canonical path won't start with ~/Sites or ~/.claude.
-        assert!(result.error.is_some(), "expected error for traversal attempt");
+        assert!(
+            result.error.is_some(),
+            "expected error for traversal attempt"
+        );
     }
 
     // ── Happy path: list_projects ────────────────────────────────────────────
@@ -619,9 +678,13 @@ mod tests {
         fs::create_dir_all(proj.join(".claude")).unwrap();
         fs::write(proj.join(".claude").join("CLAUDE.md"), "# project").unwrap();
 
-        let result = with_home(h, || tool_list_projects());
+        let result = with_home(h, tool_list_projects);
 
-        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(
+            result.error.is_none(),
+            "unexpected error: {:?}",
+            result.error
+        );
         let projects = result.output["projects"].as_array().expect("array");
         assert!(
             projects.iter().any(|p| p.as_str() == Some("myproj")),
@@ -649,9 +712,16 @@ mod tests {
             }))
         });
 
-        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(
+            result.error.is_none(),
+            "unexpected error: {:?}",
+            result.error
+        );
         let created = result.output["created"].as_str().expect("created path");
-        assert!(std::path::Path::new(created).exists(), "file not created at {created}");
+        assert!(
+            std::path::Path::new(created).exists(),
+            "file not created at {created}"
+        );
         let body = fs::read_to_string(created).unwrap();
         assert!(body.contains("Test idea"));
     }
@@ -724,7 +794,11 @@ mod tests {
             tool_read_file(&json!({ "path": file.to_string_lossy() }))
         });
 
-        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(
+            result.error.is_none(),
+            "unexpected error: {:?}",
+            result.error
+        );
         assert_eq!(result.output["contents"], "hello world");
     }
 
@@ -747,7 +821,7 @@ mod tests {
         let result = dispatch("list_projects", &json!({})).await;
         match old {
             Some(v) => std::env::set_var("HOME", v),
-            None    => std::env::remove_var("HOME"),
+            None => std::env::remove_var("HOME"),
         }
         assert_eq!(result.tool_name, "list_projects");
         assert!(result.output["projects"].is_array());

@@ -77,7 +77,7 @@ function AppInner() {
     (path: string, _lineNo?: number) => {
       navigate(`/vault?file=${encodeURIComponent(path)}`)
     },
-    [navigate],
+    [navigate]
   )
 
   return (

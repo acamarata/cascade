@@ -69,14 +69,13 @@ pub fn preflight_validation(tool_id: String) -> Result<ArchiveValidation, String
         // Add 10 % margin.
         let required = source_bytes + source_bytes / 10 + 1;
         match free_bytes_at(&legacy_dir) {
-            Some(free) => {
-                if free < required {
-                    issues.push(ArchiveIssue::InsufficientDisk {
-                        required_bytes: required,
-                        available_bytes: free,
-                    });
-                }
+            Some(free) if free < required => {
+                issues.push(ArchiveIssue::InsufficientDisk {
+                    required_bytes: required,
+                    available_bytes: free,
+                });
             }
+            Some(_) => {}
             None => {
                 // Could not determine free space — conservative: skip (no issue added).
                 // Graceful degradation: better to let the archive attempt than false-block.
@@ -315,7 +314,11 @@ mod tests {
             .expect("preflight_validation returned Err unexpectedly");
 
         assert!(result.ok, "expected ok=true; issues: {:?}", result.issues);
-        assert!(result.issues.is_empty(), "unexpected issues: {:?}", result.issues);
+        assert!(
+            result.issues.is_empty(),
+            "unexpected issues: {:?}",
+            result.issues
+        );
     }
 
     /// PermissionDenied case: chmod 000 on the legacy dir.
@@ -344,11 +347,19 @@ mod tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&legacy, perms).unwrap();
 
-        let has_perm_denied = result.issues.iter().any(|i| {
-            matches!(i, ArchiveIssue::PermissionDenied { .. })
-        });
-        assert!(has_perm_denied, "expected PermissionDenied issue; got: {:?}", result.issues);
-        assert!(!result.ok, "expected ok=false when PermissionDenied present");
+        let has_perm_denied = result
+            .issues
+            .iter()
+            .any(|i| matches!(i, ArchiveIssue::PermissionDenied { .. }));
+        assert!(
+            has_perm_denied,
+            "expected PermissionDenied issue; got: {:?}",
+            result.issues
+        );
+        assert!(
+            !result.ok,
+            "expected ok=false when PermissionDenied present"
+        );
     }
 
     /// Conflict case: destination already exists.
@@ -363,16 +374,24 @@ mod tests {
         std::fs::create_dir_all(&tool_root).unwrap();
 
         // Pre-create the destination so a conflict is detected.
-        let dest = home_path.join(".cascade").join("legacy").join("conflict-tool");
+        let dest = home_path
+            .join(".cascade")
+            .join("legacy")
+            .join("conflict-tool");
         std::fs::create_dir_all(&dest).unwrap();
 
         let result = preflight_validation("conflict-tool".to_string())
             .expect("preflight_validation returned Err unexpectedly");
 
-        let has_conflict = result.issues.iter().any(|i| {
-            matches!(i, ArchiveIssue::DestinationExists { .. })
-        });
-        assert!(has_conflict, "expected DestinationExists issue; got: {:?}", result.issues);
+        let has_conflict = result
+            .issues
+            .iter()
+            .any(|i| matches!(i, ArchiveIssue::DestinationExists { .. }));
+        assert!(
+            has_conflict,
+            "expected DestinationExists issue; got: {:?}",
+            result.issues
+        );
         // DestinationExists is non-fatal warning — does NOT make ok=false by itself.
         // (ok=false only for InsufficientDisk / PermissionDenied)
         // But our impl sets ok=issues.is_empty(), so ok=false here — the spec
@@ -389,9 +408,14 @@ mod tests {
         let result = preflight_validation("nonexistent-tool".to_string())
             .expect("preflight_validation must not Err on missing source");
 
-        let has_not_found = result.issues.iter().any(|i| {
-            matches!(i, ArchiveIssue::SourceNotFound { .. })
-        });
-        assert!(has_not_found, "expected SourceNotFound; got: {:?}", result.issues);
+        let has_not_found = result
+            .issues
+            .iter()
+            .any(|i| matches!(i, ArchiveIssue::SourceNotFound { .. }));
+        assert!(
+            has_not_found,
+            "expected SourceNotFound; got: {:?}",
+            result.issues
+        );
     }
 }

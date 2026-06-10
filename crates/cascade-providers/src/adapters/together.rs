@@ -35,7 +35,9 @@ use crate::{
     error::ProviderError,
     http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -246,10 +248,8 @@ impl ProviderAdapter for TogetherAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         // Reject models that Together.ai does not support for streaming.
         if Self::streaming_denied(&req.model) {
             return Err(ProviderError::UnsupportedTaskType(format!(
@@ -386,7 +386,10 @@ mod tests {
 
         assert!(!resp.content.is_empty(), "content must not be empty");
         assert!(!resp.model.is_empty(), "model must not be empty");
-        assert!(resp.usage.prompt_tokens > 0, "prompt_tokens must be positive");
+        assert!(
+            resp.usage.prompt_tokens > 0,
+            "prompt_tokens must be positive"
+        );
     }
 
     #[tokio::test]
@@ -438,10 +441,7 @@ mod tests {
         let req = CompletionRequest::simple("EleutherAI/gpt-j-6b", "test");
         let result = adapter.complete_stream(req).await;
 
-        assert!(
-            result.is_err(),
-            "expected Err for denylisted model"
-        );
+        assert!(result.is_err(), "expected Err for denylisted model");
         if let Err(err) = result {
             assert!(
                 matches!(err, ProviderError::UnsupportedTaskType(_)),
@@ -454,7 +454,9 @@ mod tests {
     fn together_streaming_denied_matches_denylist() {
         assert!(TogetherAdapter::streaming_denied("EleutherAI/gpt-j-6b"));
         assert!(TogetherAdapter::streaming_denied("EleutherAI/gpt-neox-20b"));
-        assert!(!TogetherAdapter::streaming_denied("meta-llama/Llama-3.1-70B-Instruct-Turbo"));
+        assert!(!TogetherAdapter::streaming_denied(
+            "meta-llama/Llama-3.1-70B-Instruct-Turbo"
+        ));
     }
 
     #[test]

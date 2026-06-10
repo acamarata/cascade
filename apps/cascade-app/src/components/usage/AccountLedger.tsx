@@ -54,7 +54,7 @@ function buildCsv(ledger: AccountLedgerType): string {
       e.costUsd.toFixed(6),
       e.provider,
       e.account ?? ledger.account,
-    ].join(','),
+    ].join(',')
   )
   return [header, ...rows].join('\n')
 }
@@ -222,7 +222,10 @@ export function AccountLedger({
                           {label} <SortIcon col={col} />
                         </th>
                       ))}
-                      <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
+                      <th
+                        scope="col"
+                        className="px-3 py-2 text-left font-medium text-muted-foreground"
+                      >
                         Provider
                       </th>
                     </tr>
@@ -237,9 +240,15 @@ export function AccountLedger({
                           {e.timestamp.replace('T', ' ').slice(0, 19)}
                         </td>
                         <td className="max-w-[160px] truncate px-3 py-1.5">{e.model}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right">{fmtTokens(e.promptTokens)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right">{fmtTokens(e.completionTokens)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right">{fmtCost(e.costUsd)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right">
+                          {fmtTokens(e.promptTokens)}
+                        </td>
+                        <td className="px-3 py-1.5 tabular-nums text-right">
+                          {fmtTokens(e.completionTokens)}
+                        </td>
+                        <td className="px-3 py-1.5 tabular-nums text-right">
+                          {fmtCost(e.costUsd)}
+                        </td>
                         <td className="px-3 py-1.5 text-muted-foreground text-xs">{e.provider}</td>
                       </tr>
                     ))}

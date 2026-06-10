@@ -275,8 +275,8 @@ fn days_since_epoch_to_ymd(mut days: u64) -> (u64, u64, u64) {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
+    use serial_test::serial;
     use std::fs;
     use std::sync::{Mutex, MutexGuard, OnceLock};
     use tempfile::TempDir;

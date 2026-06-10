@@ -77,7 +77,11 @@ fn parse_ticket_yaml(content: &str) -> Option<TicketRaw> {
         if in_depends_on {
             let trimmed = line.trim();
             if trimmed.starts_with('-') {
-                let item = trimmed.trim_start_matches('-').trim().trim_matches('"').trim_matches('\'');
+                let item = trimmed
+                    .trim_start_matches('-')
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'');
                 if !item.is_empty() {
                     raw.depends_on.push(item.to_string());
                 }
@@ -95,7 +99,11 @@ fn parse_ticket_yaml(content: &str) -> Option<TicketRaw> {
         }
 
         if let Some((key, value)) = split_kv(line) {
-            let v = value.trim().trim_matches('"').trim_matches('\'').to_string();
+            let v = value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
             match key {
                 "id" => raw.id = v,
                 "title" => raw.title = v,
@@ -198,7 +206,10 @@ fn collect_phase_dirs(phases_dir: &Path) -> Vec<PathBuf> {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
             if name.starts_with('p') {
                 dirs.push(path);
             }
@@ -351,7 +362,11 @@ mod tests {
         let graph = get_pews_dag(tmp.path().to_str().unwrap());
 
         assert_eq!(graph.nodes.len(), 1);
-        assert_eq!(graph.edges.len(), 0, "no depends_on should produce no edges");
+        assert_eq!(
+            graph.edges.len(),
+            0,
+            "no depends_on should produce no edges"
+        );
     }
 
     #[test]
@@ -407,10 +422,16 @@ mod tests {
     fn pews_dag_multiple_depends_on_entries() {
         let (tmp, tickets_dir) = make_phase_root("p3");
 
-        write_ticket(&tickets_dir, "T-P3-E01-01.yaml",
-            "id: T-P3-E01-01\ntitle: \"A\"\nstatus: done\nweight: S\n");
-        write_ticket(&tickets_dir, "T-P3-E01-02.yaml",
-            "id: T-P3-E01-02\ntitle: \"B\"\nstatus: done\nweight: S\n");
+        write_ticket(
+            &tickets_dir,
+            "T-P3-E01-01.yaml",
+            "id: T-P3-E01-01\ntitle: \"A\"\nstatus: done\nweight: S\n",
+        );
+        write_ticket(
+            &tickets_dir,
+            "T-P3-E01-02.yaml",
+            "id: T-P3-E01-02\ntitle: \"B\"\nstatus: done\nweight: S\n",
+        );
         write_ticket(
             &tickets_dir,
             "T-P3-E01-03.yaml",

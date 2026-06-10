@@ -205,9 +205,7 @@ export function buildGraphData(input: GraphDataInput): {
       const links = findWikilinks(text)
       for (const link of links) {
         // Try exact path first, then stem lookup
-        const tgt = pathSet.has(link.noteName)
-          ? link.noteName
-          : nameIndex.get(link.noteName)
+        const tgt = pathSet.has(link.noteName) ? link.noteName : nameIndex.get(link.noteName)
         if (tgt && pathSet.has(tgt) && tgt !== src) {
           rawEdges.push({ source: src, target: tgt })
         }
@@ -240,7 +238,7 @@ export function buildGraphData(input: GraphDataInput): {
 export function buildGraphDataFromTree(
   root: VaultNode,
   contentMap?: Map<string, string>,
-  edgesSource?: Map<string, string[]>,
+  edgesSource?: Map<string, string[]>
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const paths = flattenLeaves(root)
   return buildGraphData({ paths, contentMap, edgesSource })

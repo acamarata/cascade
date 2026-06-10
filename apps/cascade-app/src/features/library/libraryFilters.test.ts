@@ -24,9 +24,24 @@ function makeItem(overrides: Partial<LibraryItem> & { id: string }): LibraryItem
 }
 
 const ITEMS: LibraryItem[] = [
-  makeItem({ id: 'a', title: 'TypeScript refactor', description: 'Refactor to TS strict mode', tags: ['typescript', 'refactor'] }),
-  makeItem({ id: 'b', title: 'Write TypeScript tests', description: 'Generate vitest unit tests', tags: ['typescript', 'testing'] }),
-  makeItem({ id: 'c', title: 'Code review', description: 'Review pull requests carefully', tags: ['review'] }),
+  makeItem({
+    id: 'a',
+    title: 'TypeScript refactor',
+    description: 'Refactor to TS strict mode',
+    tags: ['typescript', 'refactor'],
+  }),
+  makeItem({
+    id: 'b',
+    title: 'Write TypeScript tests',
+    description: 'Generate vitest unit tests',
+    tags: ['typescript', 'testing'],
+  }),
+  makeItem({
+    id: 'c',
+    title: 'Code review',
+    description: 'Review pull requests carefully',
+    tags: ['review'],
+  }),
   makeItem({ id: 'd', title: 'Deploy checklist', description: '', tags: [] }),
 ]
 

@@ -151,9 +151,7 @@ pub mod test_support {
 
             Mock::given(wm_method(http_method.as_str()))
                 .and(wm_path(route))
-                .respond_with(
-                    ResponseTemplate::new(200).set_body_json(success_body),
-                )
+                .respond_with(ResponseTemplate::new(200).set_body_json(success_body))
                 .mount(&self.server)
                 .await;
         }
@@ -189,9 +187,8 @@ pub mod test_support {
     /// errors that should never reach a passing CI run.
     pub fn fixture_json(name: &str) -> Value {
         let path = fixtures_dir().join(format!("{name}.json"));
-        let content = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-            panic!("fixture file missing at {}: {e}", path.display())
-        });
+        let content = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("fixture file missing at {}: {e}", path.display()));
         serde_json::from_str(&content)
             .unwrap_or_else(|e| panic!("invalid JSON in fixture {name}: {e}"))
     }
@@ -217,10 +214,7 @@ pub mod test_support {
     /// * `model` — model string from the `CompletionResponse`
     /// * `prompt_tokens` — usage field from the response
     pub fn assert_completion_contract(content: &str, model: &str, prompt_tokens: u32) {
-        assert!(
-            !content.is_empty(),
-            "completion content must not be empty"
-        );
+        assert!(!content.is_empty(), "completion content must not be empty");
         assert!(
             !model.is_empty(),
             "completion model identifier must not be empty"
@@ -338,13 +332,8 @@ pub mod test_support {
         #[tokio::test]
         async fn mount_retry_then_success_works() {
             let ctx = MockProviderServer::start("test").await;
-            ctx.mount_retry_then_success(
-                HttpMethod::Get,
-                "/r",
-                2,
-                serde_json::json!({"ok": true}),
-            )
-            .await;
+            ctx.mount_retry_then_success(HttpMethod::Get, "/r", 2, serde_json::json!({"ok": true}))
+                .await;
 
             let client = CascadeHttpClient::new();
             let url = format!("{}/r", ctx.base_url());

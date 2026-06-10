@@ -89,7 +89,10 @@ mod tests {
         let msgs = vec![Message::user("Hello")];
         let prompt = format_gemma2_prompt(&msgs);
         assert!(prompt.starts_with("<bos>"), "missing BOS: {prompt}");
-        assert!(prompt.contains("<start_of_turn>user\nHello<end_of_turn>"), "{prompt}");
+        assert!(
+            prompt.contains("<start_of_turn>user\nHello<end_of_turn>"),
+            "{prompt}"
+        );
         assert!(
             prompt.ends_with("<start_of_turn>model\n"),
             "must end with model turn opener: {prompt}"
@@ -123,7 +126,10 @@ mod tests {
         ];
         let prompt = format_gemma2_prompt(&msgs);
         // Should have: user/Hi, model/Hello!, user/How are you?, then model opener
-        assert!(prompt.contains("<start_of_turn>model\nHello!<end_of_turn>"), "{prompt}");
+        assert!(
+            prompt.contains("<start_of_turn>model\nHello!<end_of_turn>"),
+            "{prompt}"
+        );
         assert!(prompt.ends_with("<start_of_turn>model\n"), "{prompt}");
     }
 

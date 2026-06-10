@@ -63,7 +63,11 @@ pub struct ProvisionStatus {
 ///
 /// Serialized as an adjacently-tagged enum for clean Tauri IPC payloads.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ProvisionResult {
     /// Provisioning completed — api_key and project_id are ready.
     Success {
@@ -92,7 +96,11 @@ mod tests {
 
     #[test]
     fn provision_mode_round_trips() {
-        for mode in [ProvisionMode::FullAuto, ProvisionMode::Guided, ProvisionMode::Manual] {
+        for mode in [
+            ProvisionMode::FullAuto,
+            ProvisionMode::Guided,
+            ProvisionMode::Manual,
+        ] {
             let json = serde_json::to_string(&mode).unwrap();
             let back: ProvisionMode = serde_json::from_str(&json).unwrap();
             assert_eq!(mode, back);
@@ -108,7 +116,15 @@ mod tests {
             client_secret: None,
         };
         let json = serde_json::to_string(&req).unwrap();
-        assert!(json.contains("\"accountEmail\""), "expected camelCase: {}", json);
-        assert!(json.contains("\"clientId\""), "expected camelCase: {}", json);
+        assert!(
+            json.contains("\"accountEmail\""),
+            "expected camelCase: {}",
+            json
+        );
+        assert!(
+            json.contains("\"clientId\""),
+            "expected camelCase: {}",
+            json
+        );
     }
 }

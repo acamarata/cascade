@@ -61,10 +61,7 @@ export function ScheduledTasksTab({
   const [cronErrors, setCronErrors] = useState<Record<number, boolean>>({})
 
   function addRow() {
-    onUpdate([
-      ...draft,
-      { id: nextId(), label: '', cron: '0 2 * * *', command: '', enabled: true },
-    ])
+    onUpdate([...draft, { id: nextId(), label: '', cron: '0 2 * * *', command: '', enabled: true }])
   }
 
   function removeRow(idx: number) {
@@ -79,7 +76,7 @@ export function ScheduledTasksTab({
   function updateRow<K extends keyof ScheduledTaskEntry>(
     idx: number,
     key: K,
-    val: ScheduledTaskEntry[K],
+    val: ScheduledTaskEntry[K]
   ) {
     const next = [...draft]
     next[idx] = { ...next[idx], [key]: val }

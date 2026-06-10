@@ -65,7 +65,7 @@ export interface CheckItem {
  */
 function deriveItems(
   detectedToolIds: ToolId[] | null,
-  mergeResults: Partial<Record<string, RichMergeResult>>,
+  mergeResults: Partial<Record<string, RichMergeResult>>
 ): CheckItem[] {
   // Build a map: toolId → kind → count of processed source files.
   const counts = new Map<ToolId, Map<FileKind, number>>()
@@ -196,33 +196,33 @@ export function VerifyChecklist({
   onAllResolved,
 }: VerifyChecklistProps) {
   const [items, setItems] = React.useState<CheckItem[]>(() =>
-    deriveItems(detectedToolIds, mergeResults),
+    deriveItems(detectedToolIds, mergeResults)
   )
 
   // Re-derive when mergeResults changes (e.g. after a re-run merge).
   React.useEffect(() => {
-    setItems(prev => {
+    setItems((prev) => {
       const next = deriveItems(detectedToolIds, mergeResults)
       // Preserve manually set statuses across re-derives.
-      const prevById = new Map(prev.map(i => [i.id, i]))
-      return next.map(item => {
+      const prevById = new Map(prev.map((i) => [i.id, i]))
+      return next.map((item) => {
         const existing = prevById.get(item.id)
         // Keep user-chosen 'skipped'. Re-verified stays as verified from new data.
         if (existing?.status === 'skipped') return { ...item, status: 'skipped' as CheckItemStatus }
         return item
       })
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mergeResults])
 
   // Fire onAllResolved when every item is verified or skipped.
-  const allResolved = items.length > 0 && items.every(i => i.status !== 'unchecked')
+  const allResolved = items.length > 0 && items.every((i) => i.status !== 'unchecked')
   React.useEffect(() => {
     if (allResolved) onAllResolved()
   }, [allResolved, onAllResolved])
 
   const setStatus = React.useCallback((id: string, status: CheckItemStatus) => {
-    setItems(prev => prev.map(i => (i.id === id ? { ...i, status } : i)))
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status } : i)))
   }, [])
 
   if (items.length === 0) {
@@ -241,14 +241,17 @@ export function VerifyChecklist({
     byTool.set(item.toolId, group)
   }
 
-  const verified = items.filter(i => i.status === 'verified').length
-  const skipped = items.filter(i => i.status === 'skipped').length
-  const pending = items.filter(i => i.status === 'unchecked').length
+  const verified = items.filter((i) => i.status === 'verified').length
+  const skipped = items.filter((i) => i.status === 'skipped').length
+  const pending = items.filter((i) => i.status === 'unchecked').length
 
   return (
     <div className="flex flex-col gap-4">
       {/* Summary badge row */}
-      <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-label={`${verified} verified, ${skipped} skipped${pending > 0 ? `, ${pending} pending` : ''}`}>
+      <div
+        className="flex items-center gap-3 text-xs text-muted-foreground"
+        aria-label={`${verified} verified, ${skipped} skipped${pending > 0 ? `, ${pending} pending` : ''}`}
+      >
         <span className="flex items-center gap-1">
           <CheckCircle2 className="h-3 w-3 text-green-500" aria-hidden="true" />
           {verified} verified
@@ -275,14 +278,14 @@ export function VerifyChecklist({
 
           {/* Checklist rows */}
           <ul className="divide-y">
-            {toolItems.map(item => (
+            {toolItems.map((item) => (
               <li
                 key={item.id}
                 aria-label={`${kindLabel(item.kind)}: ${item.status}`}
                 className={cn(
                   'flex items-center gap-3 px-4 py-3 text-sm',
                   item.status === 'verified' && 'bg-green-500/5',
-                  item.status === 'skipped' && 'opacity-60',
+                  item.status === 'skipped' && 'opacity-60'
                 )}
               >
                 <StatusIcon status={item.status} />
@@ -292,7 +295,8 @@ export function VerifyChecklist({
                   <span className="font-medium text-foreground">{kindLabel(item.kind)}</span>
                   {item.sourcesProcessed > 0 && (
                     <span className="ml-2 text-muted-foreground">
-                      — {item.sourcesProcessed} file{item.sourcesProcessed !== 1 ? 's' : ''} captured
+                      — {item.sourcesProcessed} file{item.sourcesProcessed !== 1 ? 's' : ''}{' '}
+                      captured
                     </span>
                   )}
                   {item.sourcesProcessed === 0 && (

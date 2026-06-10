@@ -294,11 +294,18 @@ mod tests {
         let resp = CompletionResponse {
             content: "hi".into(),
             model: "gpt-4o".into(),
-            usage: TokenUsage { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+            usage: TokenUsage {
+                prompt_tokens: 100,
+                completion_tokens: 50,
+                total_tokens: 150,
+            },
             cost_usd: Some(0.00075),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains("cost_usd"), "Some should be serialized: {json}");
+        assert!(
+            json.contains("cost_usd"),
+            "Some should be serialized: {json}"
+        );
         let back: CompletionResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(back.cost_usd, Some(0.00075));
     }

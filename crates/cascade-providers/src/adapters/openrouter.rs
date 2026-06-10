@@ -35,7 +35,9 @@ use crate::{
     error::ProviderError,
     http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -190,10 +192,7 @@ impl OpenRouterAdapter {
     fn make_auth_fn(key: String) -> impl Fn(reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         move |b| {
             CascadeHttpClient::apply_bearer(b, &key)
-                .header(
-                    "HTTP-Referer",
-                    "https://github.com/acamarata/cascade",
-                )
+                .header("HTTP-Referer", "https://github.com/acamarata/cascade")
                 .header("X-Title", format!("Cascade v{PKG_VERSION}"))
         }
     }
@@ -249,10 +248,8 @@ impl ProviderAdapter for OpenRouterAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let body = Self::build_request(&req, true);
         let url = self.completions_url();
         let key = self.api_key.clone();
@@ -378,7 +375,10 @@ mod tests {
 
         assert!(!resp.content.is_empty(), "content must not be empty");
         assert!(!resp.model.is_empty(), "model must not be empty");
-        assert!(resp.usage.prompt_tokens > 0, "prompt_tokens must be positive");
+        assert!(
+            resp.usage.prompt_tokens > 0,
+            "prompt_tokens must be positive"
+        );
     }
 
     #[tokio::test]

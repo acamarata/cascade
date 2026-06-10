@@ -6,7 +6,7 @@
 //!     should need to be renamed or type-changed when P4 fills in real values.
 //!   - serving=false + index_count=0 is the canonical P3 stub state.
 //!   - last_indexed is Option<String> (ISO 8601) so absence of an index is explicit.
-//! SPORT: T-P3-E02-29 — MASTER-ROUTES.md GET /api/gci/rag-status
+//!     SPORT: T-P3-E02-29 — MASTER-ROUTES.md GET /api/gci/rag-status
 
 use serde::{Deserialize, Serialize};
 

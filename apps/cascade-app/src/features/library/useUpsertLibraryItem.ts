@@ -45,7 +45,7 @@ export interface UseUpsertLibraryItemResult {
  * On error: calls onError(message) and sets the error state; never throws.
  */
 export function useUpsertLibraryItem(
-  options: UseUpsertLibraryItemOptions = {},
+  options: UseUpsertLibraryItemOptions = {}
 ): UseUpsertLibraryItemResult {
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +73,7 @@ export function useUpsertLibraryItem(
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [options.onSuccess, options.onError],
+    [options.onSuccess, options.onError]
   )
 
   const reset = useCallback(() => {

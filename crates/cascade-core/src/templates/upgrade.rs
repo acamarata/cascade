@@ -17,7 +17,7 @@
 
 #[cfg(test)]
 mod tests {
-    use super::super::apply::{TemplateEngine, make_stamp};
+    use super::super::apply::{make_stamp, TemplateEngine};
     use cascade_types::{TemplateManifest, TemplateRecord, TemplateTier};
     use serial_test::serial;
     use std::fs;
@@ -44,7 +44,8 @@ mod tests {
     fn diff_sections_empty_target_all_added() {
         let tmp = TempDir::new().unwrap();
         let engine = TemplateEngine::new();
-        let record = make_versioned_record("gci-default", "1.0.0", "## Alpha\nalpha\n## Beta\nbeta\n");
+        let record =
+            make_versioned_record("gci-default", "1.0.0", "## Alpha\nalpha\n## Beta\nbeta\n");
         let target = tmp.path().join("CASCADE.md");
         let dr = engine.diff_sections(&record, &target).unwrap();
         assert_eq!(dr.added, vec!["## Alpha", "## Beta"]);
@@ -57,7 +58,11 @@ mod tests {
     fn diff_sections_partial_match() {
         let tmp = TempDir::new().unwrap();
         let engine = TemplateEngine::new();
-        let record = make_versioned_record("gci-default", "1.0.0", "## Alpha\nalpha body\n## Beta\nnew beta\n");
+        let record = make_versioned_record(
+            "gci-default",
+            "1.0.0",
+            "## Alpha\nalpha body\n## Beta\nnew beta\n",
+        );
         let target = tmp.path().join("CASCADE.md");
         fs::write(&target, "## Alpha\nalpha body\n## Beta\nold beta\n").unwrap();
 
@@ -105,12 +110,21 @@ mod tests {
         let result = engine
             .upgrade(&old, &new_r, &target, false, Some(tmp.path().to_path_buf()))
             .unwrap();
-        assert!(result.upgraded.contains(&"## Rules".to_string()), "Rules must be in upgraded");
+        assert!(
+            result.upgraded.contains(&"## Rules".to_string()),
+            "Rules must be in upgraded"
+        );
         assert!(result.added.is_empty());
 
         let content = fs::read_to_string(&target).unwrap();
-        assert!(content.contains("new rules"), "target must have new content");
-        assert!(content.contains(r#"version="1.1.0""#), "stamp must be updated");
+        assert!(
+            content.contains("new rules"),
+            "target must have new content"
+        );
+        assert!(
+            content.contains(r#"version="1.1.0""#),
+            "stamp must be updated"
+        );
     }
 
     // T-10-E: upgrade removed section → deprecation comment added to target
@@ -121,19 +135,18 @@ mod tests {
         let engine = TemplateEngine::new();
 
         let old = make_versioned_record(
-            "gci-default", "1.0.0",
+            "gci-default",
+            "1.0.0",
             "## Rules\nrules\n## OldSection\nold stuff\n",
         );
-        let new_r = make_versioned_record(
-            "gci-default", "1.1.0",
-            "## Rules\nrules\n",
-        );
+        let new_r = make_versioned_record("gci-default", "1.1.0", "## Rules\nrules\n");
         let target = tmp.path().join("CASCADE.md");
         let stamp = make_stamp("gci-default", "1.0.0", "2026-01-01T00:00:00Z");
         fs::write(
             &target,
             format!("## Rules\nrules\n## OldSection\nold stuff\n\n{}\n", stamp),
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = engine
             .upgrade(&old, &new_r, &target, false, Some(tmp.path().to_path_buf()))
@@ -141,8 +154,14 @@ mod tests {
         assert!(result.deprecated.contains(&"## OldSection".to_string()));
 
         let content = fs::read_to_string(&target).unwrap();
-        assert!(content.contains("cascade:deprecated"), "deprecation comment must appear");
-        assert!(content.contains("old stuff"), "old content must be preserved");
+        assert!(
+            content.contains("cascade:deprecated"),
+            "deprecation comment must appear"
+        );
+        assert!(
+            content.contains("old stuff"),
+            "old content must be preserved"
+        );
     }
 
     // T-10-F: upgrade dry-run does not modify file

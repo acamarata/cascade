@@ -94,9 +94,7 @@ describe('getGaugeState', () => {
 // ── QuotaGaugeRow render tests ──
 describe('QuotaGaugeRow', () => {
   it('renders model name, cost, and progress bar', () => {
-    render(
-      <QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={5_000_000} costUsd={5.0} />,
-    )
+    render(<QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={5_000_000} costUsd={5.0} />)
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument()
     expect(screen.getByText(/\$5\.00/)).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
@@ -104,34 +102,26 @@ describe('QuotaGaugeRow', () => {
 
   it('renders red progress bar when tokensUsed >80% of estimate (acceptance test)', () => {
     // claude-sonnet-4-6 estimate = 10_000_000; 8_500_000 / 10_000_000 = 85%
-    render(
-      <QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={8_500_000} costUsd={8.5} />,
-    )
+    render(<QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={8_500_000} costUsd={8.5} />)
     const bar = screen.getByRole('progressbar').firstElementChild as HTMLElement
     expect(bar.classList.contains('bg-red-500')).toBe(true)
   })
 
   it('renders green progress bar at 40% of estimate', () => {
     // 4_000_000 / 10_000_000 = 40%
-    render(
-      <QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={4_000_000} costUsd={4.0} />,
-    )
+    render(<QuotaGaugeRow model="claude-sonnet-4-6" tokensUsed={4_000_000} costUsd={4.0} />)
     const bar = screen.getByRole('progressbar').firstElementChild as HTMLElement
     expect(bar.classList.contains('bg-green-500')).toBe(true)
   })
 
   it('shows "?" label for model not in estimate map', () => {
-    render(
-      <QuotaGaugeRow model="unknown-model-xyz" tokensUsed={1_000} costUsd={0.01} />,
-    )
+    render(<QuotaGaugeRow model="unknown-model-xyz" tokensUsed={1_000} costUsd={0.01} />)
     expect(screen.getByText(/\?/)).toBeInTheDocument()
   })
 
   it('shows "local" label for model with estimate=0', () => {
     // qwen2.5-coder:7b has estimate 0
-    render(
-      <QuotaGaugeRow model="qwen2.5-coder:7b" tokensUsed={50_000} costUsd={0} />,
-    )
+    render(<QuotaGaugeRow model="qwen2.5-coder:7b" tokensUsed={50_000} costUsd={0} />)
     expect(screen.getByText(/local/)).toBeInTheDocument()
   })
 
@@ -144,9 +134,7 @@ describe('QuotaGaugeRow', () => {
 describe('AccountCostRow', () => {
   it('renders truncated email, cost, and relative time', () => {
     const lastActive = new Date(Date.now() - 2 * 3_600_000).toISOString() // 2h ago
-    render(
-      <AccountCostRow email="test@example.com" costUsd={3.5} lastActive={lastActive} />,
-    )
+    render(<AccountCostRow email="test@example.com" costUsd={3.5} lastActive={lastActive} />)
     expect(screen.getByText('test@example.com')).toBeInTheDocument()
     expect(screen.getByText(/\$3\.50/)).toBeInTheDocument()
     expect(screen.getByText(/2h ago/)).toBeInTheDocument()
@@ -158,7 +146,7 @@ describe('AccountCostRow', () => {
         email="very.long.email.address.that.exceeds.limit@somecompany.example.com"
         costUsd={1.0}
         lastActive={new Date().toISOString()}
-      />,
+      />
     )
     // Should contain ellipsis character
     expect(screen.getByText(/…/)).toBeInTheDocument()
@@ -203,7 +191,7 @@ describe('FleetWidget', () => {
           { model: 'claude-sonnet-4-6', tokens: 8_500_000, costUsd: 8.5 },
           { model: 'gemini-1.5-flash', tokens: 500_000, costUsd: 0.05 },
         ],
-      }),
+      })
     )
     render(<FleetWidget />)
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument()
@@ -220,7 +208,7 @@ describe('FleetWidget', () => {
             costUsd: 5.0,
           },
         ],
-      }),
+      })
     )
     render(<FleetWidget />)
     expect(screen.getByText(/Account Costs/i)).toBeInTheDocument()
@@ -266,10 +254,8 @@ describe('FleetWidget', () => {
   it('renders progress bar red for model at >80% quota (acceptance test via FleetWidget)', () => {
     defaultMock(
       makeSummary({
-        byModel: [
-          { model: 'claude-sonnet-4-6', tokens: 8_500_000, costUsd: 8.5 },
-        ],
-      }),
+        byModel: [{ model: 'claude-sonnet-4-6', tokens: 8_500_000, costUsd: 8.5 }],
+      })
     )
     render(<FleetWidget />)
     const bar = screen.getByRole('progressbar').firstElementChild as HTMLElement
@@ -297,7 +283,9 @@ describe('useUsageData 60s refresh', () => {
     // function is reachable via the manual refresh button.
     const refetch = vi.fn()
     mockUseUsageData.mockReturnValue({
-      summary: makeSummary({ byModel: [{ model: 'claude-sonnet-4-6', tokens: 100, costUsd: 0.01 }] }),
+      summary: makeSummary({
+        byModel: [{ model: 'claude-sonnet-4-6', tokens: 100, costUsd: 0.01 }],
+      }),
       loading: false,
       error: null,
       refetch,

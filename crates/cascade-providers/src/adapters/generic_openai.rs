@@ -41,8 +41,8 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use futures_core::Stream;
 use futures::StreamExt;
+use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -52,7 +52,9 @@ use crate::{
     error::ProviderError,
     http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── GenericOpenAIConfig ───────────────────────────────────────────────────────
@@ -126,8 +128,7 @@ impl GenericOpenAIConfig {
             return name.clone();
         }
         // Extract just the host portion for a clean display name.
-        extract_host(&self.base_url)
-            .unwrap_or_else(|| self.base_url.clone())
+        extract_host(&self.base_url).unwrap_or_else(|| self.base_url.clone())
     }
 
     /// Normalised base URL (trailing slash stripped).
@@ -179,8 +180,8 @@ impl GenericOpenAIAdapter {
 
     /// Build the stable provider ID from host + model.
     fn provider_id(&self) -> String {
-        let host = extract_host(&self.config.base_url)
-            .unwrap_or_else(|| self.config.base_url.clone());
+        let host =
+            extract_host(&self.config.base_url).unwrap_or_else(|| self.config.base_url.clone());
         format!("generic:{}:{}", host, self.config.model_id)
     }
 
@@ -223,10 +224,7 @@ impl GenericOpenAIAdapter {
 #[async_trait]
 impl ProviderAdapter for GenericOpenAIAdapter {
     /// Non-streaming completion via POST `/v1/chat/completions`.
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let url = format!("{}/v1/chat/completions", self.config.normalised_base_url());
         let body = self.build_chat_body(&req, false);
 
@@ -249,10 +247,8 @@ impl ProviderAdapter for GenericOpenAIAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let url = format!("{}/v1/chat/completions", self.config.normalised_base_url());
         let body = self.build_chat_body(&req, true);
 
@@ -270,26 +266,25 @@ impl ProviderAdapter for GenericOpenAIAdapter {
 
         let byte_stream = response.bytes_stream();
 
-        let stream = byte_stream
-            .flat_map(|chunk_result| {
-                let data = match chunk_result {
-                    Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-                    Err(e) => {
-                        return futures::stream::once(async move {
-                            Err(ProviderError::StreamInterrupted(e.to_string()))
-                        })
-                        .left_stream();
-                    }
-                };
+        let stream = byte_stream.flat_map(|chunk_result| {
+            let data = match chunk_result {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+                Err(e) => {
+                    return futures::stream::once(async move {
+                        Err(ProviderError::StreamInterrupted(e.to_string()))
+                    })
+                    .left_stream();
+                }
+            };
 
-                let chunks: Vec<Result<StreamChunk, ProviderError>> = data
-                    .lines()
-                    .filter_map(CascadeHttpClient::parse_sse_line)
-                    .map(parse_openai_sse_chunk)
-                    .collect();
+            let chunks: Vec<Result<StreamChunk, ProviderError>> = data
+                .lines()
+                .filter_map(CascadeHttpClient::parse_sse_line)
+                .map(parse_openai_sse_chunk)
+                .collect();
 
-                futures::stream::iter(chunks).right_stream()
-            });
+            futures::stream::iter(chunks).right_stream()
+        });
 
         Ok(Box::pin(stream))
     }
@@ -487,9 +482,7 @@ fn parse_openai_sse_chunk(data: &str) -> Result<StreamChunk, ProviderError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::test_support::{
-        make_openai_sse, HttpMethod, MockProviderServer,
-    };
+    use crate::test_helpers::test_support::{make_openai_sse, HttpMethod, MockProviderServer};
     use futures::StreamExt;
 
     // ── helper to build a standard openai response ────────────────────────────
@@ -644,7 +637,10 @@ mod tests {
         let adapter = GenericOpenAIAdapter::new(config).unwrap();
         let req = crate::CompletionRequest::simple("open-model", "Ping");
         let resp = adapter.complete(req).await;
-        assert!(resp.is_ok(), "empty api_key must not cause an error: {resp:?}");
+        assert!(
+            resp.is_ok(),
+            "empty api_key must not cause an error: {resp:?}"
+        );
     }
 
     // ── T-P3-E04-13-07: streaming happy path ─────────────────────────────────
@@ -682,8 +678,14 @@ mod tests {
             }
         }
 
-        assert!(collected.contains("Hello"), "expected Hello in: {collected}");
-        assert!(collected.contains("world"), "expected world in: {collected}");
+        assert!(
+            collected.contains("Hello"),
+            "expected Hello in: {collected}"
+        );
+        assert!(
+            collected.contains("world"),
+            "expected world in: {collected}"
+        );
         assert!(saw_finish, "expected a finish_reason chunk");
     }
 
@@ -784,11 +786,8 @@ mod tests {
 
     #[test]
     fn test_with_api_key_auth_method_api_key() {
-        let config = GenericOpenAIConfig::with_key(
-            "https://api.example.com",
-            "sk-secret",
-            "my-model",
-        );
+        let config =
+            GenericOpenAIConfig::with_key("https://api.example.com", "sk-secret", "my-model");
         let adapter = GenericOpenAIAdapter::new(config).unwrap();
         let info = adapter.provider_info();
         assert_eq!(info.auth_method, AuthMethod::ApiKey);

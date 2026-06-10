@@ -43,8 +43,8 @@ function collectLeafPaths(node: VaultNode): string[] {
 async function readAllFiles(paths: string[]): Promise<VaultFile[]> {
   const results = await Promise.allSettled(
     paths.map((path) =>
-      invoke<string>('vault_read', { path }).then((content) => ({ path, content })),
-    ),
+      invoke<string>('vault_read', { path }).then((content) => ({ path, content }))
+    )
   )
   return results
     .filter((r): r is PromiseFulfilledResult<VaultFile> => r.status === 'fulfilled')
@@ -141,7 +141,7 @@ export function TagBrowser({ selectedTags, onTagsChange }: TagBrowserProps) {
       }
       onTagsChange(next)
     },
-    [selectedTags, onTagsChange],
+    [selectedTags, onTagsChange]
   )
 
   // ── Clear all ─────────────────────────────────────────────────────────────
@@ -183,11 +183,7 @@ export function TagBrowser({ selectedTags, onTagsChange }: TagBrowserProps) {
       </div>
 
       {/* Tag list */}
-      <div
-        role="group"
-        aria-label="Tag filters"
-        className="flex-1 overflow-y-auto p-2"
-      >
+      <div role="group" aria-label="Tag filters" className="flex-1 overflow-y-auto p-2">
         {sortedEntries.length === 0 ? (
           <div className="px-2 py-3 text-center text-xs text-muted-foreground">
             {loading ? 'Loading tags…' : 'No tags found'}

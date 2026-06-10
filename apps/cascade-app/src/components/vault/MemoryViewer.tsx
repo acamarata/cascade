@@ -19,19 +19,10 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Brain, Lightbulb, BookOpen, Repeat2, Search, Inbox } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs'
 import { ScrollArea } from '../ui/scroll-area'
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '../ui/select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { MemoryCard } from './MemoryCard'
 import { filterMemoryEntries } from '../../features/memory/memoryFilters'
-import {
-  InboxThreadsTab,
-  buildInboxIndex,
-} from '../../features/memory/InboxThreadsTab'
+import { InboxThreadsTab, buildInboxIndex } from '../../features/memory/InboxThreadsTab'
 import type { MemoryEntry, MemoryEntryKind } from '../../types/vault'
 
 // ── Tab configuration ─────────────────────────────────────────────────────────
@@ -98,7 +89,7 @@ interface TabPanelProps {
 function TabPanel({ entries, query, project, onOpen }: TabPanelProps): React.ReactElement {
   const filtered = useMemo(
     () => filterMemoryEntries(entries, query, project),
-    [entries, query, project],
+    [entries, query, project]
   )
 
   if (filtered.length === 0) {
@@ -107,7 +98,7 @@ function TabPanel({ entries, query, project, onOpen }: TabPanelProps): React.Rea
 
   return (
     <ScrollArea className="h-full">
-      <ul className="flex flex-col gap-2 p-3" role="list">
+      <ul className="flex flex-col gap-2 p-3">
         {filtered.map((entry) => (
           <li key={`${entry.path}-${entry.title}`}>
             <MemoryCard entry={entry} onOpen={onOpen} />
@@ -181,9 +172,13 @@ export function MemoryViewer({
       .then(({ inbox }) => {
         if (!cancelled) setUnreadCount(inbox.filter((e) => !e.archived).length)
       })
-      .catch(() => { /* best-effort */ })
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => {
+        /* best-effort */
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(projectPaths)])
 
   // ── Loading state ───────────────────────────────────────────────────────────
@@ -259,11 +254,7 @@ export function MemoryViewer({
       <Tabs defaultValue="decisions" className="flex flex-1 flex-col overflow-hidden">
         <TabsList className="mx-3 mt-2 w-auto shrink-0 self-start">
           {TABS.map((t) => (
-            <TabsTrigger
-              key={t.kind}
-              value={t.kind}
-              className="flex items-center gap-1.5"
-            >
+            <TabsTrigger key={t.kind} value={t.kind} className="flex items-center gap-1.5">
               {t.icon}
               <span>{t.label}</span>
               <span className="ml-0.5 rounded-full bg-muted-foreground/20 px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
@@ -302,10 +293,7 @@ export function MemoryViewer({
         ))}
 
         {/* T-P3-E06-13: Inbox & Threads content panel */}
-        <TabsContent
-          value="inbox"
-          className="flex-1 overflow-hidden focus-visible:outline-none"
-        >
+        <TabsContent value="inbox" className="flex-1 overflow-hidden focus-visible:outline-none">
           <InboxThreadsTab projectPaths={projectPaths} onOpen={onOpenFile} />
         </TabsContent>
       </Tabs>

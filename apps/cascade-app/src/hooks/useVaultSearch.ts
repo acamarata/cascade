@@ -81,7 +81,7 @@ export function useVaultSearch({
         if (seq === seqRef.current) setIsLoading(false)
       }
     },
-    [root],
+    [root]
   )
 
   const setQuery = useCallback(
@@ -100,7 +100,7 @@ export function useVaultSearch({
         void runSearch(q)
       }, debounceMs)
     },
-    [debounceMs, runSearch],
+    [debounceMs, runSearch]
   )
 
   // Clear timer on unmount.

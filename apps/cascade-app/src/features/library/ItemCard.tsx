@@ -130,8 +130,9 @@ export function ItemCard({
   }
 
   return (
-    <article
-      role="article"
+    // role="option" supports aria-selected and interactive usage (tabIndex, click, keyDown)
+    <div
+      role="option"
       tabIndex={0}
       aria-selected={isSelected}
       aria-label={`Library item: ${item.title}`}
@@ -227,14 +228,10 @@ export function ItemCard({
 
       {/* Inject status notification (brief inline feedback) */}
       {injectStatus !== null && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-1.5 text-[10px] text-muted-foreground"
-        >
+        <p role="status" aria-live="polite" className="mt-1.5 text-[10px] text-muted-foreground">
           {injectStatus}
         </p>
       )}
-    </article>
+    </div>
   )
 }

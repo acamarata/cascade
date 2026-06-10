@@ -34,8 +34,8 @@ function collectLeafPaths(node: VaultNode): string[] {
 async function readAllFiles(paths: string[]): Promise<LinkIndexFile[]> {
   const results = await Promise.allSettled(
     paths.map((path) =>
-      invoke<string>('vault_read', { path }).then((content) => ({ path, content })),
-    ),
+      invoke<string>('vault_read', { path }).then((content) => ({ path, content }))
+    )
   )
   return results
     .filter((r): r is PromiseFulfilledResult<LinkIndexFile> => r.status === 'fulfilled')

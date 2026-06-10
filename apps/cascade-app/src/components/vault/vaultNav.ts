@@ -30,7 +30,7 @@ export interface FlatNode {
 export function flattenVisible(
   root: VaultNode,
   expandedPaths: ReadonlySet<string>,
-  depth = 0,
+  depth = 0
 ): FlatNode[] {
   const result: FlatNode[] = [{ node: root, depth }]
   if (root.isDir && expandedPaths.has(root.path)) {
@@ -80,7 +80,7 @@ export function handleTreeKeyDown(
   key: string,
   focusIndex: number,
   visibleNodes: FlatNode[],
-  expandedPaths: ReadonlySet<string>,
+  expandedPaths: ReadonlySet<string>
 ): NavResult {
   const result: NavResult = {
     nextFocus: focusIndex,

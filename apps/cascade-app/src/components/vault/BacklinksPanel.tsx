@@ -85,11 +85,7 @@ export function BacklinksPanel({ currentFile, linkIndex, setCurrentFile }: Backl
 
   if (backlinks.length === 0) {
     return (
-      <div
-        className="flex flex-col gap-1 p-3"
-        data-testid="backlinks-panel"
-        aria-label="Backlinks"
-      >
+      <div className="flex flex-col gap-1 p-3" data-testid="backlinks-panel" aria-label="Backlinks">
         <SectionHeader count={0} />
         <p className="text-xs text-muted-foreground" data-testid="backlinks-empty">
           No backlinks
@@ -116,11 +112,10 @@ export function BacklinksPanel({ currentFile, linkIndex, setCurrentFile }: Backl
 
       <ul
         className="flex flex-1 flex-col overflow-y-auto"
-        role="list"
         aria-label={`${backlinks.length} backlink${backlinks.length === 1 ? '' : 's'}`}
       >
         {backlinks.map((entry) => (
-          <li key={entry.sourcePath} role="listitem">
+          <li key={entry.sourcePath}>
             <button
               type="button"
               onClick={() => setCurrentFile(entry.sourcePath)}

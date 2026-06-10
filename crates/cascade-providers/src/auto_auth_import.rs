@@ -279,8 +279,7 @@ pub fn scan_codex() -> Vec<DiscoveredAccount> {
 
         let email = json
             .get("email")
-            .or_else(|| json.get("user")
-                .and_then(|u| u.get("email")))
+            .or_else(|| json.get("user").and_then(|u| u.get("email")))
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -355,10 +354,7 @@ pub fn scan_cursor() -> Vec<DiscoveredAccount> {
 
         let email = json
             .get("cursorAuth.cachedEmail")
-            .or_else(|| {
-                json.get("cursorAuth")
-                    .and_then(|ca| ca.get("cachedEmail"))
-            })
+            .or_else(|| json.get("cursorAuth").and_then(|ca| ca.get("cachedEmail")))
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -367,13 +363,13 @@ pub fn scan_cursor() -> Vec<DiscoveredAccount> {
             return vec![];
         }
 
-        return vec![DiscoveredAccount {
+        vec![DiscoveredAccount {
             source: AuthSource::Cursor,
             email_or_hint: email,
             provider: "anthropic".to_string(), // Cursor primarily uses Anthropic models
             auth_type: AuthType::OAuthToken,
             importable: false,
-        }];
+        }]
     }
 
     // Non-macOS platforms: no-op in P3 (Windows/Linux Keychain deferred to P4)
@@ -474,7 +470,8 @@ pub async fn import_accounts(selected: Vec<DiscoveredAccount>) -> ImportResult {
         match account.auth_type {
             AuthType::EnvApiKey => {
                 // Extract variable name from hint "env: VAR_NAME"
-                let var_name = account.email_or_hint
+                let var_name = account
+                    .email_or_hint
                     .strip_prefix("env: ")
                     .unwrap_or(&account.email_or_hint);
 
@@ -509,7 +506,11 @@ pub async fn import_accounts(selected: Vec<DiscoveredAccount>) -> ImportResult {
         }
     }
 
-    ImportResult { imported, skipped, errors }
+    ImportResult {
+        imported,
+        skipped,
+        errors,
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -611,7 +612,10 @@ mod tests {
         assert_eq!(acc.source, AuthSource::ClaudeCode);
         assert_eq!(acc.email_or_hint, "claude@example.com");
         assert_eq!(acc.provider, "anthropic");
-        assert!(!acc.importable, "CC OAuth tokens are never directly importable");
+        assert!(
+            !acc.importable,
+            "CC OAuth tokens are never directly importable"
+        );
     }
 
     #[test]
@@ -636,7 +640,11 @@ mod tests {
     fn scan_cc_skips_malformed_credentials() {
         let tmp = TempDir::new().unwrap();
         // settings.json exists (so CC is "installed") but .credentials is garbage
-        write_file(&tmp, ".claude/settings.json", r#"{"model":"claude-3-5-sonnet"}"#);
+        write_file(
+            &tmp,
+            ".claude/settings.json",
+            r#"{"model":"claude-3-5-sonnet"}"#,
+        );
         write_file(&tmp, ".claude/.credentials", "NOT_VALID_JSON{{{");
 
         let prev_home = std::env::var("HOME").ok();
@@ -920,8 +928,17 @@ mod tests {
             importable: false,
         };
         let json = serde_json::to_string(&account).unwrap();
-        assert!(json.contains("\"emailOrHint\""), "expected camelCase emailOrHint, got: {json}");
-        assert!(json.contains("\"authType\""), "expected camelCase authType, got: {json}");
-        assert!(json.contains("\"claudeCode\""), "expected claudeCode source, got: {json}");
+        assert!(
+            json.contains("\"emailOrHint\""),
+            "expected camelCase emailOrHint, got: {json}"
+        );
+        assert!(
+            json.contains("\"authType\""),
+            "expected camelCase authType, got: {json}"
+        );
+        assert!(
+            json.contains("\"claudeCode\""),
+            "expected claudeCode source, got: {json}"
+        );
     }
 }

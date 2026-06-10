@@ -38,9 +38,8 @@ mod tests {
     use super::store::{load, save};
     use super::types::{
         CascadeSettings, GeminiPoolSettings, HarnessBridgesSettings, HookDefinition,
-        LibrarySettings, McpServerEntry, PluginsSettings, ProvidersSettings,
-        ScheduledTaskEntry, TelemetrySettings, VaultDisplaySettings, WidgetGeometry,
-        WidgetsSettings,
+        LibrarySettings, McpServerEntry, PluginsSettings, ProvidersSettings, ScheduledTaskEntry,
+        TelemetrySettings, VaultDisplaySettings, WidgetGeometry, WidgetsSettings,
     };
 
     // ── helpers ────────────────────────────────────────────────────────────────
@@ -78,7 +77,10 @@ mod tests {
         assert!(path.exists(), "settings.json must exist after save");
 
         let tmp_path = path.with_extension("json.tmp");
-        assert!(!tmp_path.exists(), "settings.json.tmp must not exist after atomic rename");
+        assert!(
+            !tmp_path.exists(),
+            "settings.json.tmp must not exist after atomic rename"
+        );
 
         let loaded = load(&path).expect("load after save should succeed");
         assert_eq!(loaded.schema_version, original.schema_version);
@@ -129,10 +131,12 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.library = LibrarySettings {
-            default_harness_targets: vec!["cc".to_string(), "oc".to_string()],
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            library: LibrarySettings {
+                default_harness_targets: vec!["cc".to_string(), "oc".to_string()],
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -151,7 +155,10 @@ mod tests {
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.context.sites_root.as_deref(), Some("/custom/Sites"));
-        assert_eq!(loaded.project_map.phase_root.as_deref(), Some("/custom/phases"));
+        assert_eq!(
+            loaded.project_map.phase_root.as_deref(),
+            Some("/custom/phases")
+        );
     }
 
     /// ProvidersSettings: all key fields optional, google is a vec.
@@ -160,14 +167,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.providers = ProvidersSettings {
-            anthropic: Some("sk-ant-test".to_string()),
-            openai: Some("sk-oai-test".to_string()),
-            google: vec!["g1".to_string(), "g2".to_string()],
-            codex: None,
-            default_routing: Some("anthropic".to_string()),
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            providers: ProvidersSettings {
+                anthropic: Some("sk-ant-test".to_string()),
+                openai: Some("sk-oai-test".to_string()),
+                google: vec!["g1".to_string(), "g2".to_string()],
+                codex: None,
+                default_routing: Some("anthropic".to_string()),
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -175,7 +184,10 @@ mod tests {
         assert_eq!(loaded.providers.openai.as_deref(), Some("sk-oai-test"));
         assert_eq!(loaded.providers.google, vec!["g1", "g2"]);
         assert!(loaded.providers.codex.is_none());
-        assert_eq!(loaded.providers.default_routing.as_deref(), Some("anthropic"));
+        assert_eq!(
+            loaded.providers.default_routing.as_deref(),
+            Some("anthropic")
+        );
     }
 
     /// GeminiPoolSettings round-trip including proxy_port.
@@ -184,12 +196,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.gemini_pool = GeminiPoolSettings {
-            keys: vec!["k1".to_string()],
-            proxy_port: 9999,
-            enabled: true,
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            gemini_pool: GeminiPoolSettings {
+                keys: vec!["k1".to_string()],
+                proxy_port: 9999,
+                enabled: true,
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -204,12 +218,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.harness_bridges = HarnessBridgesSettings {
-            cc_config_path: Some("/home/user/.claude/settings.json".to_string()),
-            oc_config_path: Some("/home/user/.opencode/settings.json".to_string()),
-            codex_config_path: None,
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            harness_bridges: HarnessBridgesSettings {
+                cc_config_path: Some("/home/user/.claude/settings.json".to_string()),
+                oc_config_path: Some("/home/user/.opencode/settings.json".to_string()),
+                codex_config_path: None,
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -226,14 +242,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.hooks = vec![HookDefinition {
-            id: "on-start".to_string(),
-            event: "session_start".to_string(),
-            command: "echo hello".to_string(),
-            enabled: true,
-            extra: HashMap::new(),
-        }];
+        let s = CascadeSettings {
+            hooks: vec![HookDefinition {
+                id: "on-start".to_string(),
+                event: "session_start".to_string(),
+                command: "echo hello".to_string(),
+                enabled: true,
+                extra: HashMap::new(),
+            }],
+            ..Default::default()
+        };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.hooks.len(), 1);
@@ -248,15 +266,17 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.scheduled_tasks = vec![ScheduledTaskEntry {
-            id: "nightly-index".to_string(),
-            label: "Nightly index rebuild".to_string(),
-            cron: "0 2 * * *".to_string(),
-            command: "cascade index rebuild".to_string(),
-            enabled: true,
-            extra: HashMap::new(),
-        }];
+        let s = CascadeSettings {
+            scheduled_tasks: vec![ScheduledTaskEntry {
+                id: "nightly-index".to_string(),
+                label: "Nightly index rebuild".to_string(),
+                cron: "0 2 * * *".to_string(),
+                command: "cascade index rebuild".to_string(),
+                enabled: true,
+                extra: HashMap::new(),
+            }],
+            ..Default::default()
+        };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.scheduled_tasks.len(), 1);
@@ -271,13 +291,18 @@ mod tests {
         let path = settings_path(&tmp);
 
         let mut config = HashMap::new();
-        config.insert("my-plugin".to_string(), serde_json::json!({ "key": "value" }));
+        config.insert(
+            "my-plugin".to_string(),
+            serde_json::json!({ "key": "value" }),
+        );
 
-        let mut s = CascadeSettings::default();
-        s.plugins = PluginsSettings {
-            enabled: vec!["my-plugin".to_string()],
-            config,
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            plugins: PluginsSettings {
+                enabled: vec!["my-plugin".to_string()],
+                config,
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -303,10 +328,12 @@ mod tests {
             },
         );
 
-        let mut s = CascadeSettings::default();
-        s.widgets = WidgetsSettings {
-            positions,
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            widgets: WidgetsSettings {
+                positions,
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -326,15 +353,17 @@ mod tests {
         let mut env = HashMap::new();
         env.insert("API_KEY".to_string(), "abc123".to_string());
 
-        let mut s = CascadeSettings::default();
-        s.mcp_servers = vec![McpServerEntry {
-            name: "my-mcp".to_string(),
-            command: "/usr/local/bin/my-mcp-server".to_string(),
-            args: vec!["--port".to_string(), "8080".to_string()],
-            env,
-            enabled: true,
-            extra: HashMap::new(),
-        }];
+        let s = CascadeSettings {
+            mcp_servers: vec![McpServerEntry {
+                name: "my-mcp".to_string(),
+                command: "/usr/local/bin/my-mcp-server".to_string(),
+                args: vec!["--port".to_string(), "8080".to_string()],
+                env,
+                enabled: true,
+                extra: HashMap::new(),
+            }],
+            ..Default::default()
+        };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.mcp_servers.len(), 1);
@@ -349,10 +378,12 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.vault_display = VaultDisplaySettings {
-            show_masked: true,
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            vault_display: VaultDisplaySettings {
+                show_masked: true,
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -365,11 +396,13 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = settings_path(&tmp);
 
-        let mut s = CascadeSettings::default();
-        s.telemetry = TelemetrySettings {
-            enabled: true,
-            endpoint: Some("https://telemetry.example.com".to_string()),
-            extra: HashMap::new(),
+        let s = CascadeSettings {
+            telemetry: TelemetrySettings {
+                enabled: true,
+                endpoint: Some("https://telemetry.example.com".to_string()),
+                extra: HashMap::new(),
+            },
+            ..Default::default()
         };
         save(&path, &s).unwrap();
         let loaded = load(&path).unwrap();
@@ -403,7 +436,10 @@ mod tests {
         save(&path, &loaded).unwrap();
         let reloaded = load(&path).unwrap();
         assert!(reloaded.extra.contains_key("unknownFutureSection"));
-        assert_eq!(reloaded.extra["unknownFutureSection"]["someKey"], "someValue");
+        assert_eq!(
+            reloaded.extra["unknownFutureSection"]["someKey"],
+            "someValue"
+        );
     }
 
     // ── legacy update_settings top-level merge test (kept) ────────────────────

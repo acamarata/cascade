@@ -21,8 +21,8 @@
 //! ## SPORT
 //! MASTER-COMPONENTS.md — cascade tier tree provider
 
-use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tracing::trace;
 
 /// Returns the home directory via `$HOME` (Unix) or `USERPROFILE` (Windows).
@@ -198,9 +198,22 @@ mod tests {
         let files = [
             home.join(".cascade").join("CASCADE.md"),
             home.join("Sites").join(".cascade").join("CASCADE.md"),
-            home.join("Sites").join("myproject").join(".cascade").join("CASCADE.md"),
-            home.join("Sites").join("myproject").join("myrepo").join(".cascade").join("CASCADE.md"),
-            home.join("Sites").join("myproject").join("myrepo").join("apps").join("myapp").join(".cascade").join("CASCADE.md"),
+            home.join("Sites")
+                .join("myproject")
+                .join(".cascade")
+                .join("CASCADE.md"),
+            home.join("Sites")
+                .join("myproject")
+                .join("myrepo")
+                .join(".cascade")
+                .join("CASCADE.md"),
+            home.join("Sites")
+                .join("myproject")
+                .join("myrepo")
+                .join("apps")
+                .join("myapp")
+                .join(".cascade")
+                .join("CASCADE.md"),
         ];
         for f in &files {
             fs::create_dir_all(f.parent().unwrap()).unwrap();
@@ -239,7 +252,11 @@ mod tests {
         std::env::remove_var("HOME");
 
         let by_tier = |tier: &str| -> bool {
-            entries.iter().find(|e| e.tier == tier).map(|e| e.exists).unwrap_or(false)
+            entries
+                .iter()
+                .find(|e| e.tier == tier)
+                .map(|e| e.exists)
+                .unwrap_or(false)
         };
 
         assert!(by_tier("GCI"), "GCI should exist");

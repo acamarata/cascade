@@ -90,10 +90,7 @@ impl From<cascade_cli::ipc_client::IpcClientError> for CascadeError {
             IpcClientError::AuthFailed => CascadeError::AuthFailed,
             IpcClientError::MethodNotFound(m) => CascadeError::MethodNotFound(m),
             IpcClientError::InvalidParams(m) => CascadeError::InvalidParams(m),
-            IpcClientError::Rpc { code, msg } => CascadeError::Rpc {
-                code,
-                message: msg,
-            },
+            IpcClientError::Rpc { code, msg } => CascadeError::Rpc { code, message: msg },
             IpcClientError::Io(_) | IpcClientError::Serde(_) => CascadeError::Transport,
         }
     }

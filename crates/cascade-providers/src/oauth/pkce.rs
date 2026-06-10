@@ -72,8 +72,7 @@ mod tests {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
         let challenge = generate_code_challenge(verifier);
         assert_eq!(
-            challenge,
-            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
             "RFC 7636 § B S256 vector mismatch"
         );
     }
@@ -85,14 +84,24 @@ mod tests {
         let verifier = generate_code_verifier();
         let challenge = generate_code_challenge(&verifier);
         // SHA-256 digest is always 32 bytes → base64url unpadded is always 43 chars.
-        assert_eq!(challenge.len(), 43, "S256 challenge must be 43 chars, got {}", challenge.len());
+        assert_eq!(
+            challenge.len(),
+            43,
+            "S256 challenge must be 43 chars, got {}",
+            challenge.len()
+        );
     }
 
     /// Verifier from generate_code_verifier() is 96 chars long.
     #[test]
     fn verifier_length_is_96() {
         let verifier = generate_code_verifier();
-        assert_eq!(verifier.len(), 96, "expected 96-char verifier, got {}", verifier.len());
+        assert_eq!(
+            verifier.len(),
+            96,
+            "expected 96-char verifier, got {}",
+            verifier.len()
+        );
     }
 
     /// Verifier is non-empty and contains only RFC 7636 unreserved chars:
@@ -122,6 +131,9 @@ mod tests {
     fn challenge_has_no_padding() {
         let verifier = generate_code_verifier();
         let challenge = generate_code_challenge(&verifier);
-        assert!(!challenge.contains('='), "challenge must be unpadded base64url");
+        assert!(
+            !challenge.contains('='),
+            "challenge must be unpadded base64url"
+        );
     }
 }

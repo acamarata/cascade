@@ -113,12 +113,13 @@ impl TokenStore {
     /// if no entry exists; `Err(TokenStoreError::Deserialize)` if parse fails.
     pub fn load(&self, provider_id: &str) -> Result<OAuthTokens, TokenStoreError> {
         let service = Self::service_name(provider_id);
-        let json = self.keychain.get_key(&service, "tokens").map_err(|e| match e {
-            KeychainError::NotFound => {
-                TokenStoreError::NotFound(provider_id.to_owned())
-            }
-            other => TokenStoreError::Keychain(other),
-        })?;
+        let json = self
+            .keychain
+            .get_key(&service, "tokens")
+            .map_err(|e| match e {
+                KeychainError::NotFound => TokenStoreError::NotFound(provider_id.to_owned()),
+                other => TokenStoreError::Keychain(other),
+            })?;
         serde_json::from_str::<OAuthTokens>(&json)
             .map_err(|e| TokenStoreError::Deserialize(e.to_string()))
     }
@@ -190,7 +191,10 @@ mod tests {
         store.delete("openai").unwrap();
 
         // Should be gone now.
-        assert!(matches!(store.load("openai"), Err(TokenStoreError::NotFound(_))));
+        assert!(matches!(
+            store.load("openai"),
+            Err(TokenStoreError::NotFound(_))
+        ));
 
         // Second delete is idempotent.
         store.delete("openai").unwrap();

@@ -30,9 +30,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use cascade_providers::{google_provision::GoogleProvisionClient, validate_gemini_key};
-use cascade_types::provision::{
-    ProvisionMode, ProvisionRequest, ProvisionResult, ProvisionStatus,
-};
+use cascade_types::provision::{ProvisionMode, ProvisionRequest, ProvisionResult, ProvisionStatus};
 
 // ── Shared state ─────────────────────────────────────────────────────────────
 
@@ -108,8 +106,8 @@ pub async fn handle_provision_google_start(
             let oauth_token = match req.client_id {
                 Some(ref tok) if !tok.is_empty() => tok.clone(),
                 _ => {
-                    let msg =
-                        "FullAuto mode requires an OAuth access token (client_id field)".to_string();
+                    let msg = "FullAuto mode requires an OAuth access token (client_id field)"
+                        .to_string();
                     set_done(state, &email, Some(msg.clone())).await;
                     return ProvisionResult::Error { message: msg };
                 }
@@ -263,8 +261,7 @@ mod tests {
     #[tokio::test]
     async fn status_returns_not_started_for_unknown_email() {
         let state = new_state_map();
-        let status =
-            handle_provision_google_status("nobody@example.com".to_string(), &state).await;
+        let status = handle_provision_google_status("nobody@example.com".to_string(), &state).await;
         assert_eq!(status.status, "not_started");
         assert!(!status.done);
         assert!(status.error.is_none());

@@ -31,8 +31,7 @@ export function UpgradeBadge({ version }: UpgradeBadgeProps): React.ReactElement
       aria-label={`Upgrade available: version ${version}`}
       className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
     >
-      <ArrowUp className="h-2.5 w-2.5" aria-hidden="true" />
-      v{version}
+      <ArrowUp className="h-2.5 w-2.5" aria-hidden="true" />v{version}
     </span>
   )
 }

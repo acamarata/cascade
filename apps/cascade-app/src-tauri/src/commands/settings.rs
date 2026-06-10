@@ -113,29 +113,24 @@ pub async fn update_settings(
                     }
                 }
                 "library" => {
-                    current.library =
-                        serde_json::from_value::<LibrarySettings>(v)
-                            .map_err(|e| format!("invalid library: {e}"))?;
+                    current.library = serde_json::from_value::<LibrarySettings>(v)
+                        .map_err(|e| format!("invalid library: {e}"))?;
                 }
                 "context" => {
-                    current.context =
-                        serde_json::from_value::<ContextSettings>(v)
-                            .map_err(|e| format!("invalid context: {e}"))?;
+                    current.context = serde_json::from_value::<ContextSettings>(v)
+                        .map_err(|e| format!("invalid context: {e}"))?;
                 }
                 "projectMap" => {
-                    current.project_map =
-                        serde_json::from_value::<ProjectMapSettings>(v)
-                            .map_err(|e| format!("invalid projectMap: {e}"))?;
+                    current.project_map = serde_json::from_value::<ProjectMapSettings>(v)
+                        .map_err(|e| format!("invalid projectMap: {e}"))?;
                 }
                 "providers" => {
-                    current.providers =
-                        serde_json::from_value::<ProvidersSettings>(v)
-                            .map_err(|e| format!("invalid providers: {e}"))?;
+                    current.providers = serde_json::from_value::<ProvidersSettings>(v)
+                        .map_err(|e| format!("invalid providers: {e}"))?;
                 }
                 "geminiPool" => {
-                    current.gemini_pool =
-                        serde_json::from_value::<GeminiPoolSettings>(v)
-                            .map_err(|e| format!("invalid geminiPool: {e}"))?;
+                    current.gemini_pool = serde_json::from_value::<GeminiPoolSettings>(v)
+                        .map_err(|e| format!("invalid geminiPool: {e}"))?;
                 }
                 "harnessBridges" => {
                     current.harness_bridges =
@@ -143,39 +138,32 @@ pub async fn update_settings(
                             .map_err(|e| format!("invalid harnessBridges: {e}"))?;
                 }
                 "hooks" => {
-                    current.hooks =
-                        serde_json::from_value::<Vec<HookDefinition>>(v)
-                            .map_err(|e| format!("invalid hooks: {e}"))?;
+                    current.hooks = serde_json::from_value::<Vec<HookDefinition>>(v)
+                        .map_err(|e| format!("invalid hooks: {e}"))?;
                 }
                 "scheduledTasks" => {
-                    current.scheduled_tasks =
-                        serde_json::from_value::<Vec<ScheduledTaskEntry>>(v)
-                            .map_err(|e| format!("invalid scheduledTasks: {e}"))?;
+                    current.scheduled_tasks = serde_json::from_value::<Vec<ScheduledTaskEntry>>(v)
+                        .map_err(|e| format!("invalid scheduledTasks: {e}"))?;
                 }
                 "plugins" => {
-                    current.plugins =
-                        serde_json::from_value::<PluginsSettings>(v)
-                            .map_err(|e| format!("invalid plugins: {e}"))?;
+                    current.plugins = serde_json::from_value::<PluginsSettings>(v)
+                        .map_err(|e| format!("invalid plugins: {e}"))?;
                 }
                 "widgets" => {
-                    current.widgets =
-                        serde_json::from_value::<WidgetsSettings>(v)
-                            .map_err(|e| format!("invalid widgets: {e}"))?;
+                    current.widgets = serde_json::from_value::<WidgetsSettings>(v)
+                        .map_err(|e| format!("invalid widgets: {e}"))?;
                 }
                 "mcpServers" => {
-                    current.mcp_servers =
-                        serde_json::from_value::<Vec<McpServerEntry>>(v)
-                            .map_err(|e| format!("invalid mcpServers: {e}"))?;
+                    current.mcp_servers = serde_json::from_value::<Vec<McpServerEntry>>(v)
+                        .map_err(|e| format!("invalid mcpServers: {e}"))?;
                 }
                 "vaultDisplay" => {
-                    current.vault_display =
-                        serde_json::from_value::<VaultDisplaySettings>(v)
-                            .map_err(|e| format!("invalid vaultDisplay: {e}"))?;
+                    current.vault_display = serde_json::from_value::<VaultDisplaySettings>(v)
+                        .map_err(|e| format!("invalid vaultDisplay: {e}"))?;
                 }
                 "telemetry" => {
-                    current.telemetry =
-                        serde_json::from_value::<TelemetrySettings>(v)
-                            .map_err(|e| format!("invalid telemetry: {e}"))?;
+                    current.telemetry = serde_json::from_value::<TelemetrySettings>(v)
+                        .map_err(|e| format!("invalid telemetry: {e}"))?;
                 }
                 _ => {
                     // Unknown top-level key — silently ignored to maintain

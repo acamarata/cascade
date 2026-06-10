@@ -24,7 +24,6 @@ use cascade_types::provision::{ProvisionMode, ProvisionRequest, ProvisionResult,
 use crate::error::CascadeError;
 use crate::state::{AppState, ProvisionStateMap};
 
-
 // ---------------------------------------------------------------------------
 // T-P3-E03-39b: GCP provisioning commands
 // ---------------------------------------------------------------------------
@@ -49,12 +48,15 @@ pub async fn cascade_provision_google_start(
     // Init status.
     {
         let mut map = prov_map.lock().await;
-        map.insert(email.clone(), EmailProvStatus {
-            status: "starting".to_string(),
-            done: false,
-            error: None,
-            cancel: false,
-        });
+        map.insert(
+            email.clone(),
+            EmailProvStatus {
+                status: "starting".to_string(),
+                done: false,
+                error: None,
+                cancel: false,
+            },
+        );
     }
 
     let result = match req.mode {
@@ -63,7 +65,8 @@ pub async fn cascade_provision_google_start(
                 Some(t) if !t.is_empty() => t.to_string(),
                 _ => {
                     return Ok(ProvisionResult::Error {
-                        message: "FullAuto mode requires an OAuth access token (client_id)".to_string(),
+                        message: "FullAuto mode requires an OAuth access token (client_id)"
+                            .to_string(),
                     });
                 }
             };
@@ -71,7 +74,9 @@ pub async fn cascade_provision_google_start(
             let client = GoogleProvisionClient::new(oauth_token);
             match client.full_auto(&email, 1).await {
                 Ok(r) => r,
-                Err(e) => ProvisionResult::Error { message: e.to_string() },
+                Err(e) => ProvisionResult::Error {
+                    message: e.to_string(),
+                },
             }
         }
 
@@ -91,8 +96,13 @@ pub async fn cascade_provision_google_start(
             };
             prov_set_status(&prov_map, &email, "Validating API key\u{2026}").await;
             match validate_gemini_key(&api_key).await {
-                Ok(()) => ProvisionResult::Success { api_key, project_id: String::new() },
-                Err(e) => ProvisionResult::Error { message: e.to_string() },
+                Ok(()) => ProvisionResult::Success {
+                    api_key,
+                    project_id: String::new(),
+                },
+                Err(e) => ProvisionResult::Error {
+                    message: e.to_string(),
+                },
             }
         }
     };
@@ -120,7 +130,11 @@ async fn prov_set_done(map: &ProvisionStateMap, email: &str, error: Option<Strin
     if let Some(s) = m.get_mut(email) {
         s.done = true;
         s.error = error;
-        s.status = if s.error.is_some() { "error".into() } else { "complete".into() };
+        s.status = if s.error.is_some() {
+            "error".into()
+        } else {
+            "complete".into()
+        };
     }
 }
 
@@ -197,7 +211,11 @@ pub async fn cascade_pool_register_key(
     // Validate key (never log api_key).
     match validate_gemini_key(&api_key).await {
         Ok(()) => {}
-        Err(e) => return Ok(RegisterResult::InvalidKey { message: e.to_string() }),
+        Err(e) => {
+            return Ok(RegisterResult::InvalidKey {
+                message: e.to_string(),
+            })
+        }
     }
 
     // Append entry.
@@ -248,8 +266,7 @@ fn read_pool_config_app(path: &std::path::Path) -> Result<GeminiPoolConfig, Casc
     if !path.exists() {
         return Ok(GeminiPoolConfig::default());
     }
-    let data = std::fs::read_to_string(path)
-        .map_err(|e| CascadeError::Custom(e.to_string()))?;
+    let data = std::fs::read_to_string(path).map_err(|e| CascadeError::Custom(e.to_string()))?;
     serde_json::from_str(&data).map_err(|e| CascadeError::Custom(e.to_string()))
 }
 
@@ -264,8 +281,8 @@ fn write_pool_config_app(
     let mut name = tmp.file_name().unwrap_or_default().to_owned();
     name.push(".tmp");
     tmp.set_file_name(name);
-    let json = serde_json::to_string_pretty(config)
-        .map_err(|e| CascadeError::Custom(e.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(config).map_err(|e| CascadeError::Custom(e.to_string()))?;
     std::fs::write(&tmp, json).map_err(|e| CascadeError::Custom(e.to_string()))?;
     std::fs::rename(&tmp, path).map_err(|e| CascadeError::Custom(e.to_string()))?;
     Ok(())

@@ -159,7 +159,7 @@ pub fn scan_dev_tree(root: &str) -> Result<Vec<LegacyToolHome>, String> {
         .max_depth(MAX_DEPTH)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| should_descend(e));
+        .filter_entry(should_descend);
 
     for entry in walker {
         let entry = match entry {
@@ -327,7 +327,11 @@ mod tests {
         let paths = &claude_home.unwrap().per_project_paths;
 
         let proj3_path = tmp.path().join("a/b/proj3").to_string_lossy().into_owned();
-        let proj4_path = tmp.path().join("a/b/c/proj4").to_string_lossy().into_owned();
+        let proj4_path = tmp
+            .path()
+            .join("a/b/c/proj4")
+            .to_string_lossy()
+            .into_owned();
 
         assert!(
             paths.contains(&proj3_path),
@@ -350,10 +354,16 @@ mod tests {
         touch(tmp.path(), "real-proj/.claude/CLAUDE.md");
 
         // Decoy inside node_modules — must be ignored.
-        touch(tmp.path(), "real-proj/node_modules/some-lib/.claude/CLAUDE.md");
+        touch(
+            tmp.path(),
+            "real-proj/node_modules/some-lib/.claude/CLAUDE.md",
+        );
 
         let result = scan_dev_tree(tmp.path().to_str().unwrap()).unwrap();
-        let claude_home = result.iter().find(|h| h.tool_id == ToolId::ClaudeCode).unwrap();
+        let claude_home = result
+            .iter()
+            .find(|h| h.tool_id == ToolId::ClaudeCode)
+            .unwrap();
 
         // Only real-proj should appear; node_modules sub-path must not.
         for p in &claude_home.per_project_paths {
@@ -438,7 +448,10 @@ mod tests {
         touch(tmp.path(), "oc-proj/AGENTS.md");
         let result = scan_dev_tree(tmp.path().to_str().unwrap()).unwrap();
         let opencode = result.iter().find(|h| h.tool_id == ToolId::Opencode);
-        assert!(opencode.is_some(), "Opencode must be detected via AGENTS.md");
+        assert!(
+            opencode.is_some(),
+            "Opencode must be detected via AGENTS.md"
+        );
         let oc_path = tmp.path().join("oc-proj").to_string_lossy().into_owned();
         assert!(opencode.unwrap().per_project_paths.contains(&oc_path));
     }
@@ -472,6 +485,9 @@ mod tests {
 
         let paths1: Vec<_> = r1.iter().flat_map(|h| h.per_project_paths.iter()).collect();
         let paths2: Vec<_> = r2.iter().flat_map(|h| h.per_project_paths.iter()).collect();
-        assert_eq!(paths1, paths2, "scan_dev_tree must produce deterministic output");
+        assert_eq!(
+            paths1, paths2,
+            "scan_dev_tree must produce deterministic output"
+        );
     }
 }

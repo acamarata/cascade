@@ -37,7 +37,10 @@ function createTestState(overrides?: Partial<WizardState>): WizardState {
 }
 
 /** Factory for a minimal RichMergeResult for testing. */
-function createTestMergeResult(tierStep: WizardStep, sections: MergeSection[] = []): RichMergeResult {
+function createTestMergeResult(
+  tierStep: WizardStep,
+  sections: MergeSection[] = []
+): RichMergeResult {
   return {
     tier: tierStep,
     sections,
@@ -147,7 +150,7 @@ describe('wizardReducer', () => {
 
   // Test T-21-c: UPDATE_ARCHIVE_STATUS merges multiple tools independently
   it('UPDATE_ARCHIVE_STATUS should preserve existing archivedTools entries', () => {
-    const initial = createTestState({ archivedTools: { 'opencode': true } })
+    const initial = createTestState({ archivedTools: { opencode: true } })
     const result = wizardReducer(initial, {
       type: 'UPDATE_ARCHIVE_STATUS',
       payload: { toolId: 'cursor', archived: true },
@@ -237,9 +240,7 @@ describe('wizardReducer — section approval actions (T-P3-E03-27)', () => {
   // Test T-27-a: SET_MERGE_RESULT stores result under tier key
   it('SET_MERGE_RESULT should store a MergeResult under the tier key', () => {
     const initial = createTestState()
-    const result = createTestMergeResult(WizardStep.MergeContent, [
-      createTestSection('s1'),
-    ])
+    const result = createTestMergeResult(WizardStep.MergeContent, [createTestSection('s1')])
     const next = wizardReducer(initial, {
       type: 'SET_MERGE_RESULT',
       payload: { tier: 'global', result },
@@ -357,9 +358,7 @@ describe('useWizard — section action helpers (T-P3-E03-27)', () => {
   // Test T-27-i: setMergeResult stores result; getMergeResult retrieves it
   it('setMergeResult/getMergeResult round-trip', () => {
     const { result } = renderHook(() => useWizard(), { wrapper })
-    const mergeResult = createTestMergeResult(WizardStep.MergeContent, [
-      createTestSection('s1'),
-    ])
+    const mergeResult = createTestMergeResult(WizardStep.MergeContent, [createTestSection('s1')])
     act(() => {
       result.current.setMergeResult('global', mergeResult)
     })
@@ -375,7 +374,7 @@ describe('useWizard — section action helpers (T-P3-E03-27)', () => {
     act(() => {
       result.current.setMergeResult(
         'global',
-        createTestMergeResult(WizardStep.MergeContent, [section]),
+        createTestMergeResult(WizardStep.MergeContent, [section])
       )
     })
     act(() => {
@@ -391,7 +390,7 @@ describe('useWizard — section action helpers (T-P3-E03-27)', () => {
     act(() => {
       result.current.setMergeResult(
         'global',
-        createTestMergeResult(WizardStep.MergeContent, [section]),
+        createTestMergeResult(WizardStep.MergeContent, [section])
       )
     })
     act(() => {
@@ -407,7 +406,7 @@ describe('useWizard — section action helpers (T-P3-E03-27)', () => {
     act(() => {
       result.current.setMergeResult(
         'global',
-        createTestMergeResult(WizardStep.MergeContent, [section]),
+        createTestMergeResult(WizardStep.MergeContent, [section])
       )
     })
     act(() => {
@@ -457,7 +456,9 @@ describe('checkpoint round-trip — mergeResults (T-P3-E03-33)', () => {
     const state = createTestState()
     const checkpoint = stateToCheckpoint(state)
     // Simulate old checkpoint without mergeResults field
-    const { mergeResults: _dropped, ...legacyCheckpoint } = checkpoint as typeof checkpoint & { mergeResults?: unknown }
+    const { mergeResults: _dropped, ...legacyCheckpoint } = checkpoint as typeof checkpoint & {
+      mergeResults?: unknown
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const restored = checkpointToState(legacyCheckpoint as any)
     expect(restored.mergeResults).toEqual({})

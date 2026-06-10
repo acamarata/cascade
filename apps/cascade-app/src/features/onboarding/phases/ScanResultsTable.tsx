@@ -88,7 +88,10 @@ function ExpandedRow({ home }: ExpandedRowProps) {
             <ul className="space-y-0.5">
               {home.globalPaths.map((p) => (
                 <li key={p} className="flex items-center gap-1.5">
-                  <FolderOpen className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FolderOpen
+                    className="h-3 w-3 flex-shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <span className="font-mono text-xs text-foreground break-all">{p}</span>
                 </li>
               ))}
@@ -103,7 +106,10 @@ function ExpandedRow({ home }: ExpandedRowProps) {
             <ul className="max-h-36 space-y-0.5 overflow-y-auto">
               {home.perProjectPaths.map((p) => (
                 <li key={p} className="flex items-center gap-1.5">
-                  <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FileText
+                    className="h-3 w-3 flex-shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <span className="font-mono text-xs text-foreground break-all">{p}</span>
                 </li>
               ))}
@@ -169,7 +175,7 @@ export function ScanResultsTable({ homes, className }: ScanResultsTableProps) {
       <div
         className={cn(
           'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border py-10 text-center',
-          className,
+          className
         )}
         role="status"
         aria-label="No legacy configs found"
@@ -223,7 +229,7 @@ export function ScanResultsTable({ homes, className }: ScanResultsTableProps) {
                   'grid w-full cursor-pointer items-center border-b border-border px-4 py-3 text-left',
                   'hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   'transition-colors',
-                  isExpanded && 'bg-muted/20',
+                  isExpanded && 'bg-muted/20'
                 )}
                 style={{ gridTemplateColumns: '1fr 180px 110px 80px 70px' }}
                 onClick={() => toggleRow(home.toolId)}
@@ -234,9 +240,15 @@ export function ScanResultsTable({ homes, className }: ScanResultsTableProps) {
                 {/* Tool name + expand icon */}
                 <span className="flex items-center gap-2" role="cell">
                   {isExpanded ? (
-                    <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <ChevronDown
+                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <ChevronRight
+                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   )}
                   <span className="text-sm font-medium text-foreground">{label}</span>
                 </span>
@@ -279,11 +291,16 @@ export function ScanResultsTable({ homes, className }: ScanResultsTableProps) {
       <div className="border-t border-border bg-muted/20 px-4 py-2">
         <p className="text-xs text-muted-foreground">
           Found{' '}
-          <span className="font-medium text-foreground">{totalTools} tool home{totalTools !== 1 ? 's' : ''}</span>
+          <span className="font-medium text-foreground">
+            {totalTools} tool home{totalTools !== 1 ? 's' : ''}
+          </span>
           {', '}
-          <span className="font-medium text-foreground">{totalFiles.toLocaleString()} file{totalFiles !== 1 ? 's' : ''}</span>
+          <span className="font-medium text-foreground">
+            {totalFiles.toLocaleString()} file{totalFiles !== 1 ? 's' : ''}
+          </span>
           {', '}
-          <span className="font-medium text-foreground">{formatBytes(totalBytes)}</span> of instruction content
+          <span className="font-medium text-foreground">{formatBytes(totalBytes)}</span> of
+          instruction content
         </p>
       </div>
     </div>

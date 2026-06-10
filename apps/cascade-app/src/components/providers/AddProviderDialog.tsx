@@ -50,7 +50,10 @@ const OAUTH_TIMEOUT_MS = 120_000
  *
  * Returns [result, null] on success or [null, errorMessage] on failure.
  */
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<[T | null, string | null]> {
+async function safeInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<[T | null, string | null]> {
   try {
     const result = await invoke<T>(cmd, args)
     return [result, null]
@@ -74,9 +77,7 @@ interface ProviderPickerProps {
 function ProviderPicker({ onSelect }: ProviderPickerProps) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Choose the AI provider you want to connect.
-      </p>
+      <p className="text-sm text-muted-foreground">Choose the AI provider you want to connect.</p>
       <ul
         role="listbox"
         aria-label="Select a provider"
@@ -89,7 +90,7 @@ function ProviderPicker({ onSelect }: ProviderPickerProps) {
               className={cn(
                 'w-full rounded-md border border-border bg-background px-4 py-3 text-left',
                 'hover:bg-accent hover:border-primary/40 transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
               )}
               onClick={() => onSelect(entry)}
             >
@@ -99,7 +100,11 @@ function ProviderPicker({ onSelect }: ProviderPickerProps) {
                   <p className="text-xs text-muted-foreground">{entry.description}</p>
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground capitalize">
-                  {entry.authMethod === 'api_key' ? 'API Key' : entry.authMethod === 'oauth' ? 'OAuth' : 'No Auth'}
+                  {entry.authMethod === 'api_key'
+                    ? 'API Key'
+                    : entry.authMethod === 'oauth'
+                      ? 'OAuth'
+                      : 'No Auth'}
                 </span>
               </div>
             </button>
@@ -140,9 +145,8 @@ function ApiKeyForm({ entry, onSuccess, onBack }: ApiKeyFormProps) {
     setSubmitting(true)
     setError(null)
 
-    const cmd = entry.id === 'generic'
-      ? 'cascade_providers_add_generic'
-      : 'cascade_providers_add_apikey'
+    const cmd =
+      entry.id === 'generic' ? 'cascade_providers_add_generic' : 'cascade_providers_add_apikey'
 
     const [, err] = await safeInvoke<void>(cmd, { id: entry.id, key: apiKey.trim() })
     // Wipe key from state immediately regardless of outcome (CR-A)
@@ -182,7 +186,11 @@ function ApiKeyForm({ entry, onSuccess, onBack }: ApiKeyFormProps) {
           disabled={submitting || testOk}
         />
         {error && (
-          <p id="api-key-error" role="alert" className="flex items-center gap-1.5 text-xs text-destructive">
+          <p
+            id="api-key-error"
+            role="alert"
+            className="flex items-center gap-1.5 text-xs text-destructive"
+          >
             <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
             {error}
           </p>
@@ -257,7 +265,10 @@ function GenericEndpointForm({ entry, onSuccess, onBack }: GenericFormProps) {
 
       <div className="space-y-1.5">
         <label htmlFor="generic-base-url" className="text-sm font-medium">
-          Base URL <span className="text-destructive" aria-hidden="true">*</span>
+          Base URL{' '}
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
         </label>
         <Input
           id="generic-base-url"
@@ -349,8 +360,14 @@ function OAuthForm({ entry, onSuccess, onBack }: OAuthFormProps) {
   }, [])
 
   const stopPolling = useCallback(() => {
-    if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null }
-    if (timeoutTimer.current) { clearTimeout(timeoutTimer.current); timeoutTimer.current = null }
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current)
+      pollTimer.current = null
+    }
+    if (timeoutTimer.current) {
+      clearTimeout(timeoutTimer.current)
+      timeoutTimer.current = null
+    }
   }, [])
 
   async function startOAuth() {
@@ -358,7 +375,9 @@ function OAuthForm({ entry, onSuccess, onBack }: OAuthFormProps) {
     setError(null)
 
     // Step 1: get OAuth URL from daemon
-    const [oauthUrl, startErr] = await safeInvoke<string>('cascade_providers_oauth_start', { id: entry.id })
+    const [oauthUrl, startErr] = await safeInvoke<string>('cascade_providers_oauth_start', {
+      id: entry.id,
+    })
     if (startErr || !oauthUrl) {
       setPhase('error')
       setError(startErr ?? 'No OAuth URL returned.')
@@ -382,14 +401,18 @@ function OAuthForm({ entry, onSuccess, onBack }: OAuthFormProps) {
     timeoutTimer.current = setTimeout(() => {
       stopPolling()
       setPhase('timeout')
-      setError(`OAuth did not complete within ${OAUTH_TIMEOUT_MS / 1000} seconds. Please try again.`)
+      setError(
+        `OAuth did not complete within ${OAUTH_TIMEOUT_MS / 1000} seconds. Please try again.`
+      )
     }, OAUTH_TIMEOUT_MS)
 
     pollTimer.current = setInterval(async () => {
       const elapsed = Date.now() - started
       if (elapsed >= OAUTH_TIMEOUT_MS) return // timeout handler takes over
 
-      const [status, pollErr] = await safeInvoke<string>('cascade_providers_oauth_status', { id: entry.id })
+      const [status, pollErr] = await safeInvoke<string>('cascade_providers_oauth_status', {
+        id: entry.id,
+      })
       if (pollErr) {
         // Ignore transient poll errors; timeout will fire if it persists
         return
@@ -419,7 +442,10 @@ function OAuthForm({ entry, onSuccess, onBack }: OAuthFormProps) {
           aria-live="polite"
           className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-4 py-3 text-sm"
         >
-          <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Loader2
+            className="h-4 w-4 animate-spin shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           Waiting for browser authorisation… (times out in {OAUTH_TIMEOUT_MS / 1000}s)
         </div>
       )}
@@ -465,10 +491,10 @@ function OAuthForm({ entry, onSuccess, onBack }: OAuthFormProps) {
           {phase === 'success'
             ? 'Connected!'
             : phase === 'opening'
-            ? 'Opening browser…'
-            : phase === 'waiting'
-            ? 'Waiting…'
-            : `Connect with ${entry.name}`}
+              ? 'Opening browser…'
+              : phase === 'waiting'
+                ? 'Waiting…'
+                : `Connect with ${entry.name}`}
         </Button>
       </div>
     </div>
@@ -493,9 +519,15 @@ function NoAuthForm({ entry, onSuccess, onBack }: NoAuthFormProps) {
   async function handleConnect() {
     setSubmitting(true)
     setError(null)
-    const [, err] = await safeInvoke<void>('cascade_providers_add_apikey', { id: entry.id, key: '' })
+    const [, err] = await safeInvoke<void>('cascade_providers_add_apikey', {
+      id: entry.id,
+      key: '',
+    })
     setSubmitting(false)
-    if (err) { setError(err); return }
+    if (err) {
+      setError(err)
+      return
+    }
     setSaved(true)
     setTimeout(onSuccess, 600)
   }
@@ -537,9 +569,7 @@ interface AddProviderDialogProps {
   onSuccess: () => void
 }
 
-type DialogStep =
-  | { kind: 'pick' }
-  | { kind: 'auth'; entry: ProviderCatalogEntry }
+type DialogStep = { kind: 'pick' } | { kind: 'auth'; entry: ProviderCatalogEntry }
 
 /**
  * Two-step dialog for adding an AI provider.
@@ -593,13 +623,13 @@ export function AddProviderDialog({ open, onOpenChange, onSuccess }: AddProvider
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {step.kind === 'pick' && (
-          <ProviderPicker onSelect={handleProviderSelect} />
-        )}
+        {step.kind === 'pick' && <ProviderPicker onSelect={handleProviderSelect} />}
 
-        {step.kind === 'auth' && step.entry.authMethod === 'api_key' && step.entry.id !== 'generic' && (
-          <ApiKeyForm entry={step.entry} onSuccess={handleSuccess} onBack={handleBack} />
-        )}
+        {step.kind === 'auth' &&
+          step.entry.authMethod === 'api_key' &&
+          step.entry.id !== 'generic' && (
+            <ApiKeyForm entry={step.entry} onSuccess={handleSuccess} onBack={handleBack} />
+          )}
 
         {step.kind === 'auth' && step.entry.id === 'generic' && (
           <GenericEndpointForm entry={step.entry} onSuccess={handleSuccess} onBack={handleBack} />

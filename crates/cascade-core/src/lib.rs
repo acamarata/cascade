@@ -54,23 +54,23 @@
 
 pub mod auth_detector;
 pub mod cache;
-pub mod context_pack;
-pub mod config;
 pub mod cascade_resolve;
-pub mod maps;
 pub mod compat_gen;
+pub mod config;
+pub mod context_pack;
 pub mod derived;
 pub mod discovery;
 pub mod hook_store;
 pub mod inbox;
+pub mod library;
 pub mod loader;
+pub mod maps;
 pub mod memory;
 pub mod providers_store;
 pub mod quota_aggregator;
 pub mod quota_store;
 pub mod resolution;
 pub mod routing_table;
-pub mod library;
 pub mod security;
 pub mod settings;
 pub mod symlinks;

@@ -70,19 +70,30 @@ async function buildFsAdapter(): Promise<FsAdapter> {
   if (typeof process !== 'undefined' && process.versions?.node) {
     const fs = await import('node:fs/promises')
     return {
-      async readTextFile(p) { return fs.readFile(p, 'utf8') },
+      async readTextFile(p) {
+        return fs.readFile(p, 'utf8')
+      },
       async readDir(p) {
         const entries = await fs.readdir(p, { withFileTypes: true })
         return entries.map((e) => ({ name: e.name }))
       },
-      async stat(p) { const s = await fs.stat(p); return { mtime: s.mtime } },
+      async stat(p) {
+        const s = await fs.stat(p)
+        return { mtime: s.mtime }
+      },
     }
   }
   const tauriFs = await import('@tauri-apps/plugin-fs')
   return {
-    async readTextFile(p) { return tauriFs.readTextFile(p) },
-    async readDir(p) { return tauriFs.readDir(p) },
-    async stat(p) { return tauriFs.stat(p) as Promise<FileStat> },
+    async readTextFile(p) {
+      return tauriFs.readTextFile(p)
+    },
+    async readDir(p) {
+      return tauriFs.readDir(p)
+    },
+    async stat(p) {
+      return tauriFs.stat(p) as Promise<FileStat>
+    },
   }
 }
 
@@ -99,7 +110,9 @@ async function getMtime(fs: FsAdapter, path: string): Promise<number> {
     if (s.mtime instanceof Date) return s.mtime.getTime()
     if (typeof s.mtime === 'number') return s.mtime
     return 0
-  } catch { return 0 }
+  } catch {
+    return 0
+  }
 }
 
 // ── Inbox message parser ──────────────────────────────────────────────────────
@@ -114,7 +127,7 @@ export function parseInboxEntry(
   content: string,
   project: string,
   filePath: string,
-  mtime: number,
+  mtime: number
 ): InboxEntry {
   const parts = filePath.replace(/\\/g, '/').split('/')
   const filename = parts[parts.length - 1] ?? ''
@@ -147,7 +160,7 @@ export function parseInboxEntry(
 
 async function scanProjectInbox(
   fs: FsAdapter,
-  projectRoot: string,
+  projectRoot: string
 ): Promise<{ inbox: InboxEntry[]; threads: ThreadEntry[] }> {
   const inbox: InboxEntry[] = []
   const threads: ThreadEntry[] = []
@@ -164,9 +177,13 @@ async function scanProjectInbox(
         const content = await fs.readTextFile(filePath)
         const mtime = await getMtime(fs, filePath)
         inbox.push(parseInboxEntry(content, projectRoot, filePath, mtime))
-      } catch { /* skip unreadable */ }
+      } catch {
+        /* skip unreadable */
+      }
     }
-  } catch { /* dir absent */ }
+  } catch {
+    /* dir absent */
+  }
 
   // ── Inbox archive/ messages ───────────────────────────────────────────────
   const archiveDir = `${projectRoot}/.claude/inbox/archive`
@@ -180,9 +197,13 @@ async function scanProjectInbox(
         const content = await fs.readTextFile(filePath)
         const mtime = await getMtime(fs, filePath)
         inbox.push(parseInboxEntry(content, projectRoot, filePath, mtime))
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
-  } catch { /* archive dir absent — normal */ }
+  } catch {
+    /* archive dir absent — normal */
+  }
 
   // ── Thread READMEs ────────────────────────────────────────────────────────
   const threadsDir = `${projectRoot}/.claude/memory/threads`
@@ -196,15 +217,20 @@ async function scanProjectInbox(
         const content = await fs.readTextFile(readmePath)
         const mtime = await getMtime(fs, readmePath)
         // Title = first non-empty line (strip leading # if present)
-        const firstLine = content
-          .replace(/\r\n/g, '\n')
-          .split('\n')
-          .map((l) => l.replace(/^#+\s*/, '').trim())
-          .find((l) => l.length > 0) ?? dirName
+        const firstLine =
+          content
+            .replace(/\r\n/g, '\n')
+            .split('\n')
+            .map((l) => l.replace(/^#+\s*/, '').trim())
+            .find((l) => l.length > 0) ?? dirName
         threads.push({ project: projectRoot, title: firstLine, path: readmePath, mtime })
-      } catch { /* README absent — skip this thread dir */ }
+      } catch {
+        /* README absent — skip this thread dir */
+      }
     }
-  } catch { /* threads dir absent */ }
+  } catch {
+    /* threads dir absent */
+  }
 
   return { inbox, threads }
 }
@@ -218,7 +244,7 @@ async function scanProjectInbox(
  * Constraints: Never throws. Skips unreadable projects silently.
  */
 export async function buildInboxIndex(
-  projectPaths: string[],
+  projectPaths: string[]
 ): Promise<{ inbox: InboxEntry[]; threads: ThreadEntry[] }> {
   if (projectPaths.length === 0) return { inbox: [], threads: [] }
 
@@ -245,7 +271,9 @@ export async function buildInboxIndex(
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-interface PriorityBadgeProps { priority: string }
+interface PriorityBadgeProps {
+  priority: string
+}
 
 function PriorityBadge({ priority }: PriorityBadgeProps): React.ReactElement | null {
   if (!priority) return null
@@ -265,7 +293,10 @@ function PriorityBadge({ priority }: PriorityBadgeProps): React.ReactElement | n
   )
 }
 
-interface InboxCardProps { entry: InboxEntry; onOpen: (path: string) => void }
+interface InboxCardProps {
+  entry: InboxEntry
+  onOpen: (path: string) => void
+}
 
 function InboxCard({ entry, onOpen }: InboxCardProps): React.ReactElement {
   const label = projectLabel(entry.project)
@@ -301,18 +332,20 @@ function InboxCard({ entry, onOpen }: InboxCardProps): React.ReactElement {
         </time>
       </div>
       {/* Subject */}
-      <p className="text-sm font-semibold leading-snug text-foreground truncate">
-        {entry.subject}
-      </p>
+      <p className="text-sm font-semibold leading-snug text-foreground truncate">{entry.subject}</p>
       {/* From + Date */}
       <p className="mt-0.5 text-xs text-muted-foreground truncate">
-        From: {entry.from}{entry.date ? ` · ${entry.date}` : ''}
+        From: {entry.from}
+        {entry.date ? ` · ${entry.date}` : ''}
       </p>
     </button>
   )
 }
 
-interface ThreadCardProps { entry: ThreadEntry; onOpen: (path: string) => void }
+interface ThreadCardProps {
+  entry: ThreadEntry
+  onOpen: (path: string) => void
+}
 
 function ThreadCard({ entry, onOpen }: ThreadCardProps): React.ReactElement {
   const label = projectLabel(entry.project)
@@ -377,14 +410,21 @@ export function InboxThreadsTab({
     setError(null)
     buildInboxIndex(projectPaths)
       .then(({ inbox: i, threads: t }) => {
-        if (!cancelled) { setInbox(i); setThreads(t) }
+        if (!cancelled) {
+          setInbox(i)
+          setThreads(t)
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
       })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(projectPaths)])
 
   // Split inbox into active/archived for display order (active first).
@@ -436,7 +476,7 @@ export function InboxThreadsTab({
               <Inbox className="h-3.5 w-3.5" aria-hidden="true" />
               Inbox
             </h3>
-            <ul className="flex flex-col gap-2" role="list">
+            <ul className="flex flex-col gap-2">
               {activeInbox.map((entry) => (
                 <li key={entry.path}>
                   <InboxCard entry={entry} onOpen={onOpen} />
@@ -453,7 +493,7 @@ export function InboxThreadsTab({
               <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
               Threads
             </h3>
-            <ul className="flex flex-col gap-2" role="list">
+            <ul className="flex flex-col gap-2">
               {threads.map((entry) => (
                 <li key={entry.path}>
                   <ThreadCard entry={entry} onOpen={onOpen} />
@@ -470,7 +510,7 @@ export function InboxThreadsTab({
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               Archived
             </h3>
-            <ul className="flex flex-col gap-2" role="list">
+            <ul className="flex flex-col gap-2">
               {archivedInbox.map((entry) => (
                 <li key={entry.path}>
                   <InboxCard entry={entry} onOpen={onOpen} />

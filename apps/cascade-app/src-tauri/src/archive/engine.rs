@@ -94,8 +94,12 @@ pub fn archive_tools(tool_id: String, source_root: PathBuf) -> Result<ToolArchiv
     // -----------------------------------------------------------------------
     // Create archive root
     // -----------------------------------------------------------------------
-    fs::create_dir_all(&archive_root)
-        .map_err(|e| format!("failed to create archive root {}: {e}", archive_root.display()))?;
+    fs::create_dir_all(&archive_root).map_err(|e| {
+        format!(
+            "failed to create archive root {}: {e}",
+            archive_root.display()
+        )
+    })?;
 
     // -----------------------------------------------------------------------
     // Walk and move
@@ -118,10 +122,7 @@ pub fn archive_tools(tool_id: String, source_root: PathBuf) -> Result<ToolArchiv
         // Create parent directories in archive.
         if let Some(parent) = dest.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                move_error = Some(format!(
-                    "failed to create dir {}: {e}",
-                    parent.display()
-                ));
+                move_error = Some(format!("failed to create dir {}: {e}", parent.display()));
                 break;
             }
         }
@@ -134,9 +135,7 @@ pub fn archive_tools(tool_id: String, source_root: PathBuf) -> Result<ToolArchiv
         }
 
         // Get file size before move.
-        let size_bytes = fs::metadata(&original)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let size_bytes = fs::metadata(&original).map(|m| m.len()).unwrap_or(0);
 
         // Attempt rename; fall back on EXDEV.
         match atomic_move_file(&original, &dest) {
@@ -161,7 +160,10 @@ pub fn archive_tools(tool_id: String, source_root: PathBuf) -> Result<ToolArchiv
     // Rollback on error
     // -----------------------------------------------------------------------
     if let Some(err) = move_error {
-        let log_path = home.join(".cascade").join("legacy").join("rollback-errors.log");
+        let log_path = home
+            .join(".cascade")
+            .join("legacy")
+            .join("rollback-errors.log");
         let rollback_result = rollback(&moved, &log_path);
         // Clean up (potentially empty) archive root.
         let _ = fs::remove_dir_all(&archive_root);
@@ -271,8 +273,7 @@ fn atomic_move_file(src: &Path, dst: &Path) -> io::Result<()> {
 
 /// Detect cross-device rename error (EXDEV = OS error 18 on Unix).
 fn is_cross_device(e: &io::Error) -> bool {
-    e.kind() == io::ErrorKind::CrossesDevices
-        || e.raw_os_error() == Some(18) // EXDEV on Linux/macOS
+    e.kind() == io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(18) // EXDEV on Linux/macOS
 }
 
 /// Copy src to dst, verify size matches, then delete src.
@@ -282,12 +283,9 @@ fn copy_verify_delete(src: &Path, dst: &Path) -> io::Result<()> {
     if copied != original_size {
         // Size mismatch — remove bad copy, leave original intact.
         let _ = fs::remove_file(dst);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "copy size mismatch: copied {copied} bytes, original {original_size} bytes"
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "copy size mismatch: copied {copied} bytes, original {original_size} bytes"
+        )));
     }
     fs::remove_file(src)?;
     Ok(())
@@ -361,10 +359,8 @@ fn load_manifest(path: &Path) -> Result<ArchiveManifest, String> {
     if !path.exists() {
         return Err("manifest not found".to_string());
     }
-    let contents = fs::read_to_string(path)
-        .map_err(|e| format!("failed to read manifest: {e}"))?;
-    serde_json::from_str::<ArchiveManifest>(&contents)
-        .map_err(|e| format!("corrupt manifest: {e}"))
+    let contents = fs::read_to_string(path).map_err(|e| format!("failed to read manifest: {e}"))?;
+    serde_json::from_str::<ArchiveManifest>(&contents).map_err(|e| format!("corrupt manifest: {e}"))
 }
 
 /// Write or update the manifest atomically.
@@ -373,8 +369,7 @@ fn load_manifest(path: &Path) -> Result<ArchiveManifest, String> {
 /// to `<path>.tmp`, then renames to `<path>`.
 fn write_manifest_atomic(path: &Path, tool_archive: &ToolArchive) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create manifest dir: {e}"))?;
+        fs::create_dir_all(parent).map_err(|e| format!("failed to create manifest dir: {e}"))?;
     }
 
     // Load existing or create fresh.
@@ -443,7 +438,20 @@ fn secs_to_ymd_hms(secs: u64) -> (u32, u32, u32, u32, u32, u32) {
         y += 1;
     }
     let leap = is_leap(y);
-    let months = [31u32, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31u32,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut mo = 1u32;
     for &dm in &months {
         if days < dm {
@@ -507,13 +515,26 @@ mod tests {
             assert!(manifest_path.exists(), "manifest.json missing");
             let json = fs::read_to_string(&manifest_path).unwrap();
             assert!(json.contains("\"toolId\""), "camelCase toolId missing");
-            assert!(json.contains("\"originalRoot\""), "camelCase originalRoot missing");
-            assert!(json.contains("\"archivedAt\""), "camelCase archivedAt missing");
-            assert!(json.contains("\"claude-code\""), "tool_id missing from manifest");
+            assert!(
+                json.contains("\"originalRoot\""),
+                "camelCase originalRoot missing"
+            );
+            assert!(
+                json.contains("\"archivedAt\""),
+                "camelCase archivedAt missing"
+            );
+            assert!(
+                json.contains("\"claude-code\""),
+                "tool_id missing from manifest"
+            );
 
             // All archived files exist at new location.
             for f in &ta.files {
-                assert!(f.archived_path.exists(), "archived file missing: {:?}", f.archived_path);
+                assert!(
+                    f.archived_path.exists(),
+                    "archived file missing: {:?}",
+                    f.archived_path
+                );
             }
         });
     }
@@ -630,12 +651,34 @@ mod tests {
             let manifest_path = home.join(".cascade/legacy/manifest.json");
             let json = fs::read_to_string(manifest_path).unwrap();
             // All camelCase keys must appear.
-            for key in &["toolId", "originalRoot", "archiveRoot", "archivedAt", "movedAt", "sizeBytes", "originalPath", "archivedPath"] {
-                assert!(json.contains(&format!("\"{}\"", key)), "missing camelCase key: {key}");
+            for key in &[
+                "toolId",
+                "originalRoot",
+                "archiveRoot",
+                "archivedAt",
+                "movedAt",
+                "sizeBytes",
+                "originalPath",
+                "archivedPath",
+            ] {
+                assert!(
+                    json.contains(&format!("\"{}\"", key)),
+                    "missing camelCase key: {key}"
+                );
             }
             // No snake_case leaks.
-            for key in &["tool_id", "original_root", "archive_root", "archived_at", "moved_at", "size_bytes"] {
-                assert!(!json.contains(&format!("\"{}\"", key)), "snake_case key leaked: {key}");
+            for key in &[
+                "tool_id",
+                "original_root",
+                "archive_root",
+                "archived_at",
+                "moved_at",
+                "size_bytes",
+            ] {
+                assert!(
+                    !json.contains(&format!("\"{}\"", key)),
+                    "snake_case key leaked: {key}"
+                );
             }
         });
     }

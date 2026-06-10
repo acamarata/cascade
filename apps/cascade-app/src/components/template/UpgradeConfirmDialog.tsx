@@ -109,16 +109,21 @@ export function UpgradeConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onCancel()
+      }}
+    >
       <DialogContent aria-label={`Upgrade ${templateId} confirmation`}>
         <DialogHeader>
           <DialogTitle>Upgrade template to v{newVersion}?</DialogTitle>
           <DialogDescription asChild>
             <div>
               <p className="text-sm text-muted-foreground">
-                <strong className="text-foreground">{templateId}</strong> was applied at v{oldVersion}.
-                v{newVersion} is available — {totalChanged} section{totalChanged !== 1 ? 's' : ''} will
-                change.
+                <strong className="text-foreground">{templateId}</strong> was applied at v
+                {oldVersion}. v{newVersion} is available — {totalChanged} section
+                {totalChanged !== 1 ? 's' : ''} will change.
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Sections you have not edited are updated automatically. Sections you have edited

@@ -54,13 +54,11 @@ export function UsagePage(): React.ReactElement {
 
   const { summary, history, ledger, loading, error, refetch } = useUsageData(
     period,
-    selectedAccount,
+    selectedAccount
   )
 
   const isEmpty =
-    !loading &&
-    !error &&
-    (summary === null || (summary.totalTokens === 0 && history.length === 0))
+    !loading && !error && (summary === null || (summary.totalTokens === 0 && history.length === 0))
 
   return (
     <main className="flex-1 p-6 space-y-6">
@@ -102,10 +100,7 @@ export function UsagePage(): React.ReactElement {
           />
 
           {/* Panel 2 — By-model horizontal bar chart */}
-          <ModelBreakdownChart
-            byModel={summary?.byModel ?? []}
-            loading={loading}
-          />
+          <ModelBreakdownChart byModel={summary?.byModel ?? []} loading={loading} />
 
           {/* Panel 3 — Per-account collapsible ledger */}
           <AccountLedger

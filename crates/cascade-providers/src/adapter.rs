@@ -61,10 +61,7 @@ pub trait ProviderAdapter: Send + Sync {
     /// full response.
     ///
     /// Returns the complete generated text along with token usage statistics.
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError>;
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError>;
 
     /// Send a streaming completion request and return an async stream of
     /// incremental [`StreamChunk`] values.
@@ -75,10 +72,7 @@ pub trait ProviderAdapter: Send + Sync {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    >;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>;
 
     /// List all model identifiers available on this provider.
     ///
@@ -114,20 +108,15 @@ pub struct NoopProvider;
 
 #[async_trait]
 impl ProviderAdapter for NoopProvider {
-    async fn complete(
-        &self,
-        _req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         Err(ProviderError::NotImplemented)
     }
 
     async fn complete_stream(
         &self,
         _req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         Err(ProviderError::NotImplemented)
     }
 
@@ -223,9 +212,7 @@ mod tests {
     async fn dyn_adapter_all_methods() {
         let adapter: Box<dyn ProviderAdapter> = Box::new(NoopProvider);
 
-        let _ = adapter
-            .complete(CompletionRequest::simple("m", "q"))
-            .await;
+        let _ = adapter.complete(CompletionRequest::simple("m", "q")).await;
         let _ = adapter.health_check().await;
         let _ = adapter.available_models().await;
         let _ = adapter

@@ -130,7 +130,7 @@ export function tagIndexToEntries(index: Map<string, string[]>): TagEntry[] {
  */
 export function filterNotesByTags(
   index: Map<string, string[]>,
-  selectedTags: ReadonlySet<string>,
+  selectedTags: ReadonlySet<string>
 ): Set<string> {
   if (selectedTags.size === 0) return new Set() // no filter = show all
 

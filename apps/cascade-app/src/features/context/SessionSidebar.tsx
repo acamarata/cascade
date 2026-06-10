@@ -72,7 +72,7 @@ export function SessionSidebar({
     const hasItems = session.itemCount > 0
     if (hasItems) {
       const confirmed = window.confirm(
-        `Delete "${session.title}" and its ${session.itemCount} item(s)?`,
+        `Delete "${session.title}" and its ${session.itemCount} item(s)?`
       )
       if (!confirmed) return
     }
@@ -98,7 +98,7 @@ export function SessionSidebar({
       </div>
 
       {/* Session list */}
-      <ul role="list" className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+      <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
         {/* Inline create input */}
         {creating && (
           <li>

@@ -32,11 +32,7 @@ import { Archive, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ToolId } from '@/lib/scanner/types'
 import type { ArchiveValidation } from '@/lib/archive/types'
-import {
-  archiveLegacyTools,
-  archivePreflight,
-  listArchivedTools,
-} from '@/lib/archive/archiveApi'
+import { archiveLegacyTools, archivePreflight, listArchivedTools } from '@/lib/archive/archiveApi'
 import { useWizard } from '@/features/onboarding/WizardContext'
 import { WizardStep } from '@/features/onboarding/types'
 import { ArchiveToolCard, type ArchiveChoice, type ArchiveCardState } from './ArchiveToolCard'
@@ -77,7 +73,7 @@ function Alert({
         'rounded-md border p-4',
         variant === 'destructive' && 'border-destructive/50 text-destructive',
         variant === 'warning' && 'border-yellow-500/50 text-yellow-700 dark:text-yellow-400',
-        className,
+        className
       )}
     >
       {children}
@@ -222,7 +218,7 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
                 }
               })
             }
-          }),
+          })
         )
       } catch (err) {
         if (!cancelled) {
@@ -235,7 +231,7 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
     return () => {
       cancelled = true
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -311,7 +307,7 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
         }))
       }
     },
-    [dispatch, updateState, state.archiveManifestPath],
+    [dispatch, updateState, state.archiveManifestPath]
   )
 
   // ---------------------------------------------------------------------------
@@ -357,7 +353,8 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
 
   const isEmpty = tools.length === 0
   const confirmingState = confirmingTool ? toolStateMap[confirmingTool] : null
-  const canContinue = anyArchived || skipped || tools.every((id) => toolStateMap[id]?.cardState === 'done')
+  const canContinue =
+    anyArchived || skipped || tools.every((id) => toolStateMap[id]?.cardState === 'done')
 
   // ---------------------------------------------------------------------------
   // Render
@@ -373,9 +370,8 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Archive Legacy Tools</h2>
           <p className="text-sm text-muted-foreground">
-            Move legacy tool homes to{' '}
-            <span className="font-mono">~/.cascade/legacy/</span>. Files are never
-            deleted and can be restored at any time.
+            Move legacy tool homes to <span className="font-mono">~/.cascade/legacy/</span>. Files
+            are never deleted and can be restored at any time.
           </p>
         </div>
       </div>
@@ -429,9 +425,8 @@ export function ArchiveLegacyPhase({ className }: ArchiveLegacyPhaseProps) {
       {/* Non-destructive assurance note */}
       {!isEmpty && (
         <p className="text-xs text-muted-foreground">
-          Cascade will never archive its own{' '}
-          <span className="font-mono">~/.cascade/</span> directory — only the
-          legacy tool homes listed above.
+          Cascade will never archive its own <span className="font-mono">~/.cascade/</span>{' '}
+          directory — only the legacy tool homes listed above.
         </p>
       )}
 

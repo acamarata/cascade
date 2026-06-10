@@ -97,7 +97,9 @@ pub fn parse_sections(content: &str) -> Vec<Section> {
             }
         } else {
             // Inside a fence: look for the matching closing fence.
-            if trimmed.starts_with(fence_char) && trimmed.chars().all(|c| c == fence_char || c == '\n') {
+            if trimmed.starts_with(fence_char)
+                && trimmed.chars().all(|c| c == fence_char || c == '\n')
+            {
                 in_fence = false;
             }
             current_body.push_str(line);

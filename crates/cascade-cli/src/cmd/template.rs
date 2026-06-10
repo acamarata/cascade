@@ -41,7 +41,10 @@ fn read_stamps_from_content(content: &str) -> Vec<(String, String)> {
         if !trimmed.starts_with(CLI_STAMP_PREFIX) {
             continue;
         }
-        if let (Some(id), Some(ver)) = (cli_extract_attr(trimmed, "id"), cli_extract_attr(trimmed, "version")) {
+        if let (Some(id), Some(ver)) = (
+            cli_extract_attr(trimmed, "id"),
+            cli_extract_attr(trimmed, "version"),
+        ) {
             stamps.push((id, ver));
         }
     }
@@ -143,11 +146,7 @@ impl Command for ListArgs {
         let reg = load_registry()?;
 
         let filter = TemplateFilter {
-            tier: self
-                .tier
-                .as_deref()
-                .map(parse_tier)
-                .transpose()?,
+            tier: self.tier.as_deref().map(parse_tier).transpose()?,
             stack: self.stack.clone(),
             project_shape: self.shape.clone(),
         };
@@ -187,22 +186,28 @@ impl Command for ListArgs {
             // Emit a JSON array of manifest objects (no body — keeps output lean).
             let items: Vec<_> = records
                 .iter()
-                .map(|r| serde_json::json!({
-                    "id":      r.manifest.id,
-                    "version": r.manifest.version,
-                    "tier":    r.manifest.tier.to_string(),
-                    "stacks":  r.manifest.stacks,
-                    "shapes":  r.manifest.project_shapes,
-                    "description": r.manifest.description,
-                }))
+                .map(|r| {
+                    serde_json::json!({
+                        "id":      r.manifest.id,
+                        "version": r.manifest.version,
+                        "tier":    r.manifest.tier.to_string(),
+                        "stacks":  r.manifest.stacks,
+                        "shapes":  r.manifest.project_shapes,
+                        "description": r.manifest.description,
+                    })
+                })
                 .collect();
-            println!("{}", serde_json::to_string_pretty(&items).map_err(|e| {
-                CascadeError::Other(format!("json serialize: {e}"))
-            })?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&items)
+                    .map_err(|e| { CascadeError::Other(format!("json serialize: {e}")) })?
+            );
         } else {
             if records.is_empty() {
                 if self.upgradeable {
-                    eprintln!("No upgradeable templates found — all applied templates are up to date.");
+                    eprintln!(
+                        "No upgradeable templates found — all applied templates are up to date."
+                    );
                 } else {
                     eprintln!("No templates found. Check ~/.cascade/templates/ or the bundled data/templates/.");
                 }
@@ -219,27 +224,59 @@ impl Command for ListArgs {
 /// Print a fixed-width table for a slice of template records.
 fn print_template_table(records: &[&cascade_types::TemplateRecord]) {
     // Compute column widths.
-    let id_w     = records.iter().map(|r| r.manifest.id.len()).max().unwrap_or(2).max(2);
-    let ver_w    = records.iter().map(|r| r.manifest.version.len()).max().unwrap_or(7).max(7);
-    let tier_w   = records.iter().map(|r| r.manifest.tier.to_string().len()).max().unwrap_or(4).max(4);
-    let stacks_w = records.iter()
+    let id_w = records
+        .iter()
+        .map(|r| r.manifest.id.len())
+        .max()
+        .unwrap_or(2)
+        .max(2);
+    let ver_w = records
+        .iter()
+        .map(|r| r.manifest.version.len())
+        .max()
+        .unwrap_or(7)
+        .max(7);
+    let tier_w = records
+        .iter()
+        .map(|r| r.manifest.tier.to_string().len())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    let stacks_w = records
+        .iter()
         .map(|r| {
-            if r.manifest.stacks.is_empty() { 3 } else { r.manifest.stacks.join(",").len() }
+            if r.manifest.stacks.is_empty() {
+                3
+            } else {
+                r.manifest.stacks.join(",").len()
+            }
         })
-        .max().unwrap_or(6).max(6);
-    let desc_w   = 40usize;
+        .max()
+        .unwrap_or(6)
+        .max(6);
+    let desc_w = 40usize;
 
     let sep = format!(
         "+-{}-+-{}-+-{}-+-{}-+-{}-+",
-        "-".repeat(id_w), "-".repeat(ver_w), "-".repeat(tier_w),
-        "-".repeat(stacks_w), "-".repeat(desc_w)
+        "-".repeat(id_w),
+        "-".repeat(ver_w),
+        "-".repeat(tier_w),
+        "-".repeat(stacks_w),
+        "-".repeat(desc_w)
     );
     println!("{sep}");
     println!(
         "| {:<id_w$} | {:<ver_w$} | {:<tier_w$} | {:<stacks_w$} | {:<desc_w$} |",
-        "id", "version", "tier", "stacks", "description",
-        id_w = id_w, ver_w = ver_w, tier_w = tier_w,
-        stacks_w = stacks_w, desc_w = desc_w
+        "id",
+        "version",
+        "tier",
+        "stacks",
+        "description",
+        id_w = id_w,
+        ver_w = ver_w,
+        tier_w = tier_w,
+        stacks_w = stacks_w,
+        desc_w = desc_w
     );
     println!("{sep}");
     for r in records {
@@ -251,10 +288,16 @@ fn print_template_table(records: &[&cascade_types::TemplateRecord]) {
         let desc_str = truncate(&r.manifest.description, desc_w);
         println!(
             "| {:<id_w$} | {:<ver_w$} | {:<tier_w$} | {:<stacks_w$} | {:<desc_w$} |",
-            r.manifest.id, r.manifest.version, r.manifest.tier.to_string(),
-            stacks_str, desc_str,
-            id_w = id_w, ver_w = ver_w, tier_w = tier_w,
-            stacks_w = stacks_w, desc_w = desc_w
+            r.manifest.id,
+            r.manifest.version,
+            r.manifest.tier.to_string(),
+            stacks_str,
+            desc_str,
+            id_w = id_w,
+            ver_w = ver_w,
+            tier_w = tier_w,
+            stacks_w = stacks_w,
+            desc_w = desc_w
         );
     }
     println!("{sep}");
@@ -265,7 +308,13 @@ fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..s.char_indices().nth(max.saturating_sub(1)).map_or(s.len(), |(i, _)| i)])
+        format!(
+            "{}…",
+            &s[..s
+                .char_indices()
+                .nth(max.saturating_sub(1))
+                .map_or(s.len(), |(i, _)| i)]
+        )
     }
 }
 
@@ -323,9 +372,19 @@ impl Command for ApplyArgs {
         let result = engine.apply(&subst_record, &target, &opts)?;
 
         if self.dry_run {
-            println!("Dry-run: would apply template '{}' to {}", self.id, target.display());
-        } else if result.applied.is_empty() && result.conflicts.is_empty() && result.skipped.is_empty() {
-            println!("Template '{}' already applied (idempotent) — no changes.", self.id);
+            println!(
+                "Dry-run: would apply template '{}' to {}",
+                self.id,
+                target.display()
+            );
+        } else if result.applied.is_empty()
+            && result.conflicts.is_empty()
+            && result.skipped.is_empty()
+        {
+            println!(
+                "Template '{}' already applied (idempotent) — no changes.",
+                self.id
+            );
             return Ok(());
         }
 
@@ -353,9 +412,7 @@ pub struct DiffArgs {
 impl Command for DiffArgs {
     async fn run(&self) -> Result<()> {
         let reg = load_registry()?;
-        let record = reg
-            .get(&self.id)
-            .ok_or_else(|| not_found_error(&self.id))?;
+        let record = reg.get(&self.id).ok_or_else(|| not_found_error(&self.id))?;
 
         let target = resolve_target(self.target.as_deref())?;
 
@@ -425,7 +482,11 @@ impl Command for UpgradeArgs {
                     target.display()
                 );
             } else {
-                println!("Upgraded (force) template '{}' in {}", self.id, target.display());
+                println!(
+                    "Upgraded (force) template '{}' in {}",
+                    self.id,
+                    target.display()
+                );
             }
             print_apply_result(&result, self.dry_run);
         } else {
@@ -502,8 +563,7 @@ fn bundled_templates_dir() -> Option<PathBuf> {
 
 /// Return `~/.cascade/templates/`, or `None` if HOME is unset.
 fn user_templates_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".cascade").join("templates"))
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cascade").join("templates"))
 }
 
 /// Resolve the target path:
@@ -562,10 +622,7 @@ fn parse_vars(vars: &[String]) -> Result<std::collections::HashMap<String, Strin
 /// Returns `Err` if any `{{key}}` placeholder has no corresponding entry in
 /// `vars` and no inline default (defaults are not supported in this version —
 /// all referenced variables must be provided via `--var`).
-fn substitute_vars(
-    body: &str,
-    vars: &std::collections::HashMap<String, String>,
-) -> Result<String> {
+fn substitute_vars(body: &str, vars: &std::collections::HashMap<String, String>) -> Result<String> {
     let mut result = body.to_string();
     // Find all {{...}} patterns and substitute them.
     let mut output = String::with_capacity(result.len());
@@ -629,7 +686,10 @@ fn print_upgrade_result(result: &cascade_types::UpgradeResult, dry_run: bool) {
         }
     }
     if !result.deprecated.is_empty() {
-        println!("{prefix}Deprecated sections ({}) — preserved with deprecation notice:", result.deprecated.len());
+        println!(
+            "{prefix}Deprecated sections ({}) — preserved with deprecation notice:",
+            result.deprecated.len()
+        );
         for s in &result.deprecated {
             println!("  ! {s}");
         }
@@ -649,7 +709,10 @@ fn print_apply_result(result: &cascade_types::ApplyResult, dry_run: bool) {
         }
     }
     if !result.conflicts.is_empty() {
-        println!("{prefix}Conflicts ({}): existing content preserved:", result.conflicts.len());
+        println!(
+            "{prefix}Conflicts ({}): existing content preserved:",
+            result.conflicts.len()
+        );
         for s in &result.conflicts {
             println!("  ! {s}");
         }
@@ -658,7 +721,10 @@ fn print_apply_result(result: &cascade_types::ApplyResult, dry_run: bool) {
         }
     }
     if !result.skipped.is_empty() {
-        println!("{prefix}Already present ({}): no change needed:", result.skipped.len());
+        println!(
+            "{prefix}Already present ({}): no change needed:",
+            result.skipped.len()
+        );
         for s in &result.skipped {
             println!("  = {s}");
         }
@@ -727,10 +793,7 @@ impl Command for CreateArgs {
         // Ensure parent directory exists.
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                CascadeError::Other(format!(
-                    "cannot create directory {}: {e}",
-                    parent.display()
-                ))
+                CascadeError::Other(format!("cannot create directory {}: {e}", parent.display()))
             })?;
         }
 
@@ -765,12 +828,14 @@ impl Command for CreateArgs {
             extends = extends_line,
         );
 
-        std::fs::write(&out_path, &scaffold).map_err(|e| {
-            CascadeError::Other(format!("write {}: {e}", out_path.display()))
-        })?;
+        std::fs::write(&out_path, &scaffold)
+            .map_err(|e| CascadeError::Other(format!("write {}: {e}", out_path.display())))?;
 
         println!("Created template scaffold: {}", out_path.display());
-        println!("Edit the file, then run: cascade template validate {}", out_path.display());
+        println!(
+            "Edit the file, then run: cascade template validate {}",
+            out_path.display()
+        );
         Ok(())
     }
 }
@@ -816,17 +881,13 @@ impl Command for ValidateArgs {
 fn validate_template_file(path: &Path) -> Result<Vec<String>> {
     use cascade_core::templates::parser::parse_template_file;
 
-    let record = parse_template_file(path).map_err(|e| {
-        CascadeError::Other(format!("cannot parse {}: {e}", path.display()))
-    })?;
+    let record = parse_template_file(path)
+        .map_err(|e| CascadeError::Other(format!("cannot parse {}: {e}", path.display())))?;
 
     let mut errors: Vec<String> = Vec::new();
 
     // 1. id must match the filename slug (stem without extension).
-    let file_stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     if record.manifest.id != file_stem {
         errors.push(format!(
             "id field '{}' does not match filename slug '{}' — rename the file or update the id field",
@@ -845,17 +906,12 @@ fn validate_template_file(path: &Path) -> Result<Vec<String>> {
     // 3. description must be non-empty.
     if record.manifest.description.trim().is_empty() {
         errors.push(
-            "description is empty — add a short human-readable description of this template"
-                .into(),
+            "description is empty — add a short human-readable description of this template".into(),
         );
     }
 
     // 4. body must contain at least 2 `##` sections.
-    let section_count = record
-        .body
-        .lines()
-        .filter(|l| l.starts_with("## "))
-        .count();
+    let section_count = record.body.lines().filter(|l| l.starts_with("## ")).count();
     if section_count < 2 {
         errors.push(format!(
             "body has {section_count} `##` section(s) — at least 2 are required \
@@ -904,9 +960,7 @@ pub struct ExportArgs {
 impl Command for ExportArgs {
     async fn run(&self) -> Result<()> {
         let reg = load_registry()?;
-        let record = reg
-            .get(&self.id)
-            .ok_or_else(|| not_found_error(&self.id))?;
+        let record = reg.get(&self.id).ok_or_else(|| not_found_error(&self.id))?;
 
         let out_dir = match &self.output {
             Some(d) => d.clone(),
@@ -915,20 +969,21 @@ impl Command for ExportArgs {
         };
 
         std::fs::create_dir_all(&out_dir).map_err(|e| {
-            CascadeError::Other(format!("cannot create directory {}: {e}", out_dir.display()))
+            CascadeError::Other(format!(
+                "cannot create directory {}: {e}",
+                out_dir.display()
+            ))
         })?;
 
         let out_file = out_dir.join(format!("{}.md", self.id));
 
         // Build the file content: TOML frontmatter block + body.
-        let fm = toml::to_string(&record.manifest).map_err(|e| {
-            CascadeError::Other(format!("serialize manifest: {e}"))
-        })?;
+        let fm = toml::to_string(&record.manifest)
+            .map_err(|e| CascadeError::Other(format!("serialize manifest: {e}")))?;
         let content = format!("---\n{fm}---\n{}", record.body);
 
-        std::fs::write(&out_file, &content).map_err(|e| {
-            CascadeError::Other(format!("write {}: {e}", out_file.display()))
-        })?;
+        std::fs::write(&out_file, &content)
+            .map_err(|e| CascadeError::Other(format!("write {}: {e}", out_file.display())))?;
 
         println!("Exported template '{}' → {}", self.id, out_file.display());
         Ok(())
@@ -1003,7 +1058,10 @@ mod tests {
             args: ListArgs,
         }
 
-        let cli = Cli::try_parse_from(["list", "--tier", "gci", "--stack", "rust", "--shape", "lib", "--json"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "list", "--tier", "gci", "--stack", "rust", "--shape", "lib", "--json",
+        ])
+        .unwrap();
         assert_eq!(cli.args.tier.as_deref(), Some("gci"));
         assert_eq!(cli.args.stack.as_deref(), Some("rust"));
         assert_eq!(cli.args.shape.as_deref(), Some("lib"));
@@ -1022,10 +1080,14 @@ mod tests {
 
         let cli = Cli::try_parse_from([
             "apply",
-            "--id", "gci-default",
-            "--target", "/tmp/test.md",
-            "--var", "project=myproject",
-            "--var", "author=Alice",
+            "--id",
+            "gci-default",
+            "--target",
+            "/tmp/test.md",
+            "--var",
+            "project=myproject",
+            "--var",
+            "author=Alice",
             "--dry-run",
             "--force",
         ])
@@ -1098,11 +1160,13 @@ mod tests {
         assert!(cli.args.upgradeable);
         assert!(cli.args.target.is_none());
 
-        let cli2 = Cli::try_parse_from([
-            "list", "--upgradeable", "--target", "/tmp/target.md",
-        ]).unwrap();
+        let cli2 =
+            Cli::try_parse_from(["list", "--upgradeable", "--target", "/tmp/target.md"]).unwrap();
         assert!(cli2.args.upgradeable);
-        assert_eq!(cli2.args.target.as_deref(), Some(Path::new("/tmp/target.md")));
+        assert_eq!(
+            cli2.args.target.as_deref(),
+            Some(Path::new("/tmp/target.md"))
+        );
     }
 
     // ── list: fixture registry ────────────────────────────────────────────────
@@ -1112,7 +1176,13 @@ mod tests {
     fn list_against_fixture_registry() {
         let tmp = TempDir::new().unwrap();
         write_template_file(&tmp, "gci.md", "gci-default", "gci", "## Overview\nBody.\n");
-        write_template_file(&tmp, "prc-rust.md", "prc-rust", "prc", "## Rust Rules\nBody.\n");
+        write_template_file(
+            &tmp,
+            "prc-rust.md",
+            "prc-rust",
+            "prc",
+            "## Rust Rules\nBody.\n",
+        );
         write_template_file(&tmp, "any-base.md", "any-base", "any", "## Base\nBody.\n");
         unsafe { std::env::set_var("CASCADE_BUNDLED_TEMPLATES", tmp.path()) };
         unsafe { std::env::remove_var("HOME") }; // ensure no user override
@@ -1137,7 +1207,6 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn list_upgradeable_returns_only_templates_with_newer_registry_version() {
-
         let tmp = TempDir::new().unwrap();
         // Template registry has version 1.1.0 for "gci-default".
         let path = tmp.path().join("gci.md");
@@ -1150,9 +1219,7 @@ mod tests {
         let target_dir = TempDir::new().unwrap();
         let target = target_dir.path().join("CASCADE.md");
         // Write a stamp at version 1.0.0 (the "already applied" version).
-        let stamp = format!(
-            r#"<!-- cascade:applied {{ id="gci-default", version="1.0.0", applied_at="2026-01-01T00:00:00Z" }} -->"#
-        );
+        let stamp = r#"<!-- cascade:applied { id="gci-default", version="1.0.0", applied_at="2026-01-01T00:00:00Z" } -->"#.to_string();
         fs::write(&target, format!("## Overview\nOld body.\n\n{}\n", stamp)).unwrap();
 
         let reg = load_registry().unwrap();
@@ -1208,7 +1275,10 @@ mod tests {
             }
         });
 
-        assert!(records.is_empty(), "no template should be upgradeable when already up to date");
+        assert!(
+            records.is_empty(),
+            "no template should be upgradeable when already up to date"
+        );
     }
 
     // ── upgrade: three-way engine wired via upgrade_by_id ────────────────────
@@ -1235,10 +1305,7 @@ mod tests {
         // Target stamped at 1.0.0 — stamp indicates this was applied previously.
         let stamp = r#"<!-- cascade:applied { id="gci-default", version="1.0.0", applied_at="2026-01-01T00:00:00Z" } -->"#;
         let target = tmp.path().join("CASCADE.md");
-        fs::write(
-            &target,
-            format!("## Rules\nuser content\n\n{}\n", stamp),
-        ).unwrap();
+        fs::write(&target, format!("## Rules\nuser content\n\n{}\n", stamp)).unwrap();
 
         // Registry has gci-default at 1.1.0.
         let reg_dir = TempDir::new().unwrap();
@@ -1255,7 +1322,14 @@ mod tests {
         // is "changed between old and new" → UpgradeResult is empty (no-op on content).
         // The stamp IS updated to 1.1.0 because we were not yet at 1.1.0.
         let result = engine
-            .upgrade_by_id(&reg, "gci-default", &new_record, &target, false, Some(tmp.path().to_path_buf()))
+            .upgrade_by_id(
+                &reg,
+                "gci-default",
+                &new_record,
+                &target,
+                false,
+                Some(tmp.path().to_path_buf()),
+            )
             .unwrap();
 
         let content = fs::read_to_string(&target).unwrap();
@@ -1265,7 +1339,10 @@ mod tests {
             "stamp must be updated to 1.1.0: {content}"
         );
         // User content preserved (section body unchanged between old and new template versions).
-        assert!(content.contains("user content"), "user content should be preserved");
+        assert!(
+            content.contains("user content"),
+            "user content should be preserved"
+        );
         // Result should not error.
         let _ = result; // UpgradeResult accepted (may be empty when body unchanged).
     }
@@ -1275,7 +1352,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn upgrade_force_overwrites_all_conflicting_sections() {
-        use cascade_core::templates::apply::{TemplateEngine, ApplyOptions};
+        use cascade_core::templates::apply::{ApplyOptions, TemplateEngine};
 
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
@@ -1310,8 +1387,14 @@ mod tests {
             result
         );
         let content = fs::read_to_string(&target).unwrap();
-        assert!(content.contains("new content"), "force should write new template content");
-        assert!(!content.contains("user content"), "old user content should be replaced");
+        assert!(
+            content.contains("new content"),
+            "force should write new template content"
+        );
+        assert!(
+            !content.contains("user content"),
+            "old user content should be replaced"
+        );
     }
 
     #[test]
@@ -1396,8 +1479,14 @@ some content
         let result = substitute_vars(body, &vars);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("project_name"), "error should name the missing var: {msg}");
-        assert!(msg.contains("--var"), "error should hint at --var flag: {msg}");
+        assert!(
+            msg.contains("project_name"),
+            "error should name the missing var: {msg}"
+        );
+        assert!(
+            msg.contains("--var"),
+            "error should hint at --var flag: {msg}"
+        );
     }
 
     #[test]
@@ -1416,7 +1505,10 @@ some content
         let result = parse_vars(&bad);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("key=value"), "error should mention format: {msg}");
+        assert!(
+            msg.contains("key=value"),
+            "error should mention format: {msg}"
+        );
     }
 
     #[test]
@@ -1442,7 +1534,10 @@ some content
         let result = parse_tier("bogus");
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("bogus"), "error should mention the invalid value: {msg}");
+        assert!(
+            msg.contains("bogus"),
+            "error should mention the invalid value: {msg}"
+        );
     }
 
     // ── truncate helper ───────────────────────────────────────────────────────
@@ -1456,7 +1551,10 @@ some content
     fn truncate_long_string_shortened() {
         let long = "a".repeat(50);
         let result = truncate(&long, 10);
-        assert!(result.len() <= 12, "truncated result should be short: {result}");
+        assert!(
+            result.len() <= 12,
+            "truncated result should be short: {result}"
+        );
         assert!(result.ends_with('…') || result.len() <= 10);
     }
     // ── create: scaffolds valid template ─────────────────────────────────────
@@ -1482,9 +1580,15 @@ some content
         let content = fs::read_to_string(&out).unwrap();
         assert!(content.contains("id = \"my-tmpl\""), "id: {content}");
         assert!(content.contains("tier = \"prc\""), "tier: {content}");
-        assert!(content.contains("version = \"1.0.0\""), "version: {content}");
+        assert!(
+            content.contains("version = \"1.0.0\""),
+            "version: {content}"
+        );
         assert!(content.contains("## Purpose"), "Purpose: {content}");
-        assert!(content.contains("## Key Conventions"), "Key Conventions: {content}");
+        assert!(
+            content.contains("## Key Conventions"),
+            "Key Conventions: {content}"
+        );
         assert!(content.contains("## File Layout"), "File Layout: {content}");
     }
 
@@ -1501,9 +1605,7 @@ some content
             extends: None,
             output: Some(out.clone()),
         };
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(args.run());
+        let result = tokio::runtime::Runtime::new().unwrap().block_on(args.run());
         assert!(result.is_err(), "should error on existing file");
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("already exists"), "error: {msg}");
@@ -1527,7 +1629,10 @@ some content
             .expect("create with extends should succeed");
 
         let content = fs::read_to_string(&out).unwrap();
-        assert!(content.contains("extends = \"gci-default\""), "extends: {content}");
+        assert!(
+            content.contains("extends = \"gci-default\""),
+            "extends: {content}"
+        );
     }
 
     // ── validate: passes on well-formed scaffold ──────────────────────────────
@@ -1566,7 +1671,10 @@ some content
 
         let errors = validate_template_file(&path).expect("parse should succeed");
         assert!(!errors.is_empty(), "should have errors");
-        assert!(errors.iter().any(|e| e.contains("description")), "desc: {errors:?}");
+        assert!(
+            errors.iter().any(|e| e.contains("description")),
+            "desc: {errors:?}"
+        );
     }
 
     #[test]
@@ -1577,8 +1685,12 @@ some content
             "---\nid = \"wrong-id\"\nversion = \"1.0.0\"\ntier = \"any\"\n             stacks = []\nproject_shapes = []\ndescription = \"desc\"\n---\n             ## Section One\n\nText.\n\n## Section Two\n\nMore.\n").unwrap();
 
         let errors = validate_template_file(&path).expect("parse should succeed");
-        assert!(errors.iter().any(|e| e.contains("id field") && e.contains("filename slug")),
-            "id mismatch: {errors:?}");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("id field") && e.contains("filename slug")),
+            "id mismatch: {errors:?}"
+        );
     }
 
     #[test]
@@ -1589,7 +1701,10 @@ some content
             "---\nid = \"one-section\"\nversion = \"1.0.0\"\ntier = \"any\"\n             stacks = []\nproject_shapes = []\ndescription = \"desc\"\n---\n             ## Only Section\n\nJust one.\n").unwrap();
 
         let errors = validate_template_file(&path).expect("parse should succeed");
-        assert!(errors.iter().any(|e| e.contains("section")), "sections: {errors:?}");
+        assert!(
+            errors.iter().any(|e| e.contains("section")),
+            "sections: {errors:?}"
+        );
     }
 
     #[test]
@@ -1600,7 +1715,10 @@ some content
             "---\nid = \"bad-version\"\nversion = \"not-semver\"\ntier = \"any\"\n             stacks = []\nproject_shapes = []\ndescription = \"desc\"\n---\n             ## Section One\n\nText.\n\n## Section Two\n\nMore.\n").unwrap();
 
         let errors = validate_template_file(&path).expect("parse should succeed");
-        assert!(errors.iter().any(|e| e.contains("semver")), "semver: {errors:?}");
+        assert!(
+            errors.iter().any(|e| e.contains("semver")),
+            "semver: {errors:?}"
+        );
     }
 
     // ── is_valid_semver helper ────────────────────────────────────────────────
@@ -1629,8 +1747,13 @@ some content
     #[serial(global_env)]
     fn export_writes_template_to_dir() {
         let bundled_dir = TempDir::new().unwrap();
-        write_template_file(&bundled_dir, "gci-default.md", "gci-default", "gci",
-            "## Overview\nBody content.\n");
+        write_template_file(
+            &bundled_dir,
+            "gci-default.md",
+            "gci-default",
+            "gci",
+            "## Overview\nBody content.\n",
+        );
         let out_dir = TempDir::new().unwrap();
 
         unsafe { std::env::set_var("CASCADE_BUNDLED_TEMPLATES", bundled_dir.path()) };
@@ -1666,9 +1789,7 @@ some content
             id: "nonexistent".to_string(),
             output: Some(out_dir.path().to_path_buf()),
         };
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(args.run());
+        let result = tokio::runtime::Runtime::new().unwrap().block_on(args.run());
         assert!(result.is_err(), "should error on unknown id");
     }
 }

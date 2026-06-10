@@ -134,8 +134,8 @@ pub fn read_worktree_store() -> std::io::Result<WorktreeStore> {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
+    use serial_test::serial;
     use std::sync::{Mutex, MutexGuard, OnceLock};
     use tempfile::TempDir;
 

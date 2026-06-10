@@ -151,8 +151,8 @@ pub fn read_legacy_content(
     for path_str in &paths {
         // canonicalize checks existence; returns Err on missing path.
         let canonical = safe_canonicalize(path_str, &home)?;
-        let metadata = fs::metadata(&canonical)
-            .map_err(|e| format!("cannot stat {path_str}: {e}"))?;
+        let metadata =
+            fs::metadata(&canonical).map_err(|e| format!("cannot stat {path_str}: {e}"))?;
         let size_bytes = metadata.len();
         let kind = classify_path(&canonical);
         entries.push(FileEntry {
@@ -293,8 +293,8 @@ pub fn read_legacy_content(
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
 
@@ -334,7 +334,10 @@ mod tests {
             assert_eq!(entry.tool_id, "claude-code");
             assert!(entry.content.is_some(), "content should be populated");
             let content = entry.content.as_ref().unwrap();
-            assert!(content.contains("No any types."), "content should match file");
+            assert!(
+                content.contains("No any types."),
+                "content should match file"
+            );
             assert_eq!(entry.kind, FileKind::Instructions);
             assert!(entry.size_bytes > 0);
         });
@@ -359,7 +362,10 @@ mod tests {
                 result[0].content.is_none(),
                 "binary file should have content: None"
             );
-            assert!(result[0].size_bytes > 0, "size_bytes should still be populated");
+            assert!(
+                result[0].size_bytes > 0,
+                "size_bytes should still be populated"
+            );
         });
     }
 
@@ -453,8 +459,7 @@ mod tests {
                 })
                 .collect();
 
-            let result =
-                read_legacy_content("claude-code".to_string(), files).unwrap();
+            let result = read_legacy_content("claude-code".to_string(), files).unwrap();
 
             assert_eq!(result.len(), 3);
             let with_content: Vec<_> = result.iter().filter(|r| r.content.is_some()).collect();

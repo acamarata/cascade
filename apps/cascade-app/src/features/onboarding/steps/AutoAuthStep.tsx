@@ -95,9 +95,10 @@ function Alert({
       className={cn(
         'flex items-start gap-3 rounded-md border p-4 text-sm',
         variant === 'destructive' && 'border-destructive/50 bg-destructive/10 text-destructive',
-        variant === 'success' && 'border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400',
+        variant === 'success' &&
+          'border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400',
         variant === 'default' && 'border-muted bg-muted/30 text-foreground',
-        className,
+        className
       )}
     >
       {children}
@@ -146,9 +147,7 @@ export function AutoAuthStep({ className }: AutoAuthStepProps) {
       .then((discovered) => {
         setAccounts(discovered)
         // Pre-select all importable accounts
-        const importable = new Set(
-          discovered.filter((a) => a.importable).map((a) => a.emailOrHint),
-        )
+        const importable = new Set(discovered.filter((a) => a.importable).map((a) => a.emailOrHint))
         setSelected(importable)
         setScanStatus('done')
       })
@@ -215,7 +214,7 @@ export function AutoAuthStep({ className }: AutoAuthStepProps) {
       acc[a.source].push(a)
       return acc
     },
-    {} as Record<AuthSource, DiscoveredAccount[]>,
+    {} as Record<AuthSource, DiscoveredAccount[]>
   )
 
   const sourceOrder: AuthSource[] = ['claudeCode', 'openCode', 'codex', 'cursor', 'envVar']
@@ -228,12 +227,7 @@ export function AutoAuthStep({ className }: AutoAuthStepProps) {
   // ---------------------------------------------------------------------------
 
   return (
-    <div
-      className={cn(
-        'flex h-full flex-col gap-6 overflow-y-auto px-8 py-10',
-        className,
-      )}
-    >
+    <div className={cn('flex h-full flex-col gap-6 overflow-y-auto px-8 py-10', className)}>
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h2 className="text-2xl font-bold text-foreground">Connect existing accounts</h2>
@@ -269,8 +263,8 @@ export function AutoAuthStep({ className }: AutoAuthStepProps) {
           <div>
             <p className="font-medium text-foreground">No harnesses detected</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              No existing AI tool accounts were found on this machine.
-              Connect a provider manually to get started.
+              No existing AI tool accounts were found on this machine. Connect a provider manually
+              to get started.
             </p>
           </div>
         </div>
@@ -293,9 +287,7 @@ export function AutoAuthStep({ className }: AutoAuthStepProps) {
       )}
 
       {/* Import result feedback */}
-      {importResult && importStatus === 'done' && (
-        <ImportResultAlert result={importResult} />
-      )}
+      {importResult && importStatus === 'done' && <ImportResultAlert result={importResult} />}
 
       {/* Action row */}
       {scanStatus === 'done' && (
@@ -366,16 +358,14 @@ function SourceCard({ source, accounts, selected, onToggle, importResult }: Sour
       {/* Card header */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">
-          {SOURCE_LABELS[source]}
-        </span>
+        <span className="text-sm font-semibold text-foreground">{SOURCE_LABELS[source]}</span>
         <span className="ml-auto text-xs text-muted-foreground">
           {accounts.length} account{accounts.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Account list */}
-      <ul className="divide-y divide-border" role="list">
+      <ul className="divide-y divide-border">
         {accounts.map((account) => (
           <AccountRow
             key={account.emailOrHint}
@@ -405,9 +395,7 @@ function AccountRow({ account, isSelected, onToggle, importResult }: AccountRowP
   // Determine per-row result state from ImportResult
   const wasImported = importResult?.imported.includes(account.emailOrHint) ?? false
   const wasSkipped = importResult?.skipped.includes(account.emailOrHint) ?? false
-  const rowError = importResult?.errors.find((e) =>
-    e.includes(account.provider),
-  ) ?? null
+  const rowError = importResult?.errors.find((e) => e.includes(account.provider)) ?? null
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
@@ -431,10 +419,7 @@ function AccountRow({ account, isSelected, onToggle, importResult }: AccountRowP
       {/* Account info */}
       <label
         htmlFor={account.importable ? `account-${account.emailOrHint}` : undefined}
-        className={cn(
-          'flex flex-1 flex-col gap-0.5',
-          account.importable && 'cursor-pointer',
-        )}
+        className={cn('flex flex-1 flex-col gap-0.5', account.importable && 'cursor-pointer')}
       >
         <span className="text-sm font-medium text-foreground leading-tight">
           {account.emailOrHint}
@@ -445,8 +430,8 @@ function AccountRow({ account, isSelected, onToggle, importResult }: AccountRowP
             {account.authType === 'envApiKey'
               ? 'Environment variable'
               : account.authType === 'oAuthToken'
-              ? 'OAuth token (read-only)'
-              : 'API key'}
+                ? 'OAuth token (read-only)'
+                : 'API key'}
           </span>
         </div>
       </label>
@@ -459,9 +444,7 @@ function AccountRow({ account, isSelected, onToggle, importResult }: AccountRowP
             Imported
           </span>
         )}
-        {wasSkipped && (
-          <span className="text-xs text-muted-foreground">Skipped</span>
-        )}
+        {wasSkipped && <span className="text-xs text-muted-foreground">Skipped</span>}
         {rowError && !wasImported && (
           <span className="flex items-center gap-1 text-xs text-destructive">
             <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />

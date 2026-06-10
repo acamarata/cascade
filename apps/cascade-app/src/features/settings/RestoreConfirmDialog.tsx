@@ -49,11 +49,7 @@ export interface RestoreConfirmDialogProps {
  *   2. restoring — spinner while IPC is in-flight.
  *   3. done — shows result (restored / skipped / errors) with a Close button.
  */
-export function RestoreConfirmDialog({
-  archive,
-  onRestore,
-  onCancel,
-}: RestoreConfirmDialogProps) {
+export function RestoreConfirmDialog({ archive, onRestore, onCancel }: RestoreConfirmDialogProps) {
   const [overwrite, setOverwrite] = useState(false)
   const [phase, setPhase] = useState<'confirm' | 'restoring' | 'done'>('confirm')
   const [result, setResult] = useState<RestoreResult | null>(null)
@@ -95,7 +91,7 @@ export function RestoreConfirmDialog({
             onClick={onCancel}
             className={cn(
               'absolute right-4 top-4 rounded p-1 text-muted-foreground',
-              'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             )}
             aria-label="Cancel restore"
           >
@@ -114,10 +110,12 @@ export function RestoreConfirmDialog({
 
             <p className="text-sm text-muted-foreground">
               This will move{' '}
-              <span className="font-medium text-foreground">{archive.files.length} file
-              {archive.files.length !== 1 ? 's' : ''}</span>{' '}
-              from <code className="rounded bg-muted px-1 text-xs">{archive.archiveRoot}</code>{' '}
-              back to their original paths. Cascade content is not affected.
+              <span className="font-medium text-foreground">
+                {archive.files.length} file
+                {archive.files.length !== 1 ? 's' : ''}
+              </span>{' '}
+              from <code className="rounded bg-muted px-1 text-xs">{archive.archiveRoot}</code> back
+              to their original paths. Cascade content is not affected.
             </p>
 
             {/* Destination root preview */}
@@ -170,9 +168,7 @@ export function RestoreConfirmDialog({
         {phase === 'restoring' && (
           <div className="flex flex-col items-center gap-4 py-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">
-              Restoring {toolLabel} files…
-            </p>
+            <p className="text-sm text-muted-foreground">Restoring {toolLabel} files…</p>
           </div>
         )}
 
@@ -192,7 +188,9 @@ export function RestoreConfirmDialog({
             <dl className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm space-y-1">
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Restored</dt>
-                <dd className="font-medium">{result.restoredFiles} file{result.restoredFiles !== 1 ? 's' : ''}</dd>
+                <dd className="font-medium">
+                  {result.restoredFiles} file{result.restoredFiles !== 1 ? 's' : ''}
+                </dd>
               </div>
               {result.skippedConflicts > 0 && (
                 <div className="flex justify-between">
@@ -222,8 +220,8 @@ export function RestoreConfirmDialog({
             {result.skippedConflicts > 0 && (
               <p className="text-xs text-muted-foreground">
                 {result.skippedConflicts} file{result.skippedConflicts !== 1 ? 's' : ''} already
-                existed at the original path and were skipped. Re-run with "Overwrite" enabled to
-                replace them.
+                existed at the original path and were skipped. Re-run with &quot;Overwrite&quot;
+                enabled to replace them.
               </p>
             )}
 

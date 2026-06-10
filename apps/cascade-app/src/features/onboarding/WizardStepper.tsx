@@ -40,10 +40,7 @@ interface WizardStepperProps {
  */
 export function WizardStepper({ currentStep, completedSteps, onStepClick }: WizardStepperProps) {
   return (
-    <ol
-      className="flex flex-col gap-1 py-2"
-      aria-label="Onboarding wizard steps"
-    >
+    <ol className="flex flex-col gap-1 py-2" aria-label="Onboarding wizard steps">
       {STEP_ORDER.map((step, index) => {
         const isActive = step === currentStep
         const isCompleted = completedSteps.has(step)
@@ -57,7 +54,7 @@ export function WizardStepper({ currentStep, completedSteps, onStepClick }: Wiza
                 className={cn(
                   'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
                   'text-foreground hover:bg-accent hover:text-accent-foreground',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
                 )}
                 onClick={() => onStepClick(step)}
                 aria-label={`Go back to step ${index + 1}: ${STEP_LABELS[step]}`}
@@ -89,7 +86,7 @@ export function WizardStepper({ currentStep, completedSteps, onStepClick }: Wiza
               <div
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2',
-                  'bg-accent text-accent-foreground',
+                  'bg-accent text-accent-foreground'
                 )}
                 aria-current="step"
                 role="listitem"

@@ -81,17 +81,14 @@ function EditorView() {
     }
   }, [currentContent])
 
-  const handleSave = useCallback(
-    async (path: string, content: string) => {
-      if (!isTauri()) return
-      try {
-        await ipcVaultWrite(path, content)
-      } catch (e) {
-        console.error('[VaultPage] vault_write failed:', e)
-      }
-    },
-    [],
-  )
+  const handleSave = useCallback(async (path: string, content: string) => {
+    if (!isTauri()) return
+    try {
+      await ipcVaultWrite(path, content)
+    } catch (e) {
+      console.error('[VaultPage] vault_write failed:', e)
+    }
+  }, [])
 
   if (!currentFile) {
     return (
@@ -190,13 +187,16 @@ function VaultPageInner() {
     if (filePath) {
       void setCurrentFile(decodeURIComponent(filePath))
       // Remove the param so the URL stays clean after opening.
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('file')
-        return next
-      }, { replace: true })
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('file')
+          return next
+        },
+        { replace: true }
+      )
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('file')])
 
   // Register Cmd+Shift+D and Cmd+Shift+T shortcuts + command palette entries
@@ -299,10 +299,7 @@ function VaultPageInner() {
       </main>
 
       {/* Template picker dialog — additive mount (T-P3-E06-10) */}
-      <TemplatePicker
-        isOpen={templatePickerOpen}
-        onClose={() => setTemplatePickerOpen(false)}
-      />
+      <TemplatePicker isOpen={templatePickerOpen} onClose={() => setTemplatePickerOpen(false)} />
     </div>
   )
 }

@@ -40,7 +40,7 @@ date: {{date}}
 export function buildDailyPath(
   vaultRoot: string,
   dailyFolder: string,
-  date: Date = new Date(),
+  date: Date = new Date()
 ): string {
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -97,7 +97,7 @@ export async function openDailyNote(
   vaultRoot: string,
   dailyFolder: string = 'daily',
   templateContent: string | null = null,
-  date: Date = new Date(),
+  date: Date = new Date()
 ): Promise<string> {
   const path = buildDailyPath(vaultRoot, dailyFolder, date)
   const template = templateContent ?? DEFAULT_DAILY_TEMPLATE

@@ -78,19 +78,27 @@ pub enum VaultError {
 
 impl VaultError {
     fn traversal(msg: impl Into<String>) -> Self {
-        VaultError::TraversalDenied { message: msg.into() }
+        VaultError::TraversalDenied {
+            message: msg.into(),
+        }
     }
 
     fn io(err: impl ToString) -> Self {
-        VaultError::Io { message: err.to_string() }
+        VaultError::Io {
+            message: err.to_string(),
+        }
     }
 
     fn watch(err: impl ToString) -> Self {
-        VaultError::Watch { message: err.to_string() }
+        VaultError::Watch {
+            message: err.to_string(),
+        }
     }
 
     fn not_found(msg: impl Into<String>) -> Self {
-        VaultError::NotFound { message: msg.into() }
+        VaultError::NotFound {
+            message: msg.into(),
+        }
     }
 }
 
@@ -129,9 +137,8 @@ pub struct VaultNode {
 ///
 /// Returns `VaultError::Io` if `root` does not exist or cannot be resolved.
 fn canonical_root(root: &str) -> Result<PathBuf, VaultError> {
-    fs::canonicalize(root).map_err(|e| {
-        VaultError::io(format!("cannot resolve vault root {root:?}: {e}"))
-    })
+    fs::canonicalize(root)
+        .map_err(|e| VaultError::io(format!("cannot resolve vault root {root:?}: {e}")))
 }
 
 /// Validate `path` against `canon_root`.
@@ -176,9 +183,7 @@ fn guard_path(path: &str, canon_root: &Path) -> Result<PathBuf, VaultError> {
             }
             if ancestor.exists() {
                 let canon_ancestor = fs::canonicalize(&ancestor).map_err(|e| {
-                    VaultError::io(format!(
-                        "cannot canonicalize ancestor {ancestor:?}: {e}"
-                    ))
+                    VaultError::io(format!("cannot canonicalize ancestor {ancestor:?}: {e}"))
                 })?;
                 if !canon_ancestor.starts_with(canon_root) {
                     return Err(VaultError::traversal(format!(
@@ -228,19 +233,17 @@ fn walk(dir: &Path) -> VaultNode {
             if ft.is_dir() {
                 // Recurse — include even if currently empty (may contain md later)
                 children.push(walk(&ep));
-            } else if ft.is_file() {
-                if ep.extension().and_then(|e| e.to_str()) == Some("md") {
-                    let leaf_name = ep
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    children.push(VaultNode {
-                        name: leaf_name,
-                        path: ep.to_string_lossy().into_owned(),
-                        is_dir: false,
-                        children: vec![],
-                    });
-                }
+            } else if ft.is_file() && ep.extension().and_then(|e| e.to_str()) == Some("md") {
+                let leaf_name = ep
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                children.push(VaultNode {
+                    name: leaf_name,
+                    path: ep.to_string_lossy().into_owned(),
+                    is_dir: false,
+                    children: vec![],
+                });
             }
         }
     }
@@ -333,41 +336,38 @@ pub fn vault_watch(root: String, window: tauri::Window) -> Result<(), VaultError
 
     let canon_root_clone = canon_root.clone();
 
-    let mut watcher =
-        RecommendedWatcher::new(
-            move |res: notify::Result<notify::Event>| {
-                if let Ok(event) = res {
-                    // Only emit for file-content-changing events on .md files.
-                    let is_content_event = matches!(
-                        event.kind,
-                        EventKind::Create(_)
-                            | EventKind::Modify(_)
-                            | EventKind::Remove(_)
-                    );
-                    if !is_content_event {
-                        return;
-                    }
+    let mut watcher = RecommendedWatcher::new(
+        move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                // Only emit for file-content-changing events on .md files.
+                let is_content_event = matches!(
+                    event.kind,
+                    EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+                );
+                if !is_content_event {
+                    return;
+                }
 
-                    for path in &event.paths {
-                        let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
-                        if is_md && path.starts_with(&canon_root_clone) {
-                            let _ = window.emit(
-                                "vault://changed",
-                                serde_json::json!({
-                                    "path": path.to_string_lossy()
-                                }),
-                            );
-                        }
+                for path in &event.paths {
+                    let is_md = path.extension().and_then(|e| e.to_str()) == Some("md");
+                    if is_md && path.starts_with(&canon_root_clone) {
+                        let _ = window.emit(
+                            "vault://changed",
+                            serde_json::json!({
+                                "path": path.to_string_lossy()
+                            }),
+                        );
                     }
                 }
-            },
-            Config::default(),
-        )
-        .map_err(|e| VaultError::watch(e))?;
+            }
+        },
+        Config::default(),
+    )
+    .map_err(VaultError::watch)?;
 
     watcher
         .watch(&canon_root, RecursiveMode::Recursive)
-        .map_err(|e| VaultError::watch(e))?;
+        .map_err(VaultError::watch)?;
 
     // Leak the watcher so it keeps running for the window's lifetime.
     // SAFETY: the watcher holds only a Tauri Window handle (refcounted) and the
@@ -544,7 +544,11 @@ pub fn vault_search(root: String, query: String) -> Result<Vec<SearchMatch>, Vau
             .trim_end_matches('\n')
             .to_owned();
 
-        matches.push(SearchMatch { file, line_no, line_text });
+        matches.push(SearchMatch {
+            file,
+            line_no,
+            line_text,
+        });
     }
 
     Ok(matches)
@@ -642,8 +646,7 @@ mod tests {
         let note_str = note_path.to_str().unwrap().to_owned();
         let content = "# Round trip\n\nHello vault.";
 
-        vault_write(root.clone(), note_str.clone(), content.to_owned())
-            .expect("vault_write");
+        vault_write(root.clone(), note_str.clone(), content.to_owned()).expect("vault_write");
         let read_back = vault_read(root, note_str).expect("vault_read");
         assert_eq!(read_back, content);
     }
@@ -742,7 +745,11 @@ mod tests {
         fs::write(root.join("alpha.md"), "# Alpha\n\nhello world\n").unwrap();
         let sub = root.join("subdir");
         fs::create_dir(&sub).unwrap();
-        fs::write(sub.join("beta.md"), "# Beta\n\nripgrep search test\n\nhello again\n").unwrap();
+        fs::write(
+            sub.join("beta.md"),
+            "# Beta\n\nripgrep search test\n\nhello again\n",
+        )
+        .unwrap();
         dir
     }
 
@@ -754,7 +761,10 @@ mod tests {
         assert!(result.is_empty(), "blank query should return empty vec");
 
         let result = vault_search(root, "   ".to_owned()).expect("vault_search");
-        assert!(result.is_empty(), "whitespace-only query should return empty vec");
+        assert!(
+            result.is_empty(),
+            "whitespace-only query should return empty vec"
+        );
     }
 
     #[test]
@@ -765,25 +775,26 @@ mod tests {
         }
         let dir = make_search_fixture();
         let root = dir.path().to_str().unwrap().to_owned();
-        let result = vault_search(root, "xyzzy_no_such_token_12345".to_owned())
-            .expect("vault_search");
-        assert!(result.is_empty(), "non-matching query should return empty vec");
+        let result =
+            vault_search(root, "xyzzy_no_such_token_12345".to_owned()).expect("vault_search");
+        assert!(
+            result.is_empty(),
+            "non-matching query should return empty vec"
+        );
     }
 
     #[test]
     fn vault_search_finds_match_in_root_file() {
         if !rg_available() {
-            eprintln!("SKIP: rg not found on PATH — skipping vault_search_finds_match_in_root_file");
+            eprintln!(
+                "SKIP: rg not found on PATH — skipping vault_search_finds_match_in_root_file"
+            );
             return;
         }
         let dir = make_search_fixture();
         let root = dir.path().to_str().unwrap().to_owned();
-        let result = vault_search(root.clone(), "hello world".to_owned())
-            .expect("vault_search");
-        assert!(
-            !result.is_empty(),
-            "should find 'hello world' in alpha.md"
-        );
+        let result = vault_search(root.clone(), "hello world".to_owned()).expect("vault_search");
+        assert!(!result.is_empty(), "should find 'hello world' in alpha.md");
         let hit = result.iter().find(|m| m.file.ends_with("alpha.md"));
         assert!(hit.is_some(), "alpha.md should be in results");
         let hit = hit.unwrap();
@@ -814,7 +825,9 @@ mod tests {
     #[test]
     fn vault_search_results_are_capped_at_200() {
         if !rg_available() {
-            eprintln!("SKIP: rg not found on PATH — skipping vault_search_results_are_capped_at_200");
+            eprintln!(
+                "SKIP: rg not found on PATH — skipping vault_search_results_are_capped_at_200"
+            );
             return;
         }
         let dir = tempfile::tempdir().expect("tempdir");
@@ -822,9 +835,8 @@ mod tests {
         // Write a file with 300 lines all containing "needle".
         let content: String = (1..=300).map(|i| format!("needle line {i}\n")).collect();
         fs::write(root.join("big.md"), content).unwrap();
-        let result =
-            vault_search(root.to_str().unwrap().to_owned(), "needle".to_owned())
-                .expect("vault_search");
+        let result = vault_search(root.to_str().unwrap().to_owned(), "needle".to_owned())
+            .expect("vault_search");
         assert!(
             result.len() <= SEARCH_RESULT_CAP,
             "results should be capped at {SEARCH_RESULT_CAP}, got {}",

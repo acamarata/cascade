@@ -16,7 +16,24 @@ import '@testing-library/jest-dom'
 // ---------------------------------------------------------------------------
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue({ schemaVersion: '2', library: { defaultHarnessTargets: [] }, context: {}, projectMap: {}, providers: { google: [] }, geminiPool: { keys: [], proxyPort: 3761, enabled: false }, harnessBridges: {}, hooks: [], scheduledTasks: [], plugins: { enabled: [], config: {} }, widgets: { positions: {} }, mcpServers: [], vaultDisplay: { showMasked: false }, telemetry: { enabled: false } }),
+  invoke: vi
+    .fn()
+    .mockResolvedValue({
+      schemaVersion: '2',
+      library: { defaultHarnessTargets: [] },
+      context: {},
+      projectMap: {},
+      providers: { google: [] },
+      geminiPool: { keys: [], proxyPort: 3761, enabled: false },
+      harnessBridges: {},
+      hooks: [],
+      scheduledTasks: [],
+      plugins: { enabled: [], config: {} },
+      widgets: { positions: {} },
+      mcpServers: [],
+      vaultDisplay: { showMasked: false },
+      telemetry: { enabled: false },
+    }),
 }))
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -131,7 +148,10 @@ describe('isSectionDirty', () => {
   })
 
   it('returns false when different section mutated', () => {
-    const mutated = { ...base, hooks: [{ id: '1', event: 'SessionStart', command: 'echo', enabled: true }] }
+    const mutated = {
+      ...base,
+      hooks: [{ id: '1', event: 'SessionStart', command: 'echo', enabled: true }],
+    }
     expect(isSectionDirty(base, mutated, 'providers')).toBe(false)
   })
 

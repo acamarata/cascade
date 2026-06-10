@@ -42,7 +42,6 @@ use crate::{
     adapter::ProviderAdapter,
     adapters::generic_openai::{GenericOpenAIAdapter, GenericOpenAIConfig},
     error::ProviderError,
-    http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
     types::{CompletionRequest, CompletionResponse, ModelInfo, StreamChunk},
 };
@@ -65,8 +64,8 @@ const DETECT_TIMEOUT_MS: u64 = 500;
 struct OllamaModelEntry {
     /// Model name (e.g. `"llama3.2:3b"`, `"qwen2.5-coder:7b"`).
     name: String,
-    /// Size on disk in bytes.
-    size: Option<u64>,
+    // `size` (bytes on disk) is present in the wire response but unused.
+    // Serde ignores unknown fields by default.
 }
 
 /// Top-level response from `GET /api/tags`.
@@ -125,7 +124,10 @@ impl OllamaAdapter {
             .build()
             .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
 
-        Ok(Self { inner, probe_client })
+        Ok(Self {
+            inner,
+            probe_client,
+        })
     }
 
     /// Probe the local Ollama daemon with a 500 ms timeout.
@@ -158,18 +160,13 @@ impl OllamaAdapter {
     async fn fetch_installed_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let url = format!("{OLLAMA_BASE_URL}{TAGS_PATH}");
 
-        let resp = self
-            .probe_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    ProviderError::Timeout { secs: 0 }
-                } else {
-                    ProviderError::NetworkError(e.to_string())
-                }
-            })?;
+        let resp = self.probe_client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProviderError::Timeout { secs: 0 }
+            } else {
+                ProviderError::NetworkError(e.to_string())
+            }
+        })?;
 
         if !resp.status().is_success() {
             return Err(ProviderError::NetworkError(format!(
@@ -212,10 +209,7 @@ impl OllamaAdapter {
 #[async_trait]
 impl ProviderAdapter for OllamaAdapter {
     /// Delegate to the inner OpenAI-compat adapter (`/v1/chat/completions`).
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         self.inner.complete(req).await
     }
 
@@ -223,10 +217,8 @@ impl ProviderAdapter for OllamaAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         self.inner.complete_stream(req).await
     }
 
@@ -244,18 +236,13 @@ impl ProviderAdapter for OllamaAdapter {
     /// exceeds 500 ms, and `Err(NetworkError)` on connection refused.
     async fn health_check(&self) -> Result<(), ProviderError> {
         let url = format!("{OLLAMA_BASE_URL}{TAGS_PATH}");
-        let resp = self
-            .probe_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    ProviderError::Timeout { secs: 0 }
-                } else {
-                    ProviderError::NetworkError(e.to_string())
-                }
-            })?;
+        let resp = self.probe_client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProviderError::Timeout { secs: 0 }
+            } else {
+                ProviderError::NetworkError(e.to_string())
+            }
+        })?;
 
         if resp.status().is_success() {
             Ok(())
@@ -313,7 +300,10 @@ mod tests {
         // fetch_installed_models impl uses OLLAMA_BASE_URL directly, so for
         // mock-server tests we call the helper method with the mock URL via
         // a test-only helper below.
-        OllamaAdapter { inner, probe_client }
+        OllamaAdapter {
+            inner,
+            probe_client,
+        }
     }
 
     /// Fetch models from an arbitrary URL (test-only; avoids the localhost
@@ -323,18 +313,13 @@ mod tests {
         base_url: &str,
     ) -> Result<Vec<ModelInfo>, ProviderError> {
         let url = format!("{base_url}/api/tags");
-        let resp = adapter
-            .probe_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    ProviderError::Timeout { secs: 0 }
-                } else {
-                    ProviderError::NetworkError(e.to_string())
-                }
-            })?;
+        let resp = adapter.probe_client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProviderError::Timeout { secs: 0 }
+            } else {
+                ProviderError::NetworkError(e.to_string())
+            }
+        })?;
 
         if !resp.status().is_success() {
             return Err(ProviderError::NetworkError(format!(
@@ -369,18 +354,13 @@ mod tests {
         base_url: &str,
     ) -> Result<(), ProviderError> {
         let url = format!("{base_url}/api/tags");
-        let resp = adapter
-            .probe_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    ProviderError::Timeout { secs: 0 }
-                } else {
-                    ProviderError::NetworkError(e.to_string())
-                }
-            })?;
+        let resp = adapter.probe_client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProviderError::Timeout { secs: 0 }
+            } else {
+                ProviderError::NetworkError(e.to_string())
+            }
+        })?;
         if resp.status().is_success() {
             Ok(())
         } else {
@@ -456,13 +436,8 @@ mod tests {
     #[tokio::test]
     async fn available_models_empty_list() {
         let ctx = MockProviderServer::start("ollama").await;
-        ctx.mount_json(
-            HttpMethod::Get,
-            "/api/tags",
-            200,
-            json!({ "models": [] }),
-        )
-        .await;
+        ctx.mount_json(HttpMethod::Get, "/api/tags", 200, json!({ "models": [] }))
+            .await;
 
         let adapter = adapter_for(&ctx.base_url());
         let models = fetch_models_from(&adapter, &ctx.base_url())
@@ -479,15 +454,14 @@ mod tests {
 
     #[tokio::test]
     async fn health_check_timeout_returns_timeout_error() {
-        use wiremock::{Mock, MockServer, ResponseTemplate};
         use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/api/tags"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_delay(Duration::from_millis(600)), // longer than 500 ms probe
+                ResponseTemplate::new(200).set_delay(Duration::from_millis(600)), // longer than 500 ms probe
             )
             .mount(&server)
             .await;

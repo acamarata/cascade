@@ -49,7 +49,7 @@ export function ModelBreakdownChart({
   const [sortKey, setSortKey] = useState<SortKey>('tokens')
 
   const sorted = [...byModel].sort((a, b) =>
-    sortKey === 'tokens' ? b.tokens - a.tokens : b.costUsd - a.costUsd,
+    sortKey === 'tokens' ? b.tokens - a.tokens : b.costUsd - a.costUsd
   )
 
   const chartData = sorted.map((m) => ({
@@ -62,7 +62,10 @@ export function ModelBreakdownChart({
 
   if (!loading && byModel.length === 0) {
     return (
-      <section aria-labelledby="model-chart-heading" className="rounded-lg border border-border bg-card p-4">
+      <section
+        aria-labelledby="model-chart-heading"
+        className="rounded-lg border border-border bg-card p-4"
+      >
         <h3 id="model-chart-heading" className="text-sm font-semibold">
           By Model
         </h3>
@@ -72,7 +75,10 @@ export function ModelBreakdownChart({
   }
 
   return (
-    <section aria-labelledby="model-chart-heading" className="rounded-lg border border-border bg-card p-4">
+    <section
+      aria-labelledby="model-chart-heading"
+      className="rounded-lg border border-border bg-card p-4"
+    >
       <div className="mb-3 flex items-center justify-between">
         <h3 id="model-chart-heading" className="text-sm font-semibold">
           By Model
@@ -150,7 +156,10 @@ export function ModelBreakdownChart({
       {/* Cost legend per model (below chart) */}
       <ul className="mt-2 space-y-0.5">
         {sorted.slice(0, 8).map((m) => (
-          <li key={m.model} className="flex items-center justify-between text-xs text-muted-foreground">
+          <li
+            key={m.model}
+            className="flex items-center justify-between text-xs text-muted-foreground"
+          >
             <span className="truncate max-w-[60%]">{m.model}</span>
             <span className="tabular-nums">{fmtCost(m.costUsd)}</span>
           </li>

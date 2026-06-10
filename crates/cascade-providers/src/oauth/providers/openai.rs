@@ -80,16 +80,31 @@ mod tests {
         assert_eq!(cfg.auth_url, OPENAI_AUTH_URL);
         assert_eq!(cfg.token_url, OPENAI_TOKEN_URL);
         assert_eq!(cfg.client_id, "oai-client");
-        assert!(cfg.client_secret.is_empty(), "public client must have empty secret");
+        assert!(
+            cfg.client_secret.is_empty(),
+            "public client must have empty secret"
+        );
     }
 
     #[test]
     fn openai_oauth_config_scopes() {
         let cfg = openai_oauth_config("cid");
-        assert!(cfg.scopes.contains(&"openid".to_owned()), "missing openid scope");
-        assert!(cfg.scopes.contains(&"email".to_owned()), "missing email scope");
-        assert!(cfg.scopes.contains(&"profile".to_owned()), "missing profile scope");
-        assert!(cfg.scopes.contains(&"offline_access".to_owned()), "missing offline_access scope");
+        assert!(
+            cfg.scopes.contains(&"openid".to_owned()),
+            "missing openid scope"
+        );
+        assert!(
+            cfg.scopes.contains(&"email".to_owned()),
+            "missing email scope"
+        );
+        assert!(
+            cfg.scopes.contains(&"profile".to_owned()),
+            "missing profile scope"
+        );
+        assert!(
+            cfg.scopes.contains(&"offline_access".to_owned()),
+            "missing offline_access scope"
+        );
         assert_eq!(cfg.scopes.len(), 4);
     }
 

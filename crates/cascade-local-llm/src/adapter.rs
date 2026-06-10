@@ -34,8 +34,8 @@ use tokio_stream::StreamExt as _;
 use tracing::debug;
 
 use cascade_providers::{
-    AuthMethod, CompletionRequest, CompletionResponse, ModelInfo, ProviderAdapter, ProviderCapabilities,
-    ProviderError, ProviderInfo, StreamChunk, TokenUsage,
+    AuthMethod, CompletionRequest, CompletionResponse, ModelInfo, ProviderAdapter,
+    ProviderCapabilities, ProviderError, ProviderInfo, StreamChunk, TokenUsage,
 };
 
 use crate::{
@@ -92,17 +92,18 @@ impl LocalLlmAdapter {
 #[async_trait]
 impl ProviderAdapter for LocalLlmAdapter {
     /// Non-streaming completion — drains the token stream into a single string.
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let prompt = Self::build_prompt(&req);
         debug!(
             model = %req.model,
             "cascade-local-llm: complete() called"
         );
 
-        let stream = self.runner.run(&prompt).await.map_err(ProviderError::from)?;
+        let stream = self
+            .runner
+            .run(&prompt)
+            .await
+            .map_err(ProviderError::from)?;
         let tokens: Vec<String> = stream.collect().await;
         let content = tokens.join("");
         let completion_tokens = tokens.len() as u32;
@@ -111,7 +112,7 @@ impl ProviderAdapter for LocalLlmAdapter {
             content,
             model: GEMMA_2_2B_MODEL_ID.to_string(),
             usage: TokenUsage {
-                prompt_tokens: 0,  // candle does not expose prompt token counts
+                prompt_tokens: 0, // candle does not expose prompt token counts
                 completion_tokens,
                 total_tokens: completion_tokens,
             },
@@ -123,17 +124,19 @@ impl ProviderAdapter for LocalLlmAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let prompt = Self::build_prompt(&req);
         debug!(
             model = %req.model,
             "cascade-local-llm: complete_stream() called"
         );
 
-        let stream = self.runner.run(&prompt).await.map_err(ProviderError::from)?;
+        let stream = self
+            .runner
+            .run(&prompt)
+            .await
+            .map_err(ProviderError::from)?;
 
         // Map each token string to a StreamChunk
         let mapped = stream.map(|token| {
@@ -243,7 +246,10 @@ mod tests {
             matches!(info.auth_method, AuthMethod::None),
             "local model needs no auth"
         );
-        assert!(info.base_url.is_empty(), "no network endpoint for local model");
+        assert!(
+            info.base_url.is_empty(),
+            "no network endpoint for local model"
+        );
     }
 
     // ── available_models ──────────────────────────────────────────────────────

@@ -13,11 +13,7 @@
 
 import React from 'react'
 import { Filter } from 'lucide-react'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../../components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 
 interface TagFilterProps {
   availableTags: string[]
@@ -42,11 +38,7 @@ export function TagFilter({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={
-            activeCount > 0
-              ? `Filter by tag — ${activeCount} active`
-              : 'Filter by tag'
-          }
+          aria-label={activeCount > 0 ? `Filter by tag — ${activeCount} active` : 'Filter by tag'}
           className="relative inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground transition-colors hover:bg-accent/30 focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
@@ -79,12 +71,12 @@ export function TagFilter({
         {availableTags.length === 0 ? (
           <p className="text-xs text-muted-foreground">No tags available.</p>
         ) : (
-          <ul role="list" className="max-h-48 space-y-1 overflow-y-auto">
+          <ul className="max-h-48 space-y-1 overflow-y-auto">
             {availableTags.map((tag) => {
               const checked = selectedTags.includes(tag)
               const id = `tag-filter-${tag}`
               return (
-                <li key={tag} role="listitem">
+                <li key={tag}>
                   <label
                     htmlFor={id}
                     className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent/30"

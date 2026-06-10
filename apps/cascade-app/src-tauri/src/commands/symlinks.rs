@@ -124,11 +124,13 @@ fn confine_to_home(p: &str, home: &Path, is_link_location: bool) -> Result<PathB
         // exists; otherwise fall back to lexical normalization.
         if let Some(parent) = raw.parent() {
             if parent.exists() {
-                let canon_parent = parent.canonicalize().map_err(|e| {
-                    format!("cannot resolve parent of {p}: {e}")
-                })?;
-                canon_parent
-                    .join(raw.file_name().ok_or_else(|| format!("path has no filename: {p}"))?)
+                let canon_parent = parent
+                    .canonicalize()
+                    .map_err(|e| format!("cannot resolve parent of {p}: {e}"))?;
+                canon_parent.join(
+                    raw.file_name()
+                        .ok_or_else(|| format!("path has no filename: {p}"))?,
+                )
             } else {
                 normalize_path(&raw)
             }
@@ -141,9 +143,7 @@ fn confine_to_home(p: &str, home: &Path, is_link_location: bool) -> Result<PathB
     };
 
     if !resolved.starts_with(home) {
-        return Err(format!(
-            "path escapes HOME ({p} → {resolved:?})"
-        ));
+        return Err(format!("path escapes HOME ({p} → {resolved:?})"));
     }
     Ok(resolved)
 }
@@ -169,7 +169,10 @@ fn apply_symlink_plan(plan: &SymlinkPlan) -> Vec<SymlinkResult> {
 }
 
 /// Internal implementation allowing an injected HOME for testing.
-fn apply_symlink_plan_with_home(plan: &SymlinkPlan, home_override: Option<&Path>) -> Vec<SymlinkResult> {
+fn apply_symlink_plan_with_home(
+    plan: &SymlinkPlan,
+    home_override: Option<&Path>,
+) -> Vec<SymlinkResult> {
     if plan.entries.is_empty() {
         return vec![];
     }
@@ -349,7 +352,11 @@ mod tests {
 
         let results = run_with_home(&tmp, |h| apply_symlink_plan_with_home(&plan, Some(h)));
         assert_eq!(results.len(), 1);
-        assert!(results[0].success, "expected success, got: {:?}", results[0].error);
+        assert!(
+            results[0].success,
+            "expected success, got: {:?}",
+            results[0].error
+        );
 
         // Verify link exists and points to target.
         let meta = std::fs::symlink_metadata(&link).unwrap();
@@ -402,7 +409,11 @@ mod tests {
         let results = run_with_home(&tmp, |h| apply_symlink_plan_with_home(&plan, Some(h)));
 
         assert_eq!(results.len(), 1);
-        assert!(results[0].success, "expected success, got: {:?}", results[0].error);
+        assert!(
+            results[0].success,
+            "expected success, got: {:?}",
+            results[0].error
+        );
 
         // Link should now point at new_target.
         let dest = std::fs::read_link(&link).unwrap();
@@ -462,13 +473,13 @@ pub fn setup_symlinks(plan: SymlinkPlan) -> Result<Vec<SymlinkResult>, String> {
 fn tool_sibling_files(tool_id: &str) -> &'static [&'static str] {
     match tool_id {
         "claude-code" => &["CLAUDE.md", "AGENTS.md"],
-        "opencode"    => &["AGENTS.md"],
-        "cursor"      => &[".cursorrules"],
-        "aider"       => &[".aider.conf.yml"],
-        "windsurf"    => &[".windsurf"],
+        "opencode" => &["AGENTS.md"],
+        "cursor" => &[".cursorrules"],
+        "aider" => &[".aider.conf.yml"],
+        "windsurf" => &[".windsurf"],
         "antigravity" => &[".antigravity"],
-        "codex"       => &["CODEX.md"],
-        _             => &[],
+        "codex" => &["CODEX.md"],
+        _ => &[],
     }
 }
 
@@ -633,7 +644,11 @@ mod unlink_tests {
 
         let result = cascade_unlink_tool_with_home("claude-code", Some(&home)).unwrap();
         assert!(result.removed.is_empty(), "real file must not be removed");
-        assert_eq!(result.skipped.len(), 1, "real file should appear in skipped");
+        assert_eq!(
+            result.skipped.len(),
+            1,
+            "real file should appear in skipped"
+        );
 
         // File must still exist with its original content.
         let content = std::fs::read_to_string(gci.join("CLAUDE.md")).unwrap();

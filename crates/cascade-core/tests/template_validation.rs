@@ -22,7 +22,11 @@ fn bundled_templates_dir() -> PathBuf {
     Path::new(manifest)
         .join("../../data/templates")
         .canonicalize()
-        .unwrap_or_else(|_| Path::new(manifest).join("../../data/templates").to_path_buf())
+        .unwrap_or_else(|_| {
+            Path::new(manifest)
+                .join("../../data/templates")
+                .to_path_buf()
+        })
 }
 
 /// Parse `data/templates/index.json` and return the list of `file` entries.
@@ -31,10 +35,8 @@ fn index_file_entries(templates_dir: &Path) -> Vec<String> {
     if !index_path.exists() {
         return vec![];
     }
-    let raw = std::fs::read_to_string(&index_path)
-        .expect("index.json should be readable");
-    let v: serde_json::Value =
-        serde_json::from_str(&raw).expect("index.json should be valid JSON");
+    let raw = std::fs::read_to_string(&index_path).expect("index.json should be readable");
+    let v: serde_json::Value = serde_json::from_str(&raw).expect("index.json should be valid JSON");
     v["templates"]
         .as_array()
         .map(|arr| {

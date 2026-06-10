@@ -65,7 +65,6 @@ pub enum LocalModelError {
     Io(#[from] std::io::Error),
 
     // ── Downloader errors (T-P3-E04-18) ───────────────────────────────────────
-
     /// Insufficient disk space to download the model.
     ///
     /// The downloader requires ≥2× the model file size to be free on the
@@ -84,9 +83,7 @@ pub enum LocalModelError {
     /// SHA-256 checksum of the downloaded file does not match the expected value.
     ///
     /// The `.tmp` file has been deleted before this error is returned.
-    #[error(
-        "SHA-256 mismatch for model '{model_id}': expected {expected}, got {actual}"
-    )]
+    #[error("SHA-256 mismatch for model '{model_id}': expected {expected}, got {actual}")]
     ChecksumMismatch {
         /// Model identifier.
         model_id: String,

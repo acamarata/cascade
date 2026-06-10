@@ -74,8 +74,7 @@ async function getFs(): Promise<FsAdapter> {
 // ── HOME-confinement guard ────────────────────────────────────────────────────
 
 function isHomeConfined(path: string): boolean {
-  const home =
-    (typeof process !== 'undefined' && process.env.HOME) || ''
+  const home = (typeof process !== 'undefined' && process.env.HOME) || ''
   if (!home) return true // Cannot check; allow (fail-open, daemon already validates).
   return path.startsWith(home + '/')
 }
@@ -109,7 +108,7 @@ export function parseHeadingSections(
   project: string,
   filePath: string,
   kind: MemoryEntryKind,
-  mtime: number,
+  mtime: number
 ): MemoryEntry[] {
   if (!content || !content.trim()) return []
 
@@ -125,15 +124,11 @@ export function parseHeadingSections(
   for (let i = 1; i < blocks.length; i++) {
     const block = blocks[i]
     const newline = block.indexOf('\n')
-    const title =
-      newline === -1
-        ? block.trim()
-        : block.slice(0, newline).trim()
+    const title = newline === -1 ? block.trim() : block.slice(0, newline).trim()
 
     if (!title) continue
 
-    const body =
-      newline === -1 ? '' : block.slice(newline + 1).trim()
+    const body = newline === -1 ? '' : block.slice(newline + 1).trim()
 
     // First non-empty paragraph as excerpt.
     const paragraphs = body.split(/\n{2,}/)
@@ -170,7 +165,7 @@ export function parseIdeaFile(
   content: string,
   project: string,
   filePath: string,
-  mtime: number,
+  mtime: number
 ): MemoryEntry {
   // Derive title from filename stem (last path segment, strip .md).
   const parts = filePath.replace(/\\/g, '/').split('/')
@@ -200,14 +195,14 @@ export function parseInboxFile(
   content: string,
   project: string,
   filePath: string,
-  mtime: number,
+  mtime: number
 ): MemoryEntry {
   const parts = filePath.replace(/\\/g, '/').split('/')
   const filename = parts[parts.length - 1] ?? ''
 
   const lines = content.replace(/\r\n/g, '\n').split('\n')
   let title = filename.replace(/\.md$/i, '')
-  let excerptLines: string[] = []
+  const excerptLines: string[] = []
 
   let inHeader = true
   for (const line of lines) {

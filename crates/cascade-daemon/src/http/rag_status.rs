@@ -8,7 +8,7 @@
 //!   - P3 stub values only; no actual index querying.
 //!   - serve_endpoint value is the planned P4 address; not bound yet.
 //!   - No writes; no side effects; always returns 200.
-//! SPORT: T-P3-E02-29 — MASTER-ROUTES.md GET /api/gci/rag-status
+//!     SPORT: T-P3-E02-29 — MASTER-ROUTES.md GET /api/gci/rag-status
 
 use axum::{routing::get, Json, Router};
 use cascade_types::rag::RagStatusResponse;

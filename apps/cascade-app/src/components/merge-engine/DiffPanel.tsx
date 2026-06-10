@@ -53,11 +53,7 @@ export interface DiffPanelProps {
    * @param status        - The new SectionStatus after the action.
    * @param editedContent - Present only when status === 'edited'; the user's text.
    */
-  onSectionStatusChange: (
-    sectionId: string,
-    status: SectionStatus,
-    editedContent?: string,
-  ) => void
+  onSectionStatusChange: (sectionId: string, status: SectionStatus, editedContent?: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -99,15 +95,11 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
     (sectionId: string, content: string) => {
       onSectionStatusChange(sectionId, 'edited', content)
     },
-    [onSectionStatusChange],
+    [onSectionStatusChange]
   )
 
   if (!activeSection) {
-    return (
-      <p className="px-4 py-6 text-sm text-muted-foreground">
-        No sections to review.
-      </p>
-    )
+    return <p className="px-4 py-6 text-sm text-muted-foreground">No sections to review.</p>
   }
 
   const conflict = findConflictForSection(activeSection.id, conflicts)
@@ -115,23 +107,14 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
   return (
     <div className="flex flex-col h-full overflow-hidden rounded-lg border border-border bg-background">
       {/* SR live region: announces section status changes to screen readers */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {activeSection.title}: {activeSection.status}
       </div>
 
       {/* Section tabs */}
       {sections.length > 1 && (
         <div className="px-3 pt-2">
-          <SectionTabs
-            sections={sections}
-            activeId={activeId}
-            onSelect={handleTabSelect}
-          />
+          <SectionTabs sections={sections} activeId={activeId} onSelect={handleTabSelect} />
         </div>
       )}
 
@@ -140,7 +123,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
         className={cn(
           'flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3',
           sectionBorderClass(activeSection.status),
-          'border-l-4',
+          'border-l-4'
         )}
         role="tabpanel"
         id={`section-panel-${activeSection.id}`}
@@ -151,7 +134,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-xs font-medium',
-              sectionStatusBadgeClass(activeSection.status),
+              sectionStatusBadgeClass(activeSection.status)
             )}
           >
             {activeSection.status}
@@ -180,7 +163,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               activeSection.status === 'approved'
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400'
-                : 'border border-border hover:bg-accent',
+                : 'border border-border hover:bg-accent'
             )}
           >
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -195,7 +178,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               activeSection.status === 'rejected'
                 ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400'
-                : 'border border-border hover:bg-accent',
+                : 'border border-border hover:bg-accent'
             )}
           >
             <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -212,7 +195,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
             'flex flex-col border-r border-border bg-muted/20 transition-all duration-200',
             leftOpen ? 'w-64 shrink-0' : 'w-0 overflow-hidden',
             // On wide layouts, always show
-            'max-[800px]:hidden',
+            'max-[800px]:hidden'
           )}
           aria-hidden={!leftOpen}
           // When collapsed, prevent keyboard focus reaching hidden children
@@ -240,7 +223,7 @@ export function DiffPanel({ result, conflicts = [], onSectionStatusChange }: Dif
             'hidden max-[800px]:flex',
             'shrink-0 items-center justify-center w-7 border-r border-border',
             'bg-muted/30 hover:bg-muted/60 transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
           )}
         >
           {leftOpen ? (

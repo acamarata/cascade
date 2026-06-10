@@ -45,19 +45,9 @@ export interface HooksTabProps {
   onDiscard: () => void
 }
 
-export function HooksTab({
-  draft,
-  isSaving,
-  error,
-  onUpdate,
-  onSave,
-  onDiscard,
-}: HooksTabProps) {
+export function HooksTab({ draft, isSaving, error, onUpdate, onSave, onDiscard }: HooksTabProps) {
   function addRow() {
-    onUpdate([
-      ...draft,
-      { id: nextId(), event: 'SessionStart', command: '', enabled: true },
-    ])
+    onUpdate([...draft, { id: nextId(), event: 'SessionStart', command: '', enabled: true }])
   }
 
   function removeRow(idx: number) {

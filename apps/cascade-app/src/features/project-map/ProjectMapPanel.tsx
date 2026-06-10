@@ -18,12 +18,8 @@ import { GitFork, Layers, Network } from 'lucide-react'
 import { CascadeTierTree } from './CascadeTierTree'
 
 // Lazy-load graph views to avoid inflating initial bundle
-const ProjectGraph = lazy(() =>
-  import('./ProjectGraph').then((m) => ({ default: m.ProjectGraph })),
-)
-const PewsDag = lazy(() =>
-  import('./PewsDag').then((m) => ({ default: m.PewsDag })),
-)
+const ProjectGraph = lazy(() => import('./ProjectGraph').then((m) => ({ default: m.ProjectGraph })))
+const PewsDag = lazy(() => import('./PewsDag').then((m) => ({ default: m.PewsDag })))
 
 // ── Project selector ──────────────────────────────────────────────────────────
 
@@ -52,7 +48,10 @@ export function ProjectMapPanel() {
   const [projectRoot, setProjectRoot] = useState(KNOWN_ROOTS[0]!.value)
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background" data-testid="project-map-panel">
+    <div
+      className="flex h-full flex-col overflow-hidden bg-background"
+      data-testid="project-map-panel"
+    >
       {/* Header */}
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5">
         <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -60,10 +59,7 @@ export function ProjectMapPanel() {
 
         {/* Project selector */}
         <div className="ml-auto flex items-center gap-2">
-          <label
-            htmlFor="project-root-select"
-            className="text-xs text-muted-foreground"
-          >
+          <label htmlFor="project-root-select" className="text-xs text-muted-foreground">
             Root:
           </label>
           <select

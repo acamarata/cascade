@@ -71,7 +71,7 @@ function WizardLayoutInner() {
         // Full-screen standalone layout, no app chrome
         'flex min-h-screen flex-col bg-background text-foreground',
         // Keyboard focus handling (tabIndex makes div focusable without triggering a11y errors)
-        'outline-none',
+        'outline-none'
       )}
       tabIndex={-1}
       aria-label="Onboarding wizard"
@@ -82,7 +82,7 @@ function WizardLayoutInner() {
         <nav
           className={cn(
             'flex w-60 flex-shrink-0 flex-col border-r border-border bg-muted/30',
-            'overflow-y-auto px-2 py-4',
+            'overflow-y-auto px-2 py-4'
           )}
           aria-label="Wizard step navigation"
         >
@@ -115,7 +115,7 @@ function WizardLayoutInner() {
       <div
         className={cn(
           'flex items-center justify-between border-t border-border bg-background px-6 py-3',
-          'sticky bottom-0',
+          'sticky bottom-0'
         )}
         role="navigation"
         aria-label="Wizard navigation controls"
@@ -141,12 +141,7 @@ function WizardLayoutInner() {
 
           {/* Skip button — advance without marking complete */}
           {!isLastStep && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={goNext}
-              aria-label="Skip this step"
-            >
+            <Button variant="ghost" size="sm" onClick={goNext} aria-label="Skip this step">
               Skip
             </Button>
           )}

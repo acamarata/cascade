@@ -118,8 +118,6 @@ impl From<reqwest::Error> for ProviderError {
         if e.is_timeout() {
             // Extract a timeout duration if possible, otherwise 0.
             ProviderError::Timeout { secs: 0 }
-        } else if e.is_connect() || e.is_request() {
-            ProviderError::NetworkError(e.to_string())
         } else {
             ProviderError::NetworkError(e.to_string())
         }

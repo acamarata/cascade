@@ -132,8 +132,8 @@ fn free_space_bytes(path: &Path) -> Result<u64, LocalModelError> {
     #[cfg(unix)]
     {
         use nix::sys::statvfs::statvfs;
-        let stat = statvfs(path)
-            .map_err(|e| LocalModelError::Io(std::io::Error::other(e.to_string())))?;
+        let stat =
+            statvfs(path).map_err(|e| LocalModelError::Io(std::io::Error::other(e.to_string())))?;
         // bavail = blocks available to non-root; bsize = fundamental block size
         Ok(stat.blocks_available() as u64 * stat.block_size() as u64)
     }
@@ -170,10 +170,7 @@ fn free_space_bytes(path: &Path) -> Result<u64, LocalModelError> {
 /// - Insufficient disk space (< 2× file size)
 /// - Network / I/O failure
 /// - SHA-256 mismatch (`.tmp` deleted before returning)
-pub async fn download_model<F>(
-    model_id: &str,
-    on_progress: F,
-) -> Result<PathBuf, LocalModelError>
+pub async fn download_model<F>(model_id: &str, on_progress: F) -> Result<PathBuf, LocalModelError>
 where
     F: Fn(DownloadProgress),
 {
@@ -191,9 +188,8 @@ where
     F: Fn(DownloadProgress),
 {
     // ── 1. Find model in registry ─────────────────────────────────────────────
-    let entry = find_model(model_id).ok_or_else(|| {
-        LocalModelError::UnsupportedModel(model_id.to_string())
-    })?;
+    let entry = find_model(model_id)
+        .ok_or_else(|| LocalModelError::UnsupportedModel(model_id.to_string()))?;
 
     // ── 2. Resolve target directory ────────────────────────────────────────────
     let model_dir = model_dir_path(model_id)?;
@@ -240,11 +236,16 @@ where
     let mut req = client.get(&url);
     if partial_bytes > 0 {
         req = req.header("Range", format!("bytes={}-", partial_bytes));
-        info!(model_id, offset = partial_bytes, "resuming partial download");
+        info!(
+            model_id,
+            offset = partial_bytes,
+            "resuming partial download"
+        );
     }
-    let response = req.send().await.map_err(|e| {
-        LocalModelError::Io(std::io::Error::other(format!("HTTP error: {e}")))
-    })?;
+    let response = req
+        .send()
+        .await
+        .map_err(|e| LocalModelError::Io(std::io::Error::other(format!("HTTP error: {e}"))))?;
 
     let status = response.status();
     // If server returns 200 instead of 206, ignore the partial file.
@@ -252,7 +253,10 @@ where
         (partial_bytes, partial_bytes > 0)
     } else {
         if partial_bytes > 0 {
-            warn!(model_id, "server returned 200 (not 206); restarting download");
+            warn!(
+                model_id,
+                "server returned 200 (not 206); restarting download"
+            );
         }
         (0u64, false)
     };
@@ -289,8 +293,9 @@ where
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        let chunk =
-            chunk.map_err(|e| LocalModelError::Io(std::io::Error::other(format!("stream error: {e}"))))?;
+        let chunk = chunk.map_err(|e| {
+            LocalModelError::Io(std::io::Error::other(format!("stream error: {e}")))
+        })?;
         hasher.update(&chunk);
         writer.write_all(&chunk).await?;
         bytes_received += chunk.len() as u64;
@@ -332,9 +337,8 @@ where
 
 /// Return `~/.cascade/models/{model_id}/`.
 pub fn model_dir_path(model_id: &str) -> Result<PathBuf, LocalModelError> {
-    let home = dirs::home_dir().ok_or_else(|| {
-        LocalModelError::Io(std::io::Error::other("HOME directory not found"))
-    })?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| LocalModelError::Io(std::io::Error::other("HOME directory not found")))?;
     Ok(home.join(".cascade").join("models").join(model_id))
 }
 
@@ -398,8 +402,7 @@ mod tests {
         let final_path = model_dir.join("model.safetensors");
         let tmp_path = model_dir.join("model.safetensors.tmp");
 
-        let progress_log: Arc<Mutex<Vec<DownloadProgress>>> =
-            Arc::new(Mutex::new(Vec::new()));
+        let progress_log: Arc<Mutex<Vec<DownloadProgress>>> = Arc::new(Mutex::new(Vec::new()));
         let log_clone = Arc::clone(&progress_log);
 
         // Build the URL the way the internal fn does (minus the HOME override).
@@ -414,7 +417,11 @@ mod tests {
         assert!(response.status().is_success());
 
         let content_length = response.content_length().unwrap_or(0);
-        let total_bytes = if content_length > 0 { content_length } else { total_len };
+        let total_bytes = if content_length > 0 {
+            content_length
+        } else {
+            total_len
+        };
 
         let file = tokio::fs::File::create(&tmp_path).await.unwrap();
         let mut writer = tokio::io::BufWriter::new(file);
@@ -430,7 +437,11 @@ mod tests {
                 .unwrap();
             bytes_received += chunk.len() as u64;
             let pct = bytes_received as f32 / total_bytes as f32 * 100.0;
-            let p = DownloadProgress { bytes_received, total_bytes, pct };
+            let p = DownloadProgress {
+                bytes_received,
+                total_bytes,
+                pct,
+            };
             log_clone.lock().unwrap().push(p);
         }
         tokio::io::AsyncWriteExt::flush(&mut writer).await.unwrap();
@@ -451,7 +462,7 @@ mod tests {
         // Progress callback fired ≥3 times with non-decreasing pct.
         let log = progress_log.lock().unwrap();
         assert!(
-            log.len() >= 1,
+            !log.is_empty(),
             "progress callback must fire at least once; got {}",
             log.len()
         );
@@ -494,10 +505,7 @@ mod tests {
         tokio::fs::create_dir_all(&model_dir).await.unwrap();
         let tmp_path = model_dir.join("model.safetensors.tmp");
 
-        let url = format!(
-            "{}/test/resolve/main/model.safetensors",
-            server.uri()
-        );
+        let url = format!("{}/test/resolve/main/model.safetensors", server.uri());
 
         // Perform the download manually and check the hash.
         let client = reqwest::Client::new();
@@ -555,12 +563,7 @@ mod tests {
                     .insert_header("content-length", second_half.len().to_string())
                     .insert_header(
                         "content-range",
-                        format!(
-                            "bytes {}-{}/{}",
-                            offset,
-                            total - 1,
-                            total
-                        ),
+                        format!("bytes {}-{}/{}", offset, total - 1, total),
                     ),
             )
             .mount(&server)
@@ -576,10 +579,7 @@ mod tests {
         let partial_bytes = tokio::fs::metadata(&tmp_path).await.unwrap().len();
         assert_eq!(partial_bytes, offset);
 
-        let url = format!(
-            "{}/test/resolve/main/model.safetensors",
-            server.uri()
-        );
+        let url = format!("{}/test/resolve/main/model.safetensors", server.uri());
 
         let client = reqwest::Client::new();
         let response = client
@@ -613,7 +613,10 @@ mod tests {
         drop(writer);
 
         let assembled = tokio::fs::read(&tmp_path).await.unwrap();
-        assert_eq!(assembled, full_payload, "assembled bytes must equal full payload");
+        assert_eq!(
+            assembled, full_payload,
+            "assembled bytes must equal full payload"
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -638,7 +641,10 @@ mod tests {
 
         assert!(result.is_err(), "must return Err when free < required");
         match result.unwrap_err() {
-            LocalModelError::InsufficientDiskSpace { required: r, available: a } => {
+            LocalModelError::InsufficientDiskSpace {
+                required: r,
+                available: a,
+            } => {
                 assert_eq!(r, required);
                 assert_eq!(a, free);
             }

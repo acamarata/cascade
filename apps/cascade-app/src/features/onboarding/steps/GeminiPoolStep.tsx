@@ -125,16 +125,13 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
   // Callbacks for ProvisionCard
   // ---------------------------------------------------------------------------
 
-  const handleProvisioned = useCallback(
-    (email: string, apiKey: string, projectId: string) => {
-      setProvisioned((prev) => {
-        const next = new Map(prev)
-        next.set(email, { email, apiKey, projectId })
-        return next
-      })
-    },
-    [],
-  )
+  const handleProvisioned = useCallback((email: string, apiKey: string, projectId: string) => {
+    setProvisioned((prev) => {
+      const next = new Map(prev)
+      next.set(email, { email, apiKey, projectId })
+      return next
+    })
+  }, [])
 
   const handleSkip = useCallback((email: string) => {
     setSkipped((prev) => {
@@ -199,8 +196,8 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
   // Derived state
   // ---------------------------------------------------------------------------
 
-  const allHandled = accounts.length > 0 &&
-    accounts.every((e) => provisioned.has(e) || skipped.has(e))
+  const allHandled =
+    accounts.length > 0 && accounts.every((e) => provisioned.has(e) || skipped.has(e))
 
   const provisionedCount = provisioned.size
   const canRegister = provisionedCount > 0
@@ -221,7 +218,9 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
         </h1>
         <p className="text-sm text-muted-foreground">
           Provision or paste a Gemini API key for each Google account. Keys are stored in{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">~/.cascade/pool/gemini-keys.json</code>{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            ~/.cascade/pool/gemini-keys.json
+          </code>{' '}
           and used by the cascade daemon for load-balanced Gemini requests.
         </p>
       </header>
@@ -277,9 +276,10 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
                   <div
                     className={cn(
                       'flex items-center gap-2 rounded-lg border p-3 text-sm',
-                      regState.get(email)?.status === 'success' || regState.get(email)?.status === 'already'
+                      regState.get(email)?.status === 'success' ||
+                        regState.get(email)?.status === 'already'
                         ? 'border-green-500/50 bg-green-500/5 text-green-700 dark:text-green-400'
-                        : 'border-destructive/50 bg-destructive/10 text-destructive',
+                        : 'border-destructive/50 bg-destructive/10 text-destructive'
                     )}
                     role="status"
                     aria-label={`Registration result for ${email}`}
@@ -287,17 +287,21 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
                     {regState.get(email)?.status === 'registering' && (
                       <Loader2 size={14} className="animate-spin shrink-0" aria-hidden="true" />
                     )}
-                    {(regState.get(email)?.status === 'success' || regState.get(email)?.status === 'already') && (
+                    {(regState.get(email)?.status === 'success' ||
+                      regState.get(email)?.status === 'already') && (
                       <CheckCircle2 size={14} className="shrink-0" aria-hidden="true" />
                     )}
                     {regState.get(email)?.status === 'error' && (
                       <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
                     )}
-                    <span className="truncate font-medium" title={email}>{email}</span>
+                    <span className="truncate font-medium" title={email}>
+                      {email}
+                    </span>
                     <span className="ml-auto shrink-0 text-xs">
                       {regState.get(email)?.status === 'success' && 'Registered'}
                       {regState.get(email)?.status === 'already' && 'Already registered'}
-                      {regState.get(email)?.status === 'error' && (regState.get(email)?.error ?? 'Error')}
+                      {regState.get(email)?.status === 'error' &&
+                        (regState.get(email)?.error ?? 'Error')}
                       {regState.get(email)?.status === 'registering' && 'Registering…'}
                     </span>
                   </div>
@@ -315,7 +319,8 @@ export function GeminiPoolStep({ className }: GeminiPoolStepProps) {
           {/* Progress summary */}
           {(provisionedCount > 0 || skipped.size > 0) && (
             <p className="text-xs text-muted-foreground" aria-live="polite">
-              {provisionedCount > 0 && `${provisionedCount} key${provisionedCount !== 1 ? 's' : ''} ready to register`}
+              {provisionedCount > 0 &&
+                `${provisionedCount} key${provisionedCount !== 1 ? 's' : ''} ready to register`}
               {provisionedCount > 0 && skipped.size > 0 && ' · '}
               {skipped.size > 0 && `${skipped.size} skipped`}
             </p>

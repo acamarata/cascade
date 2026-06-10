@@ -111,16 +111,15 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       edgeEl: SVGGElement,
       hoveredId: string | null,
       _nodeData: GraphNode[],
-      edgeData: GraphEdge[],
+      edgeData: GraphEdge[]
     ) => {
       if (!hoveredId) {
         // Reset all
-        d3.select(nodeEl).selectAll<SVGCircleElement, GraphNode>('circle')
+        d3.select(nodeEl)
+          .selectAll<SVGCircleElement, GraphNode>('circle')
           .attr('opacity', FULL_OPACITY)
-        d3.select(nodeEl).selectAll<SVGTextElement, GraphNode>('text')
-          .attr('opacity', FULL_OPACITY)
-        d3.select(edgeEl).selectAll<SVGLineElement, GraphEdge>('line')
-          .attr('opacity', EDGE_OPACITY)
+        d3.select(nodeEl).selectAll<SVGTextElement, GraphNode>('text').attr('opacity', FULL_OPACITY)
+        d3.select(edgeEl).selectAll<SVGLineElement, GraphEdge>('line').attr('opacity', EDGE_OPACITY)
         return
       }
 
@@ -134,20 +133,23 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       }
 
       // Dim nodes
-      d3.select(nodeEl).selectAll<SVGCircleElement, GraphNode>('circle')
+      d3.select(nodeEl)
+        .selectAll<SVGCircleElement, GraphNode>('circle')
         .attr('opacity', (d) => (neighbours.has(d.id) ? FULL_OPACITY : DIM_OPACITY))
-      d3.select(nodeEl).selectAll<SVGTextElement, GraphNode>('text')
+      d3.select(nodeEl)
+        .selectAll<SVGTextElement, GraphNode>('text')
         .attr('opacity', (d) => (neighbours.has(d.id) ? FULL_OPACITY : DIM_OPACITY))
 
       // Dim edges — only highlight edges connected to hovered node
-      d3.select(edgeEl).selectAll<SVGLineElement, GraphEdge>('line')
+      d3.select(edgeEl)
+        .selectAll<SVGLineElement, GraphEdge>('line')
         .attr('opacity', (e) => {
           const src = typeof e.source === 'string' ? e.source : (e.source as GraphNode).id
           const tgt = typeof e.target === 'string' ? e.target : (e.target as GraphNode).id
           return src === hoveredId || tgt === hoveredId ? EDGE_HOVER_OPACITY : DIM_OPACITY
         })
     },
-    [],
+    []
   )
 
   // ── Main D3 effect ────────────────────────────────────────────────────────────
@@ -182,7 +184,8 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
     }))
 
     // ── Render edges ──────────────────────────────────────────────────────────
-    const linkSel = d3.select(edgeGroup)
+    const linkSel = d3
+      .select(edgeGroup)
       .selectAll<SVGLineElement, GraphEdge>('line')
       .data(simEdges)
       .join('line')
@@ -191,7 +194,8 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       .attr('opacity', EDGE_OPACITY)
 
     // ── Render nodes ──────────────────────────────────────────────────────────
-    const nodeGroupSel = d3.select(nodeGroup)
+    const nodeGroupSel = d3
+      .select(nodeGroup)
       .selectAll<SVGGElement, GraphNode>('g.node')
       .data(simNodes, (d) => d.id)
       .join('g')
@@ -199,7 +203,8 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       .style('cursor', 'pointer')
 
     // Circle
-    nodeGroupSel.append('circle')
+    nodeGroupSel
+      .append('circle')
       .attr('r', (d) => nodeRadius(d.inDegree))
       .attr('fill', (d) => dirColour(d.dir))
       .attr('stroke', 'hsl(var(--background))')
@@ -207,7 +212,8 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       .attr('opacity', FULL_OPACITY)
 
     // Label (hidden below 8px radius to avoid clutter)
-    nodeGroupSel.append('text')
+    nodeGroupSel
+      .append('text')
       .attr('dy', (d) => nodeRadius(d.inDegree) + 10)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')
@@ -217,7 +223,8 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       .text((d) => (nodeRadius(d.inDegree) >= 6 ? d.label : ''))
 
     // Highlight ring for currently-open note
-    nodeGroupSel.append('circle')
+    nodeGroupSel
+      .append('circle')
       .attr('class', 'ring')
       .attr('r', (d) => nodeRadius(d.inDegree) + 3)
       .attr('fill', 'none')
@@ -250,14 +257,18 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
       .forceSimulation<GraphNode>(simNodes)
       .force(
         'link',
-        d3.forceLink<GraphNode, GraphEdge>(simEdges)
+        d3
+          .forceLink<GraphNode, GraphEdge>(simEdges)
           .id((d) => d.id)
           .distance(60)
-          .strength(0.5),
+          .strength(0.5)
       )
       .force('charge', d3.forceManyBody<GraphNode>().strength(-120))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide<GraphNode>().radius((d) => nodeRadius(d.inDegree) + 2))
+      .force(
+        'collision',
+        d3.forceCollide<GraphNode>().radius((d) => nodeRadius(d.inDegree) + 2)
+      )
       .alphaDecay(0.028)
 
     // Tick: update positions
@@ -290,14 +301,16 @@ export const GraphView = React.memo(function GraphView({ edgesSource }: GraphVie
     }
 
     nodeGroupSel.call(
-      d3.drag<SVGGElement, GraphNode>()
+      d3
+        .drag<SVGGElement, GraphNode>()
         .on('start', dragStarted)
         .on('drag', dragged)
-        .on('end', dragEnded),
+        .on('end', dragEnded)
     )
 
     // ── Zoom ─────────────────────────────────────────────────────────────────
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 8])
       .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
         d3.select(root.node()).attr('transform', event.transform.toString())

@@ -57,9 +57,7 @@ pub fn gemini_oauth_config(client_id: &str) -> OAuthProviderConfig {
         client_secret: String::new(), // public PKCE client — no secret
         auth_url: GOOGLE_AUTH_URL.to_owned(),
         token_url: GOOGLE_TOKEN_URL.to_owned(),
-        scopes: vec![
-            "https://www.googleapis.com/auth/generative-language.retriever".to_owned(),
-        ],
+        scopes: vec!["https://www.googleapis.com/auth/generative-language.retriever".to_owned()],
     }
 }
 
@@ -79,7 +77,10 @@ mod tests {
         assert_eq!(cfg.auth_url, GOOGLE_AUTH_URL);
         assert_eq!(cfg.token_url, GOOGLE_TOKEN_URL);
         assert_eq!(cfg.client_id, "my-client-id");
-        assert!(cfg.client_secret.is_empty(), "public client must have empty secret");
+        assert!(
+            cfg.client_secret.is_empty(),
+            "public client must have empty secret"
+        );
     }
 
     #[test]

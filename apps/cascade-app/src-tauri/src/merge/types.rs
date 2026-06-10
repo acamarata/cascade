@@ -212,23 +212,56 @@ mod tests {
         // Assert camelCase keys.
         assert!(json.contains("\"id\""), "missing id key");
         assert!(json.contains("\"title\""), "missing title key");
-        assert!(json.contains("\"sourceFiles\""), "missing sourceFiles — snake_case leak");
-        assert!(json.contains("\"proposedContent\""), "missing proposedContent — snake_case leak");
+        assert!(
+            json.contains("\"sourceFiles\""),
+            "missing sourceFiles — snake_case leak"
+        );
+        assert!(
+            json.contains("\"proposedContent\""),
+            "missing proposedContent — snake_case leak"
+        );
         assert!(json.contains("\"status\""), "missing status key");
-        assert!(json.contains("\"editedContent\""), "missing editedContent — snake_case leak");
-        assert!(json.contains("\"conflictWith\""), "missing conflictWith — snake_case leak");
-        assert!(json.contains("\"toolId\""), "missing toolId in sourceFiles — snake_case leak");
-        assert!(json.contains("\"sizeBytes\"") || !json.contains("sizeBytes"), "sizeBytes check");
+        assert!(
+            json.contains("\"editedContent\""),
+            "missing editedContent — snake_case leak"
+        );
+        assert!(
+            json.contains("\"conflictWith\""),
+            "missing conflictWith — snake_case leak"
+        );
+        assert!(
+            json.contains("\"toolId\""),
+            "missing toolId in sourceFiles — snake_case leak"
+        );
+        assert!(
+            json.contains("\"sizeBytes\"") || !json.contains("sizeBytes"),
+            "sizeBytes check"
+        );
 
         // Assert NO snake_case keys.
-        assert!(!json.contains("\"source_files\""), "snake_case source_files leaked");
-        assert!(!json.contains("\"proposed_content\""), "snake_case proposed_content leaked");
-        assert!(!json.contains("\"edited_content\""), "snake_case edited_content leaked");
-        assert!(!json.contains("\"conflict_with\""), "snake_case conflict_with leaked");
+        assert!(
+            !json.contains("\"source_files\""),
+            "snake_case source_files leaked"
+        );
+        assert!(
+            !json.contains("\"proposed_content\""),
+            "snake_case proposed_content leaked"
+        );
+        assert!(
+            !json.contains("\"edited_content\""),
+            "snake_case edited_content leaked"
+        );
+        assert!(
+            !json.contains("\"conflict_with\""),
+            "snake_case conflict_with leaked"
+        );
         assert!(!json.contains("\"tool_id\""), "snake_case tool_id leaked");
 
         // SectionStatus serializes as lowercase string.
-        assert!(json.contains("\"pending\""), "SectionStatus::Pending should serialize as 'pending'");
+        assert!(
+            json.contains("\"pending\""),
+            "SectionStatus::Pending should serialize as 'pending'"
+        );
 
         // Round-trip.
         let roundtrip: MergeSection = serde_json::from_str(&json).expect("deserialize failed");
@@ -236,7 +269,10 @@ mod tests {
         assert_eq!(roundtrip.title, section.title);
         assert_eq!(roundtrip.status, SectionStatus::Pending);
         assert_eq!(roundtrip.source_files.len(), 1);
-        assert_eq!(roundtrip.source_files[0].path, "/Users/admin/.claude/CLAUDE.md");
+        assert_eq!(
+            roundtrip.source_files[0].path,
+            "/Users/admin/.claude/CLAUDE.md"
+        );
     }
 
     #[test]
@@ -252,9 +288,18 @@ mod tests {
         assert!(json.contains("\"generatedAt\""), "missing generatedAt");
         assert!(json.contains("\"modelUsed\""), "missing modelUsed");
         assert!(json.contains("\"promptHash\""), "missing promptHash");
-        assert!(!json.contains("\"generated_at\""), "snake_case generated_at leaked");
-        assert!(!json.contains("\"model_used\""), "snake_case model_used leaked");
-        assert!(!json.contains("\"prompt_hash\""), "snake_case prompt_hash leaked");
+        assert!(
+            !json.contains("\"generated_at\""),
+            "snake_case generated_at leaked"
+        );
+        assert!(
+            !json.contains("\"model_used\""),
+            "snake_case model_used leaked"
+        );
+        assert!(
+            !json.contains("\"prompt_hash\""),
+            "snake_case prompt_hash leaked"
+        );
     }
 
     #[test]
@@ -267,7 +312,10 @@ mod tests {
         ];
         for (variant, expected) in cases {
             let json = serde_json::to_string(&variant).expect("serialize");
-            assert_eq!(json, expected, "SectionStatus::{variant:?} did not serialize to {expected}");
+            assert_eq!(
+                json, expected,
+                "SectionStatus::{variant:?} did not serialize to {expected}"
+            );
         }
     }
 
@@ -281,7 +329,13 @@ mod tests {
         let json = serde_json::to_string(&wr).expect("serialize");
         assert!(json.contains("\"bytesWritten\""), "missing bytesWritten");
         assert!(json.contains("\"sectionCount\""), "missing sectionCount");
-        assert!(!json.contains("\"bytes_written\""), "snake_case bytes_written leaked");
-        assert!(!json.contains("\"section_count\""), "snake_case section_count leaked");
+        assert!(
+            !json.contains("\"bytes_written\""),
+            "snake_case bytes_written leaked"
+        );
+        assert!(
+            !json.contains("\"section_count\""),
+            "snake_case section_count leaked"
+        );
     }
 }

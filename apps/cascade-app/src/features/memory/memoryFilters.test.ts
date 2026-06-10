@@ -7,11 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { MemoryEntry } from '../../types/vault'
-import {
-  filterMemoryEntries,
-  projectBadgeColor,
-  projectLabel,
-} from './memoryFilters'
+import { filterMemoryEntries, projectBadgeColor, projectLabel } from './memoryFilters'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

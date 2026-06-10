@@ -48,7 +48,11 @@ pub struct GeminiPoolConfig {
 ///
 /// Serialized as an adjacently-tagged enum for clean Tauri IPC payloads.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum RegisterResult {
     /// Key registered successfully.
     Success,
@@ -76,14 +80,23 @@ mod tests {
     fn register_result_success_serde() {
         let r = RegisterResult::Success;
         let json = serde_json::to_string(&r).unwrap();
-        assert!(json.contains("\"success\"") || json.contains("\"Success\""),
-            "expected Success tag, got: {}", json);
+        assert!(
+            json.contains("\"success\"") || json.contains("\"Success\""),
+            "expected Success tag, got: {}",
+            json
+        );
     }
 
     #[test]
     fn register_result_invalid_key_contains_message() {
-        let r = RegisterResult::InvalidKey { message: "Invalid API key".to_string() };
+        let r = RegisterResult::InvalidKey {
+            message: "Invalid API key".to_string(),
+        };
         let json = serde_json::to_string(&r).unwrap();
-        assert!(json.contains("Invalid API key"), "expected message, got: {}", json);
+        assert!(
+            json.contains("Invalid API key"),
+            "expected message, got: {}",
+            json
+        );
     }
 }

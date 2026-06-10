@@ -28,13 +28,13 @@
  */
 export interface ArchivedFile {
   /** Absolute path where the file lived before archiving. */
-  originalPath: string;
+  originalPath: string
   /** Absolute path where the file now lives inside ~/.cascade/legacy/{toolId}/. */
-  archivedPath: string;
+  archivedPath: string
   /** ISO 8601 timestamp of when the file was moved. */
-  movedAt: string;
+  movedAt: string
   /** File size in bytes at the time of archiving. */
-  sizeBytes: number;
+  sizeBytes: number
 }
 
 // ---------------------------------------------------------------------------
@@ -46,15 +46,15 @@ export interface ArchivedFile {
  */
 export interface ToolArchive {
   /** Kebab-case tool identifier, e.g. 'claude-code', 'opencode'. */
-  toolId: string;
+  toolId: string
   /** Absolute original root directory that was archived (e.g. ~/.claude). */
-  originalRoot: string;
+  originalRoot: string
   /** Absolute destination root inside ~/.cascade/legacy/ (e.g. ~/.cascade/legacy/claude-code). */
-  archiveRoot: string;
+  archiveRoot: string
   /** ISO 8601 timestamp of when the archive operation completed. */
-  archivedAt: string;
+  archivedAt: string
   /** Every file and directory moved during this archive operation. */
-  files: ArchivedFile[];
+  files: ArchivedFile[]
 }
 
 // ---------------------------------------------------------------------------
@@ -69,11 +69,11 @@ export interface ToolArchive {
  */
 export interface ArchiveManifest {
   /** Manifest schema version — currently '1.0'. */
-  version: string;
+  version: string
   /** ISO 8601 timestamp of when this manifest was first created. */
-  createdAt: string;
+  createdAt: string
   /** All tool archives recorded in this manifest. One entry per archived tool. */
-  tools: ToolArchive[];
+  tools: ToolArchive[]
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ export type ArchiveIssue =
   | { type: 'DestinationExists'; path: string }
   | { type: 'PermissionDenied'; path: string }
   | { type: 'SourceNotFound'; path: string }
-  | { type: 'ActiveProcessUsing'; toolName: string };
+  | { type: 'ActiveProcessUsing'; toolName: string }
 
 /**
  * Result of `validate_archive` pre-flight check.
@@ -97,8 +97,8 @@ export type ArchiveIssue =
  * resolved first.
  */
 export interface ArchiveValidation {
-  ok: boolean;
-  issues: ArchiveIssue[];
+  ok: boolean
+  issues: ArchiveIssue[]
 }
 
 // ---------------------------------------------------------------------------
@@ -110,9 +110,9 @@ export interface ArchiveValidation {
  */
 export interface RestoreResult {
   /** Number of files successfully moved back to their original paths. */
-  restoredFiles: number;
+  restoredFiles: number
   /** Number of files skipped due to conflicts at the original path. */
-  skippedConflicts: number;
+  skippedConflicts: number
   /** Error messages for any files that could not be moved or skipped cleanly. */
-  errors: string[];
+  errors: string[]
 }

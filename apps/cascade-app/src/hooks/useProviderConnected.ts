@@ -23,12 +23,12 @@
  * SPORT: MASTER-HOOKS.md — useProviderConnected
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect, useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export interface ProviderConnectionState {
-  anyConnected: boolean;
-  connectedProviders: string[];
+  anyConnected: boolean
+  connectedProviders: string[]
 }
 
 /**
@@ -44,34 +44,34 @@ export function useProviderConnected(): ProviderConnectionState {
   const [state, setState] = useState<ProviderConnectionState>({
     anyConnected: false,
     connectedProviders: [],
-  });
+  })
 
   const fetchProviderHealth = useCallback(async () => {
     try {
       // T-P3-E04-25: cascade_providers_health returns string[] of connected provider ids.
       // Currently returns [] (stub) — gracefully handled as anyConnected=false.
-      const providers = await invoke<string[]>('cascade_providers_health');
+      const providers = await invoke<string[]>('cascade_providers_health')
       setState({
         anyConnected: providers.length > 0,
         connectedProviders: providers,
-      });
+      })
     } catch {
       // Daemon not running or no providers configured — AI-optional fallback.
       // This is the expected path during onboarding before daemon is installed.
-      setState({ anyConnected: false, connectedProviders: [] });
+      setState({ anyConnected: false, connectedProviders: [] })
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     // Initial fetch on mount
-    fetchProviderHealth();
+    fetchProviderHealth()
 
     // Re-poll on focus: user may connect a provider in another window/tab
-    window.addEventListener('focus', fetchProviderHealth);
+    window.addEventListener('focus', fetchProviderHealth)
     return () => {
-      window.removeEventListener('focus', fetchProviderHealth);
-    };
-  }, [fetchProviderHealth]);
+      window.removeEventListener('focus', fetchProviderHealth)
+    }
+  }, [fetchProviderHealth])
 
-  return state;
+  return state
 }

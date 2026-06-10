@@ -56,11 +56,7 @@ function effectiveContent(section: MergeSection): string {
  * When a source file is highlighted, applies a yellow tint to the entire content area
  * (full per-token attribution is a P4+ feature; current implementation highlights the pane).
  */
-export function ProposedContent({
-  section,
-  highlightSourcePath,
-  onEdit,
-}: ProposedContentProps) {
+export function ProposedContent({ section, highlightSourcePath, onEdit }: ProposedContentProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>(effectiveContent(section))
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -92,7 +88,7 @@ export function ProposedContent({
         onEdit(section.id, value)
       }, 300)
     },
-    [section.id, onEdit],
+    [section.id, onEdit]
   )
 
   const handleBlur = useCallback(() => {
@@ -113,7 +109,7 @@ export function ProposedContent({
             className={cn(
               'flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground',
               'hover:bg-accent hover:text-foreground transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             )}
           >
             <Edit2 className="h-3 w-3" aria-hidden="true" />
@@ -125,7 +121,7 @@ export function ProposedContent({
       <div
         className={cn(
           'flex-1 relative overflow-auto rounded-b-md',
-          isHighlighted && 'ring-2 ring-yellow-400 ring-inset',
+          isHighlighted && 'ring-2 ring-yellow-400 ring-inset'
         )}
         onDoubleClick={handleDoubleClick}
         title={editing ? undefined : 'Double-click to edit'}
@@ -141,7 +137,7 @@ export function ProposedContent({
               'absolute inset-0 w-full h-full resize-none',
               'bg-background font-mono text-sm text-foreground',
               'p-3 outline-none',
-              'focus-visible:ring-2 focus-visible:ring-ring',
+              'focus-visible:ring-2 focus-visible:ring-ring'
             )}
             spellCheck={false}
           />
@@ -150,7 +146,7 @@ export function ProposedContent({
             data-source-path={highlightSourcePath ?? undefined}
             className={cn(
               'p-3 font-mono text-sm text-foreground whitespace-pre-wrap break-words min-h-full',
-              isHighlighted && 'bg-yellow-50 dark:bg-yellow-900/10',
+              isHighlighted && 'bg-yellow-50 dark:bg-yellow-900/10'
             )}
             aria-label={`Proposed content for section: ${section.title}`}
           >

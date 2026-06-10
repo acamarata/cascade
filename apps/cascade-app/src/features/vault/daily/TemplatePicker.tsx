@@ -122,7 +122,11 @@ export function TemplatePicker({ isOpen, onClose }: TemplatePickerProps) {
             <div className="flex flex-col gap-1" role="listbox" aria-label="Templates">
               {templates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No templates found in <code>{vaultRoot}/{templatesFolder}/</code>.
+                  No templates found in{' '}
+                  <code>
+                    {vaultRoot}/{templatesFolder}/
+                  </code>
+                  .
                 </p>
               ) : (
                 templates.map((t) => (

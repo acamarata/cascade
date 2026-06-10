@@ -35,9 +35,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, info, warn};
 
 use crate::{
-    config::LocalLlmConfig,
-    error::LocalModelError,
-    runner::select_device,
+    config::LocalLlmConfig, error::LocalModelError, runner::select_device,
     runner_factory::LocalLlmRunnerTrait,
 };
 
@@ -166,10 +164,7 @@ impl Llama3Runner {
 
 #[async_trait::async_trait]
 impl LocalLlmRunnerTrait for Llama3Runner {
-    async fn run(
-        &self,
-        prompt: &str,
-    ) -> Result<ReceiverStream<String>, LocalModelError> {
+    async fn run(&self, prompt: &str) -> Result<ReceiverStream<String>, LocalModelError> {
         self.ensure_loaded().await?;
 
         let state = Arc::clone(&self.state);
@@ -190,7 +185,14 @@ impl LocalLlmRunnerTrait for Llama3Runner {
                     return;
                 }
             };
-            if let Err(e) = run_inference(loaded, &prompt, max_tokens, temperature, &stop_sequences, &tx) {
+            if let Err(e) = run_inference(
+                loaded,
+                &prompt,
+                max_tokens,
+                temperature,
+                &stop_sequences,
+                &tx,
+            ) {
                 warn!("cascade-local-llm: Llama3 inference error: {e}");
             }
         });
@@ -203,7 +205,7 @@ impl LocalLlmRunnerTrait for Llama3Runner {
 
 fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     use candle_core::DType;
-    use candle_transformers::models::llama::{Cache, LlamaConfig, Llama};
+    use candle_transformers::models::llama::{Cache, Llama, LlamaConfig};
     use std::io::BufReader;
 
     let device = select_device()?;
@@ -214,7 +216,11 @@ fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     if !tok_path.exists() && !sp_path.exists() {
         return Err(LocalModelError::WeightsNotFound { path: tok_path });
     }
-    let tok_file = if tok_path.exists() { tok_path.clone() } else { sp_path };
+    let tok_file = if tok_path.exists() {
+        tok_path.clone()
+    } else {
+        sp_path
+    };
     let tokenizer = tokenizers::Tokenizer::from_file(&tok_file).map_err(|e| {
         LocalModelError::TokenizerLoad {
             path: tok_file.clone(),
@@ -241,22 +247,26 @@ fn load_model(config: LocalLlmConfig) -> Result<LoadedModel, LocalModelError> {
     }
 
     let vb = unsafe {
-        candle_nn::VarBuilder::from_mmaped_safetensors(
-            &[weights_path],
-            DType::F32,
-            &device,
-        )
-        .map_err(|e| LocalModelError::Candle(e.to_string()))?
+        candle_nn::VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device)
+            .map_err(|e| LocalModelError::Candle(e.to_string()))?
     };
 
     let cache = Cache::new(false, DType::F32, &model_config, &device)
         .map_err(|e| LocalModelError::Candle(e.to_string()))?;
 
-    let model = Llama::load(vb, &model_config)
-        .map_err(|e| LocalModelError::Candle(e.to_string()))?;
+    let model =
+        Llama::load(vb, &model_config).map_err(|e| LocalModelError::Candle(e.to_string()))?;
 
-    info!("cascade-local-llm: Llama3 weights loaded from {:?}", config.model_path);
-    Ok(LoadedModel { model, tokenizer, device, cache })
+    info!(
+        "cascade-local-llm: Llama3 weights loaded from {:?}",
+        config.model_path
+    );
+    Ok(LoadedModel {
+        model,
+        tokenizer,
+        device,
+        cache,
+    })
 }
 
 // ── run_inference (blocking) ──────────────────────────────────────────────────
@@ -269,8 +279,8 @@ fn run_inference(
     stop_sequences: &[String],
     tx: &tokio::sync::mpsc::Sender<String>,
 ) -> Result<(), LocalModelError> {
-    use candle_core::Tensor;
     use crate::runner::sample_token;
+    use candle_core::Tensor;
 
     let device = &loaded.device;
     let tokenizer = &loaded.tokenizer;
@@ -333,7 +343,10 @@ fn run_inference(
             break;
         }
 
-        if stop_sequences.iter().any(|s| generated.ends_with(s.as_str())) {
+        if stop_sequences
+            .iter()
+            .any(|s| generated.ends_with(s.as_str()))
+        {
             break;
         }
 
@@ -384,7 +397,10 @@ mod tests {
             stop_sequences: vec![],
         };
         let result = Llama3Runner::new(cfg);
-        assert!(result.is_ok(), "expected Ok for existing dir, got: {result:?}");
+        assert!(
+            result.is_ok(),
+            "expected Ok for existing dir, got: {result:?}"
+        );
     }
 
     #[test]
@@ -445,9 +461,18 @@ mod tests {
             Message::user("Tell me more."),
         ];
         let prompt = format_llama3_prompt(&msgs);
-        assert!(prompt.contains("<|start_header_id|>system<|end_header_id|>"), "{prompt}");
-        assert!(prompt.contains("<|start_header_id|>assistant<|end_header_id|>"), "{prompt}");
-        assert!(prompt.ends_with("<|start_header_id|>assistant<|end_header_id|>\n"), "{prompt}");
+        assert!(
+            prompt.contains("<|start_header_id|>system<|end_header_id|>"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("<|start_header_id|>assistant<|end_header_id|>"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.ends_with("<|start_header_id|>assistant<|end_header_id|>\n"),
+            "{prompt}"
+        );
     }
 
     /// Real model inference — requires llama-3.2-3b weights.

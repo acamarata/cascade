@@ -85,8 +85,8 @@ pub async fn read_archive_manifest() -> Result<Option<ArchiveManifest>, String> 
     if !path.exists() {
         return Ok(None);
     }
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| format!("failed to read manifest: {e}"))?;
+    let contents =
+        std::fs::read_to_string(&path).map_err(|e| format!("failed to read manifest: {e}"))?;
     let manifest: ArchiveManifest = serde_json::from_str(&contents)
         .map_err(|e| format!("corrupt manifest — invalid JSON: {e}"))?;
     Ok(Some(manifest))
@@ -183,7 +183,10 @@ mod tests {
 
         let result = read_archive_manifest().await;
         assert!(result.is_ok(), "expected Ok, got: {result:?}");
-        assert!(result.unwrap().is_none(), "expected None for missing manifest");
+        assert!(
+            result.unwrap().is_none(),
+            "expected None for missing manifest"
+        );
     }
 
     /// `read_archive_manifest` returns `Ok(Some(manifest))` for valid JSON.

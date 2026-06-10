@@ -23,7 +23,12 @@ import { UsagePage } from './UsagePage'
 import { SummaryPanel } from '../components/usage/SummaryPanel'
 import { ModelBreakdownChart } from '../components/usage/ModelBreakdownChart'
 import { AccountLedger } from '../components/usage/AccountLedger'
-import type { UsageSummary, MonthlyUsage, AccountLedger as AccountLedgerType, UsagePeriod } from '../types/ipc'
+import type {
+  UsageSummary,
+  MonthlyUsage,
+  AccountLedger as AccountLedgerType,
+  UsagePeriod,
+} from '../types/ipc'
 
 const mockInvoke = invoke as MockedFunction<typeof invoke>
 
@@ -90,7 +95,7 @@ function renderUsagePage() {
   return render(
     <MemoryRouter>
       <UsagePage />
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -114,7 +119,7 @@ describe('UsagePage — empty state', () => {
   it('shows "No usage data yet" when summary has zero tokens and empty history', async () => {
     mockInvoke
       .mockResolvedValueOnce(ZERO_SUMMARY) // cascade_usage_summary
-      .mockResolvedValueOnce([])           // cascade_usage_history
+      .mockResolvedValueOnce([]) // cascade_usage_history
 
     renderUsagePage()
 
@@ -129,7 +134,7 @@ describe('UsagePage — populated data', () => {
     mockInvoke
       .mockResolvedValue(MOCK_SUMMARY) // summary
       .mockResolvedValueOnce(MOCK_SUMMARY) // will be overridden by first
-      .mockResolvedValueOnce(MOCK_HISTORY)  // history
+      .mockResolvedValueOnce(MOCK_HISTORY) // history
 
     // Reset and set up sequential mocks properly.
     mockInvoke.mockReset()
@@ -155,7 +160,7 @@ describe('SummaryPanel', () => {
         onPeriodChange={vi.fn()}
         loading={false}
         onRefresh={vi.fn()}
-      />,
+      />
     )
     // Metric card values
     expect(screen.getByText('1,000')).toBeDefined()
@@ -172,7 +177,7 @@ describe('SummaryPanel', () => {
         onPeriodChange={vi.fn()}
         loading={false}
         onRefresh={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('Week of Jun 02, 2026')).toBeDefined()
   })
@@ -187,7 +192,7 @@ describe('SummaryPanel', () => {
         onPeriodChange={onPeriodChange}
         loading={false}
         onRefresh={vi.fn()}
-      />,
+      />
     )
     const prevBtn = screen.getByLabelText('Previous period')
     fireEvent.click(prevBtn)
@@ -206,7 +211,7 @@ describe('SummaryPanel', () => {
         onPeriodChange={onPeriodChange}
         loading={false}
         onRefresh={vi.fn()}
-      />,
+      />
     )
     const prevBtn = screen.getByLabelText('Previous period')
     fireEvent.click(prevBtn)
@@ -218,9 +223,7 @@ describe('SummaryPanel', () => {
 
 describe('ModelBreakdownChart', () => {
   it('renders a bar for each model in byModel', () => {
-    render(
-      <ModelBreakdownChart byModel={MOCK_SUMMARY.byModel} loading={false} />,
-    )
+    render(<ModelBreakdownChart byModel={MOCK_SUMMARY.byModel} loading={false} />)
     // Both model names should appear in the Y-axis labels.
     expect(screen.getByText(/claude-sonnet/i)).toBeDefined()
     expect(screen.getByText(/gemini/i)).toBeDefined()
@@ -241,7 +244,7 @@ describe('AccountLedger', () => {
         selectedAccount=""
         onAccountChange={vi.fn()}
         loading={false}
-      />,
+      />
     )
     expect(screen.getByRole('option', { name: 'a@b.com' })).toBeDefined()
     expect(screen.getByRole('option', { name: 'x@y.com' })).toBeDefined()
@@ -255,7 +258,7 @@ describe('AccountLedger', () => {
         selectedAccount="a@b.com"
         onAccountChange={vi.fn()}
         loading={false}
-      />,
+      />
     )
     expect(screen.getByText('anthropic')).toBeDefined()
     expect(screen.getByText('google')).toBeDefined()
@@ -269,7 +272,7 @@ describe('AccountLedger', () => {
         selectedAccount="a@b.com"
         onAccountChange={vi.fn()}
         loading={false}
-      />,
+      />
     )
     expect(screen.getByText('Export CSV')).toBeDefined()
   })
@@ -290,7 +293,7 @@ describe('AccountLedger', () => {
         selectedAccount="a@b.com"
         onAccountChange={vi.fn()}
         loading={false}
-      />,
+      />
     )
 
     const csvBtn = screen.getByText('Export CSV')
@@ -318,7 +321,7 @@ describe('AccountLedger', () => {
         selectedAccount="a@b.com"
         onAccountChange={vi.fn()}
         loading={false}
-      />,
+      />
     )
     expect(screen.getByText(/No entries for this account/i)).toBeDefined()
   })

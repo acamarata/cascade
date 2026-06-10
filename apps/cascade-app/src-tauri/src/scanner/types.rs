@@ -141,19 +141,46 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).expect("deserialize");
 
         // All struct field names must appear as camelCase keys.
-        assert!(value.get("toolId").is_some(),       "expected 'toolId', got: {json}");
-        assert!(value.get("globalPaths").is_some(),  "expected 'globalPaths', got: {json}");
-        assert!(value.get("perProjectPaths").is_some(), "expected 'perProjectPaths', got: {json}");
-        assert!(value.get("totalFiles").is_some(),   "expected 'totalFiles', got: {json}");
-        assert!(value.get("totalSizeBytes").is_some(), "expected 'totalSizeBytes', got: {json}");
+        assert!(
+            value.get("toolId").is_some(),
+            "expected 'toolId', got: {json}"
+        );
+        assert!(
+            value.get("globalPaths").is_some(),
+            "expected 'globalPaths', got: {json}"
+        );
+        assert!(
+            value.get("perProjectPaths").is_some(),
+            "expected 'perProjectPaths', got: {json}"
+        );
+        assert!(
+            value.get("totalFiles").is_some(),
+            "expected 'totalFiles', got: {json}"
+        );
+        assert!(
+            value.get("totalSizeBytes").is_some(),
+            "expected 'totalSizeBytes', got: {json}"
+        );
 
         // Snake_case keys must NOT appear.
-        assert!(value.get("tool_id").is_none(),        "snake_case 'tool_id' leaked into JSON");
-        assert!(value.get("global_paths").is_none(),   "snake_case 'global_paths' leaked into JSON");
-        assert!(value.get("total_size_bytes").is_none(),"snake_case 'total_size_bytes' leaked into JSON");
+        assert!(
+            value.get("tool_id").is_none(),
+            "snake_case 'tool_id' leaked into JSON"
+        );
+        assert!(
+            value.get("global_paths").is_none(),
+            "snake_case 'global_paths' leaked into JSON"
+        );
+        assert!(
+            value.get("total_size_bytes").is_none(),
+            "snake_case 'total_size_bytes' leaked into JSON"
+        );
 
         // ToolId serializes to kebab-case string.
-        assert_eq!(value["toolId"], "claude-code", "ToolId should be 'claude-code'");
+        assert_eq!(
+            value["toolId"], "claude-code",
+            "ToolId should be 'claude-code'"
+        );
     }
 
     /// ScanResult fields also round-trip as camelCase.
@@ -168,26 +195,32 @@ mod tests {
         let json = serde_json::to_string(&result).expect("serialize");
         let value: serde_json::Value = serde_json::from_str(&json).expect("deserialize");
 
-        assert!(value.get("scannedAt").is_some(),   "expected 'scannedAt'");
+        assert!(value.get("scannedAt").is_some(), "expected 'scannedAt'");
         assert!(value.get("devTreeRoot").is_some(), "expected 'devTreeRoot'");
-        assert!(value.get("scanned_at").is_none(),  "snake_case 'scanned_at' leaked");
+        assert!(
+            value.get("scanned_at").is_none(),
+            "snake_case 'scanned_at' leaked"
+        );
     }
 
     /// All 7 ToolId variants serialize to the expected kebab-case strings.
     #[test]
     fn tool_id_variants_serialize_kebab_case() {
         let cases = [
-            (ToolId::ClaudeCode,  "\"claude-code\""),
-            (ToolId::Opencode,    "\"opencode\""),
-            (ToolId::Codex,       "\"codex\""),
-            (ToolId::Cursor,      "\"cursor\""),
-            (ToolId::Aider,       "\"aider\""),
-            (ToolId::Windsurf,    "\"windsurf\""),
+            (ToolId::ClaudeCode, "\"claude-code\""),
+            (ToolId::Opencode, "\"opencode\""),
+            (ToolId::Codex, "\"codex\""),
+            (ToolId::Cursor, "\"cursor\""),
+            (ToolId::Aider, "\"aider\""),
+            (ToolId::Windsurf, "\"windsurf\""),
             (ToolId::Antigravity, "\"antigravity\""),
         ];
         for (variant, expected) in cases {
             let json = serde_json::to_string(&variant).expect("serialize");
-            assert_eq!(json, expected, "ToolId::{variant:?} did not serialize to {expected}");
+            assert_eq!(
+                json, expected,
+                "ToolId::{variant:?} did not serialize to {expected}"
+            );
         }
     }
 }

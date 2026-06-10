@@ -46,6 +46,7 @@ fn default_schema_version() -> String {
 /// Controls which AI harnesses receive newly indexed documents.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct LibrarySettings {
     /// List of harness identifiers that receive new items by default.
     /// Empty means all harnesses receive them.
@@ -57,20 +58,12 @@ pub struct LibrarySettings {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-impl Default for LibrarySettings {
-    fn default() -> Self {
-        Self {
-            default_harness_targets: Vec::new(),
-            extra: HashMap::new(),
-        }
-    }
-}
-
 // ── Context ───────────────────────────────────────────────────────────────────
 
 /// Context resolution overrides.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ContextSettings {
     /// Override the default `~/Sites/` root used for context resolution.
     /// Null = use system default.
@@ -82,20 +75,12 @@ pub struct ContextSettings {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-impl Default for ContextSettings {
-    fn default() -> Self {
-        Self {
-            sites_root: None,
-            extra: HashMap::new(),
-        }
-    }
-}
-
 // ── Project Map ───────────────────────────────────────────────────────────────
 
 /// Project-map resolution overrides.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ProjectMapSettings {
     /// Override the phase root path (`{project}/.claude/phases/`).
     /// Null = use system default.
@@ -107,15 +92,6 @@ pub struct ProjectMapSettings {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-impl Default for ProjectMapSettings {
-    fn default() -> Self {
-        Self {
-            phase_root: None,
-            extra: HashMap::new(),
-        }
-    }
-}
-
 // ── Providers ─────────────────────────────────────────────────────────────────
 
 /// Per-provider API keys and routing defaults.
@@ -124,6 +100,7 @@ impl Default for ProjectMapSettings {
 /// Vault encryption is deferred to P4.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ProvidersSettings {
     /// Anthropic API key (plain string; P4 will encrypt).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -148,19 +125,6 @@ pub struct ProvidersSettings {
     /// Preserve unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
-}
-
-impl Default for ProvidersSettings {
-    fn default() -> Self {
-        Self {
-            anthropic: None,
-            openai: None,
-            google: Vec::new(),
-            codex: None,
-            default_routing: None,
-            extra: HashMap::new(),
-        }
-    }
 }
 
 // ── Gemini Pool ───────────────────────────────────────────────────────────────
@@ -208,6 +172,7 @@ impl Default for GeminiPoolSettings {
 /// All paths are optional; absent = use the harness's own defaults.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct HarnessBridgesSettings {
     /// Path to the Claude Code (`cc`) config file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -224,17 +189,6 @@ pub struct HarnessBridgesSettings {
     /// Preserve unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
-}
-
-impl Default for HarnessBridgesSettings {
-    fn default() -> Self {
-        Self {
-            cc_config_path: None,
-            oc_config_path: None,
-            codex_config_path: None,
-            extra: HashMap::new(),
-        }
-    }
 }
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
@@ -300,6 +254,7 @@ pub struct ScheduledTaskEntry {
 /// Plugin management settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct PluginsSettings {
     /// Slugs of plugins that are currently enabled.
     #[serde(default)]
@@ -313,16 +268,6 @@ pub struct PluginsSettings {
     /// Preserve unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
-}
-
-impl Default for PluginsSettings {
-    fn default() -> Self {
-        Self {
-            enabled: Vec::new(),
-            config: HashMap::new(),
-            extra: HashMap::new(),
-        }
-    }
 }
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
@@ -418,6 +363,7 @@ pub struct McpServerEntry {
 /// Controls how vault credentials are shown in the UI.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct VaultDisplaySettings {
     /// If true, show masked previews (e.g. `sk-••••••AB`).
     /// If false, values are fully hidden. Default: false.
@@ -429,20 +375,12 @@ pub struct VaultDisplaySettings {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-impl Default for VaultDisplaySettings {
-    fn default() -> Self {
-        Self {
-            show_masked: false,
-            extra: HashMap::new(),
-        }
-    }
-}
-
 // ── Telemetry ─────────────────────────────────────────────────────────────────
 
 /// Anonymous usage telemetry preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TelemetrySettings {
     /// Opt in to anonymous telemetry. Default: false.
     #[serde(default)]
@@ -455,16 +393,6 @@ pub struct TelemetrySettings {
     /// Preserve unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
-}
-
-impl Default for TelemetrySettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            endpoint: None,
-            extra: HashMap::new(),
-        }
-    }
 }
 
 // ── Top-level CascadeSettings ─────────────────────────────────────────────────

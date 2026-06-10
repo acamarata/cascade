@@ -31,12 +31,12 @@ interface ToolMeta {
 
 const TOOL_META: Record<ToolId, ToolMeta> = {
   'claude-code': { label: 'Claude Code', iconColor: 'bg-orange-500', abbr: 'CC' },
-  opencode:      { label: 'OpenCode',    iconColor: 'bg-purple-600', abbr: 'OC' },
-  codex:         { label: 'Codex',       iconColor: 'bg-emerald-600', abbr: 'CX' },
-  cursor:        { label: 'Cursor',      iconColor: 'bg-sky-500',    abbr: 'CR' },
-  aider:         { label: 'Aider',       iconColor: 'bg-rose-500',   abbr: 'AI' },
-  windsurf:      { label: 'Windsurf',    iconColor: 'bg-cyan-600',   abbr: 'WS' },
-  antigravity:   { label: 'Antigravity', iconColor: 'bg-violet-600', abbr: 'AG' },
+  opencode: { label: 'OpenCode', iconColor: 'bg-purple-600', abbr: 'OC' },
+  codex: { label: 'Codex', iconColor: 'bg-emerald-600', abbr: 'CX' },
+  cursor: { label: 'Cursor', iconColor: 'bg-sky-500', abbr: 'CR' },
+  aider: { label: 'Aider', iconColor: 'bg-rose-500', abbr: 'AI' },
+  windsurf: { label: 'Windsurf', iconColor: 'bg-cyan-600', abbr: 'WS' },
+  antigravity: { label: 'Antigravity', iconColor: 'bg-violet-600', abbr: 'AG' },
 }
 
 // ---------------------------------------------------------------------------
@@ -46,8 +46,7 @@ const TOOL_META: Record<ToolId, ToolMeta> = {
 const MODE_DESCRIPTIONS: Record<ToolMode, string> = {
   'cascade-managed':
     'Symlinks added at each cascade tier — your tool reads cascade content transparently',
-  independent:
-    "Tool keeps its own files — cascade doesn't touch them",
+  independent: "Tool keeps its own files — cascade doesn't touch them",
 }
 
 // ---------------------------------------------------------------------------
@@ -100,9 +99,7 @@ export function ToolModeCard({ toolId, mode, isInstalled, onChange }: ToolModeCa
     <div
       className={cn(
         'rounded-lg border bg-card px-4 py-3 transition-colors',
-        isInstalled
-          ? 'hover:border-ring/50'
-          : 'opacity-50 pointer-events-none',
+        isInstalled ? 'hover:border-ring/50' : 'opacity-50 pointer-events-none'
       )}
       aria-disabled={!isInstalled}
     >
@@ -112,7 +109,7 @@ export function ToolModeCard({ toolId, mode, isInstalled, onChange }: ToolModeCa
           aria-hidden="true"
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white',
-            meta.iconColor,
+            meta.iconColor
           )}
         >
           {meta.abbr}
@@ -123,9 +120,7 @@ export function ToolModeCard({ toolId, mode, isInstalled, onChange }: ToolModeCa
           <p className="text-sm font-medium leading-tight">
             {meta.label}
             {!isInstalled && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                Not installed
-              </span>
+              <span className="ml-2 text-xs font-normal text-muted-foreground">Not installed</span>
             )}
           </p>
         </div>
@@ -143,7 +138,7 @@ export function ToolModeCard({ toolId, mode, isInstalled, onChange }: ToolModeCa
             'transition-colors duration-200 ease-in-out',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             'disabled:pointer-events-none disabled:opacity-50',
-            isCascadeManaged ? 'bg-primary' : 'bg-input',
+            isCascadeManaged ? 'bg-primary' : 'bg-input'
           )}
         >
           <span
@@ -151,7 +146,7 @@ export function ToolModeCard({ toolId, mode, isInstalled, onChange }: ToolModeCa
             className={cn(
               'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg',
               'ring-0 transition duration-200 ease-in-out',
-              isCascadeManaged ? 'translate-x-4' : 'translate-x-0',
+              isCascadeManaged ? 'translate-x-4' : 'translate-x-0'
             )}
           />
         </button>

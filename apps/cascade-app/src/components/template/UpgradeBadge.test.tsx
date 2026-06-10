@@ -10,7 +10,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { MockedFunction } from 'vitest'
 
-
 // Mock Tauri invoke BEFORE importing components that use it.
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -61,14 +60,7 @@ describe('TemplateCard upgrade badge visibility', () => {
   const entry = makeEntry()
 
   it('does NOT render UpgradeBadge when upgradeable is false', () => {
-    render(
-      <TemplateCard
-        entry={entry}
-        isSelected={false}
-        onClick={() => {}}
-        upgradeable={false}
-      />,
-    )
+    render(<TemplateCard entry={entry} isSelected={false} onClick={() => {}} upgradeable={false} />)
     expect(screen.queryByRole('status', { name: /upgrade available/i })).not.toBeInTheDocument()
   })
 
@@ -80,7 +72,7 @@ describe('TemplateCard upgrade badge visibility', () => {
         onClick={() => {}}
         upgradeable={true}
         upgradeToVersion="2.0.0"
-      />,
+      />
     )
     expect(screen.getByRole('status', { name: /upgrade available.*2\.0\.0/i })).toBeInTheDocument()
   })
@@ -93,7 +85,7 @@ describe('TemplateCard upgrade badge visibility', () => {
         onClick={() => {}}
         upgradeable={true}
         // upgradeToVersion deliberately omitted
-      />,
+      />
     )
     expect(screen.queryByRole('status', { name: /upgrade available/i })).not.toBeInTheDocument()
   })
@@ -244,11 +236,7 @@ describe('ApplyDialog', () => {
     const onApply = vi.fn()
     render(<ApplyDialog {...baseProps} onApply={onApply} />)
     fireEvent.click(screen.getByRole('button', { name: /preview changes without applying/i }))
-    expect(onApply).toHaveBeenCalledWith(
-      '~/.cascade/CASCADE.md',
-      {},
-      true,
-    )
+    expect(onApply).toHaveBeenCalledWith('~/.cascade/CASCADE.md', {}, true)
   })
 
   it('shows dry-run result with section counts when provided', () => {
@@ -292,7 +280,7 @@ describe('ApplyDialog', () => {
       <ApplyDialog
         {...baseProps}
         applyResult={{ applied: ['A', 'B'], conflicts: [], skipped: [] }}
-      />,
+      />
     )
     await waitFor(() => {
       expect(screen.getByText(/template applied successfully/i)).toBeInTheDocument()
@@ -308,7 +296,7 @@ describe('ApplyDialog', () => {
         {...baseProps}
         onClose={onClose}
         applyResult={{ applied: ['A'], conflicts: [], skipped: [] }}
-      />,
+      />
     )
     fireEvent.click(screen.getByTestId('apply-dialog-close-cancel'))
     expect(onClose).toHaveBeenCalledOnce()

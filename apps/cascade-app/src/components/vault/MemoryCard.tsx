@@ -63,14 +63,10 @@ export function MemoryCard({ entry, onOpen }: MemoryCardProps): React.ReactEleme
       </div>
 
       {/* Title */}
-      <p className="text-sm font-semibold leading-snug text-foreground truncate">
-        {entry.title}
-      </p>
+      <p className="text-sm font-semibold leading-snug text-foreground truncate">{entry.title}</p>
 
       {/* Excerpt — 2-line clamp */}
-      <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-        {excerpt}
-      </p>
+      <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{excerpt}</p>
     </button>
   )
 }

@@ -66,7 +66,10 @@ mod tests {
         write_template_v(&dir, "t.md", "my-tmpl", "1.0.0");
         let reg = TemplateRegistry::load_dirs(&[dir.path()]);
         let upgrade = reg.available_upgrade("my-tmpl", "1.0.0-alpha");
-        assert!(upgrade.is_some(), "1.0.0 > 1.0.0-alpha — upgrade should be available");
+        assert!(
+            upgrade.is_some(),
+            "1.0.0 > 1.0.0-alpha — upgrade should be available"
+        );
     }
 
     // T-13-E: unknown template → None (no panic)

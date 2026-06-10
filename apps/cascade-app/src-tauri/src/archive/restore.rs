@@ -63,10 +63,14 @@ pub fn restore_from_manifest(
     manifest_path: &Path,
 ) -> Result<RestoreResult, String> {
     // 1. Read and parse the manifest.
-    let raw = std::fs::read_to_string(manifest_path)
-        .map_err(|e| format!("failed to read manifest at {}: {e}", manifest_path.display()))?;
-    let mut manifest: ArchiveManifest = serde_json::from_str(&raw)
-        .map_err(|e| format!("corrupt manifest — invalid JSON: {e}"))?;
+    let raw = std::fs::read_to_string(manifest_path).map_err(|e| {
+        format!(
+            "failed to read manifest at {}: {e}",
+            manifest_path.display()
+        )
+    })?;
+    let mut manifest: ArchiveManifest =
+        serde_json::from_str(&raw).map_err(|e| format!("corrupt manifest — invalid JSON: {e}"))?;
 
     // 2. Find the ToolArchive entry for tool_id.
     let tool_idx = manifest
@@ -192,10 +196,8 @@ fn move_file(src: &Path, dst: &Path) -> Result<(), String> {
     match std::fs::rename(src, dst) {
         Ok(()) => Ok(()),
         Err(e) if is_cross_device_error(&e) => {
-            std::fs::copy(src, dst)
-                .map_err(|ce| format!("cross-fs copy failed: {ce}"))?;
-            std::fs::remove_file(src)
-                .map_err(|re| format!("cross-fs remove failed: {re}"))?;
+            std::fs::copy(src, dst).map_err(|ce| format!("cross-fs copy failed: {ce}"))?;
+            std::fs::remove_file(src).map_err(|re| format!("cross-fs remove failed: {re}"))?;
             Ok(())
         }
         Err(e) => Err(format!("rename failed: {e}")),
@@ -224,10 +226,8 @@ fn write_manifest_atomic(manifest: &ArchiveManifest, path: &Path) -> Result<(), 
     let tmp_path = path.with_extension("json.tmp");
     let json =
         serde_json::to_string_pretty(manifest).map_err(|e| format!("serialize failed: {e}"))?;
-    std::fs::write(&tmp_path, &json)
-        .map_err(|e| format!("write tmp manifest failed: {e}"))?;
-    std::fs::rename(&tmp_path, path)
-        .map_err(|e| format!("atomic rename manifest failed: {e}"))?;
+    std::fs::write(&tmp_path, &json).map_err(|e| format!("write tmp manifest failed: {e}"))?;
+    std::fs::rename(&tmp_path, path).map_err(|e| format!("atomic rename manifest failed: {e}"))?;
     Ok(())
 }
 
@@ -432,6 +432,9 @@ mod tests {
         let manifest_path = write_manifest(tmp.path(), &manifest);
 
         let err = restore_from_manifest("nonexistent-tool", false, &manifest_path).unwrap_err();
-        assert!(err.contains("not found in manifest"), "unexpected error: {err}");
+        assert!(
+            err.contains("not found in manifest"),
+            "unexpected error: {err}"
+        );
     }
 }

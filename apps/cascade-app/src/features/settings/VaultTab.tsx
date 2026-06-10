@@ -77,7 +77,10 @@ export function VaultTab() {
             disabled={isLoading}
             aria-label="Refresh vault keys"
           >
-            <RefreshCw className={['h-4 w-4', isLoading ? 'animate-spin' : ''].join(' ')} aria-hidden="true" />
+            <RefreshCw
+              className={['h-4 w-4', isLoading ? 'animate-spin' : ''].join(' ')}
+              aria-hidden="true"
+            />
           </Button>
           <Button
             type="button"
@@ -93,8 +96,9 @@ export function VaultTab() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Variables stored in <code className="font-mono text-xs bg-muted px-1 rounded">vault.env</code>.
-        Values are never displayed — key names only.
+        Variables stored in{' '}
+        <code className="font-mono text-xs bg-muted px-1 rounded">vault.env</code>. Values are never
+        displayed — key names only.
       </p>
 
       {isLoading ? (

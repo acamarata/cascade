@@ -39,7 +39,9 @@ function TierRow({ entry }: { entry: TierEntry }) {
   function handleCreate() {
     // Open the parent directory; actual file creation is deferred to Settings (E-07 W-05).
     const dir = entry.path.replace(/\/[^/]+$/, '')
-    open(dir).catch(() => {/* ignore */})
+    open(dir).catch(() => {
+      /* ignore */
+    })
   }
 
   return (
@@ -49,15 +51,9 @@ function TierRow({ entry }: { entry: TierEntry }) {
     >
       {/* Status icon */}
       {exists ? (
-        <CheckCircle2
-          className="mt-0.5 h-4 w-4 shrink-0 text-green-500"
-          aria-hidden="true"
-        />
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" aria-hidden="true" />
       ) : (
-        <Circle
-          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40"
-          aria-hidden="true"
-        />
+        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40" aria-hidden="true" />
       )}
 
       {/* Content */}
@@ -70,9 +66,7 @@ function TierRow({ entry }: { entry: TierEntry }) {
           >
             {entry.tier}
           </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {entry.name}
-          </span>
+          <span className="truncate text-xs text-muted-foreground">{entry.name}</span>
         </div>
         <p className="mt-0.5 truncate text-[10px] text-muted-foreground/60">
           {TIER_DESCRIPTIONS[entry.tier] ?? entry.path}

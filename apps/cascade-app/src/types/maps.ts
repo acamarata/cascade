@@ -30,15 +30,15 @@
  */
 export interface GraphNode {
   /** Stable unique id within this graph (slug or ticket id). */
-  id: string;
+  id: string
   /** Human-readable display label. */
-  label: string;
+  label: string
   /** Semantic type: "project" | "repo" | "app" | "ticket". */
-  nodeType: string;
+  nodeType: string
   /** Absolute filesystem path (project/repo/app) or empty string (ticket). */
-  path: string;
+  path: string
   /** Optional extra data — provider-specific. */
-  meta?: Record<string, unknown>;
+  meta?: Record<string, unknown>
 }
 
 /**
@@ -49,9 +49,9 @@ export interface GraphNode {
  */
 export interface GraphEdge {
   /** Source node id. */
-  from: string;
+  from: string
   /** Target node id. */
-  to: string;
+  to: string
 }
 
 /**
@@ -62,11 +62,11 @@ export interface GraphEdge {
  */
 export interface GraphData {
   /** Schema version — always 1 currently. */
-  version: number;
+  version: number
   /** All nodes in the graph. */
-  nodes: GraphNode[];
+  nodes: GraphNode[]
   /** All edges in the graph. */
-  edges: GraphEdge[];
+  edges: GraphEdge[]
 }
 
 // ---------------------------------------------------------------------------
@@ -81,20 +81,20 @@ export interface GraphData {
  */
 export interface TierEntry {
   /** Tier abbreviation: "GCI" | "PCI" | "APC" | "PPC" | "PRC" | "PAC". */
-  tier: "GCI" | "PCI" | "APC" | "PPC" | "PRC" | "PAC";
+  tier: 'GCI' | 'PCI' | 'APC' | 'PPC' | 'PRC' | 'PAC'
   /** Human-readable tier name. */
-  name: string;
+  name: string
   /** Absolute path to the expected `.cascade/CASCADE.md` file. */
-  path: string;
+  path: string
   /** Whether the file exists on disk at call time. */
-  exists: boolean;
+  exists: boolean
 }
 
 // ---------------------------------------------------------------------------
 // Typed Tauri invoke wrappers
 // ---------------------------------------------------------------------------
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from '@tauri-apps/api/core'
 
 /**
  * Scan ~/Sites (or a custom root) for cascade-managed projects and return
@@ -103,9 +103,9 @@ import { invoke } from "@tauri-apps/api/core";
  * @param sitesRoot Optional override for the ~/Sites scan root.
  */
 export function getProjectGraph(sitesRoot?: string): Promise<GraphData> {
-  return invoke<GraphData>("get_project_graph", {
+  return invoke<GraphData>('get_project_graph', {
     sitesRoot: sitesRoot ?? null,
-  });
+  })
 }
 
 /**
@@ -114,7 +114,7 @@ export function getProjectGraph(sitesRoot?: string): Promise<GraphData> {
  * @param root Absolute path to the project/repo directory to inspect.
  */
 export function getCascadeTierTree(root: string): Promise<TierEntry[]> {
-  return invoke<TierEntry[]>("get_cascade_tier_tree", { root });
+  return invoke<TierEntry[]>('get_cascade_tier_tree', { root })
 }
 
 /**
@@ -123,5 +123,5 @@ export function getCascadeTierTree(root: string): Promise<TierEntry[]> {
  * @param phaseRoot Absolute path to the project root whose PEWS files to read.
  */
 export function getPewsDag(phaseRoot: string): Promise<GraphData> {
-  return invoke<GraphData>("get_pews_dag", { phaseRoot });
+  return invoke<GraphData>('get_pews_dag', { phaseRoot })
 }

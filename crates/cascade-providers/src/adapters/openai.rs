@@ -43,7 +43,9 @@ use crate::{
     http_client::CascadeHttpClient,
     oauth::client::{OAuthClient, OAuthProviderConfig},
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -53,14 +55,7 @@ const DEFAULT_BASE_URL: &str = "https://api.openai.com";
 
 /// Model ID prefixes this adapter considers chat-capable.
 /// Embedding, DALL-E, Whisper, and TTS models are excluded.
-const CHAT_PREFIXES: &[&str] = &[
-    "gpt-",
-    "chatgpt-",
-    "o1",
-    "o3",
-    "o4",
-    "text-davinci",
-];
+const CHAT_PREFIXES: &[&str] = &["gpt-", "chatgpt-", "o1", "o3", "o4", "text-davinci"];
 
 /// Prefixes for o-series reasoning models with API quirks.
 const O_SERIES_PREFIXES: &[&str] = &["o1", "o3", "o4"];
@@ -230,22 +225,32 @@ impl OpenAIAdapter {
 
     /// Attempt one OAuth token refresh, returning the new access token.
     async fn refresh_once(&self) -> Result<String, ProviderError> {
-        let cfg = self.oauth_config.as_ref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: "openai".to_owned() }
-        })?;
-        let rt = self.oauth_refresh_token.as_deref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: "openai".to_owned() }
-        })?;
+        let cfg = self
+            .oauth_config
+            .as_ref()
+            .ok_or_else(|| ProviderError::OAuthExpired {
+                provider: "openai".to_owned(),
+            })?;
+        let rt =
+            self.oauth_refresh_token
+                .as_deref()
+                .ok_or_else(|| ProviderError::OAuthExpired {
+                    provider: "openai".to_owned(),
+                })?;
         OAuthClient::new(cfg.clone())
             .refresh_token(rt)
             .await
             .map(|t| t.access_token)
-            .map_err(|_| ProviderError::OAuthExpired { provider: "openai".to_owned() })
+            .map_err(|_| ProviderError::OAuthExpired {
+                provider: "openai".to_owned(),
+            })
     }
 
     /// Return the effective bearer token: OAuth access token wins over API key.
     fn effective_token(&self) -> &str {
-        self.oauth_access_token.as_deref().unwrap_or(self.api_key.as_str())
+        self.oauth_access_token
+            .as_deref()
+            .unwrap_or(self.api_key.as_str())
     }
 
     /// Returns `true` when the model id belongs to the o-series quirk family.
@@ -334,9 +339,9 @@ impl ProviderAdapter for OpenAIAdapter {
                     })
                     .await
                     .map_err(|e| match e {
-                        ProviderError::AuthFailed(_) => {
-                            ProviderError::OAuthExpired { provider: "openai".to_owned() }
-                        }
+                        ProviderError::AuthFailed(_) => ProviderError::OAuthExpired {
+                            provider: "openai".to_owned(),
+                        },
                         other => other,
                     })?
             }
@@ -371,10 +376,8 @@ impl ProviderAdapter for OpenAIAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let url = format!("{}/v1/chat/completions", self.base_url);
         let body = Self::build_request(&req, true);
         let token = self.effective_token().to_owned();
@@ -418,15 +421,17 @@ impl ProviderAdapter for OpenAIAdapter {
                                 let delta = choice.delta.content.unwrap_or_default();
                                 let finish_reason = choice.finish_reason;
                                 // Only emit a chunk when there is content or a stop reason.
-                                if !delta.is_empty() || finish_reason.is_some() {
-                                    if tx
-                                        .send(Ok(StreamChunk { delta, finish_reason }))
+                                if (!delta.is_empty() || finish_reason.is_some())
+                                    && tx
+                                        .send(Ok(StreamChunk {
+                                            delta,
+                                            finish_reason,
+                                        }))
                                         .await
                                         .is_err()
-                                    {
-                                        // Receiver dropped — consumer cancelled.
-                                        return;
-                                    }
+                                {
+                                    // Receiver dropped — consumer cancelled.
+                                    return;
                                 }
                             }
                         }
@@ -451,17 +456,13 @@ impl ProviderAdapter for OpenAIAdapter {
 
         let list: OaiModelList = self
             .http
-            .get_json(&url, move |b| {
-                CascadeHttpClient::apply_bearer(b, &token)
-            })
+            .get_json(&url, move |b| CascadeHttpClient::apply_bearer(b, &token))
             .await?;
 
         let models = list
             .data
             .into_iter()
-            .filter(|m| {
-                CHAT_PREFIXES.iter().any(|p| m.id.starts_with(p))
-            })
+            .filter(|m| CHAT_PREFIXES.iter().any(|p| m.id.starts_with(p)))
             .map(|m| ModelInfo {
                 context_window: model_context_window(&m.id),
                 name: m.id.clone(),
@@ -479,9 +480,7 @@ impl ProviderAdapter for OpenAIAdapter {
 
         let _: OaiModelList = self
             .http
-            .get_json(&url, move |b| {
-                CascadeHttpClient::apply_bearer(b, &token)
-            })
+            .get_json(&url, move |b| CascadeHttpClient::apply_bearer(b, &token))
             .await?;
 
         Ok(())
@@ -510,19 +509,20 @@ impl ProviderAdapter for OpenAIAdapter {
 /// Best-effort context window for well-known OpenAI model families.
 /// Falls back to 4 096 for unrecognised model ids.
 fn model_context_window(id: &str) -> u32 {
-    if id.starts_with("gpt-4o") || id.starts_with("chatgpt-4o") {
-        128_000
-    } else if id.starts_with("gpt-4-turbo") {
+    if id.starts_with("gpt-4o")
+        || id.starts_with("chatgpt-4o")
+        || id.starts_with("gpt-4-turbo")
+        || id.starts_with("o1")
+        || id.starts_with("o3")
+        || id.starts_with("o4")
+    {
         128_000
     } else if id.starts_with("gpt-4") {
         8_192
     } else if id.starts_with("gpt-3.5") {
         16_385
-    } else if id.starts_with("o1") || id.starts_with("o3") || id.starts_with("o4") {
-        128_000
-    } else if id.starts_with("text-davinci") {
-        4_096
     } else {
+        // text-davinci and unrecognised models both default to 4 096.
         4_096
     }
 }
@@ -657,9 +657,9 @@ mod tests {
         assert!(!chunks.is_empty(), "expected ≥1 StreamChunk, got 0");
 
         // At least one chunk should carry a stop finish_reason.
-        let has_stop = chunks.iter().any(|c| {
-            c.finish_reason.as_deref() == Some("stop")
-        });
+        let has_stop = chunks
+            .iter()
+            .any(|c| c.finish_reason.as_deref() == Some("stop"));
         assert!(has_stop, "expected a chunk with finish_reason=stop");
     }
 
@@ -728,7 +728,10 @@ mod tests {
         assert!(ids.contains(&"text-davinci-003"));
         assert!(!ids.contains(&"dall-e-3"), "dall-e-3 must be filtered");
         assert!(!ids.contains(&"whisper-1"), "whisper-1 must be filtered");
-        assert!(!ids.contains(&"text-embedding-3-small"), "embedding must be filtered");
+        assert!(
+            !ids.contains(&"text-embedding-3-small"),
+            "embedding must be filtered"
+        );
     }
 
     // ── health_check() ────────────────────────────────────────────────────────
@@ -801,10 +804,17 @@ mod tests {
 
         let oai = OpenAIAdapter::build_request(&req, false);
 
-        assert_eq!(oai.max_completion_tokens, Some(500), "o-series needs max_completion_tokens");
+        assert_eq!(
+            oai.max_completion_tokens,
+            Some(500),
+            "o-series needs max_completion_tokens"
+        );
         assert_eq!(oai.max_tokens, None, "o-series must not send max_tokens");
         assert_eq!(oai.temperature, None, "o-series must not send temperature");
-        assert_eq!(oai.messages[0].role, "developer", "system → developer for o-series");
+        assert_eq!(
+            oai.messages[0].role, "developer",
+            "system → developer for o-series"
+        );
         assert_eq!(oai.messages[1].role, "user");
     }
 
@@ -847,7 +857,10 @@ mod tests {
     #[test]
     fn custom_base_url_stored_in_provider_info() {
         let adapter = OpenAIAdapter::new("sk-k", Some("https://my-tenant.openai.azure.com"));
-        assert_eq!(adapter.provider_info().base_url, "https://my-tenant.openai.azure.com");
+        assert_eq!(
+            adapter.provider_info().base_url,
+            "https://my-tenant.openai.azure.com"
+        );
     }
 
     #[test]
@@ -868,12 +881,7 @@ mod tests {
             token_url: "https://auth.openai.com/oauth/token".to_owned(),
             scopes: vec!["openid".to_owned()],
         };
-        let adapter = OpenAIAdapter::with_oauth_token(
-            "oauth-token",
-            "rt",
-            cfg,
-            None::<String>,
-        );
+        let adapter = OpenAIAdapter::with_oauth_token("oauth-token", "rt", cfg, None::<String>);
         assert_eq!(adapter.effective_token(), "oauth-token");
         assert!(adapter.oauth_access_token.is_some());
     }
@@ -944,7 +952,11 @@ mod tests {
 
         let req = CompletionRequest::simple("gpt-4o", "hello");
         let result = adapter.complete(req).await;
-        assert!(result.is_ok(), "expected Ok after refresh+retry: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected Ok after refresh+retry: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -983,7 +995,10 @@ mod tests {
             Some(api_server.uri()),
         );
 
-        let err = adapter.complete(CompletionRequest::simple("gpt-4o", "hi")).await.unwrap_err();
+        let err = adapter
+            .complete(CompletionRequest::simple("gpt-4o", "hi"))
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "openai"),
             "expected OAuthExpired(openai), got: {err:?}"

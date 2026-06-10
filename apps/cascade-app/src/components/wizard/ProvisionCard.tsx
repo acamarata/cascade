@@ -100,10 +100,11 @@ function RadioOption({
   return (
     <label
       htmlFor={id}
+      aria-label={label}
       className={cn(
         'flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors',
         checked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50',
-        disabled && 'cursor-not-allowed opacity-50',
+        disabled && 'cursor-not-allowed opacity-50'
       )}
     >
       <input
@@ -135,9 +136,18 @@ function ProgressStep({ label, active, done }: { label: string; active: boolean;
       ) : active ? (
         <Loader2 size={15} className="shrink-0 animate-spin text-primary" aria-hidden="true" />
       ) : (
-        <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/40" aria-hidden="true" />
+        <span
+          className="h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/40"
+          aria-hidden="true"
+        />
       )}
-      <span className={cn(active && 'text-foreground', !active && !done && 'text-muted-foreground', done && 'text-muted-foreground line-through')}>
+      <span
+        className={cn(
+          active && 'text-foreground',
+          !active && !done && 'text-muted-foreground',
+          done && 'text-muted-foreground line-through'
+        )}
+      >
         {label}
       </span>
     </li>
@@ -172,6 +182,10 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
 
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
+  // Stable ref for the poll function so the recursive setTimeout call never
+  // captures a stale closure — avoids the react-hooks/immutability temporal
+  // dead-zone error that arises from useCallback self-reference.
+  const pollFnRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     mountedRef.current = true
@@ -193,11 +207,11 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
 
         // Map status string to a cosmetic step index for Full Auto
         const stepMap: Record<string, number> = {
-          'creating_project': 0,
-          'waiting_for_activation': 1,
-          'enabling_api': 2,
-          'creating_key': 3,
-          'retrieving_key': 4,
+          creating_project: 0,
+          waiting_for_activation: 1,
+          enabling_api: 2,
+          creating_key: 3,
+          retrieving_key: 4,
         }
         const idx = stepMap[s.status] ?? -1
         if (idx >= 0) {
@@ -211,7 +225,8 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
           setErrorMsg(s.error)
           setPhase('error')
         } else {
-          pollRef.current = setTimeout(pollStatus, 1200)
+          // Use pollFnRef to avoid self-reference TDZ (react-hooks/immutability)
+          pollRef.current = setTimeout(() => pollFnRef.current?.(), 1200)
         }
       })
       .catch((err: unknown) => {
@@ -220,6 +235,11 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
         setPhase('error')
       })
   }, [email])
+
+  // Keep pollFnRef in sync with the latest pollStatus callback (outside render).
+  useEffect(() => {
+    pollFnRef.current = pollStatus
+  }, [pollStatus])
 
   // ---------------------------------------------------------------------------
   // Start provisioning
@@ -337,7 +357,7 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
       className={cn(
         'rounded-lg border bg-card p-4 shadow-sm transition-colors',
         isDone && 'border-green-500/50 bg-green-500/5',
-        phase === 'error' && 'border-destructive/50',
+        phase === 'error' && 'border-destructive/50'
       )}
     >
       {/* Header */}
@@ -397,7 +417,10 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
           {/* Manual: API key input */}
           {mode === 'manual' && !isProvisioning && (
             <div className="mb-3">
-              <label htmlFor={`${email}-manual-key`} className="mb-1 block text-xs font-medium text-foreground">
+              <label
+                htmlFor={`${email}-manual-key`}
+                className="mb-1 block text-xs font-medium text-foreground"
+              >
                 API Key
               </label>
               <input
@@ -424,7 +447,10 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
                 Open Google Cloud Console
               </button>
               <div>
-                <label htmlFor={`${email}-paste-key`} className="mb-1 block text-xs font-medium text-foreground">
+                <label
+                  htmlFor={`${email}-paste-key`}
+                  className="mb-1 block text-xs font-medium text-foreground"
+                >
                   Paste API Key
                 </label>
                 <input
@@ -489,7 +515,11 @@ export function ProvisionCard({ email, onProvisioned, onSkip }: ProvisionCardPro
                     onClick={handleStart}
                     disabled={mode === 'manual' && !manualKey.trim()}
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50 hover:bg-primary/90"
-                    aria-label={phase === 'error' ? `Retry provisioning for ${email}` : `Start provisioning for ${email}`}
+                    aria-label={
+                      phase === 'error'
+                        ? `Retry provisioning for ${email}`
+                        : `Start provisioning for ${email}`
+                    }
                   >
                     {phase === 'error' ? 'Retry' : 'Start'}
                   </button>

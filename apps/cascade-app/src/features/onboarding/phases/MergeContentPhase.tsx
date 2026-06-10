@@ -38,12 +38,24 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { AlertTriangle, CheckCheck, GitMerge, Layers, RefreshCw, SkipForward, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCheck,
+  GitMerge,
+  Layers,
+  RefreshCw,
+  SkipForward,
+  XCircle,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWizard } from '@/features/onboarding/WizardContext'
 import { WizardStep } from '@/features/onboarding/types'
 import { mergeForTier } from '@/features/onboarding/merge/mergeService'
-import type { MergeSection, MergeSourceFile, MergeConflict } from '@/features/onboarding/merge/types'
+import type {
+  MergeSection,
+  MergeSourceFile,
+  MergeConflict,
+} from '@/features/onboarding/merge/types'
 import { DiffPanel } from '@/components/merge-engine/DiffPanel'
 import { MergeLoadingState } from './MergeLoadingState'
 import { TemplatePickerCompact } from '@/components/template/TemplatePickerCompact'
@@ -75,9 +87,10 @@ function Alert({
       className={cn(
         'flex items-start gap-3 rounded-md border p-4 text-sm',
         variant === 'destructive' && 'border-destructive/50 bg-destructive/10 text-destructive',
-        variant === 'warning' && 'border-amber-400/50 bg-amber-50/30 text-amber-800 dark:text-amber-200',
+        variant === 'warning' &&
+          'border-amber-400/50 bg-amber-50/30 text-amber-800 dark:text-amber-200',
         variant === 'default' && 'border-border bg-muted/30 text-foreground',
-        className,
+        className
       )}
     >
       {children}
@@ -166,18 +179,18 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
   // ---------------------------------------------------------------------------
 
   // Merge status tracking
-  const [mergePhase, setMergePhase] = useState<'loading' | 'ready' | 'error' | 'writing' | 'no-sources'>(
-    () => {
-      // Resume: if cached result exists, go straight to ready
-      const cached = state.mergeResults[TIER_KEY]
-      if (cached) return 'ready'
-      // No detected tools at all → nothing to merge
-      if (state.detectedToolIds !== null && state.detectedToolIds.length === 0) {
-        return 'no-sources'
-      }
-      return 'loading'
-    },
-  )
+  const [mergePhase, setMergePhase] = useState<
+    'loading' | 'ready' | 'error' | 'writing' | 'no-sources'
+  >(() => {
+    // Resume: if cached result exists, go straight to ready
+    const cached = state.mergeResults[TIER_KEY]
+    if (cached) return 'ready'
+    // No detected tools at all → nothing to merge
+    if (state.detectedToolIds !== null && state.detectedToolIds.length === 0) {
+      return 'no-sources'
+    }
+    return 'loading'
+  })
   const [mergeError, setMergeError] = useState<string | null>(null)
   const [conflicts] = useState<MergeConflict[]>([])
   const mergeFired = useRef(false)
@@ -314,7 +327,11 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
   // ---------------------------------------------------------------------------
 
   const handleSectionStatusChange = useCallback(
-    (sectionId: string, status: 'pending' | 'approved' | 'rejected' | 'edited', editedContent?: string) => {
+    (
+      sectionId: string,
+      status: 'pending' | 'approved' | 'rejected' | 'edited',
+      editedContent?: string
+    ) => {
       if (status === 'edited' && editedContent !== undefined) {
         editSection(TIER_KEY, sectionId, editedContent)
       } else if (status === 'approved') {
@@ -323,7 +340,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
         rejectSection(TIER_KEY, sectionId)
       }
     },
-    [approveSection, rejectSection, editSection],
+    [approveSection, rejectSection, editSection]
   )
 
   // ---------------------------------------------------------------------------
@@ -349,7 +366,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
 
     // Build write payload: approved + edited sections only (skip rejected)
     const toWrite: MergeSection[] = mergeResult.sections.filter(
-      (s) => s.status === 'approved' || s.status === 'edited',
+      (s) => s.status === 'approved' || s.status === 'edited'
     )
 
     try {
@@ -358,7 +375,8 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
         sections: toWrite.map((s) => ({
           id: s.id,
           title: s.title,
-          content: s.status === 'edited' ? (s.editedContent ?? s.proposedContent) : s.proposedContent,
+          content:
+            s.status === 'edited' ? (s.editedContent ?? s.proposedContent) : s.proposedContent,
         })),
       })
       markComplete(WizardStep.MergeContent)
@@ -394,9 +412,9 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
           <p className="text-sm text-muted-foreground">
-            Pick one or more templates to use as a structural scaffold for your CASCADE.md.
-            The AI merge will then fill in your project-specific content on top of that
-            scaffold. You can skip this step and proceed with a blank slate.
+            Pick one or more templates to use as a structural scaffold for your CASCADE.md. The AI
+            merge will then fill in your project-specific content on top of that scaffold. You can
+            skip this step and proceed with a blank slate.
           </p>
 
           {/* Template apply error (non-fatal — from a previous attempt) */}
@@ -407,8 +425,8 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
             >
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
               <span>
-                <span className="font-medium">Template apply warning:</span>{' '}
-                {templateApplyError} — proceeding without scaffold.
+                <span className="font-medium">Template apply warning:</span> {templateApplyError} —
+                proceeding without scaffold.
               </span>
             </div>
           )}
@@ -420,9 +438,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
             isLoading={templateCatalogLoading}
             loadError={
               // Only expose error when catalog is empty AND errored
-              templateCatalogError && templateCatalog?.length === 0
-                ? templateCatalogError
-                : null
+              templateCatalogError && templateCatalog?.length === 0 ? templateCatalogError : null
             }
           />
         </div>
@@ -436,7 +452,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
               'flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium',
               'text-primary-foreground hover:bg-primary/90',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             {state.selectedTemplates.length > 0
@@ -466,15 +482,20 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
 
   if (mergePhase === 'no-sources') {
     return (
-      <div className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}>
+      <div
+        className={cn(
+          'flex h-full flex-col items-center justify-center gap-6 px-8 py-12',
+          className
+        )}
+      >
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <GitMerge className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
         </div>
         <div className="text-center">
           <h2 className="text-xl font-semibold text-foreground">No legacy content found</h2>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Cascade will start with a clean configuration. You can add rules and preferences
-            in the editor after setup.
+            Cascade will start with a clean configuration. You can add rules and preferences in the
+            editor after setup.
           </p>
         </div>
         <button
@@ -484,7 +505,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
             'flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium',
             'text-primary-foreground hover:bg-primary/90',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'transition-colors',
+            'transition-colors'
           )}
         >
           <SkipForward className="h-4 w-4" aria-hidden="true" />
@@ -500,7 +521,12 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
 
   if (mergePhase === 'error') {
     return (
-      <div className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}>
+      <div
+        className={cn(
+          'flex h-full flex-col items-center justify-center gap-6 px-8 py-12',
+          className
+        )}
+      >
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
           <XCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
         </div>
@@ -520,7 +546,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
               'flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium',
               'text-primary-foreground hover:bg-primary/90',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -533,7 +559,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
               'flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium',
               'text-muted-foreground hover:bg-muted/50',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             <SkipForward className="h-3.5 w-3.5" aria-hidden="true" />
@@ -566,7 +592,7 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
                 'flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium',
                 'text-muted-foreground hover:bg-muted/50',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                'transition-colors',
+                'transition-colors'
               )}
               aria-label={`Approve all ${pendingCount} pending sections`}
             >
@@ -577,7 +603,8 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
           {/* Apply button */}
           {pendingCount > 0 && (
             <span id="apply-pending-hint" className="sr-only">
-              Review all sections to continue. {pendingCount} section{pendingCount !== 1 ? 's' : ''} pending.
+              Review all sections to continue. {pendingCount} section{pendingCount !== 1 ? 's' : ''}{' '}
+              pending.
             </span>
           )}
           <button
@@ -585,13 +612,17 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
             onClick={() => void handleApply()}
             disabled={!canApply || mergePhase === 'writing'}
             aria-describedby={pendingCount > 0 ? 'apply-pending-hint' : undefined}
-            title={pendingCount > 0 ? `Review all sections to continue (${pendingCount} pending)` : undefined}
+            title={
+              pendingCount > 0
+                ? `Review all sections to continue (${pendingCount} pending)`
+                : undefined
+            }
             className={cn(
               'flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-xs font-medium',
               'text-primary-foreground hover:bg-primary/90',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             {mergePhase === 'writing' ? (
@@ -613,8 +644,8 @@ export function MergeContentPhase({ className }: MergeContentPhaseProps) {
           <div>
             <p className="font-medium">Parse warning</p>
             <p className="mt-0.5 opacity-80">
-              The AI response could not be structured into sections. Raw output is shown below.
-              You can approve it as-is or retry the merge.
+              The AI response could not be structured into sections. Raw output is shown below. You
+              can approve it as-is or retry the merge.
             </p>
           </div>
         </Alert>

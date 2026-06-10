@@ -18,16 +18,16 @@ import type { Node, Edge } from '@xyflow/react'
 /** Node background colours per node type (project graph). */
 export const PROJECT_NODE_COLORS: Record<string, string> = {
   project: '#3b82f6', // blue-500
-  repo: '#a855f7',    // purple-500
-  app: '#22c55e',     // green-500
+  repo: '#a855f7', // purple-500
+  app: '#22c55e', // green-500
 }
 
 /** Node background colours per PEWS ticket status. */
 export const STATUS_COLORS: Record<string, string> = {
-  pending: '#6b7280',     // gray-500
+  pending: '#6b7280', // gray-500
   'in-progress': '#3b82f6', // blue-500
-  done: '#22c55e',        // green-500
-  blocked: '#ef4444',     // red-500
+  done: '#22c55e', // green-500
+  blocked: '#ef4444', // red-500
 }
 
 // ── Project graph transform ───────────────────────────────────────────────────

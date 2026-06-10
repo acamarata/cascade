@@ -41,8 +41,20 @@ function makeEntry(overrides: Partial<TemplateEntryIpc> = {}): TemplateEntryIpc 
 }
 
 const ENTRY_A = makeEntry({ id: 'gci-base', tier: 'gci', stacks: ['rust'], projectShapes: ['app'] })
-const ENTRY_B = makeEntry({ id: 'prc-react', tier: 'prc', stacks: ['react'], projectShapes: ['app'], description: 'React project template.' })
-const ENTRY_C = makeEntry({ id: 'pac-lib', tier: 'pac', stacks: ['rust'], projectShapes: ['lib'], description: 'Library template.' })
+const ENTRY_B = makeEntry({
+  id: 'prc-react',
+  tier: 'prc',
+  stacks: ['react'],
+  projectShapes: ['app'],
+  description: 'React project template.',
+})
+const ENTRY_C = makeEntry({
+  id: 'pac-lib',
+  tier: 'pac',
+  stacks: ['rust'],
+  projectShapes: ['lib'],
+  description: 'Library template.',
+})
 
 const ALL_ENTRIES = [ENTRY_A, ENTRY_B, ENTRY_C]
 
@@ -75,7 +87,12 @@ describe('applyFilter', () => {
   })
 
   it('filters by search term in description', () => {
-    const result = applyFilter(ALL_ENTRIES, { search: 'React project', tier: '', stack: '', shape: '' })
+    const result = applyFilter(ALL_ENTRIES, {
+      search: 'React project',
+      tier: '',
+      stack: '',
+      shape: '',
+    })
     expect(result).toHaveLength(1)
     expect(result[0]!.id).toBe('prc-react')
   })
@@ -99,13 +116,23 @@ describe('applyFilter', () => {
   })
 
   it('combines multiple filters with AND logic', () => {
-    const result = applyFilter(ALL_ENTRIES, { search: '', tier: 'pac', stack: 'rust', shape: 'lib' })
+    const result = applyFilter(ALL_ENTRIES, {
+      search: '',
+      tier: 'pac',
+      stack: 'rust',
+      shape: 'lib',
+    })
     expect(result).toHaveLength(1)
     expect(result[0]!.id).toBe('pac-lib')
   })
 
   it('returns empty when no entries match', () => {
-    const result = applyFilter(ALL_ENTRIES, { search: 'zzz-nonexistent', tier: '', stack: '', shape: '' })
+    const result = applyFilter(ALL_ENTRIES, {
+      search: 'zzz-nonexistent',
+      tier: '',
+      stack: '',
+      shape: '',
+    })
     expect(result).toHaveLength(0)
   })
 })
@@ -116,7 +143,7 @@ function renderBrowser() {
   return render(
     <MemoryRouter>
       <TemplateBrowser />
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -157,9 +184,7 @@ describe('TemplateBrowser', () => {
   })
 
   it('retries on retry button click', async () => {
-    mockInvoke
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockResolvedValueOnce([ENTRY_A])
+    mockInvoke.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce([ENTRY_A])
     renderBrowser()
     await waitFor(() => screen.getByRole('alert'))
     fireEvent.click(screen.getByRole('button', { name: /retry/i }))

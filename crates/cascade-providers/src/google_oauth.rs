@@ -135,8 +135,7 @@ const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
 /// Minimum necessary OAuth 2.0 scopes — GCP provisioning + Gemini API access.
-const OAUTH_SCOPES: &str =
-    "https://www.googleapis.com/auth/cloud-platform \
+const OAUTH_SCOPES: &str = "https://www.googleapis.com/auth/cloud-platform \
      https://www.googleapis.com/auth/generative-language";
 
 /// Gemini generateContent endpoint used for 1-token key validation probes.
@@ -153,7 +152,10 @@ impl GoogleOAuthClient {
     /// - `client_id`: Google OAuth 2.0 client ID.
     /// - `client_secret`: Google OAuth 2.0 client secret.
     pub fn new(client_id: String, client_secret: String) -> Self {
-        Self { client_id, client_secret }
+        Self {
+            client_id,
+            client_secret,
+        }
     }
 
     /// Start the PKCE authorization flow.
@@ -319,8 +321,8 @@ impl GoogleOAuthClient {
             .await
             .map_err(|e| OAuthError::TokenExchange(format!("parse: {e}")))?;
 
-        let expires_at = Utc::now()
-            + chrono::Duration::seconds(token_resp.expires_in.unwrap_or(3600));
+        let expires_at =
+            Utc::now() + chrono::Duration::seconds(token_resp.expires_in.unwrap_or(3600));
 
         Ok(GoogleToken {
             access_token: token_resp.access_token,
@@ -343,10 +345,7 @@ impl GoogleOAuthClient {
     ///
     /// # Constraints
     /// - Token values never appear in tracing logs.
-    pub async fn refresh_token_flow(
-        &self,
-        refresh_token: &str,
-    ) -> Result<GoogleToken, OAuthError> {
+    pub async fn refresh_token_flow(&self, refresh_token: &str) -> Result<GoogleToken, OAuthError> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
             .build()
@@ -378,8 +377,8 @@ impl GoogleOAuthClient {
             .await
             .map_err(|e| OAuthError::TokenExchange(format!("parse: {e}")))?;
 
-        let expires_at = Utc::now()
-            + chrono::Duration::seconds(token_resp.expires_in.unwrap_or(3600));
+        let expires_at =
+            Utc::now() + chrono::Duration::seconds(token_resp.expires_in.unwrap_or(3600));
 
         Ok(GoogleToken {
             access_token: token_resp.access_token,
@@ -480,12 +479,16 @@ fn handle_callback(
     let request_line = read_request_line(&stream)?;
 
     // Delegate callback parsing to the generic oauth::client module.
-    let (code, state) = parse_callback_params(&request_line)
-        .map_err(|e| OAuthError::CallbackIo(e.to_string()))?;
+    let (code, state) =
+        parse_callback_params(&request_line).map_err(|e| OAuthError::CallbackIo(e.to_string()))?;
 
     // Constant-time comparison delegated to oauth::client::constant_time_eq.
     if !constant_time_eq(state.as_bytes(), expected_state.as_bytes()) {
-        write_response(&mut stream, "400 Bad Request", "State mismatch — please retry.");
+        write_response(
+            &mut stream,
+            "400 Bad Request",
+            "State mismatch — please retry.",
+        );
         return Err(OAuthError::StateMismatch);
     }
 
@@ -560,22 +563,36 @@ mod tests {
 
     #[tokio::test]
     async fn start_pkce_flow_consent_url_shape() {
-        let client =
-            GoogleOAuthClient::new("my-client-id".into(), "my-secret".into());
+        let client = GoogleOAuthClient::new("my-client-id".into(), "my-secret".into());
 
         let (url, _verifier, state, port) =
             client.start_pkce_flow("user@example.com").await.unwrap();
 
         // URL must use the correct Google auth endpoint.
-        assert!(url.starts_with(GOOGLE_AUTH_URL), "URL must start with Google auth endpoint");
+        assert!(
+            url.starts_with(GOOGLE_AUTH_URL),
+            "URL must start with Google auth endpoint"
+        );
 
         // Required OAuth parameters must be present.
         assert!(url.contains("client_id=my-client-id"), "client_id missing");
         assert!(url.contains("response_type=code"), "response_type missing");
-        assert!(url.contains("code_challenge_method=S256"), "S256 method missing");
-        assert!(url.contains("access_type=offline"), "offline access missing");
-        assert!(url.contains(&format!("state={state}")), "state mismatch in URL");
-        assert!(url.contains(&format!("127.0.0.1:{port}")), "loopback redirect missing");
+        assert!(
+            url.contains("code_challenge_method=S256"),
+            "S256 method missing"
+        );
+        assert!(
+            url.contains("access_type=offline"),
+            "offline access missing"
+        );
+        assert!(
+            url.contains(&format!("state={state}")),
+            "state mismatch in URL"
+        );
+        assert!(
+            url.contains(&format!("127.0.0.1:{port}")),
+            "loopback redirect missing"
+        );
 
         // Loopback only — never a public redirect_uri.
         assert!(!url.contains("0.0.0.0"), "must not expose 0.0.0.0");
@@ -599,9 +616,7 @@ mod tests {
     #[test]
     fn parse_callback_accepts_correct_state() {
         let expected = "abc123def456";
-        let request_line = format!(
-            "GET /callback?code=authcode999&state={expected} HTTP/1.1"
-        );
+        let request_line = format!("GET /callback?code=authcode999&state={expected} HTTP/1.1");
         let (code, state) = parse_callback_params(&request_line).unwrap();
         assert_eq!(code, "authcode999");
         assert!(constant_time_eq(state.as_bytes(), expected.as_bytes()));
@@ -621,10 +636,7 @@ mod tests {
     fn parse_callback_errors_on_missing_code() {
         let request_line = "GET /callback?state=abc HTTP/1.1";
         let result = parse_callback_params(request_line);
-        assert!(
-            result.is_err(),
-            "missing code must return an error"
-        );
+        assert!(result.is_err(), "missing code must return an error");
     }
 
     // ── validate_gemini_key — wiremock response classification ────────────────
@@ -632,8 +644,10 @@ mod tests {
     #[tokio::test]
     async fn validate_gemini_key_200_returns_ok() {
         let mock_server = MockServer::start().await;
-        let base_url =
-            format!("{}/v1beta/models/gemini-1.5-flash:generateContent", mock_server.uri());
+        let base_url = format!(
+            "{}/v1beta/models/gemini-1.5-flash:generateContent",
+            mock_server.uri()
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-1.5-flash:generateContent"))
@@ -650,8 +664,10 @@ mod tests {
     #[tokio::test]
     async fn validate_gemini_key_401_returns_invalid() {
         let mock_server = MockServer::start().await;
-        let base_url =
-            format!("{}/v1beta/models/gemini-1.5-flash:generateContent", mock_server.uri());
+        let base_url = format!(
+            "{}/v1beta/models/gemini-1.5-flash:generateContent",
+            mock_server.uri()
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-1.5-flash:generateContent"))
@@ -671,8 +687,10 @@ mod tests {
     #[tokio::test]
     async fn validate_gemini_key_403_returns_invalid() {
         let mock_server = MockServer::start().await;
-        let base_url =
-            format!("{}/v1beta/models/gemini-1.5-flash:generateContent", mock_server.uri());
+        let base_url = format!(
+            "{}/v1beta/models/gemini-1.5-flash:generateContent",
+            mock_server.uri()
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-1.5-flash:generateContent"))
@@ -692,8 +710,10 @@ mod tests {
     #[tokio::test]
     async fn validate_gemini_key_429_returns_rate_limit() {
         let mock_server = MockServer::start().await;
-        let base_url =
-            format!("{}/v1beta/models/gemini-1.5-flash:generateContent", mock_server.uri());
+        let base_url = format!(
+            "{}/v1beta/models/gemini-1.5-flash:generateContent",
+            mock_server.uri()
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-1.5-flash:generateContent"))
@@ -713,8 +733,10 @@ mod tests {
     #[tokio::test]
     async fn validate_gemini_key_500_returns_gemini_http() {
         let mock_server = MockServer::start().await;
-        let base_url =
-            format!("{}/v1beta/models/gemini-1.5-flash:generateContent", mock_server.uri());
+        let base_url = format!(
+            "{}/v1beta/models/gemini-1.5-flash:generateContent",
+            mock_server.uri()
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-1.5-flash:generateContent"))
@@ -785,9 +807,18 @@ mod tests {
             expires_at: chrono::DateTime::from_timestamp(0, 0).unwrap(),
         };
         let json = serde_json::to_string(&token).unwrap();
-        assert!(json.contains("\"accessToken\""), "expected camelCase accessToken, got: {json}");
-        assert!(json.contains("\"refreshToken\""), "expected camelCase refreshToken, got: {json}");
-        assert!(json.contains("\"expiresAt\""), "expected camelCase expiresAt, got: {json}");
+        assert!(
+            json.contains("\"accessToken\""),
+            "expected camelCase accessToken, got: {json}"
+        );
+        assert!(
+            json.contains("\"refreshToken\""),
+            "expected camelCase refreshToken, got: {json}"
+        );
+        assert!(
+            json.contains("\"expiresAt\""),
+            "expected camelCase expiresAt, got: {json}"
+        );
     }
 
     // ── Constant-time comparison ──────────────────────────────────────────────

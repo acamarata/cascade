@@ -31,19 +31,26 @@ import React from 'react'
 // Mock @uiw/react-codemirror with a simple textarea so we can test React-level
 // behaviour without requiring a live DOM measurement environment.
 vi.mock('@uiw/react-codemirror', () => ({
-  default: vi.fn(({ value, onChange, readOnly, 'data-testid': testId }: {
-    value: string
-    onChange?: (v: string) => void
-    readOnly?: boolean
-    'data-testid'?: string
-  }) => (
-    <textarea
-      data-testid={testId ?? 'cm-shim'}
-      value={value}
-      readOnly={readOnly}
-      onChange={(e) => onChange?.(e.target.value)}
-    />
-  )),
+  default: vi.fn(
+    ({
+      value,
+      onChange,
+      readOnly,
+      'data-testid': testId,
+    }: {
+      value: string
+      onChange?: (v: string) => void
+      readOnly?: boolean
+      'data-testid'?: string
+    }) => (
+      <textarea
+        data-testid={testId ?? 'cm-shim'}
+        value={value}
+        readOnly={readOnly}
+        onChange={(e) => onChange?.(e.target.value)}
+      />
+    )
+  ),
 }))
 
 // Mock @codemirror/language-data — it lazy-loads parsers we don't need in tests.
@@ -189,15 +196,21 @@ describe('MarkdownEditor — props & state contract', () => {
     const ta = screen.getByTestId('cm-shim') as HTMLTextAreaElement
 
     fireEvent.change(ta, { target: { value: 'a' } })
-    await act(async () => { vi.advanceTimersByTime(500) })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
     fireEvent.change(ta, { target: { value: 'ab' } })
-    await act(async () => { vi.advanceTimersByTime(500) })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
     fireEvent.change(ta, { target: { value: 'abc' } })
 
     // Still before 2 s from last keystroke.
     expect(onSave).not.toHaveBeenCalled()
 
-    await act(async () => { vi.advanceTimersByTime(2000) })
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+    })
     expect(onSave).toHaveBeenCalledTimes(1)
   })
 
@@ -207,7 +220,9 @@ describe('MarkdownEditor — props & state contract', () => {
     fireEvent.change(ta, { target: { value: '# Dirty' } })
     expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument()
 
-    await act(async () => { vi.advanceTimersByTime(2000) })
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+    })
     expect(screen.queryByTestId('dirty-indicator')).not.toBeInTheDocument()
   })
 

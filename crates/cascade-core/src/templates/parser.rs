@@ -47,17 +47,11 @@ use std::path::Path;
 /// - No closing `---` is found after the opening.
 /// - The frontmatter fails TOML deserialization.
 pub fn parse_template_file(path: &Path) -> Result<TemplateRecord> {
-    let raw = std::fs::read_to_string(path).map_err(|e| {
-        CascadeError::Other(format!("read template {}: {}", path.display(), e))
-    })?;
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| CascadeError::Other(format!("read template {}: {}", path.display(), e)))?;
 
-    split_frontmatter(&raw).map_err(|e| {
-        CascadeError::Other(format!(
-            "parse template {}: {}",
-            path.display(),
-            e
-        ))
-    })
+    split_frontmatter(&raw)
+        .map_err(|e| CascadeError::Other(format!("parse template {}: {}", path.display(), e)))
 }
 
 /// Split raw template text into manifest + body.

@@ -39,13 +39,23 @@ function CardDescription({ children }: { children: React.ReactNode }) {
 function CardContent({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={className}>{children}</div>
 }
-function Badge({ children, className, variant }: { children: React.ReactNode; className?: string; variant?: string }) {
+function Badge({
+  children,
+  className,
+  variant,
+}: {
+  children: React.ReactNode
+  className?: string
+  variant?: string
+}) {
   return (
-    <span className={cn(
-      'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
-      variant === 'secondary' && 'bg-secondary text-secondary-foreground',
-      className
-    )}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
+        variant === 'secondary' && 'bg-secondary text-secondary-foreground',
+        className
+      )}
+    >
       {children}
     </span>
   )
@@ -85,17 +95,15 @@ export function DonePhase({ className }: DonePhaseProps) {
       markComplete(WizardStep.Done) // Mark Done phase as reached
       navigate('/', { replace: true })
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to complete wizard. Please try again.'
-      )
+      setError(err instanceof Error ? err.message : 'Failed to complete wizard. Please try again.')
       setIsNavigating(false)
     }
   }
 
   return (
-    <div className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}>
+    <div
+      className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}
+    >
       {/* Success icon */}
       <div className="flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
         <CheckCircle2 className="h-12 w-12 text-green-600" aria-label="Wizard complete" />
@@ -174,10 +182,7 @@ export function DonePhase({ className }: DonePhaseProps) {
       </div>
 
       {/* Tutorial overlay */}
-      <TutorialOverlay
-        isOpen={showTutorial}
-        onClose={() => setShowTutorial(false)}
-      />
+      <TutorialOverlay isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
     </div>
   )
 }

@@ -55,7 +55,7 @@ export function ToolModesPhase() {
   // Build a Set for O(1) lookup
   const detectedSet: ReadonlySet<ToolId> = React.useMemo(
     () => new Set(detectedToolIds ?? []),
-    [detectedToolIds],
+    [detectedToolIds]
   )
 
   // Resolved mode per tool (falls back to DEFAULT_MODE if not yet set).
@@ -102,10 +102,12 @@ export function ToolModesPhase() {
     <div className="flex h-full flex-col gap-6">
       {/* Heading */}
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Choose how Cascade manages each tool</h2>
+        <h2 className="text-xl font-semibold tracking-tight">
+          Choose how Cascade manages each tool
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          For each tool, choose whether Cascade adds symlinks at each instruction tier, or leaves the
-          tool's own files untouched. You can change this later.
+          For each tool, choose whether Cascade adds symlinks at each instruction tier, or leaves
+          the tool&apos;s own files untouched. You can change this later.
         </p>
       </div>
 
@@ -130,7 +132,7 @@ export function ToolModesPhase() {
               'border border-input bg-background shadow-sm',
               'hover:bg-accent hover:text-accent-foreground',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             Select all Cascade-managed
@@ -143,7 +145,7 @@ export function ToolModesPhase() {
               'border border-input bg-background shadow-sm',
               'hover:bg-accent hover:text-accent-foreground',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              'transition-colors',
+              'transition-colors'
             )}
           >
             Select all Independent
@@ -152,11 +154,7 @@ export function ToolModesPhase() {
       )}
 
       {/* Tool cards — all 7 always rendered */}
-      <div
-        role="list"
-        aria-label="AI tool mode selections"
-        className="flex flex-col gap-2"
-      >
+      <div role="list" aria-label="AI tool mode selections" className="flex flex-col gap-2">
         {TOOL_IDS.map((toolId) => (
           <div key={toolId} role="listitem">
             <ToolModeCard
@@ -180,7 +178,7 @@ export function ToolModesPhase() {
             'border border-input bg-background shadow-sm',
             'hover:bg-accent hover:text-accent-foreground',
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-            'transition-colors',
+            'transition-colors'
           )}
         >
           Back
@@ -196,7 +194,7 @@ export function ToolModesPhase() {
             'bg-primary text-primary-foreground shadow',
             'hover:bg-primary/90',
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-            'transition-colors',
+            'transition-colors'
           )}
         >
           Next

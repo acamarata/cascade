@@ -121,41 +121,32 @@ export interface ProviderConnectPhaseProps {
  *
  * SPORT: MASTER-COMPONENTS.md — ProviderConnectPhase
  */
-export function ProviderConnectPhase({
-  goNext,
-  goBack,
-  updateState,
-}: ProviderConnectPhaseProps) {
+export function ProviderConnectPhase({ goNext, goBack, updateState }: ProviderConnectPhaseProps) {
   // -------------------------------------------------------------------------
   // State
   // -------------------------------------------------------------------------
 
   /** Per-provider connection status map. */
-  const [statuses, setStatuses] = React.useState<Record<ProviderId, ConnectionStatus>>(
-    () => ({
-      gemini: 'disconnected',
-      anthropic: 'disconnected',
-      openai: 'disconnected',
-      opencode: 'disconnected',
-    })
-  )
+  const [statuses, setStatuses] = React.useState<Record<ProviderId, ConnectionStatus>>(() => ({
+    gemini: 'disconnected',
+    anthropic: 'disconnected',
+    openai: 'disconnected',
+    opencode: 'disconnected',
+  }))
 
   /** Per-provider inline error messages. */
-  const [errors, setErrors] = React.useState<Record<ProviderId, string | undefined>>(
-    () => ({
-      gemini: undefined,
-      anthropic: undefined,
-      openai: undefined,
-      opencode: undefined,
-    })
-  )
+  const [errors, setErrors] = React.useState<Record<ProviderId, string | undefined>>(() => ({
+    gemini: undefined,
+    anthropic: undefined,
+    openai: undefined,
+    opencode: undefined,
+  }))
 
   /** Whether the "Prefer offline" toggle is active. */
   const [offlineMode, setOfflineMode] = React.useState(false)
 
   /** Which local model variant is downloading (null = none). */
-  const [downloadingVariant, setDownloadingVariant] =
-    React.useState<LocalModelVariant | null>(null)
+  const [downloadingVariant, setDownloadingVariant] = React.useState<LocalModelVariant | null>(null)
 
   /** Download progress 0-100. */
   const [downloadProgress, setDownloadProgress] = React.useState(0)
@@ -202,9 +193,7 @@ export function ProviderConnectPhase({
 
   const isAnyConnected =
     localModelReady ||
-    Object.values(statuses).some(
-      (s) => s === 'connected' || s === 'pool_detected'
-    )
+    Object.values(statuses).some((s) => s === 'connected' || s === 'pool_detected')
 
   // -------------------------------------------------------------------------
   // Handlers
@@ -273,17 +262,13 @@ export function ProviderConnectPhase({
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Connect an AI provider</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Cascade needs at least one AI provider to power the merge engine in the next step.
-          Choose any provider below — or download a local model if you prefer to work offline.
+          Cascade needs at least one AI provider to power the merge engine in the next step. Choose
+          any provider below — or download a local model if you prefer to work offline.
         </p>
       </div>
 
       {/* Provider grid */}
-      <div
-        role="list"
-        aria-label="AI provider options"
-        className="grid gap-3 sm:grid-cols-2"
-      >
+      <div role="list" aria-label="AI provider options" className="grid gap-3 sm:grid-cols-2">
         {PROVIDERS.map((provider) => (
           <div key={provider.id} role="listitem">
             <ProviderCard
@@ -298,10 +283,7 @@ export function ProviderConnectPhase({
 
       {/* Offline toggle */}
       <div className="rounded-lg border bg-muted/40 p-4">
-        <label
-          htmlFor="offline-toggle"
-          className="flex cursor-pointer items-center gap-3"
-        >
+        <label htmlFor="offline-toggle" className="flex cursor-pointer items-center gap-3">
           {/* Custom toggle */}
           <span
             role="switch"
@@ -342,11 +324,7 @@ export function ProviderConnectPhase({
 
         {/* Local model options (revealed when toggle is on) */}
         {offlineMode && (
-          <div
-            className="mt-4 flex flex-col gap-3"
-            role="list"
-            aria-label="Local model options"
-          >
+          <div className="mt-4 flex flex-col gap-3" role="list" aria-label="Local model options">
             {LOCAL_MODELS.map(({ variant, label, description }) => {
               const isThisDownloading = downloadingVariant === variant
 

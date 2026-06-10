@@ -279,10 +279,7 @@ export function checkpointToState(checkpoint: WizardCheckpoint): WizardState {
  * App-level wizard status for routing decisions on startup.
  * Discriminated union with variant-keyed properties for programmatic routing.
  */
-export type WizardStatus =
-  | { NeverRun: true }
-  | { InProgress: true }
-  | { Complete: true }
+export type WizardStatus = { NeverRun: true } | { InProgress: true } | { Complete: true }
 
 /** WizardStatus constructor constants — use instead of namespace. */
 export const WIZARD_STATUS = {

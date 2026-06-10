@@ -177,25 +177,45 @@ mod tests {
 
         // Assert camelCase keys are present in the serialized output.
         assert!(json.contains("\"version\""), "missing version key");
-        assert!(json.contains("\"createdAt\""), "missing createdAt key — snake_case leak");
+        assert!(
+            json.contains("\"createdAt\""),
+            "missing createdAt key — snake_case leak"
+        );
         assert!(json.contains("\"tools\""), "missing tools key");
-        assert!(json.contains("\"toolId\""), "missing toolId key — snake_case leak");
-        assert!(json.contains("\"originalRoot\""), "missing originalRoot key");
+        assert!(
+            json.contains("\"toolId\""),
+            "missing toolId key — snake_case leak"
+        );
+        assert!(
+            json.contains("\"originalRoot\""),
+            "missing originalRoot key"
+        );
         assert!(json.contains("\"archiveRoot\""), "missing archiveRoot key");
         assert!(json.contains("\"archivedAt\""), "missing archivedAt key");
-        assert!(json.contains("\"originalPath\""), "missing originalPath key");
-        assert!(json.contains("\"archivedPath\""), "missing archivedPath key");
+        assert!(
+            json.contains("\"originalPath\""),
+            "missing originalPath key"
+        );
+        assert!(
+            json.contains("\"archivedPath\""),
+            "missing archivedPath key"
+        );
         assert!(json.contains("\"movedAt\""), "missing movedAt key");
         assert!(json.contains("\"sizeBytes\""), "missing sizeBytes key");
 
         // Assert NO snake_case keys leak through.
-        assert!(!json.contains("\"created_at\""), "snake_case created_at leaked");
+        assert!(
+            !json.contains("\"created_at\""),
+            "snake_case created_at leaked"
+        );
         assert!(!json.contains("\"tool_id\""), "snake_case tool_id leaked");
-        assert!(!json.contains("\"original_root\""), "snake_case original_root leaked");
+        assert!(
+            !json.contains("\"original_root\""),
+            "snake_case original_root leaked"
+        );
 
         // Round-trip: deserialize back and compare.
-        let roundtrip: ArchiveManifest =
-            serde_json::from_str(&json).expect("deserialize failed");
+        let roundtrip: ArchiveManifest = serde_json::from_str(&json).expect("deserialize failed");
         assert_eq!(manifest, roundtrip);
         assert_eq!(roundtrip.version, "1.0");
         assert_eq!(roundtrip.tools.len(), 1);
@@ -221,7 +241,10 @@ mod tests {
         assert!(json.contains("\"ok\""));
         assert!(json.contains("\"issues\""));
         assert!(json.contains("\"requiredBytes\""), "missing requiredBytes");
-        assert!(json.contains("\"availableBytes\""), "missing availableBytes");
+        assert!(
+            json.contains("\"availableBytes\""),
+            "missing availableBytes"
+        );
         assert!(!json.contains("\"required_bytes\""), "snake_case leak");
     }
 
@@ -234,7 +257,10 @@ mod tests {
         };
         let json = serde_json::to_string(&r).unwrap();
         assert!(json.contains("\"restoredFiles\""), "missing restoredFiles");
-        assert!(json.contains("\"skippedConflicts\""), "missing skippedConflicts");
+        assert!(
+            json.contains("\"skippedConflicts\""),
+            "missing skippedConflicts"
+        );
         assert!(!json.contains("\"restored_files\""), "snake_case leak");
     }
 }

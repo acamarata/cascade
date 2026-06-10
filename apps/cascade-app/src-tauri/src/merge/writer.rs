@@ -36,8 +36,8 @@ const WIZARD_END_MARKER: &str = "<!-- cascade-wizard-end -->";
 /// All other tier strings are treated as global in P3; project-tier paths are
 /// deferred to P4.
 fn resolve_target_path(tier: &str) -> Result<PathBuf, String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "HOME environment variable not set".to_string())?;
+    let home =
+        std::env::var("HOME").map_err(|_| "HOME environment variable not set".to_string())?;
 
     // P3 only supports global tier.  Project-tier paths deferred to P4.
     let _ = tier; // tier reserved for P4 routing
@@ -109,8 +109,7 @@ pub fn write_cascade_content(
         // Backup: CASCADE.md.bak (overwrite previous backup — the real protection
         // is the atomic tmp+rename that keeps the original intact until success).
         let bak = target.with_extension("md.bak");
-        fs::copy(&target, &bak)
-            .map_err(|e| format!("Failed to backup {:?}: {}", target, e))?;
+        fs::copy(&target, &bak).map_err(|e| format!("Failed to backup {:?}: {}", target, e))?;
 
         content
     } else {
@@ -126,12 +125,7 @@ pub fn write_cascade_content(
         let before = &existing[..marker_pos];
         // Strip any trailing whitespace/newlines before the marker for clean output.
         let before = before.trim_end_matches('\n');
-        format!(
-            "{}\n\n{}{}\n",
-            before,
-            new_block,
-            WIZARD_END_MARKER
-        )
+        format!("{}\n\n{}{}\n", before, new_block, WIZARD_END_MARKER)
     } else {
         // No marker yet: append new sections then add the marker.
         let base = if existing.is_empty() {
@@ -214,8 +208,14 @@ mod tests {
         // Content structure: H2 header present, marker present.
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("## Code Quality"), "H2 header missing");
-        assert!(content.contains("No `any` types."), "section content missing");
-        assert!(content.contains(WIZARD_END_MARKER), "wizard-end marker missing");
+        assert!(
+            content.contains("No `any` types."),
+            "section content missing"
+        );
+        assert!(
+            content.contains(WIZARD_END_MARKER),
+            "wizard-end marker missing"
+        );
     }
 
     // -- existing-file backup -----------------------------------------------
@@ -234,13 +234,19 @@ mod tests {
         fs::write(&target, "# Existing content\n").unwrap();
         assert!(!bak.exists(), "bak must not exist before write");
 
-        write_cascade_content("global".to_string(), vec![section("s1", "New Section", "new")])
-            .expect("write failed");
+        write_cascade_content(
+            "global".to_string(),
+            vec![section("s1", "New Section", "new")],
+        )
+        .expect("write failed");
 
         // Backup created.
         assert!(bak.exists(), "CASCADE.md.bak not created");
         let bak_content = fs::read_to_string(&bak).unwrap();
-        assert_eq!(bak_content, "# Existing content\n", "backup content mismatch");
+        assert_eq!(
+            bak_content, "# Existing content\n",
+            "backup content mismatch"
+        );
 
         // Original file updated and contains both old and new content.
         let updated = fs::read_to_string(&target).unwrap();
@@ -263,10 +269,8 @@ mod tests {
         write_cascade_content("global".to_string(), sections).expect("write failed");
 
         let home = env::var("HOME").unwrap();
-        let content = fs::read_to_string(
-            PathBuf::from(&home).join(".cascade").join("CASCADE.md"),
-        )
-        .unwrap();
+        let content =
+            fs::read_to_string(PathBuf::from(&home).join(".cascade").join("CASCADE.md")).unwrap();
 
         let pos_alpha = content.find("## Alpha").expect("Alpha missing");
         let pos_beta = content.find("## Beta").expect("Beta missing");
@@ -282,9 +286,7 @@ mod tests {
     fn tmp_file_absent_after_successful_write() {
         let _tmp = isolate_home();
         let home = env::var("HOME").unwrap();
-        let tmp_path = PathBuf::from(&home)
-            .join(".cascade")
-            .join("CASCADE.md.tmp");
+        let tmp_path = PathBuf::from(&home).join(".cascade").join("CASCADE.md.tmp");
 
         write_cascade_content(
             "global".to_string(),
@@ -317,10 +319,8 @@ mod tests {
         .expect("second write failed");
 
         let home = env::var("HOME").unwrap();
-        let content = fs::read_to_string(
-            PathBuf::from(&home).join(".cascade").join("CASCADE.md"),
-        )
-        .unwrap();
+        let content =
+            fs::read_to_string(PathBuf::from(&home).join(".cascade").join("CASCADE.md")).unwrap();
 
         // Both sections present.
         assert!(content.contains("## First"), "First section missing");
@@ -328,7 +328,11 @@ mod tests {
 
         // Only one marker.
         let marker_count = content.matches(WIZARD_END_MARKER).count();
-        assert_eq!(marker_count, 1, "expected exactly one wizard-end marker, got {}", marker_count);
+        assert_eq!(
+            marker_count, 1,
+            "expected exactly one wizard-end marker, got {}",
+            marker_count
+        );
 
         // First section before Second section.
         let pos_first = content.find("## First").unwrap();
@@ -337,7 +341,10 @@ mod tests {
 
         // Marker at end (after both sections).
         let pos_marker = content.find(WIZARD_END_MARKER).unwrap();
-        assert!(pos_second < pos_marker, "Second section must precede marker");
+        assert!(
+            pos_second < pos_marker,
+            "Second section must precede marker"
+        );
     }
 
     // -- section_count matches input -----------------------------------------
@@ -352,8 +359,7 @@ mod tests {
             section("c", "Three", "c3"),
             section("d", "Four", "c4"),
         ];
-        let result = write_cascade_content("global".to_string(), sections)
-            .expect("write failed");
+        let result = write_cascade_content("global".to_string(), sections).expect("write failed");
         assert_eq!(result.section_count, 4);
     }
 }

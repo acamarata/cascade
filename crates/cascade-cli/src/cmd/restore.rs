@@ -150,8 +150,12 @@ fn restore_from_manifest(
     manifest_path: &Path,
 ) -> std::result::Result<RestoreResult, String> {
     // 1. Read and parse the manifest.
-    let raw = std::fs::read_to_string(manifest_path)
-        .map_err(|e| format!("failed to read manifest at {}: {e}", manifest_path.display()))?;
+    let raw = std::fs::read_to_string(manifest_path).map_err(|e| {
+        format!(
+            "failed to read manifest at {}: {e}",
+            manifest_path.display()
+        )
+    })?;
     let mut manifest: ArchiveManifest =
         serde_json::from_str(&raw).map_err(|e| format!("corrupt manifest — invalid JSON: {e}"))?;
 
@@ -320,11 +324,7 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn make_manifest_json(
-        tool_id: &str,
-        original_file: &Path,
-        archived_file: &Path,
-    ) -> String {
+    fn make_manifest_json(tool_id: &str, original_file: &Path, archived_file: &Path) -> String {
         let archive_root = archived_file.parent().unwrap().to_str().unwrap();
         let original_root = original_file.parent().unwrap().to_str().unwrap();
         let orig = original_file.to_str().unwrap();
@@ -479,8 +479,7 @@ mod tests {
         assert_eq!(cli.args.tool, "claude-code");
         assert!(!cli.args.overwrite);
 
-        let cli2 =
-            Cli::try_parse_from(["restore", "--tool", "opencode", "--overwrite"]).unwrap();
+        let cli2 = Cli::try_parse_from(["restore", "--tool", "opencode", "--overwrite"]).unwrap();
         assert!(cli2.args.overwrite);
     }
 }

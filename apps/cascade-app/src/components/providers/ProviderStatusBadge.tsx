@@ -58,7 +58,7 @@ export function ProviderStatusBadge({ status, errorMsg }: ProviderStatusBadgePro
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-        cfg.classes,
+        cfg.classes
       )}
       title={status === 'unhealthy' && errorMsg ? errorMsg : undefined}
       role="status"

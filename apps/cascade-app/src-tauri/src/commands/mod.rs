@@ -48,17 +48,17 @@ pub mod context;
 pub mod maps;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
-use std::path::PathBuf;
-use std::fs;
 use std::env;
+use std::fs;
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager, State};
 
 use cascade_cli::ipc_client::IpcClient;
 use cascade_types::ipc::{
     ConfigGetParams, ConfigGetResult, ConfigSetParams, ConfigSetResult, DaemonStopParams,
     DaemonStopResult, InboxSummaryParams, InboxSummaryResult, MemoryReadParams, MemoryReadResult,
-    MemoryWriteParams, MemoryWriteResult, ResolveParams, ResolveResult,
-    SearchParams, SearchResult, StatusParams, StatusResult,
+    MemoryWriteParams, MemoryWriteResult, ResolveParams, ResolveResult, SearchParams, SearchResult,
+    StatusParams, StatusResult,
 };
 
 use crate::error::CascadeError;
@@ -433,16 +433,12 @@ pub fn cascade_open_window(
             .map_err(|e| crate::error::CascadeError::Daemon(e.to_string()))?;
         return Ok(());
     }
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::WebviewUrl::App(url.into()),
-    )
-    .title(&title)
-    .inner_size(900.0, 700.0)
-    .min_inner_size(600.0, 400.0)
-    .build()
-    .map_err(|e| crate::error::CascadeError::Daemon(e.to_string()))?;
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title(&title)
+        .inner_size(900.0, 700.0)
+        .min_inner_size(600.0, 400.0)
+        .build()
+        .map_err(|e| crate::error::CascadeError::Daemon(e.to_string()))?;
     Ok(())
 }
 
@@ -642,19 +638,17 @@ pub fn check_wizard_status() -> Result<WizardStatus, CascadeError> {
     // Check if wizard-state.json exists
     if wizard_state_file.exists() {
         match fs::read_to_string(&wizard_state_file) {
-            Ok(content) => {
-                match serde_json::from_str::<WizardCheckpoint>(&content) {
-                    Ok(checkpoint) => {
-                        if checkpoint.completed_steps.len() < 10 {
-                            return Ok(WizardStatus::InProgress(checkpoint));
-                        }
-                        return Ok(WizardStatus::Complete);
+            Ok(content) => match serde_json::from_str::<WizardCheckpoint>(&content) {
+                Ok(checkpoint) => {
+                    if checkpoint.completed_steps.len() < 10 {
+                        return Ok(WizardStatus::InProgress(checkpoint));
                     }
-                    Err(_) => {
-                        return Ok(WizardStatus::NeverRun);
-                    }
+                    return Ok(WizardStatus::Complete);
                 }
-            }
+                Err(_) => {
+                    return Ok(WizardStatus::NeverRun);
+                }
+            },
             Err(_) => {
                 return Ok(WizardStatus::NeverRun);
             }
@@ -666,9 +660,7 @@ pub fn check_wizard_status() -> Result<WizardStatus, CascadeError> {
 
 /// Save checkpoint atomically to ~/.cascade/wizard-state.json.
 #[tauri::command]
-pub async fn wizard_save_checkpoint(
-    checkpoint: WizardCheckpoint,
-) -> Result<(), CascadeError> {
+pub async fn wizard_save_checkpoint(checkpoint: WizardCheckpoint) -> Result<(), CascadeError> {
     let target_path = checkpoint_path()?;
     let tmp_path = checkpoint_tmp_path()?;
 
@@ -761,7 +753,8 @@ pub async fn wizard_check_audit_format() -> Result<AuditCheckResult, CascadeErro
     let log = AuditLog::open(&audit_log_path)
         .map_err(|e| CascadeError::Custom(format!("failed to open audit log: {}", e)))?;
 
-    let violations = log.verify_chain()
+    let violations = log
+        .verify_chain()
         .map_err(|e| CascadeError::Custom(format!("failed to verify audit chain: {}", e)))?;
 
     if violations.is_empty() {
@@ -775,7 +768,8 @@ pub async fn wizard_check_audit_format() -> Result<AuditCheckResult, CascadeErro
     }
 
     // Violations detected — classify them
-    let hash_mismatch_count = violations.iter()
+    let hash_mismatch_count = violations
+        .iter()
         .filter(|v| v.reason.contains("hash does not match recomputed"))
         .count();
 
@@ -797,8 +791,8 @@ pub async fn wizard_check_audit_format() -> Result<AuditCheckResult, CascadeErro
 /// Returns the absolute path to the archived log file.
 #[tauri::command]
 pub async fn wizard_rotate_audit_log() -> Result<String, CascadeError> {
-    use std::time::{SystemTime, UNIX_EPOCH};
     use cascade_types::paths::home_dir;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     let audit_log_path = home_dir().join(".cascade").join("audit.log");
     let count_sidecar_path = home_dir().join(".cascade").join("audit.log.count");
@@ -953,9 +947,15 @@ pub async fn provider_connect(
         success,
         provider_id: provider_id.clone(),
         message: if success {
-            format!("Provider '{}' connected (stub — E-04 will complete OAuth)", provider_id)
+            format!(
+                "Provider '{}' connected (stub — E-04 will complete OAuth)",
+                provider_id
+            )
         } else {
-            format!("Provider '{}' not recognised or missing credential", provider_id)
+            format!(
+                "Provider '{}' not recognised or missing credential",
+                provider_id
+            )
         },
     })
 }
@@ -1047,8 +1047,14 @@ pub async fn install_daemon() -> Result<DaemonInstallResult, String> {
 </plist>
 "#,
         daemon_bin.to_string_lossy(),
-        home.join("Library").join("Logs").join("cascade-daemon.log").to_string_lossy(),
-        home.join("Library").join("Logs").join("cascade-daemon-err.log").to_string_lossy(),
+        home.join("Library")
+            .join("Logs")
+            .join("cascade-daemon.log")
+            .to_string_lossy(),
+        home.join("Library")
+            .join("Logs")
+            .join("cascade-daemon-err.log")
+            .to_string_lossy(),
     );
 
     // Atomic write: tmp → rename.
@@ -1057,10 +1063,8 @@ pub async fn install_daemon() -> Result<DaemonInstallResult, String> {
         p.push(".tmp");
         PathBuf::from(p)
     };
-    fs::write(&tmp_path, &plist_content)
-        .map_err(|e| format!("failed to write plist: {}", e))?;
-    fs::rename(&tmp_path, &plist_path)
-        .map_err(|e| format!("failed to finalize plist: {}", e))?;
+    fs::write(&tmp_path, &plist_content).map_err(|e| format!("failed to write plist: {}", e))?;
+    fs::rename(&tmp_path, &plist_path).map_err(|e| format!("failed to finalize plist: {}", e))?;
 
     // Load the agent (discrete args — no shell injection).
     let load_result = std::process::Command::new("launchctl")
@@ -1097,8 +1101,7 @@ pub async fn install_daemon() -> Result<DaemonInstallResult, String> {
 /// SPORT: T-P3-E03-08
 #[tauri::command]
 pub async fn wizard_mark_complete() -> Result<(), String> {
-    let home =
-        get_home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
+    let home = get_home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
 
     let cascade_dir = home.join(".cascade");
     fs::create_dir_all(&cascade_dir)
@@ -1148,27 +1151,87 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialization failed");
 
         // Verify camelCase keys are present in the JSON output.
-        assert!(json.contains("\"completedSteps\""), "expected camelCase 'completedSteps', got: {}", json);
-        assert!(json.contains("\"providerConnected\""), "expected camelCase 'providerConnected', got: {}", json);
-        assert!(json.contains("\"scanResult\""), "expected camelCase 'scanResult', got: {}", json);
-        assert!(json.contains("\"mergeResult\""), "expected camelCase 'mergeResult', got: {}", json);
-        assert!(json.contains("\"archiveManifestPath\""), "expected camelCase 'archiveManifestPath', got: {}", json);
-        assert!(json.contains("\"daemonInstalled\""), "expected camelCase 'daemonInstalled', got: {}", json);
-        assert!(json.contains("\"startedAt\""), "expected camelCase 'startedAt', got: {}", json);
-        assert!(json.contains("\"updatedAt\""), "expected camelCase 'updatedAt', got: {}", json);
+        assert!(
+            json.contains("\"completedSteps\""),
+            "expected camelCase 'completedSteps', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"providerConnected\""),
+            "expected camelCase 'providerConnected', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"scanResult\""),
+            "expected camelCase 'scanResult', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"mergeResult\""),
+            "expected camelCase 'mergeResult', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"archiveManifestPath\""),
+            "expected camelCase 'archiveManifestPath', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"daemonInstalled\""),
+            "expected camelCase 'daemonInstalled', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"startedAt\""),
+            "expected camelCase 'startedAt', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"updatedAt\""),
+            "expected camelCase 'updatedAt', got: {}",
+            json
+        );
 
         // Verify no snake_case keys leaked through.
-        assert!(!json.contains("\"completed_steps\""), "snake_case key leaked: {}", json);
-        assert!(!json.contains("\"provider_connected\""), "snake_case key leaked: {}", json);
+        assert!(
+            !json.contains("\"completed_steps\""),
+            "snake_case key leaked: {}",
+            json
+        );
+        assert!(
+            !json.contains("\"provider_connected\""),
+            "snake_case key leaked: {}",
+            json
+        );
 
         // ScanResult camelCase keys.
-        assert!(json.contains("\"legacyFilesFound\""), "expected 'legacyFilesFound', got: {}", json);
-        assert!(json.contains("\"totalSize\""), "expected 'totalSize', got: {}", json);
-        assert!(json.contains("\"projectRoots\""), "expected 'projectRoots', got: {}", json);
+        assert!(
+            json.contains("\"legacyFilesFound\""),
+            "expected 'legacyFilesFound', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"totalSize\""),
+            "expected 'totalSize', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"projectRoots\""),
+            "expected 'projectRoots', got: {}",
+            json
+        );
 
         // MergeResult camelCase keys.
-        assert!(json.contains("\"mergedFileCount\""), "expected 'mergedFileCount', got: {}", json);
-        assert!(json.contains("\"conflictsResolved\""), "expected 'conflictsResolved', got: {}", json);
+        assert!(
+            json.contains("\"mergedFileCount\""),
+            "expected 'mergedFileCount', got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"conflictsResolved\""),
+            "expected 'conflictsResolved', got: {}",
+            json
+        );
 
         // Round-trip: deserialize back and compare.
         let deserialized: WizardCheckpoint =
@@ -1180,14 +1243,21 @@ mod tests {
         assert_eq!(deserialized.daemon_installed, original.daemon_installed);
         assert_eq!(deserialized.started_at, original.started_at);
         assert_eq!(deserialized.updated_at, original.updated_at);
-        assert_eq!(deserialized.archive_manifest_path, original.archive_manifest_path);
+        assert_eq!(
+            deserialized.archive_manifest_path,
+            original.archive_manifest_path
+        );
 
-        let sr = deserialized.scan_result.expect("scan_result missing after round-trip");
+        let sr = deserialized
+            .scan_result
+            .expect("scan_result missing after round-trip");
         assert_eq!(sr.legacy_files_found, 42);
         assert_eq!(sr.total_size, 1_048_576);
         assert_eq!(sr.project_roots, vec!["/home/user/project"]);
 
-        let mr = deserialized.merge_result.expect("merge_result missing after round-trip");
+        let mr = deserialized
+            .merge_result
+            .expect("merge_result missing after round-trip");
         assert_eq!(mr.merged_file_count, 40);
         assert_eq!(mr.conflicts_resolved, 2);
     }

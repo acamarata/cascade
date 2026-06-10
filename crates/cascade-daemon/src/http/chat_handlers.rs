@@ -245,7 +245,10 @@ fn build_gemini_body(req: &ChatRequest) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, http::{Request, StatusCode}};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
     use tower::ServiceExt;
 
     fn test_state() -> DashboardState {

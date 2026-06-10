@@ -14,11 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type {
-  ContextItem,
-  ContextMeta,
-  ContextSession,
-} from '../../types/context'
+import type { ContextItem, ContextMeta, ContextSession } from '../../types/context'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -27,11 +23,13 @@ function generateId(): string {
 }
 
 function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || `session-${Date.now()}`
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || `session-${Date.now()}`
+  )
 }
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -80,7 +78,10 @@ export function useContextSessions(): UseContextSessionsResult {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Track latest active session for the debounce closure without re-registering effect.
   const activeSessionRef = useRef<ContextSession | null>(null)
-  activeSessionRef.current = activeSession
+  // Sync ref outside render phase to avoid react-hooks/refs violations.
+  useEffect(() => {
+    activeSessionRef.current = activeSession
+  }, [activeSession])
 
   // ── fetch session list on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -175,7 +176,7 @@ export function useContextSessions(): UseContextSessionsResult {
       })
       scheduleSave()
     },
-    [scheduleSave],
+    [scheduleSave]
   )
 
   // ── upsertSession (immediate) ─────────────────────────────────────────────
@@ -216,13 +217,13 @@ export function useContextSessions(): UseContextSessionsResult {
           updated_at: new Date().toISOString(),
         }
         setSessions((s) =>
-          s.map((x) => (x.id === updated.id ? { ...x, itemCount: updated.items.length } : x)),
+          s.map((x) => (x.id === updated.id ? { ...x, itemCount: updated.items.length } : x))
         )
         return updated
       })
       scheduleSave()
     },
-    [scheduleSave],
+    [scheduleSave]
   )
 
   // ── removeItem ───────────────────────────────────────────────────────────
@@ -236,13 +237,13 @@ export function useContextSessions(): UseContextSessionsResult {
           updated_at: new Date().toISOString(),
         }
         setSessions((s) =>
-          s.map((x) => (x.id === updated.id ? { ...x, itemCount: updated.items.length } : x)),
+          s.map((x) => (x.id === updated.id ? { ...x, itemCount: updated.items.length } : x))
         )
         return updated
       })
       scheduleSave()
     },
-    [scheduleSave],
+    [scheduleSave]
   )
 
   return {

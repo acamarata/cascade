@@ -55,7 +55,9 @@ use crate::{
     error::ProviderError,
     http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -93,9 +95,9 @@ struct CohereResponse {
     #[serde(default)]
     model: Option<String>,
     message: Option<CohereResponseMessage>,
-    #[serde(default)]
-    finish_reason: Option<String>,
     usage: Option<CohereUsage>,
+    // finish_reason is present in the wire response but unused by this adapter.
+    // Serde ignores unknown fields by default; no field needed here.
 }
 
 #[derive(Debug, Deserialize)]
@@ -358,10 +360,8 @@ impl ProviderAdapter for CohereAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let key = self.api_key()?;
         let body = Self::build_request(&req, true);
         let url = self.chat_url();
@@ -451,7 +451,8 @@ mod tests {
         .await;
 
         let adapter = CohereAdapter::with_base_url(ctx.base_url(), "test-key");
-        let req = CompletionRequest::simple("command-r-plus-08-2024", "What is the capital of France?");
+        let req =
+            CompletionRequest::simple("command-r-plus-08-2024", "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("should succeed");
 
         assert!(!resp.content.is_empty(), "content must not be empty");
@@ -471,9 +472,7 @@ mod tests {
     async fn cohere_request_shape_uses_messages_array() {
         let req = CompletionRequest {
             model: "command-r-plus-08-2024".into(),
-            messages: vec![
-                crate::types::Message::user("What is 2+2?"),
-            ],
+            messages: vec![crate::types::Message::user("What is 2+2?")],
             max_tokens: Some(100),
             temperature: Some(0.7),
             stream: false,

@@ -187,10 +187,7 @@ impl ProviderIpcHandler {
             .get(id)
             .ok_or_else(|| format!("provider not found: {id}"))?;
 
-        adapter
-            .health_check()
-            .await
-            .map_err(|e| e.to_string())?;
+        adapter.health_check().await.map_err(|e| e.to_string())?;
 
         // Optimistically update the cached health state.
         let mut guard = self.health.write().await;
@@ -249,11 +246,7 @@ impl ProviderIpcHandler {
     /// Returns `Err(String)` if the keychain write or registry registration
     /// fails.  On keychain failure the registry is NOT mutated (no partial
     /// state).
-    pub async fn providers_add_apikey(
-        &self,
-        id: String,
-        mut key: String,
-    ) -> Result<(), String> {
+    pub async fn providers_add_apikey(&self, id: String, mut key: String) -> Result<(), String> {
         let kc = platform_keychain();
 
         // Write to keychain first so we never have a registered provider with
@@ -583,7 +576,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let handler = make_handler(&tmp);
         let result = handler.providers_remove("ghost").await;
-        assert!(result.is_err(), "remove on unknown provider must return Err");
+        assert!(
+            result.is_err(),
+            "remove on unknown provider must return Err"
+        );
     }
 
     #[tokio::test]

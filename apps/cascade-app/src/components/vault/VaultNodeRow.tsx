@@ -43,7 +43,7 @@ interface VaultNodeRowProps {
   fileCountBadge: number
   onToggle: (path: string) => void
   onOpen: (path: string) => void
-  rowRef?: React.RefObject<HTMLDivElement>
+  rowRef?: React.Ref<HTMLDivElement>
 }
 
 export function VaultNodeRow({

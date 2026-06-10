@@ -63,7 +63,7 @@ export interface UseSettingsResult {
 function sectionChanged<K extends keyof CascadeSettings>(
   a: CascadeSettings | null,
   b: CascadeSettings | null,
-  section: K,
+  section: K
 ): boolean {
   if (!a || !b) return false
   return JSON.stringify(a[section]) !== JSON.stringify(b[section])
@@ -111,7 +111,7 @@ export function useSettings(): UseSettingsResult {
     <K extends keyof CascadeSettings>(section: K, value: CascadeSettings[K]) => {
       setDraft((prev) => (prev ? { ...prev, [section]: value } : prev))
     },
-    [],
+    []
   )
 
   const saveSection = useCallback(
@@ -131,7 +131,7 @@ export function useSettings(): UseSettingsResult {
         setError(msg)
       }
     },
-    [draft],
+    [draft]
   )
 
   const discard = useCallback(() => {
@@ -160,7 +160,7 @@ export function useSettings(): UseSettingsResult {
 export function isSectionDirty<K extends keyof CascadeSettings>(
   saved: CascadeSettings | null,
   draft: CascadeSettings | null,
-  section: K,
+  section: K
 ): boolean {
   return sectionChanged(saved, draft, section)
 }

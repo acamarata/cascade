@@ -152,11 +152,13 @@ export function ApplyDialog({
   if (!entry) return <></>
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-      <DialogContent
-        aria-label={`Apply template ${entry.id}`}
-        className="max-w-xl"
-      >
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose()
+      }}
+    >
+      <DialogContent aria-label={`Apply template ${entry.id}`} className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Apply Template — {entry.id}</DialogTitle>
           <DialogDescription>
@@ -237,7 +239,8 @@ export function ApplyDialog({
                 {dryRunResult.toApply.length > 0 && (
                   <div className="mb-2">
                     <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                      {dryRunResult.toApply.length} section{dryRunResult.toApply.length !== 1 ? 's' : ''} will be added
+                      {dryRunResult.toApply.length} section
+                      {dryRunResult.toApply.length !== 1 ? 's' : ''} will be added
                     </p>
                     <ul className="mt-1 flex flex-wrap gap-1">
                       {dryRunResult.toApply.map((s) => (
@@ -262,8 +265,9 @@ export function ApplyDialog({
                     />
                     <div>
                       <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                        {dryRunResult.conflicts.length} section{dryRunResult.conflicts.length !== 1 ? 's' : ''} already
-                        exist and will not be overwritten:
+                        {dryRunResult.conflicts.length} section
+                        {dryRunResult.conflicts.length !== 1 ? 's' : ''} already exist and will not
+                        be overwritten:
                       </p>
                       <ul className="mt-1 flex flex-wrap gap-1">
                         {dryRunResult.conflicts.map((s) => (
@@ -297,15 +301,28 @@ export function ApplyDialog({
             aria-label="Apply result"
             className="flex flex-col items-center gap-3 py-4 text-center"
           >
-            <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" aria-hidden="true" />
+            <CheckCircle
+              className="h-10 w-10 text-green-600 dark:text-green-400"
+              aria-hidden="true"
+            />
             <p className="text-sm font-medium text-foreground">Template applied successfully.</p>
             <div className="text-xs text-muted-foreground space-y-0.5">
-              <p>{applyResult.applied.length} section{applyResult.applied.length !== 1 ? 's' : ''} added</p>
+              <p>
+                {applyResult.applied.length} section{applyResult.applied.length !== 1 ? 's' : ''}{' '}
+                added
+              </p>
               {applyResult.conflicts.length > 0 && (
-                <p>{applyResult.conflicts.length} conflict{applyResult.conflicts.length !== 1 ? 's' : ''} skipped (existing content preserved)</p>
+                <p>
+                  {applyResult.conflicts.length} conflict
+                  {applyResult.conflicts.length !== 1 ? 's' : ''} skipped (existing content
+                  preserved)
+                </p>
               )}
               {applyResult.skipped.length > 0 && (
-                <p>{applyResult.skipped.length} section{applyResult.skipped.length !== 1 ? 's' : ''} unchanged</p>
+                <p>
+                  {applyResult.skipped.length} section{applyResult.skipped.length !== 1 ? 's' : ''}{' '}
+                  unchanged
+                </p>
               )}
             </div>
           </div>

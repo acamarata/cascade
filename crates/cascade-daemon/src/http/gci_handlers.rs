@@ -18,8 +18,8 @@
 
 use std::path::{Path, PathBuf};
 
-use axum::{http::StatusCode, response::IntoResponse, Json, Router};
 use axum::routing::get;
+use axum::{http::StatusCode, response::IntoResponse, Json, Router};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -61,8 +61,8 @@ pub fn list_dir_md(dir: &Path) -> Result<Vec<FileEntry>, String> {
         return Ok(Vec::new());
     }
 
-    let read_dir = std::fs::read_dir(dir)
-        .map_err(|e| format!("failed to read {}: {e}", dir.display()))?;
+    let read_dir =
+        std::fs::read_dir(dir).map_err(|e| format!("failed to read {}: {e}", dir.display()))?;
 
     let mut entries: Vec<FileEntry> = read_dir
         .filter_map(|res| {
@@ -96,7 +96,11 @@ pub fn list_dir_md(dir: &Path) -> Result<Vec<FileEntry>, String> {
 fn file_list_response(result: Result<Vec<FileEntry>, String>) -> impl IntoResponse {
     match result {
         Ok(entries) => Json(json!(entries)).into_response(),
-        Err(msg) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": msg}))).into_response(),
+        Err(msg) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": msg})),
+        )
+            .into_response(),
     }
 }
 
@@ -498,7 +502,10 @@ pub async fn handler_hooks() -> impl IntoResponse {
                     if command.is_empty() {
                         continue;
                     }
-                    let matcher = item.get("matcher").and_then(|v| v.as_str()).map(String::from);
+                    let matcher = item
+                        .get("matcher")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
                     let path = extract_path_from_command(&command);
                     let count_key = format!("{event}:{command}");
                     let fire_count = fire_counts
@@ -576,8 +583,8 @@ mod tests {
     use super::*;
     use axum::{body::Body, http::Request, Router};
     use serial_test::serial;
-    use tower::ServiceExt;
     use tempfile::TempDir;
+    use tower::ServiceExt;
 
     // Helper: fake HOME pointing at a tempdir.
     // Callers must carry #[serial(global_env)] to prevent cross-test HOME races.
@@ -673,15 +680,19 @@ mod tests {
                 .build()
                 .unwrap();
             rt.block_on(async {
-                let app: Router = Router::new()
-                    .route("/api/gci/settings-snapshot", axum::routing::get(handler_settings_snapshot));
+                let app: Router = Router::new().route(
+                    "/api/gci/settings-snapshot",
+                    axum::routing::get(handler_settings_snapshot),
+                );
                 let req = Request::builder()
                     .uri("/api/gci/settings-snapshot")
                     .body(Body::empty())
                     .unwrap();
                 let resp = app.oneshot(req).await.unwrap();
                 assert_eq!(resp.status(), axum::http::StatusCode::OK);
-                let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
                 let json: Value = serde_json::from_slice(&body).unwrap();
                 assert_eq!(json["settings"], serde_json::json!({}));
                 assert_eq!(json["redacted_fields"], serde_json::json!([]));
@@ -705,15 +716,19 @@ mod tests {
                 .build()
                 .unwrap();
             rt.block_on(async {
-                let app: Router = Router::new()
-                    .route("/api/gci/settings-snapshot", axum::routing::get(handler_settings_snapshot));
+                let app: Router = Router::new().route(
+                    "/api/gci/settings-snapshot",
+                    axum::routing::get(handler_settings_snapshot),
+                );
                 let req = Request::builder()
                     .uri("/api/gci/settings-snapshot")
                     .body(Body::empty())
                     .unwrap();
                 let resp = app.oneshot(req).await.unwrap();
                 assert_eq!(resp.status(), axum::http::StatusCode::OK);
-                let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
                 let json: Value = serde_json::from_slice(&body).unwrap();
                 assert_eq!(json["settings"]["apiToken"], "[REDACTED]");
                 assert_eq!(json["settings"]["model"], "sonnet");
@@ -741,20 +756,22 @@ mod tests {
                 .build()
                 .unwrap();
             rt.block_on(async {
-                let app: Router = Router::new()
-                    .route("/api/gci/cascade-diagram", axum::routing::get(handler_cascade_diagram));
+                let app: Router = Router::new().route(
+                    "/api/gci/cascade-diagram",
+                    axum::routing::get(handler_cascade_diagram),
+                );
                 let req = Request::builder()
                     .uri("/api/gci/cascade-diagram")
                     .body(Body::empty())
                     .unwrap();
                 let resp = app.oneshot(req).await.unwrap();
                 assert_eq!(resp.status(), axum::http::StatusCode::OK);
-                let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
                 let json: Value = serde_json::from_slice(&body).unwrap();
                 let arr = json.as_array().unwrap();
-                let tiers: Vec<&str> = arr.iter()
-                    .filter_map(|e| e["tier"].as_str())
-                    .collect();
+                let tiers: Vec<&str> = arr.iter().filter_map(|e| e["tier"].as_str()).collect();
                 assert!(tiers.contains(&"GCI"), "expected GCI tier");
                 assert!(tiers.contains(&"ASI"), "expected ASI tier");
                 // GCI entry has file_exists = true
@@ -793,15 +810,17 @@ mod tests {
                 .build()
                 .unwrap();
             rt.block_on(async {
-                let app: Router = Router::new()
-                    .route("/api/gci/hooks", axum::routing::get(handler_hooks));
+                let app: Router =
+                    Router::new().route("/api/gci/hooks", axum::routing::get(handler_hooks));
                 let req = Request::builder()
                     .uri("/api/gci/hooks")
                     .body(Body::empty())
                     .unwrap();
                 let resp = app.oneshot(req).await.unwrap();
                 assert_eq!(resp.status(), axum::http::StatusCode::OK);
-                let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap();
                 let json: Value = serde_json::from_slice(&body).unwrap();
                 let arr = json.as_array().unwrap();
                 assert_eq!(arr.len(), 2);
@@ -809,7 +828,10 @@ mod tests {
                 assert_eq!(pre["command"], "/usr/local/bin/check.sh");
                 assert_eq!(pre["matcher"], "Bash");
                 assert_eq!(pre["path"], "/usr/local/bin/check.sh");
-                let prompt = arr.iter().find(|e| e["event"] == "UserPromptSubmit").unwrap();
+                let prompt = arr
+                    .iter()
+                    .find(|e| e["event"] == "UserPromptSubmit")
+                    .unwrap();
                 assert_eq!(prompt["command"], "echo hello");
                 assert_eq!(prompt["fire_count"], 0);
             });

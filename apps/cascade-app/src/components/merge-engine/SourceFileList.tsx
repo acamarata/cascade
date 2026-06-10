@@ -73,7 +73,7 @@ function ToolGroup({ toolId, files, selectedPath, onFileSelect }: ToolGroupProps
         className={cn(
           'flex w-full items-center justify-between px-3 py-2 text-sm font-medium',
           'bg-muted/40 hover:bg-muted/70 transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
         )}
       >
         <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
@@ -101,9 +101,7 @@ function ToolGroup({ toolId, files, selectedPath, onFileSelect }: ToolGroupProps
                   className={cn(
                     'flex w-full items-start gap-2 px-3 py-2 text-left text-xs transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    isSelected
-                      ? 'bg-yellow-50 dark:bg-yellow-900/20'
-                      : 'hover:bg-accent',
+                    isSelected ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'hover:bg-accent'
                   )}
                   aria-pressed={isSelected}
                 >
@@ -140,9 +138,7 @@ export function SourceFileList({ sourceFiles, selectedPath, onFileSelect }: Sour
 
   if (sourceFiles.length === 0) {
     return (
-      <p className="px-3 py-4 text-sm text-muted-foreground">
-        No source files for this section.
-      </p>
+      <p className="px-3 py-4 text-sm text-muted-foreground">No source files for this section.</p>
     )
   }
 

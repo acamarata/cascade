@@ -71,9 +71,7 @@ export function RestoreToolSection() {
         <h2 id="restore-section-heading" className="text-sm font-medium">
           Tool Restore
         </h2>
-        <p className="text-sm text-destructive">
-          Could not load archived tools: {loadError}
-        </p>
+        <p className="text-sm text-destructive">Could not load archived tools: {loadError}</p>
       </section>
     )
   }
@@ -114,10 +112,7 @@ export function RestoreToolSection() {
             })
 
             return (
-              <div
-                key={tool.toolId}
-                className="flex items-center justify-between px-4 py-3 gap-4"
-              >
+              <div key={tool.toolId} className="flex items-center justify-between px-4 py-3 gap-4">
                 {/* Left: tool info */}
                 <div className="flex items-center gap-3 min-w-0">
                   <Archive
@@ -156,7 +151,7 @@ export function RestoreToolSection() {
                     <span
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5',
-                        'text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400',
+                        'text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400'
                       )}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />

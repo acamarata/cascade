@@ -56,8 +56,8 @@ use cascade_providers::{
         openrouter::OpenRouterAdapter,
         together::TogetherAdapter,
     },
-    compute_cost, CompletionRequest, NoopProvider, ProviderAdapter, ProviderError, ProviderRegistry,
-    TaskType,
+    compute_cost, CompletionRequest, NoopProvider, ProviderAdapter, ProviderError,
+    ProviderRegistry, TaskType,
 };
 use futures::StreamExt as _;
 use serde_json::json;
@@ -93,12 +93,7 @@ fn fixture_text(name: &str) -> String {
 ///
 /// Proves trait-level interchangeability: any `Box<dyn ProviderAdapter>` must
 /// produce a response satisfying these invariants.
-fn assert_contract(
-    adapter_id: &str,
-    content: &str,
-    model: &str,
-    prompt_tokens: u32,
-) {
+fn assert_contract(adapter_id: &str, content: &str, model: &str, prompt_tokens: u32) {
     assert!(
         !content.is_empty(),
         "[{adapter_id}] completion content must not be empty"
@@ -126,12 +121,25 @@ async fn anthropic_complete_happy_path() {
         .mount(&server)
         .await;
 
-    let adapter: Box<dyn ProviderAdapter> =
-        Box::new(AnthropicAdapter::new_with_base_url("test-key", server.uri()));
-    let req = CompletionRequest::simple("claude-3-5-sonnet-20241022", "What is the capital of France?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let adapter: Box<dyn ProviderAdapter> = Box::new(AnthropicAdapter::new_with_base_url(
+        "test-key",
+        server.uri(),
+    ));
+    let req = CompletionRequest::simple(
+        "claude-3-5-sonnet-20241022",
+        "What is the capital of France?",
+    );
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("anthropic", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "anthropic",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
     assert!(resp.content.contains("Paris"));
 }
 
@@ -210,8 +218,10 @@ async fn anthropic_rate_limit_retries_and_succeeds() {
         .mount(&server)
         .await;
 
-    let adapter: Box<dyn ProviderAdapter> =
-        Box::new(AnthropicAdapter::new_with_base_url("test-key", server.uri()));
+    let adapter: Box<dyn ProviderAdapter> = Box::new(AnthropicAdapter::new_with_base_url(
+        "test-key",
+        server.uri(),
+    ));
     let req = CompletionRequest::simple("claude-3-5-sonnet-20241022", "ping");
 
     // Should succeed after one retry.
@@ -264,9 +274,17 @@ async fn openai_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(OpenAIAdapter::new("test-key", Some(server.uri())));
     let req = CompletionRequest::simple("gpt-4o", "What is the capital of France?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("openai", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "openai",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
     assert!(resp.content.contains("Paris"));
 }
 
@@ -280,8 +298,7 @@ async fn openai_401_returns_auth_error() {
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
         .respond_with(
-            ResponseTemplate::new(401)
-                .set_body_json(json!({"error": {"message": "unauthorized"}})),
+            ResponseTemplate::new(401).set_body_json(json!({"error": {"message": "unauthorized"}})),
         )
         .mount(&server)
         .await;
@@ -293,7 +310,10 @@ async fn openai_401_returns_auth_error() {
 
     let err = adapter.complete(req).await.unwrap_err();
     assert!(
-        matches!(err, ProviderError::AuthFailed(_) | ProviderError::OAuthExpired { .. }),
+        matches!(
+            err,
+            ProviderError::AuthFailed(_) | ProviderError::OAuthExpired { .. }
+        ),
         "expected auth error, got {err:?}"
     );
 }
@@ -321,9 +341,17 @@ async fn gemini_direct_complete_happy_path() {
     };
     let adapter: Box<dyn ProviderAdapter> = Box::new(GeminiAdapter::new(config));
     let req = CompletionRequest::simple("gemini-1.5-flash", "What is the capital of France?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("gemini", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "gemini",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
     assert!(resp.content.contains("Paris"));
 }
 
@@ -348,9 +376,17 @@ async fn gemini_proxy_complete_happy_path() {
     };
     let adapter: Box<dyn ProviderAdapter> = Box::new(GeminiAdapter::new(config));
     let req = CompletionRequest::simple("gemini-1.5-flash", "Paris?");
-    let resp = adapter.complete(req).await.expect("proxy complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("proxy complete should succeed");
 
-    assert_contract("gemini-proxy", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "gemini-proxy",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -369,9 +405,17 @@ async fn opencode_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(OpenCodeAdapter::with_base_url(server.uri(), "test-token"));
     let req = CompletionRequest::simple("kimi-k2", "What is the capital of France?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("opencode", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "opencode",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
     assert!(resp.content.contains("Paris"));
 }
 
@@ -384,15 +428,14 @@ async fn opencode_401_returns_oauth_expired() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(401)
-                .set_body_json(json!({"error": "unauthorized"})),
-        )
+        .respond_with(ResponseTemplate::new(401).set_body_json(json!({"error": "unauthorized"})))
         .mount(&server)
         .await;
 
-    let adapter: Box<dyn ProviderAdapter> =
-        Box::new(OpenCodeAdapter::with_base_url(server.uri(), "expired-token"));
+    let adapter: Box<dyn ProviderAdapter> = Box::new(OpenCodeAdapter::with_base_url(
+        server.uri(),
+        "expired-token",
+    ));
     let req = CompletionRequest::simple("kimi-k2", "ping");
 
     let err = adapter.complete(req).await.unwrap_err();
@@ -418,9 +461,17 @@ async fn openrouter_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(OpenRouterAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("openai/gpt-4o", "What is the capital of France?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("openrouter", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "openrouter",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
     assert!(resp.content.contains("Paris"));
 }
 
@@ -440,9 +491,17 @@ async fn together_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(TogetherAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("meta-llama/Llama-3.1-70B-Instruct-Turbo", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("together", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "together",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -461,7 +520,10 @@ async fn groq_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(GroqAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("llama-3.1-70b-versatile", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
     assert_contract("groq", &resp.content, &resp.model, resp.usage.prompt_tokens);
 }
@@ -482,9 +544,17 @@ async fn mistral_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(MistralAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("mistral-large-2411", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("mistral", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "mistral",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -503,9 +573,17 @@ async fn deepseek_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(DeepSeekAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("deepseek-chat", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("deepseek", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "deepseek",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -526,9 +604,17 @@ async fn cohere_complete_happy_path() {
     let adapter: Box<dyn ProviderAdapter> =
         Box::new(CohereAdapter::with_base_url(server.uri(), "test-key"));
     let req = CompletionRequest::simple("command-r-plus-08-2024", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("cohere", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "cohere",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -551,9 +637,17 @@ async fn generic_openai_complete_happy_path() {
         Box::new(GenericOpenAIAdapter::new(config).expect("valid URL"));
 
     let req = CompletionRequest::simple("test-model", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("generic", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "generic",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -592,9 +686,17 @@ async fn ollama_complete_happy_path() {
     // We can test the inner adapter directly — it implements ProviderAdapter.
     let adapter: Box<dyn ProviderAdapter> = Box::new(inner);
     let req = CompletionRequest::simple("qwen2.5-coder:7b", "Paris?");
-    let resp = adapter.complete(req).await.expect("complete should succeed");
+    let resp = adapter
+        .complete(req)
+        .await
+        .expect("complete should succeed");
 
-    assert_contract("ollama", &resp.content, &resp.model, resp.usage.prompt_tokens);
+    assert_contract(
+        "ollama",
+        &resp.content,
+        &resp.model,
+        resp.usage.prompt_tokens,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -680,10 +782,7 @@ async fn registry_health_check_all_covers_all_adapters() {
         .await;
     Mock::given(method("GET"))
         .and(path("/v1/models"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(json!({"data": [{"id": "gpt-4o"}]})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": [{"id": "gpt-4o"}]})))
         .mount(&openai_server)
         .await;
 
@@ -691,7 +790,10 @@ async fn registry_health_check_all_covers_all_adapters() {
     registry
         .register(
             "anthropic".into(),
-            Arc::new(AnthropicAdapter::new_with_base_url("test-key", anthropic_server.uri())),
+            Arc::new(AnthropicAdapter::new_with_base_url(
+                "test-key",
+                anthropic_server.uri(),
+            )),
         )
         .expect("register anthropic");
     registry
@@ -702,7 +804,11 @@ async fn registry_health_check_all_covers_all_adapters() {
         .expect("register openai");
 
     let results = registry.health_check_all().await;
-    assert_eq!(results.len(), 2, "health_check_all must cover all 2 registered adapters");
+    assert_eq!(
+        results.len(),
+        2,
+        "health_check_all must cover all 2 registered adapters"
+    );
     assert!(
         results.get("anthropic").map(|r| r.is_ok()).unwrap_or(false),
         "anthropic health-check must succeed"

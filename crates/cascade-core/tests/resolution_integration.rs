@@ -8,8 +8,8 @@
 //!
 //! Tests use `tokio::test` because [`Resolver::resolve`] is `async`.
 
-use serial_test::serial;
 use cascade_core::resolution::Resolver;
+use serial_test::serial;
 use std::fs;
 use tempfile::TempDir;
 
@@ -22,7 +22,7 @@ fn plant_cascade(dir: &std::path::Path, content: &str) {
 
 /// A single-tier hierarchy (one `.cascade/CASCADE.md`) resolves to one source.
 #[tokio::test]
-    #[serial(global_env)]
+#[serial(global_env)]
 async fn test_resolver_single_tier() {
     let root = TempDir::new().unwrap();
     plant_cascade(root.path(), "# Single tier\n");
@@ -47,7 +47,7 @@ async fn test_resolver_single_tier() {
 /// `tier_sources.len() >= 1` (the resolver finds at least the first tier
 /// within the synthetic tree).
 #[tokio::test]
-    #[serial(global_env)]
+#[serial(global_env)]
 async fn test_resolver_multi_tier_sources() {
     let root = TempDir::new().unwrap();
     let project = root.path().join("Sites").join("myproject");
@@ -72,7 +72,7 @@ async fn test_resolver_multi_tier_sources() {
 
 /// `merged_text` contains content from each tier that was discovered.
 #[tokio::test]
-    #[serial(global_env)]
+#[serial(global_env)]
 async fn test_resolver_merged_text_contains_all_tiers() {
     let root = TempDir::new().unwrap();
     let repo = root.path().join("Sites").join("proj").join("repo");
@@ -98,7 +98,7 @@ async fn test_resolver_merged_text_contains_all_tiers() {
 
 /// Dedup mode does not return duplicate lines from multiple tiers.
 #[tokio::test]
-    #[serial(global_env)]
+#[serial(global_env)]
 async fn test_resolver_dedup_removes_duplicate_lines() {
     let root = TempDir::new().unwrap();
     let repo = root.path().join("Sites").join("proj").join("repo");

@@ -138,14 +138,14 @@ function buildSingleToolPlan(toolId: ToolId): SymlinkEntry[] {
   const siblings = siblingFiles[toolId] ?? []
   const cascadeMd = `${
     typeof window !== 'undefined'
-      ? (window as unknown as Record<string, string>).__CASCADE_HOME__ ?? '~'
+      ? ((window as unknown as Record<string, string>).__CASCADE_HOME__ ?? '~')
       : '~'
   }/.cascade/gci/CASCADE.md`
 
   return siblings.map((filename) => ({
     source: `${
       typeof window !== 'undefined'
-        ? (window as unknown as Record<string, string>).__CASCADE_HOME__ ?? '~'
+        ? ((window as unknown as Record<string, string>).__CASCADE_HOME__ ?? '~')
         : '~'
     }/.cascade/gci/${filename}`,
     target: cascadeMd,
@@ -236,9 +236,7 @@ export function ToolModeSection() {
   // Derived state — which tool (if any) is showing the confirm dialog
   // ---------------------------------------------------------------------------
 
-  const confirmingEntry = Object.entries(rowStates).find(
-    ([, s]) => s.phase === 'confirming',
-  )
+  const confirmingEntry = Object.entries(rowStates).find(([, s]) => s.phase === 'confirming')
   const confirmingToolId = confirmingEntry?.[0] as ToolId | undefined
 
   // ---------------------------------------------------------------------------
@@ -267,10 +265,7 @@ export function ToolModeSection() {
             const isManaged = mode === 'managed'
 
             return (
-              <div
-                key={toolId}
-                className="flex items-center justify-between px-4 py-3 gap-4"
-              >
+              <div key={toolId} className="flex items-center justify-between px-4 py-3 gap-4">
                 {/* Left: tool name + mode badge */}
                 <div className="flex items-center gap-3 min-w-0">
                   {isManaged ? (
@@ -291,7 +286,7 @@ export function ToolModeSection() {
                         'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
                         isManaged
                           ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                          : 'bg-muted text-muted-foreground',
+                          : 'bg-muted text-muted-foreground'
                       )}
                     >
                       {isManaged ? 'Cascade-managed' : 'Independent'}
@@ -306,7 +301,7 @@ export function ToolModeSection() {
                     <span
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5',
-                        'text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400',
+                        'text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400'
                       )}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -376,7 +371,9 @@ export function ToolModeSection() {
       {confirmingToolId && (
         <ToolModeConfirmDialog
           toolLabel={toLabel(confirmingToolId)}
-          direction={(modes[confirmingToolId] === 'managed' ? 'unmanage' : 'manage') as FlipDirection}
+          direction={
+            (modes[confirmingToolId] === 'managed' ? 'unmanage' : 'manage') as FlipDirection
+          }
           onConfirm={() => {
             const currentMode = modes[confirmingToolId] ?? 'independent'
             setRow(confirmingToolId, { phase: 'idle' })

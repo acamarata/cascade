@@ -64,6 +64,7 @@ pub mod codec;
 pub mod config;
 pub mod embedding_provider;
 pub mod error;
+pub mod harness;
 pub mod hook;
 pub mod ipc;
 pub mod key_storage;
@@ -73,9 +74,8 @@ pub mod pool;
 pub mod provision;
 pub mod query_strategy;
 pub mod quota_store;
-pub mod reranker;
-pub mod harness;
 pub mod rag;
+pub mod reranker;
 pub mod retriever;
 pub mod scheduled_task;
 pub mod template;
@@ -112,4 +112,6 @@ pub use quota_store::{
 };
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
-pub use template::{ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult};
+pub use template::{
+    ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult,
+};

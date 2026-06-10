@@ -23,9 +23,24 @@ import type { TierEntry } from '../../types/maps'
 const SIMPLE_PROJECT_GRAPH: GraphData = {
   version: 1,
   nodes: [
-    { id: 'acamarata', label: 'acamarata', nodeType: 'project', path: '/Users/admin/Sites/acamarata' },
-    { id: 'cascade', label: 'cascade', nodeType: 'repo', path: '/Users/admin/Sites/acamarata/cascade' },
-    { id: 'cascade-app', label: 'cascade-app', nodeType: 'app', path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app' },
+    {
+      id: 'acamarata',
+      label: 'acamarata',
+      nodeType: 'project',
+      path: '/Users/admin/Sites/acamarata',
+    },
+    {
+      id: 'cascade',
+      label: 'cascade',
+      nodeType: 'repo',
+      path: '/Users/admin/Sites/acamarata/cascade',
+    },
+    {
+      id: 'cascade-app',
+      label: 'cascade-app',
+      nodeType: 'app',
+      path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app',
+    },
   ],
   edges: [
     { from: 'acamarata', to: 'cascade' },
@@ -36,10 +51,34 @@ const SIMPLE_PROJECT_GRAPH: GraphData = {
 const PEWS_GRAPH: GraphData = {
   version: 1,
   nodes: [
-    { id: 'T-01', label: 'Foundation setup', nodeType: 'ticket', path: '', meta: { status: 'done' } },
-    { id: 'T-02', label: 'Core engine build', nodeType: 'ticket', path: '', meta: { status: 'in-progress' } },
-    { id: 'T-03', label: 'Integration layer', nodeType: 'ticket', path: '', meta: { status: 'pending' } },
-    { id: 'T-04', label: 'Blocked task', nodeType: 'ticket', path: '', meta: { status: 'blocked' } },
+    {
+      id: 'T-01',
+      label: 'Foundation setup',
+      nodeType: 'ticket',
+      path: '',
+      meta: { status: 'done' },
+    },
+    {
+      id: 'T-02',
+      label: 'Core engine build',
+      nodeType: 'ticket',
+      path: '',
+      meta: { status: 'in-progress' },
+    },
+    {
+      id: 'T-03',
+      label: 'Integration layer',
+      nodeType: 'ticket',
+      path: '',
+      meta: { status: 'pending' },
+    },
+    {
+      id: 'T-04',
+      label: 'Blocked task',
+      nodeType: 'ticket',
+      path: '',
+      meta: { status: 'blocked' },
+    },
   ],
   edges: [
     { from: 'T-01', to: 'T-02' },
@@ -48,12 +87,42 @@ const PEWS_GRAPH: GraphData = {
 }
 
 const SIX_TIERS: TierEntry[] = [
-  { tier: 'GCI', name: 'Global Cascade Instructions', path: '/Users/admin/.cascade/CASCADE.md', exists: true },
-  { tier: 'PCI', name: 'Platform Cascade Instructions', path: '/Users/admin/Sites/.cascade/CASCADE.md', exists: false },
-  { tier: 'APC', name: 'Account Cascade Instructions', path: '/Users/admin/Sites/acamarata/.cascade/CASCADE.md', exists: false },
-  { tier: 'PPC', name: 'Project-parent Cascade Instructions', path: '/Users/admin/Sites/acamarata/cascade/.cascade/CASCADE.md', exists: true },
-  { tier: 'PRC', name: 'Project Cascade Instructions', path: '/Users/admin/Sites/acamarata/cascade/apps/.cascade/CASCADE.md', exists: false },
-  { tier: 'PAC', name: 'Per-app Cascade Instructions', path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app/.cascade/CASCADE.md', exists: false },
+  {
+    tier: 'GCI',
+    name: 'Global Cascade Instructions',
+    path: '/Users/admin/.cascade/CASCADE.md',
+    exists: true,
+  },
+  {
+    tier: 'PCI',
+    name: 'Platform Cascade Instructions',
+    path: '/Users/admin/Sites/.cascade/CASCADE.md',
+    exists: false,
+  },
+  {
+    tier: 'APC',
+    name: 'Account Cascade Instructions',
+    path: '/Users/admin/Sites/acamarata/.cascade/CASCADE.md',
+    exists: false,
+  },
+  {
+    tier: 'PPC',
+    name: 'Project-parent Cascade Instructions',
+    path: '/Users/admin/Sites/acamarata/cascade/.cascade/CASCADE.md',
+    exists: true,
+  },
+  {
+    tier: 'PRC',
+    name: 'Project Cascade Instructions',
+    path: '/Users/admin/Sites/acamarata/cascade/apps/.cascade/CASCADE.md',
+    exists: false,
+  },
+  {
+    tier: 'PAC',
+    name: 'Per-app Cascade Instructions',
+    path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app/.cascade/CASCADE.md',
+    exists: false,
+  },
 ]
 
 // ── projectGraphToFlow ────────────────────────────────────────────────────────
@@ -186,7 +255,9 @@ describe('pewsDagToFlow', () => {
     const longLabel = 'A very long ticket title that exceeds 24 chars'
     const graph: GraphData = {
       version: 1,
-      nodes: [{ id: 'T-X', label: longLabel, nodeType: 'ticket', path: '', meta: { status: 'pending' } }],
+      nodes: [
+        { id: 'T-X', label: longLabel, nodeType: 'ticket', path: '', meta: { status: 'pending' } },
+      ],
       edges: [],
     }
     const { nodes } = pewsDagToFlow(graph)

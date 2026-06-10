@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use state::{AppProviderHealth, AppState};
 use tauri::Manager;
 use tracing::{info, warn};
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{fmt, EnvFilter};
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::{NoopProvider, ProviderRegistry};
@@ -34,8 +34,7 @@ use cascade_types::paths::global_cascade_dir;
 /// Initialize the tracing subscriber.
 /// JSON output to stderr; level from RUST_LOG env (default: info).
 fn init_tracing() {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     fmt()
         .with_env_filter(filter)
         .with_target(true)
@@ -58,10 +57,7 @@ pub fn run() {
         .manage(app_state)
         // T-P3-E04-15: spawn provider health-check background task after state is managed.
         .setup(|app| {
-            let health_map = app
-                .state::<AppState>()
-                .provider_health
-                .clone();
+            let health_map = app.state::<AppState>().provider_health.clone();
 
             // Build ProviderRegistry from providers.json (NoopProvider placeholders;
             // concrete adapters land in P4).
@@ -75,9 +71,7 @@ pub fn run() {
                     .unwrap_or_default();
                 for entry in entries.into_iter().filter(|p| p.enabled) {
                     let id = entry.id.clone();
-                    if let Err(e) =
-                        registry.register(id.clone(), Arc::new(NoopProvider))
-                    {
+                    if let Err(e) = registry.register(id.clone(), Arc::new(NoopProvider)) {
                         warn!(provider_id = %id, error = %e, "app: failed to register provider");
                     }
                 }
@@ -248,10 +242,7 @@ async fn run_app_health_task(
 }
 
 /// Run one health sweep: call health_check_all, update AppState cache.
-async fn app_health_sweep(
-    registry: &ProviderRegistry,
-    health_map: &state::ProviderHealthMap,
-) {
+async fn app_health_sweep(registry: &ProviderRegistry, health_map: &state::ProviderHealthMap) {
     let results = registry.health_check_all().await;
     let mut map = health_map.write().await;
     for (id, result) in &results {

@@ -200,7 +200,10 @@ mod tests {
     fn oai_request_prepends_system_prompt() {
         let req = crate::CompletionRequest {
             model: "m".into(),
-            messages: vec![Message { role: MessageRole::User, content: "hi".into() }],
+            messages: vec![Message {
+                role: MessageRole::User,
+                content: "hi".into(),
+            }],
             max_tokens: None,
             temperature: None,
             stream: false,

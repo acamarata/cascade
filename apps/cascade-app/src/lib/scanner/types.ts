@@ -35,7 +35,7 @@ export type ToolId =
   | 'cursor'
   | 'aider'
   | 'windsurf'
-  | 'antigravity';
+  | 'antigravity'
 
 /** All 7 ToolId values as a const array for runtime iteration. */
 export const TOOL_IDS: readonly ToolId[] = [
@@ -46,7 +46,7 @@ export const TOOL_IDS: readonly ToolId[] = [
   'aider',
   'windsurf',
   'antigravity',
-] as const;
+] as const
 
 // ---------------------------------------------------------------------------
 // LegacyFile — a single file discovered inside a tool home
@@ -56,13 +56,7 @@ export const TOOL_IDS: readonly ToolId[] = [
  * Classification of a legacy file by its semantic role.
  * Matches the Rust FileKind enum serialized as a string.
  */
-export type FileKind =
-  | 'instructions'
-  | 'memory'
-  | 'docs'
-  | 'tasks'
-  | 'ideas'
-  | 'other';
+export type FileKind = 'instructions' | 'memory' | 'docs' | 'tasks' | 'ideas' | 'other'
 
 /**
  * A single file found inside a legacy tool home.
@@ -72,9 +66,9 @@ export type FileKind =
  * @param kind       - Semantic classification of the file's role.
  */
 export interface LegacyFile {
-  path: string;
-  sizeBytes: number;
-  kind: FileKind;
+  path: string
+  sizeBytes: number
+  kind: FileKind
 }
 
 // ---------------------------------------------------------------------------
@@ -92,11 +86,11 @@ export interface LegacyFile {
  * @param totalSizeBytes  - Aggregate size of all discovered files in bytes.
  */
 export interface LegacyToolHome {
-  toolId: ToolId;
-  globalPaths: string[];
-  perProjectPaths: string[];
-  totalFiles: number;
-  totalSizeBytes: number;
+  toolId: ToolId
+  globalPaths: string[]
+  perProjectPaths: string[]
+  totalFiles: number
+  totalSizeBytes: number
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +105,7 @@ export interface LegacyToolHome {
  * @param devTreeRoot - The dev-tree root that was scanned, or null for global scans.
  */
 export interface ScanResult {
-  homes: LegacyToolHome[];
-  scannedAt: string;
-  devTreeRoot: string | null;
+  homes: LegacyToolHome[]
+  scannedAt: string
+  devTreeRoot: string | null
 }

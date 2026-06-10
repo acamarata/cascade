@@ -29,7 +29,7 @@ import type { MergeSection, MergeConflict, SectionStatus } from '@/features/onbo
  */
 export function nextSectionStatus(
   current: SectionStatus,
-  action: 'approve' | 'reject' | 'edit',
+  action: 'approve' | 'reject' | 'edit'
 ): SectionStatus {
   if (action === 'edit') return 'edited'
   if (action === 'approve') return current === 'approved' ? 'pending' : 'approved'
@@ -50,13 +50,9 @@ export function nextSectionStatus(
  */
 export function findConflictForSection(
   sectionId: string,
-  conflicts: MergeConflict[],
+  conflicts: MergeConflict[]
 ): MergeConflict | null {
-  return (
-    conflicts.find(
-      (c) => c.sectionA.id === sectionId || c.sectionB.id === sectionId,
-    ) ?? null
-  )
+  return conflicts.find((c) => c.sectionA.id === sectionId || c.sectionB.id === sectionId) ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +69,7 @@ export function findConflictForSection(
  */
 export function resolveHighlightSourceId(
   section: MergeSection,
-  selectedPath: string | null,
+  selectedPath: string | null
 ): string | null {
   if (!selectedPath) return null
   const match = section.sourceFiles.find((sf) => sf.path === selectedPath)

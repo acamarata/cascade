@@ -1368,7 +1368,10 @@ mod tests {
         creds.insert("slot-1".to_string(), "providers-key".to_string());
 
         let mut kc: HashMap<String, SecretString> = HashMap::new();
-        kc.insert("slot-1".to_string(), SecretString::new("keychain-key".into()));
+        kc.insert(
+            "slot-1".to_string(),
+            SecretString::new("keychain-key".into()),
+        );
 
         let result = resolve_api_key(&creds, &kc, "slot-1");
         assert_eq!(result, "keychain-key", "keychain must take precedence");
@@ -1382,7 +1385,10 @@ mod tests {
         let kc: HashMap<String, SecretString> = HashMap::new();
 
         let result = resolve_api_key(&creds, &kc, "slot-2");
-        assert_eq!(result, "providers-fallback", "must fall back to providers.json");
+        assert_eq!(
+            result, "providers-fallback",
+            "must fall back to providers.json"
+        );
     }
 
     #[test]

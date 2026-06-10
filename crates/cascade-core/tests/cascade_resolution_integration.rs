@@ -8,9 +8,9 @@
 //! and that the compat-file generator produces CLAUDE.md + AGENTS.md files
 //! correctly at each tier directory.
 
-use serial_test::serial;
 use cascade_core::cascade_resolve::resolve_cascade;
 use cascade_core::compat_gen::generate_all;
+use serial_test::serial;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;

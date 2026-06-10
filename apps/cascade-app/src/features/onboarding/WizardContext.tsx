@@ -9,13 +9,7 @@
  *     editSection, setMergeResult) added to context value and useWizard() hook.
  */
 
-import {
-  createContext,
-  useContext,
-  useReducer,
-  ReactNode,
-  useCallback,
-} from 'react'
+import { createContext, useContext, useReducer, ReactNode, useCallback } from 'react'
 import type { WizardState } from './types'
 import { WizardStep, createInitialState } from './types'
 import { wizardReducer, type WizardAction } from './wizardReducer'
@@ -104,60 +98,45 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   /** Retrieve the AI merge result for a tier by tier id string ('global', 'project', etc.). */
   const getMergeResult = useCallback(
     (tier: string): RichMergeResult | undefined => state.mergeResults[tier],
-    [state.mergeResults],
+    [state.mergeResults]
   )
 
   /** Store or replace the full AI merge result for a tier. */
-  const setMergeResult = useCallback(
-    (tier: string, result: RichMergeResult) => {
-      dispatch({ type: 'SET_MERGE_RESULT', payload: { tier, result } })
-    },
-    [],
-  )
+  const setMergeResult = useCallback((tier: string, result: RichMergeResult) => {
+    dispatch({ type: 'SET_MERGE_RESULT', payload: { tier, result } })
+  }, [])
 
   /** Set a section's status to 'approved'. */
-  const approveSection = useCallback(
-    (tier: string, sectionId: string) => {
-      dispatch({
-        type: 'UPDATE_SECTION_STATUS',
-        payload: { tier, sectionId, status: 'approved' },
-      })
-    },
-    [],
-  )
+  const approveSection = useCallback((tier: string, sectionId: string) => {
+    dispatch({
+      type: 'UPDATE_SECTION_STATUS',
+      payload: { tier, sectionId, status: 'approved' },
+    })
+  }, [])
 
   /** Set a section's status to 'rejected'. */
-  const rejectSection = useCallback(
-    (tier: string, sectionId: string) => {
-      dispatch({
-        type: 'UPDATE_SECTION_STATUS',
-        payload: { tier, sectionId, status: 'rejected' },
-      })
-    },
-    [],
-  )
+  const rejectSection = useCallback((tier: string, sectionId: string) => {
+    dispatch({
+      type: 'UPDATE_SECTION_STATUS',
+      payload: { tier, sectionId, status: 'rejected' },
+    })
+  }, [])
 
   /**
    * Set a section's status to 'edited' and store the edited content.
    * @param content — The user-modified content for this section.
    */
-  const editSection = useCallback(
-    (tier: string, sectionId: string, content: string) => {
-      dispatch({
-        type: 'UPDATE_SECTION_STATUS',
-        payload: { tier, sectionId, status: 'edited', editedContent: content },
-      })
-    },
-    [],
-  )
+  const editSection = useCallback((tier: string, sectionId: string, content: string) => {
+    dispatch({
+      type: 'UPDATE_SECTION_STATUS',
+      payload: { tier, sectionId, status: 'edited', editedContent: content },
+    })
+  }, [])
 
   // Template picker helper — T-P3-E05-19
-  const setSelectedTemplates = useCallback(
-    (ids: string[]) => {
-      dispatch({ type: 'SET_SELECTED_TEMPLATES', payload: ids })
-    },
-    [],
-  )
+  const setSelectedTemplates = useCallback((ids: string[]) => {
+    dispatch({ type: 'SET_SELECTED_TEMPLATES', payload: ids })
+  }, [])
 
   const value: WizardContextValue = {
     state,
@@ -179,11 +158,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     setSelectedTemplates,
   }
 
-  return (
-    <WizardContext.Provider value={value}>
-      {children}
-    </WizardContext.Provider>
-  )
+  return <WizardContext.Provider value={value}>{children}</WizardContext.Provider>
 }
 
 /**
@@ -205,7 +180,7 @@ export function useWizard(): WizardContextValue {
   if (context === undefined) {
     throw new Error(
       'useWizard must be called within a <WizardProvider>. ' +
-      'Wrap your wizard routes with <WizardProvider> at a parent level.'
+        'Wrap your wizard routes with <WizardProvider> at a parent level.'
     )
   }
   return context

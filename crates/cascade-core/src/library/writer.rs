@@ -77,11 +77,7 @@ pub fn upsert_item(library_root: &Path, item: &LibraryItem) -> Result<(), Cascad
 ///
 /// - [`CascadeError::Io`] for unexpected filesystem errors other than
 ///   `NotFound`.
-pub fn delete_item(
-    library_root: &Path,
-    item_type: &str,
-    slug: &str,
-) -> Result<(), CascadeError> {
+pub fn delete_item(library_root: &Path, item_type: &str, slug: &str) -> Result<(), CascadeError> {
     let file_path = library_root.join(item_type).join(format!("{slug}.yaml"));
 
     match fs::remove_file(&file_path) {

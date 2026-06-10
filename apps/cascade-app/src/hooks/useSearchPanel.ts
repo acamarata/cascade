@@ -26,8 +26,7 @@ export function useSearchPanel() {
       // Cmd+Shift+F on macOS, Ctrl+Shift+F on Windows/Linux
       const triggered = e.shiftKey && e.key === 'F' && (isMac ? e.metaKey : e.ctrlKey)
       // Also handle lowercase 'f' in case Shift produces uppercase depending on platform
-      const triggeredLower =
-        e.shiftKey && e.key === 'f' && (isMac ? e.metaKey : e.ctrlKey)
+      const triggeredLower = e.shiftKey && e.key === 'f' && (isMac ? e.metaKey : e.ctrlKey)
       if (triggered || triggeredLower) {
         e.preventDefault()
         toggle()

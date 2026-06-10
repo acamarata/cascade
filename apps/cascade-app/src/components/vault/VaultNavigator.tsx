@@ -11,17 +11,12 @@
  * SPORT: MASTER-COMPONENTS.md — VaultNavigator (T-P3-E06-02)
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useVault } from '../../context/VaultContext'
 import type { VaultNode } from '../../types/vault'
 import { VaultNodeRow } from './VaultNodeRow'
-import {
-  flattenVisible,
-  handleTreeKeyDown,
-  totalFileCount,
-  type FlatNode,
-} from './vaultNav'
+import { flattenVisible, handleTreeKeyDown, totalFileCount, type FlatNode } from './vaultNav'
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_RECENT = 5
@@ -66,8 +61,22 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
   // Recent files (most recent first)
   const [recentFiles, setRecentFiles] = useState<string[]>([])
 
-  // Row refs for focus management
-  const rowRefs = useRef<Array<React.RefObject<HTMLDivElement>>>([])
+  // Row DOM nodes for focus management — keyed by index, populated via callback refs.
+  // Using a Map<number, HTMLDivElement> avoids any ref-array-in-render access that
+  // react-hooks/refs flags under the React Compiler rule set.
+  const rowNodesMap = useRef<Map<number, HTMLDivElement>>(new Map())
+
+  /** Stable callback ref factory; each VaultNodeRow receives a bound setter. */
+  const makeRowRef = useCallback(
+    (idx: number) => (node: HTMLDivElement | null) => {
+      if (node) {
+        rowNodesMap.current.set(idx, node)
+      } else {
+        rowNodesMap.current.delete(idx)
+      }
+    },
+    []
+  )
 
   // ── Auto-expand root on tree load ────────────────────────────────────────
 
@@ -112,29 +121,24 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
         return [path, ...filtered].slice(0, MAX_RECENT)
       })
     },
-    [setCurrentFile],
+    [setCurrentFile]
   )
 
   // ── Keyboard handler ────────────────────────────────────────────────────
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    const handled = [
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'Enter',
-      ' ',
-    ].includes(e.key)
+    const handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(
+      e.key
+    )
     if (!handled) return
     e.preventDefault()
 
-    const visible = getVisible()
+    const currentVisible = getVisible()
     const { nextFocus, expand, collapse, open, toggle } = handleTreeKeyDown(
       e.key,
       focusIndex,
-      visible,
-      expandedPaths,
+      currentVisible,
+      expandedPaths
     )
 
     if (expand) {
@@ -153,12 +157,14 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
     setFocusIndex(nextFocus)
   }
 
-  // Focus the DOM element when focusIndex changes
+  // Compute the flat visible list unconditionally (safe: getVisible returns [] when treeData is null)
+  const visible = useMemo(() => getVisible(), [getVisible])
+
+  // Focus the DOM element when focusIndex changes.
+  // rowNodesMap.current is accessed only in the effect (not during render).
   useEffect(() => {
-    const ref = rowRefs.current[focusIndex]
-    if (ref?.current) {
-      ref.current.focus({ preventScroll: false })
-    }
+    const node = rowNodesMap.current.get(focusIndex)
+    node?.focus({ preventScroll: false })
   }, [focusIndex])
 
   // ── States ────────────────────────────────────────────────────────────────
@@ -196,14 +202,6 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
     )
   }
 
-  const visible = getVisible()
-
-  // Build row refs array to match visible length
-  while (rowRefs.current.length < visible.length) {
-    rowRefs.current.push(React.createRef<HTMLDivElement>())
-  }
-  rowRefs.current.length = visible.length
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* ── Header ── */}
@@ -230,6 +228,7 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
         role="tree"
         aria-label={`Vault: ${treeData.name}`}
         className="flex-1 overflow-y-auto p-1"
+        tabIndex={0}
         onKeyDown={handleKeyDown}
       >
         {visible.length === 0 ? (
@@ -246,7 +245,7 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
               fileCountBadge={totalFileCount(flat.node)}
               onToggle={toggleExpand}
               onOpen={(path) => void openFile(path)}
-              rowRef={rowRefs.current[idx] as React.RefObject<HTMLDivElement>}
+              rowRef={makeRowRef(idx)}
             />
           ))
         )}
@@ -287,4 +286,3 @@ export function VaultNavigator({ tagFilter }: VaultNavigatorProps = {}) {
     </div>
   )
 }
-

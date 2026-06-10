@@ -24,11 +24,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { LayoutGrid } from 'lucide-react'
-import type {
-  ApplyResultIpc,
-  TemplateEntryIpc,
-  UpgradeResultIpc,
-} from '../types/templates'
+import type { ApplyResultIpc, TemplateEntryIpc, UpgradeResultIpc } from '../types/templates'
 import { TemplateCard } from '../components/template/TemplateCard'
 import { TemplateFilterBar, type TemplateFilter } from '../components/template/TemplateFilterBar'
 import { TemplatePreview } from '../components/template/TemplatePreview'
@@ -66,7 +62,7 @@ export function extractShapes(entries: TemplateEntryIpc[]): string[] {
  */
 export function applyFilter(
   entries: TemplateEntryIpc[],
-  filter: TemplateFilter,
+  filter: TemplateFilter
 ): TemplateEntryIpc[] {
   const q = filter.search.trim().toLowerCase()
   return entries.filter((e) => {
@@ -124,7 +120,13 @@ function LoadingState(): React.ReactElement {
   )
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }): React.ReactElement {
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}): React.ReactElement {
   return (
     <div
       role="alert"
@@ -156,7 +158,13 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }): React.ReactElement {
   )
 }
 
-function ToastStack({ toasts, onDismiss }: { toasts: ToastMsg[]; onDismiss: (id: number) => void }): React.ReactElement {
+function ToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: ToastMsg[]
+  onDismiss: (id: number) => void
+}): React.ReactElement {
   return (
     <div
       aria-live="polite"
@@ -264,8 +272,9 @@ export function TemplateBrowser(): React.ReactElement {
   const filtered = useMemo(() => applyFilter(entries, filter), [entries, filter])
 
   const selectedEntry = useMemo(
-    () => filtered.find((e) => e.id === selectedId) ?? entries.find((e) => e.id === selectedId) ?? null,
-    [filtered, entries, selectedId],
+    () =>
+      filtered.find((e) => e.id === selectedId) ?? entries.find((e) => e.id === selectedId) ?? null,
+    [filtered, entries, selectedId]
   )
 
   const hasFilter =
@@ -305,7 +314,7 @@ export function TemplateBrowser(): React.ReactElement {
   async function handleApplyInvoke(
     targetPath: string,
     variables: Record<string, string>,
-    dryRun: boolean,
+    dryRun: boolean
   ) {
     if (!applyEntry) return
     setApplying(true)
@@ -329,7 +338,7 @@ export function TemplateBrowser(): React.ReactElement {
         setApplyResult(result)
         pushToast(
           `Applied ${applyEntry.id}: ${result.applied.length} section${result.applied.length !== 1 ? 's' : ''} added.`,
-          'success',
+          'success'
         )
         // Refresh template list so upgrade badges update.
         void fetchTemplates()
@@ -372,7 +381,7 @@ export function TemplateBrowser(): React.ReactElement {
       setUpgradeDialogOpen(false)
       pushToast(
         `Upgraded ${upgradeEntry.id}: ${result.upgraded.length} updated, ${result.added.length} added, ${result.deprecated.length} deprecated.`,
-        'success',
+        'success'
       )
       // Refresh to clear the upgrade badge.
       void fetchTemplates()
@@ -423,6 +432,7 @@ export function TemplateBrowser(): React.ReactElement {
               role="grid"
               aria-label="Templates"
               aria-rowcount={filtered.length}
+              tabIndex={0}
               onKeyDown={handleGridKeyDown}
               className="flex-1 overflow-y-auto p-3"
             >

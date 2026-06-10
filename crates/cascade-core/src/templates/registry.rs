@@ -169,8 +169,8 @@ impl TemplateRegistry {
         visited: &mut HashSet<String>,
         depth: usize,
     ) -> cascade_types::error::Result<TemplateRecord> {
-        use cascade_types::error::CascadeError;
         use super::section_parser::parse_sections;
+        use cascade_types::error::CascadeError;
 
         const MAX_DEPTH: usize = 5;
 
@@ -292,9 +292,7 @@ impl TemplateRegistry {
                 // Stack filter: manifest.stacks must contain the tag,
                 // unless manifest.stacks is empty (means "all stacks")
                 if let Some(ref fs) = filter.stack {
-                    if !rec.manifest.stacks.is_empty()
-                        && !rec.manifest.stacks.contains(fs)
-                    {
+                    if !rec.manifest.stacks.is_empty() && !rec.manifest.stacks.contains(fs) {
                         return false;
                     }
                 }
@@ -546,22 +544,42 @@ mod tests {
             let dir = TempDir::new().unwrap();
 
             write_template_with_extends(
-                &dir, "parent.md", "gci-default", "gci", None,
+                &dir,
+                "parent.md",
+                "gci-default",
+                "gci",
+                None,
                 "## ParentSection\nparent content\n## Shared\nparent shared\n",
             );
             write_template_with_extends(
-                &dir, "child.md", "child-tmpl", "gci", Some("gci-default"),
+                &dir,
+                "child.md",
+                "child-tmpl",
+                "gci",
+                Some("gci-default"),
                 "## Shared\nchild override\n## ChildOnly\nchild only\n",
             );
 
             let reg = TemplateRegistry::load_dirs(&[dir.path()]);
             let resolved = reg.resolve("child-tmpl").unwrap();
 
-            assert!(resolved.body.contains("## ParentSection"), "parent section must be present");
+            assert!(
+                resolved.body.contains("## ParentSection"),
+                "parent section must be present"
+            );
             assert!(resolved.body.contains("parent content"));
-            assert!(resolved.body.contains("child override"), "child must override shared");
-            assert!(!resolved.body.contains("parent shared"), "parent shared must not appear");
-            assert!(resolved.body.contains("## ChildOnly"), "child-only section must appear");
+            assert!(
+                resolved.body.contains("child override"),
+                "child must override shared"
+            );
+            assert!(
+                !resolved.body.contains("parent shared"),
+                "parent shared must not appear"
+            );
+            assert!(
+                resolved.body.contains("## ChildOnly"),
+                "child-only section must appear"
+            );
             assert_eq!(resolved.manifest.id, "child-tmpl");
         }
 
@@ -571,24 +589,45 @@ mod tests {
             let dir = TempDir::new().unwrap();
 
             write_template_with_extends(
-                &dir, "gp.md", "grandparent", "gci", None,
+                &dir,
+                "gp.md",
+                "grandparent",
+                "gci",
+                None,
                 "## GpSection\ngp body\n",
             );
             write_template_with_extends(
-                &dir, "parent.md", "parent", "gci", Some("grandparent"),
+                &dir,
+                "parent.md",
+                "parent",
+                "gci",
+                Some("grandparent"),
                 "## ParentSection\nparent body\n",
             );
             write_template_with_extends(
-                &dir, "child.md", "child", "gci", Some("parent"),
+                &dir,
+                "child.md",
+                "child",
+                "gci",
+                Some("parent"),
                 "## ChildSection\nchild body\n",
             );
 
             let reg = TemplateRegistry::load_dirs(&[dir.path()]);
             let resolved = reg.resolve("child").unwrap();
 
-            assert!(resolved.body.contains("## GpSection"), "grandparent section must resolve");
-            assert!(resolved.body.contains("## ParentSection"), "parent section must resolve");
-            assert!(resolved.body.contains("## ChildSection"), "child section must resolve");
+            assert!(
+                resolved.body.contains("## GpSection"),
+                "grandparent section must resolve"
+            );
+            assert!(
+                resolved.body.contains("## ParentSection"),
+                "parent section must resolve"
+            );
+            assert!(
+                resolved.body.contains("## ChildSection"),
+                "child section must resolve"
+            );
         }
 
         // T-12-D: cycle detection — A extends B extends A → Err, no panic
@@ -597,11 +636,19 @@ mod tests {
             let dir = TempDir::new().unwrap();
 
             write_template_with_extends(
-                &dir, "a.md", "tmpl-a", "gci", Some("tmpl-b"),
+                &dir,
+                "a.md",
+                "tmpl-a",
+                "gci",
+                Some("tmpl-b"),
                 "## A\na body\n",
             );
             write_template_with_extends(
-                &dir, "b.md", "tmpl-b", "gci", Some("tmpl-a"),
+                &dir,
+                "b.md",
+                "tmpl-b",
+                "gci",
+                Some("tmpl-a"),
                 "## B\nb body\n",
             );
 
@@ -611,7 +658,8 @@ mod tests {
             let msg = result.unwrap_err().to_string();
             assert!(
                 msg.contains("cycle") || msg.contains("depth") || msg.contains("tmpl"),
-                "error message must mention cycle: {}", msg
+                "error message must mention cycle: {}",
+                msg
             );
         }
     } // mod inheritance
@@ -669,7 +717,10 @@ mod tests {
             write_template_v(&dir, "t.md", "my-tmpl", "1.0.0");
             let reg = TemplateRegistry::load_dirs(&[dir.path()]);
             let upgrade = reg.available_upgrade("my-tmpl", "1.0.0-alpha");
-            assert!(upgrade.is_some(), "1.0.0 > 1.0.0-alpha — upgrade should be available");
+            assert!(
+                upgrade.is_some(),
+                "1.0.0 > 1.0.0-alpha — upgrade should be available"
+            );
         }
 
         // T-13-E: unknown template → None (no panic)

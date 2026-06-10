@@ -38,7 +38,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::{Datelike, Local, NaiveDate};
-use serde_json;
 use tracing::{debug, warn};
 
 use cascade_types::usage_analytics::{
@@ -105,10 +104,13 @@ pub fn resolve_date_range(period: &UsagePeriod) -> (NaiveDate, NaiveDate) {
             // Apply offset in months.
             let total_months = base_month + period.offset;
             let (year, month) = if total_months >= 1 {
-                (base_year + (total_months - 1) / 12, ((total_months - 1) % 12 + 1) as u32)
+                (
+                    base_year + (total_months - 1) / 12,
+                    ((total_months - 1) % 12 + 1) as u32,
+                )
             } else {
                 // Handle negative months (go back years).
-                let adj = (-total_months / 12 + 1) as i32;
+                let adj = -total_months / 12 + 1;
                 let shifted = total_months + adj * 12;
                 (base_year - adj, ((shifted - 1) % 12 + 1) as u32)
             };
@@ -183,9 +185,7 @@ fn collect_entries(files: &[DailyUsageFile]) -> Vec<&DailyEntry> {
 }
 
 /// Fold entries into by-model and by-account breakdowns + totals.
-fn fold_entries(
-    entries: &[&DailyEntry],
-) -> (u64, f64, Vec<ModelUsageStat>, Vec<AccountUsageStat>) {
+fn fold_entries(entries: &[&DailyEntry]) -> (u64, f64, Vec<ModelUsageStat>, Vec<AccountUsageStat>) {
     let mut by_model: HashMap<String, (u64, f64)> = HashMap::new();
     let mut by_account: HashMap<String, (u64, f64)> = HashMap::new();
     let mut total_tokens: u64 = 0;
@@ -207,15 +207,23 @@ fn fold_entries(
 
     let mut model_vec: Vec<ModelUsageStat> = by_model
         .into_iter()
-        .map(|(model, (tokens, cost_usd))| ModelUsageStat { model, tokens, cost_usd })
+        .map(|(model, (tokens, cost_usd))| ModelUsageStat {
+            model,
+            tokens,
+            cost_usd,
+        })
         .collect();
-    model_vec.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+    model_vec.sort_by_key(|b| std::cmp::Reverse(b.tokens));
 
     let mut acct_vec: Vec<AccountUsageStat> = by_account
         .into_iter()
-        .map(|(email, (tokens, cost_usd))| AccountUsageStat { email, tokens, cost_usd })
+        .map(|(email, (tokens, cost_usd))| AccountUsageStat {
+            email,
+            tokens,
+            cost_usd,
+        })
         .collect();
-    acct_vec.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+    acct_vec.sort_by_key(|b| std::cmp::Reverse(b.tokens));
 
     (total_tokens, total_cost, model_vec, acct_vec)
 }
@@ -249,12 +257,13 @@ pub fn handle_usage_summary(
     validate_period(&period)?;
 
     // Build a stable cache key from the period.
-    let cache_key = serde_json::to_string(&period)
-        .unwrap_or_else(|_| format!("{:?}", period));
+    let cache_key = serde_json::to_string(&period).unwrap_or_else(|_| format!("{:?}", period));
 
     // Check cache.
     {
-        let guard = cache.lock().map_err(|e| format!("cache lock poisoned: {e}"))?;
+        let guard = cache
+            .lock()
+            .map_err(|e| format!("cache lock poisoned: {e}"))?;
         if let Some((populated_at, cached)) = guard.get(&cache_key) {
             if populated_at.elapsed() < CACHE_TTL {
                 debug!(%cache_key, "usage_summary: returning cached result");
@@ -282,7 +291,9 @@ pub fn handle_usage_summary(
 
     // Populate cache.
     {
-        let mut guard = cache.lock().map_err(|e| format!("cache lock poisoned: {e}"))?;
+        let mut guard = cache
+            .lock()
+            .map_err(|e| format!("cache lock poisoned: {e}"))?;
         guard.insert(cache_key, (Instant::now(), summary.clone()));
     }
 
@@ -394,12 +405,19 @@ mod tests {
             };
             let path = tmp.path().join(format!("{}.json", date_str));
             let mut f = std::fs::File::create(&path).unwrap();
-            f.write_all(serde_json::to_vec(&file).unwrap().as_slice()).unwrap();
+            f.write_all(serde_json::to_vec(&file).unwrap().as_slice())
+                .unwrap();
         }
         tmp
     }
 
-    fn make_entry(account: &str, model: &str, prompt: u64, completion: u64, cost: f64) -> DailyEntry {
+    fn make_entry(
+        account: &str,
+        model: &str,
+        prompt: u64,
+        completion: u64,
+        cost: f64,
+    ) -> DailyEntry {
         DailyEntry {
             timestamp: "2026-06-09T10:00:00Z".to_string(),
             account: account.to_string(),
@@ -421,8 +439,14 @@ mod tests {
         let e3 = make_entry("c@d.com", "model-a", 300, 150, 0.03);
 
         let files = vec![
-            DailyUsageFile { date: "2026-06-07".into(), entries: vec![e1, e2] },
-            DailyUsageFile { date: "2026-06-08".into(), entries: vec![e3] },
+            DailyUsageFile {
+                date: "2026-06-07".into(),
+                entries: vec![e1, e2],
+            },
+            DailyUsageFile {
+                date: "2026-06-08".into(),
+                entries: vec![e3],
+            },
         ];
 
         let entries = collect_entries(&files);
@@ -445,27 +469,43 @@ mod tests {
 
     #[test]
     fn test_range_validation_positive_offset() {
-        let period = UsagePeriod { kind: UsagePeriodKind::Day, offset: 1 };
-        assert!(validate_period(&period).is_err(), "positive offset should be rejected");
+        let period = UsagePeriod {
+            kind: UsagePeriodKind::Day,
+            offset: 1,
+        };
+        assert!(
+            validate_period(&period).is_err(),
+            "positive offset should be rejected"
+        );
     }
 
     // ── Test 3: range validation rejects offset < -120 ────────────────────────
 
     #[test]
     fn test_range_validation_too_far_back() {
-        let period = UsagePeriod { kind: UsagePeriodKind::Month, offset: -200 };
-        assert!(validate_period(&period).is_err(), "offset < -120 should be rejected");
+        let period = UsagePeriod {
+            kind: UsagePeriodKind::Month,
+            offset: -200,
+        };
+        assert!(
+            validate_period(&period).is_err(),
+            "offset < -120 should be rejected"
+        );
     }
 
     // ── Test 4: empty store returns zero UsageSummary ────────────────────────
 
     #[test]
     fn test_empty_store() {
-        let cache = new_summary_cache();
+        let _cache = new_summary_cache();
         // Point at a non-existent directory via a temp path — but we can't
         // override usage_dir() directly, so we test the building blocks.
         let tmp = tempfile::tempdir().unwrap();
-        let files = read_daily_files(tmp.path(), NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 6, 7).unwrap());
+        let files = read_daily_files(
+            tmp.path(),
+            NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 6, 7).unwrap(),
+        );
         assert!(files.is_empty(), "no files → empty result");
 
         let entries = collect_entries(&files);
@@ -484,7 +524,7 @@ mod tests {
         let e2 = make_entry("x@y.com", "model-b", 200, 100, 0.02);
         let e3 = make_entry("a@b.com", "model-c", 50, 25, 0.005);
 
-        let files = vec![DailyUsageFile {
+        let files = [DailyUsageFile {
             date: "2026-06-09".into(),
             entries: vec![e1, e2, e3],
         }];
@@ -537,7 +577,10 @@ mod tests {
         let cache = new_summary_cache();
 
         // Manually insert a cache entry with a fresh timestamp.
-        let period = UsagePeriod { kind: UsagePeriodKind::Day, offset: 0 };
+        let period = UsagePeriod {
+            kind: UsagePeriodKind::Day,
+            offset: 0,
+        };
         let key = serde_json::to_string(&period).unwrap();
         let summary = UsageSummary {
             total_tokens: 42,
@@ -548,7 +591,10 @@ mod tests {
             period_start: "2026-06-09".into(),
             period_end: "2026-06-09".into(),
         };
-        cache.lock().unwrap().insert(key.clone(), (Instant::now(), summary.clone()));
+        cache
+            .lock()
+            .unwrap()
+            .insert(key.clone(), (Instant::now(), summary.clone()));
 
         // handle_usage_summary should return the cached value without touching
         // the (non-existent) usage dir.
@@ -560,7 +606,10 @@ mod tests {
 
     #[test]
     fn test_week_range_span() {
-        let period = UsagePeriod { kind: UsagePeriodKind::Week, offset: 0 };
+        let period = UsagePeriod {
+            kind: UsagePeriodKind::Week,
+            offset: 0,
+        };
         let (start, end) = resolve_date_range(&period);
         let span = (end - start).num_days();
         assert_eq!(span, 6, "week range should span 6 days (Mon-Sun inclusive)");

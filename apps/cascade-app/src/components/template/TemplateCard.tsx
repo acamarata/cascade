@@ -75,7 +75,10 @@ export function TemplateCard({
         <h3 className="truncate text-sm font-medium leading-tight text-foreground">{entry.id}</h3>
         <div className="flex shrink-0 items-center gap-1">
           <span
-            className={['inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide', tierColor].join(' ')}
+            className={[
+              'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+              tierColor,
+            ].join(' ')}
             aria-label={`Tier: ${entry.tier}`}
           >
             {entry.tier}
@@ -86,9 +89,7 @@ export function TemplateCard({
           >
             v{entry.version}
           </span>
-          {upgradeable && upgradeToVersion && (
-            <UpgradeBadge version={upgradeToVersion} />
-          )}
+          {upgradeable && upgradeToVersion && <UpgradeBadge version={upgradeToVersion} />}
         </div>
       </div>
 

@@ -74,7 +74,12 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
 /// regardless of test execution order.
 async fn start_test_server_with_audit(
     tmp: &TempDir,
-) -> (PathBuf, PathBuf, CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (
+    PathBuf,
+    PathBuf,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
@@ -144,8 +149,7 @@ fn privileged_request(method: &str) -> serde_json::Value {
 #[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, audit_path, shutdown, handle) =
-        start_test_server_with_audit(&tmp).await;
+    let (socket_path, audit_path, shutdown, handle) = start_test_server_with_audit(&tmp).await;
 
     let methods = [
         ("gci_write", AuditOp::GciWrite),
@@ -167,10 +171,7 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
     for (method, _expected_op) in &methods {
         let resp = send_request(&mut stream, privileged_request(method)).await;
-        let code = resp
-            .get("code")
-            .and_then(|c| c.as_i64())
-            .unwrap_or(0);
+        let code = resp.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
         assert_eq!(
             code, -32601,
             "method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
@@ -266,11 +267,11 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
         }),
     )
     .await;
-    let code = resp
-        .get("code")
-        .and_then(|c| c.as_i64())
-        .unwrap_or(0);
-    assert_eq!(code, -32601, "unknown method must return -32601, got: {resp}");
+    let code = resp.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+    assert_eq!(
+        code, -32601,
+        "unknown method must return -32601, got: {resp}"
+    );
     drop(stream);
 
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -283,8 +284,7 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
         .filter(|l| !l.trim().is_empty())
         .count();
     assert_eq!(
-        entries_after,
-        entries_before,
+        entries_after, entries_before,
         "unknown non-privileged method must not produce audit entries"
     );
 }

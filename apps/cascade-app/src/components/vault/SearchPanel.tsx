@@ -130,7 +130,7 @@ export function SearchPanel({ root, onOpenNote, open, onClose }: SearchPanelProp
       }
       onClose()
     },
-    [onClose, onOpenNote],
+    [onClose, onOpenNote]
   )
 
   const handleKeyDown = useCallback(
@@ -156,7 +156,7 @@ export function SearchPanel({ root, onOpenNote, open, onClose }: SearchPanelProp
         return
       }
     },
-    [flatResults, onClose, openResult, selectedIdx],
+    [flatResults, onClose, openResult, selectedIdx]
   )
 
   const grouped = groupByFile(results)
@@ -204,7 +204,6 @@ export function SearchPanel({ root, onOpenNote, open, onClose }: SearchPanelProp
           {/* ── Results ───────────────────────────────────────────────────── */}
           <ScrollArea className="max-h-[400px]">
             <div className="p-2" data-testid="search-results">
-
               {/* Error state */}
               {error && (
                 <p className="px-3 py-4 text-center text-sm text-destructive" role="alert">
@@ -229,7 +228,8 @@ export function SearchPanel({ root, onOpenNote, open, onClose }: SearchPanelProp
               )}
 
               {/* Results grouped by file */}
-              {!error && results.length > 0 &&
+              {!error &&
+                results.length > 0 &&
                 Array.from(grouped.entries()).map(([filePath, fileMatches]) => (
                   <div key={filePath} className="mb-2">
                     {/* File heading */}

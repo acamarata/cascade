@@ -41,7 +41,9 @@ function ProjectNodeComponent({ data, selected }: NodeProps) {
 
   function handleOpenFinder() {
     if (path) {
-      open(path).catch(() => {/* ignore shell errors */})
+      open(path).catch(() => {
+        /* ignore shell errors */
+      })
     }
     setPopoverOpen(false)
   }
@@ -73,12 +75,15 @@ function ProjectNodeComponent({ data, selected }: NodeProps) {
         {nodeType}
       </span>
 
-      {/* Popover */}
+      {/* Popover — role="dialog" is interactive per WAI-ARIA; click/keydown stop propagation */}
       {popoverOpen && (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- dialog role is interactive per WAI-ARIA
         <div
-          role="tooltip"
+          role="dialog"
+          aria-label={`Details for ${label}`}
           className="absolute left-full top-0 z-50 ml-2 w-64 rounded-md border border-border bg-card p-3 shadow-lg"
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           <p className="mb-1 text-xs font-semibold text-foreground">{label}</p>
           <p className="mb-2 break-all text-[10px] text-muted-foreground">{path || '(no path)'}</p>

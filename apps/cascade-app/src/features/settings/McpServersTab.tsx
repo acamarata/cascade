@@ -83,10 +83,10 @@ export function McpServersTab({
 }: McpServersTabProps) {
   // Local textarea state per-row index (args and env as display strings).
   const [argsText, setArgsText] = useState<Record<number, string>>(() =>
-    Object.fromEntries(draft.map((srv, i) => [i, argsToText(srv.args)])),
+    Object.fromEntries(draft.map((srv, i) => [i, argsToText(srv.args)]))
   )
   const [envText, setEnvText] = useState<Record<number, string>>(() =>
-    Object.fromEntries(draft.map((srv, i) => [i, envToText(srv.env)])),
+    Object.fromEntries(draft.map((srv, i) => [i, envToText(srv.env)]))
   )
 
   function addRow() {
@@ -113,7 +113,7 @@ export function McpServersTab({
   function updateField<K extends 'name' | 'command' | 'enabled'>(
     idx: number,
     key: K,
-    val: McpServerEntry[K],
+    val: McpServerEntry[K]
   ) {
     const next = [...draft]
     next[idx] = { ...next[idx], [key]: val }

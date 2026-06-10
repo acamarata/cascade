@@ -88,82 +88,160 @@ fn build_table() -> CostTable {
 
     // ── Anthropic ─────────────────────────────────────────────────────────────
     // https://www.anthropic.com/pricing — snapshot 2026-05-31
-    t.insert(("anthropic", "claude-opus-4-8"),       ModelPricing::new(15.0,  75.0));
-    t.insert(("anthropic", "claude-sonnet-4-6"),     ModelPricing::new(3.0,   15.0));
-    t.insert(("anthropic", "claude-haiku-3-5"),      ModelPricing::new(0.8,   4.0));
+    t.insert(
+        ("anthropic", "claude-opus-4-8"),
+        ModelPricing::new(15.0, 75.0),
+    );
+    t.insert(
+        ("anthropic", "claude-sonnet-4-6"),
+        ModelPricing::new(3.0, 15.0),
+    );
+    t.insert(
+        ("anthropic", "claude-haiku-3-5"),
+        ModelPricing::new(0.8, 4.0),
+    );
     // Legacy aliases still in wide use
-    t.insert(("anthropic", "claude-3-5-sonnet-20241022"), ModelPricing::new(3.0,  15.0));
-    t.insert(("anthropic", "claude-3-5-haiku-20241022"),  ModelPricing::new(0.8,   4.0));
-    t.insert(("anthropic", "claude-3-opus-20240229"),     ModelPricing::new(15.0, 75.0));
+    t.insert(
+        ("anthropic", "claude-3-5-sonnet-20241022"),
+        ModelPricing::new(3.0, 15.0),
+    );
+    t.insert(
+        ("anthropic", "claude-3-5-haiku-20241022"),
+        ModelPricing::new(0.8, 4.0),
+    );
+    t.insert(
+        ("anthropic", "claude-3-opus-20240229"),
+        ModelPricing::new(15.0, 75.0),
+    );
 
     // ── OpenAI ────────────────────────────────────────────────────────────────
     // https://openai.com/pricing — snapshot 2026-05-31
-    t.insert(("openai", "gpt-4.1"),           ModelPricing::new(2.0,   8.0));
-    t.insert(("openai", "gpt-4.1-mini"),      ModelPricing::new(0.4,   1.6));
-    t.insert(("openai", "gpt-4o"),            ModelPricing::new(2.5,   10.0));
-    t.insert(("openai", "gpt-4o-mini"),       ModelPricing::new(0.15,  0.6));
-    t.insert(("openai", "o3"),                ModelPricing::new(10.0,  40.0));
-    t.insert(("openai", "o4-mini"),           ModelPricing::new(1.1,   4.4));
+    t.insert(("openai", "gpt-4.1"), ModelPricing::new(2.0, 8.0));
+    t.insert(("openai", "gpt-4.1-mini"), ModelPricing::new(0.4, 1.6));
+    t.insert(("openai", "gpt-4o"), ModelPricing::new(2.5, 10.0));
+    t.insert(("openai", "gpt-4o-mini"), ModelPricing::new(0.15, 0.6));
+    t.insert(("openai", "o3"), ModelPricing::new(10.0, 40.0));
+    t.insert(("openai", "o4-mini"), ModelPricing::new(1.1, 4.4));
 
     // ── Google Gemini ─────────────────────────────────────────────────────────
     // https://ai.google.dev/pricing — snapshot 2026-05-31
-    t.insert(("google-gemini", "gemini-2.5-pro"),          ModelPricing::new(1.25,  10.0));
-    t.insert(("google-gemini", "gemini-2.5-flash"),        ModelPricing::new(0.075,  0.3));
-    t.insert(("google-gemini", "gemini-2.0-flash"),        ModelPricing::new(0.1,    0.4));
-    t.insert(("google-gemini", "gemini-1.5-pro"),          ModelPricing::new(1.25,   5.0));
-    t.insert(("google-gemini", "gemini-1.5-flash"),        ModelPricing::new(0.075,  0.3));
+    t.insert(
+        ("google-gemini", "gemini-2.5-pro"),
+        ModelPricing::new(1.25, 10.0),
+    );
+    t.insert(
+        ("google-gemini", "gemini-2.5-flash"),
+        ModelPricing::new(0.075, 0.3),
+    );
+    t.insert(
+        ("google-gemini", "gemini-2.0-flash"),
+        ModelPricing::new(0.1, 0.4),
+    );
+    t.insert(
+        ("google-gemini", "gemini-1.5-pro"),
+        ModelPricing::new(1.25, 5.0),
+    );
+    t.insert(
+        ("google-gemini", "gemini-1.5-flash"),
+        ModelPricing::new(0.075, 0.3),
+    );
 
     // ── OpenCode (OpenAI-compatible endpoint — pass-through pricing) ──────────
     // OpenCode routes to underlying models; we mirror OpenAI rates.
-    t.insert(("opencode", "gpt-4o"),       ModelPricing::new(2.5,  10.0));
-    t.insert(("opencode", "gpt-4o-mini"),  ModelPricing::new(0.15,  0.6));
-    t.insert(("opencode", "o3"),           ModelPricing::new(10.0, 40.0));
+    t.insert(("opencode", "gpt-4o"), ModelPricing::new(2.5, 10.0));
+    t.insert(("opencode", "gpt-4o-mini"), ModelPricing::new(0.15, 0.6));
+    t.insert(("opencode", "o3"), ModelPricing::new(10.0, 40.0));
 
     // ── OpenRouter ────────────────────────────────────────────────────────────
     // https://openrouter.ai/models — approximate median rates, snapshot 2026-05-31
-    t.insert(("openrouter", "anthropic/claude-sonnet-4-6"),       ModelPricing::new(3.0,  15.0));
-    t.insert(("openrouter", "openai/gpt-4o"),                     ModelPricing::new(2.5,  10.0));
-    t.insert(("openrouter", "google/gemini-2.5-pro"),             ModelPricing::new(1.25, 10.0));
-    t.insert(("openrouter", "meta-llama/llama-3.3-70b-instruct"), ModelPricing::new(0.59,  0.79));
+    t.insert(
+        ("openrouter", "anthropic/claude-sonnet-4-6"),
+        ModelPricing::new(3.0, 15.0),
+    );
+    t.insert(
+        ("openrouter", "openai/gpt-4o"),
+        ModelPricing::new(2.5, 10.0),
+    );
+    t.insert(
+        ("openrouter", "google/gemini-2.5-pro"),
+        ModelPricing::new(1.25, 10.0),
+    );
+    t.insert(
+        ("openrouter", "meta-llama/llama-3.3-70b-instruct"),
+        ModelPricing::new(0.59, 0.79),
+    );
 
     // ── Together AI ───────────────────────────────────────────────────────────
     // https://www.together.ai/pricing — snapshot 2026-05-31
-    t.insert(("together", "meta-llama/Llama-3.3-70B-Instruct-Turbo"), ModelPricing::new(0.88, 0.88));
-    t.insert(("together", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"), ModelPricing::new(0.18, 0.18));
-    t.insert(("together", "mistralai/Mixtral-8x7B-Instruct-v0.1"),        ModelPricing::new(0.6,  0.6));
+    t.insert(
+        ("together", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+        ModelPricing::new(0.88, 0.88),
+    );
+    t.insert(
+        ("together", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"),
+        ModelPricing::new(0.18, 0.18),
+    );
+    t.insert(
+        ("together", "mistralai/Mixtral-8x7B-Instruct-v0.1"),
+        ModelPricing::new(0.6, 0.6),
+    );
 
     // ── Groq ──────────────────────────────────────────────────────────────────
     // https://wow.groq.com/pricing/ — snapshot 2026-05-31
-    t.insert(("groq", "llama-3.3-70b-versatile"),  ModelPricing::new(0.59, 0.79));
-    t.insert(("groq", "llama-3.1-8b-instant"),     ModelPricing::new(0.05, 0.08));
-    t.insert(("groq", "mixtral-8x7b-32768"),        ModelPricing::new(0.24, 0.24));
-    t.insert(("groq", "gemma2-9b-it"),              ModelPricing::new(0.2,  0.2));
+    t.insert(
+        ("groq", "llama-3.3-70b-versatile"),
+        ModelPricing::new(0.59, 0.79),
+    );
+    t.insert(
+        ("groq", "llama-3.1-8b-instant"),
+        ModelPricing::new(0.05, 0.08),
+    );
+    t.insert(
+        ("groq", "mixtral-8x7b-32768"),
+        ModelPricing::new(0.24, 0.24),
+    );
+    t.insert(("groq", "gemma2-9b-it"), ModelPricing::new(0.2, 0.2));
 
     // ── Mistral ───────────────────────────────────────────────────────────────
     // https://mistral.ai/technology/#pricing — snapshot 2026-05-31
-    t.insert(("mistral", "mistral-large-latest"),   ModelPricing::new(2.0,   6.0));
-    t.insert(("mistral", "mistral-small-latest"),   ModelPricing::new(0.1,   0.3));
-    t.insert(("mistral", "codestral-latest"),       ModelPricing::new(0.3,   0.9));
-    t.insert(("mistral", "open-mistral-7b"),        ModelPricing::new(0.25,  0.25));
+    t.insert(
+        ("mistral", "mistral-large-latest"),
+        ModelPricing::new(2.0, 6.0),
+    );
+    t.insert(
+        ("mistral", "mistral-small-latest"),
+        ModelPricing::new(0.1, 0.3),
+    );
+    t.insert(("mistral", "codestral-latest"), ModelPricing::new(0.3, 0.9));
+    t.insert(
+        ("mistral", "open-mistral-7b"),
+        ModelPricing::new(0.25, 0.25),
+    );
 
     // ── DeepSeek ──────────────────────────────────────────────────────────────
     // https://platform.deepseek.com/api-docs/pricing — snapshot 2026-05-31
-    t.insert(("deepseek", "deepseek-chat"),          ModelPricing::new(0.27,  1.1));
-    t.insert(("deepseek", "deepseek-reasoner"),      ModelPricing::new(0.55,  2.19));
-    t.insert(("deepseek", "deepseek-coder"),         ModelPricing::new(0.14,  0.28));
+    t.insert(("deepseek", "deepseek-chat"), ModelPricing::new(0.27, 1.1));
+    t.insert(
+        ("deepseek", "deepseek-reasoner"),
+        ModelPricing::new(0.55, 2.19),
+    );
+    t.insert(
+        ("deepseek", "deepseek-coder"),
+        ModelPricing::new(0.14, 0.28),
+    );
 
     // ── Cohere ────────────────────────────────────────────────────────────────
     // https://cohere.com/pricing — snapshot 2026-05-31
-    t.insert(("cohere", "command-r-plus"),  ModelPricing::new(2.5,  10.0));
-    t.insert(("cohere", "command-r"),       ModelPricing::new(0.15,  0.6));
-    t.insert(("cohere", "command-light"),   ModelPricing::new(0.3,   0.6));
+    t.insert(("cohere", "command-r-plus"), ModelPricing::new(2.5, 10.0));
+    t.insert(("cohere", "command-r"), ModelPricing::new(0.15, 0.6));
+    t.insert(("cohere", "command-light"), ModelPricing::new(0.3, 0.6));
 
     // ── Local / Ollama ────────────────────────────────────────────────────────
     // Local models have no cloud cost; always Some(0.0) via zero-rate entries.
-    t.insert(("ollama", "qwen2.5-coder:7b"),   ModelPricing::new(0.0, 0.0));
-    t.insert(("ollama", "llama3.2:3b"),         ModelPricing::new(0.0, 0.0));
-    t.insert(("ollama", "llama3.1:8b"),         ModelPricing::new(0.0, 0.0));
-    t.insert(("ollama", "codestral:22b"),       ModelPricing::new(0.0, 0.0));
+    t.insert(("ollama", "qwen2.5-coder:7b"), ModelPricing::new(0.0, 0.0));
+    t.insert(("ollama", "llama3.2:3b"), ModelPricing::new(0.0, 0.0));
+    t.insert(("ollama", "llama3.1:8b"), ModelPricing::new(0.0, 0.0));
+    t.insert(("ollama", "codestral:22b"), ModelPricing::new(0.0, 0.0));
 
     t
 }
@@ -316,7 +394,11 @@ mod tests {
 
     #[test]
     fn mistral_large_known_price() {
-        let cost = compute_cost("mistral", "mistral-large-latest", &usage(1_000_000, 1_000_000));
+        let cost = compute_cost(
+            "mistral",
+            "mistral-large-latest",
+            &usage(1_000_000, 1_000_000),
+        );
         let c = cost.expect("mistral-large in table");
         // 1.0 * 2.0 + 1.0 * 6.0 = 8.0
         assert!((c - 8.0).abs() < 1e-9, "expected 8.0, got {c}");
@@ -326,7 +408,11 @@ mod tests {
 
     #[test]
     fn openrouter_sonnet_known_price() {
-        let cost = compute_cost("openrouter", "anthropic/claude-sonnet-4-6", &usage(1000, 500));
+        let cost = compute_cost(
+            "openrouter",
+            "anthropic/claude-sonnet-4-6",
+            &usage(1000, 500),
+        );
         assert!(cost.is_some());
         assert!(cost.unwrap() > 0.0);
     }

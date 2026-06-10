@@ -30,8 +30,27 @@ async function getPlatformType(): Promise<string> {
 }
 
 // Minimal inline alert components until @/components/ui/alert is scaffolded (E-01 follow-up)
-function Alert({ children, className, variant }: { children: React.ReactNode; className?: string; variant?: string }) {
-  return <div role="alert" className={cn('rounded-md border p-4', variant === 'destructive' && 'border-destructive text-destructive', className)}>{children}</div>
+function Alert({
+  children,
+  className,
+  variant,
+}: {
+  children: React.ReactNode
+  className?: string
+  variant?: string
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'rounded-md border p-4',
+        variant === 'destructive' && 'border-destructive text-destructive',
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 function AlertTitle({ children }: { children: React.ReactNode }) {
   return <p className="font-semibold">{children}</p>
@@ -122,7 +141,9 @@ export function DaemonInstallPhase({ className }: DaemonInstallPhaseProps) {
   }
 
   return (
-    <div className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}>
+    <div
+      className={cn('flex h-full flex-col items-center justify-center gap-6 px-8 py-12', className)}
+    >
       {/* Progress indicator */}
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
         {isSuccess ? (

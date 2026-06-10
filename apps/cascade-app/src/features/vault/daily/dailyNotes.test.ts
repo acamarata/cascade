@@ -4,7 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { buildDailyPath, DEFAULT_DAILY_TEMPLATE, openDailyNote } from '../../../services/vault/dailyNotes'
+import {
+  buildDailyPath,
+  DEFAULT_DAILY_TEMPLATE,
+  openDailyNote,
+} from '../../../services/vault/dailyNotes'
 import { applyTemplate, buildTemplateVars } from '../../../services/vault/templates'
 
 // ── buildDailyPath ────────────────────────────────────────────────────────────

@@ -121,20 +121,22 @@ impl CascadeHttpClient {
     ///
     /// Returns the final successful `Response`, or a `ProviderError` if all
     /// retries are exhausted or a non-retryable error is received.
-    async fn send_with_retry(&self, make_req: impl Fn() -> RequestBuilder) -> Result<Response, ProviderError> {
+    async fn send_with_retry(
+        &self,
+        make_req: impl Fn() -> RequestBuilder,
+    ) -> Result<Response, ProviderError> {
         let mut attempt = 0u32;
 
         loop {
-            let response = make_req()
-                .send()
-                .await
-                .map_err(|e| {
-                    if e.is_timeout() {
-                        ProviderError::Timeout { secs: REQUEST_TIMEOUT.as_secs() }
-                    } else {
-                        ProviderError::NetworkError(e.to_string())
+            let response = make_req().send().await.map_err(|e| {
+                if e.is_timeout() {
+                    ProviderError::Timeout {
+                        secs: REQUEST_TIMEOUT.as_secs(),
                     }
-                })?;
+                } else {
+                    ProviderError::NetworkError(e.to_string())
+                }
+            })?;
 
             let status = response.status();
 
@@ -156,8 +158,7 @@ impl CascadeHttpClient {
 
             if (is_rate_limit || is_server_err) && attempt < MAX_RETRIES {
                 let wait = if is_rate_limit {
-                    parse_retry_after(&response)
-                        .unwrap_or_else(|| backoff_duration(attempt))
+                    parse_retry_after(&response).unwrap_or_else(|| backoff_duration(attempt))
                 } else {
                     backoff_duration(attempt)
                 };
@@ -185,7 +186,9 @@ impl CascadeHttpClient {
             // ── Rate-limit exhausted ──────────────────────────────────────────
             if is_rate_limit {
                 let retry_after = parse_retry_after(&response);
-                return Err(ProviderError::RateLimited { retry_after_secs: retry_after.map(|d| d.as_secs()) });
+                return Err(ProviderError::RateLimited {
+                    retry_after_secs: retry_after.map(|d| d.as_secs()),
+                });
             }
 
             // ── Other 4xx ────────────────────────────────────────────────────
@@ -218,8 +221,8 @@ impl CascadeHttpClient {
         R: serde::de::DeserializeOwned,
         F: Fn(RequestBuilder) -> RequestBuilder,
     {
-        let body_bytes = serde_json::to_vec(body)
-            .map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
 
         let response = self
             .send_with_retry(|| {
@@ -277,8 +280,8 @@ impl CascadeHttpClient {
         B: Serialize + Sync,
         F: Fn(RequestBuilder) -> RequestBuilder,
     {
-        let body_bytes = serde_json::to_vec(body)
-            .map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
+        let body_bytes =
+            serde_json::to_vec(body).map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
 
         let response = auth_fn(
             self.inner
@@ -291,7 +294,9 @@ impl CascadeHttpClient {
         .await
         .map_err(|e| {
             if e.is_timeout() {
-                ProviderError::Timeout { secs: REQUEST_TIMEOUT.as_secs() }
+                ProviderError::Timeout {
+                    secs: REQUEST_TIMEOUT.as_secs(),
+                }
             } else {
                 ProviderError::NetworkError(e.to_string())
             }
@@ -308,7 +313,9 @@ impl CascadeHttpClient {
             });
         }
         if status.is_server_error() {
-            return Err(ProviderError::NetworkError(format!("server error HTTP {status}")));
+            return Err(ProviderError::NetworkError(format!(
+                "server error HTTP {status}"
+            )));
         }
         if !status.is_success() {
             return Err(ProviderError::NetworkError(format!("HTTP {status}")));
@@ -411,7 +418,10 @@ mod tests {
 
     #[test]
     fn sse_non_data_line_returns_none() {
-        assert_eq!(CascadeHttpClient::parse_sse_line("event: content_block_delta"), None);
+        assert_eq!(
+            CascadeHttpClient::parse_sse_line("event: content_block_delta"),
+            None
+        );
     }
 
     // ── backoff_duration ──────────────────────────────────────────────────────
@@ -519,18 +529,13 @@ mod tests {
         // Then a 200 with a JSON body.
         Mock::given(method("GET"))
             .and(path("/check"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(json!({"ok": true})),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
             .mount(&server)
             .await;
 
         let client = CascadeHttpClient::new();
         let url = format!("{}/check", server.uri());
-        let result = client
-            .get_json::<serde_json::Value, _>(&url, |b| b)
-            .await;
+        let result = client.get_json::<serde_json::Value, _>(&url, |b| b).await;
 
         assert!(result.is_ok(), "expected Ok after retries, got {result:?}");
         assert_eq!(result.unwrap()["ok"], true);

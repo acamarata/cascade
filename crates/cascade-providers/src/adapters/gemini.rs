@@ -43,7 +43,9 @@ use crate::{
     http_client::CascadeHttpClient,
     oauth::client::{OAuthClient, OAuthProviderConfig},
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -197,16 +199,25 @@ impl GeminiAdapter {
     /// Attempt one OAuth token refresh.  Returns the new access token, or
     /// `Err(OAuthExpired)` if the refresh endpoint also fails.
     async fn refresh_once(&self) -> Result<String, ProviderError> {
-        let oauth_cfg = self.oauth_config.as_ref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
-        })?;
-        let rt = self.refresh_token.as_deref().ok_or_else(|| {
-            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
-        })?;
+        let oauth_cfg = self
+            .oauth_config
+            .as_ref()
+            .ok_or_else(|| ProviderError::OAuthExpired {
+                provider: "gemini".to_owned(),
+            })?;
+        let rt = self
+            .refresh_token
+            .as_deref()
+            .ok_or_else(|| ProviderError::OAuthExpired {
+                provider: "gemini".to_owned(),
+            })?;
         let client = OAuthClient::new(oauth_cfg.clone());
-        let tokens = client.refresh_token(rt).await.map_err(|_| {
-            ProviderError::OAuthExpired { provider: "gemini".to_owned() }
-        })?;
+        let tokens = client
+            .refresh_token(rt)
+            .await
+            .map_err(|_| ProviderError::OAuthExpired {
+                provider: "gemini".to_owned(),
+            })?;
         Ok(tokens.access_token)
     }
 
@@ -314,10 +325,7 @@ impl GeminiAdapter {
 
 #[async_trait]
 impl ProviderAdapter for GeminiAdapter {
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let model = if req.model.is_empty() {
             &self.config.model
         } else {
@@ -325,7 +333,11 @@ impl ProviderAdapter for GeminiAdapter {
         };
 
         let url = self.complete_url(model);
-        debug!(model, url_path = "/v1beta/models/…:generateContent", "gemini complete");
+        debug!(
+            model,
+            url_path = "/v1beta/models/…:generateContent",
+            "gemini complete"
+        );
 
         let wire_req = self.map_request(&req);
 
@@ -345,9 +357,9 @@ impl ProviderAdapter for GeminiAdapter {
                         .post_json(&url, &wire_req, Self::auth_for_token(&new_token))
                         .await
                         .map_err(|e| match e {
-                            ProviderError::AuthFailed(_) => {
-                                ProviderError::OAuthExpired { provider: "gemini".to_owned() }
-                            }
+                            ProviderError::AuthFailed(_) => ProviderError::OAuthExpired {
+                                provider: "gemini".to_owned(),
+                            },
                             other => other,
                         })?
                 }
@@ -362,13 +374,30 @@ impl ProviderAdapter for GeminiAdapter {
                 .unwrap_or_default();
 
             let usage = TokenUsage {
-                prompt_tokens: raw.usage_metadata.as_ref().map(|u| u.prompt_token_count).unwrap_or(0),
-                completion_tokens: raw.usage_metadata.as_ref().map(|u| u.candidates_token_count).unwrap_or(0),
-                total_tokens: raw.usage_metadata.as_ref().map(|u| u.total_token_count).unwrap_or(0),
+                prompt_tokens: raw
+                    .usage_metadata
+                    .as_ref()
+                    .map(|u| u.prompt_token_count)
+                    .unwrap_or(0),
+                completion_tokens: raw
+                    .usage_metadata
+                    .as_ref()
+                    .map(|u| u.candidates_token_count)
+                    .unwrap_or(0),
+                total_tokens: raw
+                    .usage_metadata
+                    .as_ref()
+                    .map(|u| u.total_token_count)
+                    .unwrap_or(0),
             };
             let response_model = raw.model_version.unwrap_or_else(|| model.to_string());
             let cost_usd = compute_cost("google-gemini", &response_model, &usage);
-            return Ok(CompletionResponse { content, model: response_model, usage, cost_usd });
+            return Ok(CompletionResponse {
+                content,
+                model: response_model,
+                usage,
+                cost_usd,
+            });
         }
 
         // ── API-key / proxy mode (existing path) ──────────────────────────────
@@ -385,14 +414,24 @@ impl ProviderAdapter for GeminiAdapter {
             .unwrap_or_default();
 
         let usage = TokenUsage {
-            prompt_tokens: raw.usage_metadata.as_ref().map(|u| u.prompt_token_count).unwrap_or(0),
-            completion_tokens: raw.usage_metadata.as_ref().map(|u| u.candidates_token_count).unwrap_or(0),
-            total_tokens: raw.usage_metadata.as_ref().map(|u| u.total_token_count).unwrap_or(0),
+            prompt_tokens: raw
+                .usage_metadata
+                .as_ref()
+                .map(|u| u.prompt_token_count)
+                .unwrap_or(0),
+            completion_tokens: raw
+                .usage_metadata
+                .as_ref()
+                .map(|u| u.candidates_token_count)
+                .unwrap_or(0),
+            total_tokens: raw
+                .usage_metadata
+                .as_ref()
+                .map(|u| u.total_token_count)
+                .unwrap_or(0),
         };
 
-        let response_model = raw
-            .model_version
-            .unwrap_or_else(|| model.to_string());
+        let response_model = raw.model_version.unwrap_or_else(|| model.to_string());
 
         let cost_usd = compute_cost("google-gemini", &response_model, &usage);
         Ok(CompletionResponse {
@@ -406,10 +445,8 @@ impl ProviderAdapter for GeminiAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let model = if req.model.is_empty() {
             self.config.model.clone()
         } else {
@@ -439,7 +476,9 @@ impl ProviderAdapter for GeminiAdapter {
                 let bytes = match raw_chunk {
                     Ok(b) => b,
                     Err(e) => {
-                        let _ = tx.send(Err(ProviderError::StreamInterrupted(e.to_string()))).await;
+                        let _ = tx
+                            .send(Err(ProviderError::StreamInterrupted(e.to_string())))
+                            .await;
                         return;
                     }
                 };
@@ -447,9 +486,11 @@ impl ProviderAdapter for GeminiAdapter {
                 let text = match std::str::from_utf8(&bytes) {
                     Ok(s) => s.to_string(),
                     Err(_) => {
-                        let _ = tx.send(Err(ProviderError::InvalidResponse(
-                            "non-UTF-8 SSE chunk".to_string(),
-                        ))).await;
+                        let _ = tx
+                            .send(Err(ProviderError::InvalidResponse(
+                                "non-UTF-8 SSE chunk".to_string(),
+                            )))
+                            .await;
                         return;
                     }
                 };
@@ -604,8 +645,8 @@ struct GeminiResponse {
 #[derive(Debug, Deserialize)]
 struct GeminiCandidate {
     content: GeminiContentResponse,
-    #[serde(rename = "finishReason")]
-    finish_reason: Option<String>,
+    // finishReason is present in the wire response but unused in the non-streaming path.
+    // Serde ignores unknown fields by default.
 }
 
 #[derive(Debug, Deserialize)]
@@ -633,9 +674,7 @@ fn parse_gemini_stream_event(payload: &str) -> Result<Option<StreamChunk>, Provi
     let val: serde_json::Value = serde_json::from_str(payload)
         .map_err(|e| ProviderError::InvalidResponse(format!("SSE JSON: {e}")))?;
 
-    let candidate = val
-        .get("candidates")
-        .and_then(|c| c.get(0));
+    let candidate = val.get("candidates").and_then(|c| c.get(0));
 
     let text = candidate
         .and_then(|c| c.get("content"))
@@ -667,7 +706,9 @@ fn parse_gemini_stream_event(payload: &str) -> Result<Option<StreamChunk>, Provi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::test_support::{fixture_json, fixture_text, HttpMethod, MockProviderServer};
+    use crate::test_helpers::test_support::{
+        fixture_json, fixture_text, HttpMethod, MockProviderServer,
+    };
     use crate::types::CompletionRequest;
     use futures::StreamExt;
     use wiremock::matchers::{method, path, query_param};
@@ -682,9 +723,7 @@ mod tests {
         // This mock will FAIL the test if `key` query param is present.
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&server)
             .await;
 
@@ -706,8 +745,8 @@ mod tests {
         );
         // Verify no x-goog-api-key or Authorization header.
         let headers = &received[0].headers;
-        let has_auth = headers.contains_key("x-goog-api-key")
-            || headers.contains_key("authorization");
+        let has_auth =
+            headers.contains_key("x-goog-api-key") || headers.contains_key("authorization");
         assert!(!has_auth, "proxy mode MUST NOT send auth headers");
     }
 
@@ -719,9 +758,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
             .and(query_param("key", "test-api-key"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&server)
             .await;
 
@@ -776,10 +813,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
-            .respond_with(
-                ResponseTemplate::new(429)
-                    .append_header("retry-after", "0"),
-            )
+            .respond_with(ResponseTemplate::new(429).append_header("retry-after", "0"))
             .mount(&server)
             .await;
 
@@ -823,7 +857,10 @@ mod tests {
 
         let ok_chunks: Vec<StreamChunk> = chunks.into_iter().map(|r| r.unwrap()).collect();
         let full_text: String = ok_chunks.iter().map(|c| c.delta.as_str()).collect();
-        assert!(!full_text.is_empty(), "combined delta text must not be empty");
+        assert!(
+            !full_text.is_empty(),
+            "combined delta text must not be empty"
+        );
     }
 
     // ── Streaming proxy mode: no key in URL ───────────────────────────────────
@@ -854,7 +891,10 @@ mod tests {
         let received = ctx.server.received_requests().await.unwrap();
         assert_eq!(received.len(), 1);
         let url = received[0].url.to_string();
-        assert!(!url.contains("key="), "proxy stream MUST NOT include key: {url}");
+        assert!(
+            !url.contains("key="),
+            "proxy stream MUST NOT include key: {url}"
+        );
     }
 
     // ── provider_info contract ────────────────────────────────────────────────
@@ -875,9 +915,18 @@ mod tests {
         let adapter = GeminiAdapter::new(GeminiConfig::direct("dummy"));
         let models = adapter.available_models().await.unwrap();
         let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&"gemini-2.0-flash"), "must include gemini-2.0-flash");
-        assert!(ids.contains(&"gemini-1.5-pro"), "must include gemini-1.5-pro");
-        assert!(ids.contains(&"gemini-1.0-pro"), "must include gemini-1.0-pro");
+        assert!(
+            ids.contains(&"gemini-2.0-flash"),
+            "must include gemini-2.0-flash"
+        );
+        assert!(
+            ids.contains(&"gemini-1.5-pro"),
+            "must include gemini-1.5-pro"
+        );
+        assert!(
+            ids.contains(&"gemini-1.0-pro"),
+            "must include gemini-1.0-pro"
+        );
     }
 
     // ── proxy mode changes base_url ───────────────────────────────────────────
@@ -946,9 +995,7 @@ mod tests {
             .await;
         Mock::given(wm_method("POST"))
             .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&api_server)
             .await;
 
@@ -969,11 +1016,15 @@ mod tests {
             client_secret: String::new(),
             auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_owned(),
             token_url: format!("{}/token", token_server.uri()),
-            scopes: vec!["https://www.googleapis.com/auth/generative-language.retriever".to_owned()],
+            scopes: vec![
+                "https://www.googleapis.com/auth/generative-language.retriever".to_owned(),
+            ],
         };
 
-        let mut config = GeminiConfig::default();
-        config.base_url = api_server.uri();
+        let config = GeminiConfig {
+            base_url: api_server.uri(),
+            ..Default::default()
+        };
 
         let adapter = GeminiAdapter::with_oauth_token(
             config,
@@ -984,7 +1035,11 @@ mod tests {
 
         let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
         let result = adapter.complete(req).await;
-        assert!(result.is_ok(), "expected Ok after refresh+retry, got: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "expected Ok after refresh+retry, got: {:?}",
+            result
+        );
     }
 
     /// Double 401 (refresh also fails): returns OAuthExpired.
@@ -1016,18 +1071,18 @@ mod tests {
             client_secret: String::new(),
             auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_owned(),
             token_url: format!("{}/token", token_server.uri()),
-            scopes: vec!["https://www.googleapis.com/auth/generative-language.retriever".to_owned()],
+            scopes: vec![
+                "https://www.googleapis.com/auth/generative-language.retriever".to_owned(),
+            ],
         };
 
-        let mut config = GeminiConfig::default();
-        config.base_url = api_server.uri();
+        let config = GeminiConfig {
+            base_url: api_server.uri(),
+            ..Default::default()
+        };
 
-        let adapter = GeminiAdapter::with_oauth_token(
-            config,
-            "bad-token",
-            "bad-refresh-token",
-            oauth_cfg,
-        );
+        let adapter =
+            GeminiAdapter::with_oauth_token(config, "bad-token", "bad-refresh-token", oauth_cfg);
 
         let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
         let err = adapter.complete(req).await.unwrap_err();

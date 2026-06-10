@@ -35,14 +35,7 @@
 
 import * as React from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import {
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
-  ChevronRight,
-  FileText,
-  Loader2,
-} from 'lucide-react'
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronRight, FileText, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ToolId, FileKind } from '@/lib/scanner/types'
 import { useWizard } from '@/features/onboarding/WizardContext'
@@ -75,7 +68,7 @@ function Alert({
         'rounded-md border p-4',
         variant === 'destructive' && 'border-destructive/50 text-destructive',
         variant === 'warning' && 'border-yellow-500/50 text-yellow-700 dark:text-yellow-400',
-        className,
+        className
       )}
     >
       {children}
@@ -125,13 +118,13 @@ export function VerifyDiffPhase() {
       tier: 'full',
       format: 'markdown',
     })
-      .then(result => {
+      .then((result) => {
         if (!cancelled) {
           setCascadeContent(result.content)
           setLoadStatus('loaded')
         }
       })
-      .catch(err => {
+      .catch((err) => {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : String(err)
           setLoadError(msg)
@@ -156,11 +149,9 @@ export function VerifyDiffPhase() {
   // Empty / no-merge state detection
   // ---------------------------------------------------------------------------
 
-  const hasMergeData =
-    mergeResult !== null || Object.keys(mergeResults).length > 0
+  const hasMergeData = mergeResult !== null || Object.keys(mergeResults).length > 0
 
-  const hasDetectedTools =
-    detectedToolIds !== null && detectedToolIds.length > 0
+  const hasDetectedTools = detectedToolIds !== null && detectedToolIds.length > 0
 
   // If nothing was scanned or merged, the checklist is irrelevant — skip it.
   const emptyState = !hasMergeData && !hasDetectedTools
@@ -177,7 +168,7 @@ export function VerifyDiffPhase() {
     (_toolId: ToolId, _kind: FileKind) => {
       jumpTo(WizardStep.MergeContent)
     },
-    [jumpTo],
+    [jumpTo]
   )
 
   // ---------------------------------------------------------------------------
@@ -240,9 +231,8 @@ export function VerifyDiffPhase() {
                   <p className="font-medium">Could not read CASCADE.md</p>
                   <p className="mt-1 text-xs opacity-80">{loadError}</p>
                   <p className="mt-2 text-xs">
-                    This is expected if the cascade daemon is not yet running (Phase 2 ships
-                    the daemon). You can still proceed — the checklist below reflects what was
-                    merged.
+                    This is expected if the cascade daemon is not yet running (Phase 2 ships the
+                    daemon). You can still proceed — the checklist below reflects what was merged.
                   </p>
                 </div>
               </div>
@@ -260,8 +250,8 @@ export function VerifyDiffPhase() {
           {loadStatus === 'loaded' && !cascadeContent && (
             <Alert>
               <p className="text-sm text-muted-foreground">
-                No CASCADE.md content found. The file may not have been written yet.
-                Return to the Merge step to generate and approve content.
+                No CASCADE.md content found. The file may not have been written yet. Return to the
+                Merge step to generate and approve content.
               </p>
             </Alert>
           )}
@@ -283,8 +273,8 @@ export function VerifyDiffPhase() {
                 <div>
                   <p className="font-medium text-foreground">No legacy content to verify</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    No tools were scanned and no content was merged. You can proceed directly
-                    to the Archive step.
+                    No tools were scanned and no content was merged. You can proceed directly to the
+                    Archive step.
                   </p>
                 </div>
               </div>
@@ -321,7 +311,7 @@ export function VerifyDiffPhase() {
             'flex items-center gap-1 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             canProceed
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'cursor-not-allowed bg-muted text-muted-foreground',
+              : 'cursor-not-allowed bg-muted text-muted-foreground'
           )}
         >
           Proceed to archive

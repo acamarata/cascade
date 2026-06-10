@@ -26,7 +26,7 @@ import type { MemoryEntry } from '../../types/vault'
 export function filterMemoryEntries(
   entries: MemoryEntry[],
   query: string,
-  project: string,
+  project: string
 ): MemoryEntry[] {
   let result = entries
 
@@ -39,9 +39,7 @@ export function filterMemoryEntries(
   const q = query.trim().toLowerCase()
   if (q) {
     result = result.filter(
-      (e) =>
-        e.title.toLowerCase().includes(q) ||
-        e.excerpt.toLowerCase().includes(q),
+      (e) => e.title.toLowerCase().includes(q) || e.excerpt.toLowerCase().includes(q)
     )
   }
 

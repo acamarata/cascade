@@ -76,7 +76,7 @@ export interface FormErrors {
  * Returns an empty object when all fields are valid.
  */
 export function validateForm(
-  fields: Pick<LibraryItem, 'title' | 'id' | 'content' | 'kind' | 'trigger'>,
+  fields: Pick<LibraryItem, 'title' | 'id' | 'content' | 'kind' | 'trigger'>
 ): FormErrors {
   const errors: FormErrors = {}
 
@@ -141,7 +141,7 @@ function TagInput({ tags, onChange, 'aria-label': ariaLabel }: TagInputProps) {
     <div
       className={cn(
         'flex flex-wrap gap-1 min-h-9 w-full rounded-md border border-input bg-transparent px-3 py-1',
-        'focus-within:ring-1 focus-within:ring-ring',
+        'focus-within:ring-1 focus-within:ring-ring'
       )}
       aria-label={ariaLabel}
     >
@@ -228,7 +228,10 @@ function FormField({ id, label, error, required, children }: FieldProps) {
     <div className="space-y-1">
       <label
         htmlFor={id}
-        className={cn('block text-sm font-medium', required && 'after:content-["*"] after:ml-0.5 after:text-destructive')}
+        className={cn(
+          'block text-sm font-medium',
+          required && 'after:content-["*"] after:ml-0.5 after:text-destructive'
+        )}
       >
         {label}
       </label>
@@ -282,7 +285,12 @@ function buildInitialState(initial?: Partial<LibraryItem>): LibraryItem {
  * upsert_library_item IPC command and reports success via onSaved.
  * Cancel with unsaved changes shows a confirmation dialog.
  */
-export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: LibraryItemFormProps) {
+export function LibraryItemForm({
+  open,
+  onOpenChange,
+  initialItem,
+  onSaved,
+}: LibraryItemFormProps) {
   const [fields, setFields] = useState<LibraryItem>(() => buildInitialState(initialItem))
   const [errors, setErrors] = useState<FormErrors>({})
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = useState(false)
@@ -291,7 +299,12 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
 
   const isEditing = Boolean(initialItem?.id)
 
-  const { mutate, isPending, error: ipcError, reset: resetMutation } = useUpsertLibraryItem({
+  const {
+    mutate,
+    isPending,
+    error: ipcError,
+    reset: resetMutation,
+  } = useUpsertLibraryItem({
     onSuccess: (ack) => {
       const saved: LibraryItem = { ...fields, id: ack.id }
       onSaved?.(saved)
@@ -313,7 +326,7 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
       resetMutation()
       slugEditedRef.current = Boolean(initialItem?.id)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialItem?.id])
 
   // ── Field helpers ──────────────────────────────────────────────────────────
@@ -409,11 +422,12 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
   return (
     <>
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="library-form-description">
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          aria-describedby="library-form-description"
+        >
           <DialogHeader>
-            <DialogTitle>
-              {isEditing ? 'Edit library item' : 'New library item'}
-            </DialogTitle>
+            <DialogTitle>{isEditing ? 'Edit library item' : 'New library item'}</DialogTitle>
             <DialogDescription id="library-form-description">
               {isEditing
                 ? 'Update the fields below and save.'
@@ -423,7 +437,6 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
 
           <form id="library-item-form" onSubmit={handleSubmit} noValidate>
             <div className="space-y-4 py-2">
-
               {/* Kind selector */}
               <FormField id="library-kind" label="Kind" required>
                 <div
@@ -444,7 +457,7 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
                         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                         fields.kind === value
                           ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background text-muted-foreground hover:bg-accent',
+                          : 'border-border bg-background text-muted-foreground hover:bg-accent'
                       )}
                     >
                       {label}
@@ -516,7 +529,7 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
                     'text-sm font-mono shadow-sm placeholder:text-muted-foreground',
                     'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                     'disabled:cursor-not-allowed disabled:opacity-50 resize-y',
-                    errors.content && 'border-destructive',
+                    errors.content && 'border-destructive'
                   )}
                   aria-required="true"
                   aria-invalid={Boolean(errors.content)}
@@ -537,7 +550,7 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
                       'flex w-full rounded-md border border-input bg-transparent px-3 py-2',
                       'text-sm font-mono shadow-sm placeholder:text-muted-foreground',
                       'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                      'resize-y',
+                      'resize-y'
                     )}
                     aria-label="System prompt"
                   />
@@ -597,7 +610,7 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
                         className={cn(
                           'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors',
                           'hover:bg-accent focus-within:ring-1 focus-within:ring-ring',
-                          checked ? 'border-primary bg-primary/10 text-primary' : 'border-border',
+                          checked ? 'border-primary bg-primary/10 text-primary' : 'border-border'
                         )}
                       >
                         <input
@@ -613,7 +626,6 @@ export function LibraryItemForm({ open, onOpenChange, initialItem, onSaved }: Li
                   })}
                 </div>
               </FormField>
-
             </div>
           </form>
 

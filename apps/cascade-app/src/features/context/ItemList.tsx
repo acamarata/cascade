@@ -152,17 +152,14 @@ export function ItemList({ items, onAdd, onRemove }: ItemListProps) {
           No items pinned. Add a file, note, or URL below.
         </p>
       ) : (
-        <ul role="list" className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-1">
           {items.map((item) => (
             <li
               key={item.id}
               className="group flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2"
             >
               <ItemIcon type={item.item_type} />
-              <span
-                className="flex-1 truncate text-sm text-foreground"
-                title={getItemDetail(item)}
-              >
+              <span className="flex-1 truncate text-sm text-foreground" title={getItemDetail(item)}>
                 {getItemLabel(item)}
               </span>
               <button

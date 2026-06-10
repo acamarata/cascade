@@ -121,12 +121,7 @@ mod tests {
         let app: Router = static_router(dist);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -157,6 +152,9 @@ mod tests {
             .await
             .unwrap();
         let text = String::from_utf8_lossy(&body);
-        assert!(text.contains("id=\"root\""), "SPA fallback must return index.html");
+        assert!(
+            text.contains("id=\"root\""),
+            "SPA fallback must return index.html"
+        );
     }
 }

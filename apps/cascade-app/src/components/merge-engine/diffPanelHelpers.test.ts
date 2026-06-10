@@ -25,10 +25,10 @@ function makeSection(overrides: Partial<MergeSection> = {}): MergeSection {
     title: 'Code Quality',
     sourceFiles: [
       {
-        toolId: 'claude-code' as any,
+        toolId: 'claude-code' as const,
         path: '/home/.claude/CLAUDE.md',
         content: '# Rules',
-        kind: 'instructions' as any,
+        kind: 'instructions' as const,
       },
     ],
     proposedContent: '# Code Quality\n\nBe strict.',

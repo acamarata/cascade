@@ -164,10 +164,7 @@ fn global_paths_for(tool_id: &ToolId, home: &Path) -> Vec<PathBuf> {
 /// - Parent directory named `ideas`                     → `Ideas`
 /// - Everything else                                    → `Other`
 fn classify(path: &Path) -> FileKind {
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     let parent_name = path
         .parent()
@@ -176,7 +173,10 @@ fn classify(path: &Path) -> FileKind {
         .unwrap_or("");
 
     // Instruction files by name.
-    if matches!(file_name, "CLAUDE.md" | "AGENTS.md" | "CASCADE.md" | ".cascade") {
+    if matches!(
+        file_name,
+        "CLAUDE.md" | "AGENTS.md" | "CASCADE.md" | ".cascade"
+    ) {
         return FileKind::Instructions;
     }
 
@@ -268,7 +268,7 @@ mod tests {
             ToolId::ClaudeCode,
             ToolId::Opencode,
             ToolId::Codex,
-            ToolId::Cursor,   // not present — should be absent from results
+            ToolId::Cursor, // not present — should be absent from results
             ToolId::Aider,
             ToolId::Windsurf,
             ToolId::Antigravity,
@@ -279,10 +279,16 @@ mod tests {
         // Only 3 tools present
         assert_eq!(result.len(), 3, "expected 3 tools, got {}", result.len());
 
-        let cc = result.iter().find(|h| h.tool_id == ToolId::ClaudeCode).unwrap();
+        let cc = result
+            .iter()
+            .find(|h| h.tool_id == ToolId::ClaudeCode)
+            .unwrap();
         assert_eq!(cc.total_files, 2, "ClaudeCode: expected 2 files");
 
-        let oc = result.iter().find(|h| h.tool_id == ToolId::Opencode).unwrap();
+        let oc = result
+            .iter()
+            .find(|h| h.tool_id == ToolId::Opencode)
+            .unwrap();
         assert_eq!(oc.total_files, 1, "Opencode: expected 1 file");
 
         let cx = result.iter().find(|h| h.tool_id == ToolId::Codex).unwrap();
@@ -378,19 +384,28 @@ mod tests {
     #[test]
     fn classify_instruction_files() {
         let base = PathBuf::from("/fake/.claude");
-        assert_eq!(classify(&base.join("CLAUDE.md")),  FileKind::Instructions);
-        assert_eq!(classify(&base.join("AGENTS.md")),  FileKind::Instructions);
+        assert_eq!(classify(&base.join("CLAUDE.md")), FileKind::Instructions);
+        assert_eq!(classify(&base.join("AGENTS.md")), FileKind::Instructions);
         assert_eq!(classify(&base.join("CASCADE.md")), FileKind::Instructions);
     }
 
     #[test]
     fn classify_by_parent_dir() {
         let base = PathBuf::from("/fake/.claude");
-        assert_eq!(classify(&base.join("memory").join("foo.md")), FileKind::Memory);
-        assert_eq!(classify(&base.join("docs").join("arch.md")),  FileKind::Docs);
-        assert_eq!(classify(&base.join("tasks").join("queue.md")), FileKind::Tasks);
-        assert_eq!(classify(&base.join("ideas").join("idea.md")), FileKind::Ideas);
-        assert_eq!(classify(&base.join("settings.json")),         FileKind::Other);
+        assert_eq!(
+            classify(&base.join("memory").join("foo.md")),
+            FileKind::Memory
+        );
+        assert_eq!(classify(&base.join("docs").join("arch.md")), FileKind::Docs);
+        assert_eq!(
+            classify(&base.join("tasks").join("queue.md")),
+            FileKind::Tasks
+        );
+        assert_eq!(
+            classify(&base.join("ideas").join("idea.md")),
+            FileKind::Ideas
+        );
+        assert_eq!(classify(&base.join("settings.json")), FileKind::Other);
     }
 
     // -----------------------------------------------------------------------
@@ -411,8 +426,7 @@ mod tests {
 
         std::env::set_var("HOME", home.to_str().unwrap());
 
-        let result =
-            scan_global(&[ToolId::ClaudeCode]).expect("scan should succeed");
+        let result = scan_global(&[ToolId::ClaudeCode]).expect("scan should succeed");
 
         std::env::remove_var("HOME");
 

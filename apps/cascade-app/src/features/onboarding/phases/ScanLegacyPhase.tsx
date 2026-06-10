@@ -67,7 +67,11 @@ function mergeHomes(a: LegacyToolHome[], b: LegacyToolHome[]): LegacyToolHome[] 
 // Inline minimal alert (until @/components/ui/alert is scaffolded)
 // ---------------------------------------------------------------------------
 
-function Alert({ children, className, variant }: {
+function Alert({
+  children,
+  className,
+  variant,
+}: {
   children: React.ReactNode
   className?: string
   variant?: 'default' | 'destructive'
@@ -80,7 +84,7 @@ function Alert({ children, className, variant }: {
         variant === 'destructive'
           ? 'border-destructive/50 bg-destructive/10 text-destructive'
           : 'border-border bg-muted/30 text-foreground',
-        className,
+        className
       )}
     >
       {children}
@@ -144,15 +148,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
     setGlobalDone(false)
     try {
       const homes = await invoke<LegacyToolHome[]>('scan_global_homes', {
-        toolIds: [
-          'claude-code',
-          'opencode',
-          'codex',
-          'cursor',
-          'aider',
-          'windsurf',
-          'antigravity',
-        ],
+        toolIds: ['claude-code', 'opencode', 'codex', 'cursor', 'aider', 'windsurf', 'antigravity'],
       })
       setGlobalHomes(homes)
       setGlobalDone(true)
@@ -237,7 +233,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
     })
 
     markComplete(WizardStep.ScanLegacy)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bothDone])
 
   // ---------------------------------------------------------------------------
@@ -271,7 +267,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
               'border border-border text-muted-foreground hover:bg-muted/50',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              'transition-colors',
+              'transition-colors'
             )}
             aria-label="Re-scan global home directories"
           >
@@ -306,8 +302,8 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
       <section aria-label="Dev tree root picker">
         <p className="mb-2 text-sm font-medium text-foreground">Development tree root</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Select the root folder of your development tree. Cascade will scan all
-          subdirectories for per-project AI tool configs.
+          Select the root folder of your development tree. Cascade will scan all subdirectories for
+          per-project AI tool configs.
         </p>
         <div className="flex items-center gap-2">
           <input
@@ -319,7 +315,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
               'flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm',
               'text-foreground placeholder:text-muted-foreground',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              'disabled:cursor-not-allowed disabled:opacity-50',
+              'disabled:cursor-not-allowed disabled:opacity-50'
             )}
             disabled={isScanning}
             aria-label="Dev tree root path"
@@ -333,7 +329,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
               'text-muted-foreground hover:bg-muted/50',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              'transition-colors',
+              'transition-colors'
             )}
             aria-label="Browse for folder"
           >
@@ -349,7 +345,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
               'text-primary-foreground hover:bg-primary/90',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              'transition-colors',
+              'transition-colors'
             )}
             aria-label="Scan dev tree"
           >
@@ -411,9 +407,7 @@ export function ScanLegacyPhase({ className }: ScanLegacyPhaseProps) {
           role="status"
           aria-live="polite"
         >
-          {scanStatus === 'error'
-            ? 'Scan failed. Use Re-scan to retry.'
-            : 'Scan starting…'}
+          {scanStatus === 'error' ? 'Scan failed. Use Re-scan to retry.' : 'Scan starting…'}
         </div>
       )}
     </div>

@@ -17,12 +17,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type {
-  UsageSummary,
-  MonthlyUsage,
-  AccountLedger,
-  UsagePeriod,
-} from '../types/ipc'
+import type { UsageSummary, MonthlyUsage, AccountLedger, UsagePeriod } from '../types/ipc'
 
 // Re-export for backward compatibility with existing consumers.
 export type { UsageSummary, MonthlyUsage, AccountLedger }
@@ -65,10 +60,7 @@ const HISTORY_MONTHS = 6
  * `cascade_usage_ledger` from the daemon on mount and every 60 s.
  * Returns null data (never throws) if the daemon is unavailable.
  */
-export function useUsageData(
-  period: UsagePeriod,
-  accountEmail = '',
-): UseUsageDataResult {
+export function useUsageData(period: UsagePeriod, accountEmail = ''): UseUsageDataResult {
   const [summary, setSummary] = useState<UsageSummary | null>(null)
   const [history, setHistory] = useState<MonthlyUsage[]>([])
   const [ledger, setLedger] = useState<AccountLedger | null>(null)

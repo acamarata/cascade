@@ -125,12 +125,16 @@ export function MarkdownEditor({
   // Ref holding the latest content so the auto-save callback always reads
   // the current value without capturing stale closure state.
   const latestContent = useRef(value)
-  latestContent.current = value
-
   // Ref holding the latest path to avoid the auto-save keybind from capturing
   // stale path values after a file switch.
   const latestPath = useRef(path)
-  latestPath.current = path
+  // Sync refs outside the render phase (react-hooks/refs).
+  useEffect(() => {
+    latestContent.current = value
+  }, [value])
+  useEffect(() => {
+    latestPath.current = path
+  }, [path])
 
   // Debounce timer ref — cleared on unmount to prevent memory leaks.
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -145,6 +149,13 @@ export function MarkdownEditor({
     setIsDirty(false)
   }, [onSave])
 
+  // Stable ref to triggerSave so the CM6 keymap extension never captures a
+  // stale closure — avoids react-hooks/refs violations from useMemo + triggerSave dep chain.
+  const triggerSaveRef = useRef(triggerSave)
+  useEffect(() => {
+    triggerSaveRef.current = triggerSave
+  }, [triggerSave])
+
   // Handle content changes: update dirty state and start/reset the debounce.
   const handleChange = useCallback(
     (newContent: string) => {
@@ -154,7 +165,7 @@ export function MarkdownEditor({
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
       autosaveTimer.current = setTimeout(triggerSave, AUTOSAVE_DELAY_MS)
     },
-    [onChange, triggerSave],
+    [onChange, triggerSave]
   )
 
   // When path changes (different file opened), reset dirty state and any
@@ -177,21 +188,28 @@ export function MarkdownEditor({
   // Cmd+S keymap — wired as a CM6 keymap extension (not a DOM listener) so
   // it composes correctly with CodeMirror's internal focus handling (CR-B).
   // Prec.highest ensures it wins over any other Cmd+S binding in the editor.
-  const saveKeymap = useMemo(
-    () =>
-      Prec.highest(
-        keymap.of([
-          {
-            key: 'Mod-s',
-            run: () => {
-              triggerSave()
-              return true
-            },
+  // The react-hooks/refs rule flags: (a) passing a closure that captures
+  // triggerSaveRef to keymap.of() as "passing a ref to a function during
+  // render", and (b) reading saveKeymapRef.current in the render body.
+  // Both are false positives: the closure only reads .current at keypress time
+  // (not during render), and saveKeymapRef.current is read once to obtain the
+  // stable CM6 Extension value that never changes after first construction.
+  /* eslint-disable react-hooks/refs -- false positive: ref.current read happens at keypress event time, not during render */
+  const saveKeymapRef = useRef(
+    Prec.highest(
+      keymap.of([
+        {
+          key: 'Mod-s',
+          run: () => {
+            triggerSaveRef.current()
+            return true
           },
-        ]),
-      ),
-    [triggerSave],
+        },
+      ])
+    )
   )
+  const saveKeymap = saveKeymapRef.current
+  /* eslint-enable react-hooks/refs */
 
   // Extension list is memoised so it is only rebuilt when theme, readOnly, or
   // wikilink options change — prevents full editor teardown on every parent
@@ -206,12 +224,10 @@ export function MarkdownEditor({
       ...(readOnly ? [EditorView.editable.of(false)] : []),
       ...(!isDark ? [lightTheme] : []),
       // Wikilink support: opt-in by providing both props together
-      ...(noteNamesFn && onNavigate
-        ? wikilinkExtension({ noteNamesFn, onNavigate })
-        : []),
+      ...(noteNamesFn && onNavigate ? wikilinkExtension({ noteNamesFn, onNavigate }) : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isDark, readOnly, saveKeymap, noteNamesFn, onNavigate],
+    [isDark, readOnly, saveKeymap, noteNamesFn, onNavigate]
   )
 
   return (

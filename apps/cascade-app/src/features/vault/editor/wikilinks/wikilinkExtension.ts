@@ -60,8 +60,7 @@ const wikilinkTheme = EditorView.baseTheme({
 function makeWikilinkPlugin(): Extension {
   const decorator = new MatchDecorator({
     regexp: /\[\[([^\][\r\n]+)\]\]/g,
-    decoration: () =>
-      Decoration.mark({ class: 'cm-wikilink', inclusive: false }),
+    decoration: () => Decoration.mark({ class: 'cm-wikilink', inclusive: false }),
   })
 
   return ViewPlugin.fromClass(
@@ -75,7 +74,7 @@ function makeWikilinkPlugin(): Extension {
         this.decorations = decorator.updateDeco(update, this.decorations)
       }
     },
-    { decorations: (v) => v.decorations },
+    { decorations: (v) => v.decorations }
   )
 }
 
@@ -88,7 +87,7 @@ function makeWikilinkPlugin(): Extension {
  * Returns completions when cursor is inside `[[prefix` (not yet closed).
  */
 export function makeWikilinkCompletion(
-  noteNamesFn: () => string[],
+  noteNamesFn: () => string[]
 ): (context: CompletionContext) => CompletionResult | null {
   return (context: CompletionContext): CompletionResult | null => {
     const { state, pos } = context
@@ -142,9 +141,7 @@ function makeInsertWikilinkKeymap(view: EditorView): boolean {
 // Click-to-navigate event handler
 // ---------------------------------------------------------------------------
 
-function makeClickHandler(
-  onNavigate: (noteName: string) => void,
-): Extension {
+function makeClickHandler(onNavigate: (noteName: string) => void): Extension {
   return EditorView.domEventHandlers({
     click(event, view) {
       const target = event.target as HTMLElement

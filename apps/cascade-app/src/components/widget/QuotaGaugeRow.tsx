@@ -31,7 +31,7 @@ export const MODEL_QUOTA_ESTIMATE: Record<string, number> = {
 /** Derive the progress bar width percentage (0–100) and colour class. */
 export function getGaugeState(
   tokensUsed: number,
-  estimate: number | undefined,
+  estimate: number | undefined
 ): { pct: number | null; colorClass: string } {
   if (!estimate || estimate <= 0) {
     // Unknown or local-unlimited model — no percentage possible.
@@ -72,23 +72,17 @@ export interface QuotaGaugeRowProps {
  * Renders model name + token/cost summary + progress bar.
  * Unknown models show "?" in place of a percentage.
  */
-export function QuotaGaugeRow({ model, tokensUsed, costUsd }: QuotaGaugeRowProps): React.ReactElement {
+export function QuotaGaugeRow({
+  model,
+  tokensUsed,
+  costUsd,
+}: QuotaGaugeRowProps): React.ReactElement {
   const estimate = MODEL_QUOTA_ESTIMATE[model]
   const { pct, colorClass } = getGaugeState(tokensUsed, estimate)
 
-  const pctLabel =
-    pct === null
-      ? estimate === 0
-        ? 'local'
-        : '?'
-      : `${Math.round(pct)}%`
+  const pctLabel = pct === null ? (estimate === 0 ? 'local' : '?') : `${Math.round(pct)}%`
 
-  const estimateLabel =
-    estimate == null
-      ? '?'
-      : estimate === 0
-        ? '∞'
-        : formatTokens(estimate)
+  const estimateLabel = estimate == null ? '?' : estimate === 0 ? '∞' : formatTokens(estimate)
 
   return (
     <div className="space-y-1 py-2">

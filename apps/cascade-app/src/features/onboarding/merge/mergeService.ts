@@ -47,8 +47,8 @@ const RETRY_DELAY_MS = 2_000
  */
 function tierLabel(tier: WizardStep): string {
   const labels: Partial<Record<number, string>> = {
-    4: 'global',   // MergeContent = 4
-    5: 'project',  // ToolModes = 5
+    4: 'global', // MergeContent = 4
+    5: 'project', // ToolModes = 5
   }
   return labels[tier as number] ?? `tier-${tier}`
 }
@@ -76,7 +76,7 @@ function tierLabel(tier: WizardStep): string {
 export async function mergeForTier(
   tier: WizardStep,
   sourceFiles: MergeSourceFile[],
-  ctx: ProviderRoutingContext,
+  ctx: ProviderRoutingContext
 ): Promise<MergeResult> {
   const label = tierLabel(tier)
   const { systemPrompt, userPrompt, promptHash } = await buildMergePrompts(label, sourceFiles)
@@ -88,7 +88,7 @@ export async function mergeForTier(
       tier,
       sourceFiles,
       promptHash,
-      'No AI provider available. Connect a provider in the wizard.',
+      'No AI provider available. Connect a provider in the wizard.'
     )
   }
 
@@ -99,7 +99,13 @@ export async function mergeForTier(
   }
 
   // For non-Gemini providers: call directly from TS with retry.
-  return runWithRetry(tier, sourceFiles, provider, { tier, sourceFiles, systemPrompt, userPrompt }, promptHash)
+  return runWithRetry(
+    tier,
+    sourceFiles,
+    provider,
+    { tier, sourceFiles, systemPrompt, userPrompt },
+    promptHash
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +121,7 @@ async function runViaTauri(
   sourceFiles: MergeSourceFile[],
   systemPrompt: string,
   userPrompt: string,
-  promptHash: string,
+  promptHash: string
 ): Promise<MergeResult> {
   try {
     const result = await invoke<MergeResult>('run_ai_merge', {
@@ -139,9 +145,9 @@ async function runViaTauri(
 async function runWithRetry(
   tier: WizardStep,
   sourceFiles: MergeSourceFile[],
-  provider: Awaited<ReturnType<typeof getActiveProvider>> & {},
+  provider: NonNullable<Awaited<ReturnType<typeof getActiveProvider>>>,
   request: MergeRequest,
-  promptHash: string,
+  promptHash: string
 ): Promise<MergeResult> {
   let lastError = ''
 
@@ -170,7 +176,7 @@ async function runWithRetry(
     tier,
     sourceFiles,
     promptHash,
-    `Provider call failed after ${MAX_RETRIES} attempts: ${lastError}`,
+    `Provider call failed after ${MAX_RETRIES} attempts: ${lastError}`
   )
 }
 
@@ -201,7 +207,7 @@ function parseModelText(
   sourceFiles: MergeSourceFile[],
   modelText: string,
   modelUsed: string,
-  promptHash: string,
+  promptHash: string
 ): MergeResult {
   const generatedAt = new Date().toISOString()
 
@@ -261,7 +267,7 @@ function makeParseErrorResult(
   sourceFiles: MergeSourceFile[],
   modelUsed: string,
   promptHash: string,
-  generatedAt: string,
+  generatedAt: string
 ): MergeResult {
   return {
     tier,
@@ -284,7 +290,7 @@ function makeErrorResult(
   tier: WizardStep,
   sourceFiles: MergeSourceFile[],
   promptHash: string,
-  message: string,
+  message: string
 ): MergeResult {
   return {
     tier,
@@ -333,7 +339,7 @@ export async function mergeSection(
   sectionId: string,
   customInstruction: string,
   sourceFiles: MergeSourceFile[],
-  ctx: ProviderRoutingContext,
+  ctx: ProviderRoutingContext
 ): Promise<MergeSection> {
   const label = 'global' // Section re-runs always use the global tier prompt context
   const { systemPrompt, userPrompt, promptHash } = await buildMergePrompts(label, sourceFiles)
@@ -345,7 +351,10 @@ export async function mergeSection(
   const provider = await getActiveProvider(ctx)
 
   if (!provider) {
-    return makeSectionErrorResult(sectionId, 'No AI provider available. Connect a provider in the wizard.')
+    return makeSectionErrorResult(
+      sectionId,
+      'No AI provider available. Connect a provider in the wizard.'
+    )
   }
 
   const request: MergeRequest = {
@@ -361,7 +370,13 @@ export async function mergeSection(
     try {
       const modelText = await provider.call(request)
       // Parse the result and return the first valid section (or a parse-error section)
-      const fullResult = parseModelText(4 as WizardStep, sourceFiles, modelText, provider.name, promptHash)
+      const fullResult = parseModelText(
+        4 as WizardStep,
+        sourceFiles,
+        modelText,
+        provider.name,
+        promptHash
+      )
       const firstSection = fullResult.sections[0]
       if (!firstSection) {
         return makeSectionErrorResult(sectionId, 'AI returned no sections.')
@@ -385,7 +400,10 @@ export async function mergeSection(
     }
   }
 
-  return makeSectionErrorResult(sectionId, `Re-run failed after ${MAX_RETRIES} attempts: ${lastError}`)
+  return makeSectionErrorResult(
+    sectionId,
+    `Re-run failed after ${MAX_RETRIES} attempts: ${lastError}`
+  )
 }
 
 /**

@@ -182,7 +182,11 @@ impl AnthropicAdapter {
                 .map(|m| m.content.as_str())
                 .collect::<Vec<_>>()
                 .join("\n");
-            if sys.is_empty() { None } else { Some(sys) }
+            if sys.is_empty() {
+                None
+            } else {
+                Some(sys)
+            }
         };
 
         // Only user/assistant messages go into the Anthropic messages array.
@@ -214,10 +218,7 @@ impl AnthropicAdapter {
 #[async_trait]
 impl ProviderAdapter for AnthropicAdapter {
     /// Send a blocking completion request to `POST /v1/messages`.
-    async fn complete(
-        &self,
-        req: CompletionRequest,
-    ) -> Result<CompletionResponse, ProviderError> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let url = format!("{}{}", self.base_url, MESSAGES_PATH);
         let body = self.build_request(&req, false);
         let api_key = self.api_key.clone();
@@ -259,10 +260,8 @@ impl ProviderAdapter for AnthropicAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let url = format!("{}{}", self.base_url, MESSAGES_PATH);
         let body = self.build_request(&req, true);
         let api_key = self.api_key.clone();
@@ -307,17 +306,17 @@ impl ProviderAdapter for AnthropicAdapter {
                         Ok(event) => match event.event_type.as_str() {
                             "content_block_delta" => {
                                 if let Some(delta) = event.delta {
-                                    if delta.delta_type == "text_delta" && !delta.text.is_empty() {
-                                        if tx
+                                    if delta.delta_type == "text_delta"
+                                        && !delta.text.is_empty()
+                                        && tx
                                             .send(Ok(StreamChunk {
                                                 delta: delta.text,
                                                 finish_reason: None,
                                             }))
                                             .await
                                             .is_err()
-                                        {
-                                            return;
-                                        }
+                                    {
+                                        return;
                                     }
                                 }
                             }
@@ -448,9 +447,14 @@ mod tests {
         .await;
 
         let adapter = AnthropicAdapter::new_with_base_url("test-key", ctx.base_url());
-        let req =
-            CompletionRequest::simple("claude-3-5-sonnet-20241022", "What is the capital of France?");
-        let resp = adapter.complete(req).await.expect("complete should succeed");
+        let req = CompletionRequest::simple(
+            "claude-3-5-sonnet-20241022",
+            "What is the capital of France?",
+        );
+        let resp = adapter
+            .complete(req)
+            .await
+            .expect("complete should succeed");
 
         assert_completion_contract(&resp.content, &resp.model, resp.usage.prompt_tokens);
         assert!(
@@ -477,11 +481,13 @@ mod tests {
         .await;
 
         let adapter = AnthropicAdapter::new_with_base_url("test-key", ctx.base_url());
-        let mut req =
-            CompletionRequest::simple("claude-3-5-sonnet-20241022", "Hello");
+        let mut req = CompletionRequest::simple("claude-3-5-sonnet-20241022", "Hello");
         req.messages
             .insert(0, crate::types::Message::system("Be concise."));
-        let resp = adapter.complete(req).await.expect("complete should succeed");
+        let resp = adapter
+            .complete(req)
+            .await
+            .expect("complete should succeed");
         assert!(!resp.content.is_empty());
     }
 
@@ -548,8 +554,7 @@ mod tests {
         .await;
 
         let adapter = AnthropicAdapter::new_with_base_url("test-key", ctx.base_url());
-        let req =
-            CompletionRequest::simple("claude-3-5-sonnet-20241022", "What is the capital?");
+        let req = CompletionRequest::simple("claude-3-5-sonnet-20241022", "What is the capital?");
 
         let stream = adapter
             .complete_stream(req)
@@ -573,7 +578,10 @@ mod tests {
             .iter()
             .filter_map(|r| r.as_ref().ok())
             .find(|c| c.finish_reason.is_some());
-        assert!(stop_chunk.is_some(), "expected a stop chunk with finish_reason");
+        assert!(
+            stop_chunk.is_some(),
+            "expected a stop chunk with finish_reason"
+        );
     }
 
     // ── available_models ──────────────────────────────────────────────────────
@@ -581,7 +589,10 @@ mod tests {
     #[tokio::test]
     async fn available_models_returns_four_models() {
         let adapter = AnthropicAdapter::new("test-key");
-        let models = adapter.available_models().await.expect("models should load");
+        let models = adapter
+            .available_models()
+            .await
+            .expect("models should load");
         assert_eq!(models.len(), 4, "expected exactly 4 models");
         assert!(models.iter().all(|m| m.context_window == 200_000));
         assert!(models.iter().all(|m| m.supports_streaming));

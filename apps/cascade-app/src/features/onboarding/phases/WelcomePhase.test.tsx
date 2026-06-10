@@ -59,7 +59,9 @@ describe('WelcomePhase', () => {
 
   it('renders the final message', () => {
     renderComponent()
-    expect(screen.getByText('Every tool reads the same rules. Written once, understood by all.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Every tool reads the same rules. Written once, understood by all.')
+    ).toBeInTheDocument()
   })
 
   it('renders the skip button with accessible label', () => {

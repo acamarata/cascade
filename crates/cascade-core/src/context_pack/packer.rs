@@ -25,6 +25,7 @@
 //!
 //! SPORT: MASTER-COMPONENTS.md — packer module (T-P3-E07-09)
 
+use std::cmp::Reverse;
 use std::fmt::Write as FmtWrite;
 use std::fs;
 use std::io::{Read, Write as IoWrite};
@@ -43,13 +44,7 @@ pub const MAX_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 const BINARY_PROBE_BYTES: usize = 512;
 
 /// Directories always excluded regardless of caller-supplied patterns.
-const BUILT_IN_EXCLUDES: &[&str] = &[
-    "node_modules/",
-    ".git/",
-    "dist/",
-    "target/",
-    ".cache/",
-];
+const BUILT_IN_EXCLUDES: &[&str] = &["node_modules/", ".git/", "dist/", "target/", ".cache/"];
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -125,7 +120,7 @@ pub fn pack_codebase(root: &Path, extra_excludes: &[String]) -> Result<PathBuf, 
     let overhead = entries.len() * 64;
     if total_size + overhead > MAX_OUTPUT_BYTES {
         // Sort descending by size; take top-10.
-        file_sizes.sort_by(|a, b| b.1.cmp(&a.1));
+        file_sizes.sort_by_key(|b| std::cmp::Reverse(b.1));
         let contributors = file_sizes
             .iter()
             .take(10)
@@ -144,7 +139,7 @@ pub fn pack_codebase(root: &Path, extra_excludes: &[String]) -> Result<PathBuf, 
     // Final size check on the actual rendered output.
     if bundle.len() > MAX_OUTPUT_BYTES {
         let mut sorted = file_sizes;
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| Reverse(b.1));
         let contributors = sorted
             .iter()
             .take(10)
@@ -173,12 +168,12 @@ pub fn pack_codebase(root: &Path, extra_excludes: &[String]) -> Result<PathBuf, 
 
 /// Return the user's HOME directory as a `PathBuf`.
 fn home_dir() -> Result<PathBuf, PackError> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| PackError::Io(std::io::Error::new(
+    std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
+        PackError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "HOME environment variable not set",
-        )))
+        ))
+    })
 }
 
 /// Walk `root` using the `ignore` crate (honours `.gitignore`) and return a
@@ -236,10 +231,10 @@ fn collect_entries(root: &Path, extra_excludes: &[String]) -> Result<Vec<PathBuf
 
         // Check caller-supplied glob excludes against relative path string.
         let rel_str = rel.to_string_lossy();
-        if extra_globs
-            .iter()
-            .any(|g| g.matches(&rel_str) || g.matches(rel.file_name().unwrap_or_default().to_str().unwrap_or("")))
-        {
+        if extra_globs.iter().any(|g| {
+            g.matches(&rel_str)
+                || g.matches(rel.file_name().unwrap_or_default().to_str().unwrap_or(""))
+        }) {
             continue;
         }
 
@@ -360,13 +355,22 @@ fn write_tree(out: &mut String, root: &Path, entries: &[PathBuf]) -> Result<(), 
     }
 
     // Print root label.
-    writeln!(out, "{}/", root.file_name().unwrap_or_default().to_string_lossy())?;
+    writeln!(
+        out,
+        "{}/",
+        root.file_name().unwrap_or_default().to_string_lossy()
+    )?;
 
     // Print dirs.
     for dir in &dirs {
         let depth = dir.components().count();
         let indent = "  ".repeat(depth);
-        writeln!(out, "{}{}/", indent, dir.file_name().unwrap_or_default().to_string_lossy())?;
+        writeln!(
+            out,
+            "{}{}/",
+            indent,
+            dir.file_name().unwrap_or_default().to_string_lossy()
+        )?;
     }
 
     // Print files.
@@ -374,7 +378,12 @@ fn write_tree(out: &mut String, root: &Path, entries: &[PathBuf]) -> Result<(), 
         if let Ok(rel) = path.strip_prefix(root) {
             let depth = rel.components().count(); // file itself counts as one component
             let indent = "  ".repeat(depth.saturating_sub(1) + 1);
-            writeln!(out, "{}{}", indent, rel.file_name().unwrap_or_default().to_string_lossy())?;
+            writeln!(
+                out,
+                "{}{}",
+                indent,
+                rel.file_name().unwrap_or_default().to_string_lossy()
+            )?;
         }
     }
 
@@ -392,7 +401,7 @@ mod tests {
 
     /// Create a small fixture repo and verify the bundle output.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_pack_small_fixture() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -413,9 +422,18 @@ mod tests {
         // Verify tree header present.
         assert!(content.contains("CASCADE CODEBASE PACK"), "missing header");
         // Verify file sections present.
-        assert!(content.contains("=== main.rs ==="), "missing main.rs section");
-        assert!(content.contains("=== README.md ==="), "missing README.md section");
-        assert!(content.contains("=== subdir/hello.rs ==="), "missing subdir/hello.rs section");
+        assert!(
+            content.contains("=== main.rs ==="),
+            "missing main.rs section"
+        );
+        assert!(
+            content.contains("=== README.md ==="),
+            "missing README.md section"
+        );
+        assert!(
+            content.contains("=== subdir/hello.rs ==="),
+            "missing subdir/hello.rs section"
+        );
         // Verify content included.
         assert!(content.contains("fn main()"), "missing file content");
 
@@ -425,7 +443,7 @@ mod tests {
 
     /// Binary files must be excluded from the bundle.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_binary_file_excluded() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -439,8 +457,14 @@ mod tests {
         let out_path = pack_codebase(root, &[]).expect("pack should succeed");
         let content = fs::read_to_string(&out_path).unwrap();
 
-        assert!(content.contains("=== text.txt ==="), "text file should be present");
-        assert!(!content.contains("=== image.png ==="), "binary file should be absent");
+        assert!(
+            content.contains("=== text.txt ==="),
+            "text file should be present"
+        );
+        assert!(
+            !content.contains("=== image.png ==="),
+            "binary file should be absent"
+        );
 
         fs::remove_file(&out_path).unwrap();
         unsafe { std::env::remove_var("HOME") };
@@ -448,7 +472,7 @@ mod tests {
 
     /// Files in node_modules/ and .git/ must be excluded.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_built_in_excludes() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -464,9 +488,15 @@ mod tests {
         let out_path = pack_codebase(root, &[]).expect("pack should succeed");
         let content = fs::read_to_string(&out_path).unwrap();
 
-        assert!(!content.contains("node_modules"), "node_modules should be excluded");
+        assert!(
+            !content.contains("node_modules"),
+            "node_modules should be excluded"
+        );
         assert!(!content.contains("HEAD"), "git HEAD should be excluded");
-        assert!(content.contains("=== app.ts ==="), "app.ts should be present");
+        assert!(
+            content.contains("=== app.ts ==="),
+            "app.ts should be present"
+        );
 
         fs::remove_file(&out_path).unwrap();
         unsafe { std::env::remove_var("HOME") };
@@ -474,7 +504,7 @@ mod tests {
 
     /// A directory producing > 2 MB output must return TooLarge with file list.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_size_cap_returns_error_with_contributors() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -490,12 +520,18 @@ mod tests {
         let result = pack_codebase(root, &[]);
         match result {
             Err(PackError::TooLarge { contributors }) => {
-                assert!(!contributors.is_empty(), "contributors list must not be empty");
+                assert!(
+                    !contributors.is_empty(),
+                    "contributors list must not be empty"
+                );
                 // At least one file name should appear.
                 let has_file = contributors.contains("a.txt")
                     || contributors.contains("b.txt")
                     || contributors.contains("c.txt");
-                assert!(has_file, "contributors should name at least one file: {contributors}");
+                assert!(
+                    has_file,
+                    "contributors should name at least one file: {contributors}"
+                );
             }
             Ok(_) => panic!("expected TooLarge error"),
             Err(e) => panic!("unexpected error: {e}"),
@@ -506,7 +542,7 @@ mod tests {
 
     /// Extra excludes supplied by the caller must be respected.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_extra_excludes_respected() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -519,8 +555,14 @@ mod tests {
         let out_path = pack_codebase(root, &["*.log".to_string()]).expect("pack should succeed");
         let content = fs::read_to_string(&out_path).unwrap();
 
-        assert!(content.contains("=== keep.rs ==="), "keep.rs should be present");
-        assert!(!content.contains("skip.log"), "skip.log should be excluded by extra pattern");
+        assert!(
+            content.contains("=== keep.rs ==="),
+            "keep.rs should be present"
+        );
+        assert!(
+            !content.contains("skip.log"),
+            "skip.log should be excluded by extra pattern"
+        );
 
         fs::remove_file(&out_path).unwrap();
         unsafe { std::env::remove_var("HOME") };
@@ -528,7 +570,7 @@ mod tests {
 
     /// Paths outside HOME must be rejected.
     #[test]
-    #[serial]
+    #[serial(global_env)]
     fn test_traversal_rejected_outside_home() {
         let tmp = TempDir::new().unwrap();
         let outside = tmp.path();

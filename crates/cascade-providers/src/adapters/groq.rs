@@ -36,7 +36,9 @@ use crate::{
     error::ProviderError,
     http_client::CascadeHttpClient,
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
-    types::{CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage},
+    types::{
+        CompletionRequest, CompletionResponse, MessageRole, ModelInfo, StreamChunk, TokenUsage,
+    },
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -233,10 +235,8 @@ impl ProviderAdapter for GroqAdapter {
     async fn complete_stream(
         &self,
         req: CompletionRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
-        ProviderError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>>, ProviderError>
+    {
         let body = Self::build_request(&req, true);
         let url = self.completions_url();
         let key = self.api_key.clone();
@@ -354,15 +354,16 @@ mod tests {
         .await;
 
         let adapter = GroqAdapter::with_base_url(ctx.base_url(), "gsk-test-key");
-        let req = CompletionRequest::simple(
-            "llama-3.1-70b-versatile",
-            "What is the capital of France?",
-        );
+        let req =
+            CompletionRequest::simple("llama-3.1-70b-versatile", "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("complete failed");
 
         assert!(!resp.content.is_empty(), "content must not be empty");
         assert!(!resp.model.is_empty(), "model must not be empty");
-        assert!(resp.usage.prompt_tokens > 0, "prompt_tokens must be positive");
+        assert!(
+            resp.usage.prompt_tokens > 0,
+            "prompt_tokens must be positive"
+        );
     }
 
     #[tokio::test]
@@ -446,14 +447,32 @@ mod tests {
         );
 
         // Verify context windows match spec.
-        let llama70 = models.iter().find(|m| m.id == "llama-3.1-70b-versatile").unwrap();
-        assert_eq!(llama70.context_window, 128_000, "llama-70b context_window mismatch");
+        let llama70 = models
+            .iter()
+            .find(|m| m.id == "llama-3.1-70b-versatile")
+            .unwrap();
+        assert_eq!(
+            llama70.context_window, 128_000,
+            "llama-70b context_window mismatch"
+        );
 
-        let llama8 = models.iter().find(|m| m.id == "llama-3.1-8b-instant").unwrap();
-        assert_eq!(llama8.context_window, 128_000, "llama-8b context_window mismatch");
+        let llama8 = models
+            .iter()
+            .find(|m| m.id == "llama-3.1-8b-instant")
+            .unwrap();
+        assert_eq!(
+            llama8.context_window, 128_000,
+            "llama-8b context_window mismatch"
+        );
 
-        let mixtral = models.iter().find(|m| m.id == "mixtral-8x7b-32768").unwrap();
-        assert_eq!(mixtral.context_window, 32_768, "mixtral context_window mismatch");
+        let mixtral = models
+            .iter()
+            .find(|m| m.id == "mixtral-8x7b-32768")
+            .unwrap();
+        assert_eq!(
+            mixtral.context_window, 32_768,
+            "mixtral context_window mismatch"
+        );
 
         let gemma = models.iter().find(|m| m.id == "gemma2-9b-it").unwrap();
         assert_eq!(gemma.context_window, 8_192, "gemma context_window mismatch");

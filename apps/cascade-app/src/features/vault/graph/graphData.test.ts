@@ -137,11 +137,7 @@ describe('buildNameIndex', () => {
 // ── buildGraphData ────────────────────────────────────────────────────────────
 
 describe('buildGraphData', () => {
-  const paths = [
-    '/vault/A.md',
-    '/vault/B.md',
-    '/vault/C.md',
-  ]
+  const paths = ['/vault/A.md', '/vault/B.md', '/vault/C.md']
 
   it('returns empty arrays for empty paths', () => {
     const { nodes, edges } = buildGraphData({ paths: [] })
@@ -210,9 +206,7 @@ describe('buildGraphData', () => {
   })
 
   it('uses edgesSource when provided (linkIndex seam)', () => {
-    const edgesSource = new Map([
-      ['/vault/A.md', ['/vault/B.md', '/vault/C.md']],
-    ])
+    const edgesSource = new Map([['/vault/A.md', ['/vault/B.md', '/vault/C.md']]])
     const { edges, nodes } = buildGraphData({ paths, edgesSource })
     expect(edges).toHaveLength(2)
     const bNode = nodes.find((n) => n.id === '/vault/B.md')
@@ -228,7 +222,7 @@ describe('buildGraphData', () => {
         p,
         // Each note links to the next 3 notes (circular within bounds)
         Array.from({ length: 3 }, (_, j) => `[[note${(i + j + 1) % 500}]]`).join(' '),
-      ]),
+      ])
     )
     const start = Date.now()
     const { nodes, edges } = buildGraphData({ paths: largePaths, contentMap })
@@ -259,7 +253,10 @@ describe('buildGraphDataFromTree', () => {
   })
 
   it('produces edges from contentMap', () => {
-    const contentMap = new Map([['/v/A.md', '[[B]]'], ['/v/B.md', '']])
+    const contentMap = new Map([
+      ['/v/A.md', '[[B]]'],
+      ['/v/B.md', ''],
+    ])
     const { edges } = buildGraphDataFromTree(tree, contentMap)
     expect(edges).toHaveLength(1)
   })

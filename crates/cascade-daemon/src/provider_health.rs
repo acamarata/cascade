@@ -278,6 +278,9 @@ mod tests {
 
         let map = state.read().await;
         // After multiple sweeps, the entry should still be present (cache not cleared).
-        assert!(map.contains_key("noop-refresh"), "cache preserved across sweeps");
+        assert!(
+            map.contains_key("noop-refresh"),
+            "cache preserved across sweeps"
+        );
     }
 }

@@ -172,7 +172,11 @@ export function WelcomePhase({ className }: WelcomePhaseProps) {
       {/* Cascade Tiers Visualization */}
       <div className="relative w-full max-w-sm">
         {/* SVG for connecting line */}
-        <svg className="absolute left-1/2 top-0 h-full w-8 -translate-x-1/2" viewBox="0 0 32 400" preserveAspectRatio="none">
+        <svg
+          className="absolute left-1/2 top-0 h-full w-8 -translate-x-1/2"
+          viewBox="0 0 32 400"
+          preserveAspectRatio="none"
+        >
           <line
             className="welcome-line"
             x1="16"

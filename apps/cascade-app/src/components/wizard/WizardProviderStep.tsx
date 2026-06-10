@@ -341,8 +341,16 @@ export function WizardProviderStep() {
       const msg = err instanceof Error ? err.message : String(err)
       setStatuses((prev) => ({ ...prev, [id]: 'error' }))
       if (msg.includes('timeout') || msg.includes('Timeout')) {
-        setErrors((prev) => ({ ...prev, [id]: 'Connection timed out. Check your network and try again.' }))
-      } else if (msg.includes('denied') || msg.includes('Denied') || msg.includes('unauthorized') || msg.includes('Unauthorized')) {
+        setErrors((prev) => ({
+          ...prev,
+          [id]: 'Connection timed out. Check your network and try again.',
+        }))
+      } else if (
+        msg.includes('denied') ||
+        msg.includes('Denied') ||
+        msg.includes('unauthorized') ||
+        msg.includes('Unauthorized')
+      ) {
         setErrors((prev) => ({ ...prev, [id]: 'Invalid API key or authorization denied.' }))
       } else if (msg.includes('not found') || msg.includes('No such command')) {
         // IPC stub absent — treat as connected for wizard progress (graceful fallback)
@@ -377,8 +385,8 @@ export function WizardProviderStep() {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Connect an AI provider</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Cascade uses AI to merge your tool configurations in the next step.
-          Connect at least one provider to unlock the full setup experience.
+          Cascade uses AI to merge your tool configurations in the next step. Connect at least one
+          provider to unlock the full setup experience.
         </p>
       </div>
 
@@ -402,11 +410,7 @@ export function WizardProviderStep() {
       )}
 
       {/* Provider grid — 2x2 */}
-      <div
-        role="list"
-        aria-label="AI provider options"
-        className="grid gap-3 sm:grid-cols-2"
-      >
+      <div role="list" aria-label="AI provider options" className="grid gap-3 sm:grid-cols-2">
         {PROVIDERS.map((provider) => (
           <div key={provider.id} role="listitem">
             <ProviderQuickCard
@@ -445,7 +449,8 @@ export function WizardProviderStep() {
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            AI features will be unavailable until a provider is connected. You can add one later in Settings.
+            AI features will be unavailable until a provider is connected. You can add one later in
+            Settings.
           </span>
         </div>
       )}
@@ -471,7 +476,11 @@ export function WizardProviderStep() {
           <button
             type="button"
             onClick={handleSkip}
-            aria-label={showSkipWarning ? 'Confirm skip — continue without a provider' : 'Skip this step and configure AI provider later'}
+            aria-label={
+              showSkipWarning
+                ? 'Confirm skip — continue without a provider'
+                : 'Skip this step and configure AI provider later'
+            }
             className={cn(
               'inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium',
               'text-muted-foreground',

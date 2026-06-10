@@ -74,6 +74,55 @@ interface GoogleKeysProps {
   onChange: (keys: string[]) => void
 }
 
+interface GoogleKeyRowProps {
+  idx: number
+  value: string
+  onUpdate: (idx: number, val: string) => void
+  onRemove: (idx: number) => void
+}
+
+/** Single Google API key row — isolated component so useState is at component scope. */
+function GoogleKeyRow({ idx, value, onUpdate, onRemove }: GoogleKeyRowProps) {
+  const [vis, setVis] = useState(false)
+  const inputId = `google-key-${idx}`
+  return (
+    <div className="flex gap-2">
+      <Input
+        id={inputId}
+        type={vis ? 'text' : 'password'}
+        value={value}
+        placeholder={`Google key ${idx + 1}…`}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(e) => onUpdate(idx, e.target.value)}
+        aria-label={`Google API key ${idx + 1}`}
+        className="flex-1 font-mono text-xs"
+      />
+      <button
+        type="button"
+        aria-pressed={vis}
+        aria-label={`${vis ? 'Hide' : 'Show'} Google key ${idx + 1}`}
+        onClick={() => setVis((v) => !v)}
+        className="flex items-center justify-center h-9 w-9 rounded-md border border-input bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        {vis ? (
+          <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        )}
+      </button>
+      <button
+        type="button"
+        aria-label={`Remove Google key ${idx + 1}`}
+        onClick={() => onRemove(idx)}
+        className="flex items-center justify-center h-9 w-9 rounded-md border border-destructive/40 bg-transparent hover:bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 function GoogleKeyList({ keys, onChange }: GoogleKeysProps) {
   function update(idx: number, val: string) {
     const next = [...keys]
@@ -92,46 +141,9 @@ function GoogleKeyList({ keys, onChange }: GoogleKeysProps) {
   return (
     <div className="space-y-1.5">
       <span className="block text-sm font-medium">Google API Keys</span>
-      {keys.map((k, idx) => {
-        const [vis, setVis] = useState(false)
-        const inputId = `google-key-${idx}`
-        return (
-          <div key={idx} className="flex gap-2">
-            <Input
-              id={inputId}
-              type={vis ? 'text' : 'password'}
-              value={k}
-              placeholder={`Google key ${idx + 1}…`}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => update(idx, e.target.value)}
-              aria-label={`Google API key ${idx + 1}`}
-              className="flex-1 font-mono text-xs"
-            />
-            <button
-              type="button"
-              aria-pressed={vis}
-              aria-label={`${vis ? 'Hide' : 'Show'} Google key ${idx + 1}`}
-              onClick={() => setVis((v) => !v)}
-              className="flex items-center justify-center h-9 w-9 rounded-md border border-input bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {vis ? (
-                <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              ) : (
-                <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              type="button"
-              aria-label={`Remove Google key ${idx + 1}`}
-              onClick={() => removeRow(idx)}
-              className="flex items-center justify-center h-9 w-9 rounded-md border border-destructive/40 bg-transparent hover:bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        )
-      })}
+      {keys.map((k, idx) => (
+        <GoogleKeyRow key={idx} idx={idx} value={k} onUpdate={update} onRemove={removeRow} />
+      ))}
       <Button type="button" variant="outline" size="sm" onClick={addRow} className="mt-1">
         <Plus className="h-4 w-4 mr-1.5" aria-hidden="true" />
         Add Google key

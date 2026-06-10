@@ -38,16 +38,16 @@ mod supervisor;
 mod telemetry;
 mod tray;
 
+use cascade_core::providers_store::read_providers_store;
+use cascade_providers::ProviderRegistry;
+use secrecy::SecretString;
 use std::collections::HashMap;
 use std::process;
-use std::sync::Arc;
 use std::sync::mpsc;
-use secrecy::SecretString;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
-use cascade_core::providers_store::read_providers_store;
-use cascade_providers::ProviderRegistry;
 
 #[tokio::main]
 async fn main() {
@@ -118,10 +118,7 @@ async fn main() {
                     .collect()
             })
             .unwrap_or_default();
-        gemini_slots
-            .into_iter()
-            .zip(raw_keys.into_iter())
-            .collect()
+        gemini_slots.into_iter().zip(raw_keys.into_iter()).collect()
     };
 
     // First-start advisory: if keys are still only in vault.env, nudge the user
@@ -367,12 +364,10 @@ async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
     use cascade_providers::adapters::ollama::OllamaAdapter;
 
     match OllamaAdapter::try_detect().await {
-        Some(adapter) => {
-            match registry.register("ollama".to_owned(), Arc::new(adapter)) {
-                Ok(()) => info!("Ollama detected and registered as provider \"ollama\""),
-                Err(e) => warn!(error = %e, "Ollama detected but registration failed"),
-            }
-        }
+        Some(adapter) => match registry.register("ollama".to_owned(), Arc::new(adapter)) {
+            Ok(()) => info!("Ollama detected and registered as provider \"ollama\""),
+            Err(e) => warn!(error = %e, "Ollama detected but registration failed"),
+        },
         None => {
             info!("Ollama not detected on localhost:11434 (skipping registration)");
         }

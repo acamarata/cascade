@@ -54,10 +54,7 @@ pub fn opencode_oauth_config(client_id: &str) -> OAuthProviderConfig {
         client_secret: String::new(),
         auth_url: OPENCODE_AUTH_URL.to_owned(),
         token_url: OPENCODE_TOKEN_URL.to_owned(),
-        scopes: vec![
-            "api:read".to_owned(),
-            "api:write".to_owned(),
-        ],
+        scopes: vec!["api:read".to_owned(), "api:write".to_owned()],
     }
 }
 
@@ -77,14 +74,23 @@ mod tests {
         assert_eq!(cfg.auth_url, OPENCODE_AUTH_URL);
         assert_eq!(cfg.token_url, OPENCODE_TOKEN_URL);
         assert_eq!(cfg.client_id, "oc-client");
-        assert!(cfg.client_secret.is_empty(), "public client must have empty secret");
+        assert!(
+            cfg.client_secret.is_empty(),
+            "public client must have empty secret"
+        );
     }
 
     #[test]
     fn opencode_oauth_config_scopes() {
         let cfg = opencode_oauth_config("cid");
-        assert!(cfg.scopes.contains(&"api:read".to_owned()), "missing api:read scope");
-        assert!(cfg.scopes.contains(&"api:write".to_owned()), "missing api:write scope");
+        assert!(
+            cfg.scopes.contains(&"api:read".to_owned()),
+            "missing api:read scope"
+        );
+        assert!(
+            cfg.scopes.contains(&"api:write".to_owned()),
+            "missing api:write scope"
+        );
         assert_eq!(cfg.scopes.len(), 2);
     }
 

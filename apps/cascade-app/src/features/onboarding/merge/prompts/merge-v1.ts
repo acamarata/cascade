@@ -127,7 +127,7 @@ export function buildUserPrompt(tier: string, sourceFiles: MergeSourceFile[]): s
  */
 export async function buildMergePrompts(
   tier: string,
-  sourceFiles: MergeSourceFile[],
+  sourceFiles: MergeSourceFile[]
 ): Promise<{ systemPrompt: string; userPrompt: string; promptHash: string }> {
   const systemPrompt = buildSystemPrompt(tier)
   const userPrompt = buildUserPrompt(tier, sourceFiles)

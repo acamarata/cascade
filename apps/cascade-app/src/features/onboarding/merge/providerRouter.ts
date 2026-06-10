@@ -58,8 +58,7 @@ export interface ProviderRoutingContext {
 // ---------------------------------------------------------------------------
 
 const GEMINI_HEALTH_URL = 'http://127.0.0.1:3761/health'
-const GEMINI_GENERATE_URL =
-  'http://127.0.0.1:3761/v1beta/models/gemini-2.0-flash:generateContent'
+const GEMINI_GENERATE_URL = 'http://127.0.0.1:3761/v1beta/models/gemini-2.0-flash:generateContent'
 const GEMINI_MODEL_ID = 'gemini-2.0-flash'
 const HEALTH_TIMEOUT_MS = 800
 
@@ -103,8 +102,7 @@ function makeGeminiPoolProvider(): Provider {
         }>
       }
 
-      const text =
-        json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       return text
     },
   }
@@ -119,9 +117,7 @@ function makeAnthropicProvider(_apiKey: string): Provider {
   return {
     name: 'claude-3-5-sonnet',
     async call(_request: MergeRequest): Promise<string> {
-      throw new Error(
-        'Anthropic provider not yet implemented. Connect via E-04 OAuth flow.',
-      )
+      throw new Error('Anthropic provider not yet implemented. Connect via E-04 OAuth flow.')
     },
   }
 }
@@ -131,9 +127,7 @@ function makeOpenAIProvider(_apiKey: string): Provider {
   return {
     name: 'gpt-4o',
     async call(_request: MergeRequest): Promise<string> {
-      throw new Error(
-        'OpenAI provider not yet implemented. Connect via E-04 OAuth flow.',
-      )
+      throw new Error('OpenAI provider not yet implemented. Connect via E-04 OAuth flow.')
     },
   }
 }
@@ -144,7 +138,7 @@ function makeLocalProvider(): Provider {
     name: 'local-model',
     async call(_request: MergeRequest): Promise<string> {
       throw new Error(
-        'Local model provider not yet implemented. E-04 will implement the Tauri command.',
+        'Local model provider not yet implemented. E-04 will implement the Tauri command.'
       )
     },
   }
@@ -162,9 +156,7 @@ function makeLocalProvider(): Provider {
  *
  * @param ctx - Minimal wizard state needed for routing.
  */
-export async function getActiveProvider(
-  ctx: ProviderRoutingContext,
-): Promise<Provider | null> {
+export async function getActiveProvider(ctx: ProviderRoutingContext): Promise<Provider | null> {
   if (!ctx.providerConnected) {
     return null
   }

@@ -112,10 +112,7 @@ export function FrontmatterPanel({ content, className = '' }: FrontmatterPanelPr
               <td className="w-28 shrink-0 py-0.5 pr-3 font-mono text-muted-foreground group-hover:text-foreground">
                 {key}
               </td>
-              <td
-                className="py-0.5 text-foreground"
-                data-testid={`frontmatter-value-${key}`}
-              >
+              <td className="py-0.5 text-foreground" data-testid={`frontmatter-value-${key}`}>
                 {formatFrontmatterValue(data[key])}
               </td>
             </tr>

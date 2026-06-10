@@ -18,7 +18,9 @@ import '@testing-library/jest-dom'
 // ---------------------------------------------------------------------------
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue({ id: 'test-slug', path: '/test/.cascade/library/test-slug.yaml' }),
+  invoke: vi
+    .fn()
+    .mockResolvedValue({ id: 'test-slug', path: '/test/.cascade/library/test-slug.yaml' }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -144,7 +146,7 @@ describe('validateForm — slug pattern', () => {
 describe('validateForm — slash-command kind', () => {
   it('requires trigger when kind is slash-command', () => {
     const errors = validateForm(
-      buildItem({ title: 'T', id: 'slug', content: 'body', kind: 'slash-command', trigger: '' }),
+      buildItem({ title: 'T', id: 'slug', content: 'body', kind: 'slash-command', trigger: '' })
     )
     expect(errors.trigger).toBeTruthy()
   })
@@ -157,7 +159,7 @@ describe('validateForm — slash-command kind', () => {
         content: 'body',
         kind: 'slash-command',
         trigger: '/summarize',
-      }),
+      })
     )
     expect(errors.trigger).toBeUndefined()
   })
@@ -165,7 +167,7 @@ describe('validateForm — slash-command kind', () => {
   it('does not require trigger for non-slash-command kinds', () => {
     for (const kind of ['prompt', 'agent', 'persona'] as const) {
       const errors = validateForm(
-        buildItem({ title: 'T', id: 'slug', content: 'body', kind, trigger: undefined }),
+        buildItem({ title: 'T', id: 'slug', content: 'body', kind, trigger: undefined })
       )
       expect(errors.trigger).toBeUndefined()
     }
@@ -182,13 +184,7 @@ describe('LibraryItemForm — kind-specific fields', () => {
   })
 
   function renderForm(kind: LibraryItem['kind']) {
-    return render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind }}
-      />,
-    )
+    return render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind }} />)
   }
 
   it('does NOT render system_prompt textarea for prompt kind', () => {
@@ -230,13 +226,7 @@ describe('LibraryItemForm — kind-specific fields', () => {
 describe('LibraryItemForm — slug auto-generation', () => {
   it('auto-generates slug from title when slug has not been manually edited', async () => {
     const user = userEvent.setup()
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     const titleInput = screen.getByLabelText(/title/i) as HTMLInputElement
     await user.type(titleInput, 'My Test Prompt')
     const slugInput = screen.getByLabelText(/id \/ slug/i) as HTMLInputElement
@@ -245,13 +235,7 @@ describe('LibraryItemForm — slug auto-generation', () => {
 
   it('stops auto-generating slug after manual slug edit', async () => {
     const user = userEvent.setup()
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     const slugInput = screen.getByLabelText(/id \/ slug/i) as HTMLInputElement
     await user.clear(slugInput)
     await user.type(slugInput, 'custom-slug')
@@ -269,13 +253,7 @@ describe('LibraryItemForm — slug auto-generation', () => {
 describe('LibraryItemForm — validation on submit', () => {
   it('shows title error when submitting with empty title', async () => {
     const user = userEvent.setup()
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     const submitButton = screen.getByRole('button', { name: /create item/i })
     await user.click(submitButton)
     expect(screen.getByText(/title is required/i)).toBeInTheDocument()
@@ -283,13 +261,7 @@ describe('LibraryItemForm — validation on submit', () => {
 
   it('shows content error when submitting without content', async () => {
     const user = userEvent.setup()
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     const titleInput = screen.getByLabelText(/title/i)
     await user.type(titleInput, 'My title')
     const submitButton = screen.getByRole('button', { name: /create item/i })
@@ -304,24 +276,12 @@ describe('LibraryItemForm — validation on submit', () => {
 
 describe('LibraryItemForm — edit vs create mode', () => {
   it('shows "Edit library item" title when editing an existing item', () => {
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={buildItem()}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={buildItem()} />)
     expect(screen.getByText('Edit library item')).toBeInTheDocument()
   })
 
   it('shows "New library item" title for a new item', () => {
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     expect(screen.getByText('New library item')).toBeInTheDocument()
   })
 })
@@ -333,13 +293,7 @@ describe('LibraryItemForm — edit vs create mode', () => {
 describe('LibraryItemForm — dirty-state confirmation', () => {
   it('shows discard confirmation when cancelling with unsaved changes', async () => {
     const user = userEvent.setup()
-    render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={vi.fn()}
-        initialItem={{ kind: 'prompt' }}
-      />,
-    )
+    render(<LibraryItemForm open={true} onOpenChange={vi.fn()} initialItem={{ kind: 'prompt' }} />)
     const titleInput = screen.getByLabelText(/title/i)
     await user.type(titleInput, 'Changed title')
     const cancelButton = screen.getByRole('button', { name: /cancel/i })
@@ -351,11 +305,7 @@ describe('LibraryItemForm — dirty-state confirmation', () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
     render(
-      <LibraryItemForm
-        open={true}
-        onOpenChange={onOpenChange}
-        initialItem={{ kind: 'prompt' }}
-      />,
+      <LibraryItemForm open={true} onOpenChange={onOpenChange} initialItem={{ kind: 'prompt' }} />
     )
     const cancelButton = screen.getByRole('button', { name: /cancel/i })
     await user.click(cancelButton)

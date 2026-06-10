@@ -80,7 +80,10 @@ fn extract_stamps(content: &str) -> Vec<(String, String)> {
             continue;
         }
         // Extract id="..." and version="..."
-        if let (Some(id), Some(ver)) = (extract_attr(trimmed, "id"), extract_attr(trimmed, "version")) {
+        if let (Some(id), Some(ver)) = (
+            extract_attr(trimmed, "id"),
+            extract_attr(trimmed, "version"),
+        ) {
             stamps.push((id, ver));
         }
     }
@@ -179,9 +182,7 @@ impl TemplateEngine {
         let root = opts
             .root
             .clone()
-            .or_else(|| {
-                std::env::var_os("HOME").map(PathBuf::from)
-            })
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
             .ok_or_else(|| CascadeError::Other("HOME not set and no root provided".into()))?;
 
         let canonical_target = canonical_path(target_path);
@@ -323,11 +324,7 @@ impl TemplateEngine {
     /// ## SPORT
     ///
     /// Registered under `cascade-core::templates` (T-P3-E05-10).
-    pub fn diff_sections(
-        &self,
-        record: &TemplateRecord,
-        target_path: &Path,
-    ) -> Result<DiffResult> {
+    pub fn diff_sections(&self, record: &TemplateRecord, target_path: &Path) -> Result<DiffResult> {
         let target_content = if target_path.exists() {
             std::fs::read_to_string(target_path).map_err(|e| {
                 CascadeError::Other(format!("read target {}: {}", target_path.display(), e))
@@ -366,7 +363,11 @@ impl TemplateEngine {
             }
         }
 
-        Ok(DiffResult { added, conflicts, matching })
+        Ok(DiffResult {
+            added,
+            conflicts,
+            matching,
+        })
     }
 
     /// Upgrade `target_path` from `old_record` to `new_record`.
@@ -523,13 +524,7 @@ impl TemplateEngine {
             // Replace old stamp with new stamp, or append if missing.
             let old_id = &old_record.manifest.id;
             let old_version = &old_record.manifest.version;
-            content = replace_or_append_stamp(
-                &content,
-                old_id,
-                old_version,
-                new_id,
-                new_version,
-            );
+            content = replace_or_append_stamp(&content, old_id, old_version, new_id, new_version);
 
             atomic_write(target_path, &content)?;
         }
@@ -539,7 +534,11 @@ impl TemplateEngine {
             .filter(|h| target_secs.contains_key(h.as_str()))
             .collect();
 
-        Ok(UpgradeResult { upgraded, added, deprecated })
+        Ok(UpgradeResult {
+            upgraded,
+            added,
+            deprecated,
+        })
     }
 
     /// Convenience wrapper: reads the current stamp from `target_path` to find
@@ -587,7 +586,13 @@ impl TemplateEngine {
         let mut old_record_versioned = old_record.clone();
         old_record_versioned.manifest.version = current_version;
 
-        self.upgrade(&old_record_versioned, new_record, target_path, dry_run, root)
+        self.upgrade(
+            &old_record_versioned,
+            new_record,
+            target_path,
+            dry_run,
+            root,
+        )
     }
 }
 
@@ -710,15 +715,13 @@ fn heading_level_of(line: &str) -> usize {
 fn atomic_write(path: &Path, content: &str) -> Result<()> {
     // Ensure parent directory exists.
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            CascadeError::Other(format!("create dirs {}: {}", parent.display(), e))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| CascadeError::Other(format!("create dirs {}: {}", parent.display(), e)))?;
     }
 
     let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, content).map_err(|e| {
-        CascadeError::Other(format!("write tmp {}: {}", tmp_path.display(), e))
-    })?;
+    std::fs::write(&tmp_path, content)
+        .map_err(|e| CascadeError::Other(format!("write tmp {}: {}", tmp_path.display(), e)))?;
     std::fs::rename(&tmp_path, path).map_err(|e| {
         CascadeError::Other(format!(
             "rename {} -> {}: {}",
@@ -813,18 +816,16 @@ fn canonical_path(p: &Path) -> PathBuf {
                 }
                 return result;
             }
-            Err(_) => {
-                match current.file_name() {
-                    Some(name) => {
-                        parts.push(name.to_owned());
-                        match current.parent() {
-                            Some(parent) => current = parent.to_path_buf(),
-                            None => break,
-                        }
+            Err(_) => match current.file_name() {
+                Some(name) => {
+                    parts.push(name.to_owned());
+                    match current.parent() {
+                        Some(parent) => current = parent.to_path_buf(),
+                        None => break,
                     }
-                    None => break,
                 }
-            }
+                None => break,
+            },
         }
     }
     p.to_path_buf()
@@ -948,7 +949,11 @@ mod tests {
 
         // Second apply — must be a no-op.
         let r2 = engine.apply(&record, &target, &opts).unwrap();
-        assert!(r2.applied.is_empty(), "second apply should be no-op: {:?}", r2.applied);
+        assert!(
+            r2.applied.is_empty(),
+            "second apply should be no-op: {:?}",
+            r2.applied
+        );
         assert!(r2.conflicts.is_empty());
         assert!(r2.skipped.is_empty());
     }
@@ -993,11 +998,17 @@ mod tests {
         let opts = force_opts_with_root(&tmp);
         let result = engine.apply(&record, &target, &opts).unwrap();
 
-        assert!(result.applied.contains(&"## Rules".to_string()), "force should mark as applied");
+        assert!(
+            result.applied.contains(&"## Rules".to_string()),
+            "force should mark as applied"
+        );
         assert!(result.conflicts.is_empty());
 
         let after = fs::read_to_string(&target).unwrap();
-        assert!(after.contains("New rules content."), "forced content should appear");
+        assert!(
+            after.contains("New rules content."),
+            "forced content should appear"
+        );
     }
 
     // ── Test: dry-run does not modify file ────────────────────────────────────
@@ -1021,8 +1032,14 @@ mod tests {
 
         // File must be unchanged.
         let after = fs::read_to_string(&target).unwrap();
-        assert!(!after.contains("New content."), "dry-run must not write file");
-        assert!(after.contains("Original."), "original content preserved in dry-run");
+        assert!(
+            !after.contains("New content."),
+            "dry-run must not write file"
+        );
+        assert!(
+            after.contains("Original."),
+            "original content preserved in dry-run"
+        );
     }
 
     // ── Test: dry-run returns plan ────────────────────────────────────────────
@@ -1041,7 +1058,9 @@ mod tests {
         let result = engine.apply(&record, &target, &opts).unwrap();
 
         assert!(result.applied.contains(&"## New Section".to_string()));
-        assert!(result.conflicts.contains(&"## Existing Section".to_string()));
+        assert!(result
+            .conflicts
+            .contains(&"## Existing Section".to_string()));
     }
 
     // ── Test: provenance record (stamp) ───────────────────────────────────────
@@ -1106,8 +1125,14 @@ mod tests {
         engine.apply(&record, &target, &opts).unwrap();
 
         let after = fs::read_to_string(&target).unwrap();
-        assert!(after.contains("keep this"), "existing section must be preserved");
-        assert!(after.contains("new content"), "new section must be appended");
+        assert!(
+            after.contains("keep this"),
+            "existing section must be preserved"
+        );
+        assert!(
+            after.contains("new content"),
+            "new section must be appended"
+        );
     }
 
     // ── Test: diff alias matches dry_run apply ────────────────────────────────
@@ -1219,12 +1244,21 @@ mod tests {
             let result = engine
                 .upgrade(&old, &new_r, &target, false, Some(tmp.path().to_path_buf()))
                 .unwrap();
-            assert!(result.upgraded.contains(&"## Rules".to_string()), "Rules must be in upgraded");
+            assert!(
+                result.upgraded.contains(&"## Rules".to_string()),
+                "Rules must be in upgraded"
+            );
             assert!(result.added.is_empty());
 
             let content = fs::read_to_string(&target).unwrap();
-            assert!(content.contains("new rules"), "target must have new content");
-            assert!(content.contains(r#"version="1.1.0""#), "stamp must be updated");
+            assert!(
+                content.contains("new rules"),
+                "target must have new content"
+            );
+            assert!(
+                content.contains(r#"version="1.1.0""#),
+                "stamp must be updated"
+            );
         }
 
         // T-10-E: upgrade removed section → deprecation comment added to target
@@ -1235,19 +1269,18 @@ mod tests {
             let engine = TemplateEngine::new();
 
             let old = make_versioned_record(
-                "gci-default", "1.0.0",
+                "gci-default",
+                "1.0.0",
                 "## Rules\nrules\n## OldSection\nold stuff\n",
             );
-            let new_r = make_versioned_record(
-                "gci-default", "1.1.0",
-                "## Rules\nrules\n",
-            );
+            let new_r = make_versioned_record("gci-default", "1.1.0", "## Rules\nrules\n");
             let target = tmp.path().join("CASCADE.md");
             let stamp = make_stamp("gci-default", "1.0.0", "2026-01-01T00:00:00Z");
             fs::write(
                 &target,
                 format!("## Rules\nrules\n## OldSection\nold stuff\n\n{}\n", stamp),
-            ).unwrap();
+            )
+            .unwrap();
 
             let result = engine
                 .upgrade(&old, &new_r, &target, false, Some(tmp.path().to_path_buf()))
@@ -1255,8 +1288,14 @@ mod tests {
             assert!(result.deprecated.contains(&"## OldSection".to_string()));
 
             let content = fs::read_to_string(&target).unwrap();
-            assert!(content.contains("cascade:deprecated"), "deprecation comment must appear");
-            assert!(content.contains("old stuff"), "old content must be preserved");
+            assert!(
+                content.contains("cascade:deprecated"),
+                "deprecation comment must appear"
+            );
+            assert!(
+                content.contains("old stuff"),
+                "old content must be preserved"
+            );
         }
 
         // T-10-F: upgrade dry-run does not modify file

@@ -59,13 +59,12 @@ pub use error::ProviderError;
 pub use provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo, TaskType};
 pub use registry::{ProviderRegistry, RoutingTable};
 pub use types::{
-    CompletionRequest, CompletionResponse, Message, MessageRole, ModelInfo, StreamChunk,
-    TokenUsage,
+    CompletionRequest, CompletionResponse, Message, MessageRole, ModelInfo, StreamChunk, TokenUsage,
 };
 
 // E-03 exports — auto_auth types live in cascade-types; re-export for convenience.
-pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, ImportResult};
 pub use auto_auth_import::scan_all;
+pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, ImportResult};
 
 pub use google_oauth::{validate_gemini_key, GoogleOAuthClient, GoogleToken};
 pub use google_provision::{GoogleProvisionClient, ProvisionError};

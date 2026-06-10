@@ -25,8 +25,7 @@ export function filterBySearch(items: LibraryItem[], query: string): LibraryItem
   const q = query.trim().toLowerCase()
   if (!q) return items
   return items.filter(
-    (item) =>
-      item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
+    (item) => item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)
   )
 }
 
@@ -65,7 +64,7 @@ export function uniqueTags(items: LibraryItem[]): string[] {
 export function applyFilters(
   items: LibraryItem[],
   searchQuery: string,
-  selectedTags: string[],
+  selectedTags: string[]
 ): LibraryItem[] {
   return filterByTags(filterBySearch(items, searchQuery), selectedTags)
 }

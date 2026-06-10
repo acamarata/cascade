@@ -2,6 +2,7 @@
 name = "cascade-app"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.85"
 # Tauri requires this specific crate structure — do not add to workspace members.
 # cascade-core is consumed here as a path dep, not published to crates.io.
 
@@ -59,9 +60,3 @@ chrono     = { version = "0.4", features = ["serde"] }
 tempfile    = "3"
 serial_test = "3"
 
-[profile.release]
-panic   = "abort"
-codegen-units = 1
-lto     = true
-strip   = true
-opt-level = "s"

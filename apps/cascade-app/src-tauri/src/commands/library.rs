@@ -165,11 +165,11 @@ pub async fn inject_library_item(
     let item = get_item(&root, &item_type, &id).map_err(|e| e.to_string())?;
 
     // Parse the harness target
-    let target =
-        InjectionTarget::from_str(&harness).ok_or_else(|| format!("unknown harness '{harness}'; expected 'cc', 'oc', or 'codex'"))?;
+    let target = InjectionTarget::from_ipc_str(&harness)
+        .ok_or_else(|| format!("unknown harness '{harness}'; expected 'cc', 'oc', or 'codex'"))?;
 
-    let outcome = inject_item(&item, target, &home, dry_run.unwrap_or(false))
-        .map_err(|e| e.to_string())?;
+    let outcome =
+        inject_item(&item, target, &home, dry_run.unwrap_or(false)).map_err(|e| e.to_string())?;
 
     use cascade_core::library::inject::InjectionOutcome;
     Ok(match outcome {

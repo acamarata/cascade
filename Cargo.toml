@@ -19,6 +19,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
+rust-version = "1.85"
 license = "MIT"
 authors = ["Aric Camarata"]
 repository = "https://github.com/acamarata/cascade"
@@ -43,3 +44,11 @@ rusqlite    = { version = "0.31", features = ["bundled"] }
 wasmtime    = "22"
 chrono      = { version = "0.4", features = ["serde"] }
 uuid        = { version = "1", features = ["v4", "serde"] }
+
+# Release profile (moved from src-tauri — cargo only honors profiles at the workspace root)
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+strip = true
+opt-level = "s"

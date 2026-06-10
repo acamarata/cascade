@@ -105,10 +105,7 @@ export function TemplatePickerCompact({
       if (filter.stack && !e.stacks.includes(filter.stack)) return false
       if (filter.search) {
         const q = filter.search.toLowerCase()
-        if (
-          !e.id.toLowerCase().includes(q) &&
-          !e.description.toLowerCase().includes(q)
-        ) {
+        if (!e.id.toLowerCase().includes(q) && !e.description.toLowerCase().includes(q)) {
           return false
         }
       }
@@ -128,11 +125,7 @@ export function TemplatePickerCompact({
 
   if (isLoading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading templates"
-        className="flex flex-col gap-2"
-      >
+      <div aria-busy="true" aria-label="Loading templates" className="flex flex-col gap-2">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
@@ -152,8 +145,7 @@ export function TemplatePickerCompact({
         role="alert"
         className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
       >
-        <span className="font-medium">Could not load templates:</span>{' '}
-        {loadError}
+        <span className="font-medium">Could not load templates:</span> {loadError}
       </div>
     )
   }
@@ -199,9 +191,7 @@ export function TemplatePickerCompact({
         <select
           id="tpc-tier"
           value={filter.tier}
-          onChange={(e) =>
-            setFilter((f) => ({ ...f, tier: e.target.value as TemplateTier | '' }))
-          }
+          onChange={(e) => setFilter((f) => ({ ...f, tier: e.target.value as TemplateTier | '' }))}
           aria-label="Filter by tier"
           className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         >
@@ -217,9 +207,7 @@ export function TemplatePickerCompact({
           <select
             id="tpc-stack"
             value={filter.stack}
-            onChange={(e) =>
-              setFilter((f) => ({ ...f, stack: e.target.value }))
-            }
+            onChange={(e) => setFilter((f) => ({ ...f, stack: e.target.value }))}
             aria-label="Filter by stack tag"
             className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
@@ -255,10 +243,7 @@ export function TemplatePickerCompact({
           filtered.map((entry) => (
             <div key={entry.id} className="relative">
               {/* Checkbox overlay — appears top-left over TemplateCard */}
-              <label
-                htmlFor={`tpc-check-${entry.id}`}
-                className="sr-only"
-              >
+              <label htmlFor={`tpc-check-${entry.id}`} className="sr-only">
                 {`Select ${entry.id}`}
               </label>
               <input

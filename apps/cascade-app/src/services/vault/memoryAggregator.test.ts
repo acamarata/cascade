@@ -58,7 +58,13 @@ All JS packages must use pnpm. npm/yarn are never used.
 
 Second paragraph of lesson (not in excerpt).
 `
-    const entries = parseHeadingSections(content, '/home/user/proj', '/home/user/proj/.claude/memory/decisions.md', 'decisions', 1000)
+    const entries = parseHeadingSections(
+      content,
+      '/home/user/proj',
+      '/home/user/proj/.claude/memory/decisions.md',
+      'decisions',
+      1000
+    )
 
     expect(entries).toHaveLength(2)
 
@@ -73,12 +79,16 @@ Second paragraph of lesson (not in excerpt).
   })
 
   it('returns empty array for an empty file', () => {
-    expect(parseHeadingSections('', '/p', '/p/.claude/memory/decisions.md', 'decisions', 0)).toEqual([])
+    expect(
+      parseHeadingSections('', '/p', '/p/.claude/memory/decisions.md', 'decisions', 0)
+    ).toEqual([])
   })
 
   it('returns empty array for a file with no ## headings', () => {
     const content = 'Just some text\nwith no headings at all.\n'
-    expect(parseHeadingSections(content, '/p', '/p/.claude/memory/decisions.md', 'decisions', 0)).toEqual([])
+    expect(
+      parseHeadingSections(content, '/p', '/p/.claude/memory/decisions.md', 'decisions', 0)
+    ).toEqual([])
   })
 
   it('returns "No excerpt" when heading section body is empty', () => {
@@ -116,7 +126,12 @@ Second paragraph of lesson (not in excerpt).
 
 describe('parseIdeaFile', () => {
   it('uses the filename stem as title', () => {
-    const entry = parseIdeaFile('Some idea text.', '/proj', '/proj/.claude/ideas/my-great-idea.md', 500)
+    const entry = parseIdeaFile(
+      'Some idea text.',
+      '/proj',
+      '/proj/.claude/ideas/my-great-idea.md',
+      500
+    )
     expect(entry.title).toBe('my great idea')
     expect(entry.type).toBe('ideas')
     expect(entry.mtime).toBe(500)
@@ -203,27 +218,27 @@ describe('buildMemoryIndex', () => {
     // Write memory files.
     await fs.writeFile(
       path.join(root, '.claude', 'memory', 'decisions.md'),
-      '## Decision A\n\nWe decided X.\n\n## Decision B\n\nWe decided Y.\n',
+      '## Decision A\n\nWe decided X.\n\n## Decision B\n\nWe decided Y.\n'
     )
     await fs.writeFile(
       path.join(root, '.claude', 'memory', 'lessons.md'),
-      '## Lesson 1\n\nDo not use npm.\n',
+      '## Lesson 1\n\nDo not use npm.\n'
     )
     await fs.writeFile(
       path.join(root, '.claude', 'memory', 'patterns.md'),
-      '## Pattern Alpha\n\nAlways DRY.\n',
+      '## Pattern Alpha\n\nAlways DRY.\n'
     )
 
     // Write an idea.
     await fs.writeFile(
       path.join(root, '.claude', 'ideas', 'cool-feature.md'),
-      'First line of idea.\nSecond line.\n',
+      'First line of idea.\nSecond line.\n'
     )
 
     // Write an inbox message.
     await fs.writeFile(
       path.join(root, '.claude', 'inbox', 'msg-001.md'),
-      'Subject: Consider upgrading\n\nPlease upgrade the dependency.\n',
+      'Subject: Consider upgrading\n\nPlease upgrade the dependency.\n'
     )
 
     const entries = await buildMemoryIndex([root])
@@ -259,7 +274,7 @@ describe('buildMemoryIndex', () => {
     // (simulates an unreadable/malformed entry — the dir won't be read as text).
     await fs.writeFile(
       path.join(root, '.claude', 'memory', 'lessons.md'),
-      '## Good Lesson\n\nContent here.\n',
+      '## Good Lesson\n\nContent here.\n'
     )
     // Create a sub-directory as an "idea" so readTextFile will fail on it.
     await fs.mkdir(path.join(root, '.claude', 'ideas', 'not-a-file.md'), { recursive: true })
@@ -276,10 +291,7 @@ describe('buildMemoryIndex', () => {
     // Set HOME somewhere that root is outside of.
     process.env.HOME = '/some/other/path'
 
-    await fs.writeFile(
-      path.join(root, '.claude', 'memory', 'decisions.md'),
-      '## D\n\nBody.\n',
-    )
+    await fs.writeFile(path.join(root, '.claude', 'memory', 'decisions.md'), '## D\n\nBody.\n')
 
     const entries = await buildMemoryIndex([root])
     expect(entries).toEqual([])

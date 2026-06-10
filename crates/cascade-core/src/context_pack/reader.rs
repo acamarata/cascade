@@ -54,11 +54,7 @@ pub fn list_contexts(contexts_dir: &Path) -> Result<Vec<ContextMeta>> {
         let raw = match std::fs::read_to_string(&path) {
             Ok(s) => s,
             Err(e) => {
-                warn!(
-                    "context_pack: failed to read {}: {}",
-                    path.display(),
-                    e
-                );
+                warn!("context_pack: failed to read {}: {}", path.display(), e);
                 continue;
             }
         };
@@ -66,11 +62,7 @@ pub fn list_contexts(contexts_dir: &Path) -> Result<Vec<ContextMeta>> {
         let session: ContextSession = match serde_yaml::from_str(&raw) {
             Ok(s) => s,
             Err(e) => {
-                warn!(
-                    "context_pack: malformed YAML at {}: {}",
-                    path.display(),
-                    e
-                );
+                warn!("context_pack: malformed YAML at {}: {}", path.display(), e);
                 continue;
             }
         };
@@ -99,10 +91,7 @@ pub fn list_contexts(contexts_dir: &Path) -> Result<Vec<ContextMeta>> {
 pub fn get_context(contexts_dir: &Path, id: &str) -> Result<ContextSession> {
     let path = contexts_dir.join(format!("{}.yaml", id));
     if !path.exists() {
-        return Err(CascadeError::Other(format!(
-            "context not found: {}",
-            id
-        )));
+        return Err(CascadeError::Other(format!("context not found: {}", id)));
     }
 
     let raw = std::fs::read_to_string(&path)

@@ -41,14 +41,15 @@ interface ProviderCardProps {
  * @param pending - Disables UI during in-flight async op
  */
 export function ProviderCard({ item, onTest, onRemove, pending = false }: ProviderCardProps) {
-  const authMethodLabel = item.authMethod === 'api_key' ? 'API Key' : item.authMethod === 'oauth' ? 'OAuth' : 'No Auth'
+  const authMethodLabel =
+    item.authMethod === 'api_key' ? 'API Key' : item.authMethod === 'oauth' ? 'OAuth' : 'No Auth'
 
   return (
     <article
       aria-label={`${item.name} provider`}
       className={cn(
         'flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 gap-4 transition-opacity',
-        pending && 'opacity-70',
+        pending && 'opacity-70'
       )}
     >
       {/* Left: name + meta */}
@@ -60,7 +61,9 @@ export function ProviderCard({ item, onTest, onRemove, pending = false }: Provid
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>{authMethodLabel}</span>
           <span aria-hidden="true">·</span>
-          <span aria-label={`Today's cost: ${item.todayCostUsd !== undefined ? `$${item.todayCostUsd.toFixed(4)}` : 'unavailable'}`}>
+          <span
+            aria-label={`Today's cost: ${item.todayCostUsd !== undefined ? `$${item.todayCostUsd.toFixed(4)}` : 'unavailable'}`}
+          >
             {item.todayCostUsd !== undefined ? `$${item.todayCostUsd.toFixed(4)} today` : '—'}
           </span>
         </div>
@@ -73,13 +76,12 @@ export function ProviderCard({ item, onTest, onRemove, pending = false }: Provid
 
       {/* Right: pending spinner or actions */}
       {pending ? (
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-label="Working…" />
-      ) : (
-        <ProviderActionsMenu
-          providerId={item.id}
-          onTestConnection={onTest}
-          onRemove={onRemove}
+        <Loader2
+          className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+          aria-label="Working…"
         />
+      ) : (
+        <ProviderActionsMenu providerId={item.id} onTestConnection={onTest} onRemove={onRemove} />
       )}
     </article>
   )

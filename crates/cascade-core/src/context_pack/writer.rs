@@ -28,11 +28,7 @@ use super::types::ContextSession;
 ///   `CascadeError::Other` on any I/O or serialization failure.
 pub fn upsert_context(contexts_dir: &Path, session: &ContextSession) -> Result<()> {
     std::fs::create_dir_all(contexts_dir).map_err(|e| {
-        CascadeError::Other(format!(
-            "create_dir_all {}: {}",
-            contexts_dir.display(),
-            e
-        ))
+        CascadeError::Other(format!("create_dir_all {}: {}", contexts_dir.display(), e))
     })?;
 
     let yaml = serde_yaml::to_string(session)

@@ -105,11 +105,11 @@ export function MarkdownPreview({ content, className = '', scrollRef }: Markdown
   const articleRef = useCallback(
     (node: HTMLElement | null) => {
       if (scrollRef && 'current' in scrollRef) {
-        // @ts-ignore – assigning to a ref passed by the caller
+        // @ts-expect-error – assigning to a ref passed by the caller
         scrollRef.current = node
       }
     },
-    [scrollRef],
+    [scrollRef]
   )
 
   if (!content) {
@@ -124,10 +124,7 @@ export function MarkdownPreview({ content, className = '', scrollRef }: Markdown
   }
 
   return (
-    <div
-      className={`h-full overflow-y-auto ${className}`}
-      data-testid="markdown-preview-scroll"
-    >
+    <div className={`h-full overflow-y-auto ${className}`} data-testid="markdown-preview-scroll">
       <article
         ref={articleRef}
         // rehype-sanitize strips <script> and other dangerous elements before

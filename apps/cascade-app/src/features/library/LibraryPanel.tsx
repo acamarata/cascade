@@ -172,7 +172,7 @@ function TabPanel({
   // Filtered items for display
   const filtered = useMemo(
     () => applyFilters(items, searchQuery, selectedTags),
-    [items, searchQuery, selectedTags],
+    [items, searchQuery, selectedTags]
   )
 
   const handleDelete = useCallback(
@@ -187,7 +187,7 @@ function TabPanel({
         console.error('Failed to delete library item:', err)
       }
     },
-    [selectedItem, refetch, onItemDeleted],
+    [selectedItem, refetch, onItemDeleted]
   )
 
   if (selectedItem) {
@@ -213,9 +213,7 @@ function TabPanel({
   }
 
   if (filtered.length === 0) {
-    return (
-      <EmptyState message="No items match your search or filters." />
-    )
+    return <EmptyState message="No items match your search or filters." />
   }
 
   return (
@@ -287,9 +285,7 @@ export function LibraryPanel(): React.ReactElement {
   }, [])
 
   const handleToggleTag = useCallback((tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-    )
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
   }, [])
 
   const handleClearTags = useCallback(() => {
@@ -358,11 +354,7 @@ export function LibraryPanel(): React.ReactElement {
           </TabsList>
 
           {TABS.map((tab) => (
-            <TabsContent
-              key={tab.kind}
-              value={tab.kind}
-              className="relative flex-1 overflow-auto"
-            >
+            <TabsContent key={tab.kind} value={tab.kind} className="relative flex-1 overflow-auto">
               <TabPanel
                 kind={tab.kind}
                 emptyText={tab.emptyText}

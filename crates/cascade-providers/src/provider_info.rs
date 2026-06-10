@@ -129,7 +129,9 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn round_trip<T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug>(
+    fn round_trip<
+        T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug,
+    >(
         v: &T,
     ) {
         let json = serde_json::to_string(v).expect("serialize");

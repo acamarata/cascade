@@ -148,11 +148,7 @@ export function ContextPanel() {
               <h3 id="items-heading" className="mb-3 text-sm font-medium text-muted-foreground">
                 Pinned items ({activeSession.items.length})
               </h3>
-              <ItemList
-                items={activeSession.items}
-                onAdd={addItem}
-                onRemove={removeItem}
-              />
+              <ItemList items={activeSession.items} onAdd={addItem} onRemove={removeItem} />
             </section>
 
             {/* Divider */}
