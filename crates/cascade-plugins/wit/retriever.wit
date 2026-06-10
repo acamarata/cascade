@@ -1,0 +1,59 @@
+// retriever.wit — WIT interface for Retriever plugin trait.
+//
+// Purpose: define the boundary contract between the Cascade host and a
+//   WASM retriever plugin. The retriever accepts a query and retrieval
+//   options, and returns a ranked list of document fragments.
+// Inputs:  retrieve-query (text + opts)
+// Outputs: list<retrieval-result> or a RetrieverError
+// Constraints: score is a float32 in [0.0, 1.0]; higher = more relevant.
+//   Source field identifies the origin document (path, URL, or corpus key).
+// SPORT: cascade-plugins / WIT interfaces (T-P4-E03-05)
+
+package cascade:plugins@0.1.0;
+
+/// A ranked retrieval result fragment.
+record retrieval-result {
+    /// Matched text fragment.
+    text: string,
+    /// Relevance score in [0.0, 1.0] — higher is more relevant.
+    score: f32,
+    /// Identifier of the source document (path, URL, or corpus key).
+    source: string,
+    /// Zero-based chunk index within the source document.
+    chunk-index: u32,
+}
+
+/// Options governing how many results to return.
+record retrieve-opts {
+    /// Maximum number of results (0 = plugin default).
+    top-k: u32,
+    /// Minimum relevance score threshold in [0.0, 1.0] (0.0 = no filter).
+    min-score: f32,
+}
+
+/// Errors returned by the retriever interface.
+variant retriever-error {
+    /// Query string is empty.
+    empty-query,
+    /// Retriever's backing index is not initialised.
+    not-ready,
+    /// Plugin ran out of fuel (host-enforced CPU budget).
+    resource-exhausted,
+    /// Plugin internal error; message contains detail.
+    internal(string),
+}
+
+/// The retriever interface exported by a Retriever plugin.
+interface retriever {
+    use self.retrieval-result;
+    use self.retrieve-opts;
+    use self.retriever-error;
+
+    /// Retrieve the top-k most relevant fragments for the given query.
+    retrieve: func(query: string, opts: retrieve-opts) -> result<list<retrieval-result>, retriever-error>;
+}
+
+/// The world a Retriever plugin must implement.
+world retriever-plugin {
+    export retriever;
+}

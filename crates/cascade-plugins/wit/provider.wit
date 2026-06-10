@@ -1,0 +1,58 @@
+// provider.wit — WIT interface for EmbeddingProvider plugin trait.
+//
+// Purpose: define the boundary contract between the Cascade host and a
+//   WASM embedding provider plugin. The provider takes a batch of text
+//   strings and returns a corresponding batch of float32 embedding vectors.
+// Inputs:  list<string> texts + embed-opts
+// Outputs: list<embedding> or a ProviderError
+// Constraints: all embedding vectors have the same dimension declared in
+//   the plugin manifest. Dimension must be > 0.
+// SPORT: cascade-plugins / WIT interfaces (T-P4-E03-05)
+
+package cascade:plugins@0.1.0;
+
+/// A single embedding vector.
+record embedding {
+    /// The float32 vector values.
+    vector: list<f32>,
+    /// Index of the input text this embedding corresponds to.
+    input-index: u32,
+}
+
+/// Options for embedding generation.
+record embed-opts {
+    /// Optional model variant hint (plugin may ignore).
+    model-hint: option<string>,
+    /// Whether to normalise the output vectors to unit length.
+    normalise: bool,
+}
+
+/// Errors returned by the provider interface.
+variant provider-error {
+    /// Input batch is empty.
+    empty-batch,
+    /// A text in the batch exceeds the model's context window.
+    text-too-long(u32),
+    /// Plugin ran out of fuel (host-enforced CPU budget).
+    resource-exhausted,
+    /// Plugin internal error; message contains detail.
+    internal(string),
+}
+
+/// The provider interface exported by an EmbeddingProvider plugin.
+interface provider {
+    use self.embedding;
+    use self.embed-opts;
+    use self.provider-error;
+
+    /// Generate embeddings for a batch of text strings.
+    embed: func(texts: list<string>, opts: embed-opts) -> result<list<embedding>, provider-error>;
+
+    /// Return the fixed dimension of this provider's embedding vectors.
+    dimension: func() -> u32;
+}
+
+/// The world an EmbeddingProvider plugin must implement.
+world provider-plugin {
+    export provider;
+}

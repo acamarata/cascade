@@ -1,0 +1,18 @@
+{
+  "id": "com.cascade.github-issues",
+  "name": "GitHub Issues",
+  "version": "0.1.0",
+  "description": "Fetches GitHub Issues (and PRs) from a configured owner/repo for RAG ingestion.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "github_issues.wasm",
+  "kind": "DataSource",
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"],
+  "capabilities": ["net_outbound", "env_read"],
+  "permissions": {
+    "fs": [],
+    "net": [{"host": "api.github.com", "ports": [443]}],
+    "env": [{"name": "GITHUB_TOKEN"}]
+  }
+}

@@ -33,19 +33,29 @@
 
 pub mod capability;
 pub mod discovery;
+pub mod hot_reload;
 pub mod ipc;
 pub mod lifecycle;
+pub mod loader;
 pub mod manifest;
+pub mod plugin_registry;
+pub mod runtime;
 pub mod sandbox;
+pub mod traits;
 pub mod types;
+pub mod wit_bindings;
 
 pub use capability::{CapabilityError, CapabilitySet, DeclaredCapabilities};
 pub use discovery::{discover_all, DiscoveredPlugin, DiscoveryError, PluginOrigin};
+pub use hot_reload::{drain_arc, drain_arc_default, PluginWatcher, ReloadEvent};
 pub use ipc::{
     dispatch, InputValidator, NoopValidator, PluginError, PluginRequest, PluginResponse,
 };
 pub use lifecycle::{LifecycleError, PluginRegistry, PluginState};
+pub use loader::{DiscoveredPlugin as LoaderDiscoveredPlugin, PluginLoadError, PluginLoader};
 pub use manifest::{ManifestError, PluginManifest, PluginType};
+pub use plugin_registry::{PluginDispatchError, PluginInfo, PluginStatus};
+pub use plugin_registry::PluginRegistry as PluginDispatchRegistry;
 pub use sandbox::{ResourceLimits, SandboxError, WasmPlugin};
 pub use types::{
     WasmAgent, WasmChunker, WasmEmbeddingProvider, WasmParser, WasmQueryStrategy, WasmReranker,

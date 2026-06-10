@@ -1,0 +1,18 @@
+{
+  "id": "com.cascade.linear",
+  "name": "Linear",
+  "version": "0.1.0",
+  "description": "Fetches Linear issues (with state, priority, assignee, labels) via the Linear GraphQL API.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "linear.wasm",
+  "kind": "DataSource",
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"],
+  "capabilities": ["net_outbound", "env_read"],
+  "permissions": {
+    "fs": [],
+    "net": [{"host": "api.linear.app", "ports": [443]}],
+    "env": [{"name": "LINEAR_API_KEY"}]
+  }
+}

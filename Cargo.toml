@@ -12,7 +12,18 @@ members = [
     "crates/cascade-audit",
     "crates/cascade-providers",
     "crates/cascade-local-llm",
+    "crates/cascade-pdk",
+    "crates/cascade-pdk-macro",
     "apps/cascade-app/src-tauri",
+    "plugins/github-issues",
+    "plugins/linear",
+    "plugins/jira",
+    "plugins/gitlab",
+    "plugins/echo-tool",
+    "plugins/clock-widget",
+    "examples/plugins/hello-world",
+    "examples/plugins/echo-tool",
+    "examples/plugins/clock-widget",
 ]
 resolver = "2"
 
@@ -49,7 +60,8 @@ tree-sitter-rust       = "0.21"
 tree-sitter-typescript = "0.21"
 tree-sitter-python     = "0.21"
 tree-sitter-javascript = "0.21"
-wasmtime    = "22"
+wasmtime      = "22"
+wasmtime-wasi = "22"
 notify      = "6"
 chrono      = { version = "0.4", features = ["serde"] }
 uuid        = { version = "1", features = ["v4", "serde"] }

@@ -1,0 +1,50 @@
+# {{plugin_name}}
+
+> {{description}}
+
+A [Cascade](https://github.com/acamarata/cascade) WASM plugin of type **{{plugin_type}}**.
+
+## Requirements
+
+- Rust toolchain + `wasm32-wasip1` target:
+  ```
+  rustup target add wasm32-wasip1
+  ```
+- Cascade CLI:
+  ```
+  cargo install cascade-cli
+  ```
+
+## Build
+
+```bash
+cargo build --target wasm32-wasip1
+# Or use the convenience script:
+./build.sh
+```
+
+## Test
+
+```bash
+cascade plugin test
+```
+
+## Install
+
+```bash
+./build.sh
+cascade plugin enable {{plugin_name}}
+```
+
+## Plugin manifest
+
+See `plugin.json` for the plugin configuration. The `permissions` block controls
+what system access the plugin has — all are deny-by-default.
+
+## Development
+
+Edit `src/lib.rs` to implement your plugin logic. The `#[cascade_plugin]`
+attribute on your struct generates the WASM ABI entry points automatically.
+
+See the [Cascade plugin development guide](https://github.com/acamarata/cascade/wiki/plugin-development-guide)
+for the full API reference.

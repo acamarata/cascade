@@ -39,7 +39,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 
 **Community**
 - [Contributing](Contributing.md) · [Governance](Governance.md) · [Roadmap](Roadmap.md)
-- [Plugin Development](Plugin-Development.md) · [Building From Source](Building-From-Source.md)
+- [Plugin Development](Plugin-Development.md) · [Plugin Development Guide](plugin-development-guide.md) · [Building From Source](Building-From-Source.md)
 
 **Project info**
 - [Security](Security.md) · [Privacy](Privacy.md) · [Telemetry Consent](Telemetry-Consent.md)

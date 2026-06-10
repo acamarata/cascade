@@ -1,0 +1,19 @@
+{
+  "$schema": "https://cascade.dev/schemas/plugin/v1",
+  "id": "dev.cascade.echo-tool",
+  "name": "echo-tool",
+  "version": "0.1.0",
+  "description": "Returns its input JSON arguments unchanged. Reference implementation for ChatTool plugins.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "target/wasm32-wasip1/debug/echo_tool.wasm",
+  "kind": "ChatTool",
+  "permissions": {
+    "fs": [],
+    "net": [],
+    "env": []
+  },
+  "capabilities": [],
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://cascade.dev/schemas/plugin/v1",
+  "id": "dev.cascade.hello-world",
+  "name": "hello-world",
+  "version": "0.1.0",
+  "description": "Returns a hard-coded greeting DataItem. Simplest possible DataSource plugin.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "target/wasm32-wasip1/debug/hello_world.wasm",
+  "kind": "DataSource",
+  "permissions": {
+    "fs": [],
+    "net": [],
+    "env": []
+  },
+  "capabilities": [],
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"]
+}

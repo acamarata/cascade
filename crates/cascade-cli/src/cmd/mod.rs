@@ -7,6 +7,7 @@
 pub mod backup;
 pub mod completions;
 pub mod config;
+pub mod plugin;
 pub mod daemon;
 pub mod dispatch;
 pub mod doctor;
@@ -107,6 +108,8 @@ pub enum Commands {
     /// Ping the cascade daemon (hidden diagnostic).
     #[command(hide = true)]
     Ping(ping::PingArgs),
+    /// Manage installed WASM plugins.
+    Plugin(plugin::PluginArgs),
 }
 
 impl Commands {
@@ -138,6 +141,7 @@ impl Commands {
             Commands::MonitorOc(args) => args.run().await,
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
+            Commands::Plugin(args) => args.run().await,
         }
     }
 }

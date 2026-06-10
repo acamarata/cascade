@@ -1,0 +1,19 @@
+[package]
+name        = "example-echo-tool"
+version     = "0.1.0"
+edition     = "2021"
+description = "Annotated ChatTool example — returns input arguments unchanged."
+authors     = ["Aric Camarata"]
+license     = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cascade-pdk = { path = "../../../crates/cascade-pdk" }
+serde       = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json  = { version = "1", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+cascade-pdk = { path = "../../../crates/cascade-pdk", features = ["test-harness"] }
+serde_json  = "1"

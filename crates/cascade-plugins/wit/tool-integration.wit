@@ -1,0 +1,67 @@
+// tool-integration.wit — WIT interface for ToolIntegration plugin trait.
+//
+// Purpose: define the boundary contract between the Cascade host and a
+//   WASM tool-integration plugin. A tool integration exposes a named tool
+//   that can be invoked by agents, the CLI, or the GUI.
+// Inputs:  ToolCall — tool name + JSON-encoded argument map
+// Outputs: ToolResult — success text or a ToolError
+// Constraints: tool name must match the name declared in the plugin manifest.
+//   The args-json field must be a valid JSON object string. Results are plain
+//   text; the host wraps them in its response envelope.
+//   Net access inside WASM is gated by the manifest's `net` permission list;
+//   the WASI network stack is disabled unless permissions are granted.
+// SPORT: cascade-plugins / WIT interfaces (T-P4-E03-05)
+
+package cascade:plugins@0.1.0;
+
+/// A request to invoke a tool.
+record tool-call {
+    /// Unique call identifier (echoed back in the result for correlation).
+    call-id: string,
+    /// Tool name as declared in the plugin manifest.
+    tool-name: string,
+    /// JSON-encoded argument map (object string).
+    args-json: string,
+}
+
+/// A successful tool result.
+record tool-result {
+    /// The call-id from the corresponding tool-call.
+    call-id: string,
+    /// Plain-text output of the tool invocation.
+    output: string,
+    /// Optional JSON-encoded structured data (for machine-readable callers).
+    data-json: option<string>,
+}
+
+/// Errors returned by the tool-integration interface.
+variant tool-error {
+    /// Tool name does not match any export declared in this plugin.
+    unknown-tool(string),
+    /// Arguments JSON is malformed or missing required fields.
+    invalid-args(string),
+    /// The operation was refused (e.g. permission denied by host).
+    permission-denied(string),
+    /// Plugin ran out of fuel (host-enforced CPU budget).
+    resource-exhausted,
+    /// Plugin internal error; message contains detail.
+    internal(string),
+}
+
+/// The tool-integration interface exported by a ToolIntegration plugin.
+interface tool-integration {
+    use self.tool-call;
+    use self.tool-result;
+    use self.tool-error;
+
+    /// Invoke the named tool with the provided JSON-encoded arguments.
+    call: func(request: tool-call) -> result<tool-result, tool-error>;
+
+    /// Return the JSON Schema for the tool's argument map (for UI generation).
+    describe: func(tool-name: string) -> result<string, tool-error>;
+}
+
+/// The world a ToolIntegration plugin must implement.
+world tool-integration-plugin {
+    export tool-integration;
+}

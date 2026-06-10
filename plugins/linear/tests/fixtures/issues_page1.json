@@ -1,0 +1,43 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "LIN-001",
+          "title": "Implement dark mode",
+          "description": "Add dark mode support to the dashboard.",
+          "url": "https://linear.app/team/issue/LIN-001",
+          "priority": 2,
+          "state": { "name": "In Progress" },
+          "labels": {
+            "nodes": [
+              { "name": "Frontend" },
+              { "name": "UX" }
+            ]
+          },
+          "assignee": { "name": "Alice Smith" },
+          "createdAt": "2024-03-01T08:00:00.000Z",
+          "updatedAt": "2024-03-02T10:00:00.000Z"
+        },
+        {
+          "id": "LIN-002",
+          "title": "Fix login redirect bug",
+          "description": null,
+          "url": "https://linear.app/team/issue/LIN-002",
+          "priority": 1,
+          "state": { "name": "Todo" },
+          "labels": {
+            "nodes": []
+          },
+          "assignee": null,
+          "createdAt": "2024-03-03T09:00:00.000Z",
+          "updatedAt": "2024-03-04T11:00:00.000Z"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      }
+    }
+  }
+}

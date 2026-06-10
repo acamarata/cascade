@@ -1,0 +1,29 @@
+[
+  {
+    "number": 42,
+    "title": "Fix the broken widget",
+    "body": "Widget crashes on startup.",
+    "html_url": "https://github.com/owner/repo/issues/42",
+    "state": "open",
+    "labels": [
+      { "id": 1, "name": "bug", "color": "d73a4a" },
+      { "id": 2, "name": "priority:high", "color": "e4e669" }
+    ],
+    "created_at": "2024-01-15T10:00:00Z",
+    "updated_at": "2024-01-16T12:30:00Z",
+    "user": { "login": "octocat" }
+  },
+  {
+    "number": 43,
+    "title": "Add dark mode support",
+    "body": null,
+    "html_url": "https://github.com/owner/repo/issues/43",
+    "state": "open",
+    "labels": [
+      { "id": 3, "name": "enhancement", "color": "a2eeef" }
+    ],
+    "created_at": "2024-01-17T09:00:00Z",
+    "updated_at": "2024-01-18T14:00:00Z",
+    "user": { "login": "contributor1" }
+  }
+]

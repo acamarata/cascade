@@ -1,0 +1,78 @@
+// agent.wit — WIT interface for Agent plugin trait.
+//
+// Purpose: define the boundary contract between the Cascade host and a
+//   WASM agent plugin. The agent receives a prompt and a context envelope,
+//   and returns a structured response with optional tool calls.
+// Inputs:  string prompt + agent-context
+// Outputs: agent-response or an AgentError
+// Constraints: WASM agents run at Tier-3 (bounded cost). Tool calls inside
+//   the response are validated and dispatched by the host before returning
+//   to the user. No direct LLM provider access is permitted inside the WASM
+//   sandbox — the agent must request tool calls via the response envelope.
+// SPORT: cascade-plugins / WIT interfaces (T-P4-E03-05)
+
+package cascade:plugins@0.1.0;
+
+/// A key-value metadata pair passed to the agent in its context.
+record context-entry {
+    key: string,
+    value: string,
+}
+
+/// Context envelope passed to the agent on each invocation.
+record agent-context {
+    /// Session identifier — unique per conversation.
+    session-id: string,
+    /// Arbitrary metadata (e.g. user prefs, active file path).
+    metadata: list<context-entry>,
+    /// History of prior turns (most recent last). Empty on first turn.
+    history: list<string>,
+}
+
+/// A tool call the agent requests the host to execute.
+record tool-call-request {
+    /// Unique call identifier (for correlating responses).
+    call-id: string,
+    /// Name of the tool to invoke.
+    tool-name: string,
+    /// JSON-encoded arguments.
+    args-json: string,
+}
+
+/// The agent's response to a prompt.
+record agent-response {
+    /// Natural language text content (may be empty if only tool calls issued).
+    text: string,
+    /// Tool calls the agent requests the host to execute (may be empty).
+    tool-calls: list<tool-call-request>,
+    /// Whether this response is a final answer or an intermediate step.
+    is-final: bool,
+}
+
+/// Errors returned by the agent interface.
+variant agent-error {
+    /// Prompt string is empty.
+    empty-prompt,
+    /// Plugin ran out of fuel (host-enforced CPU budget).
+    resource-exhausted,
+    /// Plugin internal error; message contains detail.
+    internal(string),
+}
+
+/// The agent interface exported by an Agent plugin.
+interface agent {
+    use self.agent-context;
+    use self.agent-response;
+    use self.agent-error;
+
+    /// Handle a prompt within the given context and return a response.
+    handle: func(prompt: string, ctx: agent-context) -> result<agent-response, agent-error>;
+
+    /// Return this agent's human-readable name.
+    name: func() -> string;
+}
+
+/// The world an Agent plugin must implement.
+world agent-plugin {
+    export agent;
+}

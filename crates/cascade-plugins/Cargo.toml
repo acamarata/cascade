@@ -19,10 +19,21 @@ thiserror     = { workspace = true }
 tracing       = { workspace = true }
 async-trait   = { workspace = true }
 tokio         = { workspace = true }
+futures       = "0.3"
+schemars      = "0.8"
 semver        = "1"
 toml          = "0.8"
 dirs          = "5"
 anyhow        = "1"
+wasmtime-wasi = { workspace = true }
+dashmap       = "6"
+notify        = { workspace = true }
+
+[[bin]]
+name = "gen-schema"
+path = "src/bin/gen_schema.rs"
 
 [dev-dependencies]
 tempfile      = "3"
+wat           = "1"
+walkdir       = "2"

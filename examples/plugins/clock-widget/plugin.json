@@ -1,0 +1,19 @@
+{
+  "$schema": "https://cascade.dev/schemas/plugin/v1",
+  "id": "dev.cascade.clock-widget",
+  "name": "clock-widget",
+  "version": "0.1.0",
+  "description": "Renders current UTC time as a widget panel. Reference implementation for Widget plugins.",
+  "author": "Aric Camarata",
+  "license": "MIT",
+  "entry_wasm": "target/wasm32-wasip1/debug/clock_widget.wasm",
+  "kind": "Widget",
+  "permissions": {
+    "fs": [],
+    "net": [],
+    "env": []
+  },
+  "capabilities": [],
+  "min_cascade_version": ">=0.1.0",
+  "exports": ["cascade_plugin_call", "alloc", "dealloc"]
+}

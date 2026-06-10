@@ -1,0 +1,77 @@
+// chunker.wit — WIT interface for Chunker plugin trait.
+//
+// Purpose: define the boundary contract between the Cascade host and a
+//   WASM chunker plugin. The chunker receives a document and split options,
+//   and returns a list of text chunks suitable for embedding.
+// Inputs:  ChunkRequest (JSON-encoded document + opts)
+// Outputs: list<Chunk> or a ChunkerError
+// Constraints: all byte buffers are list<u8> (length-prefixed); no raw pointers
+//   cross the boundary. String fields use WIT `string` (UTF-8, host-managed).
+// SPORT: cascade-plugins / WIT interfaces (T-P4-E03-05)
+
+package cascade:plugins@0.1.0;
+
+/// Chunk-level metadata returned alongside each text fragment.
+record chunk-meta {
+    /// Zero-based chunk index within the document.
+    index: u32,
+    /// Byte offset of this chunk in the original document.
+    byte-offset: u32,
+    /// Optional section heading covering this chunk.
+    section: option<string>,
+}
+
+/// A single text fragment produced by a chunker plugin.
+record chunk {
+    /// Plain-text content of this chunk.
+    text: string,
+    /// Metadata for this chunk.
+    meta: chunk-meta,
+}
+
+/// Options controlling how a document is split.
+record chunk-opts {
+    /// Target token count per chunk (0 = plugin default).
+    target-tokens: u32,
+    /// Overlap in tokens between adjacent chunks (0 = no overlap).
+    overlap-tokens: u32,
+}
+
+/// A document to be chunked.
+record document {
+    /// Unique document identifier (e.g. file path or URL).
+    id: string,
+    /// Raw document text.
+    content: string,
+    /// Optional MIME type hint (e.g. "text/markdown").
+    mime-type: option<string>,
+}
+
+/// Errors returned by the chunker interface.
+variant chunker-error {
+    /// Document content is empty or too short to chunk.
+    empty-document,
+    /// Plugin ran out of fuel (host-enforced CPU budget).
+    resource-exhausted,
+    /// Plugin encountered an internal error; message contains detail.
+    internal(string),
+}
+
+/// The chunker interface exported by a Chunker plugin.
+interface chunker {
+    use self.document;
+    use self.chunk;
+    use self.chunk-opts;
+    use self.chunker-error;
+
+    /// Split a document into chunks according to the provided options.
+    ///
+    /// Returns an ordered list of non-overlapping (or overlap-controlled)
+    /// text chunks.
+    chunk: func(doc: document, opts: chunk-opts) -> result<list<chunk>, chunker-error>;
+}
+
+/// The world a Chunker plugin must implement.
+world chunker-plugin {
+    export chunker;
+}
