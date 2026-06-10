@@ -21,3 +21,8 @@ target/
 # Track the repo's own PRC instruction file and its gitignore
 !.cascade/CASCADE.md
 !.cascade/.gitignore
+
+# Stray compiler intermediates (never commit)
+*.rcgu.o
+rust_out*
+rustc*/
