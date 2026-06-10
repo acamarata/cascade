@@ -332,7 +332,13 @@ impl TypesChunker for FixedSizeChunker {
 mod tests {
     use super::*;
 
-    fn make_chunk(text: &str, char_start: usize, char_end: usize, line_start: usize, line_end: usize) -> Chunk {
+    fn make_chunk(
+        text: &str,
+        char_start: usize,
+        char_end: usize,
+        line_start: usize,
+        line_end: usize,
+    ) -> Chunk {
         Chunk {
             chunk_id: None,
             source_path: PathBuf::from("test.md"),

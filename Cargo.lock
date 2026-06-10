@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-app"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cascade-audit",
  "cascade-cli",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-audit"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "filetime",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "cascade-audit",
@@ -1208,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "cascade-types",
@@ -1236,7 +1236,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-daemon"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "assert_cmd",
  "axum 0.7.9",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-harness"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "cascade-core",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-keychain"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "oo7",
  "security-framework 2.11.1",
@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-local-llm"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "candle-core",
@@ -1354,7 +1354,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-mcp"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "axum 0.7.9",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-pdk"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "cascade-pdk-macro",
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-pdk-macro"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-plugins"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-providers"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-rag"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-tray"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dbus",
  "libappindicator-sys 0.2.0",
@@ -1512,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-types"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "chrono",

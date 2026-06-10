@@ -13,6 +13,7 @@
 //! Constraints:
 //!   - No external toolchain: all WASM built from inline WAT.
 //!   - Tests must be deterministic (no sleeps on fast paths).
+//!
 //! SPORT: cascade-plugins / siege tests (T-P4-E03-21)
 
 use cascade_plugins::{
@@ -110,8 +111,8 @@ fn siege_v1_entry_wasm_path_traversal_rejected() {
         "min_cascade_version": ">=0.1.0"
     }"#;
 
-    let err = PluginJsonManifest::from_json_str(json)
-        .expect_err("entry_wasm with .. must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(json).expect_err("entry_wasm with .. must be rejected");
 
     assert!(
         matches!(err, ManifestError::PathTraversal { .. }),
@@ -166,8 +167,8 @@ fn siege_v1_fs_preopen_path_traversal_rejected() {
         }
     }"#;
 
-    let err = PluginJsonManifest::from_json_str(json)
-        .expect_err("fs path with .. must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(json).expect_err("fs path with .. must be rejected");
 
     assert!(
         matches!(err, ManifestError::PathTraversal { .. }),
@@ -302,15 +303,18 @@ fn siege_v4_capability_escalation_net_star_rejected() {
         "capabilities": ["net:*"]
     }"#;
 
-    let err = PluginJsonManifest::from_json_str(json)
-        .expect_err("net:* capability must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(json).expect_err("net:* capability must be rejected");
 
     assert!(
         matches!(err, ManifestError::UnknownCapability { .. }),
         "expected UnknownCapability, got: {err:?}"
     );
     let msg = err.to_string();
-    assert!(msg.contains("net:*"), "error must name the bad token: {msg}");
+    assert!(
+        msg.contains("net:*"),
+        "error must name the bad token: {msg}"
+    );
 }
 
 /// Permission escalation: "fs:/" capability must be rejected.
@@ -329,8 +333,8 @@ fn siege_v4_capability_escalation_fs_root_rejected() {
         "capabilities": ["fs:/"]
     }"#;
 
-    let err = PluginJsonManifest::from_json_str(json)
-        .expect_err("fs:/ capability must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(json).expect_err("fs:/ capability must be rejected");
 
     assert!(matches!(err, ManifestError::UnknownCapability { .. }));
 }
@@ -353,8 +357,8 @@ fn siege_v4_net_wildcard_host_rejected() {
         }
     }"#;
 
-    let err = PluginJsonManifest::from_json_str(json)
-        .expect_err("wildcard net host must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(json).expect_err("wildcard net host must be rejected");
 
     assert!(
         matches!(err, ManifestError::Validation { .. }),
@@ -366,8 +370,8 @@ fn siege_v4_net_wildcard_host_rejected() {
 /// (no silent collision — the registry atomically replaces and drains).
 #[test]
 fn siege_v4_duplicate_plugin_id_replaces_not_collides() {
-    use cascade_plugins::plugin_registry::PluginRegistry;
     use cascade_plugins::loader::PluginLoader;
+    use cascade_plugins::plugin_registry::PluginRegistry;
     use std::fs;
     use tempfile::TempDir;
 
@@ -397,7 +401,11 @@ fn siege_v4_duplicate_plugin_id_replaces_not_collides() {
     // Register again with same ID — must replace, not grow the registry.
     let (mut loaded2, _) = PluginLoader::scan(tmp.path());
     registry.register(loaded2.remove(0));
-    assert_eq!(registry.len(), 1, "duplicate ID must replace, registry stays at 1");
+    assert_eq!(
+        registry.len(),
+        1,
+        "duplicate ID must replace, registry stays at 1"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -542,7 +550,11 @@ fn siege_v6_registry_reload_atomic_no_panic() {
     }
 
     list_thread.join().expect("list thread must not panic");
-    assert_eq!(registry.len(), 1, "registry must have exactly one slot after reloads");
+    assert_eq!(
+        registry.len(),
+        1,
+        "registry must have exactly one slot after reloads"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -571,12 +583,7 @@ async fn siege_v7_malformed_json_output_returns_typed_error() {
 
     let sandbox = PluginSandbox::new(PluginType::Chunker).expect("sandbox");
     let plugin = sandbox
-        .load_with_permissions(
-            &wasm,
-            "malformed-output",
-            JsonPermissions::default(),
-            None,
-        )
+        .load_with_permissions(&wasm, "malformed-output", JsonPermissions::default(), None)
         .expect("compile");
 
     let result = plugin
@@ -617,8 +624,8 @@ fn dqa_allowed_capability_vocabulary_complete() {
     let bad_json = r#"{"id":"com.ex.t","name":"x","version":"1.0.0","description":"x",
         "author":"a","license":"MIT","entry_wasm":"p.wasm","kind":"ChatTool",
         "min_cascade_version":">=0.1.0","capabilities":["admin_shell"]}"#;
-    let err = PluginJsonManifest::from_json_str(bad_json)
-        .expect_err("admin_shell must be rejected");
+    let err =
+        PluginJsonManifest::from_json_str(bad_json).expect_err("admin_shell must be rejected");
     assert!(matches!(err, ManifestError::UnknownCapability { .. }));
 }
 
@@ -673,7 +680,10 @@ fn dqa_manifest_error_messages_are_non_empty() {
 
     for err in errors {
         let msg = err.to_string();
-        assert!(!msg.is_empty(), "ManifestError must have a non-empty message: {err:?}");
+        assert!(
+            !msg.is_empty(),
+            "ManifestError must have a non-empty message: {err:?}"
+        );
         // All messages should be at least marginally informative (> 10 chars).
         assert!(
             msg.len() > 10,

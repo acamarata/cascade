@@ -199,10 +199,7 @@ impl ParseDispatcher {
             detail: format!("fallback read failed: {e}"),
         })?;
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
         tracing::warn!(
             path = %path.display(),
             "no DocumentParser matched; falling back to raw UTF-8 lossy read"
@@ -299,7 +296,10 @@ mod tests {
         assert_eq!(back.text, dt.text);
         assert_eq!(back.parser_name, "code");
         assert_eq!(back.title.as_deref(), Some("hello"));
-        assert_eq!(back.metadata.get("language").map(String::as_str), Some("rust"));
+        assert_eq!(
+            back.metadata.get("language").map(String::as_str),
+            Some("rust")
+        );
     }
 
     /// T-P4-E01-13: ParseDispatcher falls back to raw read for unrecognised extensions.
@@ -308,7 +308,9 @@ mod tests {
         let mut f = NamedTempFile::with_suffix(".xyz").unwrap();
         write!(f, "hello world").unwrap();
         let dispatcher = ParseDispatcher::default();
-        let result = dispatcher.dispatch(f.path()).expect("fallback should succeed");
+        let result = dispatcher
+            .dispatch(f.path())
+            .expect("fallback should succeed");
         assert_eq!(result.parser_name, "raw");
         assert!(result.text.contains("hello world"));
     }
@@ -332,6 +334,9 @@ mod tests {
         let dispatcher = ParseDispatcher::default();
         let result = dispatcher.dispatch(f.path()).expect("code parse");
         assert_eq!(result.parser_name, "code");
-        assert_eq!(result.metadata.get("language").map(String::as_str), Some("rust"));
+        assert_eq!(
+            result.metadata.get("language").map(String::as_str),
+            Some("rust")
+        );
     }
 }

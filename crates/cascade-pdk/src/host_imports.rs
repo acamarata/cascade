@@ -40,12 +40,7 @@ extern "C" {
 
     /// Write a named key into the plugin's scoped KV store.
     #[link_name = "cascade:plugins/host::kv-set"]
-    pub fn host_kv_set(
-        key_ptr: *const u8,
-        key_len: usize,
-        val_ptr: *const u8,
-        val_len: usize,
-    );
+    pub fn host_kv_set(key_ptr: *const u8, key_len: usize, val_ptr: *const u8, val_len: usize);
 }
 
 // ── Ergonomic wrappers ────────────────────────────────────────────────────────

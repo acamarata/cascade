@@ -191,10 +191,7 @@ impl CascadeResolutionEngine {
     /// Also computes `path_searched` for each tier using the same logic as
     /// `Resolver::discover_tier_paths` (HOME-based paths for GCI/PCI/APC;
     /// cwd ancestor walk for PPC/PRC/PAC).
-    fn build_tier_results(
-        &self,
-        base: &crate::resolution::ResolvedCascade,
-    ) -> Vec<TierResult> {
+    fn build_tier_results(&self, base: &crate::resolution::ResolvedCascade) -> Vec<TierResult> {
         // Build a fast-lookup map: CascadeTier → (path, content) for found tiers.
         use std::collections::HashMap;
         let found_map: HashMap<CascadeTier, (PathBuf, String)> = base
@@ -206,8 +203,7 @@ impl CascadeResolutionEngine {
         let home = dirs_home();
 
         // Pre-compute ancestor list for PPC/PRC/PAC assignment (mirrors Resolver logic).
-        let mut ancestors: Vec<PathBuf> =
-            base.cwd.ancestors().map(|p| p.to_path_buf()).collect();
+        let mut ancestors: Vec<PathBuf> = base.cwd.ancestors().map(|p| p.to_path_buf()).collect();
         ancestors.reverse(); // root → cwd
 
         let intermediate_tiers = [
@@ -244,13 +240,11 @@ impl CascadeResolutionEngine {
                         .as_ref()
                         .map(|h| h.join("Downloads").join(".cascade"))
                         .unwrap_or_else(|| PathBuf::from("~/Downloads/.cascade")),
-                    CascadeTier::Apc => {
-                        std::env::var("CASCADE_APC_PATH")
-                            .ok()
-                            .map(PathBuf::from)
-                            .or_else(|| home.as_ref().map(|h| h.join("Sites").join(".cascade")))
-                            .unwrap_or_else(|| PathBuf::from("~/Sites/.cascade"))
-                    }
+                    CascadeTier::Apc => std::env::var("CASCADE_APC_PATH")
+                        .ok()
+                        .map(PathBuf::from)
+                        .or_else(|| home.as_ref().map(|h| h.join("Sites").join(".cascade")))
+                        .unwrap_or_else(|| PathBuf::from("~/Sites/.cascade")),
                     CascadeTier::Ppc | CascadeTier::Prc | CascadeTier::Pac => tier_dir_map
                         .get(tier)
                         .map(|p| p.join(".cascade"))
@@ -575,7 +569,10 @@ mod tests {
         let json = serde_json::to_string_pretty(&result).expect("must serialize");
 
         // Verify expected fields are present
-        assert!(json.contains("merged_instructions"), "must have merged_instructions");
+        assert!(
+            json.contains("merged_instructions"),
+            "must have merged_instructions"
+        );
         assert!(json.contains("mcp_server_url"), "must have mcp_server_url");
         assert!(json.contains("tiers_found"), "must have tiers_found");
         assert!(json.contains("working_dir"), "must have working_dir");

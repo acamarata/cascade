@@ -33,13 +33,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cascade_rag::{
-    chunk::{Chunk, ChunkerConfig, Chunker},
-    chunk::semantic::SemanticChunker,
-    chunk::markdown::MarkdownChunker,
     chunk::hierarchical::HierarchicalChunker,
-    embed::{EmbedModel, EmbedError},
-    index::{CachedIndex, sharding::{EmbedResult as ShardEmbedResult, ShardedIndex}},
-    retrieve::rrf::{rrf_merge, FusedHit, RankedList},
+    chunk::markdown::MarkdownChunker,
+    chunk::semantic::SemanticChunker,
+    chunk::{Chunker, ChunkerConfig},
+    embed::{EmbedError, EmbedModel},
+    index::{
+        sharding::{EmbedResult as ShardEmbedResult, ShardedIndex},
+        CachedIndex,
+    },
+    retrieve::rrf::{rrf_merge, RankedList},
     workers::{RawDoc, WorkerPool, WorkerPoolConfig},
 };
 
@@ -75,9 +78,7 @@ impl EmbedModel for StubEmbedder {
                 let seed = t.bytes().fold(0u64, |acc, b| acc.wrapping_add(b as u64));
                 let base = (seed % 1000) as f32 * 0.001;
                 // Non-trivial work to prevent compiler elision.
-                (0..dim)
-                    .map(|i| (base + i as f32 * 0.0013).sin())
-                    .collect()
+                (0..dim).map(|i| (base + i as f32 * 0.0013).sin()).collect()
             })
             .collect())
     }
@@ -148,8 +149,7 @@ fn make_pool(workers: usize, dim: usize) -> WorkerPool {
 
 /// Populate a [`ShardedIndex`] at `root` with `n_docs` random vectors.
 fn populate_sharded(root: &Path, shard_count: usize, dim: usize, n_docs: usize) -> ShardedIndex {
-    let idx = ShardedIndex::new(root, shard_count, dim)
-        .expect("failed to create sharded index");
+    let idx = ShardedIndex::new(root, shard_count, dim).expect("failed to create sharded index");
     let embedder = StubEmbedder::new(dim);
     // Produce n_docs docs in batches of 500 to avoid calling embed_dense with
     // an enormous slice.
@@ -164,8 +164,11 @@ fn populate_sharded(root: &Path, shard_count: usize, dim: usize, n_docs: usize) 
         let vecs = embedder.embed_dense(&text_refs).expect("stub embed failed");
         for (j, vec) in vecs.into_iter().enumerate() {
             let doc_id = format!("doc_{}", inserted + j);
-            idx.upsert(&ShardEmbedResult { doc_id, embedding: vec })
-                .expect("upsert failed");
+            idx.upsert(&ShardEmbedResult {
+                doc_id,
+                embedding: vec,
+            })
+            .expect("upsert failed");
         }
         inserted += this_batch;
     }
@@ -195,32 +198,24 @@ fn bench_embed_batch(c: &mut Criterion) {
 
         // Parallel pool (all CPUs).
         group.throughput(Throughput::Elements(n as u64));
-        group.bench_with_input(
-            BenchmarkId::new("parallel", n),
-            &n,
-            |b, _| {
-                let pool = make_pool(0, DIM); // 0 = num_cpus
-                let docs = raw_docs(&docs_text);
-                b.iter(|| {
-                    let results = pool.embed_batch(docs.clone());
-                    assert_eq!(results.len(), n);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("parallel", n), &n, |b, _| {
+            let pool = make_pool(0, DIM); // 0 = num_cpus
+            let docs = raw_docs(&docs_text);
+            b.iter(|| {
+                let results = pool.embed_batch(docs.clone());
+                assert_eq!(results.len(), n);
+            });
+        });
 
         // Single-threaded baseline.
-        group.bench_with_input(
-            BenchmarkId::new("single_thread", n),
-            &n,
-            |b, _| {
-                let pool = make_pool(1, DIM);
-                let docs = raw_docs(&docs_text);
-                b.iter(|| {
-                    let results = pool.embed_batch(docs.clone());
-                    assert_eq!(results.len(), n);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("single_thread", n), &n, |b, _| {
+            let pool = make_pool(1, DIM);
+            let docs = raw_docs(&docs_text);
+            b.iter(|| {
+                let results = pool.embed_batch(docs.clone());
+                assert_eq!(results.len(), n);
+            });
+        });
     }
 
     group.finish();
@@ -290,14 +285,18 @@ fn bench_query_cache(c: &mut Criterion) {
 
     group.bench_function("hit", |b| {
         b.iter(|| {
-            let hits = cached_hit.search(&q, TOP_K).expect("cache-hit search failed");
+            let hits = cached_hit
+                .search(&q, TOP_K)
+                .expect("cache-hit search failed");
             assert!(hits.len() <= TOP_K);
         });
     });
 
     group.bench_function("miss", |b| {
         b.iter(|| {
-            let hits = cached_miss.search(&q, TOP_K).expect("cache-miss search failed");
+            let hits = cached_miss
+                .search(&q, TOP_K)
+                .expect("cache-miss search failed");
             assert!(hits.len() <= TOP_K);
         });
     });
@@ -317,29 +316,31 @@ fn bench_rrf_merge(c: &mut Criterion) {
 
     for &n in INPUT_COUNTS {
         // Build two ranked lists of n entries each with distinct chunk_ids.
-        let fts_hits: Vec<(i64, f64)> = (0..n as i64)
-            .map(|i| (i, 1.0 / (i + 1) as f64))
-            .collect();
+        let fts_hits: Vec<(i64, f64)> = (0..n as i64).map(|i| (i, 1.0 / (i + 1) as f64)).collect();
         let dense_hits: Vec<(i64, f64)> = (0..n as i64)
             .rev()
             .map(|i| (i, 1.0 / (n as i64 - i) as f64))
             .collect();
 
         group.throughput(Throughput::Elements(n as u64));
-        group.bench_with_input(
-            BenchmarkId::new("two_lists", n),
-            &n,
-            |b, _| {
-                b.iter(|| {
-                    let lists = vec![
-                        RankedList { source: "fts5",  weight: 1.0, hits: &fts_hits },
-                        RankedList { source: "dense", weight: 1.0, hits: &dense_hits },
-                    ];
-                    let fused = rrf_merge(&lists, K, 50);
-                    assert!(!fused.is_empty());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("two_lists", n), &n, |b, _| {
+            b.iter(|| {
+                let lists = vec![
+                    RankedList {
+                        source: "fts5",
+                        weight: 1.0,
+                        hits: &fts_hits,
+                    },
+                    RankedList {
+                        source: "dense",
+                        weight: 1.0,
+                        hits: &dense_hits,
+                    },
+                ];
+                let fused = rrf_merge(&lists, K, 50);
+                assert!(!fused.is_empty());
+            });
+        });
     }
 
     group.finish();
@@ -370,29 +371,21 @@ fn bench_chunking(c: &mut Criterion) {
         let text = make_text(n_chars * 10); // scale by 10 to get non-trivial input
 
         // SemanticChunker
-        group.bench_with_input(
-            BenchmarkId::new("semantic", n_chars),
-            &n_chars,
-            |b, _| {
-                let chunker = SemanticChunker::with_config(cfg.clone());
-                b.iter(|| {
-                    let chunks = chunker.chunk(&path, &text).expect("chunk failed");
-                    assert!(!chunks.is_empty() || text.is_empty());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("semantic", n_chars), &n_chars, |b, _| {
+            let chunker = SemanticChunker::with_config(cfg.clone());
+            b.iter(|| {
+                let chunks = chunker.chunk(&path, &text).expect("chunk failed");
+                assert!(!chunks.is_empty() || text.is_empty());
+            });
+        });
 
         // MarkdownChunker
-        group.bench_with_input(
-            BenchmarkId::new("markdown", n_chars),
-            &n_chars,
-            |b, _| {
-                let chunker = MarkdownChunker;
-                b.iter(|| {
-                    let _ = chunker.chunk(&path, &text).expect("chunk failed");
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("markdown", n_chars), &n_chars, |b, _| {
+            let chunker = MarkdownChunker;
+            b.iter(|| {
+                let _ = chunker.chunk(&path, &text).expect("chunk failed");
+            });
+        });
 
         // HierarchicalChunker
         group.bench_with_input(

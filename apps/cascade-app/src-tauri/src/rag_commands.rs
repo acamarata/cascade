@@ -63,9 +63,7 @@ pub struct RagIndexStatsResult {
 /// JS: `invoke("rag_list_sources")`
 /// TODO(T-P4-E01-29): delegate to RagEngine::list_sources() via daemon IPC.
 #[tauri::command]
-pub async fn rag_list_sources(
-    _state: State<'_, AppState>,
-) -> Result<RagListSourcesResult, String> {
+pub async fn rag_list_sources(_state: State<'_, AppState>) -> Result<RagListSourcesResult, String> {
     // Stub: daemon RAG engine not yet wired. Returns empty list.
     Ok(RagListSourcesResult { sources: vec![] })
 }
@@ -75,10 +73,7 @@ pub async fn rag_list_sources(
 /// A Tauri event "rag-ingest-progress" is emitted by the daemon as chunks are processed.
 /// TODO(T-P4-E01-29): delegate to RagEngine::ingest_file() via daemon IPC.
 #[tauri::command]
-pub async fn rag_ingest_file(
-    path: String,
-    _state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn rag_ingest_file(path: String, _state: State<'_, AppState>) -> Result<(), String> {
     // Stub: log the request; real ingest wired in T-P4-E01-29.
     tracing::info!(path = %path, "rag_ingest_file: stub — T-P4-E01-29 wires daemon");
     Ok(())
@@ -88,9 +83,7 @@ pub async fn rag_ingest_file(
 /// JS: `invoke("rag_index_stats")`
 /// TODO(T-P4-E01-29): delegate to RagEngine::index_stats() via daemon IPC.
 #[tauri::command]
-pub async fn rag_index_stats(
-    _state: State<'_, AppState>,
-) -> Result<RagIndexStatsResult, String> {
+pub async fn rag_index_stats(_state: State<'_, AppState>) -> Result<RagIndexStatsResult, String> {
     // Stub: returns zeroed stats until daemon is wired.
     Ok(RagIndexStatsResult {
         total_files: 0,

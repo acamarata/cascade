@@ -42,18 +42,18 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
 use tracing::{debug, info, instrument, warn};
 
 use cascade_types::error::{CascadeError, Result};
 
-use crate::chunk::{Chunk, ChunkerConfig};
+use crate::chunk::hierarchical::HierarchicalChunker;
 use crate::chunk::markdown::MarkdownChunker;
 use crate::chunk::semantic::SemanticChunker;
-use crate::chunk::hierarchical::HierarchicalChunker;
 use crate::chunk::Chunker;
-use crate::embed::{EmbedModel, store};
+use crate::chunk::{Chunk, ChunkerConfig};
+use crate::embed::{store, EmbedModel};
 use crate::index::state::{ChangeKind, IndexStateStore};
 use crate::parse::ParseDispatcher;
 
@@ -180,6 +180,9 @@ pub struct IngestResult {
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 
+/// Progress callback type: called once per chunk with `(source_path, chunk_index, total_chunks)`.
+type ProgressCb = Box<dyn Fn(&Path, usize, usize) + Send + Sync>;
+
 /// Central coordinator for the parse → chunk → embed → index pipeline.
 ///
 /// # Purpose
@@ -207,7 +210,7 @@ pub struct IngestPipeline {
     config: IngestConfig,
     parser: ParseDispatcher,
     /// Optional progress callback: called once per chunk with (source_path, chunk_index, total_chunks).
-    progress: Option<Box<dyn Fn(&Path, usize, usize) + Send + Sync>>,
+    progress: Option<ProgressCb>,
 }
 
 impl IngestPipeline {
@@ -286,7 +289,10 @@ impl IngestPipeline {
     ///
     /// Parse/IO failures on one file are collected and returned after processing
     /// all files — they do not abort the batch.
-    pub fn ingest_files<'a, I>(&self, paths: I) -> (Vec<IngestResult>, Vec<(std::path::PathBuf, CascadeError)>)
+    pub fn ingest_files<'a, I>(
+        &self,
+        paths: I,
+    ) -> (Vec<IngestResult>, Vec<(std::path::PathBuf, CascadeError)>)
     where
         I: IntoIterator<Item = &'a Path>,
     {
@@ -321,11 +327,7 @@ impl IngestPipeline {
     /// # Parameters
     /// - `candidates` — paths to examine; caller controls discovery/globbing.
     /// - `state_store` — [`IndexStateStore`] opened at the same index root.
-    pub fn ingest_delta<'a, I>(
-        &self,
-        candidates: I,
-        state_store: &IndexStateStore,
-    ) -> IngestStats
+    pub fn ingest_delta<'a, I>(&self, candidates: I, state_store: &IndexStateStore) -> IngestStats
     where
         I: IntoIterator<Item = &'a Path>,
     {
@@ -357,27 +359,26 @@ impl IngestPipeline {
                 Ok((ChangeKind::FastSkip, _)) | Ok((ChangeKind::HashSkip, _)) => {
                     stats.skipped += 1;
                 }
-                Ok((ChangeKind::Changed, hash_opt)) => {
-                    match self.ingest_file(path) {
-                        Ok(_r) => {
-                            let hash = hash_opt.unwrap_or_else(|| {
-                                crate::index::state::blake3_file(path)
-                                    .unwrap_or_default()
-                            });
-                            if !hash.is_empty() {
-                                let _ = state_store.set_hash(path, &hash);
-                            }
-                            stats.ingested += 1;
+                Ok((ChangeKind::Changed, hash_opt)) => match self.ingest_file(path) {
+                    Ok(_r) => {
+                        let hash = hash_opt.unwrap_or_else(|| {
+                            crate::index::state::blake3_file(path).unwrap_or_default()
+                        });
+                        if !hash.is_empty() {
+                            let _ = state_store.set_hash(path, &hash);
                         }
-                        Err(e) => {
-                            warn!(path = %path.display(), error = %e, "delta ingest failed");
-                        }
+                        stats.ingested += 1;
                     }
-                }
+                    Err(e) => {
+                        warn!(path = %path.display(), error = %e, "delta ingest failed");
+                    }
+                },
                 Err(e) => {
                     warn!(path = %path.display(), error = %e, "classify failed — treating as changed");
                     match self.ingest_file(path) {
-                        Ok(_r) => { stats.ingested += 1; }
+                        Ok(_r) => {
+                            stats.ingested += 1;
+                        }
                         Err(e2) => {
                             warn!(path = %path.display(), error = %e2, "fallback ingest failed");
                         }
@@ -388,8 +389,12 @@ impl IngestPipeline {
 
         // Evict deleted files.
         match state_store.evict_deleted() {
-            Ok(n) => { stats.evicted = n; }
-            Err(e) => { warn!(error = %e, "evict_deleted failed"); }
+            Ok(n) => {
+                stats.evicted = n;
+            }
+            Err(e) => {
+                warn!(error = %e, "evict_deleted failed");
+            }
         }
 
         stats.duration = start.elapsed();
@@ -528,22 +533,22 @@ impl IngestPipeline {
             let texts: Vec<&str> = batch.iter().map(|c| c.text.as_str()).collect();
 
             // Dense embeddings.
-            let dense_vecs = self
-                .embed
-                .embed_dense(&texts)
-                .map_err(|e| CascadeError::EmbeddingFailed {
-                    provider: self.embed.model_id().to_string(),
-                    detail: e.to_string(),
-                })?;
+            let dense_vecs =
+                self.embed
+                    .embed_dense(&texts)
+                    .map_err(|e| CascadeError::EmbeddingFailed {
+                        provider: self.embed.model_id().to_string(),
+                        detail: e.to_string(),
+                    })?;
 
             // Sparse embeddings.
-            let sparse_vecs = self
-                .embed
-                .embed_sparse(&texts)
-                .map_err(|e| CascadeError::EmbeddingFailed {
-                    provider: self.embed.model_id().to_string(),
-                    detail: e.to_string(),
-                })?;
+            let sparse_vecs =
+                self.embed
+                    .embed_sparse(&texts)
+                    .map_err(|e| CascadeError::EmbeddingFailed {
+                        provider: self.embed.model_id().to_string(),
+                        detail: e.to_string(),
+                    })?;
 
             // Insert each chunk in this batch.
             for (i, chunk) in batch.iter().enumerate() {
@@ -580,17 +585,19 @@ impl IngestPipeline {
                 // Store embeddings (outside the per-connection BEGIN/COMMIT since
                 // we are already inside a transaction — store_dense/store_sparse
                 // use plain execute without wrapping their own txn here).
-                store::store_dense(&self.conn, chunk_id, &dense_vecs[i])
-                    .map_err(|e| CascadeError::EmbeddingFailed {
+                store::store_dense(&self.conn, chunk_id, &dense_vecs[i]).map_err(|e| {
+                    CascadeError::EmbeddingFailed {
                         provider: "store_dense".into(),
                         detail: e.to_string(),
-                    })?;
+                    }
+                })?;
 
-                store::store_sparse(&self.conn, chunk_id, &sparse_vecs[i])
-                    .map_err(|e| CascadeError::EmbeddingFailed {
+                store::store_sparse(&self.conn, chunk_id, &sparse_vecs[i]).map_err(|e| {
+                    CascadeError::EmbeddingFailed {
                         provider: "store_sparse".into(),
                         detail: e.to_string(),
-                    })?;
+                    }
+                })?;
 
                 chunks_written += 1;
 
@@ -618,9 +625,13 @@ impl IngestPipeline {
             .query(params![path_str])
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
-        if let Some(row) = rows.next().map_err(|e| CascadeError::Other(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| CascadeError::Other(e.to_string()))?
+        {
             let id: i64 = row.get(0).map_err(|e| CascadeError::Other(e.to_string()))?;
-            let hash: Option<String> = row.get(1).map_err(|e| CascadeError::Other(e.to_string()))?;
+            let hash: Option<String> =
+                row.get(1).map_err(|e| CascadeError::Other(e.to_string()))?;
             Ok(Some((id, hash)))
         } else {
             Ok(None)
@@ -802,7 +813,10 @@ mod tests {
         let second = pipeline.ingest_file(f.path()).expect("second ingest ok");
         assert!(second.skipped, "second ingest must skip (hash unchanged)");
         assert_eq!(second.chunks_created, 0);
-        assert_eq!(second.source_id, first.source_id, "source_id must be stable");
+        assert_eq!(
+            second.source_id, first.source_id,
+            "source_id must be stable"
+        );
     }
 
     // ── ingest::changed_file ──────────────────────────────────────────────────
@@ -841,8 +855,7 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| r.get(0))
             .unwrap();
         assert_eq!(
-            after_chunks as usize,
-            second.chunks_created,
+            after_chunks as usize, second.chunks_created,
             "DB chunks must equal second ingest output (old chunks evicted)"
         );
         // Confirm the old chunk count is gone (they should differ because content changed).
@@ -861,8 +874,7 @@ mod tests {
         let good = write_file("# Good file\n\nReal content.\n", ".md");
         let bad_path = std::path::Path::new("/nonexistent/does_not_exist_xyz.md");
 
-        let (results, errors) =
-            pipeline.ingest_files([good.path(), bad_path]);
+        let (results, errors) = pipeline.ingest_files([good.path(), bad_path]);
 
         assert_eq!(results.len(), 1, "good file must produce a result");
         assert!(!results[0].skipped);
@@ -901,10 +913,11 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
 
-        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default())
-            .with_progress(move |_path, _idx, _total| {
+        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default()).with_progress(
+            move |_path, _idx, _total| {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
+            },
+        );
 
         let f = write_file("# Progress\n\nContent for progress test.\n", ".md");
         let result = pipeline.ingest_file(f.path()).expect("ingest ok");
@@ -1032,7 +1045,11 @@ mod tests {
         assert_eq!(s1.ingested, 1);
 
         // Overwrite to force content change and mtime bump.
-        std::fs::write(f.path(), b"# Delta v2\n\nCompletely different content now.\n").unwrap();
+        std::fs::write(
+            f.path(),
+            b"# Delta v2\n\nCompletely different content now.\n",
+        )
+        .unwrap();
 
         let s2 = pipeline.ingest_delta([f.path()], &state);
         assert_eq!(s2.ingested, 1, "modified file must be re-ingested");
@@ -1090,8 +1107,10 @@ mod tests {
     fn delta_incremental_false_always_reindexes() {
         let conn = migrated_conn();
         let embed = Arc::new(MockEmbedModel::default());
-        let mut cfg = IngestConfig::default();
-        cfg.incremental = false;
+        let cfg = IngestConfig {
+            incremental: false,
+            ..Default::default()
+        };
         let pipeline = IngestPipeline::new(conn, embed, cfg);
         let state = make_state_store();
 

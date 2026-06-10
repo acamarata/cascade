@@ -93,8 +93,10 @@ mod tests {
         let bus = NotificationBus::new();
         let mut rx = bus.subscribe();
 
-        let notif =
-            JsonRpcNotification::<Value>::new("notifications/tools/list_changed", Some(serde_json::json!({})));
+        let notif = JsonRpcNotification::<Value>::new(
+            "notifications/tools/list_changed",
+            Some(serde_json::json!({})),
+        );
         let count = bus.broadcast(notif);
         assert_eq!(count, 1);
 
@@ -117,8 +119,10 @@ mod tests {
         let mut rx1 = bus.subscribe();
         let mut rx2 = bus.subscribe();
 
-        let notif =
-            JsonRpcNotification::<Value>::new("notifications/resources/list_changed", Some(serde_json::json!({})));
+        let notif = JsonRpcNotification::<Value>::new(
+            "notifications/resources/list_changed",
+            Some(serde_json::json!({})),
+        );
         let count = bus.broadcast(notif);
         assert_eq!(count, 2);
 

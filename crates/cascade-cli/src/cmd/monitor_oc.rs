@@ -68,10 +68,7 @@ pub struct MonitorOcArgs {
 
 /// Default OC sessions directory.
 pub fn default_sessions_dir() -> PathBuf {
-    home_dir()
-        .join(".config")
-        .join("opencode")
-        .join("sessions")
+    home_dir().join(".config").join("opencode").join("sessions")
 }
 
 /// Path to the OC session log in a repo.
@@ -283,10 +280,7 @@ impl Command for MonitorOcArgs {
         watcher
             .watch(&sessions_dir, RecursiveMode::Recursive)
             .map_err(|e| {
-                CascadeError::Other(format!(
-                    "cannot watch {}: {e}",
-                    sessions_dir.display()
-                ))
+                CascadeError::Other(format!("cannot watch {}: {e}", sessions_dir.display()))
             })?;
 
         // Drain any already-existing JSONL files before entering the event loop
@@ -297,9 +291,7 @@ impl Command for MonitorOcArgs {
                 Ok(event) => {
                     for path in &event.paths {
                         if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                            if let Err(e) =
-                                process_jsonl_event(path, &log_path, &mut offsets)
-                            {
+                            if let Err(e) = process_jsonl_event(path, &log_path, &mut offsets) {
                                 eprintln!("monitor-oc: error processing {}: {e}", path.display());
                             }
                         }
@@ -382,8 +374,7 @@ mod tests {
 
     #[test]
     fn parse_skips_user_role() {
-        let line =
-            r#"{"role":"user","content":"A question","session_id":"s1"}"#;
+        let line = r#"{"role":"user","content":"A question","session_id":"s1"}"#;
         assert!(parse_jsonl_line(line, "fallback").is_none());
     }
 
@@ -435,8 +426,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let jsonl = dir.path().join("session.jsonl");
 
-        let line1 =
-            "{\"role\":\"assistant\",\"content\":\"first\",\"session_id\":\"s1\"}\n";
+        let line1 = "{\"role\":\"assistant\",\"content\":\"first\",\"session_id\":\"s1\"}\n";
         std::fs::write(&jsonl, line1).unwrap();
 
         let (offset1, turns1) = drain_new_turns(&jsonl, 0, "s1").unwrap();
@@ -444,10 +434,12 @@ mod tests {
         assert!(offset1 > 0);
 
         // Append a second line
-        let line2 =
-            "{\"role\":\"assistant\",\"content\":\"second\",\"session_id\":\"s1\"}\n";
+        let line2 = "{\"role\":\"assistant\",\"content\":\"second\",\"session_id\":\"s1\"}\n";
         use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().append(true).open(&jsonl).unwrap();
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&jsonl)
+            .unwrap();
         f.write_all(line2.as_bytes()).unwrap();
 
         let (offset2, turns2) = drain_new_turns(&jsonl, offset1, "s1").unwrap();
@@ -512,7 +504,10 @@ mod tests {
         let content = std::fs::read_to_string(&log_path).unwrap();
         // "Answer" should appear exactly once
         let count = content.matches("Answer").count();
-        assert_eq!(count, 1, "answer should appear exactly once after two calls");
+        assert_eq!(
+            count, 1,
+            "answer should appear exactly once after two calls"
+        );
     }
 
     // ── run_once integration ──────────────────────────────────────────────────

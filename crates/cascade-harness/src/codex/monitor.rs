@@ -43,8 +43,7 @@ impl CodexMonitor {
     pub fn new() -> Self {
         Self {
             sys: System::new_with_specifics(
-                RefreshKind::new()
-                    .with_processes(ProcessRefreshKind::everything()),
+                RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
             ),
         }
     }
@@ -100,8 +99,7 @@ fn infer_workspace(proc: &sysinfo::Process) -> Option<PathBuf> {
     }
 
     // Fallback: parent of the exe path
-    proc.exe()
-        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
+    proc.exe().and_then(|e| e.parent().map(|p| p.to_path_buf()))
 }
 
 // ── Quota-store integration ───────────────────────────────────────────────────
@@ -142,7 +140,7 @@ pub fn write_quota_sessions(sessions: &[CodexSession]) -> cascade_types::error::
 
     // Merge codex_sessions key
     let sessions_json = serde_json::to_value(sessions)
-        .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}").into()))?;
+        .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}")))?;
     store
         .as_object_mut()
         .ok_or_else(|| CascadeError::Other("quota-store root is not an object".into()))?
@@ -157,7 +155,7 @@ pub fn write_quota_sessions(sessions: &[CodexSession]) -> cascade_types::error::
             source: e,
         })?;
         let json_str = serde_json::to_string_pretty(&store)
-            .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}").into()))?;
+            .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}")))?;
         file.write_all(json_str.as_bytes())
             .map_err(|e| CascadeError::Io {
                 path: tmp_path.clone(),

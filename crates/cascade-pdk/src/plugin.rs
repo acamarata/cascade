@@ -10,9 +10,9 @@
 //! SPORT: cascade-pdk / plugin trait (T-P4-E03-10)
 
 use crate::types::{
-    AgentContext, AgentResponse, Chunk, ChunkOpts, DataSourceFetchArgs, DataSourcePage,
-    Document, EmbedOpts, Embedding, PluginError, PluginKind, RetrievalResult, RetrieveOpts,
-    ToolCall, ToolResult, WidgetData,
+    AgentContext, AgentResponse, Chunk, ChunkOpts, DataSourceFetchArgs, DataSourcePage, Document,
+    EmbedOpts, Embedding, PluginError, PluginKind, RetrievalResult, RetrieveOpts, ToolCall,
+    ToolResult, WidgetData,
 };
 
 /// Core plugin interface.
@@ -44,11 +44,7 @@ pub trait Plugin {
     /// Split `doc` into chunks according to `opts`.
     ///
     /// Override this method if `kind()` returns `PluginKind::Chunker`.
-    fn chunk_document(
-        &self,
-        _doc: Document,
-        _opts: ChunkOpts,
-    ) -> Result<Vec<Chunk>, PluginError> {
+    fn chunk_document(&self, _doc: Document, _opts: ChunkOpts) -> Result<Vec<Chunk>, PluginError> {
         Err(PluginError::NotImplemented)
     }
 
@@ -70,11 +66,7 @@ pub trait Plugin {
     /// Compute embeddings for a batch of texts.
     ///
     /// Override this method if `kind()` returns `PluginKind::Provider`.
-    fn embed(
-        &self,
-        _texts: Vec<String>,
-        _opts: EmbedOpts,
-    ) -> Result<Vec<Embedding>, PluginError> {
+    fn embed(&self, _texts: Vec<String>, _opts: EmbedOpts) -> Result<Vec<Embedding>, PluginError> {
         Err(PluginError::NotImplemented)
     }
 
@@ -92,10 +84,7 @@ pub trait Plugin {
     /// Process an agent context and produce a response.
     ///
     /// Override this method if `kind()` returns `PluginKind::Agent`.
-    fn run_agent(
-        &self,
-        _ctx: AgentContext,
-    ) -> Result<AgentResponse, PluginError> {
+    fn run_agent(&self, _ctx: AgentContext) -> Result<AgentResponse, PluginError> {
         Err(PluginError::NotImplemented)
     }
 
@@ -118,10 +107,7 @@ pub trait Plugin {
     /// `args.cursor` is `None` on the first call; pass the `next_cursor` from
     /// the previous response to advance through pages. Return `next_cursor: None`
     /// when there are no more pages.
-    fn fetch_items(
-        &self,
-        _args: DataSourceFetchArgs,
-    ) -> Result<DataSourcePage, PluginError> {
+    fn fetch_items(&self, _args: DataSourceFetchArgs) -> Result<DataSourcePage, PluginError> {
         Err(PluginError::NotImplemented)
     }
 }

@@ -50,7 +50,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{params, Connection, OptionalExtension};
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -217,8 +217,7 @@ impl EmbedCache {
     pub fn disabled() -> Self {
         // We need a Connection to satisfy the field type.  Use an in-memory DB
         // for the disabled sentinel so no disk I/O ever occurs.
-        let conn = Connection::open_in_memory()
-            .expect("in-memory SQLite must always succeed");
+        let conn = Connection::open_in_memory().expect("in-memory SQLite must always succeed");
         Self {
             inner: Mutex::new(conn),
             enabled: false,
@@ -266,9 +265,10 @@ impl EmbedCache {
         }
 
         let blob = serialize_f32_le(vec);
-        let conn = self.inner.lock().map_err(|_| {
-            EmbedCacheError::Db(rusqlite::Error::SqliteSingleThreadedMode)
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|_| EmbedCacheError::Db(rusqlite::Error::SqliteSingleThreadedMode))?;
         conn.execute(
             "INSERT OR REPLACE INTO embeddings (content_hash, vec) VALUES (?1, ?2)",
             params![content_hash, blob],
@@ -291,9 +291,13 @@ impl EmbedCache {
         if !self.enabled {
             return 0;
         }
-        let Ok(conn) = self.inner.lock() else { return 0 };
-        conn.query_row("SELECT COUNT(*) FROM embeddings", [], |r| r.get::<_, i64>(0))
-            .unwrap_or(0) as usize
+        let Ok(conn) = self.inner.lock() else {
+            return 0;
+        };
+        conn.query_row("SELECT COUNT(*) FROM embeddings", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .unwrap_or(0) as usize
     }
 
     /// Batch lookup: returns a `Vec<Option<Vec<f32>>>` parallel to `hashes`.
@@ -488,7 +492,8 @@ impl EmbedModel for CachedEmbedModel {
 
         // 5. Write misses back to cache.
         for (miss_pos, &miss_idx) in miss_indices.iter().enumerate() {
-            self.cache.set_silent(&hashes[miss_idx], &miss_vecs[miss_pos]);
+            self.cache
+                .set_silent(&hashes[miss_idx], &miss_vecs[miss_pos]);
         }
 
         // 6. Reassemble in original order.
@@ -499,7 +504,9 @@ impl EmbedModel for CachedEmbedModel {
                 if let Some(v) = cached {
                     v
                 } else {
-                    miss_iter.next().expect("miss_iter length matches miss count")
+                    miss_iter
+                        .next()
+                        .expect("miss_iter length matches miss count")
                 }
             })
             .collect();
@@ -531,8 +538,8 @@ mod tests {
     use super::*;
     use crate::embed::MockEmbedModel;
     use std::sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     };
     use tempfile::TempDir;
 
@@ -604,15 +611,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         // Open with v1, populate.
         {
-            let cache =
-                EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
             cache.set("hash-a", &[1.0, 2.0, 3.0]).unwrap();
             assert_eq!(cache.count(), 1);
         }
         // Reopen with v2 — should invalidate all entries.
         {
-            let cache =
-                EmbedCache::open(dir.path(), "bge-m3", "2", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "bge-m3", "2", true).unwrap();
             assert_eq!(
                 cache.count(),
                 0,
@@ -629,14 +634,12 @@ mod tests {
     fn embed_cache_model_id_change_invalidates() {
         let dir = TempDir::new().unwrap();
         {
-            let cache =
-                EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
             cache.set("h1", &[0.1, 0.2]).unwrap();
         }
         // Different model_id — must invalidate.
         {
-            let cache =
-                EmbedCache::open(dir.path(), "nomic-embed", "1", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "nomic-embed", "1", true).unwrap();
             assert_eq!(cache.count(), 0, "model_id change must invalidate cache");
         }
     }
@@ -645,14 +648,12 @@ mod tests {
     fn embed_cache_same_model_version_persists() {
         let dir = TempDir::new().unwrap();
         {
-            let cache =
-                EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
             cache.set("h1", &[0.5, 0.6]).unwrap();
         }
         // Same model_id + model_version — entries survive.
         {
-            let cache =
-                EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
+            let cache = EmbedCache::open(dir.path(), "bge-m3", "1", true).unwrap();
             assert_eq!(cache.count(), 1, "same model version must keep entries");
             let v = cache.get("h1").unwrap();
             assert_eq!(v, vec![0.5, 0.6]);
@@ -689,10 +690,7 @@ mod tests {
     }
 
     impl EmbedModel for CountingMock {
-        fn embed_dense(
-            &self,
-            texts: &[&str],
-        ) -> std::result::Result<Vec<Vec<f32>>, EmbedError> {
+        fn embed_dense(&self, texts: &[&str]) -> std::result::Result<Vec<Vec<f32>>, EmbedError> {
             self.call_count.fetch_add(texts.len(), Ordering::SeqCst);
             self.inner.embed_dense(texts)
         }
@@ -719,9 +717,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
         let inner = Arc::new(CountingMock::new(16, Arc::clone(&counter)));
-        let cache = Arc::new(
-            EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap(),
-        );
+        let cache = Arc::new(EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap());
         let cached_model = CachedEmbedModel::new(inner, Arc::clone(&cache));
 
         let text = "the quick brown fox";
@@ -742,10 +738,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
         let inner = Arc::new(CountingMock::new(8, Arc::clone(&counter)));
-        let cache = Arc::new(
-            EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap(),
+        let cache = Arc::new(EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap());
+        let cached_model = CachedEmbedModel::new(
+            Arc::clone(&inner) as Arc<dyn EmbedModel>,
+            Arc::clone(&cache),
         );
-        let cached_model = CachedEmbedModel::new(Arc::clone(&inner) as Arc<dyn EmbedModel>, Arc::clone(&cache));
 
         // Pre-populate two entries in the cache.
         let hit_texts = ["cached-text-one", "cached-text-two"];
@@ -778,9 +775,7 @@ mod tests {
         // v1 session: embed one text.
         {
             let inner = Arc::new(CountingMock::new(8, Arc::clone(&counter_v1)));
-            let cache = Arc::new(
-                EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap(),
-            );
+            let cache = Arc::new(EmbedCache::open(dir.path(), "counting-mock", "1", true).unwrap());
             let m = CachedEmbedModel::new(inner, cache);
             m.embed_dense(&["same text"]).unwrap();
             assert_eq!(counter_v1.load(Ordering::SeqCst), 1);
@@ -789,9 +784,7 @@ mod tests {
         // v2 session: same text must be re-embedded (cache was invalidated).
         {
             let inner = Arc::new(CountingMock::new(8, Arc::clone(&counter_v2)));
-            let cache = Arc::new(
-                EmbedCache::open(dir.path(), "counting-mock", "2", true).unwrap(),
-            );
+            let cache = Arc::new(EmbedCache::open(dir.path(), "counting-mock", "2", true).unwrap());
             let m = CachedEmbedModel::new(inner, cache);
             m.embed_dense(&["same text"]).unwrap();
             assert_eq!(
@@ -828,7 +821,11 @@ mod tests {
         // set_silent should overwrite the corrupt row with valid data.
         let valid = vec![1.0_f32, 2.0, 3.0, 4.0];
         cache.set_silent("corrupt-hash", &valid);
-        assert_eq!(cache.get("corrupt-hash").unwrap(), valid, "overwrite must succeed");
+        assert_eq!(
+            cache.get("corrupt-hash").unwrap(),
+            valid,
+            "overwrite must succeed"
+        );
     }
 
     #[test]
@@ -836,7 +833,10 @@ mod tests {
         let (_dir, cache) = temp_cache("test-model", "1");
         let hashes = ["h1", "h2", "h3"];
         let results = cache.get_batch(&hashes);
-        assert!(results.iter().all(|r| r.is_none()), "all miss on empty cache");
+        assert!(
+            results.iter().all(|r| r.is_none()),
+            "all miss on empty cache"
+        );
     }
 
     #[test]
@@ -865,6 +865,10 @@ mod tests {
 
         // Reopen with new version: prune fires.
         let cache_v2 = EmbedCache::open(dir.path(), "model", "v2", true).unwrap();
-        assert_eq!(cache_v2.count(), 0, "version bump must prune all old entries");
+        assert_eq!(
+            cache_v2.count(),
+            0,
+            "version bump must prune all old entries"
+        );
     }
 }

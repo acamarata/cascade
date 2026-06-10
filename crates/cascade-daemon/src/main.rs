@@ -293,6 +293,12 @@ async fn main() {
                 let _ = tray_tx.send(tray::TrayStateUpdate::Shutdown);
                 let _ = tray_handle.join();
                 write_crash_sentinel(&e.to_string());
+                // Remove daemon.pid even on the error path: a stale pid file
+                // makes the next start (and tests) believe the daemon is
+                // still alive (observed: port-collision exits leaked it).
+                if let Err(fe) = shutdown::flush_state(&config_dir).await {
+                    error!(%fe, "state flush failed during error shutdown");
+                }
                 process::exit(1);
             }
         }

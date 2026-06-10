@@ -103,3 +103,15 @@ The desktop GUI. Provides a visual editor for cascade files, a step-by-step onbo
 ```
 
 Project-level cascade files live in the project directory itself (`CASCADE.md` at whatever tier is appropriate). Cascade never moves or copies them; it reads them in place.
+
+## Dogfooding: cascade hosts its own PRC
+
+The `cascade` repo itself uses the tool it builds. `.cascade/CASCADE.md` at the
+repo root is the PRC tier for the cascade codebase. When you run `cascade resolve`
+from inside this repo, `cascade-core`'s resolver walks upward and picks up that
+file as the innermost tier, providing stack facts, dev commands, key decisions,
+and active phase context to any AI agent working on cascade itself.
+
+This was bootstrapped in T-P4-E05-19 (P4 E-05). The file is tracked in git via a
+`.gitignore` negation (`!.cascade/CASCADE.md`). Runtime-only files (`*.json`,
+`temp/`) in `.cascade/` remain gitignored.

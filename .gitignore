@@ -15,4 +15,9 @@ node_modules/
 .gemini/
 .codeium/
 target/
-.cascade/
+# Ignore all .cascade/ runtime content except the repo's own PRC file
+.cascade/*
+.cascade/temp/
+# Track the repo's own PRC instruction file and its gitignore
+!.cascade/CASCADE.md
+!.cascade/.gitignore

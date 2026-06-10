@@ -85,7 +85,9 @@ impl RagStatus {
         let indexed_docs = index_root
             .as_ref()
             .and_then(|root| {
-                cascade_rag::IndexStateStore::open(root).ok().map(|s| s.count())
+                cascade_rag::IndexStateStore::open(root)
+                    .ok()
+                    .map(|s| s.count())
             })
             .unwrap_or(0);
 
@@ -95,9 +97,9 @@ impl RagStatus {
             .and_then(|root| {
                 let stats_path = root.join("last_index_stats.json");
                 std::fs::read_to_string(&stats_path).ok().and_then(|s| {
-                    serde_json::from_str::<serde_json::Value>(&s).ok().and_then(|v| {
-                        v["duration"].as_u64()
-                    })
+                    serde_json::from_str::<serde_json::Value>(&s)
+                        .ok()
+                        .and_then(|v| v["duration"].as_u64())
                 })
             })
             .unwrap_or(0);
@@ -219,12 +221,14 @@ fn read_rag_config(cwd: &std::path::Path) -> (u64, bool) {
     let config_paths: Vec<PathBuf> = {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
         let global = PathBuf::from(home).join(".cascade").join("config.toml");
-        let project = cwd
-            .ancestors()
-            .find_map(|p| {
-                let c = p.join(".cascade").join("config.toml");
-                if c.exists() { Some(c) } else { None }
-            });
+        let project = cwd.ancestors().find_map(|p| {
+            let c = p.join(".cascade").join("config.toml");
+            if c.exists() {
+                Some(c)
+            } else {
+                None
+            }
+        });
         let mut v = vec![global];
         if let Some(proj) = project {
             v.push(proj);
@@ -266,7 +270,10 @@ mod tests {
         let rag = RagStatus::load(tmp.path());
 
         assert_eq!(rag.shard_count, 4, "default shard_count must be 4");
-        assert!(rag.incremental_enabled, "incremental_enabled must default to true");
+        assert!(
+            rag.incremental_enabled,
+            "incremental_enabled must default to true"
+        );
         assert_eq!(rag.indexed_docs, 0);
         assert_eq!(rag.last_index_duration_ms, 0);
         assert_eq!(rag.worker_queue_depth, 0);
@@ -283,7 +290,8 @@ mod tests {
         std::fs::write(
             cascade_dir.join("config.toml"),
             "[rag]\nshard_count = 8\nincremental = false\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let rag = RagStatus::load(tmp.path());
         assert_eq!(rag.shard_count, 8, "shard_count from config");
@@ -333,4 +341,3 @@ mod tests {
         }
     }
 }
-

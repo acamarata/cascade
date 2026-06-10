@@ -211,12 +211,27 @@ mod tests {
         let json_str = serde_json::to_string(&params).unwrap();
 
         // Verify camelCase field names in the wire format
-        assert!(json_str.contains("protocolVersion"), "expected protocolVersion in: {json_str}");
-        assert!(json_str.contains("clientInfo"), "expected clientInfo in: {json_str}");
-        assert!(json_str.contains("listChanged"), "expected listChanged in: {json_str}");
+        assert!(
+            json_str.contains("protocolVersion"),
+            "expected protocolVersion in: {json_str}"
+        );
+        assert!(
+            json_str.contains("clientInfo"),
+            "expected clientInfo in: {json_str}"
+        );
+        assert!(
+            json_str.contains("listChanged"),
+            "expected listChanged in: {json_str}"
+        );
         // snake_case must NOT appear
-        assert!(!json_str.contains("protocol_version"), "snake_case leaked: {json_str}");
-        assert!(!json_str.contains("client_info"), "snake_case leaked: {json_str}");
+        assert!(
+            !json_str.contains("protocol_version"),
+            "snake_case leaked: {json_str}"
+        );
+        assert!(
+            !json_str.contains("client_info"),
+            "snake_case leaked: {json_str}"
+        );
 
         // Round-trip
         let back: InitializeParams = serde_json::from_str(&json_str).unwrap();
@@ -242,11 +257,23 @@ mod tests {
 
         let json_str = serde_json::to_string(&result).unwrap();
 
-        assert!(json_str.contains("protocolVersion"), "expected protocolVersion in: {json_str}");
-        assert!(json_str.contains("serverInfo"), "expected serverInfo in: {json_str}");
+        assert!(
+            json_str.contains("protocolVersion"),
+            "expected protocolVersion in: {json_str}"
+        );
+        assert!(
+            json_str.contains("serverInfo"),
+            "expected serverInfo in: {json_str}"
+        );
         // None fields must be absent (skip_serializing_if = None)
-        assert!(!json_str.contains("\"resources\""), "null resources must be absent: {json_str}");
-        assert!(!json_str.contains("\"prompts\""), "null prompts must be absent: {json_str}");
+        assert!(
+            !json_str.contains("\"resources\""),
+            "null resources must be absent: {json_str}"
+        );
+        assert!(
+            !json_str.contains("\"prompts\""),
+            "null prompts must be absent: {json_str}"
+        );
 
         let back: InitializeResult = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back, result);
@@ -257,14 +284,20 @@ mod tests {
         let caps = ServerCapabilities::default();
         let json_str = serde_json::to_string(&caps).unwrap();
         // All None fields omitted — result is empty object
-        assert_eq!(json_str, "{}", "default ServerCapabilities must serialize to {{}}");
+        assert_eq!(
+            json_str, "{}",
+            "default ServerCapabilities must serialize to {{}}"
+        );
     }
 
     #[test]
     fn initialize_result_helper_uses_canonical_version() {
         let result = InitializeResult::new(
             ServerCapabilities::default(),
-            Implementation { name: "test".into(), version: "1.0.0".into() },
+            Implementation {
+                name: "test".into(),
+                version: "1.0.0".into(),
+            },
         );
         assert_eq!(result.protocol_version, MCP_PROTOCOL_VERSION);
     }

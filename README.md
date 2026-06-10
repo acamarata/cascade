@@ -1,100 +1,109 @@
 # Cascade
 
-[![Build](https://img.shields.io/github/actions/workflow/status/acamarata/cascade/ci.yml?branch=main&label=build)](https://github.com/acamarata/cascade/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/acamarata/cascade/ci.yml?branch=main&label=CI)](https://github.com/acamarata/cascade/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Crates.io](https://img.shields.io/crates/v/cascade-core.svg)](https://crates.io/crates/cascade-core)
-[![npm](https://img.shields.io/npm/v/@acamarata/cascade.svg)](https://www.npmjs.com/package/@acamarata/cascade)
-[![docs.rs](https://img.shields.io/docsrs/cascade-core)](https://docs.rs/cascade-core)
-[![MSRV](https://img.shields.io/badge/rust-1.78+-orange.svg)](https://www.rust-lang.org)
-[![Discussions](https://img.shields.io/github/discussions/acamarata/cascade)](https://github.com/acamarata/cascade/discussions)
+[![crates.io](https://img.shields.io/crates/v/cascade-cli.svg)](https://crates.io/crates/cascade-cli)
+[![GitHub release](https://img.shields.io/github/v/release/acamarata/cascade)](https://github.com/acamarata/cascade/releases/latest)
 
-A six-tier instruction cascade manager for AI coding agents. Write your rules once, at the right scope, and every tool picks them up automatically.
+A local-first AI context manager for coding agents. Write your rules once, at the right scope, and every tool picks them up automatically.
 
 ---
 
-## The problem
+## What is a cascade?
 
-AI coding agents read instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and so on). Most teams end up with a tangle: rules duplicated across repos, tools that see different subsets, no clear override order. When you work across many repos and tool contexts, this becomes expensive to maintain and easy to get wrong.
+Most AI coding agents read instruction files: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and others. As soon as you work across multiple repos and multiple tools, those files multiply and drift. You end up with the same rules in ten places, tools seeing different subsets, and no clear answer for what wins when files conflict.
 
-## What Cascade does
-
-Cascade manages a six-tier hierarchy of instruction files:
-
-```
-GCI  — global, applies everywhere
- └─ PCI  — per-project cluster
-     └─ APC  — per-application
-         └─ PPC  — per-product
-             └─ PRC  — per-repo
-                 └─ PAC  — per-app context
-```
-
-Each tier inherits from the one above. A rule at the GCI level applies everywhere unless a lower tier overrides it. Cascade resolves the full effective instruction set for any given working directory and writes the tool-specific files each agent expects.
-
-## Install
-
-**macOS (Homebrew)**
-```bash
-brew install acamarata/tap/cascade
-```
-
-**Linux (AUR)**
-```bash
-yay -S cascade-bin
-```
-
-**Windows (Winget)**
-```powershell
-winget install acamarata.cascade
-```
-
-**From source**
-```bash
-cargo install cascade-cli
-```
-
-Verify: `cascade --version`
-
-## Quickstart
-
-```bash
-# First-time setup: interactive wizard
-cascade init
-
-# Edit your global rules
-cascade edit --tier gci
-
-# Sync derived files to all connected tools
-cascade sync
-
-# Search your indexed rule base
-cascade search "authentication"
-
-# Check status
-cascade status
-```
-
-Full documentation: [the handbook](docs/handbook/) and [the wiki](../../wiki).
-
-## Screenshots
-
-| Onboarding wizard | Cascade editor | RAG search |
-|---|---|---|
-| *(screenshot — E5 beta)* | *(screenshot — E4 beta)* | *(screenshot — E7 beta)* |
+A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each tier inherits from the one above. When Cascade resolves instructions for a given working directory, it walks the hierarchy from global down to the narrowest scope, merges the result, and writes the tool-specific files each agent expects. One source of truth, always consistent.
 
 ## Features
 
-- Automatic discovery and resolution of CASCADE.md files in the working tree
-- Derived-file writer: generates CLAUDE.md, AGENTS.md, .cursorrules, and others from a single source
-- MCP server exposing the resolved cascade as context to any MCP-compatible tool
-- Local RAG index over your instruction corpus: semantic search, citations, no cloud required
-- Onboarding wizard for first-run setup across 7 supported tools
-- All data stays local; no telemetry by default
+- Resolves a 6-tier instruction hierarchy (GCI → PCI → APC → PPC → PRC → PAC) for any working directory
+- Generates harness-native files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and more) from a single source
+- Local RAG index over your instruction corpus: FTS5 + dense embeddings + RRF reranking, no cloud required
+- MCP server with 5 transports, exposing your cascade as context to any MCP-compatible tool
+- WASM plugin system (wasmtime, capability-gated) with a PDK and `cargo-generate` template
+
+## Platform support
+
+| Platform | Install command |
+|---|---|
+| macOS | `brew install acamarata/tap/cascade` |
+| Linux (AUR) | `yay -S cascade-bin` |
+| Linux (Snap) | `snap install cascade` |
+| Linux (Flatpak) | `flatpak install flathub dev.camarata.Cascade` |
+| Windows (Winget) | `winget install acamarata.cascade` |
+| Windows (Chocolatey) | `choco install cascade` |
+| Windows (Scoop) | `scoop install cascade` |
+| Nix | `nix run github:acamarata/cascade` |
+| Any (cargo) | `cargo install cascade-cli` |
+
+## Quick start
+
+```bash
+# 1. Install (macOS example)
+brew install acamarata/tap/cascade
+
+# 2. Run the setup wizard: detects your tools, creates your first hierarchy
+cascade init
+
+# 3. Edit your global rules
+cascade edit --tier gci
+
+# 4. Sync derived files to all connected tools
+cascade sync
+
+# 5. Search your indexed rule base
+cascade search "authentication"
+```
+
+Full documentation: [the wiki](../../wiki) | [CLI reference](../../wiki/CLI-Reference) | [quickstart guide](../../wiki/Quickstart)
+
+## Architecture
+
+```
+┌──────────────────────────────────────────┐
+│              Cascade.app (Tauri 2)        │
+│  Onboarding wizard · Knowledge vault     │
+│  Template browser · Persona library      │
+│  Project maps · Settings                 │
+└─────────────────┬────────────────────────┘
+                  │ JSON-RPC / HTTP
+┌─────────────────▼────────────────────────┐
+│              cascaded (daemon)            │
+│  Cascade resolver · RAG indexer          │
+│  MCP server · WASM plugin host           │
+│  Context optimizer · Policy guardrails   │
+│  Gemini key-pool proxy                   │
+│       127.0.0.1:9761 dashboard           │
+└──────┬──────────┬───────────┬────────────┘
+       │          │           │
+  ┌────▼───┐ ┌───▼────┐ ┌────▼──────────┐
+  │cascade │ │OS tray │ │  AI tools     │
+  │  CLI   │ │widget  │ │  CC · OC      │
+  │        │ │        │ │  Cursor·Aider │
+  └────────┘ └────────┘ └───────────────┘
+```
+
+## Distribution channels
+
+| Channel | Package | Notes |
+|---|---|---|
+| Homebrew Cask | `acamarata/tap/cascade` | macOS GUI + CLI |
+| AUR | `cascade-bin` | Linux, pre-built binary |
+| Winget | `acamarata.cascade` | Windows |
+| Chocolatey | `cascade` | Windows |
+| Scoop | `cascade` | Windows |
+| Snap | `cascade` | Linux |
+| Flatpak | `dev.camarata.Cascade` | Linux |
+| Nix | `github:acamarata/cascade` | NixOS + flakes |
+| crates.io | `cascade-cli` | `cargo install cascade-cli` |
 
 ## Contributing
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and [the wiki Contributing page](../../wiki/Contributing).
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Contributing wiki page](../../wiki/Contributing).
 
 ## License
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 MIT. See [LICENSE](LICENSE).

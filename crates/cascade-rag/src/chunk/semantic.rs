@@ -30,7 +30,7 @@ use cascade_types::{
     error::Result,
 };
 
-use super::{Chunk, ChunkerConfig, Chunker};
+use super::{Chunk, Chunker, ChunkerConfig};
 
 /// Default cosine similarity threshold (used by the async pipeline variant).
 const DEFAULT_THRESHOLD: f32 = 0.65;
@@ -315,7 +315,11 @@ impl Chunker for SemanticChunker {
         for item in emit_order {
             match item {
                 EmitItem::HardSplit(t, s, e) => {
-                    raw.push(RawChunk { text: t, byte_start: s, byte_end: e });
+                    raw.push(RawChunk {
+                        text: t,
+                        byte_start: s,
+                        byte_end: e,
+                    });
                 }
                 EmitItem::Window(w) => {
                     if w.sentence_indices.is_empty() {
@@ -493,7 +497,10 @@ mod tests {
     fn sentence_split_basic() {
         let text = "Hello world. This is a test. Another sentence here.";
         let sents = split_sentences(text);
-        assert!(sents.len() >= 2, "expected at least 2 sentences, got {sents:?}");
+        assert!(
+            sents.len() >= 2,
+            "expected at least 2 sentences, got {sents:?}"
+        );
     }
 
     #[test]
@@ -521,9 +528,22 @@ mod tests {
     #[test]
     fn window_produces_multiple_chunks_for_500_char_text() {
         // 500 char text, max=200 → should produce ≥2 chunks.
-        let text = "A".repeat(30) + ". " + &"B".repeat(30) + ". " + &"C".repeat(30)
-            + ". " + &"D".repeat(30) + ". " + &"E".repeat(30) + ". "
-            + &"F".repeat(30) + ". " + &"G".repeat(30) + ". " + &"H".repeat(30) + ".";
+        let text = "A".repeat(30)
+            + ". "
+            + &"B".repeat(30)
+            + ". "
+            + &"C".repeat(30)
+            + ". "
+            + &"D".repeat(30)
+            + ". "
+            + &"E".repeat(30)
+            + ". "
+            + &"F".repeat(30)
+            + ". "
+            + &"G".repeat(30)
+            + ". "
+            + &"H".repeat(30)
+            + ".";
         let c = chunker(200, 50, 10);
         let chunks = sync_chunk(&c, path(), &text);
         assert!(
@@ -656,7 +676,10 @@ mod tests {
         let text = "A".repeat(500) + ".";
         let c = chunker(100, 20, 5);
         let chunks = sync_chunk(&c, path(), &text);
-        assert!(chunks.len() >= 5, "expected ≥5 chunks for 500-char sentence with max=100");
+        assert!(
+            chunks.len() >= 5,
+            "expected ≥5 chunks for 500-char sentence with max=100"
+        );
         for ch in &chunks {
             assert!(!ch.text.is_empty(), "empty chunk detected");
         }
@@ -695,7 +718,11 @@ mod tests {
         let chunks = sync_chunk(&c, path(), text);
         assert!(!chunks.is_empty());
         for ch in &chunks {
-            assert!(!ch.text.is_empty(), "empty chunk at index {}", ch.chunk_index);
+            assert!(
+                !ch.text.is_empty(),
+                "empty chunk at index {}",
+                ch.chunk_index
+            );
         }
     }
 

@@ -15,35 +15,51 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 **Getting started**
 - [Install](Install.md) — macOS, Linux, Windows
 - [Quickstart](Quickstart.md) — your first cascade in 30 minutes
-- [Onboarding Wizard Walkthrough](Onboarding-Wizard-Walkthrough.md)
+- [Distribution Channels](Distribution-Channels.md) — all 9 install methods
+- [Onboarding Wizard](onboarding-wizard.md) — guided setup walkthrough
 
 **Concepts**
 - [The Cascade Concept](Cascade-Concept.md) — why cascading instructions
 - [Six-Tier Taxonomy](Six-Tier-Taxonomy.md) — GCI / PCI / APC / PPC / PRC / PAC
 - [Architecture](Architecture.md) — system components and data flow
+- [Cascade Resolution](Cascade-Resolution.md) — how tiers merge
 - [Glossary](Glossary.md)
 
 **Reference**
 - [CLI Reference](CLI-Reference.md)
 - [Templates](templates.md)
-- [Configuration Reference](Configuration-Reference.md)
-- [RAG Setup](RAG-Setup.md)
+- [Configuration](Configuration.md)
+- [RAG Pipeline](RAG-Pipeline.md)
 - [MCP Server](MCP-Server.md)
 - [Performance](cascade-performance.md)
+- [Settings](cascade-settings.md)
 
 **Tool integrations**
-- [Claude Code](Integration-Claude-Code.md) · [OpenCode](Integration-OpenCode.md) · [Codex](Integration-Codex.md)
-- [Cursor](Integration-Cursor.md) · [Aider](Integration-Aider.md) · [Windsurf](Integration-Windsurf.md) · [Antigravity](Integration-Antigravity.md)
+- [Tool Integration](Tool-Integration.md) — Claude Code, OpenCode, Cursor, Aider, Windsurf, Codex, Antigravity
+
+**Plugins**
+- [Plugin Development](Plugin-Development.md) — overview
+- [Plugin Development Guide](plugin-development-guide.md) — full PDK reference
+- [github-issues](plugins-github-issues.md) · [gitlab](plugins-gitlab.md) · [jira](plugins-jira.md) · [linear](plugins-linear.md)
+
+**Daemon & OS**
+- [Daemon Architecture](Daemon-Architecture.md)
+- [Harness Bridge](Harness-Bridge.md)
+- [Hooks](Hooks.md)
+- [Scheduler](Scheduler.md)
+- [Backup](Backup.md)
+- [macOS Widget](cascade-settings.md) · [Windows Widget](cascade-widget-windows.md) · [Linux Widget](linux-widget-install.md)
 
 **Help**
 - [Troubleshooting](Troubleshooting.md) · [FAQ](FAQ.md)
 
 **Community**
 - [Contributing](Contributing.md) · [Governance](Governance.md) · [Roadmap](Roadmap.md)
-- [Plugin Development](Plugin-Development.md) · [Plugin Development Guide](plugin-development-guide.md) · [Building From Source](Building-From-Source.md)
+- [Building From Source](Building-From-Source.md) · [Development Setup](Development-Setup.md) · [Testing](Testing.md)
 
 **Project info**
 - [Security](Security.md) · [Privacy](Privacy.md) · [Telemetry Consent](Telemetry-Consent.md)
+- [Code Signing](Code-Signing.md)
 - [Changelog](Changelog.md)
 
 ## 30-second example

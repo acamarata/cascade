@@ -1,0 +1,9 @@
+# Cascade runtime files — excluded from version control
+*.json
+*.lock
+temp/
+dispatch-results/
+oc-session-log.md
+
+# Track the repo's own PRC instruction file
+!CASCADE.md

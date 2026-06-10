@@ -126,10 +126,8 @@ impl IpcServer {
     ) -> Result<Self, DaemonError> {
         let socket_path = config_dir.join(SOCKET_NAME);
         // RAG handler: lazy IndexRegistry + MockEmbedModel (real BGE-M3 injected later).
-        let rag_handler = RagSearchHandler::new(
-            IndexRegistry::new(),
-            Arc::new(MockEmbedModel::new(1024)),
-        );
+        let rag_handler =
+            RagSearchHandler::new(IndexRegistry::new(), Arc::new(MockEmbedModel::new(1024)));
         // Caches (T-P4-E04-10/11): chunk cache with default capacity; RAG caches
         // with default capacities. These are shared via Arc so future tickets can
         // pass them into the RAG pipeline without cloning.
@@ -606,10 +604,7 @@ async fn dispatch_cache(
             Response::ok(resp)
         }
         "cache.clear" => {
-            let p: CacheClearParams = match params
-                .map(serde_json::from_value)
-                .transpose()
-            {
+            let p: CacheClearParams = match params.map(serde_json::from_value).transpose() {
                 Ok(Some(p)) => p,
                 Ok(None) => CacheClearParams {
                     query: false,
@@ -634,9 +629,15 @@ async fn dispatch_cache(
 
             let cleared: Vec<&str> = {
                 let mut v = Vec::new();
-                if p.query || clear_all { v.push("query"); }
-                if p.embed || clear_all { v.push("embedding"); }
-                if p.chunk || clear_all { v.push("chunk"); }
+                if p.query || clear_all {
+                    v.push("query");
+                }
+                if p.embed || clear_all {
+                    v.push("embedding");
+                }
+                if p.chunk || clear_all {
+                    v.push("chunk");
+                }
                 v
             };
 

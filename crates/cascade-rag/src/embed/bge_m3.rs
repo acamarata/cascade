@@ -62,7 +62,7 @@ use cascade_types::{
     EmbedOpts, Embedding, EmbeddingProvider, ProviderKind,
 };
 
-use super::{EmbedError, EmbedModel, sparse_tfidf_single};
+use super::{sparse_tfidf_single, EmbedError, EmbedModel};
 
 #[cfg(feature = "fastembed")]
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
@@ -281,10 +281,7 @@ impl EmbedModel for BgeM3Embedder {
         #[cfg(not(feature = "fastembed"))]
         {
             // Stub: zero vectors when feature is off.
-            Ok(texts
-                .iter()
-                .map(|_| vec![0.0f32; BGE_M3_DIM])
-                .collect())
+            Ok(texts.iter().map(|_| vec![0.0f32; BGE_M3_DIM]).collect())
         }
     }
 
@@ -426,7 +423,9 @@ mod tests {
     #[test]
     fn mock_sparse_is_non_empty() {
         let m = MockEmbedModel::new(1024);
-        let sparse = m.embed_sparse(&["cascade retrieval augmented generation"]).unwrap();
+        let sparse = m
+            .embed_sparse(&["cascade retrieval augmented generation"])
+            .unwrap();
         assert!(!sparse[0].is_empty(), "sparse output must not be empty");
     }
 
@@ -491,7 +490,10 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(cosine > 0.99, "identical text cosine must be > 0.99, got {cosine}");
+        assert!(
+            cosine > 0.99,
+            "identical text cosine must be > 0.99, got {cosine}"
+        );
     }
 
     /// Cosine similarity between semantically dissimilar texts is < 0.9.
@@ -504,7 +506,10 @@ mod tests {
             .await
             .expect("model init");
         let vecs = embedder
-            .embed_dense(&["apple orchard fruit harvest", "nuclear fusion reactor plasma"])
+            .embed_dense(&[
+                "apple orchard fruit harvest",
+                "nuclear fusion reactor plasma",
+            ])
             .expect("embed must succeed");
         let a = &vecs[0];
         let b = &vecs[1];
@@ -512,6 +517,9 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(cosine < 0.9, "dissimilar texts cosine must be < 0.9, got {cosine}");
+        assert!(
+            cosine < 0.9,
+            "dissimilar texts cosine must be < 0.9, got {cosine}"
+        );
     }
 }

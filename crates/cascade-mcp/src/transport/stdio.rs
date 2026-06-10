@@ -31,8 +31,8 @@ use cascade_types::error::{CascadeError, Result};
 
 use crate::notification::NotificationBus;
 use crate::server::McpServerConfig;
-use crate::transport::McpTransport;
 use crate::transport::connection::{connection_loop, ConnectionContext};
+use crate::transport::McpTransport;
 
 use super::Transport;
 
@@ -184,9 +184,18 @@ impl McpTransport for StdioServer {
     /// Since stdio exits on stdin EOF naturally, this is a no-op in most cases.
     async fn stop(&self) -> Result<()> {
         self.shutdown.notify_waiters();
+        // Sticky permit: notify_waiters only wakes CURRENT waiters; if stop()
+        // fires while the accept loop is mid-iteration the wakeup is lost and
+        // shutdown hangs (observed). notify_one stores a permit consumed by
+        // the next notified() poll.
+        self.shutdown.notify_one();
         Ok(())
     }
 }
+
+// Allow Arc in test module.
+#[cfg(test)]
+use std::sync::Arc;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -209,12 +218,12 @@ mod tests {
         // the stop() signal works by checking the Notify fires.
         // Use spawn_local (current_thread + LocalSet) since stop() future is !Send.
         let local = tokio::task::LocalSet::new();
-        let result = local.run_until(async move {
-            let handle = tokio::task::spawn_local(async move {
-                server2.stop().await
-            });
-            tokio::time::timeout(std::time::Duration::from_secs(1), handle).await
-        }).await;
+        let result = local
+            .run_until(async move {
+                let handle = tokio::task::spawn_local(async move { server2.stop().await });
+                tokio::time::timeout(std::time::Duration::from_secs(1), handle).await
+            })
+            .await;
         assert!(result.is_ok(), "stop() should complete promptly");
         assert!(result.unwrap().unwrap().is_ok());
     }
@@ -257,7 +266,3 @@ mod tests {
         }).await;
     }
 }
-
-// Allow Arc in test module.
-#[cfg(test)]
-use std::sync::Arc;

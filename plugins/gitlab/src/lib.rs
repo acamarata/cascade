@@ -69,8 +69,7 @@ impl Plugin for GitLabPlugin {
     /// The cursor is the opaque `endCursor` string from `pageInfo`. Pass `None`
     /// to start from the first page. Returns `next_cursor: None` when exhausted.
     fn fetch_items(&self, args: DataSourceFetchArgs) -> Result<DataSourcePage, PluginError> {
-        let gitlab_url =
-            read_env_or("GITLAB_URL", "https://gitlab.com");
+        let gitlab_url = read_env_or("GITLAB_URL", "https://gitlab.com");
         let project_path = read_env("GITLAB_PROJECT_PATH")?;
         let state = read_env_or("GITLAB_STATE", "opened");
         let token = read_env("GITLAB_TOKEN")?;
@@ -176,7 +175,7 @@ fn graphql_post(endpoint: &str, auth_header: &str, body: &str) -> Result<String,
         ) -> i32;
     }
     let mut out_buf = vec![0u8; 2 << 20]; // 2 MiB
-    // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
+                                          // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
     let n = unsafe {
         cascade_http_post_json(
             endpoint.as_ptr(),
@@ -195,7 +194,9 @@ fn graphql_post(endpoint: &str, auth_header: &str, body: &str) -> Result<String,
         });
     }
     let s = core::str::from_utf8(&out_buf[..n as usize])
-        .map_err(|_| PluginError::Internal { message: "HTTP response is not valid UTF-8".into() })?
+        .map_err(|_| PluginError::Internal {
+            message: "HTTP response is not valid UTF-8".into(),
+        })?
         .to_string();
     Ok(s)
 }
@@ -326,7 +327,12 @@ fn map_issue_to_data_item(issue: &GitLabIssue, source: &str) -> DataItem {
     // labels: Vec<String> not Vec<{title: String}> — per spec acceptance criterion.
     let labels: Vec<String> = issue.labels.nodes.iter().map(|l| l.title.clone()).collect();
 
-    let assignees: Vec<String> = issue.assignees.nodes.iter().map(|a| a.name.clone()).collect();
+    let assignees: Vec<String> = issue
+        .assignees
+        .nodes
+        .iter()
+        .map(|a| a.name.clone())
+        .collect();
     let milestone = issue
         .milestone
         .as_ref()
@@ -465,10 +471,7 @@ mod tests {
         assert_eq!(item.id, "42");
         assert_eq!(item.title, "Fix dark mode");
         assert_eq!(item.body, "The dark mode toggle is broken on Firefox.");
-        assert_eq!(
-            item.url,
-            "https://gitlab.com/mygroup/myproject/-/issues/42"
-        );
+        assert_eq!(item.url, "https://gitlab.com/mygroup/myproject/-/issues/42");
         assert_eq!(item.created_at, "2024-01-15T10:00:00Z");
         assert_eq!(item.source, "gitlab:mygroup/myproject");
     }
@@ -517,8 +520,7 @@ mod tests {
     fn state_filter_respected_in_last_page_fixture() {
         // Verify the closed-state fixture maps correctly (state in extra_json).
         let page = parse_graphql_response(fixture_last_page(), "mygroup/myproject").unwrap();
-        let extra: serde_json::Value =
-            serde_json::from_str(&page.items[0].extra_json).unwrap();
+        let extra: serde_json::Value = serde_json::from_str(&page.items[0].extra_json).unwrap();
         assert_eq!(extra["state"].as_str().unwrap(), "closed");
     }
 
@@ -551,8 +553,7 @@ mod tests {
     #[test]
     fn extra_json_contains_assignees_array() {
         let page = parse_graphql_response(fixture_open_issues(), "mygroup/myproject").unwrap();
-        let extra: serde_json::Value =
-            serde_json::from_str(&page.items[0].extra_json).unwrap();
+        let extra: serde_json::Value = serde_json::from_str(&page.items[0].extra_json).unwrap();
         let assignees = extra["assignees"].as_array().unwrap();
         assert_eq!(assignees[0].as_str().unwrap(), "Alice");
         assert_eq!(extra["milestone"].as_str().unwrap(), "v2.0");

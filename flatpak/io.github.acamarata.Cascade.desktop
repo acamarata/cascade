@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Cascade
+GenericName=AI Context Manager
+Comment=Unified AI instruction cascade manager
+Exec=cascade-app %u
+Icon=io.github.acamarata.Cascade
+Terminal=false
+Categories=Development;Utility;
+Keywords=ai;claude;instructions;cascade;developer;
+StartupNotify=true
+StartupWMClass=cascade

@@ -94,8 +94,7 @@ impl QueryCache {
     /// - `capacity`: maximum LRU entries (must be >= 1; clamped to 1 if zero).
     /// - `ttl`: TTL for cached entries; a zero duration disables caching effectively.
     pub fn new(capacity: usize, ttl: Duration) -> Self {
-        let cap = std::num::NonZeroUsize::new(capacity.max(1))
-            .expect("capacity clamped to >= 1");
+        let cap = std::num::NonZeroUsize::new(capacity.max(1)).expect("capacity clamped to >= 1");
         Self {
             inner: Mutex::new(LruCache::new(cap)),
             ttl,
@@ -196,10 +195,7 @@ impl QueryCache {
 
     /// Current number of entries in the cache.
     pub fn len(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|g| g.len())
-            .unwrap_or(0)
+        self.inner.lock().map(|g| g.len()).unwrap_or(0)
     }
 
     /// Return `true` if the cache holds no entries.
@@ -307,10 +303,19 @@ mod tests {
         // Insert "c" — "b" should be evicted (LRU).
         cache.set("c".into(), 1, vec![make_hit("c")]);
 
-        assert!(cache.get("a", 1).is_some(), "a should still be cached (MRU)");
-        assert!(cache.get("c", 1).is_some(), "c should be cached (just inserted)");
+        assert!(
+            cache.get("a", 1).is_some(),
+            "a should still be cached (MRU)"
+        );
+        assert!(
+            cache.get("c", 1).is_some(),
+            "c should be cached (just inserted)"
+        );
         // "b" was evicted as LRU.
-        assert!(cache.get("b", 1).is_none(), "b should have been LRU-evicted");
+        assert!(
+            cache.get("b", 1).is_none(),
+            "b should have been LRU-evicted"
+        );
     }
 
     // ── T-P4-E04-08 acceptance criterion: clear() invalidates cache ──────────

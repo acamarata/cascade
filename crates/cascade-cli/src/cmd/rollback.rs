@@ -13,7 +13,9 @@
 
 use async_trait::async_trait;
 use cascade_types::error::Result;
-use cascade_types::ipc::{RollbackApplyParams, RollbackApplyResult, RollbackListParams, RollbackListResult};
+use cascade_types::ipc::{
+    RollbackApplyParams, RollbackApplyResult, RollbackListParams, RollbackListResult,
+};
 use clap::{Args, Subcommand};
 
 use super::Command;
@@ -58,8 +60,8 @@ impl Command for RollbackArgs {
 // ── list ──────────────────────────────────────────────────────────────────────
 
 async fn run_list() -> Result<()> {
-    let client = IpcClient::new()
-        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
+    let client =
+        IpcClient::new().map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
 
     let result = client
         .send::<RollbackListParams, RollbackListResult>("rollback_list", RollbackListParams {})
@@ -115,8 +117,8 @@ async fn run_apply(snapshot_id: &str, yes: bool) -> Result<()> {
         }
     }
 
-    let client = IpcClient::new()
-        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
+    let client =
+        IpcClient::new().map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
 
     let params = RollbackApplyParams {
         snapshot_id: snapshot_id.to_string(),
@@ -129,9 +131,7 @@ async fn run_apply(snapshot_id: &str, yes: bool) -> Result<()> {
     match result {
         Ok(res) if res.ok => {
             let version = res.restored_version.as_deref().unwrap_or("unknown");
-            println!(
-                "Rolled back to {snapshot_id} (cascade {version}). Daemon reloading."
-            );
+            println!("Rolled back to {snapshot_id} (cascade {version}). Daemon reloading.");
             Ok(())
         }
         Ok(res) => {

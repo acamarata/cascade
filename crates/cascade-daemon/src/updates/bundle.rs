@@ -197,7 +197,7 @@ mod tests {
     use super::*;
     use flate2::write::GzEncoder;
     use flate2::Compression;
-use tar::Builder;
+    use tar::Builder;
     use tempfile::NamedTempFile;
 
     /// Build a minimal valid tar.gz bundle with manifest.json, signature.bin,

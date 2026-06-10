@@ -237,7 +237,9 @@ mod tests {
     async fn agent_plugin_final_answer() {
         let plugin = MockAgent;
         let obs = plugin.run(make_ctx("hello")).await.unwrap();
-        assert!(matches!(obs, AgentObservation::FinalAnswer { ref text } if text.contains("echo: hello")));
+        assert!(
+            matches!(obs, AgentObservation::FinalAnswer { ref text } if text.contains("echo: hello"))
+        );
     }
 
     #[tokio::test]

@@ -15,8 +15,7 @@ use wasmtime::Val;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn hello_wat_bytes() -> Vec<u8> {
-    wat::parse_str(include_str!("fixtures/hello.wat"))
-        .expect("hello.wat must be valid WAT")
+    wat::parse_str(include_str!("fixtures/hello.wat")).expect("hello.wat must be valid WAT")
 }
 
 /// Build a minimal PluginManifest for tests.
@@ -72,8 +71,7 @@ async fn test_hello_fixture_returns_42() {
     let wasm = hello_wat_bytes();
     let manifest = test_manifest("hello-test", PluginType::Chunker);
 
-    let sandbox = PluginSandbox::new(PluginType::Chunker)
-        .expect("PluginSandbox::new must succeed");
+    let sandbox = PluginSandbox::new(PluginType::Chunker).expect("PluginSandbox::new must succeed");
     let plugin = sandbox
         .load(&wasm, &manifest)
         .expect("hello.wat must load cleanly");
@@ -95,8 +93,7 @@ async fn test_hello_fixture_returns_42() {
 async fn test_fuel_exhaustion_returns_resource_exhausted() {
     let wasm = tight_loop_wat();
 
-    let sandbox = PluginSandbox::new(PluginType::Chunker)
-        .expect("PluginSandbox::new must succeed");
+    let sandbox = PluginSandbox::new(PluginType::Chunker).expect("PluginSandbox::new must succeed");
 
     // Load with minimal fuel (1 instruction) to guarantee exhaustion.
     let plugin = sandbox
@@ -105,15 +102,15 @@ async fn test_fuel_exhaustion_returns_resource_exhausted() {
 
     let result = plugin.call("tight_loop", &[]).await;
 
-    assert!(
-        result.is_err(),
-        "tight_loop with fuel=1 must fail"
-    );
+    assert!(result.is_err(), "tight_loop with fuel=1 must fail");
 
-    let err = result.err().expect("tight_loop with fuel=1 must return an error");
+    let err = result.expect_err("tight_loop with fuel=1 must return an error");
     match err {
         PluginError::ResourceExhausted { limit } => {
-            assert_eq!(limit, 1, "ResourceExhausted must carry the configured limit");
+            assert_eq!(
+                limit, 1,
+                "ResourceExhausted must carry the configured limit"
+            );
         }
         other => panic!("expected ResourceExhausted, got: {other:?}"),
     }
@@ -123,8 +120,7 @@ async fn test_fuel_exhaustion_returns_resource_exhausted() {
 #[test]
 fn test_plugin_fuel_limit_constant() {
     assert_eq!(
-        PLUGIN_FUEL_LIMIT,
-        1_000_000_000,
+        PLUGIN_FUEL_LIMIT, 1_000_000_000,
         "PLUGIN_FUEL_LIMIT must be 1e9 per spec"
     );
 }
@@ -197,7 +193,10 @@ async fn test_empty_permissions_sandbox_calls_succeed() {
 
     // hello() does not use WASI — must succeed even with zero permissions.
     let result = plugin.call("hello", &[]).await;
-    assert!(result.is_ok(), "hello() with empty perms must succeed: {result:?}");
+    assert!(
+        result.is_ok(),
+        "hello() with empty perms must succeed: {result:?}"
+    );
 }
 
 /// Test: env isolation — plugin cannot access env vars not in the allow-list.
@@ -264,7 +263,10 @@ fn test_tool_call_round_trip() {
     };
     let json = serde_json::to_value(&result).expect("ToolResult must serialise");
     let back: ToolResult = serde_json::from_value(json).expect("ToolResult must deserialise");
-    assert_eq!(result, back, "ToolResult must round-trip without field loss");
+    assert_eq!(
+        result, back,
+        "ToolResult must round-trip without field loss"
+    );
 }
 
 /// Test: AgentResponse round-trips including nested ToolCallRequest list.
@@ -284,7 +286,10 @@ fn test_agent_response_round_trip() {
 
     let json = serde_json::to_value(&resp).expect("AgentResponse must serialise");
     let back: AgentResponse = serde_json::from_value(json).expect("AgentResponse must deserialise");
-    assert_eq!(resp, back, "AgentResponse must round-trip without field loss");
+    assert_eq!(
+        resp, back,
+        "AgentResponse must round-trip without field loss"
+    );
 }
 
 /// Test: Chunk serialises and deserialises without field loss.
@@ -319,12 +324,16 @@ fn test_retrieval_result_round_trip() {
     };
 
     let json = serde_json::to_value(&r).expect("RetrievalResult must serialise");
-    let back: RetrievalResult = serde_json::from_value(json).expect("RetrievalResult must deserialise");
+    let back: RetrievalResult =
+        serde_json::from_value(json).expect("RetrievalResult must deserialise");
     assert_eq!(r.text, back.text);
     assert_eq!(r.source, back.source);
     assert_eq!(r.chunk_index, back.chunk_index);
     // f32 round-trip through JSON may lose precision — check approximately.
-    assert!((r.score - back.score).abs() < 0.001, "score must survive round-trip");
+    assert!(
+        (r.score - back.score).abs() < 0.001,
+        "score must survive round-trip"
+    );
 }
 
 /// Test: Embedding round-trip.

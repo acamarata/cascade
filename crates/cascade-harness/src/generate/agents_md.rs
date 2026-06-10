@@ -164,7 +164,7 @@ fn build_cursorrules_content(resolved: &ResolvedCascade) -> Result<String> {
         "rules": [resolved.merged_instructions]
     });
     serde_json::to_string_pretty(&rules_json)
-        .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}").into()))
+        .map_err(|e| CascadeError::Other(format!("JSON serialize error: {e}")))
 }
 
 // ── Symlink ───────────────────────────────────────────────────────────────────
@@ -182,7 +182,12 @@ fn write_agents_md_symlink(claude_path: &Path, dest: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::symlink;
-        match symlink(claude_path.file_name().unwrap_or_else(|| std::ffi::OsStr::new("CLAUDE.md")), dest) {
+        match symlink(
+            claude_path
+                .file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new("CLAUDE.md")),
+            dest,
+        ) {
             Ok(()) => {
                 info!("created AGENTS.md as symlink to CLAUDE.md");
                 return Ok(());
@@ -227,11 +232,12 @@ fn write_atomic(dest: &Path, content: &str) -> Result<()> {
             operation: "create_tmp",
             source: e,
         })?;
-        f.write_all(content.as_bytes()).map_err(|e| CascadeError::Io {
-            path: tmp.clone(),
-            operation: "write",
-            source: e,
-        })?;
+        f.write_all(content.as_bytes())
+            .map_err(|e| CascadeError::Io {
+                path: tmp.clone(),
+                operation: "write",
+                source: e,
+            })?;
     }
     fs::rename(&tmp, dest).map_err(|e| CascadeError::Io {
         path: dest.to_path_buf(),
@@ -253,6 +259,10 @@ fn hash_of_file(path: &Path) -> u64 {
         .map(|s| hash_of_str(&s))
         .unwrap_or(0)
 }
+
+// Allow libc in non-unix (it won't be called)
+#[cfg(unix)]
+use libc;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -301,7 +311,10 @@ mod tests {
         let content = fs::read_to_string(&dest).unwrap();
         assert!(content.contains("model:"), "should have model field");
         assert!(content.contains("tools:"), "should have tools field");
-        assert!(content.contains("cascade.read"), "should have cascade.read tool");
+        assert!(
+            content.contains("cascade.read"),
+            "should have cascade.read tool"
+        );
         assert!(
             content.contains("## Test Instructions"),
             "should contain merged body"
@@ -346,7 +359,10 @@ mod tests {
         generate_agents_md(&resolved, &dest, None).unwrap();
         let mtime2 = fs::metadata(&dest).unwrap().modified().unwrap();
 
-        assert_eq!(mtime1, mtime2, "mtime should be unchanged on idempotent call");
+        assert_eq!(
+            mtime1, mtime2,
+            "mtime should be unchanged on idempotent call"
+        );
     }
 
     #[test]
@@ -383,7 +399,3 @@ mod tests {
         assert_eq!(mtime1, mtime2, "mtime unchanged on idempotent call");
     }
 }
-
-// Allow libc in non-unix (it won't be called)
-#[cfg(unix)]
-use libc;

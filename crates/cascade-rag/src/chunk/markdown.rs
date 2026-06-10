@@ -29,14 +29,12 @@ use std::path::Path;
 use tracing::debug;
 
 use cascade_types::{
-    chunker::{
-        Chunk as TypesChunk, ChunkMetadata, ChunkOpts, Chunker as TypesChunker, Document,
-    },
+    chunker::{Chunk as TypesChunk, ChunkMetadata, ChunkOpts, Chunker as TypesChunker, Document},
     error::Result,
 };
 
-use super::{Chunk, ChunkerConfig, Chunker};
 use super::semantic::SemanticChunker;
+use super::{Chunk, Chunker, ChunkerConfig};
 
 // ── Async cascade-types pipeline impl ────────────────────────────────────────
 
@@ -81,16 +79,14 @@ impl TypesChunker for MarkdownChunker {
                     mime_type: Some("text/plain".into()),
                     metadata: std::collections::HashMap::new(),
                 };
-                let sub_chunks = TypesChunker::chunk(&SemanticChunker::default(), &sub_doc, opts)
-                    .await?;
+                let sub_chunks =
+                    TypesChunker::chunk(&SemanticChunker::default(), &sub_doc, opts).await?;
                 for mut sc in sub_chunks {
                     if let Some(hp) = section.heading_path.as_deref() {
                         sc.metadata.extra.insert("heading_path".into(), json!(hp));
                     }
                     if let Some(fm) = &frontmatter {
-                        sc.metadata
-                            .extra
-                            .insert("frontmatter".into(), json!(fm));
+                        sc.metadata.extra.insert("frontmatter".into(), json!(fm));
                     }
                     chunks.push(sc);
                 }
@@ -192,8 +188,7 @@ impl MarkdownChunker {
                     sc.parent_chunk_id = Some(parent_idx);
                     sc.heading_path = section.heading_path.clone();
                     if let Some(fm) = &frontmatter {
-                        sc.metadata
-                            .insert("frontmatter".to_string(), fm.clone());
+                        sc.metadata.insert("frontmatter".to_string(), fm.clone());
                     }
                     sc.chunk_index = chunks.len();
                     chunks.push(sc);
@@ -266,7 +261,7 @@ fn strip_frontmatter(text: &str) -> (Option<String>, &str) {
         return (None, text);
     }
     let after_open = &trimmed[4..]; // skip "---\n"
-    // Find the closing "---" or "+++" on its own line.
+                                    // Find the closing "---" or "+++" on its own line.
     for (i, line) in after_open.lines().enumerate() {
         if line == "---" || line == "+++" {
             // Compute byte offset of the closing delimiter in after_open.
@@ -382,9 +377,7 @@ fn split_by_headings(text: &str) -> Vec<Section> {
             let all_eq = !next.is_empty() && next.chars().all(|c| c == '=');
             let all_dash = !next.is_empty() && next.chars().all(|c| c == '-');
             if all_eq || all_dash {
-                if let Some((level, title)) =
-                    parse_setext_heading(line, lines[i + 1])
-                {
+                if let Some((level, title)) = parse_setext_heading(line, lines[i + 1]) {
                     // Flush current section.
                     flush_section(
                         &mut sections,
@@ -396,8 +389,8 @@ fn split_by_headings(text: &str) -> Vec<Section> {
                     // Update heading stack.
                     heading_stack[level] = Some(title.to_string());
                     // Clear deeper levels.
-                    for l in (level + 1)..=6 {
-                        heading_stack[l] = None;
+                    for slot in heading_stack.iter_mut().skip(level + 1) {
+                        *slot = None;
                     }
                     current_heading_path = Some(build_breadcrumb(&heading_stack));
                     // Start new section with the heading + underline.
@@ -419,8 +412,8 @@ fn split_by_headings(text: &str) -> Vec<Section> {
                 line_no.saturating_sub(1),
             );
             heading_stack[level] = Some(title.to_string());
-            for l in (level + 1)..=6 {
-                heading_stack[l] = None;
+            for slot in heading_stack.iter_mut().skip(level + 1) {
+                *slot = None;
             }
             current_heading_path = Some(build_breadcrumb(&heading_stack));
             current_text = format!("{line}\n");
@@ -497,10 +490,7 @@ mod tests {
     fn frontmatter_stripped_from_chunk_text() {
         let doc = "---\ntitle: Hello\ndate: 2026-01-01\n---\n\n# Introduction\n\nSome content.";
         let chunks = sync_chunk(doc);
-        assert!(
-            !chunks.is_empty(),
-            "expected at least one chunk"
-        );
+        assert!(!chunks.is_empty(), "expected at least one chunk");
         for c in &chunks {
             assert!(
                 !c.text.contains("title: Hello"),
@@ -509,7 +499,7 @@ mod tests {
             );
             // Front-matter stored in metadata.
             assert!(
-                c.metadata.get("frontmatter").is_some(),
+                c.metadata.contains_key("frontmatter"),
                 "chunk must carry frontmatter metadata"
             );
         }
@@ -520,7 +510,7 @@ mod tests {
         let doc = "# Hello\n\nParagraph here.";
         let chunks = sync_chunk(doc);
         assert_eq!(chunks.len(), 1);
-        assert!(chunks[0].metadata.get("frontmatter").is_none());
+        assert!(!chunks[0].metadata.contains_key("frontmatter"));
     }
 
     #[test]
@@ -726,6 +716,9 @@ mod tests {
         let has_path = chunks
             .iter()
             .any(|c| c.metadata.extra.contains_key("heading_path"));
-        assert!(has_path, "at least one chunk must have heading_path in extra");
+        assert!(
+            has_path,
+            "at least one chunk must have heading_path in extra"
+        );
     }
 }

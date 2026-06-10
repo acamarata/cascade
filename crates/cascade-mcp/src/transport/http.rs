@@ -226,7 +226,7 @@ impl McpTransport for HttpServer {
             .map_err(|e| CascadeError::Io {
                 path: format!("{}", addr).into(),
                 operation: "http_serve",
-                source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                source: std::io::Error::other(e.to_string()),
             })?;
 
         Ok(())
@@ -234,6 +234,11 @@ impl McpTransport for HttpServer {
 
     async fn stop(&self) -> Result<()> {
         self.shutdown.notify_waiters();
+        // Sticky permit: notify_waiters only wakes CURRENT waiters; if stop()
+        // fires while the accept loop is mid-iteration the wakeup is lost and
+        // shutdown hangs (observed). notify_one stores a permit consumed by
+        // the next notified() poll.
+        self.shutdown.notify_one();
         Ok(())
     }
 }
@@ -271,7 +276,8 @@ async fn handle_mcp_post(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
                 r#"{"error":"body_too_large"}"#,
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
@@ -282,7 +288,8 @@ async fn handle_mcp_post(
                 StatusCode::BAD_REQUEST,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
                 r#"{"error":"invalid_utf8"}"#,
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
@@ -317,7 +324,10 @@ async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
 /// `McpServer` is not `Sync` (holds `Box<dyn Transport>`), so its `run()` future is not `Send`.
 /// We run it on a dedicated single-threaded Tokio runtime inside `spawn_blocking` to avoid
 /// polluting the axum multi-thread executor with non-Send futures.
-async fn dispatch_single_request(body: &str, config: &McpServerConfig) -> std::result::Result<String, String> {
+async fn dispatch_single_request(
+    body: &str,
+    config: &McpServerConfig,
+) -> std::result::Result<String, String> {
     use crate::transport::connection::ChannelTransportPub;
 
     let body_owned = body.to_owned();
@@ -357,7 +367,10 @@ async fn dispatch_single_request(body: &str, config: &McpServerConfig) -> std::r
 }
 
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
-    let value = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
+    let value = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
     value.strip_prefix("Bearer ").map(|s| s.to_owned())
 }
 
@@ -435,7 +448,9 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
-            .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#))
+            .body(Body::from(
+                r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#,
+            ))
             .unwrap();
 
         let resp = app.oneshot(req).await.unwrap();
@@ -452,7 +467,9 @@ mod tests {
             .uri("/mcp")
             .header("Authorization", "Bearer cascade-mcp-invalid")
             .header("content-type", "application/json")
-            .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#))
+            .body(Body::from(
+                r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#,
+            ))
             .unwrap();
 
         let resp = app.oneshot(req).await.unwrap();
@@ -492,4 +509,3 @@ mod tests {
         assert_eq!(addr.port(), DEFAULT_HTTP_PORT);
     }
 }
-

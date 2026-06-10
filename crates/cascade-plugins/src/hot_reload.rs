@@ -12,6 +12,7 @@
 //!   - Disabled when `dev_mode = false` — `PluginWatcher::start` returns `None`.
 //!   - In-flight `Arc<LoadedPlugin>` is not dropped until its strong-count reaches
 //!     1 (drain pattern), with a 5-second timeout.
+//!
 //! SPORT: cascade-plugins / watcher layer (T-P4-E03-08)
 
 use std::path::{Path, PathBuf};
@@ -249,7 +250,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (tx, _rx) = mpsc::channel(16);
         let watcher = PluginWatcher::start(tmp.path(), tx, false);
-        assert!(watcher.is_none(), "watcher must be None when dev_mode=false");
+        assert!(
+            watcher.is_none(),
+            "watcher must be None when dev_mode=false"
+        );
     }
 
     #[test]
@@ -266,7 +270,7 @@ mod tests {
     /// filesystem event latency (FSEvents, inotify, kqueue) in test environments.
     #[test]
     fn watcher_fires_on_wasm_write() {
-        use notify::{PollWatcher, Config as NotifyConfig};
+        use notify::{Config as NotifyConfig, PollWatcher};
         use std::sync::{Arc as StdArc, Mutex as StdMutex};
 
         let tmp = TempDir::new().unwrap();
@@ -361,7 +365,7 @@ mod tests {
     fn drain_arc_times_out_with_live_clone() {
         let arc = Arc::new(42u32);
         let _clone = arc.clone(); // keep refcount at 2
-        // With a very short timeout, the drain should time out.
+                                  // With a very short timeout, the drain should time out.
         assert!(!drain_arc(&arc, Duration::from_millis(50)));
     }
 }

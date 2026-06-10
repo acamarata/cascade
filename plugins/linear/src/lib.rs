@@ -45,8 +45,7 @@
 //! SPORT: linear plugin (T-P4-E03-14)
 
 use cascade_pdk::{
-    cascade_plugin, DataItem, DataSourceFetchArgs, DataSourcePage, Plugin, PluginError,
-    PluginKind,
+    cascade_plugin, DataItem, DataSourceFetchArgs, DataSourcePage, Plugin, PluginError, PluginKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -209,7 +208,12 @@ impl Plugin for LinearPlugin {
 /// sanitized to disallow control characters and quote injection.
 pub fn build_graphql_query(team_id: Option<&str>, cursor: Option<&str>) -> String {
     let team_filter = team_id
-        .map(|id| format!(r#"filter: {{team: {{id: {{eq: "{}"}}}}}}, "#, sanitize_str(id)))
+        .map(|id| {
+            format!(
+                r#"filter: {{team: {{id: {{eq: "{}"}}}}}}, "#,
+                sanitize_str(id)
+            )
+        })
         .unwrap_or_default();
 
     let after_arg = cursor
@@ -269,9 +273,12 @@ fn post_graphql_impl(api_key: &str, query: &str) -> Result<String, PluginError> 
 
     let endpoint = "https://api.linear.app/graphql";
     let auth_header = format!("Bearer {api_key}");
-    let body = format!(r#"{{"query":{}}}"#, serde_json::to_string(query).unwrap_or_default());
+    let body = format!(
+        r#"{{"query":{}}}"#,
+        serde_json::to_string(query).unwrap_or_default()
+    );
     let mut out_buf = vec![0u8; 2 << 20]; // 2 MiB
-    // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
+                                          // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
     let n = unsafe {
         cascade_http_post_json(
             endpoint.as_ptr(),
@@ -290,7 +297,9 @@ fn post_graphql_impl(api_key: &str, query: &str) -> Result<String, PluginError> 
         });
     }
     let s = core::str::from_utf8(&out_buf[..n as usize])
-        .map_err(|_| PluginError::Internal { message: "HTTP response is not valid UTF-8".into() })?
+        .map_err(|_| PluginError::Internal {
+            message: "HTTP response is not valid UTF-8".into(),
+        })?
         .to_string();
     Ok(s)
 }
@@ -373,8 +382,7 @@ pub fn parse_graphql_response(
                 state: state_name,
                 assignee: assignee_name,
             };
-            let extra_json =
-                serde_json::to_string(&extra).unwrap_or_else(|_| "{}".into());
+            let extra_json = serde_json::to_string(&extra).unwrap_or_else(|_| "{}".into());
 
             DataItem {
                 id: issue.id.clone(),
@@ -411,12 +419,9 @@ fn read_env_opt(key: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    const FIXTURE_TWO_ISSUES: &str =
-        include_str!("../tests/fixtures/issues_page1.json");
-    const FIXTURE_HAS_NEXT_PAGE: &str =
-        include_str!("../tests/fixtures/issues_has_next_page.json");
-    const FIXTURE_GRAPHQL_ERROR: &str =
-        include_str!("../tests/fixtures/graphql_error.json");
+    const FIXTURE_TWO_ISSUES: &str = include_str!("../tests/fixtures/issues_page1.json");
+    const FIXTURE_HAS_NEXT_PAGE: &str = include_str!("../tests/fixtures/issues_has_next_page.json");
+    const FIXTURE_GRAPHQL_ERROR: &str = include_str!("../tests/fixtures/graphql_error.json");
 
     // ── priority_label ────────────────────────────────────────────────────────
 
@@ -486,8 +491,7 @@ mod tests {
 
     #[test]
     fn cursor_advances_when_has_next_page_true() {
-        let (_, next_cursor) =
-            parse_graphql_response(FIXTURE_HAS_NEXT_PAGE, None).unwrap();
+        let (_, next_cursor) = parse_graphql_response(FIXTURE_HAS_NEXT_PAGE, None).unwrap();
         assert_eq!(next_cursor, Some("cursor-abc-xyz".to_string()));
     }
 
@@ -511,8 +515,7 @@ mod tests {
 
     #[test]
     fn team_id_appears_in_source_field() {
-        let (items, _) =
-            parse_graphql_response(FIXTURE_TWO_ISSUES, Some("ENG")).unwrap();
+        let (items, _) = parse_graphql_response(FIXTURE_TWO_ISSUES, Some("ENG")).unwrap();
         assert_eq!(items[0].source, "linear:ENG");
     }
 

@@ -30,10 +30,8 @@ fn main() {
         // IMPORTANT: This key is only for compilation in dev/test. The matching
         // private key is generated in tests via ed25519_dalek::SigningKey::generate,
         // so bundles signed in tests use a fresh keypair, NOT this fallback.
-        let test_fallback = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &[0x01u8; 32],
-        );
+        let test_fallback =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [0x01u8; 32]);
         println!("cargo:rustc-env=CASCADE_UPDATE_PUBKEY={test_fallback}");
     }
 }

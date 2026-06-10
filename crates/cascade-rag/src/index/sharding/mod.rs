@@ -45,7 +45,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{Connection, OpenFlags, params};
+use rusqlite::{params, Connection, OpenFlags};
 use tracing::{debug, instrument, warn};
 
 // ── Error type ────────────────────────────────────────────────────────────────
@@ -244,11 +244,7 @@ impl ShardedIndex {
     /// legacy file cannot be copied.  Returns [`ShardError::Sqlite`] if any
     /// shard connection fails to open or the schema cannot be applied.
     #[instrument(skip_all, fields(root = %index_root.as_ref().display(), shards = shard_count))]
-    pub fn new(
-        index_root: impl AsRef<Path>,
-        shard_count: usize,
-        embed_dim: usize,
-    ) -> Result<Self> {
+    pub fn new(index_root: impl AsRef<Path>, shard_count: usize, embed_dim: usize) -> Result<Self> {
         let root = index_root.as_ref();
         std::fs::create_dir_all(root)?;
 
@@ -270,9 +266,14 @@ impl ShardedIndex {
                 &path,
                 OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
             )
-            .map_err(|e| ShardError::Sqlite { shard: i, source: e })?;
-            apply_shard_schema(&conn, embed_dim)
-                .map_err(|e| ShardError::Sqlite { shard: i, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: i,
+                source: e,
+            })?;
+            apply_shard_schema(&conn, embed_dim).map_err(|e| ShardError::Sqlite {
+                shard: i,
+                source: e,
+            })?;
             shards.push(Arc::new(Mutex::new(conn)));
         }
 
@@ -310,7 +311,10 @@ impl ShardedIndex {
                 "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
                 params![doc.doc_id, blob],
             )
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
         }
 
         #[cfg(not(feature = "vec"))]
@@ -319,7 +323,10 @@ impl ShardedIndex {
                 "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
                 params![doc.doc_id, blob],
             )
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
         }
 
         debug!(doc_id = %doc.doc_id, shard = shard_id, "embedding stored");
@@ -343,7 +350,10 @@ impl ShardedIndex {
             "DELETE FROM shard_embeddings WHERE doc_id = ?1",
             params![doc_id],
         )
-        .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+        .map_err(|e| ShardError::Sqlite {
+            shard: shard_id,
+            source: e,
+        })?;
         debug!(doc_id, shard = shard_id, "embedding deleted");
         Ok(())
     }
@@ -481,19 +491,32 @@ fn shard_knn_query(
                  ORDER BY distance \
                  LIMIT ?",
             )
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
 
         let k_i64 = top_k as i64;
         let rows = stmt
             .query_map(params![query_blob, k_i64], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)? as f32))
             })
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
 
         let mut hits = Vec::new();
         for r in rows {
-            let (doc_id, distance) = r.map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
-            hits.push(SearchHit { doc_id, distance, shard_id });
+            let (doc_id, distance) = r.map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
+            hits.push(SearchHit {
+                doc_id,
+                distance,
+                shard_id,
+            });
         }
         Ok(hits)
     }
@@ -508,7 +531,10 @@ fn shard_knn_query(
 
         let mut stmt = conn
             .prepare_cached("SELECT doc_id, embedding FROM shard_embeddings")
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
 
         let rows = stmt
             .query_map([], |row| {
@@ -516,11 +542,17 @@ fn shard_knn_query(
                 let raw: Vec<u8> = row.get(1)?;
                 Ok((doc_id, raw))
             })
-            .map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            .map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
 
         let mut scored: Vec<SearchHit> = Vec::new();
         for r in rows {
-            let (doc_id, raw) = r.map_err(|e| ShardError::Sqlite { shard: shard_id, source: e })?;
+            let (doc_id, raw) = r.map_err(|e| ShardError::Sqlite {
+                shard: shard_id,
+                source: e,
+            })?;
             if raw.len() != dim * 4 {
                 continue; // skip corrupt rows
             }
@@ -534,7 +566,11 @@ fn shard_knn_query(
                 .zip(stored.iter())
                 .map(|(a, b)| (a - b) * (a - b))
                 .sum();
-            scored.push(SearchHit { doc_id, distance: dist, shard_id });
+            scored.push(SearchHit {
+                doc_id,
+                distance: dist,
+                shard_id,
+            });
         }
 
         // Sort ascending, take top_k.
@@ -619,7 +655,7 @@ mod tests {
         // Each shard should get 150–350 (very conservative range for uniformity).
         for (i, &c) in counts.iter().enumerate() {
             assert!(
-                c >= 150 && c <= 350,
+                (150..=350).contains(&c),
                 "shard {i} got {c}/1000; expected 150-350 for uniform distribution"
             );
         }
@@ -784,7 +820,13 @@ mod tests {
         };
         let err = idx.upsert(&bad).unwrap_err();
         assert!(
-            matches!(err, ShardError::DimMismatch { expected: 16, actual: 8 }),
+            matches!(
+                err,
+                ShardError::DimMismatch {
+                    expected: 16,
+                    actual: 8
+                }
+            ),
             "unexpected: {err:?}"
         );
     }
@@ -794,9 +836,15 @@ mod tests {
     fn search_dim_mismatch_error() {
         let dim = 16;
         let (_dir, idx) = make_index(4, dim);
-        let err = idx.search(&vec![0.0f32; 8], 3).unwrap_err();
+        let err = idx.search(&[0.0f32; 8], 3).unwrap_err();
         assert!(
-            matches!(err, ShardError::DimMismatch { expected: 16, actual: 8 }),
+            matches!(
+                err,
+                ShardError::DimMismatch {
+                    expected: 16,
+                    actual: 8
+                }
+            ),
             "unexpected: {err:?}"
         );
     }
@@ -814,10 +862,14 @@ mod tests {
         let legacy = dir.path().join("cascade_vec.db");
         // Create a minimal SQLite file.
         let conn = Connection::open(&legacy).expect("open legacy db");
-        conn.execute_batch("CREATE TABLE dummy (x INTEGER);").unwrap();
+        conn.execute_batch("CREATE TABLE dummy (x INTEGER);")
+            .unwrap();
         drop(conn);
 
-        assert!(legacy.exists(), "legacy file must exist before ShardedIndex::new");
+        assert!(
+            legacy.exists(),
+            "legacy file must exist before ShardedIndex::new"
+        );
 
         // Opening ShardedIndex must succeed and copy the legacy file.
         let idx = ShardedIndex::new(dir.path(), 4, 16).expect("ShardedIndex::new with legacy");
@@ -825,7 +877,10 @@ mod tests {
 
         let shard_0 = dir.path().join("cascade_vec_shard_0.db");
         assert!(shard_0.exists(), "shard_0 must exist after migration");
-        assert!(legacy.exists(), "legacy file must still exist (non-destructive)");
+        assert!(
+            legacy.exists(),
+            "legacy file must still exist (non-destructive)"
+        );
     }
 
     // ── integration: 100 docs across 4 shards ────────────────────────────────

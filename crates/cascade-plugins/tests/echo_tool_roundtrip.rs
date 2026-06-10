@@ -19,6 +19,7 @@
 //!   - Skips if the WASM binary is not present (CI without wasm target skips cleanly).
 //!   - No network, no filesystem preopens, no env — zero capabilities needed.
 //!   - Uses `call_export_json` with a `DispatchEnvelope` matching the macro's dispatcher.
+//!
 //! SPORT: cascade-plugins / echo-tool roundtrip (T-P4-E03-12)
 
 use cascade_plugins::{
@@ -66,12 +67,12 @@ async fn echo_tool_roundtrip_call() {
         return;
     }
 
-    let wasm_bytes = std::fs::read(&wasm_path)
-        .unwrap_or_else(|e| panic!("failed to read {:?}: {e}", wasm_path));
+    let wasm_bytes =
+        std::fs::read(&wasm_path).unwrap_or_else(|e| panic!("failed to read {:?}: {e}", wasm_path));
 
     // Build sandbox with zero permissions (echo-tool needs none).
-    let sandbox = PluginSandbox::new(PluginType::ToolIntegration)
-        .expect("PluginSandbox::new must succeed");
+    let sandbox =
+        PluginSandbox::new(PluginType::ToolIntegration).expect("PluginSandbox::new must succeed");
 
     let plugin = sandbox
         .load_with_permissions(&wasm_bytes, "echo", JsonPermissions::default(), None)
@@ -132,9 +133,7 @@ async fn echo_tool_unknown_func_returns_error_json() {
     });
 
     // Should succeed at the ABI level but return an error JSON object.
-    let result = plugin
-        .call_export_json("cascade_plugin_call", &input)
-        .await;
+    let result = plugin.call_export_json("cascade_plugin_call", &input).await;
 
     // Either it returns Ok(error_json) or Err(Serialize). Either is acceptable;
     // a Trap here would indicate the macro is unwinding instead of returning JSON.

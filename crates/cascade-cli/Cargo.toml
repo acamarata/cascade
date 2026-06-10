@@ -1,8 +1,12 @@
 [package]
 name = "cascade-cli"
-description = "Command-line interface for the Cascade AI context framework"
+description = "CLI for Cascade — unified AI instruction manager for coding agents"
 readme = "README.md"
-keywords = ["cascade", "cli", "ai"]
+keywords = ["cascade", "ai", "claude", "instructions", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+homepage = "https://github.com/acamarata/cascade"
+documentation = "https://github.com/acamarata/cascade/wiki/CLI-Reference"
+publish = true
 default-run = "cascade"
 
 version.workspace    = true
@@ -19,11 +23,11 @@ path = "src/main.rs"
 cascade-core    = { workspace = true }
 cascade-types   = { workspace = true }
 cascade-harness = { workspace = true }
-cascade-rag     = { path = "../cascade-rag" }
-cascade-plugins = { path = "../cascade-plugins" }
-cascade-mcp     = { path = "../cascade-mcp" }
-cascade-keychain = { path = "../cascade-keychain" }
-cascade-audit = { path = "../cascade-audit" }
+cascade-rag     = { path = "../cascade-rag", version = "1.0.0" }
+cascade-plugins = { path = "../cascade-plugins", version = "1.0.0" }
+cascade-mcp     = { path = "../cascade-mcp", version = "1.0.0" }
+cascade-keychain = { path = "../cascade-keychain", version = "1.0.0" }
+cascade-audit = { path = "../cascade-audit", version = "1.0.0" }
 rusqlite      = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }

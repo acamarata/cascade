@@ -136,8 +136,8 @@ impl McpAuth {
 
         // ── 2. Base64url-decode ────────────────────────────────────────────
         let mut raw = [0u8; TOTAL_DECODED_LEN];
-        let decoded = Base64UrlUnpadded::decode(encoded, &mut raw)
-            .map_err(|_| AuthError::MalformedToken)?;
+        let decoded =
+            Base64UrlUnpadded::decode(encoded, &mut raw).map_err(|_| AuthError::MalformedToken)?;
         if decoded.len() != TOTAL_DECODED_LEN {
             return Err(AuthError::MalformedToken);
         }
@@ -147,10 +147,11 @@ impl McpAuth {
         let mac_bytes = &raw[PAYLOAD_LEN..];
 
         // ── 4. Constant-time HMAC verify ───────────────────────────────────
-        let mut mac = HmacSha256::new_from_slice(&self.secret)
-            .expect("HMAC accepts any key length");
+        let mut mac =
+            HmacSha256::new_from_slice(&self.secret).expect("HMAC accepts any key length");
         mac.update(payload);
-        mac.verify_slice(mac_bytes).map_err(|_| AuthError::InvalidMac)?;
+        mac.verify_slice(mac_bytes)
+            .map_err(|_| AuthError::InvalidMac)?;
 
         // ── 5. Timestamp check (only after MAC passes) ─────────────────────
         let mut ts_bytes = [0u8; 8];
@@ -223,8 +224,7 @@ impl McpSecretManager {
 
 /// Compute HMAC-SHA256 of `data` under `secret`.
 fn compute_mac(secret: &[u8; 32], data: &[u8]) -> [u8; MAC_LEN] {
-    let mut mac = HmacSha256::new_from_slice(secret)
-        .expect("HMAC accepts any key length");
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC accepts any key length");
     mac.update(data);
     let result = mac.finalize();
     result.into_bytes().into()
@@ -265,10 +265,7 @@ fn write_secret_file(path: &Path, secret: &[u8; 32]) -> Result<(), AuthError> {
                 .collect();
             unsafe {
                 // FILE_ATTRIBUTE_HIDDEN = 0x2
-                windows_sys::Win32::Storage::FileSystem::SetFileAttributesW(
-                    wide.as_ptr(),
-                    0x2,
-                );
+                windows_sys::Win32::Storage::FileSystem::SetFileAttributesW(wide.as_ptr(), 0x2);
             }
         }
     }
@@ -320,7 +317,10 @@ mod tests {
 
         let result = auth.validate_token(&tampered);
         assert!(
-            matches!(result, Err(AuthError::InvalidMac) | Err(AuthError::MalformedToken)),
+            matches!(
+                result,
+                Err(AuthError::InvalidMac) | Err(AuthError::MalformedToken)
+            ),
             "tampered token must be rejected: {:?}",
             result
         );
@@ -402,11 +402,7 @@ mod tests {
         let mut raw = [0u8; TOTAL_DECODED_LEN];
         Base64UrlUnpadded::decode(encoded, &mut raw).unwrap();
         raw[TOTAL_DECODED_LEN - 1] ^= 0x01; // flip 1 bit in last MAC byte
-        let bad_token = format!(
-            "{}{}",
-            TOKEN_PREFIX,
-            Base64UrlUnpadded::encode_string(&raw)
-        );
+        let bad_token = format!("{}{}", TOKEN_PREFIX, Base64UrlUnpadded::encode_string(&raw));
 
         let result = auth.validate_token(&bad_token);
         assert!(
@@ -445,16 +441,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("runtime").join("mcp-secret.key");
 
-        let auth = McpSecretManager::load_or_create(&path)
-            .expect("should create secret file");
+        let auth = McpSecretManager::load_or_create(&path).expect("should create secret file");
 
         // File must exist with the right length
         let content = std::fs::read(&path).expect("file readable");
         assert_eq!(content.len(), 32, "secret file must be 32 bytes");
 
         // Reload must yield the same secret
-        let auth2 = McpSecretManager::load_or_create(&path)
-            .expect("reload should succeed");
+        let auth2 = McpSecretManager::load_or_create(&path).expect("reload should succeed");
         let token = auth.generate_token();
         auth2
             .validate_token(&token)
@@ -478,8 +472,8 @@ mod tests {
         // Write a corrupt (too-short) file
         std::fs::write(&path, b"tooshort").unwrap();
 
-        let auth = McpSecretManager::load_or_create(&path)
-            .expect("should regenerate from corrupt file");
+        let auth =
+            McpSecretManager::load_or_create(&path).expect("should regenerate from corrupt file");
         let token = auth.generate_token();
         auth.validate_token(&token)
             .expect("regenerated auth should work");

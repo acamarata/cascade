@@ -69,7 +69,10 @@ pub fn cascade_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generate a static instance of the plugin struct.
     // For wasm32 targets this is fine — each WASM module is single-threaded.
     let static_ident = Ident::new(
-        &format!("__CASCADE_PLUGIN_{}", struct_name.to_string().to_uppercase()),
+        &format!(
+            "__CASCADE_PLUGIN_{}",
+            struct_name.to_string().to_uppercase()
+        ),
         Span::call_site(),
     );
 

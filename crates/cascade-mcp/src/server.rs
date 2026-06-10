@@ -669,8 +669,8 @@ impl McpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::{HandlerRegistry, McpHandler};
     use crate::error::McpServerError;
+    use crate::handler::{HandlerRegistry, McpHandler};
     use async_trait::async_trait;
 
     /// Null transport — not needed for unit tests that call methods directly.
@@ -757,7 +757,10 @@ mod tests {
     async fn shutdown_transitions_to_shutting_down() {
         let server = make_server();
         // Get to Ready first.
-        server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await.unwrap();
+        server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await
+            .unwrap();
         let notif = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             method: "initialized".into(),
@@ -799,9 +802,14 @@ mod tests {
     async fn re_initialization_returns_error() {
         let server = make_server();
         // First initialize — OK.
-        server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await.unwrap();
+        server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await
+            .unwrap();
         // Second initialize — must fail.
-        let result = server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await;
+        let result = server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await;
         assert!(result.is_err(), "re-initialize must fail");
         let err = result.unwrap_err();
         assert_eq!(err.code, -32600);
@@ -820,7 +828,10 @@ mod tests {
     #[tokio::test]
     async fn ping_works_after_initialized() {
         let server = make_server();
-        server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await.unwrap();
+        server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await
+            .unwrap();
         let notif = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             method: "initialized".into(),
@@ -838,7 +849,10 @@ mod tests {
     async fn dispatch_unknown_method_returns_method_not_found() {
         let server = make_server();
         // Get to Ready.
-        server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await.unwrap();
+        server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await
+            .unwrap();
         let notif = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             method: "initialized".into(),
@@ -882,7 +896,10 @@ mod tests {
         struct OkHandler;
         #[async_trait]
         impl McpHandler for OkHandler {
-            async fn handle(&self, _p: Option<Value>) -> std::result::Result<Value, McpServerError> {
+            async fn handle(
+                &self,
+                _p: Option<Value>,
+            ) -> std::result::Result<Value, McpServerError> {
                 Ok(serde_json::json!({}))
             }
         }
@@ -913,7 +930,10 @@ mod tests {
         struct HelloHandler;
         #[async_trait]
         impl McpHandler for HelloHandler {
-            async fn handle(&self, _p: Option<Value>) -> std::result::Result<Value, McpServerError> {
+            async fn handle(
+                &self,
+                _p: Option<Value>,
+            ) -> std::result::Result<Value, McpServerError> {
                 Ok(serde_json::json!({ "hello": "world" }))
             }
         }
@@ -923,7 +943,10 @@ mod tests {
 
         let server = make_server_with_registry(reg);
         // Get to Ready.
-        server.handle_initialize(&init_req(MCP_PROTOCOL_VERSION)).await.unwrap();
+        server
+            .handle_initialize(&init_req(MCP_PROTOCOL_VERSION))
+            .await
+            .unwrap();
         let notif = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             method: "initialized".into(),

@@ -452,8 +452,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::cache::QueryCache;
-use crate::index::sharding::{EmbedResult, SearchHit, ShardedIndex};
 use crate::index::sharding::Result as ShardResult;
+use crate::index::sharding::{EmbedResult, SearchHit, ShardedIndex};
 
 /// Newtype wrapping [`ShardedIndex`] with an LRU + TTL [`QueryCache`].
 ///
@@ -560,18 +560,18 @@ impl CachedIndex {
     /// Cache is cleared because the search result set for any query may have
     /// changed after an upsert.
     pub fn upsert(&self, doc: &EmbedResult) -> ShardResult<()> {
-        let result = self.inner.upsert(doc)?;
+        self.inner.upsert(doc)?;
         self.cache.clear();
-        Ok(result)
+        Ok(())
     }
 
     /// Delete a chunk from the sharded index, then clear the query cache.
     ///
     /// Same invalidation rationale as [`upsert`].
     pub fn delete(&self, doc_id: &str) -> ShardResult<()> {
-        let result = self.inner.delete(doc_id)?;
+        self.inner.delete(doc_id)?;
         self.cache.clear();
-        Ok(result)
+        Ok(())
     }
 
     /// Delegate to the underlying [`ShardedIndex::shard_count`].
@@ -627,11 +627,19 @@ mod cached_index_tests {
 
         // Populate cache via a search (miss → populate).
         let _ = cached.search(&query, 5).unwrap();
-        assert_eq!(cached.cache().stats(), (0, 1), "first search must be a miss");
+        assert_eq!(
+            cached.cache().stats(),
+            (0, 1),
+            "first search must be a miss"
+        );
 
         // Hit on second search.
         let _ = cached.search(&query, 5).unwrap();
-        assert_eq!(cached.cache().stats(), (1, 1), "second search must be a hit");
+        assert_eq!(
+            cached.cache().stats(),
+            (1, 1),
+            "second search must be a hit"
+        );
 
         // Upsert clears cache.
         cached.upsert(&make_embed("doc1", 4)).unwrap();
@@ -639,7 +647,11 @@ mod cached_index_tests {
 
         // Next search is a miss again.
         let _ = cached.search(&query, 5).unwrap();
-        assert_eq!(cached.cache().stats(), (1, 2), "post-upsert search must be a miss");
+        assert_eq!(
+            cached.cache().stats(),
+            (1, 2),
+            "post-upsert search must be a miss"
+        );
     }
 
     #[test]

@@ -359,8 +359,16 @@ mod tests {
         let fts: Vec<(i64, f64)> = vec![(1, 0.9), (2, 0.6)];
         let dense: Vec<(i64, f64)> = vec![(2, 0.85), (1, 0.7)];
         let lists = vec![
-            RankedList { source: "fts5",  weight: 1.0, hits: &fts },
-            RankedList { source: "dense", weight: 1.0, hits: &dense },
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "dense",
+                weight: 1.0,
+                hits: &dense,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
 
@@ -386,8 +394,16 @@ mod tests {
         let fts: Vec<(i64, f64)> = vec![(10, 0.9)];
         let dense: Vec<(i64, f64)> = vec![(20, 0.85)];
         let lists = vec![
-            RankedList { source: "fts5",  weight: 2.0, hits: &fts },
-            RankedList { source: "dense", weight: 1.0, hits: &dense },
+            RankedList {
+                source: "fts5",
+                weight: 2.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "dense",
+                weight: 1.0,
+                hits: &dense,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
 
@@ -413,8 +429,16 @@ mod tests {
         // Second list gives same rank to both ids (one each, mirrored).
         let list2: Vec<(i64, f64)> = vec![(50, 1.0), (100, 1.0)];
         let lists = vec![
-            RankedList { source: "a", weight: 1.0, hits: &list },
-            RankedList { source: "b", weight: 1.0, hits: &list2 },
+            RankedList {
+                source: "a",
+                weight: 1.0,
+                hits: &list,
+            },
+            RankedList {
+                source: "b",
+                weight: 1.0,
+                hits: &list2,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
         // id=50: rank 2 in a + rank 1 in b → 1/62 + 1/61
@@ -438,8 +462,16 @@ mod tests {
         let fts: Vec<(i64, f64)> = vec![(1, 0.9), (2, 0.6)];
         let empty: Vec<(i64, f64)> = vec![];
         let lists = vec![
-            RankedList { source: "fts5",  weight: 1.0, hits: &fts },
-            RankedList { source: "dense", weight: 1.0, hits: &empty },
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "dense",
+                weight: 1.0,
+                hits: &empty,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
         assert_eq!(fused.len(), 2);
@@ -453,9 +485,11 @@ mod tests {
     #[test]
     fn single_list_passthrough() {
         let fts: Vec<(i64, f64)> = vec![(5, 0.99), (3, 0.75), (7, 0.4)];
-        let lists = vec![
-            RankedList { source: "fts5", weight: 1.0, hits: &fts },
-        ];
+        let lists = vec![RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        }];
         let fused = rrf_merge(&lists, 60.0, 0); // top_n=0 → return all
         assert_eq!(fused.len(), 3);
         // rank 1 → id=5 → score 1/61; rank 2 → id=3 → 1/62; rank 3 → id=7 → 1/63
@@ -468,9 +502,11 @@ mod tests {
     #[test]
     fn top_n_cut() {
         let fts: Vec<(i64, f64)> = vec![(1, 1.0), (2, 0.9), (3, 0.8), (4, 0.7)];
-        let lists = vec![
-            RankedList { source: "fts5", weight: 1.0, hits: &fts },
-        ];
+        let lists = vec![RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        }];
         let fused = rrf_merge(&lists, 60.0, 2);
         assert_eq!(fused.len(), 2);
         assert_eq!(fused[0].chunk_id, 1);
@@ -484,8 +520,16 @@ mod tests {
         let fts: Vec<(i64, f64)> = vec![(55, 0.9), (99, 0.5)];
         let dense: Vec<(i64, f64)> = vec![(55, 0.8), (77, 0.4)];
         let lists = vec![
-            RankedList { source: "fts5",  weight: 1.0, hits: &fts },
-            RankedList { source: "dense", weight: 1.0, hits: &dense },
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "dense",
+                weight: 1.0,
+                hits: &dense,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
 
@@ -507,9 +551,21 @@ mod tests {
         let dense: Vec<(i64, f64)> = vec![(1, 0.8), (3, 0.7)];
         let sparse: Vec<(i64, f64)> = vec![(2, 0.6), (1, 0.3)];
         let lists = vec![
-            RankedList { source: "fts5",   weight: 1.0, hits: &fts },
-            RankedList { source: "dense",  weight: 1.0, hits: &dense },
-            RankedList { source: "sparse", weight: 1.0, hits: &sparse },
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "dense",
+                weight: 1.0,
+                hits: &dense,
+            },
+            RankedList {
+                source: "sparse",
+                weight: 1.0,
+                hits: &sparse,
+            },
         ];
         let fused = rrf_merge(&lists, 60.0, 10);
         // id=1 appears in all 3 lists → highest cumulative RRF.

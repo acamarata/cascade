@@ -154,7 +154,11 @@ async fn run_auto(enable: bool) -> Result<()> {
 
     match result {
         Ok(res) => {
-            let state = if res.auto_update { "enabled" } else { "disabled" };
+            let state = if res.auto_update {
+                "enabled"
+            } else {
+                "disabled"
+            };
             println!("Auto-update {state}.");
             Ok(())
         }
@@ -265,8 +269,7 @@ mod tests {
 
     #[test]
     fn update_auto_enable_disable_conflict_fails() {
-        let result =
-            Cli::try_parse_from(["cascade", "update", "auto", "--enable", "--disable"]);
+        let result = Cli::try_parse_from(["cascade", "update", "auto", "--enable", "--disable"]);
         assert!(result.is_err(), "enable and disable must conflict");
     }
 

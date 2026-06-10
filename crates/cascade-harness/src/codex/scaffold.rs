@@ -64,7 +64,10 @@ pub fn scaffold_codex_config(workspace: &Path, daemon_socket: &str) -> Result<()
 
     // Navigate mcp.servers, check for existing cascade entry
     if cascade_entry_exists(&root) {
-        info!("cascade MCP entry already present in {:?}; skipping", config_path);
+        info!(
+            "cascade MCP entry already present in {:?}; skipping",
+            config_path
+        );
         return Ok(());
     }
 
@@ -89,7 +92,7 @@ pub fn scaffold_codex_config(workspace: &Path, daemon_socket: &str) -> Result<()
             source: e,
         })?;
         let yaml_str = serde_yaml::to_string(&root)
-            .map_err(|e| CascadeError::Other(format!("YAML serialization error: {e}").into()))?;
+            .map_err(|e| CascadeError::Other(format!("YAML serialization error: {e}")))?;
         file.write_all(yaml_str.as_bytes())
             .map_err(|e| CascadeError::Io {
                 path: tmp_path.clone(),

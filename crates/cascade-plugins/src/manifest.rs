@@ -89,9 +89,8 @@ fn default_abi_version() -> u32 {
 impl PluginManifest {
     /// Parse and validate a `cascade-plugin.toml` manifest.
     pub fn parse(toml_bytes: &[u8]) -> Result<Self, ManifestError> {
-        let raw: toml::Value =
-            toml::from_str(std::str::from_utf8(toml_bytes).unwrap_or_default())
-                .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
+        let raw: toml::Value = toml::from_str(std::str::from_utf8(toml_bytes).unwrap_or_default())
+            .map_err(|e| ManifestError::TomlParse(e.to_string()))?;
 
         let version_val = raw
             .get("schema_version")
@@ -345,7 +344,10 @@ impl PluginJsonManifest {
                     .to_owned(),
             });
         }
-        if wasm_path.components().any(|c| c == std::path::Component::ParentDir) {
+        if wasm_path
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
             return Err(ManifestError::PathTraversal {
                 id: self.id.clone(),
                 path: self.entry_wasm.clone(),
@@ -405,7 +407,10 @@ impl PluginJsonManifest {
                     ),
                 });
             }
-            if fp.components().any(|c| c == std::path::Component::ParentDir) {
+            if fp
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+            {
                 return Err(ManifestError::PathTraversal {
                     id: self.id.clone(),
                     path: fs_perm.path.clone(),
@@ -464,26 +469,20 @@ pub enum ManifestError {
     #[error("JSON parse error in plugin.json: {0}")]
     JsonParse(String),
 
-    #[error(
-        "plugin id \"{id}\" is not a valid reverse-domain identifier: {reason}"
-    )]
+    #[error("plugin id \"{id}\" is not a valid reverse-domain identifier: {reason}")]
     InvalidId { id: String, reason: String },
 
     #[error("plugin \"{id}\" has an invalid version: {reason}")]
     InvalidVersion { id: String, reason: String },
 
-    #[error(
-        "plugin \"{id}\" declares an absolute entry_wasm path \"{path}\": {reason}"
-    )]
+    #[error("plugin \"{id}\" declares an absolute entry_wasm path \"{path}\": {reason}")]
     AbsoluteWasmPath {
         id: String,
         path: String,
         reason: String,
     },
 
-    #[error(
-        "plugin \"{id}\" declares a path-traversal path \"{path}\": {reason}"
-    )]
+    #[error("plugin \"{id}\" declares a path-traversal path \"{path}\": {reason}")]
     PathTraversal {
         id: String,
         path: String,
@@ -808,6 +807,9 @@ cascade_version = ">=0.1.0"
 "#;
         let err = PluginManifest::parse(toml.as_bytes()).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("Update Cascade"), "should suggest update: {msg}");
+        assert!(
+            msg.contains("Update Cascade"),
+            "should suggest update: {msg}"
+        );
     }
 }

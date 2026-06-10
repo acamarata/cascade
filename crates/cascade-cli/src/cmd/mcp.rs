@@ -74,7 +74,10 @@ pub struct McpTokenArgs;
 
 impl McpTokenArgs {
     fn secret_path() -> PathBuf {
-        home_dir().join(".cascade").join("runtime").join("mcp-secret.key")
+        home_dir()
+            .join(".cascade")
+            .join("runtime")
+            .join("mcp-secret.key")
     }
 
     pub fn load_auth() -> Result<McpAuth> {
@@ -115,7 +118,11 @@ impl Command for McpStatusArgs {
         let runtime_dir = home_dir().join(".cascade").join("runtime");
         let socket_path = runtime_dir.join("mcp.sock");
 
-        let socket_status = if socket_path.exists() { "active" } else { "inactive" };
+        let socket_status = if socket_path.exists() {
+            "active"
+        } else {
+            "inactive"
+        };
 
         println!("MCP Server Status");
         println!("─────────────────────────────────────");
@@ -198,15 +205,9 @@ impl Command for McpSetupArgs {
             return setup_all(self.remove, self.dry_run);
         }
         match &self.tool {
-            Some(ToolName::ClaudeCode) => {
-                setup_claude_code(self.remove, self.dry_run)
-            }
-            Some(ToolName::ClaudeDesktop) => {
-                setup_claude_desktop(self.remove, self.dry_run)
-            }
-            Some(ToolName::Vscode) => {
-                setup_vscode(self.remove, self.global, self.dry_run)
-            }
+            Some(ToolName::ClaudeCode) => setup_claude_code(self.remove, self.dry_run),
+            Some(ToolName::ClaudeDesktop) => setup_claude_desktop(self.remove, self.dry_run),
+            Some(ToolName::Vscode) => setup_vscode(self.remove, self.global, self.dry_run),
             Some(ToolName::Opencode) => {
                 setup_opencode(self.remove, self.local, self.http, self.dry_run)
             }
@@ -273,12 +274,8 @@ fn write_json_atomic(path: &Path, value: &Value, dry_run: bool) -> Result<()> {
 /// Ensure `obj["mcp_key"]` is a JSON object, upsert `entry_key → entry_value`.
 /// Returns `true` if a change was made.
 fn upsert_key(obj: &mut Value, mcp_key: &str, entry_key: &str, entry_value: Value) -> bool {
-    let top = obj
-        .as_object_mut()
-        .expect("caller must pass a JSON object");
-    let servers = top
-        .entry(mcp_key)
-        .or_insert_with(|| json!({}));
+    let top = obj.as_object_mut().expect("caller must pass a JSON object");
+    let servers = top.entry(mcp_key).or_insert_with(|| json!({}));
     let servers_obj = servers
         .as_object_mut()
         .expect("mcpServers/servers must be an object");
@@ -352,13 +349,11 @@ pub fn claude_desktop_config_path() -> Option<PathBuf> {
                 .join("Claude")
                 .join("claude_desktop_config.json"),
         ),
-        "windows" => {
-            std::env::var("APPDATA").ok().map(|appdata| {
-                PathBuf::from(appdata)
-                    .join("Claude")
-                    .join("claude_desktop_config.json")
-            })
-        }
+        "windows" => std::env::var("APPDATA").ok().map(|appdata| {
+            PathBuf::from(appdata)
+                .join("Claude")
+                .join("claude_desktop_config.json")
+        }),
         _ => None,
     }
 }
@@ -375,10 +370,7 @@ pub fn setup_claude_desktop(remove: bool, dry_run: bool) -> Result<()> {
 
     // If config file doesn't exist, Claude Desktop is likely not installed
     if !path.exists() {
-        println!(
-            "Claude Desktop config not found at {}.",
-            path.display()
-        );
+        println!("Claude Desktop config not found at {}.", path.display());
         println!("Install Claude Desktop from https://claude.ai/download then re-run.");
         return Ok(());
     }
@@ -444,7 +436,10 @@ pub fn setup_vscode(remove: bool, global: bool, dry_run: bool) -> Result<()> {
         if changed {
             write_json_atomic(&path, &config, dry_run)?;
             if !dry_run {
-                println!("cascade MCP server removed from VS Code ({}).", path.display());
+                println!(
+                    "cascade MCP server removed from VS Code ({}).",
+                    path.display()
+                );
             }
         } else {
             println!("cascade entry not found in VS Code config.");
@@ -460,10 +455,7 @@ pub fn setup_vscode(remove: bool, global: bool, dry_run: bool) -> Result<()> {
     upsert_key(&mut config, "servers", "cascade", cascade_entry);
     write_json_atomic(&path, &config, dry_run)?;
     if !dry_run {
-        println!(
-            "cascade MCP server added to VS Code ({}).",
-            path.display()
-        );
+        println!("cascade MCP server added to VS Code ({}).", path.display());
         // Advisory: check .gitignore
         let gitignore = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
@@ -492,7 +484,10 @@ pub fn opencode_config_path(local: bool) -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("opencode.json")
     } else {
-        home_dir().join(".config").join("opencode").join("opencode.json")
+        home_dir()
+            .join(".config")
+            .join("opencode")
+            .join("opencode.json")
     }
 }
 
@@ -526,7 +521,10 @@ pub fn setup_opencode(remove: bool, local: bool, http: bool, dry_run: bool) -> R
         if changed {
             write_json_atomic(&path, &config, dry_run)?;
             if !dry_run {
-                println!("cascade MCP server removed from OpenCode ({}).", path.display());
+                println!(
+                    "cascade MCP server removed from OpenCode ({}).",
+                    path.display()
+                );
             }
         } else {
             println!("cascade entry not found in OpenCode config.");
@@ -552,10 +550,7 @@ pub fn setup_opencode(remove: bool, local: bool, http: bool, dry_run: bool) -> R
     upsert_key(&mut config, "mcpServers", "cascade", cascade_entry);
     write_json_atomic(&path, &config, dry_run)?;
     if !dry_run {
-        println!(
-            "cascade MCP server added to OpenCode ({}).",
-            path.display()
-        );
+        println!("cascade MCP server added to OpenCode ({}).", path.display());
         println!("Restart OpenCode to activate.");
     }
     Ok(())
@@ -580,7 +575,11 @@ pub fn detect_clients() -> Vec<(&'static str, DetectionResult)> {
         "Claude Code",
         DetectionResult {
             detected: cc_path.exists(),
-            reason: if cc_path.exists() { "~/.claude/settings.json found" } else { "~/.claude/settings.json not found" },
+            reason: if cc_path.exists() {
+                "~/.claude/settings.json found"
+            } else {
+                "~/.claude/settings.json not found"
+            },
         },
     ));
 
@@ -592,15 +591,17 @@ pub fn detect_clients() -> Vec<(&'static str, DetectionResult)> {
         "Claude Desktop",
         DetectionResult {
             detected: cd_detected,
-            reason: if cd_detected { "config file found" } else { "config file not found" },
+            reason: if cd_detected {
+                "config file found"
+            } else {
+                "config file not found"
+            },
         },
     ));
 
     // VS Code: code binary in PATH OR ~/.vscode/ exists
     let vscode_bin = std::env::var_os("PATH")
-        .map(|p| {
-            std::env::split_paths(&p).any(|d| d.join("code").exists())
-        })
+        .map(|p| std::env::split_paths(&p).any(|d| d.join("code").exists()))
         .unwrap_or(false);
     let vscode_dir = home_dir().join(".vscode").exists();
     let vscode_detected = vscode_bin || vscode_dir;
@@ -641,7 +642,7 @@ pub fn detect_clients() -> Vec<(&'static str, DetectionResult)> {
 /// Print detection table without configuring anything.
 fn setup_list() -> Result<()> {
     let clients = detect_clients();
-    println!("{:<16} {:<10} {}", "Client", "Detected", "Reason");
+    println!("{:<16} {:<10} Reason", "Client", "Detected");
     println!("{}", "─".repeat(60));
     for (name, det) in &clients {
         let mark = if det.detected { "✓ yes" } else { "✗ no" };
@@ -656,7 +657,7 @@ fn setup_all(remove: bool, dry_run: bool) -> Result<()> {
     let clients = detect_clients();
     let mut configured = 0usize;
 
-    println!("{:<16} {}", "Client", "Status");
+    println!("{:<16} Status", "Client");
     println!("{}", "─".repeat(50));
 
     for (name, det) in &clients {
@@ -727,14 +728,14 @@ impl Command for McpStdioArgs {
         // dedicated single-threaded Tokio runtime in a blocking thread so the
         // outer multi-threaded runtime's Send constraint is satisfied.
         tokio::task::spawn_blocking(|| {
-            use cascade_mcp::{McpServer, McpServerConfig};
             use cascade_mcp::transport::stdio::StdioTransport;
+            use cascade_mcp::{McpServer, McpServerConfig};
             use tokio::task::LocalSet;
 
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .map_err(|e| CascadeError::Other(format!("runtime build error: {e}").into()))?;
+                .map_err(|e| CascadeError::Other(format!("runtime build error: {e}")))?;
 
             let local = LocalSet::new();
             rt.block_on(local.run_until(async {
@@ -743,12 +744,12 @@ impl Command for McpStdioArgs {
                 let server = McpServer::new(config, Box::new(transport));
                 tokio::task::spawn_local(server.run())
                     .await
-                    .map_err(|e| CascadeError::Other(format!("MCP stdio join error: {e}").into()))?
-                    .map_err(|e| CascadeError::Other(format!("MCP stdio server error: {e}").into()))
+                    .map_err(|e| CascadeError::Other(format!("MCP stdio join error: {e}")))?
+                    .map_err(|e| CascadeError::Other(format!("MCP stdio server error: {e}")))
             }))
         })
         .await
-        .map_err(|e| CascadeError::Other(format!("spawn_blocking join error: {e}").into()))?
+        .map_err(|e| CascadeError::Other(format!("spawn_blocking join error: {e}")))?
     }
 }
 
@@ -776,8 +777,10 @@ mod tests {
         let result = McpTokenArgs::mint_token();
         assert!(result.is_err(), "missing key file should error");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("not running") || msg.contains("not yet initialized"),
-            "unexpected error message: {msg}");
+        assert!(
+            msg.contains("not running") || msg.contains("not yet initialized"),
+            "unexpected error message: {msg}"
+        );
     }
 
     #[test]
@@ -861,7 +864,11 @@ mod tests {
                 "cascade": { "command": "cascade", "args": ["mcp", "--stdio"], "env": {} }
             }
         });
-        std::fs::write(&settings_path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
+        std::fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&initial).unwrap(),
+        )
+        .unwrap();
 
         setup_claude_code(true, false).expect("remove should succeed");
 
@@ -907,7 +914,11 @@ mod tests {
             "verbose": true,
             "mcpServers": { "existing-tool": { "command": "existing" } }
         });
-        std::fs::write(&settings_path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
+        std::fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&initial).unwrap(),
+        )
+        .unwrap();
 
         setup_claude_code(false, false).unwrap();
 
@@ -971,7 +982,9 @@ mod tests {
         McpSecretManager::load_or_create(&runtime_dir.join("mcp-secret.key")).unwrap();
 
         // Create the Claude Desktop config directory + empty file
-        let Some(config_path) = claude_desktop_config_path() else { return };
+        let Some(config_path) = claude_desktop_config_path() else {
+            return;
+        };
         std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
         std::fs::write(&config_path, "{}").unwrap();
 
@@ -1046,8 +1059,12 @@ mod tests {
         let mcp_path = project_dir.join(".vscode").join("mcp.json");
         let raw = std::fs::read_to_string(&mcp_path).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
-        let count = parsed["servers"].as_object().unwrap()
-            .keys().filter(|k| *k == "cascade").count();
+        let count = parsed["servers"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| *k == "cascade")
+            .count();
         assert_eq!(count, 1, "exactly one cascade entry after two runs");
     }
 
@@ -1074,9 +1091,10 @@ mod tests {
 
         let raw = std::fs::read_to_string(&mcp_path).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
-        assert!(parsed["servers"].get("cascade").is_none()
-            || parsed["servers"]["cascade"].is_null(),
-            "cascade must be removed");
+        assert!(
+            parsed["servers"].get("cascade").is_none() || parsed["servers"]["cascade"].is_null(),
+            "cascade must be removed"
+        );
         assert_eq!(
             parsed["servers"]["other"]["command"],
             json!("other"),
@@ -1182,8 +1200,12 @@ mod tests {
         let oc_path = project_dir.join("opencode.json");
         let raw = std::fs::read_to_string(&oc_path).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
-        let count = parsed["mcpServers"].as_object().unwrap()
-            .keys().filter(|k| *k == "cascade").count();
+        let count = parsed["mcpServers"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| *k == "cascade")
+            .count();
         assert_eq!(count, 1, "exactly one cascade entry");
     }
 
@@ -1201,7 +1223,10 @@ mod tests {
         std::fs::write(claude_dir.join("settings.json"), "{}").unwrap();
 
         let result = setup_all(false, false);
-        assert!(result.is_ok(), "setup_all should succeed when at least one client detected");
+        assert!(
+            result.is_ok(),
+            "setup_all should succeed when at least one client detected"
+        );
     }
 
     #[test]

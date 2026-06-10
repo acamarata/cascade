@@ -277,7 +277,11 @@ mod tests {
 
         let c = cache.counters();
         // Exactly `cap` entries remain.
-        assert_eq!(c.entries, cap, "expected {cap} entries after overflow; got {}", c.entries);
+        assert_eq!(
+            c.entries, cap,
+            "expected {cap} entries after overflow; got {}",
+            c.entries
+        );
     }
 
     /// `clear()` evicts all entries and resets counters.
@@ -296,6 +300,9 @@ mod tests {
         assert_eq!(c.entries, 0);
         assert_eq!(c.hits, 0);
         assert_eq!(c.misses, 0);
-        assert!(cache.get(&path, mtime).is_none(), "cache should be empty after clear");
+        assert!(
+            cache.get(&path, mtime).is_none(),
+            "cache should be empty after clear"
+        );
     }
 }

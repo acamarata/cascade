@@ -1,0 +1,15 @@
+[Unit]
+Description=Cascade AI context daemon
+Documentation=https://github.com/acamarata/cascade/wiki
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cascaded
+Restart=on-failure
+RestartSec=5s
+# Allow user's home directory access for cascade root discovery
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target

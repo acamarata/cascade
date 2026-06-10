@@ -238,7 +238,8 @@ fn parse_error_response() -> String {
 }
 
 fn auth_required_response() -> String {
-    r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32003,"message":"Authentication required"}}"#.into()
+    r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32003,"message":"Authentication required"}}"#
+        .into()
 }
 
 // ── ChannelTransportPub ──────────────────────────────────────────────────────
@@ -304,7 +305,11 @@ mod tests {
             let config = McpServerConfig::default();
 
             let loop_handle = tokio::task::spawn_local(connection_loop(
-                server_read, server_write, config, bus, ctx,
+                server_read,
+                server_write,
+                config,
+                bus,
+                ctx,
             ));
 
             use tokio::io::AsyncWriteExt;
@@ -325,7 +330,11 @@ mod tests {
 
             drop(client);
             let result = loop_handle.await.unwrap();
-            assert!(result.is_ok(), "connection_loop should exit cleanly: {:?}", result);
+            assert!(
+                result.is_ok(),
+                "connection_loop should exit cleanly: {:?}",
+                result
+            );
         });
     }
 
@@ -340,7 +349,11 @@ mod tests {
             let config = McpServerConfig::default();
 
             let loop_handle = tokio::task::spawn_local(connection_loop(
-                server_read, server_write, config, bus, ctx,
+                server_read,
+                server_write,
+                config,
+                bus,
+                ctx,
             ));
 
             use tokio::io::AsyncWriteExt;
@@ -382,7 +395,11 @@ mod tests {
             let config = McpServerConfig::default();
 
             let loop_handle = tokio::task::spawn_local(connection_loop(
-                server_read, server_write, config, bus, ctx,
+                server_read,
+                server_write,
+                config,
+                bus,
+                ctx,
             ));
 
             use tokio::io::AsyncWriteExt;
@@ -426,7 +443,11 @@ mod tests {
             let config = McpServerConfig::default();
 
             let loop_handle = tokio::task::spawn_local(connection_loop(
-                server_read, server_write, config, bus, ctx,
+                server_read,
+                server_write,
+                config,
+                bus,
+                ctx,
             ));
 
             // Let connection_loop subscribe to bus before broadcasting.
@@ -442,11 +463,8 @@ mod tests {
             let mut reader = tokio::io::BufReader::new(&mut client);
             let mut line = String::new();
 
-            let result = tokio::time::timeout(
-                Duration::from_millis(500),
-                reader.read_line(&mut line),
-            )
-            .await;
+            let result =
+                tokio::time::timeout(Duration::from_millis(500), reader.read_line(&mut line)).await;
 
             assert!(result.is_ok(), "Notification should arrive within 500ms");
             let n = result.unwrap().unwrap_or(0);

@@ -84,10 +84,7 @@ impl ChunkCache {
     ///
     /// Used by `cache.stats` IPC handler (T-P4-E04-11).
     pub fn len(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|g| g.entries.len())
-            .unwrap_or(0)
+        self.inner.lock().map(|g| g.entries.len()).unwrap_or(0)
     }
 
     /// Return `true` if no chunks are cached.

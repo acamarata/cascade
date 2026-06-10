@@ -168,9 +168,9 @@ fn chunk_text(content: &str, path: &Path, mtime: SystemTime) -> Vec<Chunk> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as IoWrite;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
-    use std::io::Write as IoWrite;
 
     fn make_cache() -> Arc<ChunkCache> {
         Arc::new(ChunkCache::new(256))
@@ -238,7 +238,10 @@ mod tests {
         // The content changed, so at minimum the text differs.
         let joined1: String = chunks1.iter().map(|c| c.text.as_str()).collect();
         let joined2: String = chunks2.iter().map(|c| c.text.as_str()).collect();
-        assert_ne!(joined1, joined2, "expected different content after file change");
+        assert_ne!(
+            joined1, joined2,
+            "expected different content after file change"
+        );
 
         let c = cache.counters();
         // Two misses (mtime changed), zero hits.

@@ -530,7 +530,10 @@ mod tests {
             annotations: None,
         };
         let json_str = serde_json::to_string(&resource).unwrap();
-        assert!(json_str.contains("mimeType"), "expected mimeType camelCase in: {json_str}");
+        assert!(
+            json_str.contains("mimeType"),
+            "expected mimeType camelCase in: {json_str}"
+        );
         let back: Resource = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back, resource);
     }
@@ -563,7 +566,10 @@ mod tests {
             }),
         };
         let json_str = serde_json::to_string(&tool).unwrap();
-        assert!(json_str.contains("inputSchema"), "expected inputSchema camelCase in: {json_str}");
+        assert!(
+            json_str.contains("inputSchema"),
+            "expected inputSchema camelCase in: {json_str}"
+        );
         let back: Tool = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back.name, "search");
         assert_eq!(back.input_schema["type"], "object");
@@ -575,10 +581,15 @@ mod tests {
     fn prompt_message_role_lowercase() {
         let msg = PromptMessage {
             role: Role::User,
-            content: PromptContent::Text(TextContent { text: "hello".into() }),
+            content: PromptContent::Text(TextContent {
+                text: "hello".into(),
+            }),
         };
         let json_str = serde_json::to_string(&msg).unwrap();
-        assert!(json_str.contains("\"user\""), "role must serialize as lowercase: {json_str}");
+        assert!(
+            json_str.contains("\"user\""),
+            "role must serialize as lowercase: {json_str}"
+        );
         let back: PromptMessage = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back.role, Role::User);
     }
@@ -608,7 +619,10 @@ mod tests {
             metadata: None,
         };
         let json_str = serde_json::to_string(&req).unwrap();
-        assert!(json_str.contains("maxTokens"), "expected maxTokens camelCase: {json_str}");
+        assert!(
+            json_str.contains("maxTokens"),
+            "expected maxTokens camelCase: {json_str}"
+        );
         let back: CreateMessageRequest = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back.max_tokens, 256);
     }
@@ -645,7 +659,9 @@ mod tests {
 
     #[test]
     fn set_level_request_round_trip() {
-        let req = SetLevelRequest { level: LoggingLevel::Warning };
+        let req = SetLevelRequest {
+            level: LoggingLevel::Warning,
+        };
         let json_str = serde_json::to_string(&req).unwrap();
         let back: SetLevelRequest = serde_json::from_str(&json_str).unwrap();
         assert_eq!(back.level, LoggingLevel::Warning);

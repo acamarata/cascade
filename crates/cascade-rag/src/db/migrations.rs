@@ -343,16 +343,21 @@ mod tests {
     fn rag_chunks_has_required_columns() {
         let conn = migrated_db();
         // PRAGMA table_info returns one row per column.
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(rag_chunks)")
-            .unwrap();
+        let mut stmt = conn.prepare("PRAGMA table_info(rag_chunks)").unwrap();
         let cols: Vec<String> = stmt
             .query_map([], |r| r.get::<_, String>(1))
             .unwrap()
             .filter_map(|r| r.ok())
             .collect();
 
-        for required in &["id", "source_id", "chunk_index", "chunk_text", "line_start", "line_end"] {
+        for required in &[
+            "id",
+            "source_id",
+            "chunk_index",
+            "chunk_text",
+            "line_start",
+            "line_end",
+        ] {
             assert!(
                 cols.contains(&required.to_string()),
                 "rag_chunks must have column '{required}'"

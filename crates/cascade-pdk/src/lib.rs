@@ -56,10 +56,10 @@ pub use cascade_pdk_macro::{
     register_tool,
 };
 
-pub mod types;
+pub mod dispatch;
 pub mod host_imports;
 pub mod plugin;
-pub mod dispatch;
+pub mod types;
 
 #[cfg(all(feature = "test-harness", not(target_arch = "wasm32")))]
 pub mod test_harness;
@@ -68,19 +68,18 @@ pub mod test_harness;
 /// Not part of the public API — may change without notice.
 #[doc(hidden)]
 pub mod __private {
-    pub use serde_json;
     pub use crate::dispatch::{dispatch, error_json, DispatchEnvelope};
+    pub use serde_json;
 
     pub type String = ::std::string::String;
 }
 
-pub use types::{
-    AgentContext, AgentResponse, Chunk, ChunkMeta, ChunkOpts, ContextEntry,
-    DataItem, DataSourceFetchArgs, DataSourcePage,
-    Document, Embedding, EmbedOpts, PluginError, PluginKind, RetrievalResult, RetrieveOpts,
-    ToolCall, ToolResult, WidgetData,
-};
 pub use plugin::Plugin;
+pub use types::{
+    AgentContext, AgentResponse, Chunk, ChunkMeta, ChunkOpts, ContextEntry, DataItem,
+    DataSourceFetchArgs, DataSourcePage, Document, EmbedOpts, Embedding, PluginError, PluginKind,
+    RetrievalResult, RetrieveOpts, ToolCall, ToolResult, WidgetData,
+};
 
 // ── WASM memory management exports ───────────────────────────────────────────
 // The host uses these to allocate/free memory when passing JSON strings in.

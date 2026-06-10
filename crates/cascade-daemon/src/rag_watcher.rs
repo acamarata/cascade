@@ -52,9 +52,7 @@ use tracing::{debug, warn};
 // ── Extensions that trigger ingest ───────────────────────────────────────────
 
 /// File extensions that trigger ingest on create/modify events.
-const WATCHED_EXTENSIONS: &[&str] = &[
-    "md", "rs", "ts", "py", "json", "yaml", "toml", "html",
-];
+const WATCHED_EXTENSIONS: &[&str] = &["md", "rs", "ts", "py", "json", "yaml", "toml", "html"];
 
 /// Directory name segments that are always excluded from watching.
 const EXCLUDED_DIRS: &[&str] = &[".git", "target", "node_modules", ".cascade"];
@@ -342,7 +340,13 @@ impl AutoRagWatcher {
             debug!("rag_watcher: debounce task exited");
         });
 
-        Ok((Self { _watcher: watcher, paused }, out_rx))
+        Ok((
+            Self {
+                _watcher: watcher,
+                paused,
+            },
+            out_rx,
+        ))
     }
 
     /// Pause signal emission (volume unmounted).
@@ -391,8 +395,12 @@ mod tests {
     fn test_excluded_dir_filter() {
         assert!(is_excluded(&PathBuf::from("/project/.git/config")));
         assert!(is_excluded(&PathBuf::from("/project/target/debug/foo.md")));
-        assert!(is_excluded(&PathBuf::from("/project/node_modules/.bin/x.md")));
-        assert!(is_excluded(&PathBuf::from("/project/.cascade/index/vec.db")));
+        assert!(is_excluded(&PathBuf::from(
+            "/project/node_modules/.bin/x.md"
+        )));
+        assert!(is_excluded(&PathBuf::from(
+            "/project/.cascade/index/vec.db"
+        )));
         assert!(!is_excluded(&PathBuf::from(
             "/project/.claude/memory/notes.md"
         )));
@@ -464,7 +472,9 @@ mod tests {
 
         let sig = next_signal(&mut rx, 2000).await;
         let sig = sig.expect("expected Ingest signal");
-        let got = sig_path(&sig).canonicalize().unwrap_or_else(|_| sig_path(&sig).clone());
+        let got = sig_path(&sig)
+            .canonicalize()
+            .unwrap_or_else(|_| sig_path(&sig).clone());
         assert!(
             matches!(sig, WatchSignal::Ingest(_)),
             "expected Ingest, got {sig:?}"
@@ -497,7 +507,9 @@ mod tests {
 
         let sig = next_signal(&mut rx, 2000).await;
         let sig = sig.expect("expected Ingest signal");
-        let got = sig_path(&sig).canonicalize().unwrap_or_else(|_| sig_path(&sig).clone());
+        let got = sig_path(&sig)
+            .canonicalize()
+            .unwrap_or_else(|_| sig_path(&sig).clone());
         assert!(matches!(sig, WatchSignal::Ingest(_)));
         assert_eq!(got, expected);
 
@@ -539,8 +551,13 @@ mod tests {
 
         let sig = next_signal(&mut rx, 2000).await;
         let sig = sig.expect("expected Evict signal");
-        let got = sig_path(&sig).canonicalize().unwrap_or_else(|_| sig_path(&sig).clone());
-        assert!(matches!(sig, WatchSignal::Evict(_)), "expected Evict, got {sig:?}");
+        let got = sig_path(&sig)
+            .canonicalize()
+            .unwrap_or_else(|_| sig_path(&sig).clone());
+        assert!(
+            matches!(sig, WatchSignal::Evict(_)),
+            "expected Evict, got {sig:?}"
+        );
         assert_eq!(got, expected);
 
         token.cancel();
@@ -570,7 +587,9 @@ mod tests {
         // Debounce fires 200 ms after the LAST write.
         let first = next_signal(&mut rx, 1500).await;
         let first = first.expect("expected one Ingest signal");
-        let got = sig_path(&first).canonicalize().unwrap_or_else(|_| sig_path(&first).clone());
+        let got = sig_path(&first)
+            .canonicalize()
+            .unwrap_or_else(|_| sig_path(&first).clone());
         assert!(matches!(first, WatchSignal::Ingest(_)));
         assert_eq!(got, expected);
 

@@ -55,8 +55,8 @@ use cascade_types::error::{CascadeError, Result};
 use crate::auth::McpAuth;
 use crate::notification::NotificationBus;
 use crate::server::McpServerConfig;
-use crate::transport::McpTransport;
 use crate::transport::http::BODY_LIMIT;
+use crate::transport::McpTransport;
 
 use super::Transport;
 
@@ -185,7 +185,10 @@ impl SseServer {
 impl McpTransport for SseServer {
     async fn listen(&self) -> Result<()> {
         let addr = self.bind_addr();
-        debug_assert!(addr.ip().is_loopback(), "SSE transport must bind loopback only");
+        debug_assert!(
+            addr.ip().is_loopback(),
+            "SSE transport must bind loopback only"
+        );
 
         let state = SseAppState {
             auth: Arc::clone(&self.auth),
@@ -218,7 +221,7 @@ impl McpTransport for SseServer {
             .map_err(|e| CascadeError::Io {
                 path: format!("{}", addr).into(),
                 operation: "sse_serve",
-                source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                source: std::io::Error::other(e.to_string()),
             })?;
 
         Ok(())
@@ -226,6 +229,11 @@ impl McpTransport for SseServer {
 
     async fn stop(&self) -> Result<()> {
         self.shutdown.notify_waiters();
+        // Sticky permit: notify_waiters only wakes CURRENT waiters; if stop()
+        // fires while the accept loop is mid-iteration the wakeup is lost and
+        // shutdown hangs (observed). notify_one stores a permit consumed by
+        // the next notified() poll.
+        self.shutdown.notify_one();
         Ok(())
     }
 }
@@ -261,18 +269,16 @@ async fn handle_sse_events(
 
     // Subscribe to the notification bus.
     let rx = state.bus.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(|item| {
-        match item {
-            Ok(val) => {
-                match serde_json::to_string(&val) {
-                    Ok(json) => Some(Ok::<Event, std::convert::Infallible>(Event::default().data(json))),
-                    Err(_) => None,
-                }
-            }
-            Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
-                warn!(missed = n, "SSE client lagged — missed notifications");
-                None
-            }
+    let stream = BroadcastStream::new(rx).filter_map(|item| match item {
+        Ok(val) => match serde_json::to_string(&val) {
+            Ok(json) => Some(Ok::<Event, std::convert::Infallible>(
+                Event::default().data(json),
+            )),
+            Err(_) => None,
+        },
+        Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
+            warn!(missed = n, "SSE client lagged — missed notifications");
+            None
         }
     });
 
@@ -294,8 +300,8 @@ async fn handle_mcp_post_sse(
     headers: HeaderMap,
     request: axum::extract::Request,
 ) -> impl IntoResponse {
-    use crate::transport::connection::ChannelTransportPub;
     use crate::server::McpServer;
+    use crate::transport::connection::ChannelTransportPub;
 
     // Auth.
     let token = match extract_bearer_sse(&headers) {
@@ -317,10 +323,11 @@ async fn handle_mcp_post_sse(
     }
 
     // Read body bytes.
-    let bytes = match axum::body::to_bytes(request.into_body(), crate::transport::http::BODY_LIMIT).await {
-        Ok(b) => b,
-        Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
-    };
+    let bytes =
+        match axum::body::to_bytes(request.into_body(), crate::transport::http::BODY_LIMIT).await {
+            Ok(b) => b,
+            Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
+        };
     let body_str = match std::str::from_utf8(&bytes) {
         Ok(s) => s.to_owned(),
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid utf8").into_response(),
@@ -338,7 +345,10 @@ async fn handle_mcp_post_sse(
         rt.block_on(async move {
             let (msg_tx, msg_rx) = tokio::sync::mpsc::channel::<String>(2);
             let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<String>(2);
-            let transport = ChannelTransportPub { recv: msg_rx, send: resp_tx };
+            let transport = ChannelTransportPub {
+                recv: msg_rx,
+                send: resp_tx,
+            };
             let server = McpServer::new(config_owned, Box::new(transport));
             msg_tx.send(body_str).await.map_err(|e| e.to_string())?;
             drop(msg_tx);
@@ -369,7 +379,10 @@ async fn handle_health_sse(State(state): State<SseAppState>) -> impl IntoRespons
 }
 
 fn extract_bearer_sse(headers: &HeaderMap) -> Option<String> {
-    let value = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
+    let value = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
     value.strip_prefix("Bearer ").map(|s| s.to_owned())
 }
 
@@ -462,40 +475,43 @@ mod tests {
         drop(listener);
 
         let local = tokio::task::LocalSet::new();
-        local.run_until(async {
-            let server = Arc::new(SseServer::new(
-                Some(port),
-                Arc::clone(&auth),
-                McpServerConfig::default(),
-                bus2.clone(),
-            ));
-            let server2 = Arc::clone(&server);
-            let handle = tokio::task::spawn_local(async move { server2.listen().await });
+        local
+            .run_until(async {
+                let server = Arc::new(SseServer::new(
+                    Some(port),
+                    Arc::clone(&auth),
+                    McpServerConfig::default(),
+                    bus2.clone(),
+                ));
+                let server2 = Arc::clone(&server);
+                let handle = tokio::task::spawn_local(async move { server2.listen().await });
 
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-            let client = reqwest::Client::new();
-            let resp_future = client
-                .get(format!("http://127.0.0.1:{}/mcp/events", port))
-                .header("Authorization", format!("Bearer {}", token))
-                .send();
+                let client = reqwest::Client::new();
+                let resp_future = client
+                    .get(format!("http://127.0.0.1:{}/mcp/events", port))
+                    .header("Authorization", format!("Bearer {}", token))
+                    .send();
 
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
-            let notif = JsonRpcNotification::<serde_json::Value>::new(
-                "notifications/tools/list_changed",
-                Some(serde_json::json!({})),
-            );
-            bus2.broadcast(notif);
+                let notif = JsonRpcNotification::<serde_json::Value>::new(
+                    "notifications/tools/list_changed",
+                    Some(serde_json::json!({})),
+                );
+                bus2.broadcast(notif);
 
-            let resp = tokio::time::timeout(std::time::Duration::from_secs(2), resp_future).await;
-            if let Ok(Ok(response)) = resp {
-                assert_eq!(response.status().as_u16(), 200);
-            }
+                let resp =
+                    tokio::time::timeout(std::time::Duration::from_secs(2), resp_future).await;
+                if let Ok(Ok(response)) = resp {
+                    assert_eq!(response.status().as_u16(), 200);
+                }
 
-            server.stop().await.unwrap();
-            let _ = handle.await;
-        }).await;
+                server.stop().await.unwrap();
+                let _ = handle.await;
+            })
+            .await;
     }
 
     #[tokio::test(flavor = "current_thread")]

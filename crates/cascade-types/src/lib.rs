@@ -59,9 +59,7 @@
 pub mod agent;
 pub mod auto_auth;
 pub mod cascade_tier;
-pub mod mcp;
 pub mod chunker;
-pub mod policy;
 pub mod codec;
 pub mod config;
 pub mod embedding_provider;
@@ -70,8 +68,10 @@ pub mod harness;
 pub mod hook;
 pub mod ipc;
 pub mod key_storage;
+pub mod mcp;
 pub mod parser;
 pub mod paths;
+pub mod policy;
 pub mod pool;
 pub mod provision;
 pub mod query_strategy;
@@ -106,13 +106,13 @@ pub use paths::{
     project_cascade_md, project_subdir, subdirs, AGENTS_MD_NAME, CASCADE_DIR_NAME, CASCADE_MD_NAME,
     CLAUDE_MD_NAME, DAEMON_PIPE_WIN,
 };
+pub use policy::{Decision, PolicyAction, PolicyResult};
 pub use query_strategy::{
     ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind,
 };
 pub use quota_store::{
     AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
 };
-pub use policy::{Decision, PolicyAction, PolicyResult};
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
 pub use template::{

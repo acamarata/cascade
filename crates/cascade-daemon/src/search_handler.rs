@@ -234,8 +234,7 @@ impl RagSearchHandler {
 
         // Open a fresh read connection — WAL allows concurrent readers.
         let conn = tokio::task::spawn_blocking(move || {
-            let c = Connection::open(&db_path)
-                .map_err(|e| format!("open read conn: {e}"))?;
+            let c = Connection::open(&db_path).map_err(|e| format!("open read conn: {e}"))?;
             // Ensure WAL reader mode.
             c.execute_batch("PRAGMA journal_mode=WAL;")
                 .map_err(|e| format!("wal pragma: {e}"))?;
@@ -295,12 +294,11 @@ impl RagSearchHandler {
         let embed = Arc::clone(&self.embed);
 
         let result = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)
-                .map_err(|e| cascade_types::error::CascadeError::Other(format!("open write conn: {e}")))?;
-            conn.execute_batch(
-                "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;",
-            )
-            .map_err(|e| cascade_types::error::CascadeError::Other(format!("pragmas: {e}")))?;
+            let conn = Connection::open(&db_path).map_err(|e| {
+                cascade_types::error::CascadeError::Other(format!("open write conn: {e}"))
+            })?;
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+                .map_err(|e| cascade_types::error::CascadeError::Other(format!("pragmas: {e}")))?;
             let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default());
             pipeline.ingest_file(&file_path)
         })
@@ -355,8 +353,7 @@ impl RagSearchHandler {
         let db_path = mgr.db_path().to_path_buf();
 
         let stats = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)
-                .map_err(|e| format!("open stats conn: {e}"))?;
+            let conn = Connection::open(&db_path).map_err(|e| format!("open stats conn: {e}"))?;
 
             let file_count: u64 = conn
                 .query_row("SELECT COUNT(*) FROM rag_sources", [], |r| r.get(0))
@@ -370,9 +367,7 @@ impl RagSearchHandler {
                 .query_row("SELECT MAX(indexed_at) FROM rag_sources", [], |r| r.get(0))
                 .unwrap_or(None);
 
-            let index_size_bytes = std::fs::metadata(&db_path)
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let index_size_bytes = std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
 
             Ok::<RagIndexStatsResponse, String>(RagIndexStatsResponse {
                 file_count,
@@ -425,9 +420,7 @@ pub async fn dispatch_rag(
                 .handle_search(p)
                 .await
                 .map_err(|e| (-32001_i32, e))
-                .and_then(|r| {
-                    serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string()))
-                })
+                .and_then(|r| serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string())))
         }
         "rag.ingest_file" => {
             let p: RagIngestParams = serde_json::from_value(params)
@@ -436,9 +429,7 @@ pub async fn dispatch_rag(
                 .handle_ingest_file(p)
                 .await
                 .map_err(|e| (-32001_i32, e))
-                .and_then(|r| {
-                    serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string()))
-                })
+                .and_then(|r| serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string())))
         }
         "rag.list_sources" => {
             let p: RagListSourcesParams = serde_json::from_value(params)
@@ -447,9 +438,7 @@ pub async fn dispatch_rag(
                 .handle_list_sources(p)
                 .await
                 .map_err(|e| (-32001_i32, e))
-                .and_then(|r| {
-                    serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string()))
-                })
+                .and_then(|r| serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string())))
         }
         "rag.index_stats" => {
             let p: RagIndexStatsParams = serde_json::from_value(params)
@@ -458,9 +447,7 @@ pub async fn dispatch_rag(
                 .handle_index_stats(p)
                 .await
                 .map_err(|e| (-32001_i32, e))
-                .and_then(|r| {
-                    serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string()))
-                })
+                .and_then(|r| serde_json::to_value(r).map_err(|e| (-32603_i32, e.to_string())))
         }
         other => Err((-32601_i32, format!("method not found: {other}"))),
     }
@@ -518,7 +505,10 @@ mod tests {
             config: RagSearchConfigOverride::default(),
         };
         let result = handler.handle_search(params).await.unwrap();
-        assert!(result.citations.is_empty(), "whitespace query → no citations");
+        assert!(
+            result.citations.is_empty(),
+            "whitespace query → no citations"
+        );
     }
 
     // ── rag.search — empty project_root returns error ─────────────────────────

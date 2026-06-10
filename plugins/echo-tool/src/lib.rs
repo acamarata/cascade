@@ -9,7 +9,7 @@
 //! Constraints: no filesystem, network, or environment access required.
 //! SPORT: plugins / echo-tool (T-P4-E03-17)
 
-use cascade_pdk::{cascade_plugin, Plugin, PluginKind, ToolCall, ToolResult, PluginError};
+use cascade_pdk::{cascade_plugin, Plugin, PluginError, PluginKind, ToolCall, ToolResult};
 
 /// Echo-tool plugin struct.
 ///

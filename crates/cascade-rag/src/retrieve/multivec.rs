@@ -16,9 +16,7 @@
 
 use rusqlite::Connection;
 
-use crate::embed::multivector::{
-    MultiVecEmbedModel, load_token_embeddings, maxsim,
-};
+use crate::embed::multivector::{load_token_embeddings, maxsim, MultiVecEmbedModel};
 use crate::embed::EmbedError;
 
 // ── MultiVecRetriever ─────────────────────────────────────────────────────────
@@ -110,7 +108,7 @@ impl<E: MultiVecEmbedModel + Sync + Send> MultiVecRetriever<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::embed::multivector::{MockMultiVecEmbedModel, store_token_embeddings};
+    use crate::embed::multivector::{store_token_embeddings, MockMultiVecEmbedModel};
     use rusqlite::Connection;
     use std::sync::Arc;
 
@@ -147,8 +145,14 @@ mod tests {
         // Query "hello world" should score chunk 1 higher (same tokens).
         let ranked = retriever.rerank(&conn, "hello world", &[1, 2]).unwrap();
         assert_eq!(ranked.len(), 2);
-        assert_eq!(ranked[0].0, 1, "chunk 1 must rank first for query 'hello world'");
-        assert!(ranked[0].1 > 0.0, "MaxSim score must be positive for matching query");
+        assert_eq!(
+            ranked[0].0, 1,
+            "chunk 1 must rank first for query 'hello world'"
+        );
+        assert!(
+            ranked[0].1 > 0.0,
+            "MaxSim score must be positive for matching query"
+        );
     }
 
     /// Rerank with empty candidates returns empty vec.

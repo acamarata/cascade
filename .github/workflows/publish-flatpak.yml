@@ -1,0 +1,51 @@
+name: Publish Flatpak
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-submit:
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-46
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get release info
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          TAR_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_linux_x86_64.tar.gz"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tar_url=${TAR_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Download tarball and compute SHA256
+        id: sha256
+        run: |
+          curl -sSL "${{ steps.release.outputs.tar_url }}" -o cascade.tar.gz
+          SHA256=$(sha256sum cascade.tar.gz | awk '{print $1}')
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Flatpak manifest
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          SHA256="${{ steps.sha256.outputs.sha256 }}"
+          TAR_URL="${{ steps.release.outputs.tar_url }}"
+          sed -i "s|url: https://github.com/acamarata/cascade/releases/download/.*|url: ${TAR_URL}|" flatpak/io.github.acamarata.Cascade.yml
+          sed -i "s|sha256: .*|sha256: ${SHA256}|" flatpak/io.github.acamarata.Cascade.yml
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: cascade.flatpak
+          manifest-path: flatpak/io.github.acamarata.Cascade.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-flatpak
+          path: cascade.flatpak

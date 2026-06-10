@@ -107,9 +107,8 @@ pub fn read_json_or_empty(path: &Path) -> Result<Value> {
     }
     let raw = std::fs::read_to_string(path)
         .map_err(|e| CascadeError::Other(format!("failed to read {}: {e}", path.display())))?;
-    serde_json::from_str(&raw).map_err(|e| {
-        CascadeError::Other(format!("failed to parse JSON {}: {e}", path.display()))
-    })
+    serde_json::from_str(&raw)
+        .map_err(|e| CascadeError::Other(format!("failed to parse JSON {}: {e}", path.display())))
 }
 
 /// Atomically write pretty-printed JSON (write to `.tmp`, rename).
@@ -193,9 +192,7 @@ pub fn upsert_global_mcp_entry(dry_run: bool) -> Result<bool> {
     let top = config
         .as_object_mut()
         .ok_or_else(|| CascadeError::Other("opencode.json root is not an object".into()))?;
-    let servers = top
-        .entry("mcpServers")
-        .or_insert_with(|| json!({}));
+    let servers = top.entry("mcpServers").or_insert_with(|| json!({}));
     let servers_obj = servers
         .as_object_mut()
         .ok_or_else(|| CascadeError::Other("mcpServers is not an object".into()))?;
@@ -372,7 +369,11 @@ mod tests {
             json!("other"),
             "other server must be preserved"
         );
-        assert_eq!(parsed["theme"], json!("dark"), "other keys must be preserved");
+        assert_eq!(
+            parsed["theme"],
+            json!("dark"),
+            "other keys must be preserved"
+        );
         assert_eq!(
             parsed["mcpServers"]["cascade"]["type"],
             json!("stdio"),
@@ -408,7 +409,10 @@ mod tests {
         inject_oc_instructions(&repo, false).unwrap();
 
         let instructions_path = oc_instructions_path(&repo);
-        assert!(instructions_path.exists(), "instructions file must be created");
+        assert!(
+            instructions_path.exists(),
+            "instructions file must be created"
+        );
 
         let content = std::fs::read_to_string(&instructions_path).unwrap();
         assert!(
@@ -433,7 +437,10 @@ mod tests {
         inject_oc_instructions(&repo, false).unwrap();
 
         let project_json_path = project_opencode_json_path(&repo);
-        assert!(project_json_path.exists(), "project opencode.json must be created");
+        assert!(
+            project_json_path.exists(),
+            "project opencode.json must be created"
+        );
 
         let raw = std::fs::read_to_string(&project_json_path).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
@@ -466,7 +473,11 @@ mod tests {
 
         let raw = std::fs::read_to_string(&project_json_path).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed["model"], json!("claude-sonnet-4-5"), "model must be preserved");
+        assert_eq!(
+            parsed["model"],
+            json!("claude-sonnet-4-5"),
+            "model must be preserved"
+        );
         assert_eq!(parsed["theme"], json!("dark"), "theme must be preserved");
         assert_eq!(
             parsed["instructions"],
@@ -487,8 +498,7 @@ mod tests {
         inject_oc_instructions(&repo, false).unwrap();
         inject_oc_instructions(&repo, false).unwrap();
 
-        let raw =
-            std::fs::read_to_string(project_opencode_json_path(&repo)).unwrap();
+        let raw = std::fs::read_to_string(project_opencode_json_path(&repo)).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
         // instructions field should appear exactly once (it's a single JSON key)
         assert_eq!(

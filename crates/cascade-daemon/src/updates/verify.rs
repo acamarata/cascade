@@ -217,11 +217,13 @@ mod tests {
             .map_err(|_| UpdateError::InvalidSignature)?;
 
         for file_entry in &bundle.manifest.files {
-            let content = bundle.files.get(&file_entry.path).ok_or_else(|| {
-                UpdateError::HashMismatch {
-                    path: file_entry.path.clone(),
-                }
-            })?;
+            let content =
+                bundle
+                    .files
+                    .get(&file_entry.path)
+                    .ok_or_else(|| UpdateError::HashMismatch {
+                        path: file_entry.path.clone(),
+                    })?;
             let actual_hex = blake3::hash(content).to_hex().to_string();
             if actual_hex != file_entry.hash {
                 return Err(UpdateError::HashMismatch {

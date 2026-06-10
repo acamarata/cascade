@@ -31,4 +31,4 @@ pub mod verify;
 pub use bundle::{DeltaBundle, FileEntry, Manifest};
 pub use downloader::{DownloadError, UpdateChecker, UpdateStatus};
 pub use snapshot::{Snapshot, SnapshotMetadata};
-pub use verify::{UpdateError, verify_bundle};
+pub use verify::{verify_bundle, UpdateError};

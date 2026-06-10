@@ -524,7 +524,10 @@ mod tests {
         // Search fn always returns the relevant id at position 0.
         let harness = EvalHarness::new(
             gt,
-            EvalConfig { k: 10, strategy: "mock".into() },
+            EvalConfig {
+                k: 10,
+                strategy: "mock".into(),
+            },
             Box::new(|query, _k| {
                 if query == "q1" {
                     vec!["a".into(), "b".into()]
@@ -581,14 +584,29 @@ mod tests {
             name: "agg".into(),
             version: "1.0.0".into(),
             queries: vec![
-                EvalQuery { query: "q1".into(), relevant_chunk_ids: vec!["a".into()], notes: None },
-                EvalQuery { query: "q2".into(), relevant_chunk_ids: vec!["b".into()], notes: None },
-                EvalQuery { query: "q3".into(), relevant_chunk_ids: vec!["c".into()], notes: None },
+                EvalQuery {
+                    query: "q1".into(),
+                    relevant_chunk_ids: vec!["a".into()],
+                    notes: None,
+                },
+                EvalQuery {
+                    query: "q2".into(),
+                    relevant_chunk_ids: vec!["b".into()],
+                    notes: None,
+                },
+                EvalQuery {
+                    query: "q3".into(),
+                    relevant_chunk_ids: vec!["c".into()],
+                    notes: None,
+                },
             ],
         };
         let harness = EvalHarness::new(
             gt,
-            EvalConfig { k: 10, strategy: "agg-test".into() },
+            EvalConfig {
+                k: 10,
+                strategy: "agg-test".into(),
+            },
             Box::new(|query: &str, _k| {
                 if query == "q1" {
                     vec!["a".into(), "x".into()]

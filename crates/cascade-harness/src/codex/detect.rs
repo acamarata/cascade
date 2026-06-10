@@ -259,7 +259,10 @@ mod tests {
         let result = detect_codex();
 
         std::env::set_var("PATH", &original_path);
-        assert!(result.is_none(), "expected None when --version exits non-zero");
+        assert!(
+            result.is_none(),
+            "expected None when --version exits non-zero"
+        );
     }
 
     #[test]

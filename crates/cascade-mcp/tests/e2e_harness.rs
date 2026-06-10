@@ -94,7 +94,10 @@ async fn spawn_channel_server() -> (
     let (client_tx, server_rx) = tokio::sync::mpsc::channel::<String>(64);
     let (server_tx, client_rx) = tokio::sync::mpsc::channel::<String>(64);
 
-    let transport = ChannelTransportPub { recv: server_rx, send: server_tx };
+    let transport = ChannelTransportPub {
+        recv: server_rx,
+        send: server_tx,
+    };
     let server = McpServer::new(McpServerConfig::default(), Box::new(transport));
     let handle = tokio::task::spawn_local(server.run());
     (client_tx, client_rx, handle)

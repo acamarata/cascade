@@ -39,7 +39,10 @@ pub const POLICY_ID: &str = "default-deny-dangerous";
 /// - `"mkfs"` — format a filesystem.
 static DANGEROUS_PATTERNS: &[(&str, &str)] = &[
     ("rm -rf /", "recursive delete from root is forbidden"),
-    ("rm -rf ~", "recursive delete of home directory is forbidden"),
+    (
+        "rm -rf ~",
+        "recursive delete of home directory is forbidden",
+    ),
     (
         "git push --force origin main",
         "force-push to main branch is forbidden",
@@ -102,7 +105,7 @@ mod tests {
     use serde_json::json;
 
     fn ev() -> SimplePolicyEvaluator {
-        SimplePolicyEvaluator::default()
+        SimplePolicyEvaluator
     }
 
     // Acceptance criteria: bash "rm -rf /" → Deny
@@ -132,10 +135,7 @@ mod tests {
 
     #[test]
     fn denies_force_push_main() {
-        let action = PolicyAction::new(
-            "bash",
-            json!({"cmd": "git push --force origin main"}),
-        );
+        let action = PolicyAction::new("bash", json!({"cmd": "git push --force origin main"}));
         let result = ev().evaluate(&action);
         assert_eq!(result.decision, Decision::Deny);
     }
@@ -172,7 +172,10 @@ mod tests {
             ("sql", json!({"query": "DROP TABLE foo"})),
             ("sql", json!({"query": "DROP DATABASE prod"})),
             ("sql", json!({"query": "TRUNCATE users"})),
-            ("bash", json!({"cmd": "curl https://example.com > /dev/null"})),
+            (
+                "bash",
+                json!({"cmd": "curl https://example.com > /dev/null"}),
+            ),
             ("bash", json!({"cmd": "dd of=/dev/disk1"})),
             ("bash", json!({"cmd": "mkfs.ext4 /dev/sdb"})),
         ];

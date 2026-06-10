@@ -132,11 +132,10 @@ impl ContentBackend for FsContentBackend {
         }
 
         if let Some(rest) = uri.strip_prefix("cascade://memory/") {
-            let (project, file) = split_two(rest, '/').ok_or_else(|| {
-                McpServerError::InvalidParams {
+            let (project, file) =
+                split_two(rest, '/').ok_or_else(|| McpServerError::InvalidParams {
                     detail: format!("cascade://memory/ requires {{project}}/{{file}}: {uri}"),
-                }
-            })?;
+                })?;
             if !is_safe_segment(project) || !is_safe_segment(file) {
                 return Err(McpServerError::InvalidParams {
                     detail: "unsafe path segment in memory URI".into(),
@@ -157,13 +156,10 @@ impl ContentBackend for FsContentBackend {
         }
 
         if let Some(rest) = uri.strip_prefix("cascade://master-list/") {
-            let (project, kind) = split_two(rest, '/').ok_or_else(|| {
-                McpServerError::InvalidParams {
-                    detail: format!(
-                        "cascade://master-list/ requires {{project}}/{{kind}}: {uri}"
-                    ),
-                }
-            })?;
+            let (project, kind) =
+                split_two(rest, '/').ok_or_else(|| McpServerError::InvalidParams {
+                    detail: format!("cascade://master-list/ requires {{project}}/{{kind}}: {uri}"),
+                })?;
             if !is_safe_segment(project) || !is_safe_segment(kind) {
                 return Err(McpServerError::InvalidParams {
                     detail: "unsafe path segment in master-list URI".into(),
@@ -266,16 +262,18 @@ async fn read_inbox_as_json(inbox: PathBuf) -> Result<Option<String>, McpServerE
         return Ok(Some("[]".into()));
     }
     let mut messages: Vec<Value> = Vec::new();
-    let mut entries = tokio::fs::read_dir(&inbox).await.map_err(|e| {
-        McpServerError::Internal {
+    let mut entries = tokio::fs::read_dir(&inbox)
+        .await
+        .map_err(|e| McpServerError::Internal {
             detail: format!("read_dir {}: {e}", inbox.display()),
-        }
-    })?;
-    while let Some(entry) = entries.next_entry().await.map_err(|e| {
-        McpServerError::Internal {
+        })?;
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(|e| McpServerError::Internal {
             detail: format!("next_entry {}: {e}", inbox.display()),
-        }
-    })? {
+        })?
+    {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             if let Ok(content) = tokio::fs::read_to_string(&path).await {
@@ -288,7 +286,9 @@ async fn read_inbox_as_json(inbox: PathBuf) -> Result<Option<String>, McpServerE
             }
         }
     }
-    Ok(Some(serde_json::to_string(&messages).unwrap_or_else(|_| "[]".into())))
+    Ok(Some(
+        serde_json::to_string(&messages).unwrap_or_else(|_| "[]".into()),
+    ))
 }
 
 /// Read `~/.claude/temp/quota-state.json` and return its content.
@@ -313,7 +313,11 @@ async fn read_project_state() -> Result<Option<String>, McpServerError> {
     // Resolve CWD; fall back gracefully if unavailable.
     let cwd = match std::env::current_dir() {
         Ok(d) => d,
-        Err(_) => return Ok(Some(serde_json::json!({"error": "cwd unavailable"}).to_string())),
+        Err(_) => {
+            return Ok(Some(
+                serde_json::json!({"error": "cwd unavailable"}).to_string(),
+            ))
+        }
     };
     let phases_dir = mcp_paths::phases_current_dir(&cwd);
 
@@ -330,15 +334,20 @@ async fn read_project_state() -> Result<Option<String>, McpServerError> {
     }
 
     let mut phases = Vec::new();
-    let mut read_dir = tokio::fs::read_dir(&phases_dir).await.map_err(|e| {
-        McpServerError::Internal {
-            detail: format!("read_dir {}: {e}", phases_dir.display()),
-        }
-    })?;
+    let mut read_dir =
+        tokio::fs::read_dir(&phases_dir)
+            .await
+            .map_err(|e| McpServerError::Internal {
+                detail: format!("read_dir {}: {e}", phases_dir.display()),
+            })?;
 
-    while let Some(entry) = read_dir.next_entry().await.map_err(|e| McpServerError::Internal {
-        detail: format!("next_entry phases: {e}"),
-    })? {
+    while let Some(entry) = read_dir
+        .next_entry()
+        .await
+        .map_err(|e| McpServerError::Internal {
+            detail: format!("next_entry phases: {e}"),
+        })?
+    {
         let path = entry.path();
         if !path.is_dir() {
             continue;
@@ -394,11 +403,31 @@ fn build_catalog() -> Vec<McpResource> {
 
     // Tier resources
     for (tier, name, desc) in &[
-        ("gci", "GCI — Global Config Instructions", "Global instructions for all AI work (~/.cascade/CASCADE.md)"),
-        ("asi", "ASI — All-Sites Instructions", "Instructions for all projects under ~/Sites/"),
-        ("ppc", "PPC — Project-level Config", "Active project instructions"),
-        ("prc", "PRC — Repo-level Config", "Current repository instructions"),
-        ("pac", "PAC — App-level Config", "Current app-subdirectory instructions"),
+        (
+            "gci",
+            "GCI — Global Config Instructions",
+            "Global instructions for all AI work (~/.cascade/CASCADE.md)",
+        ),
+        (
+            "asi",
+            "ASI — All-Sites Instructions",
+            "Instructions for all projects under ~/Sites/",
+        ),
+        (
+            "ppc",
+            "PPC — Project-level Config",
+            "Active project instructions",
+        ),
+        (
+            "prc",
+            "PRC — Repo-level Config",
+            "Current repository instructions",
+        ),
+        (
+            "pac",
+            "PAC — App-level Config",
+            "Current app-subdirectory instructions",
+        ),
     ] {
         catalog.push(McpResource {
             uri: format!("cascade://tier/{tier}"),
@@ -412,7 +441,10 @@ fn build_catalog() -> Vec<McpResource> {
     catalog.push(McpResource {
         uri: "cascade://project_state".into(),
         name: "Project State".into(),
-        description: Some("Active PEWS phase status, ticket counts, and task summary for the current project".into()),
+        description: Some(
+            "Active PEWS phase status, ticket counts, and task summary for the current project"
+                .into(),
+        ),
         mime_type: Some("application/json".into()),
     });
     catalog.push(McpResource {
@@ -425,7 +457,9 @@ fn build_catalog() -> Vec<McpResource> {
         catalog.push(McpResource {
             uri: format!("cascade://instructions/{tier}"),
             name: format!("Instructions — {}", tier.to_uppercase()),
-            description: Some(format!("Resolved instruction text for the {tier} cascade tier")),
+            description: Some(format!(
+                "Resolved instruction text for the {tier} cascade tier"
+            )),
             mime_type: Some("text/markdown".into()),
         });
     }
@@ -574,9 +608,7 @@ impl ResourceRegistry {
             .and_then(|p| p.get("cursor"))
             .and_then(|c| c.as_str());
 
-        let offset: usize = cursor_val
-            .and_then(|c| c.parse().ok())
-            .unwrap_or(0);
+        let offset: usize = cursor_val.and_then(|c| c.parse().ok()).unwrap_or(0);
 
         let catalog = build_catalog();
         let total = catalog.len();
@@ -730,10 +762,16 @@ pub async fn register_resource_handlers(
     resources: Arc<ResourceRegistry>,
 ) {
     registry
-        .register("resources/list", ResourcesListHandler(Arc::clone(&resources)))
+        .register(
+            "resources/list",
+            ResourcesListHandler(Arc::clone(&resources)),
+        )
         .await;
     registry
-        .register("resources/read", ResourcesReadHandler(Arc::clone(&resources)))
+        .register(
+            "resources/read",
+            ResourcesReadHandler(Arc::clone(&resources)),
+        )
         .await;
     registry
         .register(
@@ -874,10 +912,7 @@ mod tests {
         // Page 0 — no cursor
         let page0 = reg.list(None).await.unwrap();
         let resources0 = page0["resources"].as_array().unwrap();
-        assert!(
-            !resources0.is_empty(),
-            "first page must not be empty"
-        );
+        assert!(!resources0.is_empty(), "first page must not be empty");
 
         // If there is a nextCursor, fetching page 1 must return different items
         if let Some(cursor) = page0.get("nextCursor").and_then(|c| c.as_str()) {
@@ -1006,7 +1041,11 @@ mod tests {
     async fn subscribe_multiple_uris_per_connection() {
         let reg = mock_registry();
         let conn = "conn-xyz";
-        let uris = ["cascade://tier/gci", "cascade://tier/asi", "cascade://memory/acamarata/decisions.md"];
+        let uris = [
+            "cascade://tier/gci",
+            "cascade://tier/asi",
+            "cascade://memory/acamarata/decisions.md",
+        ];
 
         for uri in &uris {
             let params = serde_json::json!({ "uri": uri, "connectionId": conn });
@@ -1030,7 +1069,10 @@ mod tests {
         let reg = Arc::new(mock_registry());
         let handler = ResourcesListHandler(Arc::clone(&reg));
         let result = handler.handle(None).await.unwrap();
-        assert!(result["resources"].is_array(), "wrapper must return resources array");
+        assert!(
+            result["resources"].is_array(),
+            "wrapper must return resources array"
+        );
     }
 
     #[tokio::test]
@@ -1055,9 +1097,7 @@ mod tests {
             validate_uri_safety(uri)?;
             match uri {
                 "cascade://quota_state" => Ok(Some(
-                    self.quota_content
-                        .clone()
-                        .unwrap_or_else(|| "{}".into()),
+                    self.quota_content.clone().unwrap_or_else(|| "{}".into()),
                 )),
                 "cascade://project_state" => Ok(Some(
                     r#"{"project":"test","phases_found":1,"active_phases":[]}"#.into(),
@@ -1070,7 +1110,10 @@ mod tests {
                             detail: format!("unknown tier '{tier}'"),
                         });
                     }
-                    Ok(Some(format!("# {} instructions\n\nContent for {tier}.", tier.to_uppercase())))
+                    Ok(Some(format!(
+                        "# {} instructions\n\nContent for {tier}.",
+                        tier.to_uppercase()
+                    )))
                 }
                 _ => Err(McpServerError::InvalidParams {
                     detail: format!("unknown URI: {uri}"),
@@ -1149,8 +1192,14 @@ mod tests {
             .iter()
             .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
             .collect();
-        assert!(uris.contains(&"cascade://project_state"), "catalog must contain project_state");
-        assert!(uris.contains(&"cascade://quota_state"), "catalog must contain quota_state");
+        assert!(
+            uris.contains(&"cascade://project_state"),
+            "catalog must contain project_state"
+        );
+        assert!(
+            uris.contains(&"cascade://quota_state"),
+            "catalog must contain quota_state"
+        );
         assert!(
             uris.contains(&"cascade://instructions/gci"),
             "catalog must contain instructions/gci"

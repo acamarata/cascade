@@ -115,7 +115,7 @@ pub fn index_chunk(conn: &Connection, chunk_id: i64, text: &str) -> SqlResult<()
 ///
 /// - `conn`  — open connection with migrations applied.
 /// - `query` — user-supplied search string (arbitrary UTF-8, including FTS5
-///             operator characters).  Sanitised internally.
+///   operator characters).  Sanitised internally.
 /// - `k`     — maximum number of results to return.
 ///
 /// # Outputs
@@ -278,7 +278,10 @@ mod tests {
         assert!(!results.is_empty(), "query for 'hello' must return results");
 
         let ids: Vec<i64> = results.iter().map(|(id, _)| *id).collect();
-        assert!(ids.contains(&1), "chunk 1 (contains 'hello') must be in results");
+        assert!(
+            ids.contains(&1),
+            "chunk 1 (contains 'hello') must be in results"
+        );
     }
 
     // ── retrieve::fts::ranking_order ─────────────────────────────────────────
@@ -392,7 +395,10 @@ mod tests {
 
         // Positive → in [0.0, 0.5) after clamp.
         let pos = normalize_bm25_score(5.0);
-        assert!(pos >= 0.0 && pos <= 1.0, "positive score must be in [0,1]");
+        assert!(
+            (0.0..=1.0).contains(&pos),
+            "positive score must be in [0,1]"
+        );
 
         // Relative ordering: -5 more relevant than -1 → higher normalised score.
         let r_neg5 = normalize_bm25_score(-5.0);
@@ -430,6 +436,10 @@ mod tests {
         index_chunk(&conn, 60, "duplicate test content foobar").unwrap();
 
         let results = query_fts5(&conn, "foobar", 10).unwrap();
-        assert_eq!(results.len(), 1, "must return exactly one result, not duplicates");
+        assert_eq!(
+            results.len(),
+            1,
+            "must return exactly one result, not duplicates"
+        );
     }
 }

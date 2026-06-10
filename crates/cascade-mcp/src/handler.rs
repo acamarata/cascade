@@ -232,7 +232,8 @@ mod tests {
     #[tokio::test]
     async fn registry_dispatch_registered_handler() {
         let reg = HandlerRegistry::new();
-        reg.register("tools/list", OkHandler(serde_json::json!({ "tools": [] }))).await;
+        reg.register("tools/list", OkHandler(serde_json::json!({ "tools": [] })))
+            .await;
 
         let result = reg.dispatch("tools/list", None).await.unwrap();
         assert_eq!(result["tools"], serde_json::json!([]));
@@ -251,15 +252,23 @@ mod tests {
         reg.register("resources/read", EchoHandler).await;
 
         let params = serde_json::json!({ "uri": "cascade://memory/decisions.md" });
-        let result = reg.dispatch("resources/read", Some(params.clone())).await.unwrap();
+        let result = reg
+            .dispatch("resources/read", Some(params.clone()))
+            .await
+            .unwrap();
         assert_eq!(result, params);
     }
 
     #[tokio::test]
     async fn registry_duplicate_registration_replaces() {
         let reg = HandlerRegistry::new();
-        reg.register("tools/list", OkHandler(serde_json::json!({ "tools": [] }))).await;
-        reg.register("tools/list", OkHandler(serde_json::json!({ "tools": ["a"] }))).await;
+        reg.register("tools/list", OkHandler(serde_json::json!({ "tools": [] })))
+            .await;
+        reg.register(
+            "tools/list",
+            OkHandler(serde_json::json!({ "tools": ["a"] })),
+        )
+        .await;
 
         let result = reg.dispatch("tools/list", None).await.unwrap();
         // Second registration wins.

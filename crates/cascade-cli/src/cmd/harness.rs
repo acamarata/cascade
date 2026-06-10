@@ -119,7 +119,11 @@ pub struct HarnessCodexInstallArgs {
     pub workspace: Option<PathBuf>,
 
     /// Daemon socket path for the CASCADE_SOCKET env var.
-    #[arg(long, value_name = "SOCKET", default_value = "unix://~/.cascade/cascade.sock")]
+    #[arg(
+        long,
+        value_name = "SOCKET",
+        default_value = "unix://~/.cascade/cascade.sock"
+    )]
     pub socket: String,
 }
 
@@ -168,9 +172,8 @@ impl Command for HarnessCodexInstallArgs {
         }
 
         // Scaffold config
-        scaffold_codex_config(&workspace, &self.socket).map_err(|e| {
-            CascadeError::Other(format!("scaffold_codex_config failed: {e}").into())
-        })?;
+        scaffold_codex_config(&workspace, &self.socket)
+            .map_err(|e| CascadeError::Other(format!("scaffold_codex_config failed: {e}")))?;
 
         println!(
             "Cascade MCP entry written to {}/codex/config.yaml",
@@ -195,7 +198,10 @@ impl Command for HarnessCodexStatusArgs {
         }
 
         if self.json {
-            println!("{}", serde_json::to_string_pretty(&sessions).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&sessions).unwrap_or_default()
+            );
             return Ok(());
         }
 
@@ -262,43 +268,46 @@ impl Command for HarnessGenerateArgs {
             .clone()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-        let resolved = resolve_cascade_full(&workspace).map_err(|e| {
-            CascadeError::Other(format!("cascade resolution failed: {e}").into())
-        })?;
+        let resolved = resolve_cascade_full(&workspace)
+            .map_err(|e| CascadeError::Other(format!("cascade resolution failed: {e}")))?;
 
         let gen_agents = matches!(
             self.harness,
-            HarnessTarget::Cc
-                | HarnessTarget::Oc
-                | HarnessTarget::Codex
-                | HarnessTarget::All
+            HarnessTarget::Cc | HarnessTarget::Oc | HarnessTarget::Codex | HarnessTarget::All
         );
         let gen_cursor = matches!(self.harness, HarnessTarget::Cursor | HarnessTarget::All);
 
         if self.dry_run {
-            println!("[dry-run] would generate for workspace: {}", workspace.display());
+            println!(
+                "[dry-run] would generate for workspace: {}",
+                workspace.display()
+            );
             if gen_agents {
-                println!("[dry-run] AGENTS.md -> {}", workspace.join("AGENTS.md").display());
+                println!(
+                    "[dry-run] AGENTS.md -> {}",
+                    workspace.join("AGENTS.md").display()
+                );
             }
             if gen_cursor {
-                println!("[dry-run] .cursorrules -> {}", workspace.join(".cursorrules").display());
+                println!(
+                    "[dry-run] .cursorrules -> {}",
+                    workspace.join(".cursorrules").display()
+                );
             }
             return Ok(());
         }
 
         if gen_agents {
             let dest = workspace.join("AGENTS.md");
-            generate_agents_md(&resolved, &dest, None).map_err(|e| {
-                CascadeError::Other(format!("generate_agents_md failed: {e}").into())
-            })?;
+            generate_agents_md(&resolved, &dest, None)
+                .map_err(|e| CascadeError::Other(format!("generate_agents_md failed: {e}")))?;
             println!("Written: {}", dest.display());
         }
 
         if gen_cursor {
             let dest = workspace.join(".cursorrules");
-            generate_cursorrules(&resolved, &dest).map_err(|e| {
-                CascadeError::Other(format!("generate_cursorrules failed: {e}").into())
-            })?;
+            generate_cursorrules(&resolved, &dest)
+                .map_err(|e| CascadeError::Other(format!("generate_cursorrules failed: {e}")))?;
             println!("Written: {}", dest.display());
         }
 

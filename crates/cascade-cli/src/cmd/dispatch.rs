@@ -146,12 +146,10 @@ pub struct DispatchArgs {
 impl Command for DispatchArgs {
     async fn run(&self) -> Result<()> {
         // 1. Validate target repo path (HOME-confined).
-        let repo = self.repo.canonicalize().map_err(|e| {
-            CascadeError::Io {
-                path: self.repo.clone(),
-                operation: "canonicalize",
-                source: e,
-            }
+        let repo = self.repo.canonicalize().map_err(|e| CascadeError::Io {
+            path: self.repo.clone(),
+            operation: "canonicalize",
+            source: e,
         })?;
         validate_home_confined(&repo)?;
 
@@ -181,11 +179,10 @@ impl Command for DispatchArgs {
         //    so we use the optimizer in "shell-only" mode: the query is echoed as
         //    a header and the budget is noted. A full RAG-backed slice requires the
         //    cascade-mcp context_slice tool (T-P4-E04-22) or daemon IPC.
-        let context_block = if let Some(ref query) = self.context_query {
-            Some(fetch_context_with_optimizer(query, self.budget_tokens))
-        } else {
-            None
-        };
+        let context_block = self
+            .context_query
+            .as_ref()
+            .map(|query| fetch_context_with_optimizer(query, self.budget_tokens));
 
         // 5. Compose full prompt.
         let full_prompt = compose_prompt(context_block.as_deref(), &self.prompt);
@@ -194,7 +191,7 @@ impl Command for DispatchArgs {
         let mcp_socket = self
             .mcp_socket
             .clone()
-            .unwrap_or_else(|| cascade_types::paths::daemon_socket());
+            .unwrap_or_else(cascade_types::paths::daemon_socket);
 
         // 7. Build argv.
         let (bin_path, args) = self.harness.build_argv(&binary, &full_prompt);
@@ -303,9 +300,7 @@ pub fn validate_home_confined(path: &Path) -> Result<()> {
 pub fn compose_prompt(context: Option<&str>, user_prompt: &str) -> String {
     match context {
         None => user_prompt.to_string(),
-        Some(ctx) => format!(
-            "## Context from Cascade\n\n{ctx}\n\n---\n\n{user_prompt}"
-        ),
+        Some(ctx) => format!("## Context from Cascade\n\n{ctx}\n\n---\n\n{user_prompt}"),
     }
 }
 
@@ -367,7 +362,11 @@ fn run_subprocess(
     harness: Harness,
     timeout: Duration,
 ) -> Result<i32> {
-    let stdout_cfg = if capture { Stdio::piped() } else { Stdio::inherit() };
+    let stdout_cfg = if capture {
+        Stdio::piped()
+    } else {
+        Stdio::inherit()
+    };
     let stderr_cfg = Stdio::inherit();
 
     let mut child = StdCommand::new(binary)
@@ -559,11 +558,7 @@ mod tests {
     fn validate_home_confined_rejects_tmp() {
         let path = PathBuf::from("/tmp");
         let result = validate_home_confined(&path);
-        assert!(
-            result.is_err(),
-            "expected error for /tmp, got {:?}",
-            result
-        );
+        assert!(result.is_err(), "expected error for /tmp, got {:?}", result);
     }
 
     // ── harness argv construction ─────────────────────────────────────────
@@ -669,6 +664,9 @@ mod tests {
 
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        assert!(name_str.ends_with("-oc.md"), "expected -oc.md suffix, got {name_str}");
+        assert!(
+            name_str.ends_with("-oc.md"),
+            "expected -oc.md suffix, got {name_str}"
+        );
     }
 }

@@ -30,7 +30,7 @@
 //! SPORT: MASTER-TABLES.md → rag_embeddings (write/read implemented),
 //!        rag_sparse_embeddings (write/read implemented)
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 use super::EmbedError;
 
@@ -219,10 +219,11 @@ pub fn store_embeddings(
     validate_dense_dim(dense)?;
 
     // Wrap both writes in a single transaction.
-    conn.execute_batch("BEGIN").map_err(|e| EmbedError::InferenceFailed {
-        model_id: "store_embeddings/begin".into(),
-        detail: e.to_string(),
-    })?;
+    conn.execute_batch("BEGIN")
+        .map_err(|e| EmbedError::InferenceFailed {
+            model_id: "store_embeddings/begin".into(),
+            detail: e.to_string(),
+        })?;
 
     let result = (|| {
         store_dense(conn, chunk_id, dense)?;
@@ -232,10 +233,11 @@ pub fn store_embeddings(
 
     match result {
         Ok(()) => {
-            conn.execute_batch("COMMIT").map_err(|e| EmbedError::InferenceFailed {
-                model_id: "store_embeddings/commit".into(),
-                detail: e.to_string(),
-            })?;
+            conn.execute_batch("COMMIT")
+                .map_err(|e| EmbedError::InferenceFailed {
+                    model_id: "store_embeddings/commit".into(),
+                    detail: e.to_string(),
+                })?;
             Ok(())
         }
         Err(e) => {
@@ -458,7 +460,9 @@ mod tests {
 
     /// Build a deterministic 1024-dim unit vector seeded by `seed`.
     fn make_vec(seed: f32) -> Vec<f32> {
-        let raw: Vec<f32> = (0..DENSE_DIM).map(|i| (seed + i as f32 * 0.001).sin()).collect();
+        let raw: Vec<f32> = (0..DENSE_DIM)
+            .map(|i| (seed + i as f32 * 0.001).sin())
+            .collect();
         let norm = raw.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-9);
         raw.iter().map(|v| v / norm).collect()
     }
@@ -520,7 +524,10 @@ mod tests {
         let query = make_vec(1.0);
         let knn = query_dense_knn(&conn, &query, 3).expect("knn");
         assert!(!knn.is_empty(), "must return results");
-        assert_eq!(knn[0].0, chunk_ids[0], "top-1 must be the queried vector's own chunk");
+        assert_eq!(
+            knn[0].0, chunk_ids[0],
+            "top-1 must be the queried vector's own chunk"
+        );
 
         // Distances must be in ascending order.
         for w in knn.windows(2) {
@@ -534,7 +541,9 @@ mod tests {
 
         // Verify total sparse row count = 5 (one per chunk).
         let total: i64 = conn
-            .query_row("SELECT COUNT(*) FROM rag_sparse_embeddings", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM rag_sparse_embeddings", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(total, 5, "expected 5 sparse rows total");
     }
@@ -551,7 +560,13 @@ mod tests {
         let bad_dense = vec![0.0f32; 512]; // wrong dim
         let err = store_embeddings(&conn, cid, &bad_dense, &[]).unwrap_err();
         assert!(
-            matches!(err, EmbedError::DimensionMismatch { expected: 1024, actual: 512 }),
+            matches!(
+                err,
+                EmbedError::DimensionMismatch {
+                    expected: 1024,
+                    actual: 512
+                }
+            ),
             "unexpected error variant: {err:?}"
         );
     }
@@ -563,7 +578,13 @@ mod tests {
         let bad = vec![0.0f32; 768];
         let err = query_dense_knn(&conn, &bad, 3).unwrap_err();
         assert!(
-            matches!(err, EmbedError::DimensionMismatch { expected: 1024, actual: 768 }),
+            matches!(
+                err,
+                EmbedError::DimensionMismatch {
+                    expected: 1024,
+                    actual: 768
+                }
+            ),
             "unexpected error: {err:?}"
         );
     }
@@ -652,18 +673,16 @@ mod tests {
 
         // Verify sparse total = n.
         let total: i64 = conn
-            .query_row("SELECT COUNT(*) FROM rag_sparse_embeddings", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM rag_sparse_embeddings", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(total as usize, n, "sparse row count must equal n");
 
         // Each query must return its own chunk as top-1.
         for (i, v) in vecs.iter().enumerate() {
             let knn = query_dense_knn(&conn, v, 1).expect("knn");
-            assert_eq!(
-                knn.len(),
-                1,
-                "must return 1 result for query {i}"
-            );
+            assert_eq!(knn.len(), 1, "must return 1 result for query {i}");
             assert_eq!(
                 knn[0].0, cids[i],
                 "query {i}: top-1 must be chunk {i} (cid={}), got {}",

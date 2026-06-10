@@ -97,7 +97,7 @@ impl Command for GenerateInstructionsArgs {
         let resolved = resolve_cascade_full(&cwd).map_err(|e| CascadeError::Io {
             path: cwd.clone(),
             operation: "resolve cascade for generate-instructions",
-            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+            source: std::io::Error::other(e.to_string()),
         })?;
 
         // Filter tiers by --tier flag
@@ -124,7 +124,9 @@ impl Command for GenerateInstructionsArgs {
         };
 
         if tiers_to_process.is_empty() {
-            eprintln!("No cascade tiers found. Run `cascade init` to scaffold a .cascade/ directory.");
+            eprintln!(
+                "No cascade tiers found. Run `cascade init` to scaffold a .cascade/ directory."
+            );
             return Ok(());
         }
 
@@ -227,7 +229,11 @@ fn generate_cc(
         let new_content = if existing_claude.is_empty() {
             format!("{header_block}\n")
         } else {
-            let sep = if existing_claude.ends_with('\n') { "\n" } else { "\n\n" };
+            let sep = if existing_claude.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            };
             format!("{existing_claude}{sep}{header_block}\n")
         };
 
@@ -331,9 +337,8 @@ fn update_cc_settings_json(settings_path: &Path, dry_run: bool) -> Result<bool> 
         String::from("{}")
     };
 
-    let mut root: Value = serde_json::from_str(&existing_raw).unwrap_or(Value::Object(
-        serde_json::Map::new(),
-    ));
+    let mut root: Value =
+        serde_json::from_str(&existing_raw).unwrap_or(Value::Object(serde_json::Map::new()));
 
     let mcp_entry = serde_json::json!({
         "command": "cascade",
@@ -365,7 +370,7 @@ fn update_cc_settings_json(settings_path: &Path, dry_run: bool) -> Result<bool> 
     let new_json = serde_json::to_string_pretty(&root).map_err(|e| CascadeError::Io {
         path: settings_path.to_path_buf(),
         operation: "serialize settings.json",
-        source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+        source: std::io::Error::other(e.to_string()),
     })?;
 
     if dry_run {
@@ -433,8 +438,7 @@ fn generate_oc(tier: &TierResult, tier_root: &Path, dry_run: bool) -> Result<boo
     // 3. Per-tier opencode.json — set instructions field to point at the
     //    opencode-instructions.md we wrote above (T-P4-E02-29 deeper OC integration).
     let project_oc_json = tier_root.join("opencode.json");
-    let instr_updated =
-        update_project_oc_instructions_field(&project_oc_json, tier_root, dry_run)?;
+    let instr_updated = update_project_oc_instructions_field(&project_oc_json, tier_root, dry_run)?;
     any_written |= instr_updated;
 
     Ok(any_written)
@@ -460,12 +464,10 @@ fn update_project_oc_instructions_field(
         String::from("{}")
     };
 
-    let mut root: Value = serde_json::from_str(&existing_raw).unwrap_or(Value::Object(
-        serde_json::Map::new(),
-    ));
+    let mut root: Value =
+        serde_json::from_str(&existing_raw).unwrap_or(Value::Object(serde_json::Map::new()));
 
-    let expected_value =
-        Value::String(".cascade/opencode-instructions.md".to_string());
+    let expected_value = Value::String(".cascade/opencode-instructions.md".to_string());
 
     // Check if already set correctly
     if root.get("instructions") == Some(&expected_value) {
@@ -483,7 +485,7 @@ fn update_project_oc_instructions_field(
     let new_json = serde_json::to_string_pretty(&root).map_err(|e| CascadeError::Io {
         path: project_oc_json.to_path_buf(),
         operation: "serialize project opencode.json",
-        source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+        source: std::io::Error::other(e.to_string()),
     })?;
 
     if dry_run {
@@ -540,9 +542,8 @@ fn update_oc_json(oc_json_path: &Path, dry_run: bool) -> Result<bool> {
         String::from("{}")
     };
 
-    let mut root: Value = serde_json::from_str(&existing_raw).unwrap_or(Value::Object(
-        serde_json::Map::new(),
-    ));
+    let mut root: Value =
+        serde_json::from_str(&existing_raw).unwrap_or(Value::Object(serde_json::Map::new()));
 
     // OC format: "mcpServers" is an array of objects with "name", "type", "command"
     let cascade_entry = serde_json::json!({
@@ -555,7 +556,10 @@ fn update_oc_json(oc_json_path: &Path, dry_run: bool) -> Result<bool> {
     let already_present = root
         .get("mcpServers")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().any(|e| e.get("name").and_then(|n| n.as_str()) == Some(CASCADE_MCP_NAME)))
+        .map(|arr| {
+            arr.iter()
+                .any(|e| e.get("name").and_then(|n| n.as_str()) == Some(CASCADE_MCP_NAME))
+        })
         .unwrap_or(false);
 
     if already_present {
@@ -579,7 +583,7 @@ fn update_oc_json(oc_json_path: &Path, dry_run: bool) -> Result<bool> {
     let new_json = serde_json::to_string_pretty(&root).map_err(|e| CascadeError::Io {
         path: oc_json_path.to_path_buf(),
         operation: "serialize opencode.json",
-        source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+        source: std::io::Error::other(e.to_string()),
     })?;
 
     if dry_run {
@@ -682,11 +686,7 @@ mod tests {
         fs::create_dir_all(&cascade_dir).unwrap();
         fs::write(cascade_dir.join("CASCADE.md"), "project instructions").unwrap();
 
-        let tier = fake_tier_result(
-            CascadeTier::Ppc,
-            &cascade_dir,
-            "project instructions",
-        );
+        let tier = fake_tier_result(CascadeTier::Ppc, &cascade_dir, "project instructions");
         let tier_root = cascade_dir.parent().unwrap();
 
         generate_cc(&tier, tier_root, "unix://~/.cascade/cascade.sock", false)
@@ -770,7 +770,10 @@ mod tests {
             .expect("generate_cc should succeed");
 
         let agents_md = tmp.path().join(".claude").join("AGENTS.md");
-        assert!(agents_md.exists() || agents_md.is_symlink(), "AGENTS.md must exist");
+        assert!(
+            agents_md.exists() || agents_md.is_symlink(),
+            "AGENTS.md must exist"
+        );
         assert!(
             agents_md.is_symlink(),
             "AGENTS.md must be a symlink (not a plain file)"
@@ -807,9 +810,7 @@ mod tests {
         let claude_md = tmp.path().join(".claude").join("CLAUDE.md");
         let content = fs::read_to_string(&claude_md).unwrap();
 
-        let marker_count = content
-            .matches(CASCADE_HEADER_MARKER)
-            .count();
+        let marker_count = content.matches(CASCADE_HEADER_MARKER).count();
         assert_eq!(
             marker_count, 1,
             "cascade header must appear exactly once (idempotent)"
@@ -834,7 +835,13 @@ mod tests {
 
         let tier = fake_tier_result(CascadeTier::Gci, &cascade_dir, "dry run text");
 
-        generate_cc(&tier, tmp.path(), "unix://~/.cascade/cascade.sock", /* dry_run= */ true).unwrap();
+        generate_cc(
+            &tier,
+            tmp.path(),
+            "unix://~/.cascade/cascade.sock",
+            /* dry_run= */ true,
+        )
+        .unwrap();
 
         let claude_md = tmp.path().join(".claude").join("CLAUDE.md");
         assert!(
@@ -864,7 +871,11 @@ mod tests {
                 }
             }
         });
-        fs::write(&settings_path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
+        fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&initial).unwrap(),
+        )
+        .unwrap();
 
         update_cc_settings_json(&settings_path, false).unwrap();
 
@@ -935,7 +946,10 @@ mod tests {
         generate_oc(&tier, tier_root, false).expect("generate_oc should succeed");
 
         let instr_path = cascade_dir.join("opencode-instructions.md");
-        assert!(instr_path.exists(), "opencode-instructions.md must be created");
+        assert!(
+            instr_path.exists(),
+            "opencode-instructions.md must be created"
+        );
 
         let content = fs::read_to_string(&instr_path).unwrap();
         assert!(

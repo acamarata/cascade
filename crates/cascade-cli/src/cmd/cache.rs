@@ -167,8 +167,14 @@ fn print_stats_table(caches: &[CacheStat]) {
     println!("{}", "-".repeat(48));
     for c in caches {
         let hits = c.hits.map(|v| v.to_string()).unwrap_or_else(|| "—".into());
-        let misses = c.misses.map(|v| v.to_string()).unwrap_or_else(|| "—".into());
-        println!("{:<18} {:>8}  {:>8}  {:>8}", c.name, c.entries, hits, misses);
+        let misses = c
+            .misses
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "—".into());
+        println!(
+            "{:<18} {:>8}  {:>8}  {:>8}",
+            c.name, c.entries, hits, misses
+        );
     }
 }
 
@@ -194,12 +200,21 @@ async fn run_clear(args: &CacheClearArgs) -> Result<()> {
     if !args.yes {
         let targets: Vec<&str> = {
             let mut v = Vec::new();
-            if clear_query { v.push("query"); }
-            if clear_embed { v.push("embedding"); }
-            if clear_chunk { v.push("chunk"); }
+            if clear_query {
+                v.push("query");
+            }
+            if clear_embed {
+                v.push("embedding");
+            }
+            if clear_chunk {
+                v.push("chunk");
+            }
             v
         };
-        eprintln!("This will clear the following cache(s): {}", targets.join(", "));
+        eprintln!(
+            "This will clear the following cache(s): {}",
+            targets.join(", ")
+        );
         eprint!("Continue? [y/N] ");
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).ok();
@@ -212,7 +227,9 @@ async fn run_clear(args: &CacheClearArgs) -> Result<()> {
     // Step 1: delete the on-disk embed cache .db if requested.
     // Do this BEFORE sending the IPC message so the daemon can reopen cleanly.
     if clear_embed {
-        let db_path = global_cascade_dir().join("embed-cache").join("cascade_embed_cache.db");
+        let db_path = global_cascade_dir()
+            .join("embed-cache")
+            .join("cascade_embed_cache.db");
         if db_path.exists() {
             match std::fs::remove_file(&db_path) {
                 Ok(()) => println!("deleted {}", db_path.display()),
@@ -272,7 +289,6 @@ mod tests {
     /// usage" is satisfied if clap can build the command tree without panicking.
     #[test]
     fn cache_args_help_builds_without_panic() {
-        use clap::CommandFactory;
         // Build the top-level Cli struct and verify the cache subcommand exists.
         // We import the top-level Cli to avoid a circular dependency.
         // Instead, build CacheArgs directly.
@@ -292,7 +308,10 @@ mod tests {
         // No flags set — the run function would eprintln + exit(1).
         // We just verify the logic branch here without spawning a process.
         let nothing_selected = !args.query && !args.embed && !args.chunk && !args.all;
-        assert!(nothing_selected, "no flags should produce no-selection error");
+        assert!(
+            nothing_selected,
+            "no flags should produce no-selection error"
+        );
     }
 
     /// `cache clear --all` should set all three clear flags.

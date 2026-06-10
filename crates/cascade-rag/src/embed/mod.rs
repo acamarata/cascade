@@ -207,9 +207,7 @@ impl EmbedModel for MockEmbedModel {
                 let seed = t.bytes().fold(0u64, |acc, b| acc.wrapping_add(b as u64));
                 let base = (seed as f32) / 255.0;
                 // Build a vector, then normalise it so cosine similarity works.
-                let raw: Vec<f32> = (0..dim)
-                    .map(|i| (base + i as f32 * 0.001).sin())
-                    .collect();
+                let raw: Vec<f32> = (0..dim).map(|i| (base + i as f32 * 0.001).sin()).collect();
                 let norm: f32 = raw.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-9);
                 raw.iter().map(|v| v / norm).collect()
             })
@@ -293,9 +291,8 @@ pub(crate) fn sparse_tfidf_single(text: &str) -> Vec<(u32, f32)> {
 pub(crate) fn fnv1a_32(s: &str) -> u32 {
     const FNV_BASIS: u32 = 2_166_136_261;
     const FNV_PRIME: u32 = 16_777_619;
-    s.bytes().fold(FNV_BASIS, |h, b| {
-        (h ^ (b as u32)).wrapping_mul(FNV_PRIME)
-    })
+    s.bytes()
+        .fold(FNV_BASIS, |h, b| (h ^ (b as u32)).wrapping_mul(FNV_PRIME))
 }
 
 // ── Sub-module declarations ───────────────────────────────────────────────────
@@ -319,10 +316,9 @@ pub mod multivector;
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use cascade_types::{EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind};
-pub use model_cache::{ModelCacheError, is_model_cached, model_cache_dir};
+pub use model_cache::{is_model_cached, model_cache_dir, ModelCacheError};
 pub use store::{
-    delete_embeddings_by_source, query_dense_knn, store_embeddings, validate_dense_dim,
-    DENSE_DIM,
+    delete_embeddings_by_source, query_dense_knn, store_embeddings, validate_dense_dim, DENSE_DIM,
 };
 
 // ── Compile-time safety assertions ───────────────────────────────────────────
@@ -347,8 +343,7 @@ mod tests {
     /// `Arc<dyn EmbedModel>` must compile (trait object safety check).
     #[test]
     fn embed_model_is_object_safe() {
-        let model: std::sync::Arc<dyn EmbedModel> =
-            std::sync::Arc::new(MockEmbedModel::new(1024));
+        let model: std::sync::Arc<dyn EmbedModel> = std::sync::Arc::new(MockEmbedModel::new(1024));
         assert_eq!(model.dim(), 1024);
         assert_eq!(model.model_id(), "mock-embed-model");
     }
@@ -384,7 +379,10 @@ mod tests {
         let m = MockEmbedModel::new(64);
         let a = m.embed_dense(&["same input"]).unwrap();
         let b = m.embed_dense(&["same input"]).unwrap();
-        assert_eq!(a, b, "identical inputs must produce identical dense vectors");
+        assert_eq!(
+            a, b,
+            "identical inputs must produce identical dense vectors"
+        );
     }
 
     /// Different texts must produce different dense vectors.
@@ -393,7 +391,10 @@ mod tests {
         let m = MockEmbedModel::new(64);
         let a = m.embed_dense(&["alpha text"]).unwrap();
         let b = m.embed_dense(&["completely different"]).unwrap();
-        assert_ne!(a[0], b[0], "different texts must produce different dense vectors");
+        assert_ne!(
+            a[0], b[0],
+            "different texts must produce different dense vectors"
+        );
     }
 
     /// Sparse output must be non-empty for non-empty input.
@@ -402,7 +403,10 @@ mod tests {
         let m = MockEmbedModel::new(1024);
         let sparse = m.embed_sparse(&["hello world foo"]).unwrap();
         assert_eq!(sparse.len(), 1);
-        assert!(!sparse[0].is_empty(), "sparse vector must have entries for non-empty text");
+        assert!(
+            !sparse[0].is_empty(),
+            "sparse vector must have entries for non-empty text"
+        );
     }
 
     /// Sparse output must be empty for empty input text.
@@ -411,7 +415,10 @@ mod tests {
         let m = MockEmbedModel::new(1024);
         let sparse = m.embed_sparse(&[""]).unwrap();
         assert_eq!(sparse.len(), 1);
-        assert!(sparse[0].is_empty(), "sparse vector for empty text must be empty");
+        assert!(
+            sparse[0].is_empty(),
+            "sparse vector for empty text must be empty"
+        );
     }
 
     /// Sparse token IDs must be deterministic across calls.
@@ -456,11 +463,17 @@ mod tests {
     #[test]
     fn embed_error_dimension_mismatch_converts() {
         use cascade_types::error::CascadeError;
-        let e = EmbedError::DimensionMismatch { expected: 1024, actual: 768 };
+        let e = EmbedError::DimensionMismatch {
+            expected: 1024,
+            actual: 768,
+        };
         let ce: CascadeError = e.into();
         assert!(matches!(
             ce,
-            CascadeError::EmbeddingDimensionMismatch { expected: 1024, actual: 768 }
+            CascadeError::EmbeddingDimensionMismatch {
+                expected: 1024,
+                actual: 768
+            }
         ));
     }
 

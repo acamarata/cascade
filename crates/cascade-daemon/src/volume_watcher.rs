@@ -197,7 +197,7 @@ impl VolumeWatcher {
 
         // Warn once at startup for each watched root whose volume is not present.
         for root in &self.watched_roots {
-            if !volume_for(root, &known).is_some() {
+            if volume_for(root, &known).is_none() {
                 warn!(
                     path = %root.display(),
                     "volume_watcher: index root on absent volume at daemon start; \
@@ -352,8 +352,8 @@ impl VolumeIndexGuard {
                                 }
                             }
                             Ok(VolumeEvent::Mounted(vol)) => {
-                                if self.paused_volumes.remove(&vol) {
-                                    if self.paused_volumes.is_empty() {
+                                if self.paused_volumes.remove(&vol)
+                                    && self.paused_volumes.is_empty() {
                                         self.index_mgr.resume().await;
                                         info!(
                                             volume = %vol.display(),
@@ -361,7 +361,6 @@ impl VolumeIndexGuard {
                                              indexing resumed"
                                         );
                                     }
-                                }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
                                 warn!(skipped = n, "VolumeIndexGuard: broadcast lagged");
@@ -419,7 +418,9 @@ mod tests {
     }
 
     impl FakeMountProvider {
-        fn new(initial: impl IntoIterator<Item = PathBuf>) -> (Self, Arc<StdMutex<HashSet<PathBuf>>>) {
+        fn new(
+            initial: impl IntoIterator<Item = PathBuf>,
+        ) -> (Self, Arc<StdMutex<HashSet<PathBuf>>>) {
             let mounts = Arc::new(StdMutex::new(initial.into_iter().collect()));
             let provider = Self {
                 mounts: mounts.clone(),
@@ -449,11 +450,8 @@ mod tests {
         let watched = vec![p("/Volumes/X9/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(initial);
 
-        let (watcher, mut rx) = VolumeWatcher::with_provider(
-            watched,
-            Duration::from_millis(10),
-            Arc::new(provider),
-        );
+        let (watcher, mut rx) =
+            VolumeWatcher::with_provider(watched, Duration::from_millis(10), Arc::new(provider));
 
         let shutdown = CancellationToken::new();
         watcher.spawn(shutdown.clone());
@@ -484,11 +482,8 @@ mod tests {
         let watched = vec![p("/Volumes/X9/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(vec![]);
 
-        let (watcher, mut rx) = VolumeWatcher::with_provider(
-            watched,
-            Duration::from_millis(10),
-            Arc::new(provider),
-        );
+        let (watcher, mut rx) =
+            VolumeWatcher::with_provider(watched, Duration::from_millis(10), Arc::new(provider));
 
         let shutdown = CancellationToken::new();
         watcher.spawn(shutdown.clone());
@@ -513,11 +508,8 @@ mod tests {
         let watched = vec![p("/Volumes/X9/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(initial);
 
-        let (watcher, mut rx) = VolumeWatcher::with_provider(
-            watched,
-            Duration::from_millis(10),
-            Arc::new(provider),
-        );
+        let (watcher, mut rx) =
+            VolumeWatcher::with_provider(watched, Duration::from_millis(10), Arc::new(provider));
 
         let shutdown = CancellationToken::new();
         watcher.spawn(shutdown.clone());
@@ -573,7 +565,10 @@ mod tests {
         tx.send(VolumeEvent::Mounted(p("/Volumes/X9"))).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        assert!(!index_mgr.is_paused().await, "IndexManager should be resumed");
+        assert!(
+            !index_mgr.is_paused().await,
+            "IndexManager should be resumed"
+        );
 
         shutdown.cancel();
     }
@@ -589,10 +584,14 @@ mod tests {
         let shutdown = CancellationToken::new();
         let _handle = guard.spawn(rx, shutdown.clone());
 
-        tx.send(VolumeEvent::Unmounted(p("/Volumes/Other"))).unwrap();
+        tx.send(VolumeEvent::Unmounted(p("/Volumes/Other")))
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        assert!(!index_mgr.is_paused().await, "unrelated unmount must not pause");
+        assert!(
+            !index_mgr.is_paused().await,
+            "unrelated unmount must not pause"
+        );
 
         shutdown.cancel();
     }
@@ -626,18 +625,18 @@ mod tests {
         let watched = vec![p("/Volumes/NonExistent/cascade-indexes/")];
         let (provider, _) = FakeMountProvider::new(vec![]); // empty table
 
-        let (watcher, mut rx) = VolumeWatcher::with_provider(
-            watched,
-            Duration::from_millis(10),
-            Arc::new(provider),
-        );
+        let (watcher, mut rx) =
+            VolumeWatcher::with_provider(watched, Duration::from_millis(10), Arc::new(provider));
 
         let shutdown = CancellationToken::new();
         watcher.spawn(shutdown.clone());
 
         // No events — volume was already absent at snapshot time.
         let result = timeout(Duration::from_millis(80), rx.recv()).await;
-        assert!(result.is_err(), "no events expected on absent-at-startup volume");
+        assert!(
+            result.is_err(),
+            "no events expected on absent-at-startup volume"
+        );
 
         shutdown.cancel();
     }

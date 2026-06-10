@@ -27,9 +27,9 @@ use cascade_types::error::{CascadeError, Result};
 use crate::auth::McpAuth;
 use crate::notification::NotificationBus;
 use crate::server::McpServerConfig;
-use crate::transport::McpTransport;
 use crate::transport::auth_handshake::{perform as auth_perform, AuthResult};
 use crate::transport::connection::{connection_loop, ConnectionContext};
+use crate::transport::McpTransport;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -197,6 +197,11 @@ impl McpTransport for TcpServer {
 
     async fn stop(&self) -> Result<()> {
         self.shutdown.notify_waiters();
+        // Sticky permit: notify_waiters only wakes CURRENT waiters; if stop()
+        // fires while the accept loop is mid-iteration the wakeup is lost and
+        // shutdown hangs (observed). notify_one stores a permit consumed by
+        // the next notified() poll.
+        self.shutdown.notify_one();
         Ok(())
     }
 }
@@ -245,7 +250,12 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn tcp_bind_addr_is_loopback() {
         let auth = make_auth();
-        let server = TcpServer::new(None, auth, McpServerConfig::default(), NotificationBus::new());
+        let server = TcpServer::new(
+            None,
+            auth,
+            McpServerConfig::default(),
+            NotificationBus::new(),
+        );
         let addr = server.bind_addr();
         assert!(addr.ip().is_loopback(), "bind addr must be loopback");
         assert_eq!(addr.port(), DEFAULT_TCP_PORT);
@@ -293,7 +303,11 @@ mod tests {
             .unwrap();
 
             let val: serde_json::Value = serde_json::from_str(resp.trim()).unwrap();
-            assert!(val["result"]["ok"].as_bool().unwrap_or(false), "Expected ok:true: {}", resp);
+            assert!(
+                val["result"]["ok"].as_bool().unwrap_or(false),
+                "Expected ok:true: {}",
+                resp
+            );
 
             // Send an initialize.
             let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"tcp-test","version":"0.1"}}}"#;
@@ -399,8 +413,16 @@ mod tests {
             stream.set_nodelay(true).unwrap();
             assert!(stream.nodelay().unwrap(), "TCP_NODELAY should be set");
 
-            server.stop().await.unwrap();
-            let _ = handle.await;
+            // Close the client before stopping: the per-connection task awaits
+            // a frame, and stop() drains connection tasks — an open idle
+            // stream would deadlock the shutdown (observed CI hang).
+            drop(stream);
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                server.stop().await.unwrap();
+                let _ = handle.await;
+            })
+            .await
+            .expect("server stop must not hang");
         });
     }
 

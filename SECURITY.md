@@ -97,3 +97,17 @@ scheduled scan (see `.github/workflows/security.yml`). Any RUSTSEC advisory
 rated high or critical blocks merge.
 
 `gitleaks` scans every commit for accidental secret inclusion.
+
+## Release signing
+
+Release artifacts are signed with the Cascade release key.
+
+- Public key: [.github/RELEASE_KEY.asc](.github/RELEASE_KEY.asc)
+- Fingerprint: `3C46 3D90 DF30 61AA 752F  B850 0F57 2977 3E69 4CEA`
+
+Verify a download with:
+
+```bash
+gpg --import RELEASE_KEY.asc
+gpg --verify cascade-<version>-<target>.tar.gz.asc
+```

@@ -60,7 +60,7 @@ const MODEL_ID: &str = "bge-reranker-v2-m3";
 // ── Options ───────────────────────────────────────────────────────────────────
 
 /// Options for initialising [`BgeReranker`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BgeRerankerOptions {
     /// Override the model cache directory.
     ///
@@ -70,15 +70,6 @@ pub struct BgeRerankerOptions {
     /// If `true`, fail immediately when model files are absent rather than
     /// downloading them.  Recommended for CI / production after bootstrap.
     pub offline_guard: bool,
-}
-
-impl Default for BgeRerankerOptions {
-    fn default() -> Self {
-        Self {
-            model_dir: None,
-            offline_guard: false,
-        }
-    }
 }
 
 // ── BgeReranker ───────────────────────────────────────────────────────────────
@@ -137,7 +128,11 @@ impl BgeReranker {
     pub async fn new(opts: BgeRerankerOptions) -> Result<Self> {
         let model_dir = match opts.model_dir {
             Some(p) => p,
-            None => crate::embed::model_cache_dir().map_err(|e| CascadeError::Other(format!("reranker[{MODEL_ID}] cache dir resolution failed: {e}")))?,
+            None => crate::embed::model_cache_dir().map_err(|e| {
+                CascadeError::Other(format!(
+                    "reranker[{MODEL_ID}] cache dir resolution failed: {e}"
+                ))
+            })?,
         };
 
         std::fs::create_dir_all(&model_dir)
@@ -171,9 +166,11 @@ impl BgeReranker {
                 };
                 TextRerank::try_new(opts)
             })
-            .map_err(|e| CascadeError::Other(format!(
-                "reranker[{MODEL_ID}] fastembed TextRerank init: {e}"
-            )))?;
+            .map_err(|e| {
+                CascadeError::Other(format!(
+                    "reranker[{MODEL_ID}] fastembed TextRerank init: {e}"
+                ))
+            })?;
 
             return Ok(Self { model_dir, inner });
         }
@@ -224,12 +221,11 @@ impl Reranker for BgeReranker {
             // fastembed TextRerank::rerank() is synchronous; run on a blocking
             // thread pool to avoid blocking the async executor.
             let ranked = tokio::task::block_in_place(|| {
-                self.inner
-                    .rerank(query_owned, passages, false, None)
+                self.inner.rerank(query_owned, passages, false, None)
             })
-            .map_err(|e| CascadeError::Other(format!(
-                "reranker[{MODEL_ID}] ONNX inference: {e}"
-            )))?;
+            .map_err(|e| {
+                CascadeError::Other(format!("reranker[{MODEL_ID}] ONNX inference: {e}"))
+            })?;
 
             // fastembed returns results sorted by score descending.
             // Map back to RerankResult using original candidate order.
@@ -241,11 +237,13 @@ impl Reranker for BgeReranker {
                 .map(|(rank, r)| {
                     // r.index is the original position in the input passages slice.
                     let chunk = candidates[r.index].clone();
-                    RerankResult { chunk, score: r.score, rank }
+                    RerankResult {
+                        chunk,
+                        score: r.score,
+                        rank,
+                    }
                 })
-                .filter(|r| {
-                    opts.min_score.map(|min| r.score >= min).unwrap_or(true)
-                })
+                .filter(|r| opts.min_score.map(|min| r.score >= min).unwrap_or(true))
                 .collect();
 
             return Ok(results);
@@ -389,7 +387,9 @@ mod tests {
     /// top_k is honoured — only opts.top_k results are returned.
     #[tokio::test]
     async fn top_k_is_honoured() {
-        let chunks: Vec<Chunk> = (0..10).map(|i| make_chunk(&format!("passage {i}"))).collect();
+        let chunks: Vec<Chunk> = (0..10)
+            .map(|i| make_chunk(&format!("passage {i}")))
+            .collect();
         let opts = RerankOpts {
             top_k: Some(3),
             min_score: None,
@@ -452,7 +452,10 @@ mod tests {
             make_chunk("apple pie recipe with cinnamon and sugar"),
             make_chunk("the Tokio runtime provides async I/O for Rust"),
         ];
-        let opts = RerankOpts { top_k: Some(3), min_score: None };
+        let opts = RerankOpts {
+            top_k: Some(3),
+            min_score: None,
+        };
         let results = reranker
             .rerank("Rust async programming", &chunks, &opts)
             .await

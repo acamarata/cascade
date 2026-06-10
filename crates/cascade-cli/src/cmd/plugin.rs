@@ -3,11 +3,14 @@
 //! Purpose: list, enable, disable, scaffold, and test plugins.
 //!   - list/enable/disable/info operate on `~/.cascade/plugins/` (no daemon IPC required).
 //!   - new: scaffolds a new plugin project from `templates/plugin-template/` using
-//!          cargo-generate (vendored template, no network). (T-P4-E03-11)
+//!     cargo-generate (vendored template, no network). (T-P4-E03-11)
 //!   - test: runs `cargo build --target wasm32-wasip1` + `cargo test` in a plugin project
-//!           and formats the pass/fail output. (T-P4-E03-12)
+//!     and formats the pass/fail output. (T-P4-E03-12)
+//!
 //! Inputs:  subcommand + optional plugin ID arg.
+//!
 //! Outputs: formatted table (list) or confirmation message (enable/disable/new/test).
+//!
 //! Constraints:
 //!   - Operates on `~/.cascade/plugins/` by default; `--plugins-dir` overrides for testing.
 //!   - Enable/disable writes or removes a `.disabled` marker file in the plugin directory.
@@ -15,6 +18,7 @@
 //!   - `cascade plugin new` uses cargo-generate with the vendored template directory.
 //!   - `cascade plugin test` builds with wasm32-wasip1 first; if the toolchain is absent,
 //!     it prints a graceful message and exits 0 rather than erroring.
+//!
 //! SPORT: cascade-cli / plugin subcommand (T-P4-E03-09, T-P4-E03-11, T-P4-E03-12)
 
 use std::path::{Path, PathBuf};
@@ -198,25 +202,27 @@ fn run_list(plugins_dir: &Path, args: &ListArgs) -> Result<()> {
     // Human-readable table.
     if loaded.is_empty() && errors.is_empty() {
         println!("No plugins installed in {}", plugins_dir.display());
-        println!("Install a plugin by copying its directory to {}", plugins_dir.display());
+        println!(
+            "Install a plugin by copying its directory to {}",
+            plugins_dir.display()
+        );
         return Ok(());
     }
 
     // Header
     println!(
-        "{:<40}  {:<24}  {:<8}  {:<16}  {}",
-        "ID", "NAME", "VERSION", "KIND", "STATUS"
+        "{:<40}  {:<24}  {:<8}  {:<16}  STATUS",
+        "ID", "NAME", "VERSION", "KIND"
     );
     println!("{}", "-".repeat(110));
 
     for d in &loaded {
         println!(
-            "{:<40}  {:<24}  {:<8}  {:<16}  {}",
+            "{:<40}  {:<24}  {:<8}  {:<16}  loaded",
             truncate(&d.manifest.id, 40),
             truncate(&d.manifest.name, 24),
             truncate(&d.manifest.version, 8),
-            kind_str(d.manifest.kind),
-            "loaded"
+            kind_str(d.manifest.kind)
         );
     }
 
@@ -224,12 +230,11 @@ fn run_list(plugins_dir: &Path, args: &ListArgs) -> Result<()> {
     for e in &errors {
         let (id_col, reason) = error_display(e);
         println!(
-            "{:<40}  {:<24}  {:<8}  {:<16}  {} ({})",
+            "{:<40}  {:<24}  {:<8}  {:<16}  error ({})",
             truncate(&id_col, 40),
             "-",
             "-",
             "-",
-            "error",
             reason
         );
     }
@@ -253,9 +258,7 @@ fn run_enable(plugins_dir: &Path, id: &str) -> Result<()> {
 
     if marker.exists() {
         std::fs::remove_file(&marker).map_err(|e| {
-            CascadeError::Other(format!(
-                "failed to remove .disabled marker for {id}: {e}"
-            ))
+            CascadeError::Other(format!("failed to remove .disabled marker for {id}: {e}"))
         })?;
         println!("Plugin '{id}' enabled.");
     } else {
@@ -275,9 +278,7 @@ fn run_disable(plugins_dir: &Path, id: &str) -> Result<()> {
         println!("Plugin '{id}' is already disabled.");
     } else {
         std::fs::write(&marker, "").map_err(|e| {
-            CascadeError::Other(format!(
-                "failed to write .disabled marker for {id}: {e}"
-            ))
+            CascadeError::Other(format!("failed to write .disabled marker for {id}: {e}"))
         })?;
         println!("Plugin '{id}' disabled. It will not be loaded on next daemon start.");
     }
@@ -305,7 +306,10 @@ fn run_info(plugins_dir: &Path, id: &str) -> Result<()> {
     println!("  License:     {}", manifest.license);
     println!("  WASM entry:  {}", manifest.entry_wasm);
     println!("  Directory:   {}", plugin_dir.display());
-    println!("  Status:      {}", if disabled { "disabled" } else { "enabled" });
+    println!(
+        "  Status:      {}",
+        if disabled { "disabled" } else { "enabled" }
+    );
     println!("  Min Cascade: {}", manifest.min_cascade_version);
 
     if !manifest.capabilities.is_empty() {
@@ -511,25 +515,17 @@ fn run_test(args: &TestArgs) -> Result<()> {
     for (name, status, duration_ms) in &results {
         let status_str = if *status { "PASS" } else { "FAIL" };
         let duration_str = format!("{duration_ms}ms");
-        println!(
-            "  {:<8}  {:<50}  {}",
-            status_str, name, duration_str
-        );
+        println!("  {:<8}  {:<50}  {}", status_str, name, duration_str);
     }
 
     println!("{}", "─".repeat(60));
-    println!(
-        "Results: {} passed, {} failed",
-        passed, failed
-    );
+    println!("Results: {} passed, {} failed", passed, failed);
 
     if test_output.status.success() && failed == 0 {
         println!("All tests passed.");
         Ok(())
     } else {
-        Err(CascadeError::Other(format!(
-            "{failed} test(s) failed."
-        )))
+        Err(CascadeError::Other(format!("{failed} test(s) failed.")))
     }
 }
 
@@ -552,11 +548,9 @@ fn build_wasm(project_dir: &Path, release: bool) -> Result<bool> {
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             println!("  cargo not found — skipping WASM build.");
-            return Ok(true); // Graceful: allow tests to proceed without WASM.
+            Ok(true) // Graceful: allow tests to proceed without WASM.
         }
-        Err(e) => {
-            return Err(CascadeError::Other(format!("failed to spawn cargo: {e}")));
-        }
+        Err(e) => Err(CascadeError::Other(format!("failed to spawn cargo: {e}"))),
         Ok(status) => {
             if status.success() {
                 println!("  WASM build succeeded.");
@@ -569,9 +563,7 @@ fn build_wasm(project_dir: &Path, release: bool) -> Result<bool> {
             let has_target = StdCommand::new("rustup")
                 .args(["target", "list", "--installed"])
                 .output()
-                .map(|o| {
-                    String::from_utf8_lossy(&o.stdout).contains("wasm32-wasip1")
-                })
+                .map(|o| String::from_utf8_lossy(&o.stdout).contains("wasm32-wasip1"))
                 .unwrap_or(false);
 
             if !has_target {
@@ -585,7 +577,7 @@ fn build_wasm(project_dir: &Path, release: bool) -> Result<bool> {
             }
 
             // Real build failure.
-            return Ok(false);
+            Ok(false)
         }
     }
 }
@@ -616,7 +608,10 @@ fn parse_test_output(stdout: &str) -> (usize, usize, Vec<(String, bool, u64)>) {
         // Extract optional timing from "(Xms)" suffix.
         let duration_ms = status_part
             .split_once('(')
-            .and_then(|(_, rest)| rest.split_once("ms)").map(|(ms, _)| ms.trim().parse::<u64>().unwrap_or(0)))
+            .and_then(|(_, rest)| {
+                rest.split_once("ms)")
+                    .map(|(ms, _)| ms.trim().parse::<u64>().unwrap_or(0))
+            })
             .unwrap_or(0);
 
         let ok = status_part.trim_start().starts_with("ok");
@@ -641,9 +636,8 @@ fn resolve_plugins_dir(override_dir: Option<&Path>) -> Result<PathBuf> {
     if let Some(d) = override_dir {
         return Ok(d.to_owned());
     }
-    let home = dirs::home_dir().ok_or_else(|| {
-        CascadeError::Other("cannot determine home directory".to_owned())
-    })?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| CascadeError::Other("cannot determine home directory".to_owned()))?;
     Ok(home.join(".cascade").join("plugins"))
 }
 
@@ -726,9 +720,7 @@ fn error_display(e: &PluginLoadError) -> (String, String) {
                 .unwrap_or_else(|| "<unknown>".to_owned()),
             format!("WASM read error: {reason}"),
         ),
-        PluginLoadError::SandboxError { id, reason } => {
-            (id.clone(), format!("sandbox: {reason}"))
-        }
+        PluginLoadError::SandboxError { id, reason } => (id.clone(), format!("sandbox: {reason}")),
         PluginLoadError::Disabled { id } => (id.clone(), "disabled".to_owned()),
         PluginLoadError::NotADirectory { path } => (
             path.file_name()
@@ -816,7 +808,10 @@ mod tests {
         assert!(dir.join(".disabled").exists());
 
         run_enable(&plugins_dir, "com.example.bar").unwrap();
-        assert!(!dir.join(".disabled").exists(), ".disabled should be removed after enable");
+        assert!(
+            !dir.join(".disabled").exists(),
+            ".disabled should be removed after enable"
+        );
     }
 
     #[test]
@@ -828,7 +823,10 @@ mod tests {
 
         assert!(!dir.join(".disabled").exists());
         run_disable(&plugins_dir, "com.example.baz").unwrap();
-        assert!(dir.join(".disabled").exists(), ".disabled should be created after disable");
+        assert!(
+            dir.join(".disabled").exists(),
+            ".disabled should be created after disable"
+        );
     }
 
     #[test]
@@ -876,7 +874,10 @@ mod tests {
         let result = run_new(&args);
         assert!(result.is_err(), "invalid kind should return error");
         let msg = format!("{result:?}");
-        assert!(msg.contains("invalid plugin kind"), "error message should mention kind: {msg}");
+        assert!(
+            msg.contains("invalid plugin kind"),
+            "error message should mention kind: {msg}"
+        );
     }
 
     #[test]
@@ -887,7 +888,10 @@ mod tests {
         let result = resolve_template_path();
         // Unset before asserting so test isolation is maintained.
         std::env::remove_var("CASCADE_WORKSPACE");
-        assert!(result.is_ok(), "should find template via CASCADE_WORKSPACE: {result:?}");
+        assert!(
+            result.is_ok(),
+            "should find template via CASCADE_WORKSPACE: {result:?}"
+        );
     }
 
     // ── test command helper tests ─────────────────────────────────────────────

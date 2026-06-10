@@ -110,10 +110,19 @@ async fn tools_call_search_without_query_returns_invalid_params() {
     let registry = ToolRegistry::new();
     let params = serde_json::json!({ "name": "cascade.search", "arguments": {} });
     // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
-    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
-    assert_eq!(result["isError"], true, "missing 'query' must yield isError:true");
+    let result = registry
+        .call(&params)
+        .await
+        .expect("should return tool error, not protocol error");
+    assert_eq!(
+        result["isError"], true,
+        "missing 'query' must yield isError:true"
+    );
     let text = result["content"][0]["text"].as_str().unwrap_or("");
-    assert!(text.contains("query"), "error text should mention missing field: {text}");
+    assert!(
+        text.contains("query"),
+        "error text should mention missing field: {text}"
+    );
 }
 
 #[tokio::test]
@@ -141,10 +150,19 @@ async fn tools_call_inbox_send_missing_fields() {
         // missing 'target', 'subject', 'body', etc.
     });
     // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
-    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
-    assert_eq!(result["isError"], true, "missing required fields must yield isError:true");
+    let result = registry
+        .call(&params)
+        .await
+        .expect("should return tool error, not protocol error");
+    assert_eq!(
+        result["isError"], true,
+        "missing required fields must yield isError:true"
+    );
     let text = result["content"][0]["text"].as_str().unwrap_or("");
-    assert!(!text.is_empty(), "error text should describe the missing field: {text}");
+    assert!(
+        !text.is_empty(),
+        "error text should describe the missing field: {text}"
+    );
 }
 
 #[tokio::test]
@@ -156,10 +174,19 @@ async fn tools_call_master_lists_unknown_kind() {
         "arguments": { "project": "nself", "kind": "bogus" }
     });
     // Per MCP spec: arg validation errors → Ok(is_error:true), not Err(JsonRpcError).
-    let result = registry.call(&params).await.expect("should return tool error, not protocol error");
-    assert_eq!(result["isError"], true, "unknown 'kind' must yield isError:true");
+    let result = registry
+        .call(&params)
+        .await
+        .expect("should return tool error, not protocol error");
+    assert_eq!(
+        result["isError"], true,
+        "unknown 'kind' must yield isError:true"
+    );
     let text = result["content"][0]["text"].as_str().unwrap_or("");
-    assert!(text.contains("bogus"), "error text should mention the invalid kind value: {text}");
+    assert!(
+        text.contains("bogus"),
+        "error text should mention the invalid kind value: {text}"
+    );
 }
 
 // ── Resource registry unit tests ──────────────────────────────────────────────

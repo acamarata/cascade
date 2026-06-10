@@ -15,6 +15,7 @@
 //!   - All capability gates are checked at load time (build_wasi_ctx).
 //!   - One Store per call — fuel and memory reset cleanly each invocation.
 //!   - Net access at WASI level: always disabled (P4 sockets via capability TBD).
+//!
 //! SPORT: cascade-plugins / runtime module (T-P4-E03-04)
 
 pub mod wasi_ctx;
@@ -243,11 +244,7 @@ impl LoadedPlugin {
     /// # Fuel exhaustion
     /// If the module runs out of fuel, wasmtime returns an error whose message
     /// contains "out of fuel". This is mapped to `PluginError::ResourceExhausted`.
-    pub async fn call(
-        &self,
-        func_name: &str,
-        args: &[Val],
-    ) -> Result<Vec<Val>, PluginError> {
+    pub async fn call(&self, func_name: &str, args: &[Val]) -> Result<Vec<Val>, PluginError> {
         let store_limits = StoreLimitsBuilder::new()
             .memory_size(self.limits.max_memory_bytes as usize)
             .instances(1)
@@ -326,8 +323,8 @@ impl LoadedPlugin {
         func_name: &str,
         input: &Value,
     ) -> Result<Value, PluginError> {
-        let input_bytes = serde_json::to_vec(input)
-            .map_err(|e| PluginError::Serialize(e.to_string()))?;
+        let input_bytes =
+            serde_json::to_vec(input).map_err(|e| PluginError::Serialize(e.to_string()))?;
 
         let store_limits = StoreLimitsBuilder::new()
             .memory_size(self.limits.max_memory_bytes as usize)

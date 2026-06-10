@@ -111,14 +111,10 @@ impl WasmPolicyEvaluator {
             .instances(1)
             .build();
 
-        let mut store: Store<wasmtime::StoreLimits> =
-            Store::new(&self.engine, store_limits);
+        let mut store: Store<wasmtime::StoreLimits> = Store::new(&self.engine, store_limits);
         store.limiter(|data| data);
         if let Err(e) = store.set_fuel(POLICY_FUEL) {
-            return PolicyResult::deny(
-                &self.id,
-                format!("WASM store fuel error: {e}"),
-            );
+            return PolicyResult::deny(&self.id, format!("WASM store fuel error: {e}"));
         }
 
         // Zero-import linker: no WASI, no filesystem, no network.
@@ -129,10 +125,7 @@ impl WasmPolicyEvaluator {
         let instance = match linker.instantiate(&mut store, &self.module) {
             Ok(i) => i,
             Err(e) => {
-                return PolicyResult::deny(
-                    &self.id,
-                    format!("WASM instantiate error: {e}"),
-                );
+                return PolicyResult::deny(&self.id, format!("WASM instantiate error: {e}"));
             }
         };
 
@@ -145,12 +138,13 @@ impl WasmPolicyEvaluator {
             }
         };
 
-        let policy_eval = match instance.get_typed_func::<(i32, i32), i32>(&mut store, "policy_eval") {
-            Ok(f) => f,
-            Err(_) => {
-                return PolicyResult::deny(&self.id, "WASM module has no 'policy_eval' export");
-            }
-        };
+        let policy_eval =
+            match instance.get_typed_func::<(i32, i32), i32>(&mut store, "policy_eval") {
+                Ok(f) => f,
+                Err(_) => {
+                    return PolicyResult::deny(&self.id, "WASM module has no 'policy_eval' export");
+                }
+            };
 
         // Write input JSON into WASM linear memory at offset 0.
         let input_bytes = input_json.as_bytes();
@@ -226,9 +220,8 @@ pub fn load_bundled_default() -> Option<WasmPolicyEvaluator> {
         // Developers who modify the .rego policy must re-run:
         //   opa build -t wasm -e data/allow cascade/assets/policies/default-deny-dangerous.rego
         // and check in the extracted policy.wasm as default-deny-dangerous.wasm.
-        let bytes: &'static [u8] = include_bytes!(
-            "../../../../assets/policies/default-deny-dangerous.wasm"
-        );
+        let bytes: &'static [u8] =
+            include_bytes!("../../../../assets/policies/default-deny-dangerous.wasm");
         WasmPolicyEvaluator::load("default-deny-dangerous", bytes).ok()
     }
     #[cfg(not(feature = "bundled-policy-wasm"))]
@@ -356,7 +349,8 @@ mod tests {
     }
 
     fn build_allow_all_wasm() -> Vec<u8> {
-        let allow_json = b"{\"decision\":\"ALLOW\",\"reason\":\"\",\"policy_id\":\"zero-import-test\"}\0";
+        let allow_json =
+            b"{\"decision\":\"ALLOW\",\"reason\":\"\",\"policy_id\":\"zero-import-test\"}\0";
         let allow_hex = bytes_to_wat_hex(allow_json);
         let wat = format!(
             r#"(module

@@ -55,10 +55,7 @@ impl Plugin for HelloWorld {
     // - Call an external API (requires `net_outbound` capability declared in plugin.json).
     // - Map API responses to `DataItem` structs.
     // - Return a `next_cursor` if more pages are available.
-    fn fetch_items(
-        &self,
-        _args: DataSourceFetchArgs,
-    ) -> Result<DataSourcePage, PluginError> {
+    fn fetch_items(&self, _args: DataSourceFetchArgs) -> Result<DataSourcePage, PluginError> {
         // For this example we return a single hard-coded item and no next cursor,
         // which tells the host "this is the only page."
         Ok(DataSourcePage {
@@ -67,10 +64,7 @@ impl Plugin for HelloWorld {
                 title: String::from("Hello, World!"),
                 body: String::from("This is a demo plugin."),
                 url: String::from("https://cascade.dev/docs/plugins"),
-                labels: vec![
-                    String::from("demo"),
-                    String::from("example"),
-                ],
+                labels: vec![String::from("demo"), String::from("example")],
                 created_at: String::from("2026-01-01T00:00:00Z"),
                 updated_at: String::from("2026-01-01T00:00:00Z"),
                 source: String::from("hello-world:demo"),

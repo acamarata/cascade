@@ -74,8 +74,7 @@ pub struct CodeDocParser;
 
 /// Extensions claimed by [`CodeDocParser`].
 const CODE_EXTENSIONS: &[&str] = &[
-    "rs", "ts", "tsx", "js", "jsx", "py", "go", "rb", "java", "c", "cpp", "h", "sh", "bash",
-    "zsh",
+    "rs", "ts", "tsx", "js", "jsx", "py", "go", "rb", "java", "c", "cpp", "h", "sh", "bash", "zsh",
 ];
 
 impl DocumentParser for CodeDocParser {
@@ -93,10 +92,7 @@ impl DocumentParser for CodeDocParser {
         })?;
         let text = String::from_utf8_lossy(&bytes).into_owned();
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
 
         let language = detect_language(path).to_string();
         let mut metadata = HashMap::new();
@@ -113,72 +109,6 @@ impl DocumentParser for CodeDocParser {
 
     fn parser_name(&self) -> &str {
         "code"
-    }
-}
-
-// ── Tests (T-P4-E01-14) ───────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod doc_parser_tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    #[test]
-    fn parses_rust_file() {
-        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
-        write!(f, "fn main() {{}}").unwrap();
-        let parser = CodeDocParser;
-        assert!(parser.can_parse(f.path()));
-        let doc = parser.parse(f.path()).unwrap();
-        assert_eq!(doc.parser_name, "code");
-        assert_eq!(doc.metadata.get("language").map(String::as_str), Some("rust"));
-        assert!(doc.text.contains("fn main()"));
-    }
-
-    #[test]
-    fn parses_python_file() {
-        let mut f = NamedTempFile::with_suffix(".py").unwrap();
-        write!(f, "print('hello')").unwrap();
-        let parser = CodeDocParser;
-        assert!(parser.can_parse(f.path()));
-        let doc = parser.parse(f.path()).unwrap();
-        assert_eq!(doc.metadata.get("language").map(String::as_str), Some("python"));
-    }
-
-    #[test]
-    fn can_parse_extension_table() {
-        let parser = CodeDocParser;
-        // In scope
-        for ext in &["rs", "ts", "tsx", "js", "jsx", "py", "go", "rb", "java", "c", "cpp", "h", "sh", "bash", "zsh"] {
-            let p = format!("file.{ext}");
-            assert!(parser.can_parse(Path::new(&p)), "expected can_parse for .{ext}");
-        }
-        // Not in scope
-        assert!(!parser.can_parse(Path::new("README.md")));
-        assert!(!parser.can_parse(Path::new("data.pdf")));
-    }
-
-    #[test]
-    fn lossy_fallback_non_utf8() {
-        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
-        let mut content = b"fn foo() {\n".to_vec();
-        content.extend_from_slice(&[0xFF, 0xFE]);
-        content.extend_from_slice(b"\n}");
-        f.write_all(&content).unwrap();
-        let parser = CodeDocParser;
-        let doc = parser.parse(f.path()).unwrap(); // must not error
-        assert!(doc.text.contains("fn foo()"));
-    }
-
-    #[test]
-    fn title_is_filename_stem() {
-        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
-        write!(f, "// empty").unwrap();
-        let parser = CodeDocParser;
-        let doc = parser.parse(f.path()).unwrap();
-        // title must be the stem (not the full filename, not None)
-        assert!(doc.title.is_some());
     }
 }
 
@@ -212,5 +142,83 @@ fn detect_language(path: &Path) -> &'static str {
         Some("sh") | Some("bash") => "bash",
         Some("sql") => "sql",
         _ => "unknown",
+    }
+}
+
+// ── Tests (T-P4-E01-14) ───────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod doc_parser_tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn parses_rust_file() {
+        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
+        write!(f, "fn main() {{}}").unwrap();
+        let parser = CodeDocParser;
+        assert!(parser.can_parse(f.path()));
+        let doc = parser.parse(f.path()).unwrap();
+        assert_eq!(doc.parser_name, "code");
+        assert_eq!(
+            doc.metadata.get("language").map(String::as_str),
+            Some("rust")
+        );
+        assert!(doc.text.contains("fn main()"));
+    }
+
+    #[test]
+    fn parses_python_file() {
+        let mut f = NamedTempFile::with_suffix(".py").unwrap();
+        write!(f, "print('hello')").unwrap();
+        let parser = CodeDocParser;
+        assert!(parser.can_parse(f.path()));
+        let doc = parser.parse(f.path()).unwrap();
+        assert_eq!(
+            doc.metadata.get("language").map(String::as_str),
+            Some("python")
+        );
+    }
+
+    #[test]
+    fn can_parse_extension_table() {
+        let parser = CodeDocParser;
+        // In scope
+        for ext in &[
+            "rs", "ts", "tsx", "js", "jsx", "py", "go", "rb", "java", "c", "cpp", "h", "sh",
+            "bash", "zsh",
+        ] {
+            let p = format!("file.{ext}");
+            assert!(
+                parser.can_parse(Path::new(&p)),
+                "expected can_parse for .{ext}"
+            );
+        }
+        // Not in scope
+        assert!(!parser.can_parse(Path::new("README.md")));
+        assert!(!parser.can_parse(Path::new("data.pdf")));
+    }
+
+    #[test]
+    fn lossy_fallback_non_utf8() {
+        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
+        let mut content = b"fn foo() {\n".to_vec();
+        content.extend_from_slice(&[0xFF, 0xFE]);
+        content.extend_from_slice(b"\n}");
+        f.write_all(&content).unwrap();
+        let parser = CodeDocParser;
+        let doc = parser.parse(f.path()).unwrap(); // must not error
+        assert!(doc.text.contains("fn foo()"));
+    }
+
+    #[test]
+    fn title_is_filename_stem() {
+        let mut f = NamedTempFile::with_suffix(".rs").unwrap();
+        write!(f, "// empty").unwrap();
+        let parser = CodeDocParser;
+        let doc = parser.parse(f.path()).unwrap();
+        // title must be the stem (not the full filename, not None)
+        assert!(doc.title.is_some());
     }
 }

@@ -442,7 +442,8 @@ fn cascade_context_slice_tool() -> McpTool {
         description: "Return a token-budgeted, deduplicated, windowed context slice from the \
                        local knowledge base for injection into a harness prompt. Applies \
                        shell-output compression, within-window chunk dedup, and optionally \
-                       cross-session dedup.".into(),
+                       cross-session dedup."
+            .into(),
         input_schema: serde_json::json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
@@ -513,8 +514,7 @@ async fn handle_search(args: &Value) -> std::result::Result<Value, JsonRpcError>
         .get("limit")
         .and_then(|v| v.as_u64())
         .unwrap_or(10)
-        .min(20)
-        .max(1) as usize;
+        .clamp(1, 20) as usize;
     let strategy = args
         .get("strategy")
         .and_then(|v| v.as_str())
@@ -552,8 +552,7 @@ async fn handle_search_codebase(args: &Value) -> std::result::Result<Value, Json
         .get("limit")
         .and_then(|v| v.as_u64())
         .unwrap_or(10)
-        .min(20)
-        .max(1) as usize;
+        .clamp(1, 20) as usize;
 
     debug!(query, limit, lang = ?lang, "cascade.search_codebase");
 
@@ -817,7 +816,7 @@ async fn handle_context_slice(args: &Value) -> std::result::Result<Value, JsonRp
         .unwrap_or(4096) as usize;
 
     // Enforce JSON schema constraints.
-    if budget_tokens < 256 || budget_tokens > 32768 {
+    if !(256..=32768).contains(&budget_tokens) {
         return Err(JsonRpcError::invalid_params(
             "'budget_tokens' must be between 256 and 32768",
         ));
@@ -937,7 +936,12 @@ mod tests {
         let reg = ToolRegistry::new();
         let result = reg.list().await.expect("list should not fail");
         let tools = result["tools"].as_array().expect("tools must be array");
-        assert_eq!(tools.len(), 9, "expected exactly 9 tools, got {}", tools.len());
+        assert_eq!(
+            tools.len(),
+            9,
+            "expected exactly 9 tools, got {}",
+            tools.len()
+        );
     }
 
     /// cascade.context_slice appears in the tool list.
@@ -964,7 +968,10 @@ mod tests {
         let result = reg.list().await.unwrap();
         let tools = result["tools"].as_array().unwrap();
         for tool in tools {
-            let name = tool.get("name").and_then(|v| v.as_str()).unwrap_or("<missing>");
+            let name = tool
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("<missing>");
             assert!(
                 tool.get("name").and_then(|v| v.as_str()).is_some(),
                 "{name}: missing 'name'"
@@ -973,7 +980,9 @@ mod tests {
                 tool.get("description").and_then(|v| v.as_str()).is_some(),
                 "{name}: missing 'description'"
             );
-            let schema = tool.get("inputSchema").expect(&format!("{name}: missing inputSchema"));
+            let schema = tool
+                .get("inputSchema")
+                .unwrap_or_else(|| panic!("{name}: missing inputSchema"));
             assert_eq!(
                 schema.get("type").and_then(|v| v.as_str()),
                 Some("object"),
@@ -1047,7 +1056,10 @@ mod tests {
             "name": "cascade.search",
             "arguments": { "query": "cascade tiered instructions" }
         });
-        let result = reg.call(&params).await.expect("call should not return protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("call should not return protocol error");
         assert!(
             result.get("isError").is_none() || result["isError"] == false,
             "happy path must not be error"
@@ -1069,7 +1081,10 @@ mod tests {
             "name": "cascade.inbox.list",
             "arguments": { "project": "__nonexistent_test_project__" }
         });
-        let result = reg.call(&params).await.expect("should not be protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be protocol error");
         // Non-existent inbox dir → 0 messages, not an error.
         assert!(
             result.get("isError").is_none() || result["isError"] == false,
@@ -1089,13 +1104,19 @@ mod tests {
             "name": "cascade.search",
             "arguments": { "limit": 5 }
         });
-        let result = reg.call(&params).await.expect("should return tool error, not protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should return tool error, not protocol error");
         assert_eq!(
             result["isError"], true,
             "missing required arg should yield is_error=true"
         );
         let text = result["content"][0]["text"].as_str().unwrap();
-        assert!(text.contains("query"), "error text should mention missing field");
+        assert!(
+            text.contains("query"),
+            "error text should mention missing field"
+        );
     }
 
     /// cascade.master_lists with unknown kind returns is_error: true.
@@ -1135,7 +1156,10 @@ mod tests {
                 "file": "decisions.md"
             }
         });
-        let result = reg.call(&params).await.expect("should be tool error, not protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should be tool error, not protocol error");
         assert_eq!(
             result["isError"], true,
             "file-not-found must become is_error=true"
@@ -1168,14 +1192,22 @@ mod tests {
                 "content": "## Test entry"
             }
         });
-        let ctx = ConnectionContext { authenticated: false };
+        let ctx = ConnectionContext {
+            authenticated: false,
+        };
         let result = reg
             .call_with_context(&params, &ctx)
             .await
             .expect("should be is_error, not protocol error");
-        assert_eq!(result["isError"], true, "unauthenticated write must be rejected");
+        assert_eq!(
+            result["isError"], true,
+            "unauthenticated write must be rejected"
+        );
         let text = result["content"][0]["text"].as_str().unwrap();
-        assert_eq!(text, "Unauthorized", "error text must be exactly 'Unauthorized'");
+        assert_eq!(
+            text, "Unauthorized",
+            "error text must be exactly 'Unauthorized'"
+        );
     }
 
     /// Authenticated cascade.memory.write succeeds (writes to temp dir).
@@ -1186,7 +1218,9 @@ mod tests {
         // so we verify the call returns *without* is_error when authenticated.
         // Full integration (real file write) is QA-B scope.
         let reg = ToolRegistry::new();
-        let ctx = ConnectionContext { authenticated: true };
+        let ctx = ConnectionContext {
+            authenticated: true,
+        };
 
         // Use a tmp dir path by setting a known nonexistent project that will
         // fail at the fs level; verify is_error is true but NOT "Unauthorized".
@@ -1212,9 +1246,8 @@ mod tests {
             );
         }
         // Clean up any created dirs.
-        let _ = std::fs::remove_dir_all(
-            dirs_next_home().join("Sites").join("__auth_test_project__"),
-        );
+        let _ =
+            std::fs::remove_dir_all(dirs_next_home().join("Sites").join("__auth_test_project__"));
     }
 
     // ── tools/call — unknown tool ─────────────────────────────────────────────
@@ -1228,7 +1261,10 @@ mod tests {
             "arguments": {}
         });
         let result = reg.call(&params).await;
-        assert!(result.is_err(), "unknown tool must return Err(JsonRpcError)");
+        assert!(
+            result.is_err(),
+            "unknown tool must return Err(JsonRpcError)"
+        );
         let err = result.unwrap_err();
         assert_eq!(
             err.code,
@@ -1243,7 +1279,10 @@ mod tests {
         let reg = ToolRegistry::new();
         let params = serde_json::json!({ "arguments": { "query": "test" } });
         let result = reg.call(&params).await;
-        assert!(result.is_err(), "missing name must return Err(JsonRpcError)");
+        assert!(
+            result.is_err(),
+            "missing name must return Err(JsonRpcError)"
+        );
         let err = result.unwrap_err();
         assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS);
     }
@@ -1277,7 +1316,10 @@ mod tests {
             "name": "cascade.context_slice",
             "arguments": { "query": "authentication", "budget_tokens": 1024 }
         });
-        let result = reg.call(&params).await.expect("should not error at protocol level");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not error at protocol level");
         // Tool-level result: no is_error.
         assert!(
             result.get("isError").is_none() || result["isError"].as_bool() != Some(true),
@@ -1302,7 +1344,10 @@ mod tests {
             "name": "cascade.context_slice",
             "arguments": { "query": "test", "budget_tokens": 100 }
         });
-        let result = reg.call(&params).await.expect("should not be a protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be a protocol error");
         // Tool-level error: isError=true.
         assert_eq!(
             result["isError"].as_bool(),
@@ -1319,7 +1364,10 @@ mod tests {
             "name": "cascade.context_slice",
             "arguments": { "budget_tokens": 2048 }
         });
-        let result = reg.call(&params).await.expect("should not be a protocol error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be a protocol error");
         assert_eq!(
             result["isError"].as_bool(),
             Some(true),
@@ -1339,7 +1387,11 @@ mod tests {
         let content = result["content"].as_array().expect("content must be array");
         assert!(!content.is_empty(), "content array must not be empty");
         let first = &content[0];
-        assert_eq!(first["type"].as_str(), Some("text"), "first content must be text");
+        assert_eq!(
+            first["type"].as_str(),
+            Some("text"),
+            "first content must be text"
+        );
         assert!(
             first["text"].as_str().is_some(),
             "text field must be a string"
@@ -1356,9 +1408,18 @@ mod tests {
         });
         let result = reg.call(&params).await.unwrap();
         let meta = &result["metadata"];
-        assert!(meta.get("tokens_used").is_some(), "metadata.tokens_used required");
-        assert!(meta.get("chunks_returned").is_some(), "metadata.chunks_returned required");
+        assert!(
+            meta.get("tokens_used").is_some(),
+            "metadata.tokens_used required"
+        );
+        assert!(
+            meta.get("chunks_returned").is_some(),
+            "metadata.chunks_returned required"
+        );
         assert!(meta.get("query").is_some(), "metadata.query required");
-        assert!(meta.get("budget_tokens").is_some(), "metadata.budget_tokens required");
+        assert!(
+            meta.get("budget_tokens").is_some(),
+            "metadata.budget_tokens required"
+        );
     }
 }

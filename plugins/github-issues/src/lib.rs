@@ -36,8 +36,7 @@
 //! SPORT: github-issues plugin (T-P4-E03-13)
 
 use cascade_pdk::{
-    cascade_plugin, DataItem, DataSourceFetchArgs, DataSourcePage, Plugin, PluginError,
-    PluginKind,
+    cascade_plugin, DataItem, DataSourceFetchArgs, DataSourcePage, Plugin, PluginError, PluginKind,
 };
 use serde::Deserialize;
 
@@ -170,7 +169,7 @@ fn fetch_page_impl(
     );
     let auth_header = format!("Bearer {token}");
     let mut out_buf = vec![0u8; 2 << 20]; // 2 MiB
-    // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
+                                          // Safety: all slices are valid; wasmtime bounds-checks linear memory accesses.
     let n = unsafe {
         cascade_http_get_json(
             url.as_ptr(),
@@ -186,8 +185,9 @@ fn fetch_page_impl(
             message: format!("cascade_http_get_json failed (code {n})"),
         });
     }
-    let body = std::str::from_utf8(&out_buf[..n as usize])
-        .map_err(|_| PluginError::Internal { message: "HTTP response is not valid UTF-8".into() })?;
+    let body = std::str::from_utf8(&out_buf[..n as usize]).map_err(|_| PluginError::Internal {
+        message: "HTTP response is not valid UTF-8".into(),
+    })?;
     parse_issues_response(body)
 }
 
@@ -263,7 +263,10 @@ mod tests {
         assert_eq!(first.created_at, "2024-01-15T10:00:00Z");
         assert_eq!(first.updated_at, "2024-01-16T12:30:00Z");
         // Body is present.
-        assert_eq!(first.body.as_deref().unwrap_or(""), "Widget crashes on startup.");
+        assert_eq!(
+            first.body.as_deref().unwrap_or(""),
+            "Widget crashes on startup."
+        );
         // Labels.
         assert_eq!(first.labels.len(), 2);
         assert_eq!(first.labels[0].name, "bug");
@@ -305,7 +308,11 @@ mod tests {
         // Parse fewer than 100 items — no next cursor.
         let issues = parse_issues_response(FIXTURE_TWO_ISSUES).unwrap();
         assert!(issues.len() < 100);
-        let next_cursor = if issues.len() == 100 { Some("2".into()) } else { None };
+        let next_cursor = if issues.len() == 100 {
+            Some("2".into())
+        } else {
+            None
+        };
         assert_eq!(next_cursor, None::<String>);
     }
 
@@ -353,7 +360,10 @@ mod tests {
         };
         let serialised = serde_json::to_string(&item).unwrap();
         // The fixture doesn't contain a token; verify no env-like string leaks.
-        assert!(!serialised.contains("ghp_"), "token pattern leaked into DataItem");
+        assert!(
+            !serialised.contains("ghp_"),
+            "token pattern leaked into DataItem"
+        );
     }
 
     #[test]

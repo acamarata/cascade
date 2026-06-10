@@ -54,8 +54,8 @@ pub use ipc::{
 pub use lifecycle::{LifecycleError, PluginRegistry, PluginState};
 pub use loader::{DiscoveredPlugin as LoaderDiscoveredPlugin, PluginLoadError, PluginLoader};
 pub use manifest::{ManifestError, PluginManifest, PluginType};
-pub use plugin_registry::{PluginDispatchError, PluginInfo, PluginStatus};
 pub use plugin_registry::PluginRegistry as PluginDispatchRegistry;
+pub use plugin_registry::{PluginDispatchError, PluginInfo, PluginStatus};
 pub use sandbox::{ResourceLimits, SandboxError, WasmPlugin};
 pub use types::{
     WasmAgent, WasmChunker, WasmEmbeddingProvider, WasmParser, WasmQueryStrategy, WasmReranker,

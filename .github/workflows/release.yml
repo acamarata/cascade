@@ -1,0 +1,587 @@
+name: Release
+
+# Purpose: Build, sign, and publish Cascade release artifacts for all platforms.
+# Triggers on version tags (v*.*.*) and manual workflow_dispatch.
+# Signing steps are gated on secrets — open-source forks without certs skip gracefully.
+#
+# Secrets required per platform (set via `gh secret set`):
+#   macOS:   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_ID,
+#            APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD
+#   Windows: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
+#   Linux:   GPG_PRIVATE_KEY, GPG_PASSPHRASE
+#
+# See .github/docs/code-signing.md for enrollment instructions.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ── Build CLI + daemon artifacts ───────────────────────────────────────────
+  # Builds cascade (CLI) and cascaded (daemon) binaries with --release --locked.
+  # 5 targets: macos-14 ARM64, macos-13 x86_64, ubuntu-22.04 x86_64,
+  #            ubuntu-22.04 aarch64 (via cross-rs), windows-2022 x86_64.
+  build-cli:
+    name: Build CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            os: macos
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            os: macos
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os: linux
+          - runner: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            os: linux
+            use-cross: true
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            os: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0
+
+      - name: Install Linux system deps
+        if: matrix.os == 'linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cross-rs (Linux aarch64 only)
+        if: matrix.use-cross == true
+        uses: cargo-bins/cargo-binstall@main
+        # cargo-binstall is already set up; install cross via it
+      - name: Install cross binary
+        if: matrix.use-cross == true
+        run: cargo binstall --no-confirm cross
+
+      - name: Build cascade + cascaded (native)
+        if: matrix.use-cross != true
+        run: |
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-daemon
+
+      - name: Build cascade + cascaded (cross)
+        if: matrix.use-cross == true
+        run: |
+          cross build --release --locked --target ${{ matrix.target }} -p cascade-cli
+          cross build --release --locked --target ${{ matrix.target }} -p cascade-daemon
+
+      - name: Package CLI + daemon (Linux/macOS tar.gz)
+        if: matrix.os != 'windows'
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          ARTIFACT_NAME="cascade-${VERSION}-${{ matrix.target }}"
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/cascade dist/cascade
+          cp target/${{ matrix.target }}/release/cascaded dist/cascaded
+          cd dist && tar czf "${ARTIFACT_NAME}.tar.gz" cascade cascaded
+          rm cascade cascaded
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Package CLI + daemon (Windows zip)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $artifact = "cascade-${version}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/cascade.exe" dist/
+          Copy-Item "target/${{ matrix.target }}/release/cascaded.exe" dist/
+          Compress-Archive -Path dist/cascade.exe,dist/cascaded.exe -DestinationPath "dist/${artifact}.zip"
+          Remove-Item dist/cascade.exe,dist/cascaded.exe
+          "ARTIFACT_NAME=${artifact}" | Out-File -Append $env:GITHUB_ENV
+
+      # ── Sign Linux artifacts (GPG) ─────────────────────────────────────────
+      # Evaluates secret presence via output step (secrets cannot be used in
+      # `if:` expressions directly — env var bridge pattern).
+      # Gracefully skips on open-source forks without GPG_PRIVATE_KEY.
+      - name: Check GPG secret presence
+        if: matrix.os == 'linux'
+        id: gpg-check
+        run: |
+          if [ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "GPG_PRIVATE_KEY not set — skipping GPG signing for this fork."
+          fi
+
+      - name: Sign Linux artifacts (GPG)
+        if: matrix.os == 'linux' && steps.gpg-check.outputs.present == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          cd dist
+          for f in *.tar.gz *.deb *.rpm *.AppImage; do
+            [ -f "$f" ] && gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor "$f" \
+              && echo "Signed: ${f}.asc" \
+              || true
+          done
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist/
+          retention-days: 1
+
+  # ── Build Tauri desktop app (macOS + Windows) ──────────────────────────────
+  # macOS: builds per-arch bundles; a separate job below lipo-combines them.
+  # Windows: produces .msi + .exe installer via Tauri bundler.
+  build-tauri:
+    name: Build Tauri app (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            platform: macos-arm64
+            target: aarch64-apple-darwin
+          - runner: macos-13
+            platform: macos-x64
+            target: x86_64-apple-darwin
+          - runner: windows-2022
+            platform: windows-x64
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/cascade-app/pnpm-lock.yaml
+
+      - name: Install frontend deps
+        working-directory: apps/cascade-app
+        run: pnpm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing env vars are passed through — tauri-action uses them when present.
+          # When absent, the build still produces an unsigned bundle.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        with:
+          projectPath: apps/cascade-app
+          args: --target ${{ matrix.target }}
+
+      # ── Sign macOS app bundle ──────────────────────────────────────────────
+      # Runs only when APPLE_CERTIFICATE secret is non-empty.
+      # Open-source forks without a Developer ID cert skip this step gracefully.
+      - name: Check Apple certificate presence
+        if: runner.os == 'macOS'
+        id: apple-check
+        run: |
+          if [ -n "${{ secrets.APPLE_CERTIFICATE }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "APPLE_CERTIFICATE not set — skipping macOS notarization for this fork."
+          fi
+
+      - name: Sign macOS app (codesign + notarize)
+        if: runner.os == 'macOS' && steps.apple-check.outputs.present == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APP_BUNDLE_PATH: apps/cascade-app/src-tauri/target/${{ matrix.target }}/release/bundle/macos/Cascade.app
+          DMG_PATH: apps/cascade-app/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/Cascade_*.dmg
+        run: bash .github/workflows/sign-macos.sh
+
+      - name: Upload Tauri artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.platform }}
+          path: |
+            apps/cascade-app/src-tauri/target/${{ matrix.target }}/release/bundle/
+          retention-days: 1
+
+  # ── Universal macOS binary (lipo arm64 + x86_64) ──────────────────────────
+  # Combines the two macOS CLI tarballs into a single universal binary tarball.
+  # The universal binary is what Homebrew will point to via the Cask.
+  # Fork safety: no secrets required — runs on every tag push.
+  universal-macos:
+    name: Build universal macOS binary
+    needs: build-cli
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "cascade-*-aarch64-apple-darwin"
+          path: macos-arm64
+          merge-multiple: true
+
+      - name: Download macOS x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "cascade-*-x86_64-apple-darwin"
+          path: macos-x64
+          merge-multiple: true
+
+      - name: Create universal binary tarball
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          mkdir -p arm64-bin x64-bin universal-bin
+
+          # Extract both tarballs
+          tar xzf macos-arm64/*.tar.gz -C arm64-bin
+          tar xzf macos-x64/*.tar.gz -C x64-bin
+
+          # lipo-combine each binary
+          for bin in cascade cascaded; do
+            lipo -create -output "universal-bin/${bin}" \
+              "arm64-bin/${bin}" "x64-bin/${bin}"
+            chmod +x "universal-bin/${bin}"
+            echo "Created universal ${bin}:"
+            lipo -info "universal-bin/${bin}"
+          done
+
+          # Package universal tarball
+          mkdir -p dist
+          ARTIFACT="cascade-${VERSION}-universal-apple-darwin"
+          cd universal-bin && tar czf "../dist/${ARTIFACT}.tar.gz" cascade cascaded
+          echo "ARTIFACT_NAME=${ARTIFACT}" >> "$GITHUB_ENV"
+
+      - name: Upload universal macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist/
+          retention-days: 1
+
+  # ── Sign Windows MSI (Authenticode via SignPath.io) ────────────────────────
+  # Gated on SIGNPATH_API_TOKEN. Open-source forks without SignPath enrollment
+  # skip this job entirely — the unsigned MSI is still uploaded to the release.
+  sign-windows:
+    name: Sign Windows MSI (Authenticode)
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    # Only run when SIGNPATH_API_TOKEN is set.
+    # Note: secrets cannot be used in `if:` directly; use env var bridge below.
+    if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
+
+    steps:
+      - name: Check SignPath token presence
+        id: signpath-check
+        run: |
+          if [ -n "${{ secrets.SIGNPATH_API_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "SIGNPATH_API_TOKEN not set, skipping signing"
+          fi
+
+      - name: Download Windows MSI artifact
+        if: steps.signpath-check.outputs.present == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-windows-x64
+          path: unsigned-msi
+
+      - name: Prepare MSI artifact for signing
+        if: steps.signpath-check.outputs.present == 'true'
+        run: |
+          mkdir -p msi-to-sign
+          find unsigned-msi -name "*.msi" -exec cp {} msi-to-sign/ \;
+
+      - name: Upload MSI for SignPath
+        if: steps.signpath-check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-windows-msi
+          path: msi-to-sign/
+
+      - name: Sign MSI via SignPath.io
+        if: steps.signpath-check.outputs.present == 'true'
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          artifact-configuration-slug: cascade-msi
+          signing-policy-slug: release-signing
+          github-artifact-name: cascade-windows-msi
+          wait-for-completion: true
+          output-artifact-directory: signed-msi
+
+      - name: Upload signed MSI
+        if: steps.signpath-check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-windows-msi-signed
+          path: signed-msi/
+          retention-days: 1
+
+  # ── Publish GitHub Release ─────────────────────────────────────────────────
+  # Waits for all build + sign jobs. Uses `always()` + result checks so a
+  # graceful skip of the optional sign-windows job does not block the release.
+  publish:
+    name: Publish GitHub Release
+    needs: [build-cli, universal-macos, build-tauri, sign-windows]
+    if: >-
+      always() &&
+      needs.build-cli.result == 'success' &&
+      needs.universal-macos.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release-meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release metadata
+        id: release-meta
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Flatten artifacts for release upload
+        run: |
+          mkdir -p upload
+          find release-artifacts -type f \
+            \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.msi" \
+               -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" \
+               -o -name "*.AppImage" -o -name "*.asc" \) \
+            -exec cp {} upload/ \;
+          echo "=== Collected artifacts ==="
+          ls -lah upload/
+
+      - name: Generate SHA256SUMS
+        working-directory: upload
+        run: |
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Sign SHA256SUMS with GPG
+        id: sign-checksums
+        run: |
+          if [ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]; then
+            echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+              --detach-sign --armor upload/SHA256SUMS
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "GPG_PRIVATE_KEY not set — skipping checksum signature"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+
+  # ── Update Homebrew Cask ───────────────────────────────────────────────────
+  # Fork safety: gated on acamarata/cascade — forks do not have the PAT.
+  update-homebrew:
+    name: Update Homebrew Cask
+    needs: publish
+    if: github.repository == 'acamarata/cascade'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger update-homebrew workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'update-homebrew.yml',
+              ref: 'main',
+            });
+
+  # ── Update Winget Manifest ─────────────────────────────────────────────────
+  # Fork safety: gated on acamarata/cascade.
+  update-winget:
+    name: Update Winget Manifest
+    needs: publish
+    if: github.repository == 'acamarata/cascade'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger update-winget workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'update-winget.yml',
+              ref: 'main',
+            });
+
+  # ── Publish to crates.io ───────────────────────────────────────────────────
+  # Publishes crates in dependency order. Each step uses `continue-on-error: true`
+  # so an already-published version (crates.io is immutable) does not block
+  # downstream crates. Fork safety: gated on CARGO_REGISTRY_TOKEN secret + repo.
+  #
+  # Dependency order (per spec):
+  #   cascade-types → cascade-core → cascade-keychain → cascade-audit
+  #   → cascade-rag → cascade-plugins → cascade-mcp → cascade-providers
+  #   → cascade-local-llm → cascade-harness → cascade-cli
+  publish-crates:
+    name: Publish to crates.io
+    needs: publish
+    if: github.repository == 'acamarata/cascade'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check crates.io token presence
+        id: cratesio-check
+        run: |
+          if [ -n "${{ secrets.CARGO_REGISTRY_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "CARGO_REGISTRY_TOKEN not set — skipping crates.io publish"
+          fi
+
+      - name: Publish cascade-types
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-types --no-verify
+
+      - name: Publish cascade-core
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-core --no-verify
+
+      - name: Publish cascade-keychain
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-keychain --no-verify
+
+      - name: Publish cascade-audit
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-audit --no-verify
+
+      - name: Publish cascade-rag
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-rag --no-verify
+
+      - name: Publish cascade-plugins
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-plugins --no-verify
+
+      - name: Publish cascade-mcp
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-mcp --no-verify
+
+      - name: Publish cascade-providers
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-providers --no-verify
+
+      - name: Publish cascade-local-llm
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-local-llm --no-verify
+
+      - name: Publish cascade-harness
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-harness --no-verify
+
+      - name: Publish cascade-cli (final — user-facing binary crate)
+        if: steps.cratesio-check.outputs.present == 'true'
+        continue-on-error: true
+        run: cargo publish -p cascade-cli --no-verify
+
+  # ── Wiki sync ──────────────────────────────────────────────────────────────
+  # Syncs .github/wiki/ to the GitHub Wiki on every release.
+  # Fork safety: gated on acamarata/cascade — forks have no wiki.
+  wiki-sync:
+    name: Sync GitHub Wiki
+    needs: publish
+    if: github.repository == 'acamarata/cascade'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync .github/wiki to GitHub Wiki
+        uses: nickg/github-wikis@v1
+        with:
+          path: .github/wiki
+          token: ${{ secrets.GITHUB_TOKEN }}

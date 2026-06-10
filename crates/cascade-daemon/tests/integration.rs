@@ -19,6 +19,7 @@
 //!
 //! SPORT: .claude/docs/MASTER-DAEMON.md — integration test suite (T-P2-E02-13)
 
+use serial_test::serial;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -98,6 +99,20 @@ fn spawn_daemon_with_cascade_md(
 /// Poll `path` every 50 ms until it exists or `timeout_ms` elapses.
 ///
 /// Returns `true` when the file exists within the window, `false` on timeout.
+/// Poll until `path` is REMOVED or the deadline passes. Mirror of
+/// wait_for_file for shutdown-ordering assertions (pid removal follows the
+/// stop marker by a small window that widens under load).
+fn wait_for_gone(path: &Path, timeout_ms: u64) -> bool {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    while Instant::now() < deadline {
+        if !path.exists() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    !path.exists()
+}
+
 fn wait_for_file(path: &Path, timeout_ms: u64) -> bool {
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
     while Instant::now() < deadline {
@@ -117,6 +132,7 @@ fn wait_for_file(path: &Path, timeout_ms: u64) -> bool {
 /// contains a valid u32 process ID, and that the reported PID matches a
 /// running process.
 #[test]
+#[serial(global_env)]
 fn daemon_starts_writes_pid() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
@@ -160,6 +176,7 @@ fn daemon_starts_writes_pid() {
 /// Test 2 — after SIGTERM, daemon exits cleanly: daemon.pid removed and
 /// last-stop.txt written within 3 s, daemon-status.json has `clean_stop=true`.
 #[test]
+#[serial(global_env)]
 fn daemon_clean_stop() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
@@ -187,9 +204,10 @@ fn daemon_clean_stop() {
     let stop_path = cascade_dir.join("last-stop.txt");
     let stop_written = wait_for_file(&stop_path, 8000);
 
-    // daemon.pid should be gone after clean stop.
+    // daemon.pid should be gone after clean stop (poll: removal follows the
+    // stop marker by a small window that widens under system load).
     assert!(
-        !pid_path.exists(),
+        wait_for_gone(&pid_path, 8000),
         "daemon.pid should be removed after clean stop"
     );
     assert!(
@@ -213,6 +231,7 @@ fn daemon_clean_stop() {
 /// Test 3 — while the daemon is running, daemon-status.json either does not
 /// exist or does not contain `clean_stop=true` (daemon has not stopped yet).
 #[test]
+#[serial(global_env)]
 fn daemon_healthcheck_json() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
@@ -253,6 +272,7 @@ fn daemon_healthcheck_json() {
 /// CASCADE.md must exist BEFORE the daemon spawns so `discover_all_cascade_paths`
 /// finds and registers the path with the notify watcher during start-up.
 #[test]
+#[serial(global_env)]
 fn watcher_triggers_on_cascade_change() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir, cascade_md) =
@@ -313,6 +333,7 @@ fn watcher_triggers_on_cascade_change() {
 /// binary does NOT write crash-last.txt synchronously at startup (e.g.
 /// only on panic/error exit), this test is skipped with a note.
 #[test]
+#[serial(global_env)]
 fn crash_sentinel_written_on_kill9() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
@@ -352,6 +373,7 @@ fn crash_sentinel_written_on_kill9() {
 /// fires within ~10 s. When `localhost:3761` is not available (normal in CI)
 /// the poller writes an error-state JSON — the file must still exist.
 #[test]
+#[serial(global_env)]
 fn quota_state_written() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
@@ -396,6 +418,7 @@ fn quota_state_written() {
 /// and writes the result to `~/.cascade/providers.json`. Even with no harnesses
 /// installed in the mock home, the file must exist (possibly empty or with manual entries).
 #[test]
+#[serial(global_env)]
 fn daemon_writes_providers_json_at_startup() {
     let tmpdir = TempDir::new().expect("tmpdir");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);

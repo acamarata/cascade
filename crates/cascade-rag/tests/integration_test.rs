@@ -139,7 +139,9 @@ async fn hierarchical_chunker_sets_parent_id() -> Result<()> {
     // so we get 2 parents with no children (no parent_chunk_id key).
     // Just verify the chunks round-tripped and contain section text.
     let texts: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
-    assert!(texts.iter().any(|t| t.contains("Section A") || t.contains("Para A")));
+    assert!(texts
+        .iter()
+        .any(|t| t.contains("Section A") || t.contains("Para A")));
     Ok(())
 }
 

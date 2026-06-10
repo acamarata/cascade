@@ -165,7 +165,7 @@ fn http_post(url: &str, auth_header: &str, body: &str) -> Result<String, PluginE
         ) -> i32;
     }
     let mut out_buf = vec![0u8; 2 << 20]; // 2 MiB response buffer
-    // Safety: all pointers are valid slices; wasmtime bounds-checks linear memory.
+                                          // Safety: all pointers are valid slices; wasmtime bounds-checks linear memory.
     let n = unsafe {
         cascade_http_post_json(
             url.as_ptr(),
@@ -184,7 +184,9 @@ fn http_post(url: &str, auth_header: &str, body: &str) -> Result<String, PluginE
         });
     }
     let s = core::str::from_utf8(&out_buf[..n as usize])
-        .map_err(|_| PluginError::Internal { message: "HTTP response is not valid UTF-8".into() })?
+        .map_err(|_| PluginError::Internal {
+            message: "HTTP response is not valid UTF-8".into(),
+        })?
         .to_string();
     Ok(s)
 }
@@ -428,17 +430,15 @@ mod tests {
 
     #[test]
     fn parse_two_issues_correct_count() {
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
-                .expect("parse failed");
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
+            .expect("parse failed");
         assert_eq!(page.items.len(), 2);
     }
 
     #[test]
     fn first_issue_fields_mapped_correctly() {
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
-                .unwrap();
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
+            .unwrap();
         let item = &page.items[0];
         assert_eq!(item.id, "PROJ-1");
         assert_eq!(item.title, "Fix login bug");
@@ -452,11 +452,9 @@ mod tests {
     #[test]
     fn extra_json_contains_string_fields_issuetype_and_priority() {
         // Spec acceptance criterion: issuetype and priority are strings (not objects).
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
-                .unwrap();
-        let extra: serde_json::Value =
-            serde_json::from_str(&page.items[0].extra_json).unwrap();
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
+            .unwrap();
+        let extra: serde_json::Value = serde_json::from_str(&page.items[0].extra_json).unwrap();
         assert_eq!(extra["issuetype"].as_str().unwrap(), "Bug");
         assert_eq!(extra["priority"].as_str().unwrap(), "High");
         assert_eq!(extra["status"].as_str().unwrap(), "In Progress");
@@ -466,9 +464,8 @@ mod tests {
 
     #[test]
     fn null_optional_fields_degrade_gracefully() {
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
-                .unwrap();
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
+            .unwrap();
         let item = &page.items[1];
         assert_eq!(item.id, "PROJ-2");
         assert_eq!(item.body, ""); // null description → empty string
@@ -480,9 +477,8 @@ mod tests {
     #[test]
     fn cursor_advances_on_full_page() {
         // total=150, startAt=0, 2 fetched but max_results=2 → next cursor = "2"
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 2)
-                .unwrap();
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 2)
+            .unwrap();
         assert_eq!(page.next_cursor, Some("2".to_string()));
     }
 
@@ -530,7 +526,8 @@ mod tests {
         assert_eq!(p1.items.len(), 50);
         assert_eq!(p1.next_cursor, Some("50".to_string()));
 
-        let p2 = parse_search_response(&make_fixture(50), "https://x.atlassian.net", 50, 50).unwrap();
+        let p2 =
+            parse_search_response(&make_fixture(50), "https://x.atlassian.net", 50, 50).unwrap();
         assert_eq!(p2.next_cursor, Some("100".to_string()));
 
         let p3 =
@@ -563,10 +560,15 @@ mod tests {
         let header = build_basic_auth("user@example.com", "abc123");
         assert!(header.starts_with("Basic "));
         let encoded = header.strip_prefix("Basic ").unwrap();
-        assert!(!encoded.contains('\n'), "base64 must not contain line breaks");
+        assert!(
+            !encoded.contains('\n'),
+            "base64 must not contain line breaks"
+        );
         // Decode and verify the original credential string.
         use base64::Engine as _;
-        let decoded = base64::engine::general_purpose::STANDARD.decode(encoded).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap();
         let s = String::from_utf8(decoded).unwrap();
         assert_eq!(s, "user@example.com:abc123");
     }
@@ -592,9 +594,8 @@ mod tests {
     fn token_not_in_data_item_fields() {
         // Verify no DataItem field contains the token — all fields originate from
         // the API response JSON, never from the JIRA_TOKEN env var.
-        let page =
-            parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
-                .unwrap();
+        let page = parse_search_response(fixture_two_issues(), "https://myco.atlassian.net", 0, 50)
+            .unwrap();
         for item in &page.items {
             let serialised = serde_json::to_string(item).unwrap();
             // Fixture contains no token-like strings; double-check env leakage is impossible.

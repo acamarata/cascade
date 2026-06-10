@@ -39,9 +39,9 @@ use cascade_types::error::{CascadeError, Result};
 use crate::auth::McpAuth;
 use crate::notification::NotificationBus;
 use crate::server::McpServerConfig;
-use crate::transport::McpTransport;
 use crate::transport::auth_handshake::{perform as auth_perform, AuthResult};
 use crate::transport::connection::{connection_loop, ConnectionContext};
+use crate::transport::McpTransport;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -261,12 +261,13 @@ impl McpTransport for UnixServer {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-                .map_err(|e| CascadeError::Io {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(
+                |e| CascadeError::Io {
                     path: path.clone(),
                     operation: "set_socket_permissions",
                     source: e,
-                })?;
+                },
+            )?;
         }
 
         info!(socket = %path.display(), "Unix MCP server listening (max {} conns)", MAX_CONNECTIONS);
@@ -347,6 +348,11 @@ impl McpTransport for UnixServer {
 
     async fn stop(&self) -> Result<()> {
         self.shutdown.notify_waiters();
+        // Sticky permit: notify_waiters only wakes CURRENT waiters; if stop()
+        // fires while the accept loop is mid-iteration the wakeup is lost and
+        // shutdown hangs (observed). notify_one stores a permit consumed by
+        // the next notified() poll.
+        self.shutdown.notify_one();
         Ok(())
     }
 }

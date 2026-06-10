@@ -84,6 +84,8 @@ impl MockHost {
 
 /// Test runner that wires a `MockHost` + wasmtime store to execute WASM exports.
 pub struct PluginTestRunner {
+    // Stored for callers that inspect host state after a call; not read by runner internals.
+    #[allow(dead_code)]
     mock_host: MockHost,
     engine: Engine,
 }
@@ -112,18 +114,15 @@ impl PluginTestRunner {
         export_name: &str,
         args: Value,
     ) -> anyhow::Result<Value> {
-        let module = Module::new(&self.engine, wasm_bytes)
-            .context("failed to compile WASM module")?;
+        let module =
+            Module::new(&self.engine, wasm_bytes).context("failed to compile WASM module")?;
 
         // Build a minimal WASIp1 context (no filesystem, no network).
-        let wasi_ctx = WasiCtxBuilder::new()
-            .build_p1();
+        let wasi_ctx = WasiCtxBuilder::new().build_p1();
 
-        let mut store = Store::new(
-            &self.engine,
-            TestStoreData { wasi: wasi_ctx },
-        );
-        store.set_fuel(1_000_000_000)
+        let mut store = Store::new(&self.engine, TestStoreData { wasi: wasi_ctx });
+        store
+            .set_fuel(1_000_000_000)
             .context("failed to set fuel")?;
 
         let mut linker: Linker<TestStoreData> = Linker::new(&self.engine);
@@ -138,8 +137,7 @@ impl PluginTestRunner {
             .context("failed to instantiate WASM module")?;
 
         // Serialise args to JSON bytes.
-        let args_json = serde_json::to_vec(&args)
-            .context("failed to serialise args to JSON")?;
+        let args_json = serde_json::to_vec(&args).context("failed to serialise args to JSON")?;
         let args_len = args_json.len();
 
         // Write args into guest memory via the guest's `alloc` export.
@@ -147,7 +145,7 @@ impl PluginTestRunner {
             .get_func(&mut store, "alloc")
             .context("WASM module missing `alloc` export")?;
 
-        let alloc_result = alloc_fn
+        alloc_fn
             .call(&mut store, &[Val::I32(args_len as i32)], &mut [Val::I32(0)])
             .context("alloc call failed")?;
 
@@ -160,13 +158,13 @@ impl PluginTestRunner {
             Val::I32(p) => *p as usize,
             _ => anyhow::bail!("alloc returned unexpected type"),
         };
-        let _ = alloc_result;
 
         // Write the JSON bytes into the guest's linear memory.
         let memory = instance
             .get_memory(&mut store, "memory")
             .context("WASM module missing `memory` export")?;
-        memory.write(&mut store, args_ptr, &args_json)
+        memory
+            .write(&mut store, args_ptr, &args_json)
             .context("failed to write args into guest memory")?;
 
         // Call the named export.
@@ -198,7 +196,8 @@ impl PluginTestRunner {
 
         // Read result bytes from guest memory.
         let mut result_bytes = vec![0u8; result_len];
-        memory.read(&store, result_ptr, &mut result_bytes)
+        memory
+            .read(&store, result_ptr, &mut result_bytes)
             .context("failed to read result from guest memory")?;
 
         // Free the result memory via `dealloc`.
@@ -218,16 +217,16 @@ impl PluginTestRunner {
     }
 
     /// Register mock implementations of `cascade:plugins/host` functions.
-    fn register_mock_functions(
-        &self,
-        linker: &mut Linker<TestStoreData>,
-    ) -> anyhow::Result<()> {
+    fn register_mock_functions(&self, linker: &mut Linker<TestStoreData>) -> anyhow::Result<()> {
         // log — capture to test output.
         linker
             .func_wrap(
                 "cascade:plugins/host",
                 "log",
-                |_caller: wasmtime::Caller<'_, TestStoreData>, _level: i32, _ptr: i32, _len: i32| {
+                |_caller: wasmtime::Caller<'_, TestStoreData>,
+                 _level: i32,
+                 _ptr: i32,
+                 _len: i32| {
                     // In tests, log calls are silently dropped unless inspected via
                     // the MockHost log_lines field (not accessible in this closure).
                     // For richer log inspection, use a separate logging mock.

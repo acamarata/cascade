@@ -1,6 +1,6 @@
 [package]
 name = "cascade-app"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.85"
 # Tauri requires this specific crate structure — do not add to workspace members.
@@ -59,4 +59,17 @@ chrono     = { version = "0.4", features = ["serde"] }
 [dev-dependencies]
 tempfile    = "3"
 serial_test = "3"
+
+# Bundle metadata — Tauri 2 reads these from tauri.conf.json, not here.
+# Listed for reference so tooling (cargo-bundle, auditing) can locate them.
+# Canonical source: tauri.conf.json § bundle
+# identifier = "dev.cascade.app"
+# category   = "Utility"
+# copyright  = "2026 Aric Camarata"
+# icons      = ["icons/32x32.png","icons/128x128.png","icons/128x128@2x.png","icons/icon.icns","icons/icon.ico"]
+[package.metadata.bundle]
+identifier = "dev.cascade.app"
+category   = "Utility"
+copyright  = "2026 Aric Camarata"
+icon       = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
 

@@ -28,7 +28,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use tracing::{debug, instrument};
 
 use cascade_types::error::{CascadeError, Result};
@@ -104,8 +104,7 @@ impl IndexStateStore {
     /// Open an in-memory database (for tests only).
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| CascadeError::Other(e.to_string()))?;
+        let conn = Connection::open_in_memory().map_err(|e| CascadeError::Other(e.to_string()))?;
         conn.execute_batch(SQL_STATE_SCHEMA)
             .map_err(|e| CascadeError::Other(e.to_string()))?;
         Ok(Self { conn })
@@ -131,7 +130,8 @@ impl IndexStateStore {
         let doc_id = doc_id_for_path(path);
         let meta = std::fs::metadata(path).ok();
         let mtime = meta.as_ref().and_then(|m| {
-            m.modified().ok()
+            m.modified()
+                .ok()
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() as i64)
         });
@@ -203,11 +203,9 @@ impl IndexStateStore {
     /// Remove a single doc from the state store (file was deleted).
     pub fn delete(&self, path: &Path) -> Result<()> {
         let doc_id = doc_id_for_path(path);
-        self.conn.execute(
-            "DELETE FROM index_state WHERE doc_id = ?1",
-            params![doc_id],
-        )
-        .map_err(|e| CascadeError::Other(e.to_string()))?;
+        self.conn
+            .execute("DELETE FROM index_state WHERE doc_id = ?1", params![doc_id])
+            .map_err(|e| CascadeError::Other(e.to_string()))?;
         Ok(())
     }
 
@@ -215,7 +213,8 @@ impl IndexStateStore {
 
     /// Return all currently-tracked file paths.
     pub fn all_indexed_paths(&self) -> Result<Vec<PathBuf>> {
-        let mut stmt = self.conn
+        let mut stmt = self
+            .conn
             .prepare_cached("SELECT file_path FROM index_state")
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
@@ -233,7 +232,8 @@ impl IndexStateStore {
 
     /// Return the set of doc_ids for all currently-tracked files.
     pub fn all_indexed_doc_ids(&self) -> Result<HashSet<String>> {
-        let mut stmt = self.conn
+        let mut stmt = self
+            .conn
             .prepare_cached("SELECT doc_id FROM index_state")
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
@@ -249,7 +249,9 @@ impl IndexStateStore {
     /// Total number of tracked documents.  Used by `cascade status --json`.
     pub fn count(&self) -> usize {
         self.conn
-            .query_row("SELECT COUNT(*) FROM index_state", [], |r| r.get::<_, i64>(0))
+            .query_row("SELECT COUNT(*) FROM index_state", [], |r| {
+                r.get::<_, i64>(0)
+            })
             .unwrap_or(0) as usize
     }
 
@@ -271,7 +273,8 @@ impl IndexStateStore {
     // ── Internal ──────────────────────────────────────────────────────────────
 
     fn get_row(&self, doc_id: &str) -> Result<Option<StateRow>> {
-        let mut stmt = self.conn
+        let mut stmt = self
+            .conn
             .prepare_cached(
                 "SELECT content_hash, mtime, byte_size FROM index_state WHERE doc_id = ?1",
             )
@@ -281,11 +284,14 @@ impl IndexStateStore {
             .query(params![doc_id])
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
-        if let Some(row) = rows.next().map_err(|e| CascadeError::Other(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| CascadeError::Other(e.to_string()))?
+        {
             Ok(Some(StateRow {
                 content_hash: row.get(0).map_err(|e| CascadeError::Other(e.to_string()))?,
-                mtime:        row.get(1).map_err(|e| CascadeError::Other(e.to_string()))?,
-                byte_size:    row.get(2).map_err(|e| CascadeError::Other(e.to_string()))?,
+                mtime: row.get(1).map_err(|e| CascadeError::Other(e.to_string()))?,
+                byte_size: row.get(2).map_err(|e| CascadeError::Other(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -297,8 +303,8 @@ impl IndexStateStore {
 
 struct StateRow {
     content_hash: String,
-    mtime:        Option<i64>,
-    byte_size:    Option<i64>,
+    mtime: Option<i64>,
+    byte_size: Option<i64>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -379,7 +385,9 @@ mod tests {
 
         // First classify — Changed.
         let (_, hash) = store.classify(f.path()).expect("classify ok");
-        store.set_hash(f.path(), &hash.unwrap()).expect("set_hash ok");
+        store
+            .set_hash(f.path(), &hash.unwrap())
+            .expect("set_hash ok");
 
         // Second classify — must FastSkip (mtime+size unchanged for tempfile).
         let (kind, _) = store.classify(f.path()).expect("second classify ok");
@@ -399,7 +407,9 @@ mod tests {
         let f = write_file("version 1");
 
         let (_, hash) = store.classify(f.path()).expect("classify ok");
-        store.set_hash(f.path(), &hash.unwrap()).expect("set_hash ok");
+        store
+            .set_hash(f.path(), &hash.unwrap())
+            .expect("set_hash ok");
 
         // Overwrite content — new bytes, new hash.
         std::fs::write(f.path(), b"version 2 - completely different").unwrap();
@@ -416,7 +426,9 @@ mod tests {
         let f = write_file("content for delete test");
 
         let (_, hash) = store.classify(f.path()).expect("classify ok");
-        store.set_hash(f.path(), &hash.unwrap()).expect("set_hash ok");
+        store
+            .set_hash(f.path(), &hash.unwrap())
+            .expect("set_hash ok");
 
         assert_eq!(store.count(), 1, "one row after set_hash");
 
@@ -436,7 +448,9 @@ mod tests {
 
         for f in &[&f1, &f2] {
             let (_, hash) = store.classify(f.path()).expect("classify ok");
-            store.set_hash(f.path(), &hash.unwrap()).expect("set_hash ok");
+            store
+                .set_hash(f.path(), &hash.unwrap())
+                .expect("set_hash ok");
         }
         assert_eq!(store.count(), 2);
 
@@ -459,7 +473,9 @@ mod tests {
 
         let f = write_file("counting test");
         let (_, hash) = store.classify(f.path()).expect("classify ok");
-        store.set_hash(f.path(), &hash.unwrap()).expect("set_hash ok");
+        store
+            .set_hash(f.path(), &hash.unwrap())
+            .expect("set_hash ok");
         assert_eq!(store.count(), 1);
 
         store.delete(f.path()).expect("delete ok");
@@ -481,7 +497,10 @@ mod tests {
     fn blake3_file_differs_on_content_change() {
         let f1 = write_file("aaa");
         let f2 = write_file("bbb");
-        assert_ne!(blake3_file(f1.path()).unwrap(), blake3_file(f2.path()).unwrap());
+        assert_ne!(
+            blake3_file(f1.path()).unwrap(),
+            blake3_file(f2.path()).unwrap()
+        );
     }
 
     // ── state::doc_id_for_path ────────────────────────────────────────────────

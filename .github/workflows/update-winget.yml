@@ -1,0 +1,33 @@
+name: Update Winget Manifest
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-manifest:
+    runs-on: windows-latest
+    steps:
+      - name: Get release info
+        id: release
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          MSI_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_windows_x64.msi"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "msi_url=${MSI_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Install wingetcreate
+        run: |
+          winget install --id Microsoft.WingetCreate --exact --silent --accept-source-agreements --accept-package-agreements
+
+      - name: Update manifests and open PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          wingetcreate update acamarata.cascade `
+            --version "${{ steps.release.outputs.version }}" `
+            --urls "${{ steps.release.outputs.msi_url }}" `
+            --token "$env:GITHUB_TOKEN" `
+            --submit

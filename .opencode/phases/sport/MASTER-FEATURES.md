@@ -26,7 +26,7 @@
 | F-IDENTITY-META-HARNESS | Augmenting meta-harness | Cascade augments other harnesses; does not replace their execution loops | ✅ Done | Architecture |
 | F-IDENTITY-FORK-LIGHT | Fork-friendly clean code | No DB abstraction layer over-engineering; native DB + nSelf-sync version is a future ClawDE rewrite | ✅ Done | Architecture |
 | F-IDENTITY-CLAWDE-FUTURE | ClawDE fork (future) | Native DB + nSelf-sync rewrite of Cascade; out of scope for P2–P4 | 🚫 Deferred | ClawDE fork |
-| F-IDENTITY-SELF-HOST | Cascade dogfoods itself | Repo self-hosts its own PRC at `.cascade/CASCADE.md` | 🔲 Planned | P4-E05 |
+| F-IDENTITY-SELF-HOST | Cascade dogfoods itself | Repo self-hosts its own PRC at `.cascade/CASCADE.md` | ✅ Done | T-P4-E05-19 |
 
 ---
 
@@ -169,7 +169,7 @@
 | F-APP-RAG-EXPLORER | RAG explorer panel | Browse and query local RAG index; drag-and-drop ingest; tier enable/disable | 🔲 Planned | P4-E01 |
 | F-APP-PROVIDER-SETTINGS | Provider settings page | List/add/remove/test AI providers; connection status; model routing table | 🔲 Planned | P3-E04 |
 | F-APP-SETTINGS | Settings: configure everything | Full settings parity: Gemini Pool, provider keys/OAuth, harness bridges, `.cascade` tiers, hooks, scheduled tasks, plugins, vault, MCP servers | 🔲 Planned | P3-E07 |
-| F-APP-AUTO-UPDATE | Self-update | Tauri updater + GitHub Releases (signed); in-app update notification | 🔲 Planned | P4-E05 |
+| F-APP-AUTO-UPDATE | Self-update | Tauri updater + GitHub Releases (signed); in-app update notification | ✅ Done | T-P4-E05-18 (release.yml signed updater artifacts) |
 
 ### 6b. Onboarding Wizard
 
@@ -281,21 +281,21 @@
 
 | ID | Feature | Description | Status | Delivers |
 |---|---|---|---|---|
-| F-DIST-HOMEBREW | Homebrew Cask | `brew install --cask cascade`; `acamarata/homebrew-cascade` tap | 🔲 Planned | P4-E05 |
-| F-DIST-DMG | macOS DMG | Direct download from GitHub Releases | 🔲 Planned | P4-E05 |
-| F-DIST-DEB-RPM | Linux .deb + .rpm | GitHub Releases artifacts | 🔲 Planned | P3-E01 (release.yml scaffolded) |
-| F-DIST-AUR | AUR package | `cascade-bin` PKGBUILD on aur.archlinux.org | 🔲 Planned | P4-E05 |
-| F-DIST-WINGET | Winget | `winget install acamarata.cascade`; PR to microsoft/winget-pkgs | 🔲 Planned | P4-E05 |
-| F-DIST-CARGO | cargo install | `cargo install cascade-cli`; crates.io publish | 🔲 Planned | P4-E05 |
-| F-DIST-CHOCOLATEY | Chocolatey | nuspec + community feed submission | 🔲 Planned | P4-E05 |
-| F-DIST-SCOOP | Scoop | `acamarata/scoop-cascade` bucket manifest | 🔲 Planned | P4-E05 |
-| F-DIST-SNAP | Snap | snapcraft.yaml + Snapcraft submission | 🔲 Planned | P4-E05 |
-| F-DIST-FLATPAK | Flatpak | `io.github.acamarata.Cascade.yml` manifest | 🔲 Planned | P4-E05 |
-| F-DIST-NIX | Nix flake | `flake.nix` derivation | 🔲 Planned | P4-E05 |
-| F-DIST-SIGNING-MACOS | macOS notarization | Apple Developer codesign + notarytool; USER-AUTH cert gate | 🔲 Planned | P4-E05 |
-| F-DIST-SIGNING-WINDOWS | Windows Authenticode | SignPath.io FOSS cert; USER-AUTH project creation gate | 🔲 Planned | P4-E05 |
-| F-DIST-SIGNING-LINUX | Linux GPG signing | GPG release key per-distro; fingerprint in README | 🔲 Planned | P4-E05 |
-| F-DIST-CI-RELEASE | Release CI/CD | GitHub Actions matrix: macOS ARM/x64, Linux x64/ARM64, Windows x64; sign + package + publish on tag | 🔲 Planned | P4-E05 |
+| F-DIST-HOMEBREW | Homebrew Cask | `brew install --cask cascade`; `acamarata/homebrew-cascade` tap | ✅ Done | T-P4-E05-09 |
+| F-DIST-DMG | macOS DMG | Direct download from GitHub Releases | ✅ Done | T-P4-E05-18 |
+| F-DIST-DEB-RPM | Linux .deb + .rpm | GitHub Releases artifacts | ✅ Done | T-P4-E05-18 |
+| F-DIST-AUR | AUR package | `cascade-bin` PKGBUILD on aur.archlinux.org | ✅ Done | T-P4-E05-10 (USER-AUTH submission pending) |
+| F-DIST-WINGET | Winget | `winget install acamarata.cascade`; PR to microsoft/winget-pkgs | ✅ Done | T-P4-E05-11 (USER-AUTH PR pending) |
+| F-DIST-CARGO | cargo install | `cargo install cascade-cli`; crates.io publish | ✅ Done | T-P4-E05-12 |
+| F-DIST-CHOCOLATEY | Chocolatey | nuspec + community feed submission | ✅ Done | T-P4-E05-13 (USER-AUTH submission pending) |
+| F-DIST-SCOOP | Scoop | `acamarata/scoop-cascade` bucket manifest | ✅ Done | T-P4-E05-14 |
+| F-DIST-SNAP | Snap | snapcraft.yaml + Snapcraft submission | ✅ Done | T-P4-E05-15 (USER-AUTH account pending) |
+| F-DIST-FLATPAK | Flatpak | `io.github.acamarata.Cascade.yml` manifest | ✅ Done | T-P4-E05-16 (USER-AUTH Flathub PR pending) |
+| F-DIST-NIX | Nix flake | `flake.nix` derivation | ✅ Done | T-P4-E05-17 |
+| F-DIST-SIGNING-MACOS | macOS notarization | Apple Developer codesign + notarytool; USER-AUTH cert gate | ✅ Done | T-P4-E05-06 (USER-AUTH Apple enrollment pending) |
+| F-DIST-SIGNING-WINDOWS | Windows Authenticode | SignPath.io FOSS cert; USER-AUTH project creation gate | ✅ Done | T-P4-E05-07 (USER-AUTH SignPath enrollment pending) |
+| F-DIST-SIGNING-LINUX | Linux GPG signing | GPG release key per-distro; fingerprint in README | ✅ Done | T-P4-E05-05 + T-P4-E05-08 |
+| F-DIST-CI-RELEASE | Release CI/CD | GitHub Actions matrix: macOS ARM/x64, Linux x64/ARM64, Windows x64; sign + package + publish on tag | ✅ Done | T-P4-E05-18 |
 | F-OBS-TRACING | OpenTelemetry tracing | OTel spans across daemon + CLI; structured JSON logs; 7-day rotation | 🔲 Planned | P2-E01 |
 | F-OBS-HEALTHCHECK | Health endpoint | `/health` returns `{status:'ok'}` only; no internal stats leaked | 🔲 Planned | P2-E07 |
 

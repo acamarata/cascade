@@ -129,11 +129,7 @@ impl DocumentParser for XlsxParser {
                     lines.push(format!("[truncated: {remaining} rows omitted]"));
                     break;
                 }
-                let line = row
-                    .iter()
-                    .map(format_cell)
-                    .collect::<Vec<_>>()
-                    .join("\t");
+                let line = row.iter().map(format_cell).collect::<Vec<_>>().join("\t");
                 lines.push(line);
                 row_count += 1;
             }
@@ -150,11 +146,7 @@ impl DocumentParser for XlsxParser {
         let title = sheet_names
             .first()
             .cloned()
-            .or_else(|| {
-                path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(String::from)
-            });
+            .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(String::from));
 
         // Metadata.
         let mut metadata: HashMap<String, String> = HashMap::new();
@@ -237,10 +229,7 @@ mod tests {
             result.text.contains("Alice"),
             "should contain cell value Alice"
         );
-        assert!(
-            result.text.contains("Bob"),
-            "should contain cell value Bob"
-        );
+        assert!(result.text.contains("Bob"), "should contain cell value Bob");
     }
 
     /// T-P4-E01-19: sheet_names metadata is comma-joined sheet names.
@@ -252,7 +241,10 @@ mod tests {
 
         let result = parser.parse(&path).expect("parse should succeed");
 
-        let sheet_names = result.metadata.get("sheet_names").expect("sheet_names metadata");
+        let sheet_names = result
+            .metadata
+            .get("sheet_names")
+            .expect("sheet_names metadata");
         assert!(
             sheet_names.contains("Data"),
             "sheet_names should include Data: {sheet_names}"

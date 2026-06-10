@@ -139,9 +139,7 @@ impl UpdateChecker {
     /// Inputs:  `&self` config
     /// Outputs: `(latest_version, delta_asset_url)` if an update is available;
     ///           `None` if already up to date or no delta asset found.
-    pub async fn check_for_update(
-        &self,
-    ) -> Result<Option<(String, String)>, DownloadError> {
+    pub async fn check_for_update(&self) -> Result<Option<(String, String)>, DownloadError> {
         let url = format!("{}/releases/latest", self.github_api_base);
 
         let client = build_reqwest_client()?;
@@ -358,7 +356,10 @@ fn apply_delta(bundle: &DeltaBundle, protocol_root: &Path) -> Result<(), std::io
         if actual_hash != entry.hash {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("blake3 mismatch for {} after verification passed", entry.path),
+                format!(
+                    "blake3 mismatch for {} after verification passed",
+                    entry.path
+                ),
             ));
         }
 
@@ -440,7 +441,7 @@ mod tests {
     fn bundle_to_tarball_bytes(bundle: &DeltaBundle) -> Vec<u8> {
         use flate2::write::GzEncoder;
         use flate2::Compression;
-        use std::io::Write;
+
         use tar::Builder;
 
         let mut buf = Vec::new();
@@ -452,16 +453,24 @@ mod tests {
         header.set_size(bundle.manifest_bytes.len() as u64);
         header.set_mode(0o644);
         header.set_cksum();
-        ar.append_data(&mut header, "manifest.json", bundle.manifest_bytes.as_slice())
-            .unwrap();
+        ar.append_data(
+            &mut header,
+            "manifest.json",
+            bundle.manifest_bytes.as_slice(),
+        )
+        .unwrap();
 
         // signature.bin
         let mut header = tar::Header::new_gnu();
         header.set_size(bundle.signature_bytes.len() as u64);
         header.set_mode(0o644);
         header.set_cksum();
-        ar.append_data(&mut header, "signature.bin", bundle.signature_bytes.as_slice())
-            .unwrap();
+        ar.append_data(
+            &mut header,
+            "signature.bin",
+            bundle.signature_bytes.as_slice(),
+        )
+        .unwrap();
 
         // payload files
         for (path, content) in &bundle.files {
@@ -520,7 +529,9 @@ mod tests {
         let content = b"# spec content";
         let mut bundle = make_signed_bundle(&sk, &[("spec.md", content)], "0.1.2", "0.1.3");
         // Tamper content AFTER building (verify_bundle already passed in prod; test apply-layer guard).
-        bundle.files.insert("spec.md".to_string(), b"TAMPERED".to_vec());
+        bundle
+            .files
+            .insert("spec.md".to_string(), b"TAMPERED".to_vec());
 
         let err = apply_delta(&bundle, proto_root.path()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
@@ -546,10 +557,11 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/releases/latest"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(make_release_json("v0.1.2", "cascade-delta-0.1.1-to-0.1.2.tar.gz", "http://example.com/delta.tar.gz")),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(make_release_json(
+                "v0.1.2",
+                "cascade-delta-0.1.1-to-0.1.2.tar.gz",
+                "http://example.com/delta.tar.gz",
+            )))
             .mount(&server)
             .await;
 
@@ -584,22 +596,18 @@ mod tests {
         let asset_url = format!("{}/download/delta.tar.gz", server.uri());
         Mock::given(method("GET"))
             .and(path("/releases/latest"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(make_release_json(
-                    "v0.1.3",
-                    "cascade-delta-0.1.2-to-0.1.3.tar.gz",
-                    &asset_url,
-                )),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(make_release_json(
+                "v0.1.3",
+                "cascade-delta-0.1.2-to-0.1.3.tar.gz",
+                &asset_url,
+            )))
             .mount(&server)
             .await;
 
         // Mount the asset download endpoint.
         Mock::given(method("GET"))
             .and(path("/download/delta.tar.gz"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_bytes(tarball_bytes),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(tarball_bytes))
             .mount(&server)
             .await;
 
@@ -664,7 +672,9 @@ mod tests {
         let mut bundle = make_signed_bundle(&sk, &[("specs.md", content)], "0.1.2", "0.1.3");
 
         // Tamper the bundle content so apply_delta sees a hash mismatch.
-        bundle.files.insert("specs.md".to_string(), b"TAMPERED".to_vec());
+        bundle
+            .files
+            .insert("specs.md".to_string(), b"TAMPERED".to_vec());
 
         // Snapshot current state.
         let snap = Snapshot::create(
@@ -679,12 +689,14 @@ mod tests {
         assert!(apply_result.is_err(), "tampered bundle must fail");
 
         // Restore from snapshot.
-        Snapshot::restore(snap_root.path(), &snap.metadata.id, proto_root.path())
-            .expect("restore");
+        Snapshot::restore(snap_root.path(), &snap.metadata.id, proto_root.path()).expect("restore");
 
         // File should be back to original.
         let after_restore = std::fs::read(proto_root.path().join("specs.md")).expect("read");
-        assert_eq!(after_restore, original, "auto-rollback must restore original content");
+        assert_eq!(
+            after_restore, original,
+            "auto-rollback must restore original content"
+        );
     }
 
     #[tokio::test]
@@ -701,13 +713,11 @@ mod tests {
         let asset_url = format!("{}/download/tampered.tar.gz", server.uri());
         Mock::given(method("GET"))
             .and(path("/releases/latest"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(make_release_json(
-                    "v0.1.3",
-                    "cascade-delta-0.1.2-to-0.1.3.tar.gz",
-                    &asset_url,
-                )),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(make_release_json(
+                "v0.1.3",
+                "cascade-delta-0.1.2-to-0.1.3.tar.gz",
+                &asset_url,
+            )))
             .mount(&server)
             .await;
 

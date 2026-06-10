@@ -22,7 +22,9 @@ pub use agent::{
     AgentContext, AgentObservation, AgentPlugin, AgentPluginCapabilities, AgentPluginError,
     AgentTool,
 };
-pub use chunker::{Chunk, ChunkPlugin, ChunkPluginCapabilities, ChunkPluginError, Query as ChunkQuery};
+pub use chunker::{
+    Chunk, ChunkPlugin, ChunkPluginCapabilities, ChunkPluginError, Query as ChunkQuery,
+};
 pub use provider::{
     Message, MessageRole, ProviderDelta, ProviderPlugin, ProviderPluginCapabilities,
     ProviderPluginError, ProviderRequest, ProviderResponse,
@@ -34,6 +36,4 @@ pub use retriever::{
 pub use tool_integration::{
     ToolCall, ToolIntegration, ToolIntegrationCapabilities, ToolIntegrationError, ToolResult,
 };
-pub use widget::{
-    WidgetData, WidgetPlugin, WidgetPluginCapabilities, WidgetPluginError,
-};
+pub use widget::{WidgetData, WidgetPlugin, WidgetPluginCapabilities, WidgetPluginError};

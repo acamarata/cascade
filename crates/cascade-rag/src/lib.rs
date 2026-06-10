@@ -109,17 +109,23 @@ impl TierLevel {
 
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
-pub use cache::{CachedEmbedModel, ChunkCache, EmbedCache, EmbedCacheError, LegacyQueryCache, QueryCache};
+pub use cache::{
+    CachedEmbedModel, ChunkCache, EmbedCache, EmbedCacheError, LegacyQueryCache, QueryCache,
+};
+pub use citation::{citations_from_chunk_ids, Citation, CitationSet, RagCitation};
 pub use context::{ContextOptimizer, ContextResult};
-pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
-pub use index_manager::{IndexManager, IndexRegistry, SourceInfo, resolve_db_path};
-pub use citation::{Citation, CitationSet, RagCitation, citations_from_chunk_ids};
-pub use eval::{EvalConfig, EvalHarness, EvalMetrics, EvalQuery, EvalReport, GroundTruth, QueryResult, SearchFn};
+pub use db::run_migrations;
+pub use eval::{
+    EvalConfig, EvalHarness, EvalMetrics, EvalQuery, EvalReport, GroundTruth, QueryResult, SearchFn,
+};
+pub use index::sharding::{
+    shard_for, EmbedResult as ShardEmbedResult, SearchHit as ShardSearchHit, ShardedIndex,
+};
+pub use index::state::{ChangeKind, IndexStateStore};
 pub use index::{CachedIndex, RagIndex};
-pub use index::sharding::{EmbedResult as ShardEmbedResult, SearchHit as ShardSearchHit, ShardedIndex, shard_for};
+pub use index_manager::{resolve_db_path, IndexManager, IndexRegistry, SourceInfo};
+pub use ingest::{IngestConfig, IngestPipeline, IngestResult, IngestStats};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
 pub use retrieve::rrf::RrfRetriever;
 pub use search::{search, SearchConfig};
-pub use ingest::{IngestPipeline, IngestConfig, IngestResult, IngestStats};
-pub use index::state::{IndexStateStore, ChangeKind};
-pub use db::run_migrations;
+pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};

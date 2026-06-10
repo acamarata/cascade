@@ -35,7 +35,7 @@ use std::sync::Arc;
 use rusqlite::Connection;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use cascade_rag::embed::EmbedModel;
 use cascade_rag::ingest::{IngestConfig, IngestPipeline};
@@ -96,7 +96,13 @@ impl IndexingPipeline {
         embed: Arc<dyn EmbedModel>,
         shutdown: CancellationToken,
     ) -> Self {
-        Self { rx, pool, index_mgr, embed, shutdown }
+        Self {
+            rx,
+            pool,
+            index_mgr,
+            embed,
+            shutdown,
+        }
     }
 
     /// Drive the pipeline until `shutdown` is cancelled.
@@ -159,13 +165,9 @@ impl IndexingPipeline {
         // Clone path before moving into spawn_blocking so we can log after.
         let path_for_log = path.clone();
         let result = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path).map_err(|e| {
-                format!("open db: {e}")
-            })?;
-            conn.execute_batch(
-                "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;",
-            )
-            .map_err(|e| format!("pragmas: {e}"))?;
+            let conn = Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+                .map_err(|e| format!("pragmas: {e}"))?;
 
             // Use the WorkerPool to account for queue_depth even when
             // IngestPipeline does its own batching.
@@ -203,8 +205,7 @@ impl IndexingPipeline {
         let path_str = path.to_string_lossy().to_string();
 
         let result = tokio::task::spawn_blocking(move || -> Result<(), String> {
-            let conn = Connection::open(&db_path)
-                .map_err(|e| format!("open db: {e}"))?;
+            let conn = Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
             conn.execute_batch("PRAGMA foreign_keys=ON;")
                 .map_err(|e| format!("pragma: {e}"))?;
             // DELETE FROM rag_sources cascades to rag_chunks via FK ON DELETE CASCADE.
@@ -219,7 +220,9 @@ impl IndexingPipeline {
 
         match result {
             Ok(Ok(())) => debug!(path = %path.display(), "IndexingPipeline: evict complete"),
-            Ok(Err(e)) => error!(path = %path.display(), error = %e, "IndexingPipeline: evict failed"),
+            Ok(Err(e)) => {
+                error!(path = %path.display(), error = %e, "IndexingPipeline: evict failed")
+            }
             Err(e) => error!(path = %path.display(), "IndexingPipeline: evict join error: {e}"),
         }
     }

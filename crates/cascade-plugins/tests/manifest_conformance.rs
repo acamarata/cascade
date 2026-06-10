@@ -49,10 +49,7 @@ fn find_plugin_jsons(base_dir: &std::path::Path) -> Vec<PathBuf> {
 fn manifest_conformance_all_plugin_jsons_pass_validator() {
     let root = repo_root();
 
-    let mut search_roots = vec![
-        root.join("plugins"),
-        root.join("examples").join("plugins"),
-    ];
+    let mut search_roots = vec![root.join("plugins"), root.join("examples").join("plugins")];
 
     // Collect all plugin.json files across both trees
     let mut all_files: Vec<PathBuf> = Vec::new();

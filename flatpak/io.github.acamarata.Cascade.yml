@@ -1,0 +1,29 @@
+app-id: io.github.acamarata.Cascade
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: cascade-app
+
+finish-args:
+  - --share=network
+  - --filesystem=home
+  - --socket=wayland
+  - --socket=x11
+  - --device=dri
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: cascade
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 cascaded /app/bin/cascaded
+      - install -Dm755 cascade /app/bin/cascade
+      - install -Dm755 Cascade /app/bin/cascade-app
+      - install -Dm644 io.github.acamarata.Cascade.desktop /app/share/applications/io.github.acamarata.Cascade.desktop
+      - install -Dm644 LICENSE /app/share/licenses/io.github.acamarata.Cascade/LICENSE
+    sources:
+      - type: archive
+        url: https://github.com/acamarata/cascade/releases/download/v1.0.0/cascade_1.0.0_linux_x86_64.tar.gz
+        sha256: PLACEHOLDER_SHA256
+      - type: file
+        path: io.github.acamarata.Cascade.desktop

@@ -248,9 +248,7 @@ pub fn citations_from_chunk_ids(
     }
 
     // Build the IN clause: (?1, ?2, …)
-    let placeholders: Vec<String> = (1..=chunk_ids.len())
-        .map(|i| format!("?{i}"))
-        .collect();
+    let placeholders: Vec<String> = (1..=chunk_ids.len()).map(|i| format!("?{i}")).collect();
     let sql = format!(
         "SELECT rc.id, rs.file_path, rc.line_start, rc.line_end, \
                 rc.heading_path, rc.chunk_text, rs.content_hash \
@@ -261,8 +259,7 @@ pub fn citations_from_chunk_ids(
     );
 
     // Build a lookup map: chunk_id → rrf_score
-    let score_map: std::collections::HashMap<i64, f64> =
-        chunk_ids.iter().copied().collect();
+    let score_map: std::collections::HashMap<i64, f64> = chunk_ids.iter().copied().collect();
 
     let mut stmt = conn.prepare(&sql)?;
 
@@ -281,13 +278,20 @@ pub fn citations_from_chunk_ids(
         let chunk_text: String = row.get(5)?;
         let content_hash: Option<String> = row.get(6)?;
 
-        Ok((id, file_path, line_start, line_end, heading_path, chunk_text, content_hash))
+        Ok((
+            id,
+            file_path,
+            line_start,
+            line_end,
+            heading_path,
+            chunk_text,
+            content_hash,
+        ))
     })?;
 
     let mut citations = Vec::with_capacity(chunk_ids.len());
     for row in rows {
-        let (id, file_path, line_start, line_end, heading_path, chunk_text, content_hash) =
-            row?;
+        let (id, file_path, line_start, line_end, heading_path, chunk_text, content_hash) = row?;
         let rrf_score = score_map.get(&id).copied().unwrap_or(0.0);
         citations.push(RagCitation {
             chunk_id: id,
@@ -389,16 +393,34 @@ mod tests {
         let json = serde_json::to_string(&c).expect("serialize");
         // Verify camelCase keys
         assert!(json.contains("\"chunkId\""), "chunkId camelCase field");
-        assert!(json.contains("\"sourcePath\""), "sourcePath camelCase field");
+        assert!(
+            json.contains("\"sourcePath\""),
+            "sourcePath camelCase field"
+        );
         assert!(json.contains("\"lineStart\""), "lineStart camelCase field");
         assert!(json.contains("\"lineEnd\""), "lineEnd camelCase field");
-        assert!(json.contains("\"headingPath\""), "headingPath camelCase field");
+        assert!(
+            json.contains("\"headingPath\""),
+            "headingPath camelCase field"
+        );
         assert!(json.contains("\"rrfScore\""), "rrfScore camelCase field");
-        assert!(json.contains("\"denseScore\""), "denseScore camelCase field");
-        assert!(json.contains("\"sparseScore\""), "sparseScore camelCase field");
+        assert!(
+            json.contains("\"denseScore\""),
+            "denseScore camelCase field"
+        );
+        assert!(
+            json.contains("\"sparseScore\""),
+            "sparseScore camelCase field"
+        );
         assert!(json.contains("\"fts5Score\""), "fts5Score camelCase field");
-        assert!(json.contains("\"rerankerScore\""), "rerankerScore camelCase field");
-        assert!(json.contains("\"sourceHash\""), "sourceHash camelCase field");
+        assert!(
+            json.contains("\"rerankerScore\""),
+            "rerankerScore camelCase field"
+        );
+        assert!(
+            json.contains("\"sourceHash\""),
+            "sourceHash camelCase field"
+        );
         assert!(json.contains("\"snippet\""), "snippet field");
 
         let back: RagCitation = serde_json::from_str(&json).expect("deserialize");
@@ -411,13 +433,17 @@ mod tests {
     fn rag_citation_snippet_truncated_at_200_chars() {
         let long_text: String = "a".repeat(300);
         let snippet = RagCitation::snippet_from(&long_text);
-        assert_eq!(snippet.len(), 200, "snippet must be exactly 200 chars for ASCII");
+        assert_eq!(
+            snippet.len(),
+            200,
+            "snippet must be exactly 200 chars for ASCII"
+        );
     }
 
     #[test]
     fn rag_citation_snippet_truncated_char_boundary_safe() {
         // 3-byte UTF-8 codepoint (€ = U+20AC)
-        let text: String = std::iter::repeat('€').take(100).collect();
+        let text: String = std::iter::repeat_n('€', 100).collect();
         let snippet = RagCitation::snippet_from(&text);
         // 200 characters = 100 '€' (200 chars limit hits char count, not byte 200)
         assert_eq!(snippet.chars().count(), 100);
@@ -442,7 +468,10 @@ mod tests {
         };
         let json = serde_json::to_string(&c).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert!(v["denseScore"].is_null(), "None fields must serialize as JSON null");
+        assert!(
+            v["denseScore"].is_null(),
+            "None fields must serialize as JSON null"
+        );
     }
 
     #[test]

@@ -136,8 +136,11 @@ fn resolve_db_path(explicit: Option<&std::path::Path>) -> PathBuf {
 /// Open (or create) the SQLite database at `path`.
 fn open_conn(path: &PathBuf) -> Result<rusqlite::Connection> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| CascadeError::Io { path: parent.to_path_buf(), operation: "create_dir_all", source: e })?;
+        std::fs::create_dir_all(parent).map_err(|e| CascadeError::Io {
+            path: parent.to_path_buf(),
+            operation: "create_dir_all",
+            source: e,
+        })?;
     }
     rusqlite::Connection::open(path)
         .map_err(|e| CascadeError::Other(format!("Failed to open DB at {}: {e}", path.display())))
@@ -182,7 +185,9 @@ mod tests {
         assert_eq!(deleted, 2, "should delete 2 rows for s1");
 
         let remaining: i64 = conn
-            .query_row("SELECT COUNT(*) FROM context_fingerprints", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM context_fingerprints", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(remaining, 1, "s2 row should remain");
     }

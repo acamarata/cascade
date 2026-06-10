@@ -33,23 +33,20 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::chunk::CodeChunker
 
+use tracing::warn;
 #[cfg(feature = "code-chunker")]
 use tree_sitter::{Language, Parser};
-use tracing::warn;
 
-use std::collections::HashMap;
 use std::path::Path;
 
-use super::{Chunk, ChunkerConfig, Chunker};
+use super::{Chunk, Chunker, ChunkerConfig};
 use cascade_types::error::Result;
 
 // ── async pipeline types (always compiled) ───────────────────────────────────
 
 use async_trait::async_trait;
 use cascade_types::{
-    chunker::{
-        Chunk as TypesChunk, ChunkOpts, Chunker as TypesChunker, Document,
-    },
+    chunker::{Chunk as TypesChunk, ChunkOpts, Chunker as TypesChunker, Document},
     error::Result as TypesResult,
 };
 
@@ -214,10 +211,7 @@ fn get_ts_language(lang: SourceLanguage) -> Language {
 #[cfg(feature = "code-chunker")]
 fn is_chunk_node(kind: &str, lang: SourceLanguage) -> bool {
     match lang {
-        SourceLanguage::Rust => matches!(
-            kind,
-            "function_item" | "impl_item"
-        ),
+        SourceLanguage::Rust => matches!(kind, "function_item" | "impl_item"),
         SourceLanguage::TypeScript | SourceLanguage::JavaScript => matches!(
             kind,
             "function_declaration"
@@ -374,7 +368,11 @@ fn ts_chunk(
             if !preamble_lines.is_empty() {
                 let first_line = preamble_lines[0].0;
                 let last_line = preamble_lines.last().unwrap().0;
-                let preamble_text = preamble_lines.iter().map(|(_, l)| *l).collect::<Vec<_>>().join("\n");
+                let preamble_text = preamble_lines
+                    .iter()
+                    .map(|(_, l)| *l)
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 if preamble_text.len() >= config.min_chunk_chars {
                     let mut meta = HashMap::new();
                     meta.insert("language".to_owned(), lang.as_str().to_owned());
@@ -393,7 +391,10 @@ fn ts_chunk(
                         parent_chunk_id: None,
                         heading_path: Some(format!(
                             "{} > preamble",
-                            source_path.file_name().and_then(|n| n.to_str()).unwrap_or("file")
+                            source_path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("file")
                         )),
                         metadata: meta,
                     });
@@ -478,7 +479,11 @@ fn ts_chunk(
     if !preamble_lines.is_empty() {
         let first_line = preamble_lines[0].0;
         let last_line = preamble_lines.last().unwrap().0;
-        let preamble_text = preamble_lines.iter().map(|(_, l)| *l).collect::<Vec<_>>().join("\n");
+        let preamble_text = preamble_lines
+            .iter()
+            .map(|(_, l)| *l)
+            .collect::<Vec<_>>()
+            .join("\n");
         if preamble_text.len() >= config.min_chunk_chars {
             let mut meta = HashMap::new();
             meta.insert("language".to_owned(), lang.as_str().to_owned());
@@ -497,7 +502,10 @@ fn ts_chunk(
                 parent_chunk_id: None,
                 heading_path: Some(format!(
                     "{} > preamble",
-                    source_path.file_name().and_then(|n| n.to_str()).unwrap_or("file")
+                    source_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file")
                 )),
                 metadata: meta,
             });
@@ -539,7 +547,16 @@ fn split_oversized(
             let node_text = child.utf8_text(src).unwrap_or("").to_owned();
             if node_text.len() > config.max_chunk_chars {
                 // Recurse deeper.
-                let sub = split_oversized(child, src, source_path, full_text, lang, config, &heading, idx);
+                let sub = split_oversized(
+                    child,
+                    src,
+                    source_path,
+                    full_text,
+                    lang,
+                    config,
+                    &heading,
+                    idx,
+                );
                 idx += sub.len();
                 result.extend(sub);
             } else {
@@ -599,6 +616,7 @@ fn split_oversized(
 }
 
 /// Convert a 0-based line number to a byte offset in `text`.
+#[cfg(feature = "code-chunker")]
 fn byte_offset_for_line(text: &str, line: usize) -> usize {
     text.lines()
         .take(line)
@@ -671,10 +689,7 @@ async fn async_chunk_impl(doc: &Document, opts: &ChunkOpts) -> TypesResult<Vec<T
                                 e.insert(k.clone(), serde_json::Value::String(v.clone()));
                             }
                             if let Some(hp) = c.heading_path {
-                                e.insert(
-                                    "heading_path".to_owned(),
-                                    serde_json::Value::String(hp),
-                                );
+                                e.insert("heading_path".to_owned(), serde_json::Value::String(hp));
                             }
                             e
                         },
@@ -743,21 +758,38 @@ fn mul(a: i32, b: i32) -> i32 { a * b }
             .iter()
             .filter(|c| c.metadata.get("kind").map(|s| s.as_str()) == Some("fn"))
             .collect();
-        assert_eq!(fn_chunks.len(), 3, "expected 3 fn chunks, got {}", fn_chunks.len());
+        assert_eq!(
+            fn_chunks.len(),
+            3,
+            "expected 3 fn chunks, got {}",
+            fn_chunks.len()
+        );
 
         // Heading path contains function name.
         assert!(
-            fn_chunks[0].heading_path.as_deref().unwrap_or("").contains("add"),
+            fn_chunks[0]
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("add"),
             "heading_path missing 'add': {:?}",
             fn_chunks[0].heading_path
         );
         assert!(
-            fn_chunks[1].heading_path.as_deref().unwrap_or("").contains("sub"),
+            fn_chunks[1]
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("sub"),
             "heading_path missing 'sub': {:?}",
             fn_chunks[1].heading_path
         );
         assert!(
-            fn_chunks[2].heading_path.as_deref().unwrap_or("").contains("mul"),
+            fn_chunks[2]
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("mul"),
             "heading_path missing 'mul': {:?}",
             fn_chunks[2].heading_path
         );
@@ -773,7 +805,11 @@ fn mul(a: i32, b: i32) -> i32 { a * b }
             .find(|c| c.heading_path.as_deref().unwrap_or("").contains("foo"))
             .expect("fn foo chunk");
         // "fn foo()" is on line 3 (1-based).
-        assert_eq!(foo.line_start, 3, "expected line_start=3, got {}", foo.line_start);
+        assert_eq!(
+            foo.line_start, 3,
+            "expected line_start=3, got {}",
+            foo.line_start
+        );
     }
 
     #[test]
@@ -812,7 +848,11 @@ impl Foo {
             })
             .expect("impl chunk");
         assert!(
-            impl_chunk.heading_path.as_deref().unwrap_or("").contains("Foo"),
+            impl_chunk
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("Foo"),
             "impl heading_path missing 'Foo': {:?}",
             impl_chunk.heading_path
         );
@@ -845,7 +885,11 @@ function helper(x: number): number {
             })
             .expect("class chunk");
         assert!(
-            class_chunk.heading_path.as_deref().unwrap_or("").contains("Greeter"),
+            class_chunk
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("Greeter"),
             "class chunk missing 'Greeter': {:?}",
             class_chunk.heading_path
         );
@@ -881,14 +925,23 @@ def standalone(x):
             .find(|c| c.heading_path.as_deref().unwrap_or("").contains("Dog"))
             .expect("class Dog chunk");
         assert!(
-            class_chunk.heading_path.as_deref().unwrap_or("").contains("Dog"),
+            class_chunk
+                .heading_path
+                .as_deref()
+                .unwrap_or("")
+                .contains("Dog"),
             "missing 'Dog' in heading_path: {:?}",
             class_chunk.heading_path
         );
 
         let standalone = chunks
             .iter()
-            .find(|c| c.heading_path.as_deref().unwrap_or("").contains("standalone"))
+            .find(|c| {
+                c.heading_path
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("standalone")
+            })
             .expect("standalone fn chunk");
         assert!(standalone.line_start > 1);
     }
@@ -912,13 +965,15 @@ function cube(x) {
         let fn_chunks: Vec<_> = chunks
             .iter()
             .filter(|c| {
-                c.heading_path
-                    .as_deref()
-                    .unwrap_or("")
-                    .contains("square") || c.heading_path.as_deref().unwrap_or("").contains("cube")
+                c.heading_path.as_deref().unwrap_or("").contains("square")
+                    || c.heading_path.as_deref().unwrap_or("").contains("cube")
             })
             .collect();
-        assert_eq!(fn_chunks.len(), 2, "expected 2 js fn chunks, got {fn_chunks:?}");
+        assert_eq!(
+            fn_chunks.len(),
+            2,
+            "expected 2 js fn chunks, got {fn_chunks:?}"
+        );
     }
 
     // ── Oversize split ────────────────────────────────────────────────────────

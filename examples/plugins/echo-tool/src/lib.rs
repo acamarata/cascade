@@ -35,7 +35,7 @@
 //
 // `PluginError`     — returned from `on_tool_call()` on plugin-level failure.
 //                     Use `ToolResult { is_error: true }` for tool-logic errors.
-use cascade_pdk::{cascade_plugin, Plugin, PluginKind, ToolCall, ToolResult, PluginError};
+use cascade_pdk::{cascade_plugin, Plugin, PluginError, PluginKind, ToolCall, ToolResult};
 
 // --- Plugin struct ------------------------------------------------------------
 //

@@ -359,11 +359,12 @@ impl SamplingHandler {
         const MAX_ATTEMPTS: u8 = 2;
         const RETRY_DELAY_SECS: u64 = 5;
 
-        let adapter = self.registry.get(provider_id).ok_or_else(|| {
-            McpServerError::Internal {
+        let adapter = self
+            .registry
+            .get(provider_id)
+            .ok_or_else(|| McpServerError::Internal {
                 detail: format!("provider '{}' disappeared from registry", provider_id),
-            }
-        })?;
+            })?;
 
         let mut attempt = 0u8;
         loop {
@@ -428,12 +429,11 @@ impl McpHandler for SamplingHandler {
         );
 
         // ── 3. Select provider ────────────────────────────────────────────────
-        let provider_id =
-            self.select_provider_id(&req.model_preferences)
-                .ok_or_else(|| McpServerError::Internal {
-                    detail: "no AI provider configured; connect a provider in Cascade settings"
-                        .into(),
-                })?;
+        let provider_id = self
+            .select_provider_id(&req.model_preferences)
+            .ok_or_else(|| McpServerError::Internal {
+                detail: "no AI provider configured; connect a provider in Cascade settings".into(),
+            })?;
 
         debug!(provider = %provider_id, "sampling: selected provider");
 
@@ -593,8 +593,14 @@ mod tests {
 
     fn registry_with(id: &'static str, text: &'static str) -> Arc<ProviderRegistry> {
         let r = Arc::new(ProviderRegistry::new());
-        r.register(id.into(), Arc::new(MockCompleteProvider { id, response_text: text }))
-            .expect("register mock provider");
+        r.register(
+            id.into(),
+            Arc::new(MockCompleteProvider {
+                id,
+                response_text: text,
+            }),
+        )
+        .expect("register mock provider");
         r
     }
 
@@ -752,7 +758,11 @@ mod tests {
         let mapped = SamplingHandler::map_messages(&msgs);
         assert_eq!(mapped[0].role, MessageRole::User);
         assert_eq!(mapped[1].role, MessageRole::Assistant);
-        assert_eq!(mapped[2].role, MessageRole::User, "unknown role defaults to User");
+        assert_eq!(
+            mapped[2].role,
+            MessageRole::User,
+            "unknown role defaults to User"
+        );
     }
 
     /// Rate-limited provider: after 2 attempts (with instant mock) returns Internal.

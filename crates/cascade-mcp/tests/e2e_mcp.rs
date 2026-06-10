@@ -77,17 +77,26 @@ async fn do_handshake(
     req_id: i64,
 ) -> serde_json::Value {
     // Send initialize request.
-    writer.write_all(init_msg(req_id).as_bytes()).await.expect("write init");
+    writer
+        .write_all(init_msg(req_id).as_bytes())
+        .await
+        .expect("write init");
     writer.write_all(b"\n").await.expect("write newline");
     writer.flush().await.expect("flush init");
 
     // Read initialize response.
     let mut line = String::new();
-    reader.read_line(&mut line).await.expect("read init response");
+    reader
+        .read_line(&mut line)
+        .await
+        .expect("read init response");
     let val: serde_json::Value = serde_json::from_str(line.trim()).expect("parse init response");
 
     // Send initialized notification (transitions server to Ready).
-    writer.write_all(initialized_notif().as_bytes()).await.expect("write initialized");
+    writer
+        .write_all(initialized_notif().as_bytes())
+        .await
+        .expect("write initialized");
     writer.write_all(b"\n").await.expect("write newline");
     writer.flush().await.expect("flush initialized");
 
@@ -105,7 +114,10 @@ async fn rpc(
     writer.flush().await.expect("flush rpc");
 
     let mut line = String::new();
-    reader.read_line(&mut line).await.expect("read rpc response");
+    reader
+        .read_line(&mut line)
+        .await
+        .expect("read rpc response");
     serde_json::from_str(line.trim()).expect("parse rpc response")
 }
 
@@ -123,7 +135,10 @@ async fn spawn_channel_server() -> (
     let (client_tx, server_rx) = tokio::sync::mpsc::channel::<String>(64);
     let (server_tx, client_rx) = tokio::sync::mpsc::channel::<String>(64);
 
-    let transport = ChannelTransportPub { recv: server_rx, send: server_tx };
+    let transport = ChannelTransportPub {
+        recv: server_rx,
+        send: server_tx,
+    };
     let server = McpServer::new(McpServerConfig::default(), Box::new(transport));
     let handle = tokio::task::spawn_local(server.run());
     (client_tx, client_rx, handle)
@@ -138,7 +153,9 @@ async fn channel_handshake(
     let resp = rx.recv().await.expect("recv init");
     let val: serde_json::Value = serde_json::from_str(&resp).expect("parse init");
 
-    tx.send(initialized_notif().to_owned()).await.expect("send initialized");
+    tx.send(initialized_notif().to_owned())
+        .await
+        .expect("send initialized");
     // Give the server a tick to process the notification.
     tokio::time::sleep(Duration::from_millis(5)).await;
     val
@@ -172,13 +189,18 @@ async fn unix_transport_lifecycle() {
             });
 
             // Client side.
-            let stream = UnixStream::connect(&sock_path2).await.expect("connect unix");
+            let stream = UnixStream::connect(&sock_path2)
+                .await
+                .expect("connect unix");
             let (read_half, mut write_half) = tokio::io::split(stream);
             let mut reader = BufReader::new(read_half);
 
             let init_resp = do_handshake(&mut write_half, &mut reader, 1).await;
             assert_eq!(init_resp["jsonrpc"], "2.0", "jsonrpc field");
-            assert!(init_resp.get("result").is_some(), "initialize must return result: {init_resp}");
+            assert!(
+                init_resp.get("result").is_some(),
+                "initialize must return result: {init_resp}"
+            );
             assert_eq!(init_resp["result"]["protocolVersion"], PROTO_VERSION);
 
             // resources/list
@@ -188,7 +210,10 @@ async fn unix_transport_lifecycle() {
                 r#"{"jsonrpc":"2.0","id":2,"method":"resources/list","params":{}}"#,
             )
             .await;
-            assert!(resources_resp.get("result").is_some(), "resources/list must return result: {resources_resp}");
+            assert!(
+                resources_resp.get("result").is_some(),
+                "resources/list must return result: {resources_resp}"
+            );
 
             // shutdown
             let shutdown_resp = rpc(
@@ -251,7 +276,10 @@ async fn tcp_transport_lifecycle() {
                 r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
             )
             .await;
-            assert!(tools_resp.get("result").is_some(), "tools/list must return result: {tools_resp}");
+            assert!(
+                tools_resp.get("result").is_some(),
+                "tools/list must return result: {tools_resp}"
+            );
 
             // graceful shutdown
             let shutdown_resp = rpc(
@@ -366,8 +394,13 @@ async fn resources_list_returns_cascade_uris() {
             let resp = rx.recv().await.expect("recv resources/list");
             let val: serde_json::Value = serde_json::from_str(&resp).expect("parse");
 
-            assert!(val.get("result").is_some(), "resources/list must return result: {val}");
-            let resources = val["result"]["resources"].as_array().expect("resources array");
+            assert!(
+                val.get("result").is_some(),
+                "resources/list must return result: {val}"
+            );
+            let resources = val["result"]["resources"]
+                .as_array()
+                .expect("resources array");
             let uris: Vec<&str> = resources
                 .iter()
                 .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
@@ -435,10 +468,18 @@ async fn tools_list_returns_8_tools() {
             let resp = rx.recv().await.expect("recv tools/list");
             let val: serde_json::Value = serde_json::from_str(&resp).expect("parse");
 
-            assert!(val.get("result").is_some(), "tools/list must return result: {val}");
+            assert!(
+                val.get("result").is_some(),
+                "tools/list must return result: {val}"
+            );
             let tools = val["result"]["tools"].as_array().expect("tools array");
             // 9 tools: 8 original + cascade.context_slice (T-P4-E04-22)
-            assert_eq!(tools.len(), 9, "expected exactly 9 tools, got {}", tools.len());
+            assert_eq!(
+                tools.len(),
+                9,
+                "expected exactly 9 tools, got {}",
+                tools.len()
+            );
 
             let names: Vec<&str> = tools
                 .iter()
@@ -455,7 +496,10 @@ async fn tools_list_returns_8_tools() {
                 "cascade.memory.write",
                 "cascade.context_slice",
             ] {
-                assert!(names.contains(expected), "missing tool '{expected}'; got: {names:?}");
+                assert!(
+                    names.contains(expected),
+                    "missing tool '{expected}'; got: {names:?}"
+                );
             }
         })
         .await;
@@ -515,7 +559,7 @@ async fn prompts_get_cascade_context() {
             if let Some(result) = val.get("result") {
                 let messages = result.get("messages").and_then(|m| m.as_array());
                 assert!(
-                    messages.map_or(false, |m| !m.is_empty()),
+                    messages.is_some_and(|m| !m.is_empty()),
                     "prompts/get result must contain at least one message: {val}"
                 );
             }
@@ -576,7 +620,12 @@ async fn unix_invalid_token_rejected() {
     let bus = NotificationBus::new();
     let config = McpServerConfig::default();
 
-    let server = UnixServer::new(Some(sock_path.clone().into()), Arc::clone(&auth), config, bus);
+    let server = UnixServer::new(
+        Some(sock_path.clone().into()),
+        Arc::clone(&auth),
+        config,
+        bus,
+    );
 
     let local = LocalSet::new();
     local
@@ -596,7 +645,10 @@ async fn unix_invalid_token_rejected() {
 
             let bad_auth =
                 r#"{"jsonrpc":"2.0","method":"auth","params":{"token":"cascade-mcp-INVALID"}}"#;
-            write_half.write_all(bad_auth.as_bytes()).await.expect("write bad auth");
+            write_half
+                .write_all(bad_auth.as_bytes())
+                .await
+                .expect("write bad auth");
             write_half.write_all(b"\n").await.expect("newline");
             write_half.flush().await.expect("flush");
 
@@ -611,7 +663,10 @@ async fn unix_invalid_token_rejected() {
                 // Got a response — must be an error.
                 let val: serde_json::Value =
                     serde_json::from_str(line.trim()).expect("parse auth error");
-                assert!(val.get("error").is_some(), "bad token must return error: {val}");
+                assert!(
+                    val.get("error").is_some(),
+                    "bad token must return error: {val}"
+                );
                 let code = val["error"]["code"].as_i64().unwrap_or(0);
                 assert_ne!(code, 0, "error code must be non-zero: {val}");
             }
@@ -705,15 +760,16 @@ async fn unknown_method_returns_method_not_found() {
             let (tx, mut rx, _handle) = spawn_channel_server().await;
             channel_handshake(&tx, &mut rx).await;
 
-            tx.send(
-                r#"{"jsonrpc":"2.0","id":11,"method":"unknown/method","params":{}}"#.into(),
-            )
-            .await
-            .expect("send");
+            tx.send(r#"{"jsonrpc":"2.0","id":11,"method":"unknown/method","params":{}}"#.into())
+                .await
+                .expect("send");
             let resp = rx.recv().await.expect("recv");
             let val: serde_json::Value = serde_json::from_str(&resp).expect("parse");
 
-            assert!(val.get("error").is_some(), "unknown method must return error: {val}");
+            assert!(
+                val.get("error").is_some(),
+                "unknown method must return error: {val}"
+            );
             // The server wraps all handle_request errors via JsonRpcError::internal,
             // so the wire code is -32603. The original -32601 is in the message string.
             let msg = val["error"]["message"].as_str().unwrap_or("");
@@ -735,7 +791,10 @@ async fn initialize_before_ready_required() {
             // Do NOT send initialize — send resources/list directly.
             let (in_tx, in_rx) = tokio::sync::mpsc::channel::<String>(64);
             let (out_tx, mut out_rx) = tokio::sync::mpsc::channel::<String>(64);
-            let transport = ChannelTransportPub { recv: in_rx, send: out_tx };
+            let transport = ChannelTransportPub {
+                recv: in_rx,
+                send: out_tx,
+            };
             let server = McpServer::new(McpServerConfig::default(), Box::new(transport));
             tokio::task::spawn_local(server.run());
 
@@ -768,10 +827,15 @@ async fn double_initialize_rejected() {
             tx.send(init_msg(1)).await.expect("send first init");
             let resp1 = rx.recv().await.expect("recv first init");
             let val1: serde_json::Value = serde_json::from_str(&resp1).expect("parse");
-            assert!(val1.get("result").is_some(), "first initialize must succeed: {val1}");
+            assert!(
+                val1.get("result").is_some(),
+                "first initialize must succeed: {val1}"
+            );
 
             // Transition to Ready.
-            tx.send(initialized_notif().to_owned()).await.expect("send initialized");
+            tx.send(initialized_notif().to_owned())
+                .await
+                .expect("send initialized");
             tokio::time::sleep(Duration::from_millis(5)).await;
 
             // Second initialize — must fail.
@@ -817,25 +881,41 @@ async fn malformed_frame_does_not_kill_server() {
             let mut reader = BufReader::new(read_half);
 
             // Send malformed JSON.
-            write_half.write_all(b"THIS IS NOT JSON\n").await.expect("write bad");
+            write_half
+                .write_all(b"THIS IS NOT JSON\n")
+                .await
+                .expect("write bad");
             write_half.flush().await.expect("flush");
 
             // Server must respond with a parse error, not crash.
             let mut line = String::new();
             reader.read_line(&mut line).await.expect("read response");
-            let val: serde_json::Value = serde_json::from_str(line.trim()).expect("parse error response");
+            let val: serde_json::Value =
+                serde_json::from_str(line.trim()).expect("parse error response");
 
-            assert!(val.get("error").is_some(), "malformed frame must return error: {val}");
+            assert!(
+                val.get("error").is_some(),
+                "malformed frame must return error: {val}"
+            );
             let code = val["error"]["code"].as_i64().unwrap_or(0);
-            assert_eq!(code, -32700, "malformed frame must return parse error -32700: {val}");
+            assert_eq!(
+                code, -32700,
+                "malformed frame must return parse error -32700: {val}"
+            );
 
             // Send a valid initialize — server should still respond (not be dead).
-            write_half.write_all(init_msg(1).as_bytes()).await.expect("write init");
+            write_half
+                .write_all(init_msg(1).as_bytes())
+                .await
+                .expect("write init");
             write_half.write_all(b"\n").await.expect("newline");
             write_half.flush().await.expect("flush");
 
             let mut init_line = String::new();
-            reader.read_line(&mut init_line).await.expect("read init response");
+            reader
+                .read_line(&mut init_line)
+                .await
+                .expect("read init response");
             let init_val: serde_json::Value =
                 serde_json::from_str(init_line.trim()).expect("parse init response");
             // Server stayed alive — either result or error is fine.

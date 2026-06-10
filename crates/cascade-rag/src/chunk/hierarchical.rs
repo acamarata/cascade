@@ -29,15 +29,13 @@ use std::path::Path;
 use tracing::debug;
 
 use cascade_types::{
-    chunker::{
-        Chunk as TypesChunk, ChunkMetadata, ChunkOpts, Chunker as TypesChunker, Document,
-    },
+    chunker::{Chunk as TypesChunk, ChunkMetadata, ChunkOpts, Chunker as TypesChunker, Document},
     error::Result,
 };
 use serde_json::json;
 
-use super::{Chunk, ChunkerConfig, Chunker};
 use super::semantic::SemanticChunker;
+use super::{Chunk, Chunker, ChunkerConfig};
 
 // ── Parent-size multiplier ────────────────────────────────────────────────────
 
@@ -227,8 +225,7 @@ impl Chunker for HierarchicalChunker {
 
         debug!(
             section_count = sections.len(),
-            max_parent,
-            "hierarchical: split sections"
+            max_parent, "hierarchical: split sections"
         );
 
         let inner = SemanticChunker::with_config(self.config.clone());
@@ -250,8 +247,11 @@ impl Chunker for HierarchicalChunker {
             let parent_byte_start = section.byte_start;
             let parent_byte_end = parent_byte_start + parent_text.len();
 
-            let parent_line_start =
-                text[..parent_byte_start].bytes().filter(|&b| b == b'\n').count() + 1;
+            let parent_line_start = text[..parent_byte_start]
+                .bytes()
+                .filter(|&b| b == b'\n')
+                .count()
+                + 1;
             let parent_line_end = text[..parent_byte_end.min(text.len())]
                 .bytes()
                 .filter(|&b| b == b'\n')
@@ -416,7 +416,10 @@ mod tests {
             .collect();
 
         assert_eq!(parents.len(), 1, "one parent");
-        assert!(!children.is_empty(), "children expected for oversize section");
+        assert!(
+            !children.is_empty(),
+            "children expected for oversize section"
+        );
 
         let parent_idx = parents[0].chunk_index;
         for child in &children {
@@ -437,11 +440,9 @@ mod tests {
 
     #[test]
     fn subsection_heading_detected() {
-        let text =
-            "# Level 1\n\nIntro paragraph.\n\n## Level 2\n\nSubsection content here.";
+        let text = "# Level 1\n\nIntro paragraph.\n\n## Level 2\n\nSubsection content here.";
         let chunks = Chunker::chunk(&chunker(2000), &path(), text).unwrap();
-        let paths: Vec<Option<&str>> =
-            chunks.iter().map(|c| c.heading_path.as_deref()).collect();
+        let paths: Vec<Option<&str>> = chunks.iter().map(|c| c.heading_path.as_deref()).collect();
         assert!(paths.contains(&Some("# Level 1")), "# heading not found");
         assert!(paths.contains(&Some("## Level 2")), "## heading not found");
     }
@@ -500,12 +501,10 @@ mod tests {
     #[test]
     fn chunk_index_monotonic() {
         let long_content = "Word sentence fragment here. ".repeat(60);
-        let text = format!(
-            "# A\n\n{long_content}\n\n# B\n\nShort.\n\n# C\n\n{long_content}"
-        );
+        let text = format!("# A\n\n{long_content}\n\n# B\n\nShort.\n\n# C\n\n{long_content}");
         let chunks = Chunker::chunk(&chunker(200), &path(), &text).unwrap();
-        for i in 0..chunks.len() {
-            assert_eq!(chunks[i].chunk_index, i, "chunk_index[{i}] must equal {i}");
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(chunk.chunk_index, i, "chunk_index[{i}] must equal {i}");
         }
     }
 

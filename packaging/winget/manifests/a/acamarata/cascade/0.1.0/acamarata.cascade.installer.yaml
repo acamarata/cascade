@@ -1,0 +1,18 @@
+PackageIdentifier: acamarata.cascade
+PackageVersion: 0.1.0
+MinimumOSVersion: 10.0.18362.0
+InstallerType: msi
+Scope: machine
+InstallModes:
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /qn /norestart
+  SilentWithProgress: /qn /norestart
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/acamarata/cascade/releases/download/v0.1.0/cascade_0.1.0_windows_x64.msi
+    InstallerSha256: PLACEHOLDER_UPDATED_BY_CI
+ManifestType: installer
+ManifestVersion: 1.6.0

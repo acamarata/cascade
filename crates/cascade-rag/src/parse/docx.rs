@@ -68,10 +68,7 @@ pub struct DocxParser;
 
 impl DocumentParser for DocxParser {
     fn can_parse(&self, path: &Path) -> bool {
-        matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("docx")
-        )
+        matches!(path.extension().and_then(|e| e.to_str()), Some("docx"))
     }
 
     fn parse(&self, path: &Path) -> Result<DocumentText> {
@@ -110,11 +107,7 @@ impl DocumentParser for DocxParser {
             .iter()
             .find(|p| !p.trim().is_empty())
             .cloned()
-            .or_else(|| {
-                path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(String::from)
-            });
+            .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(String::from));
 
         // Core-property metadata (author, created).
         // docx-rs CoreProps/CustomProps expose their fields only via builder

@@ -11,6 +11,7 @@
 //!   - Non-recursive scan (one directory level only).
 //!   - Symlinks inside the plugins dir are NOT followed (prevents path-traversal).
 //!   - Tracing spans are emitted per plugin attempt (`plugin_id` field populated).
+//!
 //! SPORT: cascade-plugins / loader layer (T-P4-E03-07)
 
 use std::path::{Path, PathBuf};
@@ -190,13 +191,12 @@ impl PluginLoader {
             });
         }
 
-        let manifest =
-            PluginJsonManifest::load(&manifest_path).map_err(|e: ManifestError| {
-                PluginLoadError::ManifestInvalid {
-                    dir: plugin_dir.to_owned(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let manifest = PluginJsonManifest::load(&manifest_path).map_err(|e: ManifestError| {
+            PluginLoadError::ManifestInvalid {
+                dir: plugin_dir.to_owned(),
+                reason: e.to_string(),
+            }
+        })?;
 
         // 3. Resolve WASM path (entry_wasm must be relative per manifest validation).
         let wasm_path = plugin_dir.join(&manifest.entry_wasm);
@@ -212,14 +212,19 @@ impl PluginLoader {
 
         // 5. Compile via sandbox.  Map PluginJsonManifest.kind -> PluginType for resource limits.
         let plugin_type = kind_to_type(manifest.kind);
-        let sandbox = PluginSandbox::new(plugin_type)
-            .map_err(|e| PluginLoadError::SandboxError {
+        let sandbox =
+            PluginSandbox::new(plugin_type).map_err(|e| PluginLoadError::SandboxError {
                 id: manifest.id.clone(),
                 reason: e.to_string(),
             })?;
 
         let loaded = sandbox
-            .load_with_permissions(&wasm_bytes, &manifest.id, manifest.permissions.clone(), None)
+            .load_with_permissions(
+                &wasm_bytes,
+                &manifest.id,
+                manifest.permissions.clone(),
+                None,
+            )
             .map_err(|e| PluginLoadError::SandboxError {
                 id: manifest.id.clone(),
                 reason: e.to_string(),
@@ -289,11 +294,7 @@ mod tests {
     fn make_valid_plugin(dir: &Path, id: &str) {
         let plugin_dir = dir.join(id);
         fs::create_dir_all(&plugin_dir).unwrap();
-        fs::write(
-            plugin_dir.join("plugin.json"),
-            valid_manifest_json(id),
-        )
-        .unwrap();
+        fs::write(plugin_dir.join("plugin.json"), valid_manifest_json(id)).unwrap();
         write_minimal_wasm(&plugin_dir.join(format!("{id}.wasm")));
     }
 
@@ -309,7 +310,10 @@ mod tests {
     fn scan_nonexistent_dir_returns_empty() {
         let (loaded, errors) = PluginLoader::scan(Path::new("/tmp/__cascade_no_such_dir_xyz__"));
         assert!(loaded.is_empty());
-        assert!(errors.is_empty(), "non-existent dir should not produce errors");
+        assert!(
+            errors.is_empty(),
+            "non-existent dir should not produce errors"
+        );
     }
 
     #[test]
@@ -325,7 +329,16 @@ mod tests {
 
         let (loaded, errors) = PluginLoader::scan(tmp.path());
 
-        assert_eq!(loaded.len(), 2, "should load 2 valid plugins (errors: {})", errors.iter().map(|e| e.to_string()).collect::<Vec<_>>().join(", "));
+        assert_eq!(
+            loaded.len(),
+            2,
+            "should load 2 valid plugins (errors: {})",
+            errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
         assert_eq!(errors.len(), 1, "should report 1 error; errors: {errors:?}");
 
         // The error for the missing manifest must be ManifestNotFound.
@@ -346,7 +359,10 @@ mod tests {
 
         assert!(loaded.is_empty());
         assert_eq!(errors.len(), 1);
-        assert!(matches!(errors[0], PluginLoadError::ManifestNotFound { .. }));
+        assert!(matches!(
+            errors[0],
+            PluginLoadError::ManifestNotFound { .. }
+        ));
     }
 
     #[test]
@@ -354,7 +370,11 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let plugin_dir = tmp.path().join("com.example.disabled-plugin");
         fs::create_dir_all(&plugin_dir).unwrap();
-        fs::write(plugin_dir.join("plugin.json"), valid_manifest_json("com.example.disabled-plugin")).unwrap();
+        fs::write(
+            plugin_dir.join("plugin.json"),
+            valid_manifest_json("com.example.disabled-plugin"),
+        )
+        .unwrap();
         write_minimal_wasm(&plugin_dir.join("com.example.disabled-plugin.wasm"));
         // Place the disable marker.
         fs::write(plugin_dir.join(".disabled"), "").unwrap();

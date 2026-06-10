@@ -111,8 +111,13 @@ mod tests {
     async fn jina_provider_embed_returns_err() {
         use cascade_types::error::CascadeError;
         let p = JinaProvider::new();
-        let result = p.embed(&["hello"], &cascade_types::EmbedOpts::default()).await;
+        let result = p
+            .embed(&["hello"], &cascade_types::EmbedOpts::default())
+            .await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CascadeError::EmbeddingFailed { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            CascadeError::EmbeddingFailed { .. }
+        ));
     }
 }

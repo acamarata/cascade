@@ -1,0 +1,35 @@
+name: cascade
+base: core22
+version: '1.0.0'
+summary: Unified AI instruction cascade manager
+description: |
+  Cascade consolidates AI tool instruction files (CLAUDE.md, AGENTS.md, .cursorrules)
+  into a single tiered hierarchy that every tool reads automatically.
+
+  Write your rules once at the right scope and every AI coding agent picks them up
+  consistently. Includes the cascaded background daemon and cascade CLI.
+
+  Note: classic confinement is required for the file watcher to monitor your entire
+  home directory for CASCADE.md files across project roots.
+
+grade: stable
+confinement: classic
+
+parts:
+  cascade-cli:
+    plugin: dump
+    source: https://github.com/acamarata/cascade/releases/download/v1.0.0/cascade_1.0.0_linux_x86_64.tar.gz
+    source-type: tar
+    stage:
+      - cascade
+      - cascaded
+
+apps:
+  cascade:
+    command: cascade
+
+  cascaded:
+    command: cascaded
+    daemon: simple
+    restart-condition: on-failure
+    restart-delay: 5s

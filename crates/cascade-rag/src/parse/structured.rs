@@ -150,10 +150,7 @@ impl DocumentParser for YamlParser {
         let json_val = yaml_to_json(yaml_val);
         let text = flatten_value("", &json_val, 0);
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
 
         Ok(DocumentText {
             source_path: path.to_path_buf(),
@@ -224,10 +221,7 @@ pub struct JsonParser;
 
 impl DocumentParser for JsonParser {
     fn can_parse(&self, path: &Path) -> bool {
-        matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("json")
-        )
+        matches!(path.extension().and_then(|e| e.to_str()), Some("json"))
     }
 
     fn parse(&self, path: &Path) -> Result<DocumentText> {
@@ -246,10 +240,7 @@ impl DocumentParser for JsonParser {
 
         let text = flatten_value("", &json_val, 0);
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
 
         Ok(DocumentText {
             source_path: path.to_path_buf(),
@@ -285,10 +276,7 @@ pub struct TomlParser;
 
 impl DocumentParser for TomlParser {
     fn can_parse(&self, path: &Path) -> bool {
-        matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("toml")
-        )
+        matches!(path.extension().and_then(|e| e.to_str()), Some("toml"))
     }
 
     fn parse(&self, path: &Path) -> Result<DocumentText> {
@@ -308,10 +296,7 @@ impl DocumentParser for TomlParser {
         let json_val = toml_to_json(toml_val);
         let text = flatten_value("", &json_val, 0);
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
 
         Ok(DocumentText {
             source_path: path.to_path_buf(),
@@ -422,8 +407,16 @@ mod tests {
         let parser = YamlParser;
         let doc = parser.parse(f.path()).expect("yaml parse");
         assert_eq!(doc.parser_name, "yaml");
-        assert!(doc.text.contains("database.host: localhost"), "got: {}", doc.text);
-        assert!(doc.text.contains("database.port: 5432"), "got: {}", doc.text);
+        assert!(
+            doc.text.contains("database.host: localhost"),
+            "got: {}",
+            doc.text
+        );
+        assert!(
+            doc.text.contains("database.port: 5432"),
+            "got: {}",
+            doc.text
+        );
         assert!(doc.text.contains("app.name: cascade"), "got: {}", doc.text);
     }
 
@@ -477,7 +470,11 @@ mod tests {
         let parser = JsonParser;
         let doc = parser.parse(f.path()).expect("json parse");
         assert_eq!(doc.parser_name, "json");
-        assert!(doc.text.contains("server.host: 0.0.0.0"), "got: {}", doc.text);
+        assert!(
+            doc.text.contains("server.host: 0.0.0.0"),
+            "got: {}",
+            doc.text
+        );
         assert!(doc.text.contains("server.port: 8080"), "got: {}", doc.text);
         assert!(doc.text.contains("debug: true"), "got: {}", doc.text);
     }
@@ -501,7 +498,10 @@ mod tests {
         let parser = JsonParser;
         let result = parser.parse(f.path());
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CascadeError::ParseFailed { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            CascadeError::ParseFailed { .. }
+        ));
     }
 
     /// can_parse returns true only for .json.
@@ -519,13 +519,24 @@ mod tests {
     #[test]
     fn toml_nested_flatten() {
         let mut f = NamedTempFile::with_suffix(".toml").unwrap();
-        write!(f, "[database]\nhost = \"localhost\"\nport = 5432\n\n[app]\nname = \"cascade\"\n")
-            .unwrap();
+        write!(
+            f,
+            "[database]\nhost = \"localhost\"\nport = 5432\n\n[app]\nname = \"cascade\"\n"
+        )
+        .unwrap();
         let parser = TomlParser;
         let doc = parser.parse(f.path()).expect("toml parse");
         assert_eq!(doc.parser_name, "toml");
-        assert!(doc.text.contains("database.host: localhost"), "got: {}", doc.text);
-        assert!(doc.text.contains("database.port: 5432"), "got: {}", doc.text);
+        assert!(
+            doc.text.contains("database.host: localhost"),
+            "got: {}",
+            doc.text
+        );
+        assert!(
+            doc.text.contains("database.port: 5432"),
+            "got: {}",
+            doc.text
+        );
         assert!(doc.text.contains("app.name: cascade"), "got: {}", doc.text);
     }
 
@@ -533,7 +544,7 @@ mod tests {
     #[test]
     fn toml_array_flatten() {
         let mut f = NamedTempFile::with_suffix(".toml").unwrap();
-        write!(f, "tags = [\"alpha\", \"beta\"]\n").unwrap();
+        writeln!(f, "tags = [\"alpha\", \"beta\"]").unwrap();
         let parser = TomlParser;
         let doc = parser.parse(f.path()).expect("toml parse");
         assert!(doc.text.contains("tags[0]: alpha"), "got: {}", doc.text);
@@ -548,7 +559,10 @@ mod tests {
         let parser = TomlParser;
         let result = parser.parse(f.path());
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CascadeError::ParseFailed { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            CascadeError::ParseFailed { .. }
+        ));
     }
 
     /// can_parse returns true only for .toml.
@@ -576,6 +590,8 @@ mod tests {
         write!(f, "{yaml}").unwrap();
         let parser = YamlParser;
         // Must not panic; output may be truncated at depth cap
-        let _doc = parser.parse(f.path()).expect("deep yaml should parse without panic");
+        let _doc = parser
+            .parse(f.path())
+            .expect("deep yaml should parse without panic");
     }
 }

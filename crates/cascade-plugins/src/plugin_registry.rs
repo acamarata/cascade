@@ -14,6 +14,7 @@
 //!     lock is held across the await boundary.
 //!   - `reload_plugin` uses `hot_reload::drain_arc_default` to wait for in-flight
 //!     calls before dropping the old plugin.
+//!
 //! SPORT: cascade-plugins / registry layer (T-P4-E03-09)
 
 use std::path::PathBuf;
@@ -211,13 +212,14 @@ impl PluginRegistry {
         };
 
         // Shard lock is released here; the call runs without holding any lock.
-        let result = plugin_arc
-            .call(func_name, args)
-            .await
-            .map_err(|e| PluginDispatchError::CallError {
-                id: id.to_owned(),
-                reason: e.to_string(),
-            })?;
+        let result =
+            plugin_arc
+                .call(func_name, args)
+                .await
+                .map_err(|e| PluginDispatchError::CallError {
+                    id: id.to_owned(),
+                    reason: e.to_string(),
+                })?;
 
         Ok(result)
     }
@@ -299,16 +301,32 @@ mod tests {
     }
 
     /// Create a complete plugin directory and return a `DiscoveredPlugin`.
-    fn make_and_load_plugin(plugins_dir: &std::path::Path, id: &str, kind: &str) -> DiscoveredPlugin {
+    fn make_and_load_plugin(
+        plugins_dir: &std::path::Path,
+        id: &str,
+        kind: &str,
+    ) -> DiscoveredPlugin {
         let plugin_dir = plugins_dir.join(id);
         fs::create_dir_all(&plugin_dir).unwrap();
-        fs::write(plugin_dir.join("plugin.json"), valid_manifest_json(id, kind)).unwrap();
+        fs::write(
+            plugin_dir.join("plugin.json"),
+            valid_manifest_json(id, kind),
+        )
+        .unwrap();
         write_minimal_wasm(&plugin_dir.join(format!("{id}.wasm")));
 
         let (mut loaded, errors) = PluginLoader::scan(plugins_dir);
-        assert!(errors.iter().all(|e| matches!(e, crate::loader::PluginLoadError::Disabled { .. })), "unexpected errors: {errors:?}");
+        assert!(
+            errors
+                .iter()
+                .all(|e| matches!(e, crate::loader::PluginLoadError::Disabled { .. })),
+            "unexpected errors: {errors:?}"
+        );
         // Find the one we just added.
-        let pos = loaded.iter().position(|d| d.manifest.id == id).expect("plugin not found");
+        let pos = loaded
+            .iter()
+            .position(|d| d.manifest.id == id)
+            .expect("plugin not found");
         loaded.swap_remove(pos)
     }
 
@@ -362,8 +380,13 @@ mod tests {
         // Both plugins export a trivial module (no exports), so calling a
         // non-existent export should return a MissingExport error — proving
         // dispatch reached the correct plugin and did not panic.
-        let result = registry.dispatch("com.example.one", "does_not_exist", &[]).await;
-        assert!(result.is_err(), "expected MissingExport error, got: {result:?}");
+        let result = registry
+            .dispatch("com.example.one", "does_not_exist", &[])
+            .await;
+        assert!(
+            result.is_err(),
+            "expected MissingExport error, got: {result:?}"
+        );
         let err_str = result.unwrap_err().to_string();
         assert!(
             err_str.contains("com.example.one"),

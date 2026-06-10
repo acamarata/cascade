@@ -263,11 +263,8 @@ mod doc_parser {
             let text = post_process(trimmed);
 
             // Title: prefer PDF metadata, fall back to filename stem.
-            let title = title_from_meta.or_else(|| {
-                path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(String::from)
-            });
+            let title = title_from_meta
+                .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(String::from));
 
             let mut metadata = HashMap::new();
             metadata.insert("page_count".to_string(), page_count.to_string());
@@ -310,9 +307,7 @@ mod doc_parser {
             let dict = info_obj.as_dict().ok()?;
             let title_obj = dict.get(b"Title").ok()?;
             let s = match title_obj {
-                pdf_extract::Object::String(bytes, _) => {
-                    String::from_utf8(bytes.clone()).ok()?
-                }
+                pdf_extract::Object::String(bytes, _) => String::from_utf8(bytes.clone()).ok()?,
                 _ => return None,
             };
             if s.trim().is_empty() {
@@ -462,7 +457,10 @@ mod doc_parser {
 
             // Minimal PDF whose content stream is empty.
             let stream = b"";
-            let obj4 = format!("4 0 obj\n<< /Length {} >>\nstream\n\nendstream\nendobj\n", stream.len());
+            let obj4 = format!(
+                "4 0 obj\n<< /Length {} >>\nstream\n\nendstream\nendobj\n",
+                stream.len()
+            );
             let header = b"%PDF-1.4\n";
             let obj1 = b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
             let obj2 = b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
@@ -480,7 +478,10 @@ mod doc_parser {
                 "xref\n0 6\n0000000000 65535 f \n{:010} 00000 n \n{:010} 00000 n \n{:010} 00000 n \n{:010} 00000 n \n{:010} 00000 n \n",
                 off1, off2, off3, off4, off5
             );
-            let trailer = format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off);
+            let trailer = format!(
+                "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+                xref_off
+            );
 
             let mut f = std::fs::File::create(&path).unwrap();
             f.write_all(header).unwrap();
@@ -507,7 +508,6 @@ mod doc_parser {
         /// T-P4-E01-17: A file that exceeds MAX_BYTES returns ParseFailed (size cap).
         #[test]
         fn size_cap_rejects_oversized_file() {
-
             // We cannot create a 50 MiB file in a unit test, so patch the logic
             // via a tiny fake that is 1 byte over the cap.
             // Instead, test by temporarily creating a stub approach: write a
@@ -525,8 +525,14 @@ mod doc_parser {
             let input = "hyphen-\nated word";
             let out = super::post_process(input);
             // The hyphen and newline are dropped; adjacent text is joined.
-            assert!(!out.contains("-\n"), "hyphen-newline must be removed; got: {out}");
-            assert!(out.contains("hyphenated"), "merged word must appear; got: {out}");
+            assert!(
+                !out.contains("-\n"),
+                "hyphen-newline must be removed; got: {out}"
+            );
+            assert!(
+                out.contains("hyphenated"),
+                "merged word must appear; got: {out}"
+            );
         }
 
         /// T-P4-E01-17: post_process normalises multiple spaces.

@@ -60,7 +60,10 @@ fn mcp_stdio_initialize_responds_within_2s() {
 
     // Read response with a 2-second deadline
     let response = read_line_timeout(stdout, Duration::from_secs(2));
-    assert!(response.is_some(), "server should respond to initialize within 2s");
+    assert!(
+        response.is_some(),
+        "server should respond to initialize within 2s"
+    );
 
     let response = response.unwrap();
     let val: serde_json::Value =
@@ -122,7 +125,10 @@ fn mcp_stdio_initialized_notification_accepted() {
 
     // Server should still be alive (not panicked/exited)
     let alive = child.try_wait().expect("try_wait").is_none();
-    assert!(alive, "server should still be running after initialized notification");
+    assert!(
+        alive,
+        "server should still be running after initialized notification"
+    );
 
     let _ = child.kill();
     let _ = child.wait();
@@ -131,12 +137,15 @@ fn mcp_stdio_initialized_notification_accepted() {
 // ── Utility ───────────────────────────────────────────────────────────────────
 
 /// Read one line from a reader, timing out after `timeout`.
-fn read_line_timeout(stdout: impl std::io::Read + Send + 'static, timeout: Duration) -> Option<String> {
+fn read_line_timeout(
+    stdout: impl std::io::Read + Send + 'static,
+    timeout: Duration,
+) -> Option<String> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             let trimmed = line.trim().to_owned();
             if !trimmed.is_empty() {
                 let _ = tx.send(trimmed);
@@ -150,17 +159,15 @@ fn read_line_timeout(stdout: impl std::io::Read + Send + 'static, timeout: Durat
 /// Find the `cascade` binary in the Cargo target directory.
 fn locate_cascade_binary() -> Option<std::path::PathBuf> {
     // Check CARGO_TARGET_DIR env or the standard locations
-    let target_dirs = [
-        std::env::var("CARGO_TARGET_DIR")
-            .map(|s| std::path::PathBuf::from(s))
-            .unwrap_or_else(|_| {
-                // Relative to this file's workspace root
-                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("..")
-                    .join("..")
-                    .join("target")
-            }),
-    ];
+    let target_dirs = [std::env::var("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            // Relative to this file's workspace root
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("..")
+                .join("target")
+        })];
 
     for base in &target_dirs {
         for profile in &["debug", "release"] {

@@ -45,15 +45,15 @@ pub mod rag_watcher;
 // T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)
 pub mod indexer;
 // T-P4-E01-29: IPC search endpoint (rag.* JSON-RPC methods)
-pub mod search_handler;
 pub mod regen;
+pub mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
-pub mod volume_watcher;
 pub mod shutdown;
 pub mod state;
 pub mod supervisor;
 pub mod telemetry;
 pub mod tray;
+pub mod volume_watcher;
 
 // T-P4-E04-12/13: delta bundle format, snapshot layout, Ed25519 verification
 pub mod updates;

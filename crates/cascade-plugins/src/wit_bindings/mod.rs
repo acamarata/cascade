@@ -23,18 +23,18 @@
 //! Constraints: all WIT records are `Serialize + Deserialize`; no raw pointers.
 //! SPORT: cascade-plugins / WIT bindings (T-P4-E03-05)
 
-pub mod chunker;
-pub mod retriever;
-pub mod provider;
 pub mod agent;
+pub mod chunker;
+pub mod provider;
+pub mod retriever;
 pub mod tool_integration;
 
 // Re-export all record types for ergonomic use by callers.
-pub use chunker::{Chunk, ChunkMeta, ChunkOpts, Document, ChunkerError};
+pub use agent::{AgentContext, AgentError, AgentResponse, ContextEntry, ToolCallRequest};
+pub use chunker::{Chunk, ChunkMeta, ChunkOpts, ChunkerError, Document};
+pub use provider::{EmbedOpts, Embedding, ProviderError};
 pub use retriever::{RetrievalResult, RetrieveOpts, RetrieverError};
-pub use provider::{Embedding, EmbedOpts, ProviderError};
-pub use agent::{AgentContext, ContextEntry, AgentResponse, ToolCallRequest, AgentError};
-pub use tool_integration::{ToolCall, ToolResult, ToolError};
+pub use tool_integration::{ToolCall, ToolError, ToolResult};
 
 use serde_json::Value;
 use thiserror::Error;
@@ -56,7 +56,7 @@ pub enum BindingError {
 /// Host functions exposed to WASM guests:
 /// - `cascade:plugins/host::log` — emit a tracing log line (info level)
 /// - `cascade:plugins/host::kv-get` — retrieve a named key from the plugin's
-///    scoped KV store (stub: always returns empty string in this release)
+///   scoped KV store (stub: always returns empty string in this release)
 /// - `cascade:plugins/host::kv-set` — store a named key (stub: no-op in P4)
 ///
 /// Net/HTTP fetch host functions are gated by manifest `net` permissions and
@@ -68,18 +68,13 @@ pub enum BindingError {
 /// ```wat
 /// (import "cascade:plugins/host" "log" (func ...))
 /// ```
-pub fn register_host_functions(
-    linker: &mut Linker<RuntimeStoreData>,
-) -> Result<(), BindingError> {
+pub fn register_host_functions(linker: &mut Linker<RuntimeStoreData>) -> Result<(), BindingError> {
     // ── log ──────────────────────────────────────────────────────────────────
     linker
         .func_wrap(
             "cascade:plugins/host",
             "log",
-            |_caller: wasmtime::Caller<'_, RuntimeStoreData>,
-             _level: i32,
-             _ptr: i32,
-             _len: i32| {
+            |_caller: wasmtime::Caller<'_, RuntimeStoreData>, _level: i32, _ptr: i32, _len: i32| {
                 // WHY: we don't read WASM memory here because this is a
                 // demonstration stub. Real implementation reads the UTF-8 string
                 // from linear memory using the Caller handle and emits via tracing.

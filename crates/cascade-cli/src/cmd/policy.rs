@@ -102,13 +102,12 @@ pub struct PolicyEvalArgs {
 #[async_trait]
 impl Command for PolicyEvalArgs {
     async fn run(&self) -> Result<()> {
-        let action: PolicyAction =
-            serde_json::from_str(&self.action).map_err(|e| {
-                CascadeError::Other(format!(
-                    "invalid --action JSON: {e}\n\
+        let action: PolicyAction = serde_json::from_str(&self.action).map_err(|e| {
+            CascadeError::Other(format!(
+                "invalid --action JSON: {e}\n\
                      Expected: {{\"action_type\":\"bash\",\"args\":{{\"cmd\":\"...\"}}}}",
-                ))
-            })?;
+            ))
+        })?;
 
         let result = if let Some(ref policy_path) = self.policy {
             // Evaluate against a single named policy file.
@@ -135,7 +134,10 @@ impl Command for PolicyEvalArgs {
 ///   `wasm-policy` feature.  Without that feature, returns an informative error.
 /// - `.rego` files: evaluated via `SimplePolicyEvaluator` (literal pattern
 ///   matching).  Full Rego execution (OPA eval) is not supported in-process.
-fn eval_with_file(path: &Path, action: &PolicyAction) -> Result<cascade_types::policy::PolicyResult> {
+fn eval_with_file(
+    path: &Path,
+    action: &PolicyAction,
+) -> Result<cascade_types::policy::PolicyResult> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     match ext {
         "wasm" => {
@@ -156,7 +158,7 @@ fn eval_with_file(path: &Path, action: &PolicyAction) -> Result<cascade_types::p
             // Evaluate using the SimplePolicyEvaluator (applies the same built-in
             // patterns as the default-deny-dangerous.rego).
             // Full Rego execution (OPA eval) is not supported in-process.
-            let ev = SimplePolicyEvaluator::default();
+            let ev = SimplePolicyEvaluator;
             Ok(ev.evaluate(action))
         }
         other => Err(CascadeError::Other(format!(
@@ -170,9 +172,7 @@ fn eval_with_file(path: &Path, action: &PolicyAction) -> Result<cascade_types::p
 /// Returns `None` when the wasm-policy feature is not compiled in.
 /// Returns `Some(Err(_))` on load errors.
 /// Returns `Some(Ok(result))` on successful evaluation.
-fn try_load_wasm_evaluator(
-    path: &Path,
-) -> Option<Result<cascade_types::policy::PolicyResult>> {
+fn try_load_wasm_evaluator(path: &Path) -> Option<Result<cascade_types::policy::PolicyResult>> {
     // WasmPolicyEvaluator is only available when the wasm-policy feature is active.
     // We detect availability at runtime by checking if cascade-harness exposes it.
     // Since cascade-harness is a compile-time dep of cascade-cli, we can use
@@ -238,7 +238,7 @@ async fn run_list() -> Result<()> {
     }
 
     // Print table.
-    println!("{:<35} {:<8} {}", "ID", "TYPE", "PATH");
+    println!("{:<35} {:<8} PATH", "ID", "TYPE");
     println!("{}", "-".repeat(80));
     for (id, ty, path) in &entries {
         println!("{:<35} {:<8} {}", id, ty, path.display());
@@ -279,9 +279,9 @@ impl Command for PolicyAddArgs {
             source: e,
         })?;
 
-        let filename = src.file_name().ok_or_else(|| {
-            CascadeError::Other("source path has no filename".to_string())
-        })?;
+        let filename = src
+            .file_name()
+            .ok_or_else(|| CascadeError::Other("source path has no filename".to_string()))?;
         let dest = dir.join(filename);
 
         std::fs::copy(&src, &dest).map_err(|e| CascadeError::Io {
@@ -360,10 +360,7 @@ mod tests {
 
     #[tokio::test]
     async fn eval_denies_dangerous_bash_via_dispatch() {
-        let action = PolicyAction::new(
-            "bash",
-            serde_json::json!({"cmd": "rm -rf /"}),
-        );
+        let action = PolicyAction::new("bash", serde_json::json!({"cmd": "rm -rf /"}));
         let result = evaluate_before_dispatch(&action);
         assert_eq!(result.decision, Decision::Deny);
     }

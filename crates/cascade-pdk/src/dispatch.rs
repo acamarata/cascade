@@ -16,8 +16,8 @@ use serde_json::Value;
 
 use crate::plugin::Plugin;
 use crate::types::{
-    AgentContext, ChunkOpts, DataSourceFetchArgs, Document, EmbedOpts, PluginError,
-    RetrieveOpts, ToolCall,
+    AgentContext, ChunkOpts, DataSourceFetchArgs, Document, EmbedOpts, PluginError, RetrieveOpts,
+    ToolCall,
 };
 
 /// The envelope the host sends on every `cascade_plugin_call` invocation.
@@ -33,15 +33,13 @@ pub struct DispatchEnvelope {
 /// string with the serialised result (or a serialised `PluginError` on failure).
 pub fn dispatch(plugin: &dyn Plugin, envelope: DispatchEnvelope) -> String {
     match envelope.func.as_str() {
-        "tool_call" => {
-            match serde_json::from_value::<ToolCall>(envelope.args) {
-                Ok(call) => match plugin.on_tool_call(call) {
-                    Ok(result) => json_ok(&result),
-                    Err(e) => json_err(&e),
-                },
-                Err(e) => error_json(&format!("args decode: {e}")),
-            }
-        }
+        "tool_call" => match serde_json::from_value::<ToolCall>(envelope.args) {
+            Ok(call) => match plugin.on_tool_call(call) {
+                Ok(result) => json_ok(&result),
+                Err(e) => json_err(&e),
+            },
+            Err(e) => error_json(&format!("args decode: {e}")),
+        },
         "chunker_chunk" => {
             #[derive(Deserialize)]
             struct ChunkArgs {
@@ -84,15 +82,13 @@ pub fn dispatch(plugin: &dyn Plugin, envelope: DispatchEnvelope) -> String {
                 Err(e) => error_json(&format!("args decode: {e}")),
             }
         }
-        "agent_run" => {
-            match serde_json::from_value::<AgentContext>(envelope.args) {
-                Ok(ctx) => match plugin.run_agent(ctx) {
-                    Ok(resp) => json_ok(&resp),
-                    Err(e) => json_err(&e),
-                },
-                Err(e) => error_json(&format!("args decode: {e}")),
-            }
-        }
+        "agent_run" => match serde_json::from_value::<AgentContext>(envelope.args) {
+            Ok(ctx) => match plugin.run_agent(ctx) {
+                Ok(resp) => json_ok(&resp),
+                Err(e) => json_err(&e),
+            },
+            Err(e) => error_json(&format!("args decode: {e}")),
+        },
         "datasource_fetch_items" => {
             match serde_json::from_value::<DataSourceFetchArgs>(envelope.args) {
                 Ok(args) => match plugin.fetch_items(args) {
@@ -102,12 +98,10 @@ pub fn dispatch(plugin: &dyn Plugin, envelope: DispatchEnvelope) -> String {
                 Err(e) => error_json(&format!("args decode: {e}")),
             }
         }
-        "widget_render" => {
-            match plugin.render() {
-                Ok(data) => json_ok(&data),
-                Err(e) => json_err(&e),
-            }
-        }
+        "widget_render" => match plugin.render() {
+            Ok(data) => json_ok(&data),
+            Err(e) => json_err(&e),
+        },
         other => error_json(&format!("unknown function: {other}")),
     }
 }
@@ -145,10 +139,7 @@ mod tests {
         fn kind(&self) -> PluginKind {
             PluginKind::ChatTool
         }
-        fn on_tool_call(
-            &self,
-            call: ToolCall,
-        ) -> Result<ToolResult, PluginError> {
+        fn on_tool_call(&self, call: ToolCall) -> Result<ToolResult, PluginError> {
             Ok(ToolResult {
                 call_id: call.call_id,
                 output: format!("echo: {}", call.args_json),

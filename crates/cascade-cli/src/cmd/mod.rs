@@ -14,10 +14,8 @@ pub mod context;
 // T-P4-E04-15: cascade rollback list/apply
 pub mod rollback;
 // T-P4-E04-16: cascade update check/apply/auto
-pub mod update;
 pub mod completions;
 pub mod config;
-pub mod plugin;
 pub mod daemon;
 pub mod dispatch;
 pub mod doctor;
@@ -29,17 +27,19 @@ pub mod link;
 pub mod mcp;
 pub mod memory;
 pub mod migrate;
-pub mod monitor_oc;
-pub mod setup_oc;
 pub mod migrate_keys;
+pub mod monitor_oc;
 pub mod ping;
+pub mod plugin;
 pub mod resolve;
 pub mod restore;
 pub mod search;
+pub mod setup_oc;
 pub mod status;
 pub mod template;
 pub mod uninstall;
 pub mod unlink;
+pub mod update;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};

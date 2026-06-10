@@ -1,0 +1,26 @@
+name: Publish Snap
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update snap version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          sed -i "s/^version:.*/version: '${VERSION}'/" snap/snapcraft.yaml
+          sed -i "s|/releases/download/v[^/]*/cascade_[^/]*/|/releases/download/v${VERSION}/cascade_${VERSION}_linux_x86_64.tar.gz|" snap/snapcraft.yaml
+
+      - name: Publish to Snapcraft
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
+        with:
+          snap: snap/snapcraft.yaml
+          release: stable

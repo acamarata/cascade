@@ -1,0 +1,72 @@
+name: Update Scoop Manifest
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          ZIP_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_windows_x64.zip"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "zip_url=${ZIP_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Download ZIP and compute SHA256
+        id: sha256
+        run: |
+          curl -sSL "${{ steps.release.outputs.zip_url }}" -o cascade.zip
+          SHA256=$(sha256sum cascade.zip | awk '{print $1}')
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout scoop-cascade bucket
+        uses: actions/checkout@v4
+        with:
+          repository: acamarata/scoop-cascade
+          path: scoop-cascade
+          token: ${{ secrets.TAP_UPDATE_TOKEN }}
+
+      - name: Update bucket/cascade.json
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          SHA256="${{ steps.sha256.outputs.sha256 }}"
+          ZIP_URL="${{ steps.release.outputs.zip_url }}"
+
+          python3 - <<'PYEOF'
+          import json, os, sys
+
+          version = os.environ['VERSION']
+          sha256 = os.environ['SHA256']
+          zip_url = os.environ['ZIP_URL']
+
+          with open('scoop-cascade/bucket/cascade.json') as f:
+              manifest = json.load(f)
+
+          manifest['version'] = version
+          manifest['architecture']['64bit']['url'] = zip_url
+          manifest['architecture']['64bit']['hash'] = sha256
+
+          with open('scoop-cascade/bucket/cascade.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+              f.write('\n')
+          PYEOF
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA256: ${{ steps.sha256.outputs.sha256 }}
+          ZIP_URL: ${{ steps.release.outputs.zip_url }}
+
+      - name: Commit and push update
+        working-directory: scoop-cascade
+        env:
+          GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
+        run: |
+          git config user.name "cascade-release-bot"
+          git config user.email "bot@cascade.dev"
+          git add bucket/cascade.json
+          git commit -m "chore: bump cascade to ${{ steps.release.outputs.version }}"
+          git push origin main

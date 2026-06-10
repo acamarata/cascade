@@ -35,8 +35,7 @@ struct CachedChain {
 }
 
 /// The global lazy-cached policy chain.
-static CHAIN_CACHE: std::sync::OnceLock<RwLock<Option<CachedChain>>> =
-    std::sync::OnceLock::new();
+static CHAIN_CACHE: std::sync::OnceLock<RwLock<Option<CachedChain>>> = std::sync::OnceLock::new();
 
 fn cache() -> &'static RwLock<Option<CachedChain>> {
     CHAIN_CACHE.get_or_init(|| RwLock::new(None))
@@ -57,10 +56,10 @@ fn policies_dir_mtime() -> Option<SystemTime> {
 /// Loads WASM policies from `~/.cascade/policies/*.wasm` when the `wasm-policy`
 /// feature is enabled; always prepends `SimplePolicyEvaluator` as a backstop.
 fn build_chain() -> PolicyChain {
-    let mut evaluators: Vec<Box<dyn PolicyEvaluator>> = Vec::new();
-
-    // Always include the built-in SimplePolicyEvaluator.
-    evaluators.push(Box::new(SimplePolicyEvaluator::default()));
+    // Always start with the built-in SimplePolicyEvaluator as backstop.
+    // mut is only exercised by the wasm-policy cfg block below.
+    #[cfg_attr(not(feature = "wasm-policy"), allow(unused_mut))]
+    let mut evaluators: Vec<Box<dyn PolicyEvaluator>> = vec![Box::new(SimplePolicyEvaluator)];
 
     // If wasm-policy feature is active, also load any WASM files.
     #[cfg(feature = "wasm-policy")]
@@ -76,7 +75,9 @@ fn build_chain() -> PolicyChain {
                         .unwrap_or("unknown")
                         .to_string();
                     if let Ok(bytes) = std::fs::read(&path) {
-                        if let Ok(ev) = crate::policy::wasm::WasmPolicyEvaluator::load(&stem, &bytes) {
+                        if let Ok(ev) =
+                            crate::policy::wasm::WasmPolicyEvaluator::load(&stem, &bytes)
+                        {
                             evaluators.push(Box::new(ev));
                         }
                     }

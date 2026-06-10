@@ -38,9 +38,9 @@ use rusqlite::Connection;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
+use cascade_types::chunker::{Chunk as TypesChunk, ChunkMetadata as TypesChunkMetadata};
 use cascade_types::error::{CascadeError, Result};
 use cascade_types::reranker::{RerankOpts, Reranker};
-use cascade_types::chunker::{Chunk as TypesChunk, ChunkMetadata as TypesChunkMetadata};
 
 use crate::citation::{citations_from_chunk_ids, RagCitation};
 use crate::embed::EmbedModel;
@@ -162,8 +162,7 @@ pub async fn search(
         let conn_arc = Arc::clone(&conn);
         tokio::task::spawn_blocking(move || {
             let locked = conn_arc.blocking_lock();
-            query_fts5(&locked, &query_owned, candidate_n)
-                .unwrap_or_default()
+            query_fts5(&locked, &query_owned, candidate_n).unwrap_or_default()
         })
         .await
         .map_err(|e| CascadeError::Other(e.to_string()))?
@@ -192,9 +191,9 @@ pub async fn search(
 
             // Fetch all embeddings from the BLOB table (brute-force KNN fallback).
             let locked = conn_arc.blocking_lock();
-            let mut stmt = match locked.prepare(
-                "SELECT rowid, embedding FROM rag_embeddings ORDER BY rowid",
-            ) {
+            let mut stmt = match locked
+                .prepare("SELECT rowid, embedding FROM rag_embeddings ORDER BY rowid")
+            {
                 Ok(s) => s,
                 Err(_) => return vec![],
             };
@@ -283,10 +282,7 @@ pub async fn search(
         if let Some(ref rr) = reranker {
             // Collect the RRF candidate chunk IDs (up to candidate_n).
             let candidates_fused: Vec<FusedHit> = fused;
-            let candidate_ids: Vec<i64> = candidates_fused
-                .iter()
-                .map(|h| h.chunk_id)
-                .collect();
+            let candidate_ids: Vec<i64> = candidates_fused.iter().map(|h| h.chunk_id).collect();
 
             // Fetch chunk texts from DB for the candidate IDs.
             let conn_arc2 = Arc::clone(&conn);
@@ -302,21 +298,19 @@ pub async fn search(
             let ct_chunks: Vec<TypesChunk> = chunk_texts
                 .iter()
                 .enumerate()
-                .map(|(i, (cid, text))| {
-                    TypesChunk {
-                        id: cid.to_string(),
-                        text: text.clone(),
-                        metadata: TypesChunkMetadata {
-                            start_byte: 0,
-                            end_byte: text.len(),
-                            source_path: None,
-                            start_line: None,
-                            end_line: None,
-                            chunk_index: i,
-                            total_chunks: chunk_texts.len(),
-                            extra: std::collections::HashMap::new(),
-                        },
-                    }
+                .map(|(i, (cid, text))| TypesChunk {
+                    id: cid.to_string(),
+                    text: text.clone(),
+                    metadata: TypesChunkMetadata {
+                        start_byte: 0,
+                        end_byte: text.len(),
+                        source_path: None,
+                        start_line: None,
+                        end_line: None,
+                        chunk_index: i,
+                        total_chunks: chunk_texts.len(),
+                        extra: std::collections::HashMap::new(),
+                    },
                 })
                 .collect();
 
@@ -332,11 +326,7 @@ pub async fn search(
             reranked
                 .into_iter()
                 .map(|r| {
-                    let cid = r
-                        .chunk
-                        .id
-                        .parse::<i64>()
-                        .unwrap_or_default();
+                    let cid = r.chunk.id.parse::<i64>().unwrap_or_default();
                     (cid, r.score as f64)
                 })
                 .collect()
@@ -398,8 +388,7 @@ pub async fn search(
 
     // Sort by descending rrf_score (citations_from_chunk_ids preserves insertion
     // order from the SQL IN clause, not score order).
-    let score_order: std::collections::HashMap<i64, f64> =
-        top_k_fused.iter().copied().collect();
+    let score_order: std::collections::HashMap<i64, f64> = top_k_fused.iter().copied().collect();
     citations.sort_by(|a, b| {
         score_order
             .get(&b.chunk_id)
@@ -427,10 +416,11 @@ fn fetch_chunk_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String)
         "SELECT id, chunk_text FROM rag_chunks WHERE id IN ({}) ORDER BY id",
         placeholders.join(", ")
     );
-    let params_boxed: Vec<Box<dyn rusqlite::ToSql>> =
-        ids.iter().map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>).collect();
-    let params_refs: Vec<&dyn rusqlite::ToSql> =
-        params_boxed.iter().map(|b| b.as_ref()).collect();
+    let params_boxed: Vec<Box<dyn rusqlite::ToSql>> = ids
+        .iter()
+        .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+        .collect();
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_boxed.iter().map(|b| b.as_ref()).collect();
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| CascadeError::Other(e.to_string()))?;
@@ -441,9 +431,7 @@ fn fetch_chunk_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String)
             Ok((id, text))
         })
         .map_err(|e| CascadeError::Other(e.to_string()))?;
-    let results: Vec<(i64, String)> = rows
-        .filter_map(|r| r.ok())
-        .collect();
+    let results: Vec<(i64, String)> = rows.filter_map(|r| r.ok()).collect();
     Ok(results)
 }
 
@@ -512,8 +500,13 @@ mod tests {
         let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
 
         let cfg = SearchConfig::default(); // fts5_enabled = true
-        let results = search("cascade rag search", &cfg, conn, embed, None).await.unwrap();
-        assert!(results.is_empty(), "empty index must return empty vec, not error");
+        let results = search("cascade rag search", &cfg, conn, embed, None)
+            .await
+            .unwrap();
+        assert!(
+            results.is_empty(),
+            "empty index must return empty vec, not error"
+        );
     }
 
     #[tokio::test]
@@ -581,7 +574,9 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("cascade retrieval", &cfg, conn, embed, None).await.unwrap();
+        let results = search("cascade retrieval", &cfg, conn, embed, None)
+            .await
+            .unwrap();
         // If both appear, first must have score >= second.
         if results.len() >= 2 {
             assert!(
@@ -611,7 +606,9 @@ mod tests {
         // Must not panic or error — reranker is Some(NoopReranker) to exercise the seam.
         use cascade_types::NoopReranker;
         let rr: Arc<dyn Reranker> = Arc::new(NoopReranker);
-        let results = search("cascade", &cfg, conn, embed, Some(rr)).await.unwrap();
+        let results = search("cascade", &cfg, conn, embed, Some(rr))
+            .await
+            .unwrap();
         // May return results (chunk text contains "cascade").
         let _ = results;
     }
@@ -627,11 +624,17 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("chunk text testing", &cfg, conn, embed, None).await.unwrap();
+        let results = search("chunk text testing", &cfg, conn, embed, None)
+            .await
+            .unwrap();
         if let Some(first) = results.first() {
             assert!(!first.snippet.is_empty(), "snippet must be populated");
             assert!(
-                first.source_path.to_str().map(|s| s.contains("test")).unwrap_or(false),
+                first
+                    .source_path
+                    .to_str()
+                    .map(|s| s.contains("test"))
+                    .unwrap_or(false),
                 "source_path should be /test/file.md"
             );
         }

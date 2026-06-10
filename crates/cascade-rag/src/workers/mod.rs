@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex};
 
 use rayon::ThreadPool;
 
-use crate::embed::{EmbedModel, EmbedError};
+use crate::embed::{EmbedError, EmbedModel};
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -75,7 +75,10 @@ pub struct RawDoc {
 impl RawDoc {
     /// Create a `RawDoc` with explicit index.
     pub fn new(idx: usize, text: impl Into<String>) -> Self {
-        Self { idx, text: text.into() }
+        Self {
+            idx,
+            text: text.into(),
+        }
     }
 }
 
@@ -149,7 +152,7 @@ pub struct WorkerPoolConfig {
 impl Default for WorkerPoolConfig {
     fn default() -> Self {
         Self {
-            max_embed_workers: 0,           // resolved to num_cpus at build time
+            max_embed_workers: 0, // resolved to num_cpus at build time
             embed_batch_size: 64,
             max_queue_depth: 8,
         }
@@ -211,8 +214,7 @@ impl WorkerPool {
 
         let total = docs.len();
         // Pre-allocate output in input order.
-        let results: Arc<Mutex<Vec<Option<EmbedResult>>>> =
-            Arc::new(Mutex::new(vec![None; total]));
+        let results: Arc<Mutex<Vec<Option<EmbedResult>>>> = Arc::new(Mutex::new(vec![None; total]));
 
         // Chunk by embed_batch_size, record queue depth.
         let chunks: Vec<Vec<RawDoc>> = docs
@@ -234,8 +236,7 @@ impl WorkerPool {
                     let texts: Vec<&str> = chunk.iter().map(|d| d.text.as_str()).collect();
 
                     // Dense embedding for the whole chunk.
-                    let dense_all: Result<Vec<Vec<f32>>, EmbedError> =
-                        model2.embed_dense(&texts);
+                    let dense_all: Result<Vec<Vec<f32>>, EmbedError> = model2.embed_dense(&texts);
                     let sparse_all: Result<Vec<Vec<(u32, f32)>>, EmbedError> =
                         model2.embed_sparse(&texts);
 
@@ -265,7 +266,7 @@ impl WorkerPool {
         });
 
         // Decrement queue depth after work completes.
-        let n_chunks = (total + self.embed_batch_size - 1) / self.embed_batch_size;
+        let n_chunks = total.div_ceil(self.embed_batch_size);
         let mut depth = self.queue_depth.lock().unwrap();
         *depth = depth.saturating_sub(n_chunks);
         drop(depth);
@@ -343,7 +344,7 @@ mod tests {
         let pool = WorkerPool::new(
             WorkerPoolConfig {
                 max_embed_workers: 4,
-                embed_batch_size: 3,   // force multiple chunks from 10 docs
+                embed_batch_size: 3, // force multiple chunks from 10 docs
                 max_queue_depth: 8,
             },
             mock_model(16),
@@ -364,7 +365,10 @@ mod tests {
 
         assert_eq!(results.len(), 10);
         for (i, res) in results.iter().enumerate() {
-            assert_eq!(res.text_idx, i, "result at position {i} must have text_idx={i}");
+            assert_eq!(
+                res.text_idx, i,
+                "result at position {i} must have text_idx={i}"
+            );
             assert!(res.error.is_none(), "no error expected for doc {i}");
             assert_eq!(
                 res.dense, expected_dense[i],
@@ -386,7 +390,9 @@ mod tests {
             },
             mock_model(16),
         );
-        let docs: Vec<RawDoc> = (0..16).map(|i| RawDoc::new(i, format!("doc {i}"))).collect();
+        let docs: Vec<RawDoc> = (0..16)
+            .map(|i| RawDoc::new(i, format!("doc {i}")))
+            .collect();
         let results = pool.embed_batch(docs);
         assert_eq!(results.len(), 16);
         for r in &results {
@@ -422,7 +428,11 @@ mod tests {
         // After a batch completes, must be 0 again.
         let docs: Vec<RawDoc> = (0..8).map(|i| RawDoc::new(i, format!("d{i}"))).collect();
         pool.embed_batch(docs);
-        assert_eq!(pool.queue_depth(), 0, "depth must be 0 after batch completes");
+        assert_eq!(
+            pool.queue_depth(),
+            0,
+            "depth must be 0 after batch completes"
+        );
     }
 
     // ── T-P4-E04-02: batch_size chunks respected ─────────────────────────────
@@ -438,7 +448,9 @@ mod tests {
             },
             mock_model(16),
         );
-        let docs: Vec<RawDoc> = (0..1000).map(|i| RawDoc::new(i, format!("doc {i}"))).collect();
+        let docs: Vec<RawDoc> = (0..1000)
+            .map(|i| RawDoc::new(i, format!("doc {i}")))
+            .collect();
         let results = pool.embed_batch(docs);
         assert_eq!(results.len(), 1000);
         for (i, r) in results.iter().enumerate() {

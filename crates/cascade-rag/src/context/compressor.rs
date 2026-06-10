@@ -189,9 +189,10 @@ impl ContextOptimizer {
             Err(_) => return chunks, // table not yet created — fall through
         };
 
-        let seen: HashSet<String> = match stmt.query_map(rusqlite::params![session_id, cutoff], |row| {
-            row.get::<_, String>(0)
-        }) {
+        let seen: HashSet<String> = match stmt
+            .query_map(rusqlite::params![session_id, cutoff], |row| {
+                row.get::<_, String>(0)
+            }) {
             Ok(rows) => rows.flatten().collect(),
             Err(_) => HashSet::new(),
         };
@@ -257,8 +258,10 @@ impl ContextOptimizer {
         let tokens_used: usize = selected.iter().map(|c| estimate_tokens(&c.text)).sum();
 
         // 4. Compress shell snippets.
-        let compressed_shell: Vec<String> =
-            shell_snippets.iter().map(|s| self.compress_shell(s)).collect();
+        let compressed_shell: Vec<String> = shell_snippets
+            .iter()
+            .map(|s| self.compress_shell(s))
+            .collect();
 
         ContextResult {
             chunks: selected,
@@ -294,7 +297,13 @@ pub fn content_fingerprint(text: &str) -> String {
 fn normalise_text(text: &str) -> String {
     text.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -315,7 +324,7 @@ fn strip_ansi(raw: &str) -> String {
             // Consume until a letter in `@A-Z[\]^_`a-z` terminates the seq.
             if chars.peek() == Some(&'[') {
                 chars.next(); // consume '['
-                // Consume parameter/intermediate bytes (0x20-0x3F) and final byte.
+                              // Consume parameter/intermediate bytes (0x20-0x3F) and final byte.
                 for c in chars.by_ref() {
                     if ('\x40'..='\x7e').contains(&c) {
                         break; // final byte — sequence complete
@@ -379,7 +388,7 @@ fn now_unix() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cascade_types::{RetrievalHit};
+    use cascade_types::RetrievalHit;
 
     /// Build a minimal RetrievalHit for tests.
     fn make_hit(id: &str, text: &str, score: f32) -> RetrievalHit {
@@ -427,7 +436,10 @@ mod tests {
     fn shell_output_over_80_lines_truncated() {
         let opt = ContextOptimizer::new(4096);
         // 200 unique lines — no folding, so truncation must apply.
-        let raw = (0..200).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let raw = (0..200)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let out = opt.compress_shell(&raw);
         let line_count = out.lines().count();
         // head(20) + 1 omission notice + tail(20) = 41 lines
@@ -469,7 +481,7 @@ mod tests {
     #[test]
     fn window_stops_at_budget() {
         let opt = ContextOptimizer::new(50); // tiny budget
-        // Each chunk: "word " * 20 ≈ 20 words * 1.33 ≈ 27 tokens.
+                                             // Each chunk: "word " * 20 ≈ 20 words * 1.33 ≈ 27 tokens.
         let chunks: Vec<RetrievalHit> = (0..10)
             .map(|i| make_hit(&i.to_string(), &"word ".repeat(20), 1.0 - i as f32 * 0.1))
             .collect();
@@ -480,7 +492,10 @@ mod tests {
             "window must respect budget: used={used} > budget=50"
         );
         // At least one chunk should fit.
-        assert!(!selected.is_empty(), "at least one chunk should fit in budget=50");
+        assert!(
+            !selected.is_empty(),
+            "at least one chunk should fit in budget=50"
+        );
     }
 
     #[test]
@@ -583,7 +598,10 @@ mod tests {
         .unwrap();
 
         let result = opt.cross_session_dedup(vec![chunk], "sess-1", &conn);
-        assert!(result.is_empty(), "chunk should be filtered as already delivered");
+        assert!(
+            result.is_empty(),
+            "chunk should be filtered as already delivered"
+        );
     }
 
     #[test]
@@ -622,7 +640,11 @@ mod tests {
         .unwrap();
 
         let result = opt.cross_session_dedup(vec![chunk], "sess-1", &conn);
-        assert_eq!(result.len(), 1, "chunk with expired TTL should not be filtered");
+        assert_eq!(
+            result.len(),
+            1,
+            "chunk with expired TTL should not be filtered"
+        );
     }
 
     #[test]

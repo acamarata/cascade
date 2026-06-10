@@ -25,11 +25,11 @@ use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use cascade_daemon::indexer::{IndexingPipeline, worker_queue_depth};
+use cascade_daemon::indexer::{worker_queue_depth, IndexingPipeline};
 use cascade_daemon::rag_watcher::WatchSignal;
-use cascade_rag::IndexManager;
 use cascade_rag::embed::MockEmbedModel;
 use cascade_rag::workers::{WorkerPool, WorkerPoolConfig};
+use cascade_rag::IndexManager;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -54,8 +54,8 @@ async fn make_index_manager(tmp: &TempDir) -> Arc<IndexManager> {
 /// Sanity: IngestPipeline directly writes sources to DB opened from IndexManager path.
 #[tokio::test]
 async fn direct_ingest_pipeline_sanity() {
-    use cascade_rag::ingest::{IngestConfig, IngestPipeline};
     use cascade_rag::embed::MockEmbedModel;
+    use cascade_rag::ingest::{IngestConfig, IngestPipeline};
     use rusqlite::Connection;
     use std::sync::Arc;
 
@@ -69,10 +69,14 @@ async fn direct_ingest_pipeline_sanity() {
     let embed = Arc::new(MockEmbedModel::new(1024));
     let result = tokio::task::spawn_blocking(move || {
         let conn = Connection::open(&db_path).expect("open db");
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;").expect("pragmas");
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .expect("pragmas");
         let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default());
         pipeline.ingest_file(&p)
-    }).await.expect("spawn_blocking").expect("ingest_file");
+    })
+    .await
+    .expect("spawn_blocking")
+    .expect("ingest_file");
 
     eprintln!("sanity result: {:?}", result);
     assert!(!result.skipped, "should not skip a new file");
@@ -103,7 +107,11 @@ async fn pipeline_ingest_signals_processed() {
     let mut paths = Vec::with_capacity(n);
     for i in 0..n {
         let p = tmp.path().join(format!("file_{i}.md"));
-        fs::write(&p, format!("# Document {i}\nContent for document number {i}.\n")).unwrap();
+        fs::write(
+            &p,
+            format!("# Document {i}\nContent for document number {i}.\n"),
+        )
+        .unwrap();
         paths.push(p);
     }
 
@@ -146,12 +154,17 @@ async fn pipeline_ingest_signals_processed() {
     handle.await.expect("pipeline task did not panic");
 
     // After drain, queue depth must be 0.
-    assert_eq!(worker_queue_depth(&pool), 0, "queue_depth must be 0 after shutdown");
+    assert_eq!(
+        worker_queue_depth(&pool),
+        0,
+        "queue_depth must be 0 after shutdown"
+    );
 
     // All 20 files must be indexed.
     let sources = index_mgr.list_sources().await.unwrap_or_default();
     assert_eq!(
-        sources.len(), n,
+        sources.len(),
+        n,
         "expected {n} indexed sources, got {}",
         sources.len()
     );
@@ -180,7 +193,9 @@ async fn pipeline_evict_no_panic() {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
     shutdown2.cancel();
-    handle.await.expect("pipeline must not panic on phantom evict");
+    handle
+        .await
+        .expect("pipeline must not panic on phantom evict");
 }
 
 /// After shutdown, queue depth must be 0.
@@ -199,13 +214,7 @@ async fn pipeline_queue_depth_zero_after_drain() {
     let p = tmp.path().join("drain_test.md");
     fs::write(&p, "# Drain test\nSome content.\n").unwrap();
 
-    let pipeline = IndexingPipeline::new(
-        rx,
-        Arc::clone(&pool),
-        index_mgr,
-        embed,
-        shutdown,
-    );
+    let pipeline = IndexingPipeline::new(rx, Arc::clone(&pool), index_mgr, embed, shutdown);
     let handle = tokio::spawn(pipeline.run());
 
     tx.send(WatchSignal::Ingest(p)).await.unwrap();
@@ -216,7 +225,8 @@ async fn pipeline_queue_depth_zero_after_drain() {
     handle.await.expect("pipeline task did not panic");
 
     assert_eq!(
-        worker_queue_depth(&pool), 0,
+        worker_queue_depth(&pool),
+        0,
         "queue_depth must be 0 after drain"
     );
 }
@@ -225,5 +235,9 @@ async fn pipeline_queue_depth_zero_after_drain() {
 #[test]
 fn worker_pool_queue_depth_zero_idle() {
     let pool = make_pool(2);
-    assert_eq!(worker_queue_depth(&pool), 0, "idle pool must report depth=0");
+    assert_eq!(
+        worker_queue_depth(&pool),
+        0,
+        "idle pool must report depth=0"
+    );
 }

@@ -88,7 +88,10 @@ pub fn inbox_dir(project: &str) -> PathBuf {
 /// Returns an absolute path. The file may not exist; callers must handle
 /// `io::Error` on read.
 pub fn quota_state_file() -> PathBuf {
-    home_dir().join(".claude").join("temp").join("quota-state.json")
+    home_dir()
+        .join(".claude")
+        .join("temp")
+        .join("quota-state.json")
 }
 
 // ── Phase status ──────────────────────────────────────────────────────────────

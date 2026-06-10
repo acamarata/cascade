@@ -176,7 +176,8 @@ impl FieldVisitor {
         if name == "message" {
             self.message = value.as_str().map(|s| s.to_owned());
         } else if Self::should_redact(name) {
-            self.fields.insert(name.to_owned(), Value::String("[REDACTED]".into()));
+            self.fields
+                .insert(name.to_owned(), Value::String("[REDACTED]".into()));
         } else {
             self.fields.insert(name.to_owned(), value);
         }
@@ -355,7 +356,10 @@ mod tests {
         assert!(should_emit(&LoggingLevel::Error, &LoggingLevel::Warning));
         assert!(should_emit(&LoggingLevel::Critical, &LoggingLevel::Warning));
         assert!(should_emit(&LoggingLevel::Alert, &LoggingLevel::Warning));
-        assert!(should_emit(&LoggingLevel::Emergency, &LoggingLevel::Warning));
+        assert!(should_emit(
+            &LoggingLevel::Emergency,
+            &LoggingLevel::Warning
+        ));
         assert!(!should_emit(&LoggingLevel::Notice, &LoggingLevel::Warning));
         assert!(!should_emit(&LoggingLevel::Info, &LoggingLevel::Warning));
         assert!(!should_emit(&LoggingLevel::Debug, &LoggingLevel::Warning));
@@ -366,7 +370,10 @@ mod tests {
         assert!(should_emit(&LoggingLevel::Emergency, &LoggingLevel::Debug));
 
         // min=Emergency: only Emergency passes
-        assert!(should_emit(&LoggingLevel::Emergency, &LoggingLevel::Emergency));
+        assert!(should_emit(
+            &LoggingLevel::Emergency,
+            &LoggingLevel::Emergency
+        ));
         assert!(!should_emit(&LoggingLevel::Alert, &LoggingLevel::Emergency));
         assert!(!should_emit(&LoggingLevel::Debug, &LoggingLevel::Emergency));
     }
@@ -388,7 +395,10 @@ mod tests {
         tracing::info!("should be dropped");
 
         // No message should arrive.
-        assert!(rx.try_recv().is_err(), "info should be dropped at Warning level");
+        assert!(
+            rx.try_recv().is_err(),
+            "info should be dropped at Warning level"
+        );
 
         // Lower threshold to Info
         tx.send(LoggingLevel::Info).unwrap();
@@ -417,7 +427,11 @@ mod tests {
         let subscriber = tracing_subscriber::registry().with(layer);
         let _guard = tracing::subscriber::set_default(subscriber);
 
-        tracing::debug!(password = "hunter2", api_key = "sk-secret-123", "login attempt");
+        tracing::debug!(
+            password = "hunter2",
+            api_key = "sk-secret-123",
+            "login attempt"
+        );
 
         let msg = rx.recv().await.expect("debug event should arrive");
         let data = &msg["params"]["data"];
@@ -454,10 +468,7 @@ mod tests {
             count += 1;
         }
 
-        assert!(
-            count <= cap,
-            "expected at most {cap} messages, got {count}"
-        );
+        assert!(count <= cap, "expected at most {cap} messages, got {count}");
         // And at least some messages got through.
         assert!(count > 0, "expected at least one message through rate cap");
     }
@@ -491,7 +502,10 @@ mod tests {
 
         let msg = rx.recv().await.expect("message should arrive");
         let data = &msg["params"]["data"];
-        assert!(data.is_string(), "plain message with no fields should be a JSON string");
+        assert!(
+            data.is_string(),
+            "plain message with no fields should be a JSON string"
+        );
         assert_eq!(data.as_str().unwrap(), "hello world");
     }
 }

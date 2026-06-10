@@ -349,7 +349,10 @@ pub fn resolve_db_path(project_root: &Path) -> PathBuf {
         let hash = project_path_hash(project_root);
         PathBuf::from(root).join(hash).join("cascade.db")
     } else {
-        project_root.join(".cascade").join("index").join("cascade.db")
+        project_root
+            .join(".cascade")
+            .join("index")
+            .join("cascade.db")
     }
 }
 
@@ -476,10 +479,7 @@ mod tests {
             "DB file must exist after open: {:?}",
             mgr.db_path()
         );
-        assert_eq!(
-            mgr.db_path(),
-            dir.path().join(".cascade/index/cascade.db")
-        );
+        assert_eq!(mgr.db_path(), dir.path().join(".cascade/index/cascade.db"));
     }
 
     // ── Multi-project isolation ────────────────────────────────────────────────
@@ -504,7 +504,10 @@ mod tests {
         // Register a source in project A.
         let file_a = dir_a.path().join("README.md");
         std::fs::write(&file_a, "# A").unwrap();
-        mgr_a.register_source(&file_a, CascadeTier::Prc).await.unwrap();
+        mgr_a
+            .register_source(&file_a, CascadeTier::Prc)
+            .await
+            .unwrap();
 
         // Project B has no sources.
         let sources_a = mgr_a.list_sources().await.unwrap();
@@ -567,7 +570,10 @@ mod tests {
         assert!(!ok, "register should return false while paused");
 
         let sources = mgr.list_sources().await.unwrap();
-        assert!(sources.is_empty(), "no source should be stored while paused");
+        assert!(
+            sources.is_empty(),
+            "no source should be stored while paused"
+        );
 
         mgr.resume().await;
         let ok2 = mgr.register_source(&path, CascadeTier::Gci).await.unwrap();
@@ -649,6 +655,9 @@ mod tests {
 
         let evicted = registry.evict_project(dir.path()).await;
         assert!(evicted.is_some(), "evicted entry should be Some");
-        assert!(registry.is_empty().await, "registry should be empty after eviction");
+        assert!(
+            registry.is_empty().await,
+            "registry should be empty after eviction"
+        );
     }
 }

@@ -332,7 +332,9 @@ fn is_safe_snapshot_id(id: &str) -> bool {
     let tail = &id["snapshot-".len()..];
     // Must be digits, optionally followed by `-digits` for collision suffix.
     let parts: Vec<&str> = tail.splitn(2, '-').collect();
-    parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+    parts
+        .iter()
+        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Resolve a non-colliding snapshot directory path under `root`.
@@ -395,13 +397,11 @@ mod tests {
         let file_a = write_tmp_file(&src_dir, "spec-a.md", b"# Spec A content");
         let file_b = write_tmp_file(&src_dir, "spec-b.md", b"# Spec B content");
 
-        let protocol_files: Vec<(&str, &Path)> = vec![
-            ("specs/spec-a.md", &file_a),
-            ("specs/spec-b.md", &file_b),
-        ];
+        let protocol_files: Vec<(&str, &Path)> =
+            vec![("specs/spec-a.md", &file_a), ("specs/spec-b.md", &file_b)];
 
-        let snap = Snapshot::create(root.path(), "0.1.2", &protocol_files)
-            .expect("create snapshot");
+        let snap =
+            Snapshot::create(root.path(), "0.1.2", &protocol_files).expect("create snapshot");
 
         assert_eq!(snap.metadata.cascade_version, "0.1.2");
         assert_eq!(snap.metadata.files.len(), 2);
@@ -425,8 +425,7 @@ mod tests {
 
         // Create 3 snapshots — sleep-free; use resolve_snapshot_dir for unique names.
         for _ in 0..3 {
-            Snapshot::create(root.path(), "0.1.0", &[("f.md", &file_a)])
-                .expect("create snapshot");
+            Snapshot::create(root.path(), "0.1.0", &[("f.md", &file_a)]).expect("create snapshot");
         }
 
         let list = Snapshot::list(root.path()).expect("list");
@@ -445,8 +444,8 @@ mod tests {
 
     #[test]
     fn snapshot_list_nonexistent_root() {
-        let list = Snapshot::list(Path::new("/nonexistent/snapshot/root"))
-            .expect("list on missing root");
+        let list =
+            Snapshot::list(Path::new("/nonexistent/snapshot/root")).expect("list on missing root");
         assert!(list.is_empty());
     }
 
@@ -486,10 +485,16 @@ mod tests {
         let remaining_ids: std::collections::HashSet<_> =
             remaining.iter().map(|s| s.metadata.id.clone()).collect();
         for old_id in &ids[..2] {
-            assert!(!remaining_ids.contains(old_id), "oldest {old_id} should be pruned");
+            assert!(
+                !remaining_ids.contains(old_id),
+                "oldest {old_id} should be pruned"
+            );
         }
         for kept_id in &ids[2..] {
-            assert!(remaining_ids.contains(kept_id), "newest {kept_id} should remain");
+            assert!(
+                remaining_ids.contains(kept_id),
+                "newest {kept_id} should remain"
+            );
         }
     }
 
@@ -532,12 +537,8 @@ mod tests {
         std::fs::write(&file_b, b"modified B").unwrap();
 
         // Restore should write back to proto_root.
-        let version = Snapshot::restore(
-            snap_root.path(),
-            &snap.metadata.id,
-            proto_root.path(),
-        )
-        .expect("restore");
+        let version = Snapshot::restore(snap_root.path(), &snap.metadata.id, proto_root.path())
+            .expect("restore");
 
         assert_eq!(version, "0.1.2");
         assert_eq!(
@@ -555,8 +556,8 @@ mod tests {
         let snap_root = TempDir::new().expect("snap tmpdir");
         let proto_root = TempDir::new().expect("proto tmpdir");
 
-        let err = Snapshot::restore(snap_root.path(), "../etc/passwd", proto_root.path())
-            .unwrap_err();
+        let err =
+            Snapshot::restore(snap_root.path(), "../etc/passwd", proto_root.path()).unwrap_err();
         assert!(
             matches!(err, SnapshotError::UnsafePath(_)),
             "expected UnsafePath, got: {err:?}"
@@ -582,8 +583,7 @@ mod tests {
         let src_dir = TempDir::new().expect("src tmpdir");
         let file = write_tmp_file(&src_dir, "proto.md", b"protocol spec");
 
-        let snap = Snapshot::create(root.path(), "0.2.0", &[("proto.md", &file)])
-            .expect("create");
+        let snap = Snapshot::create(root.path(), "0.2.0", &[("proto.md", &file)]).expect("create");
 
         // Re-read metadata.json and verify round-trip.
         let raw = std::fs::read(snap.path.join("metadata.json")).expect("read metadata");

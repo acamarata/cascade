@@ -22,7 +22,7 @@
 // Constraints: feature = "rag-multivec" must be enabled; off by default
 // SPORT: MASTER-TABLES.md → rag_token_embeddings (write/read); MASTER-LIBS.md → cascade-rag::embed::multivector
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 use super::{EmbedError, EmbedModel};
 
@@ -100,9 +100,7 @@ impl super::EmbedModel for MockMultiVecEmbedModel {
             .map(|t| {
                 let seed = t.bytes().fold(0u64, |acc, b| acc.wrapping_add(b as u64));
                 let base = (seed as f32) / 255.0;
-                let raw: Vec<f32> = (0..dim)
-                    .map(|i| (base + i as f32 * 0.01).sin())
-                    .collect();
+                let raw: Vec<f32> = (0..dim).map(|i| (base + i as f32 * 0.01).sin()).collect();
                 let norm: f32 = raw.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-9);
                 raw.iter().map(|v| v / norm).collect()
             })
@@ -113,7 +111,10 @@ impl super::EmbedModel for MockMultiVecEmbedModel {
         &self,
         texts: &[&str],
     ) -> std::result::Result<Vec<Vec<(u32, f32)>>, EmbedError> {
-        Ok(texts.iter().map(|t| super::sparse_tfidf_single(t)).collect())
+        Ok(texts
+            .iter()
+            .map(|t| super::sparse_tfidf_single(t))
+            .collect())
     }
 
     fn dim(&self) -> usize {
@@ -132,7 +133,11 @@ impl super::EmbedModel for MockMultiVecEmbedModel {
 /// Panics in debug mode if `a.len() != b.len()`.
 #[inline]
 pub fn dot(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len(), "dot product requires equal-length vectors");
+    debug_assert_eq!(
+        a.len(),
+        b.len(),
+        "dot product requires equal-length vectors"
+    );
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
 
@@ -219,11 +224,14 @@ pub fn store_token_embeddings(
     chunk_id: i64,
     token_vecs: &[Vec<f32>],
 ) -> Result<(), EmbedError> {
-    conn.execute("DELETE FROM rag_token_embeddings WHERE chunk_id = ?1", params![chunk_id])
-        .map_err(|e| EmbedError::InferenceFailed {
-            model_id: "multivec-storage".into(),
-            detail: format!("delete existing token embeddings: {e}"),
-        })?;
+    conn.execute(
+        "DELETE FROM rag_token_embeddings WHERE chunk_id = ?1",
+        params![chunk_id],
+    )
+    .map_err(|e| EmbedError::InferenceFailed {
+        model_id: "multivec-storage".into(),
+        detail: format!("delete existing token embeddings: {e}"),
+    })?;
 
     let mut stmt = conn
         .prepare(
@@ -310,11 +318,7 @@ mod tests {
     #[test]
     fn maxsim_toy_query() {
         let sqrt2_inv = 1.0_f32 / 2.0_f32.sqrt();
-        let q: Vec<Vec<f32>> = vec![
-            vec![1.0, 0.0],
-            vec![0.0, 1.0],
-            vec![sqrt2_inv, sqrt2_inv],
-        ];
+        let q: Vec<Vec<f32>> = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![sqrt2_inv, sqrt2_inv]];
         let d1: Vec<Vec<f32>> = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
         let d2: Vec<Vec<f32>> = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
 
@@ -432,14 +436,19 @@ mod tests {
         store_token_embeddings(&conn, 7, &vecs).expect("first store");
         store_token_embeddings(&conn, 7, &vecs).expect("idempotent second store");
         let loaded = load_token_embeddings(&conn, 7).expect("load");
-        assert_eq!(loaded.len(), 1, "must still have exactly 1 token vector after idempotent store");
+        assert_eq!(
+            loaded.len(),
+            1,
+            "must still have exactly 1 token vector after idempotent store"
+        );
     }
 
     /// Loading for a chunk_id with no token embeddings returns empty Vec.
     #[test]
     fn token_embeddings_load_empty_chunk() {
         let conn = migrated_conn();
-        let loaded = load_token_embeddings(&conn, 999).expect("load non-existent chunk must not error");
+        let loaded =
+            load_token_embeddings(&conn, 999).expect("load non-existent chunk must not error");
         assert!(loaded.is_empty(), "no embeddings stored → empty result");
     }
 

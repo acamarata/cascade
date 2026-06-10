@@ -225,7 +225,10 @@ pub(crate) mod auth_handshake {
         AuthResult::Ok
     }
 
-    async fn write_auth_error<W: AsyncWrite + Unpin>(writer: &mut W, msg: &str) -> std::io::Result<()> {
+    async fn write_auth_error<W: AsyncWrite + Unpin>(
+        writer: &mut W,
+        msg: &str,
+    ) -> std::io::Result<()> {
         let resp = format!(
             r#"{{"jsonrpc":"2.0","id":null,"error":{{"code":-32003,"message":"auth failed: {}"}}}}"#,
             msg

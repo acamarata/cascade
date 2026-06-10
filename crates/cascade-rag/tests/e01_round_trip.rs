@@ -43,8 +43,8 @@ use cascade_rag::{
     ingest::{IngestConfig, IngestPipeline},
     search::{search, SearchConfig},
 };
-use cascade_types::NoopReranker;
 use cascade_types::reranker::Reranker;
+use cascade_types::NoopReranker;
 
 // ── Fixture helpers ───────────────────────────────────────────────────────────
 
@@ -176,13 +176,20 @@ async fn round_trip_fts_finds_seeded_content() {
     let conn_ingest = Connection::open(&db_path).expect("ingest db");
     run_migrations(&conn_ingest).expect("migrations");
     let embed = Arc::new(MockEmbedModel::new(1024));
-    let pipeline = IngestPipeline::new(conn_ingest, Arc::clone(&embed) as _, IngestConfig::default());
+    let pipeline = IngestPipeline::new(
+        conn_ingest,
+        Arc::clone(&embed) as _,
+        IngestConfig::default(),
+    );
     let (results, errors) = pipeline.ingest_files(files.iter().map(|p| p.as_path()));
     assert!(errors.is_empty(), "ingest should not error: {:?}", errors);
     assert_eq!(results.len(), 3, "all 3 fixture files should be ingested");
     for r in &results {
         assert!(!r.skipped, "first ingest must not be skipped");
-        assert!(r.chunks_created > 0, "each file must produce at least 1 chunk");
+        assert!(
+            r.chunks_created > 0,
+            "each file must produce at least 1 chunk"
+        );
     }
 
     let cfg = SearchConfig {
@@ -216,7 +223,10 @@ async fn round_trip_fts_finds_seeded_content() {
             .map(|s| s.contains("CLAUDE.md"))
             .unwrap_or(false)
     });
-    assert!(found_claude, "CLAUDE.md must appear in search results for 'tiers'");
+    assert!(
+        found_claude,
+        "CLAUDE.md must appear in search results for 'tiers'"
+    );
 
     // Also verify lib.rs is findable via its unique term "retrieval".
     let results_lib = {
@@ -232,7 +242,10 @@ async fn round_trip_fts_finds_seeded_content() {
             .map(|s| s.contains("lib.rs"))
             .unwrap_or(false)
     });
-    assert!(found_lib, "lib.rs must appear in search results for 'retrieval'");
+    assert!(
+        found_lib,
+        "lib.rs must appear in search results for 'retrieval'"
+    );
 
     // Verify line spans are non-zero
     for r in &results {
@@ -257,13 +270,18 @@ async fn ingest_idempotency() {
         let pipeline = IngestPipeline::new(conn, Arc::clone(&embed) as _, IngestConfig::default());
         let (results, errors) = pipeline.ingest_files(files.iter().map(|p| p.as_path()));
         assert!(errors.is_empty());
-        assert!(results.iter().all(|r| !r.skipped), "first ingest: none skipped");
+        assert!(
+            results.iter().all(|r| !r.skipped),
+            "first ingest: none skipped"
+        );
     }
 
     let count_after_first = {
         let c = Connection::open(&db_path).expect("db");
-        c.query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| r.get::<_, i64>(0))
-            .expect("count")
+        c.query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .expect("count")
     };
 
     // Second ingest (same file bytes, same hashes)
@@ -279,14 +297,19 @@ async fn ingest_idempotency() {
                 "second ingest of unchanged file must be skipped: source_id={}",
                 r.source_id
             );
-            assert_eq!(r.chunks_created, 0, "skipped files must report 0 chunks_created");
+            assert_eq!(
+                r.chunks_created, 0,
+                "skipped files must report 0 chunks_created"
+            );
         }
     }
 
     let count_after_second = {
         let c = Connection::open(&db_path).expect("db");
-        c.query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| r.get::<_, i64>(0))
-            .expect("count")
+        c.query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .expect("count")
     };
 
     assert_eq!(
@@ -314,10 +337,19 @@ async fn changed_file_re_ingest_reflected_in_results() {
     // Search before modification — should NOT find "qibla direction"
     {
         let conn_s = open_file_db(&db_path);
-        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
-        let cfg = SearchConfig { k: 5, fts5_enabled: true, ..Default::default() };
-        let before = search("qibla direction", &cfg, conn_s, embed_arc, None).await.unwrap();
-        let has_qibla = before.iter().any(|r| r.snippet.to_lowercase().contains("qibla"));
+        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> =
+            Arc::new(MockEmbedModel::new(1024));
+        let cfg = SearchConfig {
+            k: 5,
+            fts5_enabled: true,
+            ..Default::default()
+        };
+        let before = search("qibla direction", &cfg, conn_s, embed_arc, None)
+            .await
+            .unwrap();
+        let has_qibla = before
+            .iter()
+            .any(|r| r.snippet.to_lowercase().contains("qibla"));
         // Before modification, no content mentions qibla.
         assert!(!has_qibla, "should not find 'qibla' before we add it");
     }
@@ -341,9 +373,16 @@ async fn changed_file_re_ingest_reflected_in_results() {
     // Search after modification — should now find "qibla direction".
     {
         let conn_s = open_file_db(&db_path);
-        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
-        let cfg = SearchConfig { k: 5, fts5_enabled: true, ..Default::default() };
-        let after = search("qibla direction", &cfg, conn_s, embed_arc, None).await.unwrap();
+        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> =
+            Arc::new(MockEmbedModel::new(1024));
+        let cfg = SearchConfig {
+            k: 5,
+            fts5_enabled: true,
+            ..Default::default()
+        };
+        let after = search("qibla direction", &cfg, conn_s, embed_arc, None)
+            .await
+            .unwrap();
         assert!(
             !after.is_empty(),
             "after modification, 'qibla direction' should be findable in config.json"
@@ -374,7 +413,8 @@ async fn fts_vs_hybrid_parity() {
     // FTS-only
     let fts_results = {
         let conn_s = open_file_db(&db_path);
-        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
+        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> =
+            Arc::new(MockEmbedModel::new(1024));
         let cfg = SearchConfig {
             k: 5,
             fts5_enabled: true,
@@ -388,7 +428,8 @@ async fn fts_vs_hybrid_parity() {
     // Hybrid (FTS5 + dense vectors via MockEmbedModel cosine path)
     let hybrid_results = {
         let conn_s = open_file_db(&db_path);
-        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
+        let embed_arc: Arc<dyn cascade_rag::embed::EmbedModel> =
+            Arc::new(MockEmbedModel::new(1024));
         let cfg = SearchConfig {
             k: 5,
             fts5_enabled: true,
@@ -452,15 +493,9 @@ async fn rerank_seam_exercised() {
         ..Default::default()
     };
 
-    let results = search(
-        "retrieval",
-        &cfg,
-        conn_s,
-        embed_arc,
-        Some(rr),
-    )
-    .await
-    .expect("rerank path must not error");
+    let results = search("retrieval", &cfg, conn_s, embed_arc, Some(rr))
+        .await
+        .expect("rerank path must not error");
 
     assert!(
         !results.is_empty(),
@@ -477,10 +512,7 @@ async fn rerank_seam_exercised() {
     }
 
     // Results must be ordered by descending reranker_score.
-    let scores: Vec<f64> = results
-        .iter()
-        .filter_map(|r| r.reranker_score)
-        .collect();
+    let scores: Vec<f64> = results.iter().filter_map(|r| r.reranker_score).collect();
     for pair in scores.windows(2) {
         assert!(
             pair[0] >= pair[1],
@@ -516,11 +548,26 @@ async fn synthetic_100_chunks_five_queries() {
         chunk_index: usize,
     }
     let golden: Vec<GoldenQuery> = vec![
-        GoldenQuery { term: "hijri calendar month calculation",     chunk_index: 3  },
-        GoldenQuery { term: "prayer times solar declination angle", chunk_index: 17 },
-        GoldenQuery { term: "moon sighting ephemeris JPL",          chunk_index: 31 },
-        GoldenQuery { term: "qibla direction great circle bearing",  chunk_index: 55 },
-        GoldenQuery { term: "RRF score fusion FTS5 dense vectors",  chunk_index: 82 },
+        GoldenQuery {
+            term: "hijri calendar month calculation",
+            chunk_index: 3,
+        },
+        GoldenQuery {
+            term: "prayer times solar declination angle",
+            chunk_index: 17,
+        },
+        GoldenQuery {
+            term: "moon sighting ephemeris JPL",
+            chunk_index: 31,
+        },
+        GoldenQuery {
+            term: "qibla direction great circle bearing",
+            chunk_index: 55,
+        },
+        GoldenQuery {
+            term: "RRF score fusion FTS5 dense vectors",
+            chunk_index: 82,
+        },
     ];
 
     for i in 0..100usize {
@@ -569,9 +616,15 @@ async fn synthetic_100_chunks_five_queries() {
         // Extract the first word as FTS query (guaranteed to be in the chunk text).
         let fts_term = g.term.split_whitespace().next().expect("non-empty term");
 
-        let results = search(fts_term, &cfg, Arc::clone(&conn_arc), Arc::clone(&embed_arc), None)
-            .await
-            .expect("search should not fail");
+        let results = search(
+            fts_term,
+            &cfg,
+            Arc::clone(&conn_arc),
+            Arc::clone(&embed_arc),
+            None,
+        )
+        .await
+        .expect("search should not fail");
 
         assert!(
             !results.is_empty(),
@@ -580,7 +633,7 @@ async fn synthetic_100_chunks_five_queries() {
         );
 
         // The golden chunk's line_start is (chunk_index * 5 + 1).
-        let golden_line_start = (g.chunk_index * 5 + 1) as usize;
+        let golden_line_start = g.chunk_index * 5 + 1;
         let top3_has_golden = results
             .iter()
             .take(3)
@@ -591,7 +644,11 @@ async fn synthetic_100_chunks_five_queries() {
             "golden chunk for '{}' (line_start={}) must appear in top-3; got: {:?}",
             fts_term,
             golden_line_start,
-            results.iter().take(3).map(|r| r.line_start).collect::<Vec<_>>()
+            results
+                .iter()
+                .take(3)
+                .map(|r| r.line_start)
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -616,15 +673,39 @@ async fn slow_full_50_files() {
     // Seed 50 files with domain-varied content.
     let mut file_paths = Vec::new();
     let topics = [
-        ("hijri_calendar", "Hijri calendar month calculation umm al-qura"),
-        ("prayer_times", "Prayer times solar declination angle fajr dhuhr asr"),
-        ("moon_sighting", "Moon sighting ephemeris JPL DE442S new crescent"),
-        ("qibla", "Qibla direction great circle bearing true north kaaba"),
-        ("rrf_pipeline", "RRF score fusion FTS5 dense vectors retrieval"),
-        ("cascade_tiers", "Instruction cascade GCI ASI PPI PRI PAI tiers"),
-        ("delegation", "Multi-agent delegation subagent spawn parallel"),
+        (
+            "hijri_calendar",
+            "Hijri calendar month calculation umm al-qura",
+        ),
+        (
+            "prayer_times",
+            "Prayer times solar declination angle fajr dhuhr asr",
+        ),
+        (
+            "moon_sighting",
+            "Moon sighting ephemeris JPL DE442S new crescent",
+        ),
+        (
+            "qibla",
+            "Qibla direction great circle bearing true north kaaba",
+        ),
+        (
+            "rrf_pipeline",
+            "RRF score fusion FTS5 dense vectors retrieval",
+        ),
+        (
+            "cascade_tiers",
+            "Instruction cascade GCI ASI PPI PRI PAI tiers",
+        ),
+        (
+            "delegation",
+            "Multi-agent delegation subagent spawn parallel",
+        ),
         ("phase_build", "Phase based development PBD PEWS plan build"),
-        ("typescript_strict", "TypeScript strict mode typed boundaries DRY"),
+        (
+            "typescript_strict",
+            "TypeScript strict mode typed boundaries DRY",
+        ),
         ("pnpm_packages", "pnpm workspace package manager dependency"),
     ];
 
@@ -691,7 +772,9 @@ async fn slow_full_50_files() {
             rerank_enabled: false,
             ..Default::default()
         };
-        let results = search(query, &cfg, conn_s, ea, None).await.unwrap_or_default();
+        let results = search(query, &cfg, conn_s, ea, None)
+            .await
+            .unwrap_or_default();
         let rr = results
             .iter()
             .enumerate()
@@ -725,7 +808,9 @@ async fn slow_full_50_files() {
             rerank_enabled: false,
             ..Default::default()
         };
-        let results = search(query, &cfg, conn_s, ea, None).await.unwrap_or_default();
+        let results = search(query, &cfg, conn_s, ea, None)
+            .await
+            .unwrap_or_default();
         let rr = results
             .iter()
             .enumerate()
@@ -740,7 +825,8 @@ async fn slow_full_50_files() {
         hybrid_reciprocal_ranks.push(rr);
     }
 
-    let hybrid_mrr: f64 = hybrid_reciprocal_ranks.iter().sum::<f64>() / hybrid_reciprocal_ranks.len() as f64;
+    let hybrid_mrr: f64 =
+        hybrid_reciprocal_ranks.iter().sum::<f64>() / hybrid_reciprocal_ranks.len() as f64;
     assert!(
         hybrid_mrr >= 0.65,
         "hybrid MRR@10 must be >= 0.65; got {:.3}",

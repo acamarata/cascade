@@ -195,7 +195,8 @@ pub trait ProviderPlugin: Send + Sync + 'static {
     fn capabilities(&self) -> ProviderPluginCapabilities;
 
     /// Perform a synchronous (non-streaming) completion.
-    async fn complete(&self, req: ProviderRequest) -> Result<ProviderResponse, ProviderPluginError>;
+    async fn complete(&self, req: ProviderRequest)
+        -> Result<ProviderResponse, ProviderPluginError>;
 
     /// Perform a streaming completion, yielding incremental deltas.
     ///

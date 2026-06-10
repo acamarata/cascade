@@ -220,11 +220,13 @@ mod tests {
         }
 
         async fn call(&self, call: ToolCall) -> Result<ToolResult, ToolIntegrationError> {
-            let text = call.arguments.get("text").cloned().ok_or_else(|| {
-                ToolIntegrationError::Parse {
-                    message: "missing required field 'text'".into(),
-                }
-            })?;
+            let text =
+                call.arguments
+                    .get("text")
+                    .cloned()
+                    .ok_or_else(|| ToolIntegrationError::Parse {
+                        message: "missing required field 'text'".into(),
+                    })?;
             Ok(ToolResult {
                 result: text,
                 is_error: false,
@@ -243,7 +245,10 @@ mod tests {
         };
         let result = tool.call(call).await.unwrap();
         assert!(!result.is_error);
-        assert_eq!(result.result, serde_json::Value::String("hello cascade".into()));
+        assert_eq!(
+            result.result,
+            serde_json::Value::String("hello cascade".into())
+        );
         assert_eq!(result.call_id, Some("req-001".into()));
     }
 

@@ -31,12 +31,34 @@ const SKIP_TAGS: &[&str] = &[
 
 // Block-level tags that get a newline inserted after their contribution.
 const BLOCK_TAGS: &[&str] = &[
-    "p", "div", "section", "article", "main",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li",
-    "table", "thead", "tbody", "tr", "th", "td",
-    "blockquote", "pre", "figure", "figcaption",
-    "form", "fieldset", "br", "hr",
+    "p",
+    "div",
+    "section",
+    "article",
+    "main",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "li",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "th",
+    "td",
+    "blockquote",
+    "pre",
+    "figure",
+    "figcaption",
+    "form",
+    "fieldset",
+    "br",
+    "hr",
 ];
 
 /// HTML document parser.
@@ -178,10 +200,7 @@ impl DocumentParser for HtmlParser {
 
         let title = Self::extract_title(&document);
         let text = Self::extract_text(&document);
-        let stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .map(String::from);
+        let stem = path.file_stem().and_then(|s| s.to_str()).map(String::from);
 
         let mut metadata = HashMap::new();
         if let Some(desc) = Self::extract_description(&document) {
@@ -306,7 +325,10 @@ mod tests {
         );
         assert!(!doc.text.contains("Sidebar"), "aside must be stripped");
         assert!(!doc.text.contains("Footer text"), "footer must be stripped");
-        assert!(doc.text.contains("Main content"), "main content must remain");
+        assert!(
+            doc.text.contains("Main content"),
+            "main content must remain"
+        );
     }
 
     // ── T-P4-E01-15-05: entity decoding ──────────────────────────────────────
@@ -314,9 +336,7 @@ mod tests {
     /// HTML entities are decoded to their Unicode equivalents.
     #[test]
     fn entities_decoded() {
-        let f = write_html(
-            "<html><body><p>Price: &pound;10 &amp; &lt;free&gt;</p></body></html>",
-        );
+        let f = write_html("<html><body><p>Price: &pound;10 &amp; &lt;free&gt;</p></body></html>");
         let p = HtmlParser;
         let doc = p.parse(f.path()).unwrap();
         assert!(
@@ -341,9 +361,7 @@ mod tests {
     /// Multiple whitespace sequences are collapsed to a single space.
     #[test]
     fn whitespace_collapsed() {
-        let f = write_html(
-            "<html><body><p>Too   many    spaces   here</p></body></html>",
-        );
+        let f = write_html("<html><body><p>Too   many    spaces   here</p></body></html>");
         let p = HtmlParser;
         let doc = p.parse(f.path()).unwrap();
         assert!(
@@ -358,9 +376,7 @@ mod tests {
     /// Parser handles malformed / unclosed tags gracefully without panicking.
     #[test]
     fn malformed_html_tolerant() {
-        let f = write_html(
-            "<html><body><p>Unclosed paragraph<div>nested<b>bold</div></body>",
-        );
+        let f = write_html("<html><body><p>Unclosed paragraph<div>nested<b>bold</div></body>");
         let p = HtmlParser;
         // Must not panic; should return some non-empty text.
         let doc = p.parse(f.path()).unwrap();
@@ -404,24 +420,24 @@ mod tests {
         let p = HtmlParser;
         let doc = p.parse(f.path()).unwrap();
 
-        assert_eq!(
-            doc.title.as_deref(),
-            Some("Cascade — Context Cascade Tool")
+        assert_eq!(doc.title.as_deref(), Some("Cascade — Context Cascade Tool"));
+        assert!(
+            doc.text.contains("Welcome to Cascade"),
+            "h1 must be present"
         );
-        assert!(doc.text.contains("Welcome to Cascade"), "h1 must be present");
         assert!(
             doc.text.contains("multi-agent"),
             "paragraph text must be present"
         );
-        assert!(doc.text.contains("RAG support"), "list items must be present");
+        assert!(
+            doc.text.contains("RAG support"),
+            "list items must be present"
+        );
         assert!(
             !doc.text.contains("trackPageView"),
             "script must be removed"
         );
-        assert!(
-            !doc.text.contains("display: none"),
-            "style must be removed"
-        );
+        assert!(!doc.text.contains("display: none"), "style must be removed");
         assert!(
             !doc.text.contains("Copyright 2026"),
             "footer must be removed"

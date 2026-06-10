@@ -8,7 +8,7 @@
 //! ## Inputs
 //! - `prompts/list` — no params → `{ "prompts": [PromptInfo, ...] }`
 //! - `prompts/get`  — `{ "name": "cascade-context", "arguments": { ... } }`
-//!                  → `GetPromptResult { description, messages }`
+//!   → `GetPromptResult { description, messages }`
 //!
 //! ## Outputs
 //! - `GetPromptResult.messages` — one `PromptMessage` per turn (always role:user)
@@ -71,8 +71,13 @@ pub struct GetPromptResult {
 
 // ── Static prompt catalogue ───────────────────────────────────────────────────
 
+/// `(name, description, required_flag)` tuple for a single argument descriptor.
+type ArgDesc = (&'static str, &'static str, bool);
+/// `(name, description, args)` tuple for a single prompt entry.
+type PromptEntry = (&'static str, &'static str, &'static [ArgDesc]);
+
 /// The built-in Cascade prompts (four entries).
-static PROMPTS: &[(&str, &str, &[(&str, &str, bool)])] = &[
+static PROMPTS: &[PromptEntry] = &[
     (
         "cascade-context",
         "Inject Cascade tier instructions into the conversation. \
@@ -162,14 +167,19 @@ impl PromptsHandler {
 
         debug!(prompt = name, "prompts/get");
 
-        let args = params.get("arguments").cloned().unwrap_or(Value::Object(Default::default()));
+        let args = params
+            .get("arguments")
+            .cloned()
+            .unwrap_or(Value::Object(Default::default()));
 
         let result = match name {
             "cascade-context" => self.get_cascade_context(&args),
             "cascade-search" => self.get_cascade_search(&args),
             "cascade-commit-review" => self.get_cascade_commit_review(&args),
             "cascade.harness_setup" => self.get_harness_setup(&args),
-            _ => Err(JsonRpcError::method_not_found(format!("Prompt not found: {name}"))),
+            _ => Err(JsonRpcError::method_not_found(format!(
+                "Prompt not found: {name}"
+            ))),
         }?;
 
         serde_json::to_value(result).map_err(|e| JsonRpcError::internal(e.to_string()))
@@ -204,16 +214,10 @@ impl PromptsHandler {
     }
 
     fn get_cascade_search(&self, args: &Value) -> Result<GetPromptResult, JsonRpcError> {
-        let query = args
-            .get("query")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                JsonRpcError::invalid_params("missing required argument 'query' for cascade-search")
-            })?;
-        let limit = args
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(5);
+        let query = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| {
+            JsonRpcError::invalid_params("missing required argument 'query' for cascade-search")
+        })?;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5);
 
         let description = format!("Search Cascade corpus for '{query}' (limit: {limit})");
 
@@ -332,20 +336,16 @@ impl PromptsHandler {
             );
             steps.push("\n### Step 4: Confirm in Your Harness\n".into());
             steps.push(match harness {
-                "cc" => {
-                    "In Claude Code, open a new session and run:\n\
+                "cc" => "In Claude Code, open a new session and run:\n\
                      ```sh\n/mcp\n```\n\
                      You should see `cascade` in the connected MCP servers list with \
                      `resources/list` showing the configured tier resources.\n"
-                        .into()
-                }
-                "oc" => {
-                    "In OpenCode, confirm the MCP server is running:\n\
+                    .into(),
+                "oc" => "In OpenCode, confirm the MCP server is running:\n\
                      ```sh\noc mcp status cascade\n```\n\
                      Then read a resource to confirm resolution:\n\
                      ```sh\noc mcp read cascade://instructions/gci\n```\n"
-                        .into()
-                }
+                    .into(),
                 _ => "Confirm the harness MCP client sees the cascade server resources.\n".into(),
             });
         }
@@ -369,14 +369,11 @@ impl PromptsHandler {
     }
 
     fn get_cascade_commit_review(&self, args: &Value) -> Result<GetPromptResult, JsonRpcError> {
-        let diff = args
-            .get("diff")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                JsonRpcError::invalid_params(
-                    "missing required argument 'diff' for cascade-commit-review",
-                )
-            })?;
+        let diff = args.get("diff").and_then(|v| v.as_str()).ok_or_else(|| {
+            JsonRpcError::invalid_params(
+                "missing required argument 'diff' for cascade-commit-review",
+            )
+        })?;
 
         let description = "Commit review against Cascade rules".to_string();
 
@@ -431,8 +428,15 @@ mod tests {
     fn list_returns_exactly_4_prompts() {
         let h = handler();
         let result = h.list().unwrap();
-        let prompts = result["prompts"].as_array().expect("prompts must be an array");
-        assert_eq!(prompts.len(), 4, "expected exactly 4 prompts, got {}", prompts.len());
+        let prompts = result["prompts"]
+            .as_array()
+            .expect("prompts must be an array");
+        assert_eq!(
+            prompts.len(),
+            4,
+            "expected exactly 4 prompts, got {}",
+            prompts.len()
+        );
     }
 
     #[test]
@@ -444,10 +448,19 @@ mod tests {
             .iter()
             .map(|p| p["name"].as_str().unwrap())
             .collect();
-        assert!(names.contains(&"cascade-context"), "missing cascade-context");
+        assert!(
+            names.contains(&"cascade-context"),
+            "missing cascade-context"
+        );
         assert!(names.contains(&"cascade-search"), "missing cascade-search");
-        assert!(names.contains(&"cascade-commit-review"), "missing cascade-commit-review");
-        assert!(names.contains(&"cascade.harness_setup"), "missing cascade.harness_setup");
+        assert!(
+            names.contains(&"cascade-commit-review"),
+            "missing cascade-commit-review"
+        );
+        assert!(
+            names.contains(&"cascade.harness_setup"),
+            "missing cascade.harness_setup"
+        );
     }
 
     #[test]
@@ -456,7 +469,11 @@ mod tests {
         let result = h.list().unwrap();
         let prompts = result["prompts"].as_array().unwrap();
         for p in prompts {
-            assert!(p["arguments"].is_array(), "prompt {} missing 'arguments'", p["name"]);
+            assert!(
+                p["arguments"].is_array(),
+                "prompt {} missing 'arguments'",
+                p["name"]
+            );
         }
     }
 
@@ -470,12 +487,17 @@ mod tests {
             "arguments": { "tier": "gci" }
         });
         let result = h.get(&params).unwrap();
-        let messages = result["messages"].as_array().expect("messages must be array");
+        let messages = result["messages"]
+            .as_array()
+            .expect("messages must be array");
         assert!(!messages.is_empty(), "messages must be non-empty");
         assert_eq!(messages[0]["role"].as_str().unwrap(), "user");
         let text = messages[0]["content"]["text"].as_str().unwrap();
         assert!(!text.is_empty(), "message text must be non-empty");
-        assert!(text.contains("gci"), "text should mention the requested tier");
+        assert!(
+            text.contains("gci"),
+            "text should mention the requested tier"
+        );
     }
 
     #[test]
@@ -511,8 +533,15 @@ mod tests {
             "arguments": {}
         });
         let err = h.get(&params).unwrap_err();
-        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS, "expected -32602 invalid_params");
-        assert!(err.message.contains("query"), "error should mention missing field");
+        assert_eq!(
+            err.code,
+            crate::server::ERR_INVALID_PARAMS,
+            "expected -32602 invalid_params"
+        );
+        assert!(
+            err.message.contains("query"),
+            "error should mention missing field"
+        );
     }
 
     #[test]
@@ -540,7 +569,10 @@ mod tests {
         let messages = result["messages"].as_array().unwrap();
         assert!(!messages.is_empty());
         let text = messages[0]["content"]["text"].as_str().unwrap();
-        assert!(text.contains("+fn hello()"), "diff should be embedded in message");
+        assert!(
+            text.contains("+fn hello()"),
+            "diff should be embedded in message"
+        );
     }
 
     #[test]
@@ -565,8 +597,14 @@ mod tests {
             "arguments": { "harness": "cc" }
         });
         let result = h.get(&params).unwrap();
-        let messages = result["messages"].as_array().expect("messages must be array");
-        assert_eq!(messages.len(), 2, "harness_setup must return exactly 2 messages");
+        let messages = result["messages"]
+            .as_array()
+            .expect("messages must be array");
+        assert_eq!(
+            messages.len(),
+            2,
+            "harness_setup must return exactly 2 messages"
+        );
         assert_eq!(messages[0]["role"].as_str().unwrap(), "system");
         assert_eq!(messages[1]["role"].as_str().unwrap(), "user");
     }
@@ -581,7 +619,8 @@ mod tests {
         let result = h.get(&params).unwrap();
         let user_text = result["messages"][1]["content"]["text"].as_str().unwrap();
         assert!(
-            user_text.contains("cascade generate-instructions") || user_text.contains("No cascade tier"),
+            user_text.contains("cascade generate-instructions")
+                || user_text.contains("No cascade tier"),
             "user message must reference generate-instructions or no-tiers fallback"
         );
     }
@@ -598,7 +637,10 @@ mod tests {
         // Must contain verification step or no-tiers fallback
         let has_verification = user_text.contains("cascade mcp list-resources")
             || user_text.contains("No cascade tier");
-        assert!(has_verification, "user message must contain list-resources verification step");
+        assert!(
+            has_verification,
+            "user message must contain list-resources verification step"
+        );
     }
 
     #[test]
@@ -624,8 +666,15 @@ mod tests {
             "arguments": {}
         });
         let err = h.get(&params).unwrap_err();
-        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS, "missing harness must return -32602");
-        assert!(err.message.contains("harness"), "error must mention missing field");
+        assert_eq!(
+            err.code,
+            crate::server::ERR_INVALID_PARAMS,
+            "missing harness must return -32602"
+        );
+        assert!(
+            err.message.contains("harness"),
+            "error must mention missing field"
+        );
     }
 
     #[test]
@@ -636,7 +685,11 @@ mod tests {
             "arguments": { "harness": "cursor" }
         });
         let err = h.get(&params).unwrap_err();
-        assert_eq!(err.code, crate::server::ERR_INVALID_PARAMS, "unknown harness must return -32602");
+        assert_eq!(
+            err.code,
+            crate::server::ERR_INVALID_PARAMS,
+            "unknown harness must return -32602"
+        );
     }
 
     #[test]
@@ -679,7 +732,10 @@ mod tests {
             .unwrap();
         let args = prompt["arguments"].as_array().unwrap();
         let harness_arg = args.iter().find(|a| a["name"].as_str() == Some("harness"));
-        assert!(harness_arg.is_some(), "cascade.harness_setup must have 'harness' argument");
+        assert!(
+            harness_arg.is_some(),
+            "cascade.harness_setup must have 'harness' argument"
+        );
         assert!(
             harness_arg.unwrap()["required"].as_bool().unwrap_or(false),
             "harness argument must be required"

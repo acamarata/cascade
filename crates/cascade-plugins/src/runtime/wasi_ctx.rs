@@ -16,12 +16,13 @@
 //!   - Network (WASI level): disabled entirely in this release. The WASI socket
 //!     interfaces are not added to the linker. The `net` permission list is
 //!     recorded for audit but not currently enforced at the WASI layer.
+//!
 //! SPORT: cascade-plugins / runtime module (T-P4-E03-04)
 
 use anyhow::Result;
 use tracing::warn;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi::preview1::WasiP1Ctx;
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 
 use crate::manifest::JsonPermissions;
 
@@ -123,14 +124,19 @@ mod tests {
     fn empty_permissions_builds_without_error() {
         let perms = JsonPermissions::default();
         let result = build_wasi_ctx(&perms);
-        assert!(result.is_ok(), "empty permissions should produce valid WASI ctx");
+        assert!(
+            result.is_ok(),
+            "empty permissions should produce valid WASI ctx"
+        );
     }
 
     #[test]
     fn env_permission_injects_known_var() {
         // Use PATH — always set in test environments.
         let perms = JsonPermissions {
-            env: vec![EnvPermission { name: "PATH".to_owned() }],
+            env: vec![EnvPermission {
+                name: "PATH".to_owned(),
+            }],
             ..Default::default()
         };
         // Should build without error regardless of whether PATH is set.
