@@ -78,9 +78,73 @@ pub mod runners;
 
 pub use adapter::LocalLlmAdapter;
 pub use config::LocalLlmConfig;
-pub use downloader::{download_model, DownloadProgress, ModelEntry};
+pub use downloader::{download_model, find_model, model_dir_path, models, DownloadProgress, ModelEntry};
 pub use error::LocalModelError;
 pub use runner::{LocalLlmRunner, GEMMA_2_2B_MODEL_ID};
 pub use runner_factory::{build_runner, LocalLlmRunnerTrait, ModelFamily};
 pub use runners::llama3::{format_llama3_prompt, Llama3Runner, LLAMA3_2_3B_MODEL_ID};
 pub use runners::phi3::{format_phi3_prompt, Phi3Runner, PHI3_MINI_MODEL_ID};
+
+// ── Startup helper ────────────────────────────────────────────────────────────
+
+/// Scan `~/.cascade/models/` and return a list of `(provider_id, LocalLlmAdapter)`
+/// pairs for every model directory that is present on disk.
+///
+/// # Purpose
+///
+/// Called at daemon startup. For each known model whose directory exists under
+/// `~/.cascade/models/<model_id>/`, this function constructs a `LocalLlmAdapter`
+/// and returns it paired with the provider ID `local:<model_id>`. The caller
+/// (daemon) registers these in the `ProviderRegistry` so the health-check and
+/// routing subsystems see them as healthy local providers.
+///
+/// # Behaviour
+///
+/// - Uses `$HOME` env var first (test-isolation-safe), then `dirs::home_dir()`.
+/// - Iterates the hardcoded model catalog (`downloader::models()`).
+/// - Skips models whose directory is absent — no error, no log noise.
+/// - Constructs each adapter with `LocalLlmConfig::new_for_model(id)` (defaults).
+///
+/// # Errors
+///
+/// Returns `Vec` — per-model errors are logged at WARN and skipped. The function
+/// itself is infallible so the daemon never fails to start due to a bad local model.
+///
+/// # SPORT
+///
+/// Entity: cascade-local-llm crate — startup registration helper (E-P5-07)
+pub fn scan_installed_models() -> Vec<(String, LocalLlmAdapter)> {
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(dirs::home_dir);
+    let Some(home) = home else {
+        return vec![];
+    };
+    let models_root = home.join(".cascade").join("models");
+
+    let mut out = Vec::new();
+    for entry in models() {
+        let model_dir = models_root.join(entry.model_id);
+        if !model_dir.is_dir() {
+            continue;
+        }
+        let cfg = LocalLlmConfig {
+            model_path: model_dir,
+            max_tokens: 512,
+            temperature: 0.7,
+            stop_sequences: vec![],
+        };
+        match LocalLlmAdapter::new(cfg) {
+            Ok(adapter) => {
+                let provider_id = format!("local:{}", entry.model_id);
+                out.push((provider_id, adapter));
+            }
+            Err(e) => {
+                // Log at warn but never abort startup.
+                tracing::warn!(model_id = entry.model_id, error = %e,
+                    "scan_installed_models: adapter init failed (skipping)");
+            }
+        }
+    }
+    out
+}

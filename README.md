@@ -23,7 +23,43 @@ A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each
 - MCP server with 5 transports, exposing your cascade as context to any MCP-compatible tool
 - WASM plugin system (wasmtime, capability-gated) with a PDK and `cargo-generate` template
 
-## Platform support
+## Install
+
+### One-liner (macOS / Linux)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
+```
+
+Downloads the latest release, verifies the SHA256 checksum, installs to `~/.local/bin`, and runs the daemon + init setup. No `sudo` required.
+
+```sh
+# Pin a version
+CASCADE_VERSION=v1.0.0 curl -fsSL .../install.sh | sh
+
+# Skip daemon + init (CI / unattended agents)
+CASCADE_NO_DAEMON=1 CASCADE_NO_INIT=1 curl -fsSL .../install.sh | sh
+```
+
+### One-liner (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.ps1 | iex
+```
+
+Installs to `%LOCALAPPDATA%\Cascade\bin` and adds it to your user PATH. No Administrator prompt required.
+
+```powershell
+# Pin a version
+$env:CASCADE_VERSION = "v1.0.0"
+irm .../install.ps1 | iex
+
+# Skip daemon + init
+$env:CASCADE_NO_DAEMON = "1"; $env:CASCADE_NO_INIT = "1"
+irm .../install.ps1 | iex
+```
+
+### Package managers
 
 | Platform | Install command |
 |---|---|
@@ -36,6 +72,8 @@ A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each
 | Windows (Scoop) | `scoop install cascade` |
 | Nix | `nix run github:acamarata/cascade` |
 | Any (cargo) | `cargo install cascade-cli` |
+
+Full documentation for all install paths: [Installation wiki](../../wiki/Installation)
 
 ## Quick start
 

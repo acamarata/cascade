@@ -182,7 +182,12 @@ async fn main() {
         }
     }
 
-    // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
+    // ── Local LLM scan (E-P5-07) ──────────────────────────────────────────────
+    // Scan ~/.cascade/models/ and register each present model as a local:<id>
+    // provider. Never blocks startup — missing models are skipped silently.
+    try_register_local_models(&provider_registry);
+
+        // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
     // Probe localhost:11434 with a 500 ms timeout. If Ollama is running,
     // register the adapter as "ollama". If absent, skip silently — the
     // daemon must never block startup waiting for an optional local LLM.
@@ -384,6 +389,33 @@ async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
         },
         None => {
             info!("Ollama not detected on localhost:11434 (skipping registration)");
+        }
+    }
+}
+
+/// Scan `~/.cascade/models/` and register any locally-installed LLM adapters.
+///
+/// Delegates to `cascade_local_llm::scan_installed_models()` which returns
+/// `(provider_id, LocalLlmAdapter)` pairs for every model directory present on
+/// disk.  Each pair is registered in the `ProviderRegistry` under its provider
+/// ID (e.g. `local:gemma-2-2b`).
+///
+/// Registration failures (e.g. duplicate ID) are logged at WARN and skipped —
+/// a bad local model must never block daemon startup.
+///
+/// SPORT: MASTER-RUST-CRATES.md — cascade-daemon: local LLM registration (E-P5-07)
+fn try_register_local_models(registry: &Arc<ProviderRegistry>) {
+    use cascade_local_llm::scan_installed_models;
+
+    let adapters = scan_installed_models();
+    if adapters.is_empty() {
+        info!("no local models found under ~/.cascade/models/ (skipping)");
+        return;
+    }
+    for (provider_id, adapter) in adapters {
+        match registry.register(provider_id.clone(), Arc::new(adapter)) {
+            Ok(()) => info!(provider_id, "local LLM registered"),
+            Err(e) => warn!(provider_id, error = %e, "local LLM registration failed (skipping)"),
         }
     }
 }

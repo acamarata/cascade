@@ -28,6 +28,8 @@ cascade-plugins = { path = "../cascade-plugins", version = "1.0.0" }
 cascade-mcp     = { path = "../cascade-mcp", version = "1.0.0" }
 cascade-keychain = { path = "../cascade-keychain", version = "1.0.0" }
 cascade-audit = { path = "../cascade-audit", version = "1.0.0" }
+cascade-local-llm = { path = "../cascade-local-llm", version = "1.0.0" }
+cascade-providers = { path = "../cascade-providers", version = "1.0.0" }
 rusqlite      = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }
@@ -49,6 +51,7 @@ libc = "0.2"
 tempfile    = "3"
 serial_test = "3"
 wat         = "1"
+wiremock    = "0.6"
 
 [build-dependencies]
 clap          = { version = "4", features = ["derive"] }

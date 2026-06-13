@@ -52,6 +52,7 @@
 //! # }
 //! ```
 
+pub mod ai_folder;
 pub mod auth_detector;
 pub mod cache;
 pub mod cascade_resolution;

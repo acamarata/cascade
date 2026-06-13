@@ -32,6 +32,8 @@ cascade-cli       = { path = "../../../crates/cascade-cli" }
 cascade-audit     = { path = "../../../crates/cascade-audit" }
 # T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
 cascade-providers = { path = "../../../crates/cascade-providers" }
+# E-P5-08: OS keychain access for provider_connect (platform_keychain)
+cascade-keychain  = { path = "../../../crates/cascade-keychain" }
 cascade-core  = { path = "../../../crates/cascade-core" }    # T-P3-E04-15: read_providers_store
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)

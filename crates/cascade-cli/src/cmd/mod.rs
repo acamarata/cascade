@@ -5,8 +5,16 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// E-P5-04: post-init healthcheck gate
+pub mod verify;
+// E-P5-08: provider credential CLI (add/list/remove/test)
+pub mod provider;
 // T-P4-E04-11: cascade cache stats + cache clear
 pub mod cache;
+// E-P5-07: local LLM model catalog + download + remove
+pub mod models;
+// E-P5-06: AI-folder preference
+pub mod folder;
 // T-P4-E06-13: cascade policy eval/list/add/remove + dispatch enforcement
 pub mod policy;
 // T-P4-E04-21: cascade context clear-session / cleanup-expired
@@ -130,6 +138,14 @@ pub enum Commands {
     Context(context::ContextArgs),
     /// Manage guardrail policies (eval / list / add / remove).
     Policy(policy::PolicyArgs),
+    /// Manage the AI folder preference (.cascade, .claude, .codex, or custom).
+    Folder(folder::FolderArgs),
+    /// List, download, and remove local LLM model weights.
+    Models(models::ModelsArgs),
+    /// Manage AI provider credentials (add / list / remove / test).
+    Provider(provider::ProviderArgs),
+    /// Post-init healthcheck gate — verify a cascade setup is fully operational.
+    Verify(verify::VerifyArgs),
 }
 
 impl Commands {
@@ -167,6 +183,10 @@ impl Commands {
             Commands::Update(args) => args.run().await,
             Commands::Context(args) => args.run().await,
             Commands::Policy(args) => args.run().await,
+            Commands::Folder(args) => args.run().await,
+            Commands::Models(args) => args.run().await,
+            Commands::Provider(args) => args.run().await,
+            Commands::Verify(args) => args.run().await,
         }
     }
 }

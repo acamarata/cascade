@@ -22,6 +22,7 @@ cascade-tray      = { workspace = true }
 cascade-keychain  = { path = "../cascade-keychain" }
 cascade-audit     = { path = "../cascade-audit" }
 cascade-providers = { workspace = true }
+cascade-local-llm = { path = "../cascade-local-llm" }
 secrecy       = "0.8"
 tokio         = { workspace = true }
 tracing       = { workspace = true }

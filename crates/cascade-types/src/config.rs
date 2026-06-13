@@ -26,6 +26,74 @@ use crate::query_strategy::StrategyKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// ── AiFolder ──────────────────────────────────────────────────────────────────
+
+/// Which AI folder name Cascade uses to store its working files.
+///
+/// On a fresh setup, Cascade checks for an already-existing AI folder in this
+/// order: `.claude` → `.codex` → `.opencode` → `.cascade`. If one is found it
+/// is auto-adopted (non-destructive). If none exists, `.cascade` is created.
+///
+/// The choice is persisted to `config.toml` as `ai_folder`.
+///
+/// # Variants
+/// - `Cascade` — `.cascade` (default)
+/// - `Claude`  — `.claude`
+/// - `Codex`   — `.codex`
+/// - `Custom`  — any other folder name supplied by the user
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AiFolder {
+    /// Use `.cascade/` (default).
+    Cascade,
+    /// Use `.claude/` (Claude Code convention).
+    Claude,
+    /// Use `.codex/` (OpenAI Codex convention).
+    Codex,
+    /// Use `.opencode/` (OpenCode convention).
+    Opencode,
+    /// Arbitrary folder name.
+    Custom(String),
+}
+
+impl Default for AiFolder {
+    fn default() -> Self {
+        AiFolder::Cascade
+    }
+}
+
+impl AiFolder {
+    /// The folder name this variant resolves to (without a leading dot, as
+    /// that is part of the identifier stored on disk).
+    ///
+    /// Returns the dotted folder name (e.g. `.cascade`).
+    pub fn folder_name(&self) -> &str {
+        match self {
+            AiFolder::Cascade => ".cascade",
+            AiFolder::Claude => ".claude",
+            AiFolder::Codex => ".codex",
+            AiFolder::Opencode => ".opencode",
+            AiFolder::Custom(name) => name.as_str(),
+        }
+    }
+
+    /// Try to parse an `AiFolder` from a user-supplied string (e.g. from the
+    /// CLI argument `cascade folder set .claude`).
+    ///
+    /// Leading dots are accepted and stripped before comparison so both
+    /// `.claude` and `claude` are valid inputs.
+    pub fn from_str_loose(s: &str) -> Self {
+        let name = s.trim_start_matches('.');
+        match name {
+            "cascade" => AiFolder::Cascade,
+            "claude" => AiFolder::Claude,
+            "codex" => AiFolder::Codex,
+            "opencode" => AiFolder::Opencode,
+            other => AiFolder::Custom(format!(".{}", other)),
+        }
+    }
+}
+
 // ── CascadeConfig ─────────────────────────────────────────────────────────────
 
 /// The top-level configuration struct.
@@ -49,6 +117,12 @@ pub struct CascadeConfig {
 
     /// Daemon process settings.
     pub daemon: DaemonConfig,
+
+    /// Which AI folder name Cascade uses (`.cascade`, `.claude`, `.codex`, or custom).
+    ///
+    /// Written by `cascade folder set <name>` and read by every path-resolution
+    /// helper. Defaults to `cascade` (→ `.cascade`).
+    pub ai_folder: AiFolder,
 
     /// Which cascade tiers are active. An empty vec means all tiers are active.
     pub active_tiers: Vec<CascadeTier>,
@@ -270,4 +344,5 @@ pub mod keys {
     pub const MCP_ENABLED: &str = "mcp.enabled";
     pub const DAEMON_LOG_LEVEL: &str = "daemon.log_level";
     pub const DAEMON_DEBOUNCE_MS: &str = "daemon.debounce_ms";
+    pub const AI_FOLDER: &str = "ai_folder";
 }

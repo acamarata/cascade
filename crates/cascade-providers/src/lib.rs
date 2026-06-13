@@ -31,6 +31,7 @@
 // ── E-04 core type-system modules ────────────────────────────────────────────
 pub mod adapter;
 pub mod adapters;
+pub mod connect;
 pub mod cost;
 pub mod error;
 pub mod http_client;
@@ -68,3 +69,10 @@ pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, Impo
 
 pub use google_oauth::{validate_gemini_key, GoogleOAuthClient, GoogleToken};
 pub use google_provision::{GoogleProvisionClient, ProvisionError};
+
+// E-P5-08 exports — CLI-accessible provider credential connect/validate path.
+pub use connect::{
+    connect_provider, connect_provider_at, list_providers, list_providers_at, remove_provider,
+    remove_provider_at, validate_api_key, ConnectedProvider, Credential, ProviderKind,
+    KEYCHAIN_SERVICE as PROVIDER_KEYCHAIN_SERVICE, PROVIDERS_JSON_NAME,
+};

@@ -991,43 +991,67 @@ pub async fn detect_gemini_pool() -> Result<GeminiPoolDetectResult, String> {
     }
 }
 
-/// Connect / validate an AI provider by id and optional credential token.
+/// Connect / validate an AI provider by id and optional API key credential.
 ///
-/// Purpose: stub for E-04 OAuth flow; wires the provider-connect UI and handles
-///          the returned credential token when E-04 fills in the real OAuth logic.
-/// Inputs: provider_id (e.g. "anthropic", "openai", "opencode"), credential (optional token)
+/// Purpose: Delegates to `cascade_providers::connect_provider` to validate the
+///          supplied API key against the provider's live auth endpoint, then
+///          stores the secret in the OS keychain and records the connection in
+///          `~/.cascade/providers.json`.  OAuth providers (opencode, openai-oauth,
+///          gemini-oauth) pass `credential = None`; the PKCE flow stores the
+///          token in keychain before this command is called.
+/// Inputs: provider_id (e.g. "anthropic", "openai", "gemini"), credential (API key or None for OAuth)
 /// Outputs: ProviderConnectResult { success, providerId, message }
-/// Constraints: E-03 stub — does not store credentials (E-04 scope); validates id is non-empty.
-/// SPORT: T-P3-E03-06
+/// Constraints: Secrets NEVER stored plaintext or logged. Result shape is stable (frozen IPC).
+/// SPORT: T-P3-E03-06 / E-P5-08
 #[tauri::command]
 pub async fn provider_connect(
     provider_id: String,
     credential: Option<String>,
 ) -> Result<ProviderConnectResult, String> {
+    use cascade_keychain::platform_keychain;
+    use cascade_providers::{connect_provider, Credential, ProviderKind};
+
     if provider_id.is_empty() {
         return Err("provider_id must not be empty".to_string());
     }
 
-    // Stub: accept known provider ids; real OAuth lives in E-04.
-    let known_providers = ["gemini", "anthropic", "openai", "opencode"];
-    let success = known_providers.contains(&provider_id.as_str())
-        && credential.as_deref().map(|c| !c.is_empty()).unwrap_or(true);
+    // Parse the provider kind. Unknown slugs fall back to a graceful error.
+    let kind = match ProviderKind::from_slug(&provider_id) {
+        Some(k) => k,
+        None => {
+            return Ok(ProviderConnectResult {
+                success: false,
+                provider_id: provider_id.clone(),
+                message: format!(
+                    "Unknown provider '{}'. Supported: anthropic, openai, gemini, openrouter, groq, mistral, deepseek, together, cohere.",
+                    provider_id
+                ),
+            });
+        }
+    };
 
-    Ok(ProviderConnectResult {
-        success,
-        provider_id: provider_id.clone(),
-        message: if success {
-            format!(
-                "Provider '{}' connected (stub — E-04 will complete OAuth)",
-                provider_id
-            )
-        } else {
-            format!(
-                "Provider '{}' not recognised or missing credential",
-                provider_id
-            )
-        },
-    })
+    // Determine credential type.
+    let cred = match credential {
+        Some(key) if !key.is_empty() => Credential::ApiKey(key),
+        _ => Credential::OAuth,
+    };
+
+    let kc = platform_keychain();
+    match connect_provider(kind, cred, kc.as_ref()).await {
+        Ok(connected) => Ok(ProviderConnectResult {
+            success: true,
+            provider_id: connected.id.clone(),
+            message: format!(
+                "Provider '{}' connected and validated successfully.",
+                connected.name
+            ),
+        }),
+        Err(e) => Ok(ProviderConnectResult {
+            success: false,
+            provider_id: provider_id.clone(),
+            message: format!("Connection failed: {e}"),
+        }),
+    }
 }
 
 /// Trigger a local model pull via `ollama pull <model>`.

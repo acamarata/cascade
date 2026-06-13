@@ -1134,6 +1134,7 @@ dependencies = [
  "cascade-audit",
  "cascade-cli",
  "cascade-core",
+ "cascade-keychain",
  "cascade-providers",
  "cascade-types",
  "chrono",
@@ -1183,8 +1184,10 @@ dependencies = [
  "cascade-core",
  "cascade-harness",
  "cascade-keychain",
+ "cascade-local-llm",
  "cascade-mcp",
  "cascade-plugins",
+ "cascade-providers",
  "cascade-rag",
  "cascade-types",
  "chrono",
@@ -1204,6 +1207,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wat",
+ "wiremock",
 ]
 
 [[package]]
@@ -1245,6 +1249,7 @@ dependencies = [
  "cascade-audit",
  "cascade-core",
  "cascade-keychain",
+ "cascade-local-llm",
  "cascade-providers",
  "cascade-rag",
  "cascade-tray",
