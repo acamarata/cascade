@@ -1,0 +1,25 @@
+[package]
+name = "cascade-agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Agent registry, tool grants, and agent-library schema for the Cascade orchestration runtime (E-P6-01/06/09)."
+
+[dependencies]
+cascade-types = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+serde_yaml    = { workspace = true }
+async-trait   = { workspace = true }
+thiserror     = { workspace = true }
+tokio         = { workspace = true }
+tracing       = { workspace = true }
+uuid          = { workspace = true }
+chrono        = { workspace = true }
+
+[dev-dependencies]
+tokio    = { workspace = true }
+tempfile = "3"

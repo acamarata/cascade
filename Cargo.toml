@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/cascade-agents",
     "crates/cascade-types",
     "crates/cascade-core",
     "crates/cascade-cli",
@@ -38,6 +39,7 @@ repository = "https://github.com/acamarata/cascade"
 
 [workspace.dependencies]
 # Shared deps — crates pin to workspace version to avoid drift
+cascade-agents    = { path = "crates/cascade-agents", version = "1.0.0" }
 cascade-types     = { path = "crates/cascade-types", version = "1.0.0" }
 cascade-core      = { path = "crates/cascade-core", version = "1.0.0" }
 cascade-harness   = { path = "crates/cascade-harness", version = "1.0.0" }

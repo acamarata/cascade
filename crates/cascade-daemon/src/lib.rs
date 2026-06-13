@@ -11,6 +11,8 @@
 #![allow(dead_code)]
 
 pub mod audit;
+// E-P6-04: CEO orchestrator IPC methods (ceo_directive / ceo_status / ceo_approve)
+pub mod ipc_ceo;
 // T-P4-E04-10: in-memory mtime-validated chunk cache for cascade file reads
 pub mod chunk_cache;
 pub mod config;

@@ -116,6 +116,9 @@ pub struct IpcServer {
     /// RAG embedding SQLite cache (T-P4-E04-09 / T-P4-E04-11).
     /// Shared with the RAG pipeline; surfaced via `cache.stats`.
     embed_cache: Arc<cascade_rag::cache::EmbedCache>,
+    /// CEO orchestrator runtime (E-P6-04).
+    /// Shared via Arc so connection tasks can call CEO IPC methods concurrently.
+    ceo_runtime: Arc<crate::ipc_ceo::CeoRuntime>,
 }
 
 impl IpcServer {
@@ -142,6 +145,10 @@ impl IpcServer {
             cascade_rag::cache::EmbedCache::open(&embed_cache_dir, "bge-m3", "1.0", false)
                 .unwrap_or_else(|_| cascade_rag::cache::EmbedCache::disabled()),
         );
+        // CEO runtime: session files under ~/.cascade/agents/sessions/ (E-P6-04).
+        let ceo_session_dir = config_dir.join("agents").join("sessions");
+        let ceo_runtime = Arc::new(crate::ipc_ceo::CeoRuntime::new(Some(ceo_session_dir)));
+
         Ok(Self {
             socket_path,
             health,
@@ -151,6 +158,7 @@ impl IpcServer {
             file_chunk_cache,
             query_cache,
             embed_cache,
+            ceo_runtime,
         })
     }
 
@@ -441,6 +449,61 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                     };
                     return match handle_usage_ledger(account_email, period) {
                         Ok(ledger) => Response::ok(ledger),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                _ => {}
+            }
+
+            // ── CEO methods (E-P6-04) ────────────────────────────────────
+            match typed_req.method.as_str() {
+                "ceo_directive" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let params: crate::ipc_ceo::CeoDirectiveParams =
+                        match serde_json::from_value(params_val) {
+                            Ok(p) => p,
+                            Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                        };
+                    return match crate::ipc_ceo::handle_ceo_directive(&server.ceo_runtime, params)
+                        .await
+                    {
+                        Ok(v) => Response::ok(v),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                "ceo_status" => {
+                    return match crate::ipc_ceo::handle_ceo_status(&server.ceo_runtime) {
+                        Ok(v) => Response::ok(v),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                "ceo_approvals" => {
+                    return match crate::ipc_ceo::handle_ceo_approvals(&server.ceo_runtime) {
+                        Ok(v) => Response::ok(v),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                "ceo_approve" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let params: crate::ipc_ceo::CeoApproveParams =
+                        match serde_json::from_value(params_val) {
+                            Ok(p) => p,
+                            Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                        };
+                    return match crate::ipc_ceo::handle_ceo_approve(&server.ceo_runtime, params) {
+                        Ok(v) => Response::ok(v),
+                        Err(e) => Response::err(-32001, e),
+                    };
+                }
+                "ceo_deny" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let params: crate::ipc_ceo::CeoApproveParams =
+                        match serde_json::from_value(params_val) {
+                            Ok(p) => p,
+                            Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                        };
+                    return match crate::ipc_ceo::handle_ceo_deny(&server.ceo_runtime, params) {
+                        Ok(v) => Response::ok(v),
                         Err(e) => Response::err(-32001, e),
                     };
                 }

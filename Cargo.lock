@@ -1128,6 +1128,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cascade-agents"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "cascade-types",
+ "chrono",
+ "serde 1.0.228",
+ "serde_json 1.0.150",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "cascade-app"
 version = "1.0.0"
 dependencies = [
@@ -1243,9 +1260,11 @@ name = "cascade-daemon"
 version = "1.0.0"
 dependencies = [
  "assert_cmd",
+ "async-trait",
  "axum 0.7.9",
  "base64 0.22.1",
  "blake3",
+ "cascade-agents",
  "cascade-audit",
  "cascade-core",
  "cascade-keychain",

@@ -5,6 +5,8 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// E-P6-04: T0 CEO / Founder orchestrator
+pub mod ceo;
 // E-P5-04: post-init healthcheck gate
 pub mod verify;
 // E-P5-08: provider credential CLI (add/list/remove/test)
@@ -146,6 +148,8 @@ pub enum Commands {
     Provider(provider::ProviderArgs),
     /// Post-init healthcheck gate — verify a cascade setup is fully operational.
     Verify(verify::VerifyArgs),
+    /// Submit directives to the CEO/Founder AI orchestrator.
+    Ceo(ceo::CeoArgs),
 }
 
 impl Commands {
@@ -187,6 +191,7 @@ impl Commands {
             Commands::Models(args) => args.run().await,
             Commands::Provider(args) => args.run().await,
             Commands::Verify(args) => args.run().await,
+            Commands::Ceo(args) => args.run().await,
         }
     }
 }

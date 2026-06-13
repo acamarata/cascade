@@ -26,6 +26,8 @@ mod healthcheck;
 mod hook_runner;
 mod ipc;
 mod ipc_handlers;
+// E-P6-04: CEO orchestrator IPC methods
+mod ipc_ceo;
 // T-P3-E04-29: usage analytics IPC handlers (wired in ipc.rs try_typed_dispatch)
 mod ipc_usage_analytics;
 mod key_index;
