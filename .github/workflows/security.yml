@@ -60,10 +60,10 @@ jobs:
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          # deny.toml at workspace root governs licenses, bans, and advisories.
-          config: deny.toml
-          # Fail on any license violation or banned crate.
-          arguments: --all-features check licenses bans advisories sources
+          # deny.toml at workspace root is auto-discovered by cargo-deny-action@v2.
+          # command defaults to "check"; arguments lists which checks to run.
+          command: check
+          arguments: --all-features licenses bans advisories sources
 
   # ── gitleaks ───────────────────────────────────────────────────────────────
   # Scans the repository history for accidentally committed secrets.

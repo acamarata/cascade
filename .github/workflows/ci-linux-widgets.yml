@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dev dependencies
         working-directory: apps/cascade-widget-linux/gnome
-        run: pnpm install
+        run: pnpm install --ignore-scripts
 
       - name: Lint GJS
         working-directory: apps/cascade-widget-linux/gnome
@@ -67,7 +67,7 @@ jobs:
 
       - name: Lint QML files
         run: |
-          qmllint --ignore-warnings \
+          qmllint \
             apps/cascade-widget-linux/kde/contents/ui/main.qml \
             apps/cascade-widget-linux/kde/contents/ui/CacheModel.qml \
             apps/cascade-widget-linux/kde/contents/ui/FullRepresentation.qml \

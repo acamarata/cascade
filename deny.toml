@@ -19,15 +19,9 @@ allow = [
     "CC0-1.0",
     "Zlib",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "LGPL-2.0",
-    "LGPL-2.1",
-    "LGPL-3.0",
-    "AGPL-1.0",
-    "AGPL-3.0",
-]
+# Note: [licenses].deny was removed in cargo-deny >=0.14 (PR#611).
+# Unlisted licenses are denied by default when an allow list is present,
+# so GPL/LGPL/AGPL are implicitly rejected without a separate deny list.
 confidence-threshold = 0.8
 exceptions = []
 

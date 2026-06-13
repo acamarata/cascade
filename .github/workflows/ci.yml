@@ -84,7 +84,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
@@ -124,7 +124,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
         run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
@@ -172,7 +172,7 @@ jobs:
           components: clippy
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
@@ -246,7 +246,7 @@ jobs:
           components: llvm-tools-preview
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
@@ -370,7 +370,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Build cascade-tray for Windows x64
         run: cargo build -p cascade-tray --target x86_64-pc-windows-msvc
@@ -400,7 +400,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
         run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev

@@ -1,0 +1,15 @@
+title = "cascade gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and scanner pattern literals, not real secrets"
+# These two files contain the scanner's own detection needles and unit-test
+# fixtures.  The PEM headers are the literal strings the scanner searches for;
+# the JWT is a public sample from jwt.io used in a unit test; the hex token is
+# a fabricated 64-char string used only in a tempfile-based unit test.
+paths = [
+  '''crates/cascade-core/src/security/secrets_scanner\.rs''',
+  '''crates/cascade-cli/src/proxy_client\.rs''',
+]
