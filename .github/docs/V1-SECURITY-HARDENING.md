@@ -1,50 +1,60 @@
-# Cascade v1 — Security & Release Hardening (P10 candidate)
+# Cascade v1 — Security & Release Hardening (P10) — COMPLETE
 
-_Generated 2026-06-14 during the pre-release CI review. All 9 feature phases
-(P5–P9) are complete and the workspace tests pass with 0 failures. The items
-below are the remaining **dependency-security + license** work that gates a
-clean public v1, surfaced for a founder decision._
+_P10 executed 2026-06-14 per founder decision (Option B: harden before v1).
+All 9 feature phases (P5–P9) were already complete + green; this pass closed the
+dependency-security and license gaps that gated a clean public release._
 
-## What's clean
-- **gitleaks**: 0 leaks on the tracked tree (the false-positive allowlist for
-  `secrets_scanner.rs` + `proxy_client.rs` covers the scanner's own pattern
-  literals). No real secret committed. The release private key lives only in the
-  OS keychain; only the PUBLIC key is in the repo.
-- **Feature code**: workspace `cargo test` 0 failed; app vitest 769; typecheck +
-  build clean.
+## What P10 fixed
 
-## The residual: dependency advisories + licenses (NOT release-clean yet)
+### 1. wasmtime sandbox runtime: 22 → 36.0.10 LTS
+The plugin WASM runtime carried 16 RUSTSEC-2026 advisories on wasmtime 22,
+including **RUSTSEC-2026-0096 — aarch64 Cranelift miscompile enabling sandbox
+escape** (the host is Apple Silicon) and heap-OOB / WASI resource-exhaustion
+issues, plus **RUSTSEC-2026-0149 — WASI `path_open(TRUNCATE)` bypassing
+`FilePerms::WRITE`**.
 
-### Advisories — 21 vulnerabilities + 33 unmaintained warnings (RustSec)
-| Source | Count | Severity / nature | Fix |
-|---|---|---|---|
-| **wasmtime 22** | **16** | 2026 batch incl. aarch64 Cranelift sandbox escape (RUSTSEC-2026-0096), heap-OOB, WASI resource exhaustion | **Major upgrade 22 → 35+/45** (large, risky migration of the WASM plugin runtime) |
-| rustc-serialize | 2 | unmaintained, stack overflow on nested JSON | transitive — find parent + update/replace |
-| atty / gtk-sys / gdk-sys / atk-sys | ~5 | unmaintained, **Linux-tray-only** | update `tray-item` / Linux GUI stack, or gate the indicator |
-| 33 misc | warn | unmaintained/yanked transitive | `cargo update` does NOT clear (latest-in-range already); needs targeted bumps |
+- Upgraded to **wasmtime 36.0.10 LTS** (chosen over latest 45 because 45 needs
+  `cc ^1.2.41`, which forces a tree-sitter family migration through the RAG
+  code chunker; 36.x keeps `cc ^1.0` and is the LTS line with security
+  backports). 36.0.10 clears **all 17** wasmtime/wasmtime-wasi advisories.
+- API migration: `wasmtime_wasi::preview1` module, explicit `async_support(true)`,
+  `set_fuel`/`consume_fuel`, `StoreLimitsBuilder`. The capability-gated WASI
+  (deny-by-default fs/net, manifest-only preopens), fuel metering, memory
+  limits, and the i64-packed JSON ABI are all preserved.
+- **Validated at runtime**: 98 plugin tests pass on 36.0.10 — including the real
+  WASM round-trip and all 14 SIEGE vectors (fuel exhaustion trapped,
+  path-traversal denied, ABI-abuse handled).
 
-### Licenses
-- **libappindicator-sys** = `LGPL-2.1/LGPL-3.0` — Linux system-tray binding,
-  **dynamically linked** to the system lib (LGPL-compliant; no obligation on our
-  MIT code). Violates the project's "no LGPL" rule on paper → documented
-  exception OR swap the Linux tray backend.
-- `ring` has no SPDX `license` field → needs a clarify (ISC AND MIT AND OpenSSL).
-- Permissive licenses to allow: MPL-2.0, Unicode-3.0, OpenSSL, CDLA-Permissive-2.0,
-  Unlicense (all done in deny.toml).
+### 2. LGPL + GTK Linux-tray dependency removed
+The Linux system tray used `libappindicator-sys` (**LGPL-2.1/LGPL-3.0**,
+violating the project's no-LGPL rule) which pulled unmaintained gtk/gdk/atk-sys
+bindings. Replaced the Linux backend with **`ksni` 0.3** (pure-Rust
+StatusNotifierItem over zbus, MIT, no GTK, no system libs). Menu items, action
+dispatch, and lifecycle preserved. The LGPL crate is gone.
 
-## The decision (founder)
-**Option A — Ship v1 now, harden as v1.0.1:** accept the advisories with
-documented mitigations (Cascade runs **user-installed** plugins, not untrusted
-multi-tenant code; WASI is capability-gated; fuel + memory limits apply), finish
-the deny.toml exceptions so CI is green-with-documented-risk, merge + release.
-Fast; ships with known (mitigated) CVEs in the plugin sandbox.
+### 3. CI build workflows repaired
+Reconciled ci-app / daemon-ci / ci-dashboard / ci-linux-widgets / template-ci:
+corepack-before-pnpm ordering, the real `@cascade/dashboard` package name,
+removed the now-stale GTK/libappindicator apt installs (ksni needs none),
+sccache pin. (Tauri's own GTK-webview Linux GUI deps remain — see below.)
 
-**Option B — Harden first (P10), then release:** do the wasmtime major upgrade
-(clears 16/21), clean the unmaintained Linux-GUI + transitive deps, resolve the
-LGPL dep, then ship with a genuinely clean security gate. Correct for a
-security-positioned FOSS tool; the wasmtime migration is real, risky work that
-could destabilize the plugin system and needs full re-validation.
+### 4. License + advisory gate finalized (honest, documented)
+- `cascade-app` is MIT-licensed; permissive licenses (MPL-2.0, Unicode-3.0,
+  OpenSSL, CDLA, Unlicense) allow-listed; `ring` clarified; internal
+  workspace path-deps handled via `allow-wildcard-paths`.
+- gitleaks: 0 real leaks (scanner pattern-literals allow-listed).
 
-**Recommendation:** Option B (P10) for a credible security tool — but it's a real
-phase of work and your call. The wasmtime migration specifically should not be
-done blind; it warrants its own focused, validated effort.
+## Documented accepted-risk residual (no exploit path; in deny.toml + cargo-audit)
+None of these are exploitable sandbox escapes — those are fixed above.
+- **GTK3 stack** (atk/gdk/gtk/glib, 11 advisories) — **required by Tauri 2's
+  Linux GTK-webview GUI**; gtk-rs marked them unmaintained after moving to gtk4.
+  Linux-only, maintenance-status only.
+- **Transitive build/util deps** (proc-macro-error, instant, derivative, paste,
+  fxhash, number_prefix, lru) — unmaintained/unsound, no exploit path in our use.
+- **unic-*** Unicode crates — unmaintained transitive text processing.
+- **ring RUSTSEC-2025-0009** — AES panic only under overflow-checks (debug);
+  release builds are unaffected.
+
+Each is enumerated by RUSTSEC id in `deny.toml [advisories].ignore` and the
+`cargo-audit` CI step, with the rationale above. The security gate now passes on
+genuine fixes plus this explicitly-documented, no-exploit residual.

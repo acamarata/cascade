@@ -165,11 +165,14 @@ impl PluginSandbox {
     ///
     /// Builds the wasmtime `Engine` with:
     /// - `consume_fuel(true)` — fuel metering on
-    /// - `async_support(true)` — needed for tokio timeout integration
+    ///
+    /// Note: async support enabled explicitly (wasmtime 36 LTS); the runtime drives
+    /// `async_support(true)` toggle was removed/no-op). The runtime drives the
+    /// guest via `call_async`/`instantiate_async` for tokio timeout integration.
     pub fn new(plugin_type: PluginType) -> Result<Self, PluginError> {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
-        config.async_support(true);
+        config.async_support(true); // wasmtime 36: required for add_to_linker_async + call_async
 
         let engine = Engine::new(&config)?;
         let default_limits = ResourceLimits::for_type(plugin_type);

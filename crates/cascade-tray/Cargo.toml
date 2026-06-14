@@ -38,26 +38,14 @@ tray-item = "0.9"
 [target.'cfg(target_os = "windows")'.dependencies]
 tray-icon = "0.14"
 
-# Linux: libappindicator-sys for AppIndicator3 (GNOME/Unity/Cinnamon) and
-# dbus for KsystemTray fallback (KDE Plasma).  Both are gated to Linux only
-# so cross-compilation to macOS/Windows is never affected.
-#
-# WHY libappindicator-sys not optional: build.rs probes pkg-config and emits
-# cargo:rustc-cfg=cascade_tray_appindicator (found) or ..._no_appindicator
-# (absent).  The crate is always listed here but its symbols are only used
-# in #[cfg(cascade_tray_appindicator)] blocks in linux.rs — so on systems
-# without libappindicator3-dev the code compiles but the symbols are not
-# referenced, avoiding linker errors.
-# dbus 0.9 provides the D-Bus connection type used by the ksystemtray fallback.
+# Linux: ksni drives the StatusNotifierItem D-Bus protocol (KDE/freedesktop)
+# in pure Rust via zbus — no GTK, no libappindicator, no LGPL transitive deps.
+# The "blocking" feature gives us a synchronous spawn() / Handle::update() API
+# that fits the TrayHandle trait surface without requiring an async runtime in
+# the caller.  No system libraries probed; no build.rs pkg-config needed.
 [target.'cfg(target_os = "linux")'.dependencies]
-libappindicator-sys = "0.2"
-dbus = "0.9"
+ksni = { version = "0.3", features = ["blocking"] }
 
-[build-dependencies]
-# pkg_config is used in build.rs to probe libappindicator3-0.1 on Linux.
-# Declared unconditionally — pkg_config compiles on all OS targets; build.rs
-# guards execution with CARGO_CFG_TARGET_OS == "linux".
-pkg-config = "0.3"
 
 [dev-dependencies]
 serde_json = { workspace = true }

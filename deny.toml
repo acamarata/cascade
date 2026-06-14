@@ -38,17 +38,10 @@ crate = "ring"
 expression = "ISC AND MIT AND OpenSSL"
 license-files = []
 
-# libappindicator-sys (LGPL-2.1/LGPL-3.0): Linux-ONLY system-tray binding that
-# DYNAMICALLY links the system libappindicator (LGPL-compliant use; no static
-# link, no source obligation on our MIT code). Documented exception — flagged
-# for review; alternative tray backends are a P10 hardening candidate.
-[[licenses.clarify]]
-crate = "libappindicator-sys"
-expression = "LGPL-2.1-or-later"
-license-files = []
 
 # ── Bans ────────────────────────────────────────────────────────────────────
 [bans]
+allow-wildcard-paths = true  # internal workspace path deps carry no version by design
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
@@ -61,7 +54,22 @@ deny = [
 # ── Advisories ──────────────────────────────────────────────────────────────
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # ── GTK3 stack — REQUIRED by Tauri 2's Linux GTK-webview GUI. gtk-rs marked
+    #    these "unmaintained" after moving to gtk4; Tauri 2 still targets gtk3.
+    #    Linux-only, no exploit (maintenance status / one glib unsound lint).
+    "RUSTSEC-2024-0411", "RUSTSEC-2024-0412", "RUSTSEC-2024-0413", "RUSTSEC-2024-0414",
+    "RUSTSEC-2024-0415", "RUSTSEC-2024-0416", "RUSTSEC-2024-0417", "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0419", "RUSTSEC-2024-0420", "RUSTSEC-2024-0429",
+    # ── Transitive build/util deps (unmaintained/unsound) — no exploit path in our usage.
+    "RUSTSEC-2024-0370", "RUSTSEC-2024-0384", "RUSTSEC-2024-0388", "RUSTSEC-2024-0436",
+    "RUSTSEC-2025-0057", "RUSTSEC-2025-0119", "RUSTSEC-2026-0002",
+    # ── unic-* Unicode crates (unmaintained, transitive text processing).
+    "RUSTSEC-2025-0075", "RUSTSEC-2025-0080", "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098", "RUSTSEC-2025-0100",
+    # ── ring: AES panic ONLY under overflow-checks (debug). Release builds unaffected.
+    "RUSTSEC-2025-0009",
+]
 
 # ── Sources ─────────────────────────────────────────────────────────────────
 [sources]

@@ -30,8 +30,8 @@ test-harness = ["dep:tokio", "dep:wasmtime", "dep:wasmtime-wasi", "dep:anyhow"]
 # These are only resolved on host (non-wasm) builds — they are gated by the
 # test-harness feature too, but the target gate prevents wasm linker errors.
 tokio       = { version = "1", features = ["rt", "rt-multi-thread", "macros"], optional = true }
-wasmtime    = { version = "22", optional = true }
-wasmtime-wasi = { version = "22", optional = true }
+wasmtime    = { version = "=36.0.10", optional = true }
+wasmtime-wasi = { version = "=36.0.10", optional = true }
 anyhow      = { version = "1", optional = true }
 
 [dev-dependencies]

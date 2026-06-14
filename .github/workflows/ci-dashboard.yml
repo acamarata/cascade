@@ -26,23 +26,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enable corepack
-        run: corepack enable
-
       - name: Setup Node ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm --filter cascade-dashboard typecheck
+        run: pnpm --filter @cascade/dashboard typecheck
 
       - name: Build
-        run: pnpm --filter cascade-dashboard build
+        run: pnpm --filter @cascade/dashboard build
 
       - name: Verify dist output
         run: |

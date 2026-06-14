@@ -1,21 +1,23 @@
 //! Linux system-tray backend for cascade-tray.
 //!
-//! Purpose: Implement [`crate::TrayHandle`] for Linux desktop environments.
-//!   Primary backend: AppIndicator3 via libappindicator-sys (GTK3-based,
-//!   works in GNOME/Unity/Cinnamon).  Fallback: ksystemtray status-notifier
-//!   via D-Bus (KDE Plasma).  When both fail the impl stores a NoOp variant
-//!   and returns `TrayError::Platform` from `update()`.
+//! Purpose: Implement [`crate::TrayHandle`] for Linux desktop environments via
+//!   the StatusNotifierItem D-Bus specification (KDE/freedesktop), using the
+//!   `ksni` crate (pure Rust, MIT, zbus/D-Bus, no GTK, no LGPL deps).
+//!   When the D-Bus session bus is unavailable (headless CI) the impl stores a
+//!   `NoOp` variant and returns `TrayError::Platform` from `update()`.
 //! Inputs: [`crate::TrayState`] snapshots from the cascade daemon.
-//! Outputs: Updated AppIndicator label/tooltip, D-Bus SetTitle call, or
-//!   `TrayError::Platform` on NoOp.
+//! Outputs: Updated StatusNotifierItem title/tooltip and context menu via
+//!   D-Bus, or `TrayError::Platform` on NoOp.
 //! Constraints:
-//!   - build.rs emits `cascade_tray_appindicator` when pkg-config detects
-//!     libappindicator3-0.1; emits `cascade_tray_no_appindicator` otherwise.
-//!   - libappindicator-sys uses a Lazy<Library> that panics if the `.so` is
-//!     absent.  We guard all calls with `#[cfg(cascade_tray_appindicator)]`
-//!     so those symbols are never reached on systems without the library.
-//!   - On headless CI (no D-Bus session bus, no AppIndicator3) `new()` always
-//!     succeeds with the NoOp variant.
+//!   - `new()` never returns `Err` — NoOp is the guaranteed final fallback.
+//!   - The ksni `blocking` feature is required; it wraps the async zbus
+//!     runtime in a std::thread so no async runtime is needed in the caller.
+//!   - `CascadeTray` implements `ksni::Tray` and is driven by a `Handle<>`
+//!     returned from `ksni::blocking::TrayMethods::spawn()`.
+//!   - Menu items from `TrayMenuSpec` are converted to `ksni::MenuItem<CascadeTray>`
+//!     inside `ksni::Tray::menu()` each time the desktop queries the menu.
+//!   - `last_action_slot` captures the most recent `TrayAction` dispatched by
+//!     a menu callback and is drained by `TrayHandle::last_action()`.
 //!
 //! SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
 
@@ -23,213 +25,208 @@ use std::sync::{Arc, Mutex};
 
 use crate::{TrayAction, TrayError, TrayHandle, TrayMenuItem, TrayMenuSpec, TrayState};
 
+// ── CascadeTray (ksni::Tray impl) ─────────────────────────────────────────────
+
+/// Internal tray state shared with the ksni event loop.
+///
+/// Purpose: carry the current cascade daemon telemetry snapshot and menu
+///   specification so ksni can call `title()` / `tool_tip()` / `menu()` when
+///   the desktop bar queries the StatusNotifierItem over D-Bus.
+/// Constraints: `ksni::Tray` requires `Send + 'static`; all fields satisfy that.
+///
+/// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
+struct CascadeTray {
+    /// Most recent tooltip string derived from a `TrayState` snapshot.
+    title: String,
+    /// Current menu specification (updated via `TrayHandle::set_menu`).
+    menu_spec: TrayMenuSpec,
+    /// Shared slot written by menu-item callbacks and read by `last_action()`.
+    last_action_slot: Arc<Mutex<Option<TrayAction>>>,
+    /// Raw 32×32 ARGB32 icon data embedded at compile time.
+    icon: ksni::Icon,
+}
+
+impl CascadeTray {
+    /// Build a `CascadeTray` ready to be handed to ksni.
+    fn new(
+        title: String,
+        menu_spec: TrayMenuSpec,
+        last_action_slot: Arc<Mutex<Option<TrayAction>>>,
+    ) -> Self {
+        // The asset is 32×32 RGBA (4 096 bytes, R-G-B-A order).
+        // ksni expects ARGB32 (network byte order), so we rotate each pixel
+        // one byte right: [R, G, B, A] → [A, R, G, B].
+        let rgba = include_bytes!("../assets/cascade_icon_32.rgba");
+        let mut argb = rgba.to_vec();
+        for pixel in argb.chunks_exact_mut(4) {
+            pixel.rotate_right(1);
+        }
+        CascadeTray {
+            title,
+            menu_spec,
+            last_action_slot,
+            icon: ksni::Icon {
+                width: 32,
+                height: 32,
+                data: argb,
+            },
+        }
+    }
+}
+
+impl ksni::Tray for CascadeTray {
+    /// Application id — stable across sessions, used by the SNI watcher.
+    fn id(&self) -> String {
+        "cascade".into()
+    }
+
+    /// Human-readable title shown in panel tooltips or alt-text.
+    fn title(&self) -> String {
+        self.title.clone()
+    }
+
+    /// Embedded 32×32 icon in ARGB32 format.
+    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+        vec![self.icon.clone()]
+    }
+
+    /// Tooltip shown on hover; re-uses the title text.
+    fn tool_tip(&self) -> ksni::ToolTip {
+        ksni::ToolTip {
+            title: self.title.clone(),
+            description: String::new(),
+            icon_name: String::new(),
+            icon_pixmap: Vec::new(),
+        }
+    }
+
+    /// Build the context menu from the stored `TrayMenuSpec`.
+    ///
+    /// Called by ksni each time the desktop requests the menu (lazy, no cache).
+    /// Items are converted from the platform-agnostic `TrayMenuItem` enum to
+    /// the appropriate `ksni::menu::*` type.  `StandardItem`s carry a closure
+    /// that writes the dispatched `TrayAction` into `last_action_slot`.
+    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
+        let mut items: Vec<ksni::MenuItem<CascadeTray>> = Vec::new();
+
+        for menu_item in &self.menu_spec.items {
+            match menu_item {
+                TrayMenuItem::Separator => {
+                    items.push(ksni::MenuItem::Separator);
+                }
+                TrayMenuItem::Action { label, action } => {
+                    let action_captured = *action;
+                    items.push(
+                        ksni::menu::StandardItem {
+                            label: label.clone(),
+                            activate: Box::new(move |tray: &mut CascadeTray| {
+                                if let Ok(mut slot) = tray.last_action_slot.lock() {
+                                    *slot = Some(action_captured);
+                                }
+                            }),
+                            ..Default::default()
+                        }
+                        .into(),
+                    );
+                }
+            }
+        }
+
+        items
+    }
+}
+
 // ── LinuxTrayVariant ──────────────────────────────────────────────────────────
 
 /// Internal backend discriminant for [`LinuxTrayImpl`].
 ///
-/// Purpose: capture which tray backend was successfully initialised at
-///   construction time so update / show / hide can dispatch to the right API.
-/// Constraints: NOT Clone — both `AppIndicatorHandle` and `dbus::blocking::Connection`
-///   are non-Clone OS resources.
+/// Purpose: distinguish between a live ksni service (with its `Handle`) and the
+///   guaranteed headless no-op fallback.
+/// Constraints: `ksni::blocking::Handle<CascadeTray>` is `Clone + Send`.
 ///
 /// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
 enum LinuxTrayVariant {
-    /// AppIndicator3 via libappindicator-sys (GNOME / Unity / Cinnamon).
-    /// Only compiled when build.rs confirmed libappindicator3-0.1 is present.
-    #[cfg(cascade_tray_appindicator)]
-    AppIndicator(AppIndicatorHandle),
-
-    /// KDE StatusNotifierItem registered over the D-Bus Session Bus.
-    /// Connection is kept alive so KDE does not un-register the item.
-    KsystemTray(dbus::blocking::Connection),
-
-    /// Neither AppIndicator3 nor D-Bus KDE tray was available at runtime.
-    /// show / hide are no-ops; update returns `TrayError::Platform`.
+    /// Live StatusNotifierItem service driven by ksni.
+    Ksni(ksni::blocking::Handle<CascadeTray>),
+    /// Neither ksni spawn nor D-Bus session bus was available.
     NoOp,
 }
-
-// ── AppIndicatorHandle ────────────────────────────────────────────────────────
-
-/// Owned wrapper around a raw `*mut AppIndicator` C object.
-///
-/// Purpose: enforce single-owner semantics.  Drop is intentionally a no-op at
-///   the Rust level because `AppIndicator` objects are GLib GObjects whose
-///   lifetime is managed by the GLib reference-counting system.
-/// Constraints: NOT Clone — do not copy the raw pointer into multiple owners.
-///
-/// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
-#[cfg(cascade_tray_appindicator)]
-struct AppIndicatorHandle {
-    /// Non-null pointer to the `AppIndicator` GObject.
-    ptr: *mut libappindicator_sys::AppIndicator,
-}
-
-// Safety: AppIndicator operations (set_label, set_status) are thread-safe
-// per the GLib/GObject documentation.  Construction must happen on the GTK
-// main thread (caller's responsibility).
-#[cfg(cascade_tray_appindicator)]
-unsafe impl Send for AppIndicatorHandle {}
 
 // ── LinuxTrayImpl ─────────────────────────────────────────────────────────────
 
 /// Linux implementation of [`crate::TrayHandle`].
 ///
-/// Purpose: present the cascade daemon status in the OS tray using the best
-///   available backend for the running desktop environment. Also tracks the
-///   most recently received `TrayAction` from the menu (for polling via
-///   `last_action()`).
+/// Purpose: present the cascade daemon status in the OS status-notifier tray
+///   using ksni (pure-Rust StatusNotifierItem, MIT, no GTK). Tracks the most
+///   recently dispatched `TrayAction` for polling via `last_action()`.
 /// Inputs: `TrayState` snapshots pushed by the daemon via `TrayHandle::update`.
-///   Menu specs registered via `set_menu()`.
-/// Outputs: native tray label updated; D-Bus message sent (KDE); or no-op.
+///   Menu specs registered via `TrayHandle::set_menu()`.
+/// Outputs: StatusNotifierItem title/tooltip updated over D-Bus; or no-op.
 /// Constraints:
 ///   - `new()` never returns `Err` — NoOp is the guaranteed final fallback.
-///   - Construction tries AppIndicator3 first, KsystemTray second, NoOp last.
-///   - `set_menu()` stores the spec and the latest action behind an
-///     `Arc<Mutex<>>` so callbacks can update it from any thread.
+///   - `show()`/`hide()` are no-ops on SNI (visibility is controlled by the
+///     StatusNotifierItem `Status` property; Active = shown, Passive = hidden;
+///     we leave the default `Active` throughout as the cascade daemon's tray
+///     should always be visible while the daemon is running).
+///   - `set_menu()` propagates the new spec to the running ksni service via
+///     `Handle::update`, which triggers a D-Bus property-changed signal so the
+///     desktop bar refreshes its menu on the next open.
 ///
 /// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
 pub struct LinuxTrayImpl {
     variant: LinuxTrayVariant,
     /// Shared last-action slot written by menu callbacks and read by
-    /// `last_action()`. `Arc<Mutex<Option<TrayAction>>>` is used so GTK /
-    /// GLib callbacks (which run on the main GTK thread) can write here while
-    /// the tray event loop reads from a different thread.
+    /// `last_action()`. Kept here so we can hand the same `Arc` to the
+    /// `CascadeTray` held inside the ksni service thread.
     ///
-    /// WHY Arc<Mutex>: Linux menu callbacks may fire on a GLib main loop
-    /// thread separate from the Cascade tray thread. Mutex is the simplest
-    /// safe sharing primitive in this case.
+    /// WHY Arc<Mutex>: menu callbacks run inside the ksni zbus thread; the
+    /// outer `LinuxTrayImpl` lives on the daemon's tray thread. Mutex is the
+    /// simplest safe primitive for this one-writer / one-reader pattern.
     last_action_slot: Arc<Mutex<Option<TrayAction>>>,
 }
 
 impl LinuxTrayImpl {
-    /// Construct a new Linux tray handle using the best available backend.
+    /// Construct a new Linux tray handle using ksni.
     ///
-    /// Purpose: detect at runtime whether AppIndicator3 or D-Bus KDE tray is
-    ///   available and select the appropriate variant.
-    /// Inputs: `label` — application name shown in the tray (e.g. "Cascade").
-    /// Outputs: always `Ok(LinuxTrayImpl)` — variant is AppIndicator, KsystemTray,
-    ///   or NoOp depending on what is available at runtime.
-    /// Constraints: must be called from the GTK main thread when AppIndicator3
-    ///   is to be used (GTK3 is not thread-safe for initialisation).
+    /// Purpose: attempt to spawn a ksni StatusNotifierItem service; fall back
+    ///   to the NoOp variant when the D-Bus session bus is unavailable (e.g.
+    ///   headless CI).
+    /// Inputs: `label` — application name used as the initial tray tooltip.
+    /// Outputs: always `Ok(LinuxTrayImpl)` — variant is `Ksni` or `NoOp`.
+    /// Constraints: does NOT require a running GTK main loop.
     ///
     /// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
     pub fn new(label: &str) -> Result<Self, TrayError> {
         let last_action_slot: Arc<Mutex<Option<TrayAction>>> = Arc::new(Mutex::new(None));
 
-        // 1. Try AppIndicator3 (GNOME, Unity, Cinnamon, …)
-        //    Only attempted when build.rs detected the library at build time.
-        #[cfg(cascade_tray_appindicator)]
-        {
-            if let Ok(handle) = Self::try_appindicator(label) {
-                return Ok(LinuxTrayImpl {
-                    variant: LinuxTrayVariant::AppIndicator(handle),
+        let tray = CascadeTray::new(
+            label.to_owned(),
+            TrayMenuSpec::default_menu(),
+            Arc::clone(&last_action_slot),
+        );
+
+        use ksni::blocking::TrayMethods;
+        match tray.spawn() {
+            Ok(handle) => Ok(LinuxTrayImpl {
+                variant: LinuxTrayVariant::Ksni(handle),
+                last_action_slot,
+            }),
+            Err(_) => {
+                // D-Bus unavailable (headless CI / unsupported DE). NoOp is
+                // the guaranteed fallback — construction never fails.
+                Ok(LinuxTrayImpl {
+                    variant: LinuxTrayVariant::NoOp,
                     last_action_slot,
-                });
+                })
             }
         }
-
-        // Suppress unused-variable warning on no-appindicator builds.
-        #[cfg(cascade_tray_no_appindicator)]
-        let _ = label;
-
-        // 2. Try KsystemTray via D-Bus Session Bus (KDE Plasma)
-        if let Ok(conn) = Self::try_ksystemtray(label) {
-            return Ok(LinuxTrayImpl {
-                variant: LinuxTrayVariant::KsystemTray(conn),
-                last_action_slot,
-            });
-        }
-
-        // 3. NoOp — headless / unsupported DE (guaranteed fallback)
-        Ok(LinuxTrayImpl {
-            variant: LinuxTrayVariant::NoOp,
-            last_action_slot,
-        })
-    }
-
-    // ── private initializers ──────────────────────────────────────────────────
-
-    /// Attempt to create an AppIndicator3 object.
-    ///
-    /// Returns `Err` if `app_indicator_new` returns a null pointer (e.g. no
-    /// GTK display).  The call is gated with `#[cfg(cascade_tray_appindicator)]`
-    /// so it is never compiled on systems without libappindicator3.
-    ///
-    /// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
-    #[cfg(cascade_tray_appindicator)]
-    fn try_appindicator(label: &str) -> Result<AppIndicatorHandle, TrayError> {
-        use libappindicator_sys::{
-            app_indicator_new, app_indicator_set_status,
-            AppIndicatorCategory_APP_INDICATOR_CATEGORY_APPLICATION_STATUS as APP_STATUS,
-            AppIndicatorStatus_APP_INDICATOR_STATUS_ACTIVE as STATUS_ACTIVE,
-        };
-        use std::ffi::CString;
-
-        let id = CString::new(label)
-            .map_err(|_| TrayError::Platform("label contains interior NUL byte".into()))?;
-        let icon = CString::new("cascade")
-            .map_err(|_| TrayError::Platform("icon name contains interior NUL byte".into()))?;
-
-        // Safety: app_indicator_new is documented as GTK-main-thread-safe.
-        //   `id` and `icon` are valid NUL-terminated CStrings that outlive
-        //   this call.  `APP_STATUS` is a valid `AppIndicatorCategory` value.
-        let ptr = unsafe { app_indicator_new(id.as_ptr(), icon.as_ptr(), APP_STATUS) };
-
-        if ptr.is_null() {
-            return Err(TrayError::Platform(
-                "app_indicator_new returned NULL — GTK not initialised or no display".into(),
-            ));
-        }
-
-        // Make the indicator visible immediately.
-        // Safety: ptr is non-null; STATUS_ACTIVE is a valid AppIndicatorStatus.
-        unsafe { app_indicator_set_status(ptr, STATUS_ACTIVE) };
-
-        Ok(AppIndicatorHandle { ptr })
-    }
-
-    /// Attempt to connect to the D-Bus Session Bus and register a
-    /// `org.kde.StatusNotifierItem` service for KDE Plasma tray integration.
-    ///
-    /// Returns `Err` if the D-Bus session bus is unavailable (headless CI, or
-    /// a desktop environment that does not start a session bus).
-    ///
-    /// SPORT: .claude/docs/MASTER-CRATES.md — cascade-tray
-    fn try_ksystemtray(label: &str) -> Result<dbus::blocking::Connection, TrayError> {
-        use dbus::blocking::Connection;
-        use std::time::Duration;
-
-        let conn = Connection::new_session()
-            .map_err(|e| TrayError::Platform(format!("D-Bus session bus unavailable: {e}")))?;
-
-        // Request a well-known bus name so KDE StatusNotifierWatcher finds us.
-        let bus_name = format!("org.kde.StatusNotifierItem-{}-1", std::process::id());
-        conn.request_name(bus_name.as_str(), false, true, false)
-            .map_err(|e| TrayError::Platform(format!("D-Bus request_name failed: {e}")))?;
-
-        // Notify KDE StatusNotifierWatcher — fire-and-forget.  If the watcher
-        // is absent (non-KDE DE) the call fails and we silently continue; the
-        // D-Bus connection is still valid.
-        let proxy = conn.with_proxy(
-            "org.kde.StatusNotifierWatcher",
-            "/StatusNotifierWatcher",
-            Duration::from_millis(500),
-        );
-        let _: Result<(), _> = proxy.method_call(
-            "org.kde.StatusNotifierWatcher",
-            "RegisterStatusNotifierItem",
-            (bus_name.as_str(),),
-        );
-
-        let _ = label; // label is conveyed via SetTitle in update()
-        Ok(conn)
     }
 
     // ── tooltip helper ────────────────────────────────────────────────────────
 
     /// Build the canonical tray label string from a [`TrayState`] snapshot.
     ///
-    /// Purpose: single source of truth for the human-readable label shown in
+    /// Purpose: single source of truth for the human-readable tooltip shown in
     ///   all Linux tray backends.  MUST produce the same output as the macOS
     ///   `MacosTrayImpl::tooltip_string` for the same state.
     /// Inputs: `state` — live daemon telemetry.
@@ -254,46 +251,20 @@ impl LinuxTrayImpl {
 // ── TrayHandle impl ───────────────────────────────────────────────────────────
 
 impl TrayHandle for LinuxTrayImpl {
-    /// Push a new state snapshot to the OS tray icon.
+    /// Push a new state snapshot to the StatusNotifierItem service.
     ///
-    /// Dispatches to the active backend variant:
-    /// - AppIndicator: calls `app_indicator_set_label` with the tooltip string.
-    /// - KsystemTray: sends D-Bus `SetTitle` (best-effort, errors are dropped).
-    /// - NoOp: returns `TrayError::Platform("no tray backend available …")`.
+    /// Ksni variant: calls `Handle::update` to set the new title on the
+    ///   `CascadeTray` inside the ksni thread, which triggers a D-Bus
+    ///   `NewTitle` property-changed signal so the desktop bar refreshes.
+    /// NoOp variant: returns `TrayError::Platform`.
     fn update(&mut self, state: &TrayState) -> Result<(), TrayError> {
         let tooltip = Self::tooltip_string(state);
 
-        match &mut self.variant {
-            #[cfg(cascade_tray_appindicator)]
-            LinuxTrayVariant::AppIndicator(handle) => {
-                use libappindicator_sys::app_indicator_set_label;
-                use std::ffi::CString;
-
-                let label = CString::new(tooltip.as_str())
-                    .map_err(|_| TrayError::Platform("tooltip contains NUL byte".into()))?;
-                // Safety: handle.ptr is non-null (checked at construction).
-                //   label is a valid NUL-terminated CString.
-                //   guide = NULL is documented as valid (no guide/separator).
-                unsafe {
-                    app_indicator_set_label(handle.ptr, label.as_ptr(), std::ptr::null());
-                }
-                Ok(())
-            }
-            LinuxTrayVariant::KsystemTray(conn) => {
-                use std::time::Duration;
-
-                let bus_name = format!("org.kde.StatusNotifierItem-{}-1", std::process::id());
-                let proxy = conn.with_proxy(
-                    bus_name.as_str(),
-                    "/StatusNotifierItem",
-                    Duration::from_millis(500),
-                );
-                // Best-effort: drop errors silently (KDE Plasma may not be running).
-                let _: Result<(), _> = proxy.method_call(
-                    "org.kde.StatusNotifierItem",
-                    "SetTitle",
-                    (tooltip.as_str(),),
-                );
+        match &self.variant {
+            LinuxTrayVariant::Ksni(handle) => {
+                handle.update(|tray: &mut CascadeTray| {
+                    tray.title = tooltip;
+                });
                 Ok(())
             }
             LinuxTrayVariant::NoOp => Err(TrayError::Platform(
@@ -304,88 +275,63 @@ impl TrayHandle for LinuxTrayImpl {
 
     /// Make the tray icon visible.
     ///
-    /// AppIndicator: sets `AppIndicatorStatus::Active` (icon appears in bar).
-    /// KsystemTray / NoOp: no-op.
+    /// The SNI `Active` status (set by default at ksni construction) makes the
+    /// icon visible.  This method is a no-op — visibility is managed by ksni
+    /// and the StatusNotifierItem `Status` property.
     fn show(&mut self) -> Result<(), TrayError> {
-        #[cfg(cascade_tray_appindicator)]
-        if let LinuxTrayVariant::AppIndicator(handle) = &mut self.variant {
-            use libappindicator_sys::{
-                app_indicator_set_status,
-                AppIndicatorStatus_APP_INDICATOR_STATUS_ACTIVE as STATUS_ACTIVE,
-            };
-            // Safety: handle.ptr is non-null; STATUS_ACTIVE is valid.
-            unsafe { app_indicator_set_status(handle.ptr, STATUS_ACTIVE) };
-        }
         Ok(())
     }
 
     /// Hide the tray icon.
     ///
-    /// AppIndicator: sets `AppIndicatorStatus::Passive` (icon disappears).
-    /// KsystemTray / NoOp: no-op.
-    fn hide(&mut self) {
-        #[cfg(cascade_tray_appindicator)]
-        if let LinuxTrayVariant::AppIndicator(handle) = &mut self.variant {
-            use libappindicator_sys::{
-                app_indicator_set_status,
-                AppIndicatorStatus_APP_INDICATOR_STATUS_PASSIVE as STATUS_PASSIVE,
-            };
-            // Safety: handle.ptr is non-null; STATUS_PASSIVE is valid.
-            unsafe { app_indicator_set_status(handle.ptr, STATUS_PASSIVE) };
-        }
-    }
+    /// No-op for the ksni backend (SNI visibility management is intentionally
+    /// deferred to a future P3 ticket; daemon is always "Active" while running).
+    fn hide(&mut self) {}
 
     /// Release all native resources held by this tray handle.
     ///
-    /// Drops `self`, which drops the `LinuxTrayVariant`:
-    /// - AppIndicator: `AppIndicatorHandle` is dropped; GLib decrements its
-    ///   reference count and frees the GObject if the count reaches zero.
-    /// - KsystemTray: `dbus::blocking::Connection` is dropped; the bus name
-    ///   is released and KDE un-registers the status notifier item.
-    /// - NoOp: nothing to release.
+    /// Ksni variant: calls `Handle::shutdown()` to gracefully stop the ksni
+    ///   service thread and deregister the StatusNotifierItem from D-Bus.
+    /// NoOp: nothing to release.
     fn destroy(self) {
-        drop(self);
+        if let LinuxTrayVariant::Ksni(handle) = self.variant {
+            handle.shutdown().wait();
+        }
     }
 
     /// Register a menu specification on this Linux tray icon.
     ///
-    /// Purpose: Store the `TrayMenuSpec` so it can be used by backends that
-    ///   support context menus (AppIndicator3 GTK menus, KDE D-Bus menus).
-    /// Inputs: `spec` — ordered list of menu items.
+    /// Purpose: Store the new `TrayMenuSpec` so `CascadeTray::menu()` returns
+    ///   updated items the next time the desktop bar opens the context menu.
+    ///   For the ksni variant, `Handle::update` propagates the new spec into
+    ///   the `CascadeTray` held inside the ksni service thread, triggering a
+    ///   D-Bus `ItemsPropertiesUpdated` signal.
+    /// Inputs: `spec` — ordered list of platform-agnostic menu items.
     /// Outputs: `Ok(())` always.
-    /// Constraints:
-    ///   - AppIndicator3 GTK menu construction requires a GTK main loop which
-    ///     is not available in the headless test / CI environment. The spec is
-    ///     stored internally; actual GTK menu construction is deferred to a
-    ///     future integration (P3 scope). This preserves the interface contract
-    ///     without requiring GTK at compile time in the tray thread.
-    ///   - KsystemTray and NoOp variants accept and store the spec silently.
-    ///   - The `last_action_slot` Arc is pre-shared so when GTK or D-Bus menu
-    ///     callbacks fire in P3 they can write into it directly.
     ///
-    /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-tray (menu wiring done)
+    /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-tray
     fn set_menu(&mut self, spec: &TrayMenuSpec) -> Result<(), TrayError> {
-        // Validate and acknowledge all action items so tests can verify
-        // set_menu is wired. The actual native menu construction (GTK/D-Bus)
-        // is platform-specific and deferred to P3. Here we ensure the
-        // last_action_slot is primed and the spec is accepted.
-        //
-        // WHY accept without native build: Linux menu construction requires
-        // a running GTK main loop or D-Bus session. In the current P2 scope
-        // the tray thread is a std::thread (not GTK main loop). Native menu
-        // integration is a P3 deliverable; this wiring completes the trait
-        // contract and enables integration tests against the mock IPC sender.
-        let _ = spec; // spec acknowledged; P3 will iterate items for GTK menu
+        let new_spec = spec.clone();
+        match &self.variant {
+            LinuxTrayVariant::Ksni(handle) => {
+                handle.update(|tray: &mut CascadeTray| {
+                    tray.menu_spec = new_spec;
+                });
+            }
+            LinuxTrayVariant::NoOp => {
+                // NoOp: accept silently (same as the old behaviour).
+            }
+        }
         Ok(())
     }
 
     /// Return the most recently dispatched `TrayAction`, if any.
     ///
-    /// Purpose: Allows the tray thread to drain menu-click events into the
-    ///   action dispatcher without polling a channel directly.
+    /// Purpose: allows the daemon tray thread to drain menu-click events from
+    ///   the shared slot without polling a channel.
     /// Outputs: `Some(TrayAction)` if a menu item was clicked since the last
-    ///   call; `None` otherwise.
-    /// Constraints: non-blocking; uses Mutex::try_lock internally.
+    ///   call; `None` otherwise. Uses take-semantics — consuming on read.
+    /// Constraints: non-blocking; uses `Mutex::try_lock` internally.
     ///
     /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-tray
     fn last_action(&self) -> Option<TrayAction> {
@@ -482,7 +428,7 @@ mod tests {
     }
 
     /// Verify LinuxTrayImpl::new() always returns Ok — NoOp fallback ensures it.
-    /// This test exercises the headless path (no D-Bus session bus on CI).
+    /// This test exercises the headless path (no D-Bus session bus on CI / macOS).
     #[test]
     fn linux_new_always_ok() {
         let result = LinuxTrayImpl::new("Cascade");
@@ -493,8 +439,7 @@ mod tests {
     }
 
     /// Verify update() on the NoOp variant returns TrayError::Platform.
-    /// Constructs the NoOp variant directly to mock the "no backend" scenario
-    /// described in QA-B guidance (cfg(test) mock path).
+    /// Constructs the NoOp variant directly to mock the "no backend" scenario.
     #[test]
     fn linux_noop_update_returns_platform_error() {
         let mut tray = LinuxTrayImpl {
@@ -559,6 +504,28 @@ mod tests {
         assert!(
             tray.last_action().is_none(),
             "last_action must consume the value (return None on second call)"
+        );
+    }
+
+    /// Verify CascadeTray::menu() produces one item per TrayMenuItem::Action
+    /// and one ksni::MenuItem::Separator per TrayMenuItem::Separator.
+    #[test]
+    fn cascade_tray_menu_builds_from_spec() {
+        let slot: Arc<Mutex<Option<TrayAction>>> = Arc::new(Mutex::new(None));
+        let spec = TrayMenuSpec::default_menu(); // 4 actions + 1 separator = 5 items
+        let tray = CascadeTray::new("Cascade".to_owned(), spec.clone(), slot);
+
+        let menu = ksni::Tray::menu(&tray);
+        // default_menu: OpenApp, OpenDashboard, Separator, PauseDaemon, Quit → 5 items
+        assert_eq!(
+            menu.len(),
+            5,
+            "menu must have 5 items (4 actions + 1 separator)"
+        );
+        // Second item (index 2) must be a separator.
+        assert!(
+            matches!(menu[2], ksni::MenuItem::Separator),
+            "item at index 2 must be a Separator"
         );
     }
 }

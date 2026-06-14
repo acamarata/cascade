@@ -34,14 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enable corepack
-        run: corepack enable
-
       - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install
@@ -57,14 +57,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enable corepack
-        run: corepack enable
-
       - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install
@@ -86,14 +86,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enable corepack
-        run: corepack enable
-
       - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: "pnpm"
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
