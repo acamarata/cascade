@@ -18,12 +18,34 @@ allow = [
     "Unicode-DFS-2016",
     "CC0-1.0",
     "Zlib",
+    "Unlicense",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+    "MPL-2.0",
+    "Unicode-3.0",
 ]
 # Note: [licenses].deny was removed in cargo-deny >=0.14 (PR#611).
 # Unlisted licenses are denied by default when an allow list is present,
 # so GPL/LGPL/AGPL are implicitly rejected without a separate deny list.
 confidence-threshold = 0.8
 exceptions = []
+
+
+# ── Clarifications & documented exceptions ───────────────────────────────────
+# ring ships no `license` field; its real terms are ISC AND MIT AND OpenSSL.
+[[licenses.clarify]]
+crate = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = []
+
+# libappindicator-sys (LGPL-2.1/LGPL-3.0): Linux-ONLY system-tray binding that
+# DYNAMICALLY links the system libappindicator (LGPL-compliant use; no static
+# link, no source obligation on our MIT code). Documented exception — flagged
+# for review; alternative tray backends are a P10 hardening candidate.
+[[licenses.clarify]]
+crate = "libappindicator-sys"
+expression = "LGPL-2.1-or-later"
+license-files = []
 
 # ── Bans ────────────────────────────────────────────────────────────────────
 [bans]

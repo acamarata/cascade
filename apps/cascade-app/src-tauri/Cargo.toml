@@ -1,6 +1,7 @@
 [package]
 name = "cascade-app"
 version = "1.0.0"
+license = "MIT"
 edition = "2021"
 rust-version = "1.85"
 # Tauri requires this specific crate structure — do not add to workspace members.
