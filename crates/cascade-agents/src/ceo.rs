@@ -187,8 +187,7 @@ impl SessionState {
 // ── Internal type aliases ─────────────────────────────────────────────────────
 
 /// Join handle carrying a single executor result; used in parallel sub-goal waves.
-type SubGoalHandle =
-    tokio::task::JoinHandle<Result<AgentTask, crate::executor::ExecutorError>>;
+type SubGoalHandle = tokio::task::JoinHandle<Result<AgentTask, crate::executor::ExecutorError>>;
 
 /// One entry in the pending parallel wave: (goal, role, task_id, join handle).
 type WaveEntry = (String, AgentRole, String, SubGoalHandle);
@@ -339,34 +338,34 @@ impl CeoOrchestrator {
         let mut parallel_wave: Vec<WaveEntry> = vec![];
 
         let flush_wave = |wave: Vec<WaveEntry>| async move {
-                let mut wave_outcomes: Vec<SubTaskOutcome> = Vec::with_capacity(wave.len());
-                for (goal, role, task_id, handle) in wave {
-                    let result = match handle.await {
-                        Ok(inner) => inner,
-                        Err(e) => Err(crate::executor::ExecutorError::SpawnFailed(e.to_string())),
-                    };
-                    let (status, error, parked) = match result {
-                        Ok(finished_task) => {
-                            if finished_task.status == TaskStatus::Pending {
-                                warn!(task_id = %task_id, "CEO: task parked for approval");
-                                (TaskStatus::Pending, None, true)
-                            } else {
-                                (finished_task.status, None, false)
-                            }
+            let mut wave_outcomes: Vec<SubTaskOutcome> = Vec::with_capacity(wave.len());
+            for (goal, role, task_id, handle) in wave {
+                let result = match handle.await {
+                    Ok(inner) => inner,
+                    Err(e) => Err(crate::executor::ExecutorError::SpawnFailed(e.to_string())),
+                };
+                let (status, error, parked) = match result {
+                    Ok(finished_task) => {
+                        if finished_task.status == TaskStatus::Pending {
+                            warn!(task_id = %task_id, "CEO: task parked for approval");
+                            (TaskStatus::Pending, None, true)
+                        } else {
+                            (finished_task.status, None, false)
                         }
-                        Err(e) => (TaskStatus::Failed, Some(e.to_string()), false),
-                    };
-                    wave_outcomes.push(SubTaskOutcome {
-                        task_id,
-                        goal,
-                        role,
-                        status,
-                        error,
-                        parked_for_approval: parked,
-                    });
-                }
-                wave_outcomes
-            };
+                    }
+                    Err(e) => (TaskStatus::Failed, Some(e.to_string()), false),
+                };
+                wave_outcomes.push(SubTaskOutcome {
+                    task_id,
+                    goal,
+                    role,
+                    status,
+                    error,
+                    parked_for_approval: parked,
+                });
+            }
+            wave_outcomes
+        };
 
         for sub_goal in &plan.sub_goals {
             let spec = self.resolve_spec(sub_goal.role)?;

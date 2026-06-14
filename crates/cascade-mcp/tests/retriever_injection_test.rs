@@ -88,7 +88,10 @@ async fn search_returns_live_hits_when_retriever_injected() {
         .and_then(|m| m.get("ready"))
         .and_then(|v| v.as_bool())
         .expect("metadata.ready must be present");
-    assert!(ready, "metadata.ready should be true when retriever is injected");
+    assert!(
+        ready,
+        "metadata.ready should be true when retriever is injected"
+    );
 
     // At least one hit for a query matching the seeded fixture text.
     let hits_returned = result
@@ -147,5 +150,8 @@ async fn with_retriever_is_chainable() {
         .and_then(|m| m.get("ready"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    assert!(ready, "retriever should be active after with_retriever chain");
+    assert!(
+        ready,
+        "retriever should be active after with_retriever chain"
+    );
 }

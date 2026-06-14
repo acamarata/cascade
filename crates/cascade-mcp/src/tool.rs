@@ -251,9 +251,7 @@ impl ToolRegistry {
 
         match name {
             "cascade.read" => tool_result(handle_read(&args).await),
-            "cascade.search" => {
-                tool_result(handle_search(&args, retriever_snapshot).await)
-            }
+            "cascade.search" => tool_result(handle_search(&args, retriever_snapshot).await),
             "cascade.search_codebase" => {
                 tool_result(handle_search_codebase(&args, retriever_snapshot).await)
             }
@@ -3801,15 +3799,36 @@ mod tests {
         let idx = Arc::new(RagIndex::open(&db_path).await.expect("RagIndex::open"));
 
         // Ingest three fixture chunks.
-        idx.upsert_chunk("c1", None, Some(1), Some(5), "prayer times fajr dhuhr asr maghrib isha", None)
-            .await
-            .expect("upsert c1");
-        idx.upsert_chunk("c2", None, Some(10), Some(15), "hijri calendar month ramadan shawwal dhul-hijja", None)
-            .await
-            .expect("upsert c2");
-        idx.upsert_chunk("c3", None, Some(20), Some(25), "qibla direction great circle mecca bearing", None)
-            .await
-            .expect("upsert c3");
+        idx.upsert_chunk(
+            "c1",
+            None,
+            Some(1),
+            Some(5),
+            "prayer times fajr dhuhr asr maghrib isha",
+            None,
+        )
+        .await
+        .expect("upsert c1");
+        idx.upsert_chunk(
+            "c2",
+            None,
+            Some(10),
+            Some(15),
+            "hijri calendar month ramadan shawwal dhul-hijja",
+            None,
+        )
+        .await
+        .expect("upsert c2");
+        idx.upsert_chunk(
+            "c3",
+            None,
+            Some(20),
+            Some(25),
+            "qibla direction great circle mecca bearing",
+            None,
+        )
+        .await
+        .expect("upsert c3");
 
         // FTS-only retriever (no embedding model required for the test).
         let retriever: Arc<dyn Retriever> = Arc::new(RrfRetriever::new(
@@ -3828,7 +3847,10 @@ mod tests {
             "name": "cascade.search",
             "arguments": { "query": "prayer fajr", "limit": 5 }
         });
-        let result = reg.call(&params).await.expect("call must not protocol-error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("call must not protocol-error");
 
         // Must not be an error result.
         assert!(
@@ -3837,7 +3859,9 @@ mod tests {
         );
 
         // Citations array must contain at least one entry.
-        let citations = result["citations"].as_array().expect("citations must be array");
+        let citations = result["citations"]
+            .as_array()
+            .expect("citations must be array");
         assert!(
             !citations.is_empty(),
             "cascade.search must return at least one citation for 'prayer fajr'; got: {result}"
@@ -3870,7 +3894,10 @@ mod tests {
             "name": "cascade.search",
             "arguments": { "query": "anything", "limit": 5 }
         });
-        let result = reg.call(&params).await.expect("call must not protocol-error");
+        let result = reg
+            .call(&params)
+            .await
+            .expect("call must not protocol-error");
 
         // Must not be is_error.
         assert!(
@@ -3886,9 +3913,7 @@ mod tests {
         );
 
         // Text must explain the situation.
-        let text = result["content"][0]["text"]
-            .as_str()
-            .unwrap_or_default();
+        let text = result["content"][0]["text"].as_str().unwrap_or_default();
         assert!(
             text.contains("index not ready"),
             "response text must mention 'index not ready'; got: {text:?}"

@@ -58,7 +58,6 @@
 
 pub mod agent;
 pub mod auto_auth;
-pub mod model_registry;
 pub mod cascade_tier;
 pub mod chunker;
 pub mod codec;
@@ -70,6 +69,7 @@ pub mod hook;
 pub mod ipc;
 pub mod key_storage;
 pub mod mcp;
+pub mod model_registry;
 pub mod parser;
 pub mod paths;
 pub mod policy;

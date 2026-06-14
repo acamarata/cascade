@@ -26,10 +26,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::pbd::store::{resolve_phases_root, PbdStore};
-use cascade_types::{
-    error::Result,
-    task::TaskStatus,
-};
+use cascade_types::{error::Result, task::TaskStatus};
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -311,8 +308,8 @@ pub fn build_active_work_with_tasks(
 mod tests {
     use super::*;
     use crate::pbd::schema::{
-        Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket,
-        TicketStatus, Wave, WaveStatus,
+        Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket, TicketStatus, Wave,
+        WaveStatus,
     };
     use crate::pbd::store::PbdStore;
     use crate::tasks::{open_tasks_db, KanbanTaskStore};

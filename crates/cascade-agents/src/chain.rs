@@ -816,8 +816,7 @@ impl ChainExecutor {
                         let mut branch_ctx = branch_ctx;
                         let mut branch_traces: Vec<ChainStepTrace> = vec![];
                         // Use a local counter that starts from the shared atomic value.
-                        let mut local_counter =
-                            counter_clone.load(Ordering::Relaxed);
+                        let mut local_counter = counter_clone.load(Ordering::Relaxed);
 
                         executor
                             .exec_step(
@@ -1779,9 +1778,7 @@ mod tests {
     #[tokio::test]
     async fn parallel_n5_all_complete() {
         // 5 branches each call the provider once — supply 5 scripted responses.
-        let provider = Arc::new(ScriptedProvider::new(vec![
-            "r0", "r1", "r2", "r3", "r4",
-        ]));
+        let provider = Arc::new(ScriptedProvider::new(vec!["r0", "r1", "r2", "r3", "r4"]));
         let invoker = Arc::new(EchoInvoker::new());
         let agent_exec = make_agent_executor(
             Arc::new(ScriptedProvider::new(vec![])),
@@ -1989,6 +1986,10 @@ mod tests {
             "max concurrent in-flight ({observed}) exceeded the cap ({CAP})"
         );
         // Sanity: all branches completed.
-        assert_eq!(active.load(Ordering::SeqCst), 0, "active count should be 0 after completion");
+        assert_eq!(
+            active.load(Ordering::SeqCst),
+            0,
+            "active count should be 0 after completion"
+        );
     }
 }

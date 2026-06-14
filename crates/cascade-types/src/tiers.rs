@@ -407,7 +407,6 @@ pub struct ResolvedContext {
     pub resolved_at: String,
 }
 
-
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /// Returns the user's home directory via `$HOME` (Unix) or `USERPROFILE` (Windows).
