@@ -78,7 +78,9 @@ pub mod runners;
 
 pub use adapter::LocalLlmAdapter;
 pub use config::LocalLlmConfig;
-pub use downloader::{download_model, find_model, model_dir_path, models, DownloadProgress, ModelEntry};
+pub use downloader::{
+    download_model, find_model, model_dir_path, models, DownloadProgress, ModelEntry,
+};
 pub use error::LocalModelError;
 pub use runner::{LocalLlmRunner, GEMMA_2_2B_MODEL_ID};
 pub use runner_factory::{build_runner, LocalLlmRunnerTrait, ModelFamily};

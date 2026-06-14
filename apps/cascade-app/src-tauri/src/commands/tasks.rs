@@ -35,59 +35,41 @@ async fn task_rpc(method: &'static str, params: Value) -> Result<Value, String> 
 /// Create a new kanban task.
 /// JS: `invoke("task_create", { title, project?, status?, tags?, priority?, ... })`
 #[tauri::command]
-pub async fn task_create(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_create(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_create", params).await
 }
 
 /// Get a single task by id.
 /// JS: `invoke("task_get", { id })`
 #[tauri::command]
-pub async fn task_get(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_get(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_get", params).await
 }
 
 /// List tasks with optional filter.
 /// JS: `invoke("task_list", { filter: { project?, status?, tag?, assignee? } })`
 #[tauri::command]
-pub async fn task_list(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_list(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_list", params).await
 }
 
 /// Update a task — PATCH semantics; only provided fields are changed.
 /// JS: `invoke("task_update", { id, title?, status?, tags?, priority?, ... })`
 #[tauri::command]
-pub async fn task_update(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_update(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_update", params).await
 }
 
 /// Delete a task by id.
 /// JS: `invoke("task_delete", { id })`
 #[tauri::command]
-pub async fn task_delete(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_delete(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_delete", params).await
 }
 
 /// Move a task to a new status column and board order.
 /// JS: `invoke("task_move", { id, status, order })`
 #[tauri::command]
-pub async fn task_move(
-    _state: State<'_, AppState>,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn task_move(_state: State<'_, AppState>, params: Value) -> Result<Value, String> {
     task_rpc("task_move", params).await
 }

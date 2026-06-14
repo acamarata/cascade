@@ -276,7 +276,9 @@ impl AgentExecutor {
         loop {
             // ── Loop guards ──────────────────────────────────────────────────
             if steps >= self.max_steps {
-                return Err(ExecutorError::MaxStepsExceeded { max: self.max_steps });
+                return Err(ExecutorError::MaxStepsExceeded {
+                    max: self.max_steps,
+                });
             }
             if total_tokens >= self.token_budget {
                 return Err(ExecutorError::TokenBudgetExceeded {
@@ -335,7 +337,9 @@ impl AgentExecutor {
                     .get_tool(&call.tool_id)
                     .map(|d| d.required_level)
                     .unwrap_or(AccessLevel::Write);
-                let decision = self.tool_registry.check(&spec.id, &call.tool_id, required_level);
+                let decision = self
+                    .tool_registry
+                    .check(&spec.id, &call.tool_id, required_level);
 
                 match decision {
                     GrantDecision::Denied { reason } => {
@@ -574,7 +578,10 @@ mod tests {
                     assistant_text: "done".into(),
                     tool_calls: vec![],
                     done: true,
-                    usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+                    usage: TokenUsage {
+                        prompt_tokens: 5,
+                        completion_tokens: 5,
+                    },
                 })
             } else {
                 Ok(q.remove(0))
@@ -649,7 +656,10 @@ mod tests {
             assistant_text: "calling tool".into(),
             tool_calls: vec![tool_call(tool_id)],
             done: false,
-            usage: TokenUsage { prompt_tokens: 10, completion_tokens: 2 },
+            usage: TokenUsage {
+                prompt_tokens: 10,
+                completion_tokens: 2,
+            },
         }
     }
 
@@ -658,7 +668,10 @@ mod tests {
             assistant_text: "all done".into(),
             tool_calls: vec![],
             done: true,
-            usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+            usage: TokenUsage {
+                prompt_tokens: 5,
+                completion_tokens: 5,
+            },
         }
     }
 
@@ -704,8 +717,10 @@ mod tests {
             }],
         );
 
-        let (exec, invoker) =
-            make_executor_with_registry(vec![step_with_tool("cascade.search"), done_step()], registry);
+        let (exec, invoker) = make_executor_with_registry(
+            vec![step_with_tool("cascade.search"), done_step()],
+            registry,
+        );
 
         let task = AgentTask::new_root("search then summarise", AgentRole::Coder);
         let result = exec.run_task(builtin_coder(), task).await.unwrap();
@@ -752,9 +767,15 @@ mod tests {
             "parked task should be Pending, not Done"
         );
         // Tool must NOT have been invoked
-        assert_eq!(invoker.call_count(), 0, "outbound tool must not be auto-executed");
+        assert_eq!(
+            invoker.call_count(),
+            0,
+            "outbound tool must not be auto-executed"
+        );
         // Approval request must have been emitted
-        let approval = rx.try_recv().expect("approval request should have been emitted");
+        let approval = rx
+            .try_recv()
+            .expect("approval request should have been emitted");
         assert_eq!(approval.tool_call.tool_id, "email.send");
     }
 
@@ -799,9 +820,7 @@ mod tests {
         );
 
         // 5 consecutive tool steps, never done — should hit max_steps = 3
-        let outcomes: Vec<StepOutcome> = (0..5)
-            .map(|_| step_with_tool("cascade.search"))
-            .collect();
+        let outcomes: Vec<StepOutcome> = (0..5).map(|_| step_with_tool("cascade.search")).collect();
         let invoker = Arc::new(MockToolInvoker::new());
         let exec = AgentExecutor::builder()
             .provider_router(Arc::new(MockProvider::new(outcomes)))
@@ -850,7 +869,10 @@ mod tests {
                 call_id: "c-spawn".into(),
             }],
             done: false,
-            usage: TokenUsage { prompt_tokens: 10, completion_tokens: 5 },
+            usage: TokenUsage {
+                prompt_tokens: 10,
+                completion_tokens: 5,
+            },
         };
 
         let invoker = Arc::new(MockToolInvoker::new());
@@ -869,8 +891,13 @@ mod tests {
         assert_eq!(result.status, TaskStatus::Done);
 
         // A child task should have been emitted
-        let child_req = child_rx.try_recv().expect("child task should have been spawned");
-        assert_eq!(child_req.task.parent_id.as_deref(), Some(parent_id.as_str()));
+        let child_req = child_rx
+            .try_recv()
+            .expect("child task should have been spawned");
+        assert_eq!(
+            child_req.task.parent_id.as_deref(),
+            Some(parent_id.as_str())
+        );
         assert_eq!(child_req.task.goal, "write tests");
     }
 
@@ -912,7 +939,10 @@ mod tests {
 
         let task = AgentTask::new_root("native task", AgentRole::Coder);
         exec.run_task(builtin_coder(), task).await.unwrap();
-        assert!(*saw.lock().unwrap(), "provider should have seen Native runtime");
+        assert!(
+            *saw.lock().unwrap(),
+            "provider should have seen Native runtime"
+        );
     }
 
     #[tokio::test]
@@ -927,12 +957,16 @@ mod tests {
             model_pref: None,
             system_prompt_ref: None,
             tool_grants_ref: None,
-            runtime: Runtime::Wasm { plugin_id: "my-wasm-plugin".into() },
+            runtime: Runtime::Wasm {
+                plugin_id: "my-wasm-plugin".into(),
+            },
         };
 
         let saw = Arc::new(Mutex::new(false));
         let provider = Arc::new(RuntimeCheckProvider {
-            expected_runtime: Runtime::Wasm { plugin_id: "my-wasm-plugin".into() },
+            expected_runtime: Runtime::Wasm {
+                plugin_id: "my-wasm-plugin".into(),
+            },
             saw_correct_runtime: saw.clone(),
         });
 
@@ -945,7 +979,10 @@ mod tests {
 
         let task = AgentTask::new_root("wasm task", AgentRole::Coder);
         exec.run_task(wasm_spec, task).await.unwrap();
-        assert!(*saw.lock().unwrap(), "provider should have seen Wasm runtime");
+        assert!(
+            *saw.lock().unwrap(),
+            "provider should have seen Wasm runtime"
+        );
     }
 
     // ── T8: no-progress guard ─────────────────────────────────────────────────
@@ -957,7 +994,10 @@ mod tests {
             assistant_text: "thinking…".into(),
             tool_calls: vec![],
             done: false,
-            usage: TokenUsage { prompt_tokens: 5, completion_tokens: 1 },
+            usage: TokenUsage {
+                prompt_tokens: 5,
+                completion_tokens: 1,
+            },
         };
         let outcomes: Vec<StepOutcome> = (0..5).map(|_| stuck_step.clone()).collect();
         let (exec, _) = make_executor_with_registry(outcomes, Arc::new(ToolRegistry::new()));

@@ -383,7 +383,10 @@ impl CeoOrchestrator {
     ///
     /// Identical to `submit` but preserves the existing `session_id` and
     /// appends the new directive to the session history.
-    pub async fn send_followup(&self, directive: FounderDirective) -> Result<FounderReport, CeoError> {
+    pub async fn send_followup(
+        &self,
+        directive: FounderDirective,
+    ) -> Result<FounderReport, CeoError> {
         info!(
             session_id = %self.session_id,
             "CEO: follow-up message received"
@@ -537,7 +540,9 @@ impl CeoOrchestrator {
                     task.goal
                 ),
             };
-            pending.entry(task.id.clone()).or_insert_with(|| req.clone());
+            pending
+                .entry(task.id.clone())
+                .or_insert_with(|| req.clone());
             // Add to persisted approvals if not already there
             if !state.pending_approvals.iter().any(|a| a.task_id == task.id) {
                 state.pending_approvals.push(req);
@@ -546,14 +551,16 @@ impl CeoOrchestrator {
     }
 
     /// Build a human-readable summary from the sub-task outcomes.
-    fn build_summary(
-        &self,
-        outcomes: &[SubTaskOutcome],
-        pending: &[ApprovalRequest],
-    ) -> String {
+    fn build_summary(&self, outcomes: &[SubTaskOutcome], pending: &[ApprovalRequest]) -> String {
         let total = outcomes.len();
-        let done = outcomes.iter().filter(|o| o.status == TaskStatus::Done).count();
-        let failed = outcomes.iter().filter(|o| o.status == TaskStatus::Failed).count();
+        let done = outcomes
+            .iter()
+            .filter(|o| o.status == TaskStatus::Done)
+            .count();
+        let failed = outcomes
+            .iter()
+            .filter(|o| o.status == TaskStatus::Failed)
+            .count();
         let parked = pending.len();
         format!(
             "{} sub-tasks: {} done, {} failed, {} parked for approval",
@@ -639,7 +646,10 @@ mod tests {
                         call_id: "c-email".into(),
                     }],
                     done: false,
-                    usage: TokenUsage { prompt_tokens: 10, completion_tokens: 5 },
+                    usage: TokenUsage {
+                        prompt_tokens: 10,
+                        completion_tokens: 5,
+                    },
                 }]),
             }
         }
@@ -658,7 +668,10 @@ mod tests {
                     assistant_text: "done".into(),
                     tool_calls: vec![],
                     done: true,
-                    usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+                    usage: TokenUsage {
+                        prompt_tokens: 5,
+                        completion_tokens: 5,
+                    },
                 })
             } else {
                 Ok(q.remove(0))
@@ -735,13 +748,28 @@ mod tests {
         let reg = make_registry();
         let exec = make_executor(Arc::new(ScriptedProvider::done()));
         let planner = Arc::new(MockPlanner::new(vec![
-            SubGoal { goal: "write auth module".into(), role: AgentRole::Coder, parallel: false },
-            SubGoal { goal: "review PR".into(), role: AgentRole::Reviewer, parallel: false },
+            SubGoal {
+                goal: "write auth module".into(),
+                role: AgentRole::Coder,
+                parallel: false,
+            },
+            SubGoal {
+                goal: "review PR".into(),
+                role: AgentRole::Reviewer,
+                parallel: false,
+            },
         ]));
         let ceo = CeoOrchestrator::new(reg, exec, planner, None);
-        let report = ceo.submit(FounderDirective::new("ship auth feature")).await.unwrap();
+        let report = ceo
+            .submit(FounderDirective::new("ship auth feature"))
+            .await
+            .unwrap();
 
-        assert_eq!(report.sub_tasks.len(), 2, "2 sub-tasks should have been spawned");
+        assert_eq!(
+            report.sub_tasks.len(),
+            2,
+            "2 sub-tasks should have been spawned"
+        );
         assert_eq!(report.session_id, ceo.session_id());
     }
 
@@ -764,7 +792,10 @@ mod tests {
 
         // At least one task should be parked and appear in pending approvals
         let parked = report.sub_tasks.iter().any(|t| t.parked_for_approval);
-        assert!(parked, "at least one sub-task should be parked for approval");
+        assert!(
+            parked,
+            "at least one sub-task should be parked for approval"
+        );
         // pending_approvals in the report should be non-empty
         assert!(
             !report.pending_approvals.is_empty(),
@@ -817,10 +848,18 @@ mod tests {
         let ceo = CeoOrchestrator::new(reg, exec, planner, None);
         let sid = ceo.session_id().to_string();
 
-        ceo.submit(FounderDirective::new("first directive")).await.unwrap();
-        let r2 = ceo.send_followup(FounderDirective::new("follow-up directive")).await.unwrap();
+        ceo.submit(FounderDirective::new("first directive"))
+            .await
+            .unwrap();
+        let r2 = ceo
+            .send_followup(FounderDirective::new("follow-up directive"))
+            .await
+            .unwrap();
 
-        assert_eq!(r2.session_id, sid, "follow-up must reuse the same session id");
+        assert_eq!(
+            r2.session_id, sid,
+            "follow-up must reuse the same session id"
+        );
     }
 
     // ── T5: report aggregates child outcomes ─────────────────────────────────
@@ -830,11 +869,21 @@ mod tests {
         let reg = make_registry();
         let exec = make_executor(Arc::new(ScriptedProvider::done()));
         let planner = Arc::new(MockPlanner::new(vec![
-            SubGoal { goal: "task A".into(), role: AgentRole::Coder, parallel: false },
-            SubGoal { goal: "task B".into(), role: AgentRole::Coder, parallel: false },
+            SubGoal {
+                goal: "task A".into(),
+                role: AgentRole::Coder,
+                parallel: false,
+            },
+            SubGoal {
+                goal: "task B".into(),
+                role: AgentRole::Coder,
+                parallel: false,
+            },
         ]));
         let ceo = CeoOrchestrator::new(reg, exec, planner, None);
-        ceo.submit(FounderDirective::new("do two things")).await.unwrap();
+        ceo.submit(FounderDirective::new("do two things"))
+            .await
+            .unwrap();
 
         let report = ceo.report();
         assert_eq!(report.sub_tasks.len(), 2);
@@ -857,16 +906,21 @@ mod tests {
         }]));
         let ceo1 = CeoOrchestrator::new(reg1, exec1, planner1, Some(session_dir.clone()));
         let original_sid = ceo1.session_id().to_string();
-        ceo1.submit(FounderDirective::new("do something")).await.unwrap();
+        ceo1.submit(FounderDirective::new("do something"))
+            .await
+            .unwrap();
 
         // Reload session
         let reg2 = make_registry();
         let exec2 = make_executor(Arc::new(ScriptedProvider::done()));
         let planner2 = Arc::new(MockPlanner::new(vec![]));
-        let ceo2 =
-            CeoOrchestrator::resume_from(&session_dir, reg2, exec2, planner2).unwrap();
+        let ceo2 = CeoOrchestrator::resume_from(&session_dir, reg2, exec2, planner2).unwrap();
 
-        assert_eq!(ceo2.session_id(), original_sid, "resumed session must have same id");
+        assert_eq!(
+            ceo2.session_id(),
+            original_sid,
+            "resumed session must have same id"
+        );
         let state = ceo2.state.lock().unwrap();
         assert!(!state.tasks.is_empty(), "persisted tasks must reload");
     }

@@ -418,13 +418,12 @@ pub async fn search(
             }
 
             // Build a token-weight map for the query.
-            let query_map: std::collections::HashMap<u32, f32> =
-                query_sparse.into_iter().collect();
+            let query_map: std::collections::HashMap<u32, f32> = query_sparse.into_iter().collect();
 
             // For each FTS5 candidate, fetch text from DB and compute sparse overlap.
             let locked = conn_arc.blocking_lock();
-            let texts = crate::search::fetch_chunk_texts(&locked, &candidate_ids)
-                .unwrap_or_default();
+            let texts =
+                crate::search::fetch_chunk_texts(&locked, &candidate_ids).unwrap_or_default();
 
             texts
                 .into_iter()
@@ -458,8 +457,7 @@ pub async fn search(
     // ── Sort sparse hits descending ───────────────────────────────────────────
 
     let mut sparse_hits_sorted = sparse_hits;
-    sparse_hits_sorted
-        .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    sparse_hits_sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     sparse_hits_sorted.truncate(candidate_n);
     let sparse_hits = sparse_hits_sorted;
 
@@ -813,7 +811,9 @@ mod tests {
         let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
 
         let cfg = SearchConfig::default();
-        let results = search("   \t\n", &cfg, conn, embed, None, None).await.unwrap();
+        let results = search("   \t\n", &cfg, conn, embed, None, None)
+            .await
+            .unwrap();
         assert!(results.is_empty());
     }
 
@@ -848,7 +848,9 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("cascade", &cfg, conn, embed, None, None).await.unwrap();
+        let results = search("cascade", &cfg, conn, embed, None, None)
+            .await
+            .unwrap();
         assert!(
             !results.is_empty(),
             "keyword search for 'cascade' should find the chunk"

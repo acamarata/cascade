@@ -166,11 +166,7 @@ fn collect_tree(store: &PbdStore, result: &mut ValidationResult) -> PhaseTree {
 
     for phase in phases {
         for epic_id in &phase.epics {
-            let epic_path = store
-                .root()
-                .join(&phase.id)
-                .join(epic_id)
-                .join("epic.yaml");
+            let epic_path = store.root().join(&phase.id).join(epic_id).join("epic.yaml");
             match load_yaml::<Epic>(&epic_path) {
                 Ok(epic) => {
                     for wave_id in &epic.waves {
@@ -254,7 +250,9 @@ fn collect_tree(store: &PbdStore, result: &mut ValidationResult) -> PhaseTree {
     tree
 }
 
-fn load_yaml<T: for<'de> serde::Deserialize<'de>>(path: &std::path::Path) -> std::result::Result<T, Box<dyn std::error::Error>> {
+fn load_yaml<T: for<'de> serde::Deserialize<'de>>(
+    path: &std::path::Path,
+) -> std::result::Result<T, Box<dyn std::error::Error>> {
     let s = fs::read_to_string(path)?;
     let v: T = serde_yaml::from_str(&s)?;
     Ok(v)
@@ -342,13 +340,20 @@ fn dfs_cycle<'a>(
 
 // ── Check: status values ──────────────────────────────────────────────────────
 
-static VALID_PHASE_STATUSES: &[&str] =
-    &["planning", "ready_to_build", "building", "qa", "shipped", "archived"];
+static VALID_PHASE_STATUSES: &[&str] = &[
+    "planning",
+    "ready_to_build",
+    "building",
+    "qa",
+    "shipped",
+    "archived",
+];
 static VALID_EPIC_STATUSES: &[&str] = &["planned", "active", "done", "archived"];
 static VALID_WAVE_STATUSES: &[&str] = &["queued", "active", "qa", "done"];
 static VALID_SPRINT_STATUSES: &[&str] = &["queued", "active", "qa", "done"];
-static VALID_TICKET_STATUSES: &[&str] =
-    &["planned", "queue", "active", "review", "blocked", "done", "archived"];
+static VALID_TICKET_STATUSES: &[&str] = &[
+    "planned", "queue", "active", "review", "blocked", "done", "archived",
+];
 
 fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
     // Walk raw YAML to catch string-level issues serde would silently reject
@@ -373,7 +378,11 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
             if !VALID_PHASE_STATUSES.contains(&raw.as_str()) {
                 result.issues.push(Issue::error_at(
                     "status",
-                    format!("Phase has invalid status '{}' in {}", raw, phase_path.display()),
+                    format!(
+                        "Phase has invalid status '{}' in {}",
+                        raw,
+                        phase_path.display()
+                    ),
                     phase_path.clone(),
                 ));
             }
@@ -462,7 +471,9 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
 }
 
 /// Read the raw `status:` string value from a YAML file without full type parsing.
-fn read_raw_status(path: &std::path::Path) -> std::result::Result<String, Box<dyn std::error::Error>> {
+fn read_raw_status(
+    path: &std::path::Path,
+) -> std::result::Result<String, Box<dyn std::error::Error>> {
     let s = fs::read_to_string(path)?;
     let v: serde_yaml::Value = serde_yaml::from_str(&s)?;
     let status = v
@@ -566,11 +577,7 @@ fn run_repair(store: &PbdStore, tree: &PhaseTree, result: &mut ValidationResult)
     let phases = store.list_phases()?;
     for phase in &phases {
         for epic_id in &phase.epics {
-            let epic_path = store
-                .root()
-                .join(&phase.id)
-                .join(epic_id)
-                .join("epic.yaml");
+            let epic_path = store.root().join(&phase.id).join(epic_id).join("epic.yaml");
             if !epic_path.exists() {
                 continue;
             }
@@ -613,17 +620,14 @@ fn run_repair(store: &PbdStore, tree: &PhaseTree, result: &mut ValidationResult)
                         Ok(entries) => entries
                             .flatten()
                             .filter(|e| e.path().join("ticket.yaml").exists())
-                            .map(|e| {
-                                e.file_name().to_string_lossy().into_owned()
-                            })
+                            .map(|e| e.file_name().to_string_lossy().into_owned())
                             .collect(),
                         Err(_) => continue,
                     };
 
                     let declared: HashSet<&str> =
                         sprint.tickets.iter().map(|s| s.as_str()).collect();
-                    let actual_set: HashSet<&str> =
-                        actual_ids.iter().map(|s| s.as_str()).collect();
+                    let actual_set: HashSet<&str> = actual_ids.iter().map(|s| s.as_str()).collect();
 
                     if declared != actual_set {
                         // Add missing ticket IDs; do not remove any declared ones
@@ -873,7 +877,13 @@ mod tests {
         build_clean(&store);
 
         // Manually create a ticket dir without updating sprint.yaml
-        let orphan_dir = store.root().join("p1").join("e01").join("w01").join("s01").join("t99");
+        let orphan_dir = store
+            .root()
+            .join("p1")
+            .join("e01")
+            .join("w01")
+            .join("s01")
+            .join("t99");
         std::fs::create_dir_all(&orphan_dir).unwrap();
         std::fs::write(
             orphan_dir.join("ticket.yaml"),
@@ -898,7 +908,13 @@ mod tests {
         build_clean(&store);
 
         // Create orphan ticket dir
-        let orphan_dir = store.root().join("p1").join("e01").join("w01").join("s01").join("t99");
+        let orphan_dir = store
+            .root()
+            .join("p1")
+            .join("e01")
+            .join("w01")
+            .join("s01")
+            .join("t99");
         std::fs::create_dir_all(&orphan_dir).unwrap();
         std::fs::write(
             orphan_dir.join("ticket.yaml"),

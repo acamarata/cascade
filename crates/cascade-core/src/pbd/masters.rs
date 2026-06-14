@@ -276,9 +276,8 @@ fn scan_typescript(repo_path: &Path) -> Vec<MasterEntity> {
                     || trimmed.starts_with(&format!("export function {method}("))
                 {
                     // Extract path if present as string arg
-                    let route_name = extract_route_path(trimmed, method).unwrap_or_else(|| {
-                        format!("{method} (in {})", rel_path)
-                    });
+                    let route_name = extract_route_path(trimmed, method)
+                        .unwrap_or_else(|| format!("{method} (in {})", rel_path));
                     let key = format!("route:{route_name}:{rel_path}");
                     if seen.insert(key) {
                         entities.push(MasterEntity {
@@ -416,11 +415,7 @@ fn find_src_root(repo_path: &Path) -> PathBuf {
 }
 
 /// Walk all files under `root` with the given extensions, calling `cb` for each.
-fn walk_files(
-    root: &Path,
-    extensions: &[&str],
-    cb: &mut impl FnMut(&Path, String),
-) {
+fn walk_files(root: &Path, extensions: &[&str], cb: &mut impl FnMut(&Path, String)) {
     let root = root.to_path_buf();
     walk_recursive(&root, &root, extensions, cb);
 }
@@ -439,10 +434,19 @@ fn walk_recursive(
         let path = entry.path();
         if path.is_dir() {
             // Skip common non-source dirs
-            let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy())
+                .unwrap_or_default();
             if matches!(
                 name.as_ref(),
-                "node_modules" | "target" | ".git" | "dist" | "build" | ".cache" | "coverage"
+                "node_modules"
+                    | "target"
+                    | ".git"
+                    | "dist"
+                    | "build"
+                    | ".cache"
+                    | "coverage"
                     | "__pycache__"
             ) {
                 continue;
@@ -486,7 +490,10 @@ mod tests {
 
     use crate::pbd::{
         masters::{index_pbd, index_repo},
-        schema::{Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket, TicketStatus, Wave, WaveStatus},
+        schema::{
+            Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket, TicketStatus, Wave,
+            WaveStatus,
+        },
         store::PbdStore,
     };
 
@@ -579,7 +586,11 @@ mod tests {
         assert_eq!(list.repo, "rust-repo");
 
         let names: Vec<&str> = list.entities.iter().map(|e| e.name.as_str()).collect();
-        assert!(names.contains(&"hello"), "Expected 'hello'; got: {:?}", names);
+        assert!(
+            names.contains(&"hello"),
+            "Expected 'hello'; got: {:?}",
+            names
+        );
         assert!(names.contains(&"Config"), "Expected 'Config'");
         assert!(names.contains(&"Mode"), "Expected 'Mode'");
 
@@ -604,7 +615,10 @@ mod tests {
         // Entity names should be identical
         let names1: Vec<&str> = r1.entities.iter().map(|e| e.name.as_str()).collect();
         let names2: Vec<&str> = r2.entities.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names1, names2, "Idempotent index should produce same entities");
+        assert_eq!(
+            names1, names2,
+            "Idempotent index should produce same entities"
+        );
     }
 
     // ── PBD tree indexing ─────────────────────────────────────────────────────

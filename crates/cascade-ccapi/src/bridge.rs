@@ -47,24 +47,20 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::State,
     http::StatusCode,
     response::{
-        IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
+        IntoResponse, Response,
     },
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{
-    driver::ProcessDriver,
-    quota::QuotaGuard,
-};
+use crate::{driver::ProcessDriver, quota::QuotaGuard};
 
 // ── BridgeConfig ──────────────────────────────────────────────────────────────
 
@@ -169,8 +165,10 @@ async fn handle_messages(
 ) -> Response {
     // 1. Quota check (non-blocking atomic).
     if let Err(e) = state.quota.check() {
-        let body = serde_json::to_string(&ErrorBody { error: e.to_string() })
-            .unwrap_or_default();
+        let body = serde_json::to_string(&ErrorBody {
+            error: e.to_string(),
+        })
+        .unwrap_or_default();
         return (StatusCode::TOO_MANY_REQUESTS, body).into_response();
     }
 
@@ -195,8 +193,10 @@ async fn handle_messages(
     let chunks = match state.driver.send_prompt(&prompt).await {
         Ok(c) => c,
         Err(e) => {
-            let body = serde_json::to_string(&ErrorBody { error: e.to_string() })
-                .unwrap_or_default();
+            let body = serde_json::to_string(&ErrorBody {
+                error: e.to_string(),
+            })
+            .unwrap_or_default();
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     };
@@ -271,8 +271,9 @@ mod tests {
             .unwrap();
         let resp = router.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body_bytes =
-            axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(json["status"], "running");
         assert_eq!(json["driver"], "MockDriver");

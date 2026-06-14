@@ -53,9 +53,6 @@
 //! ```
 
 pub mod ai_folder;
-pub mod eie;
-pub mod pbd;
-pub mod tasks;
 pub mod auth_detector;
 pub mod cache;
 pub mod cascade_resolution;
@@ -65,12 +62,14 @@ pub mod config;
 pub mod context_pack;
 pub mod derived;
 pub mod discovery;
+pub mod eie;
 pub mod hook_store;
 pub mod inbox;
 pub mod library;
 pub mod loader;
 pub mod maps;
 pub mod memory;
+pub mod pbd;
 pub mod providers_store;
 pub mod quota_aggregator;
 pub mod quota_store;
@@ -80,6 +79,7 @@ pub mod security;
 pub mod settings;
 pub mod symlinks;
 pub mod task_store;
+pub mod tasks;
 pub mod templates;
 pub mod watcher;
 pub mod worktree_store;

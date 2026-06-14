@@ -60,7 +60,13 @@ fn setup_golden_corpus() -> Connection {
             "INSERT INTO rag_chunks \
              (source_id, chunk_index, chunk_text, line_start, line_end, schema_version) \
              VALUES (?1, ?2, ?3, ?4, ?5, 1)",
-            rusqlite::params![source_id, i as i64, text, i as i64 * 5 + 1, i as i64 * 5 + 5],
+            rusqlite::params![
+                source_id,
+                i as i64,
+                text,
+                i as i64 * 5 + 1,
+                i as i64 * 5 + 5
+            ],
         )
         .expect("insert chunk");
     }
@@ -140,26 +146,53 @@ async fn golden_baseline_all_flags_off() {
     };
 
     // Query 1: unique token from chunk 0 — must find it via FTS5.
-    let r1 = search("BM25", &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("search must not error");
+    let r1 = search(
+        "BM25",
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("search must not error");
     assert!(!r1.is_empty(), "baseline: 'BM25' must return results");
     // Top result must have a positive FTS5 score.
-    assert!(r1[0].fts5_score.unwrap_or(0.0) > 0.0, "fts5_score must be positive");
+    assert!(
+        r1[0].fts5_score.unwrap_or(0.0) > 0.0,
+        "fts5_score must be positive"
+    );
     // Dense score must be None (vec_enabled=false).
-    assert_eq!(r1[0].dense_score, None, "dense_score must be None with flags off");
+    assert_eq!(
+        r1[0].dense_score, None,
+        "dense_score must be None with flags off"
+    );
 
     // Query 2: unique token from chunk 2.
-    let r2 = search("qibla", &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("search must not error");
+    let r2 = search(
+        "qibla",
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("search must not error");
     assert!(!r2.is_empty(), "baseline: 'qibla' must return results");
 
     // Query 3: noise-only query — may return empty or low-ranked results.
     // What matters: no panic, no error.
-    let r3 = search("zzz_nonexistent_token_xqzw", &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("search must not error on no-match query");
+    let r3 = search(
+        "zzz_nonexistent_token_xqzw",
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("search must not error on no-match query");
     // r3 may be empty; that is correct behavior.
     let _ = r3;
 }
@@ -177,14 +210,32 @@ async fn golden_baseline_score_stability() {
     };
 
     let query = "BM25";
-    let r1 = search(query, &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("first search");
-    let r2 = search(query, &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("second search");
+    let r1 = search(
+        query,
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("first search");
+    let r2 = search(
+        query,
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("second search");
 
-    assert_eq!(r1.len(), r2.len(), "result count must be stable across runs");
+    assert_eq!(
+        r1.len(),
+        r2.len(),
+        "result count must be stable across runs"
+    );
     for (a, b) in r1.iter().zip(r2.iter()) {
         assert_eq!(a.chunk_id, b.chunk_id, "chunk_id order must be stable");
         assert!(
@@ -290,7 +341,10 @@ async fn hyde_on_failing_llm_falls_back_to_raw_query() {
         .await
         .expect("failing LLM must not propagate error — fallback to raw query");
     // FTS5 still finds results using the raw query.
-    assert!(!r.is_empty(), "failing LLM fallback: FTS5 must still find results");
+    assert!(
+        !r.is_empty(),
+        "failing LLM fallback: FTS5 must still find results"
+    );
 }
 
 /// HyDE ON but no LLM provided: must fall back to raw query with a warning.
@@ -309,7 +363,10 @@ async fn hyde_on_no_llm_fallback_to_raw_query() {
     let r = search("BM25", &cfg, conn, embed, None, None)
         .await
         .expect("hyde=on + no llm must not error");
-    assert!(!r.is_empty(), "no-llm fallback: FTS5 must still find results");
+    assert!(
+        !r.is_empty(),
+        "no-llm fallback: FTS5 must still find results"
+    );
 }
 
 // ── 3. Sparse tier ───────────────────────────────────────────────────────────
@@ -326,9 +383,16 @@ async fn sparse_off_no_sparse_hits() {
         ..Default::default()
     };
 
-    let r = search("BM25", &cfg, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("sparse=off must not error");
+    let r = search(
+        "BM25",
+        &cfg,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("sparse=off must not error");
     // Results come from FTS5 only; pipeline unchanged.
     assert!(!r.is_empty(), "sparse=off: FTS5 still finds results");
 }
@@ -353,7 +417,10 @@ async fn sparse_on_tfidf_fallback_runs() {
     assert!(!r.is_empty(), "sparse=on: must return results");
     // All rrf_scores must be positive.
     for c in &r {
-        assert!(c.rrf_score > 0.0, "rrf_score must be > 0 when sparse is active");
+        assert!(
+            c.rrf_score > 0.0,
+            "rrf_score must be > 0 when sparse is active"
+        );
     }
 }
 
@@ -398,18 +465,32 @@ async fn colbert_off_rrf_unchanged() {
         colbert_enabled: false, // DEFAULT
         ..Default::default()
     };
-    let r_baseline = search("BM25", &cfg_baseline, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("colbert=off baseline");
+    let r_baseline = search(
+        "BM25",
+        &cfg_baseline,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("colbert=off baseline");
 
     // Explicitly OFF matches baseline exactly.
     let cfg_off = SearchConfig {
         colbert_enabled: false,
         ..cfg_baseline.clone()
     };
-    let r_off = search("BM25", &cfg_off, Arc::clone(&conn), Arc::clone(&embed), None, None)
-        .await
-        .expect("colbert=off explicit");
+    let r_off = search(
+        "BM25",
+        &cfg_off,
+        Arc::clone(&conn),
+        Arc::clone(&embed),
+        None,
+        None,
+    )
+    .await
+    .expect("colbert=off explicit");
 
     assert_eq!(
         r_baseline.len(),
@@ -444,7 +525,10 @@ async fn colbert_on_without_feature_graceful() {
         .await
         .expect("colbert=on without feature must not error");
     // Results still returned (FTS5 drives them); ColBERT is a no-op when feature absent.
-    assert!(!r.is_empty(), "colbert=on graceful: FTS5 still returns results");
+    assert!(
+        !r.is_empty(),
+        "colbert=on graceful: FTS5 still returns results"
+    );
 }
 
 // ── 5. Combination: all flags ON simultaneously ───────────────────────────────
@@ -461,11 +545,11 @@ async fn all_flags_on_no_crash() {
     let cfg = SearchConfig {
         k: 3,
         fts5_enabled: true,
-        vec_enabled: true,      // dense on (BLOB table empty → no dense hits, but no crash)
-        sparse_enabled: true,   // TF-IDF sparse on
-        hyde_enabled: true,     // HyDE on
-        colbert_enabled: true,  // ColBERT on (no-op without feature, or graceful with)
-        rerank_enabled: false,  // keep reranker off (no model)
+        vec_enabled: true, // dense on (BLOB table empty → no dense hits, but no crash)
+        sparse_enabled: true, // TF-IDF sparse on
+        hyde_enabled: true, // HyDE on
+        colbert_enabled: true, // ColBERT on (no-op without feature, or graceful with)
+        rerank_enabled: false, // keep reranker off (no model)
         rrf_k: 60.0,
         ..Default::default()
     };
@@ -474,16 +558,9 @@ async fn all_flags_on_no_crash() {
         "cascade retrieval augmented generation pipeline uses FTS5 and dense vectors",
     ));
 
-    let r = search(
-        "BM25",
-        &cfg,
-        conn,
-        embed,
-        None,
-        Some(llm),
-    )
-    .await
-    .expect("all flags ON must not error");
+    let r = search("BM25", &cfg, conn, embed, None, Some(llm))
+        .await
+        .expect("all flags ON must not error");
 
     // May return results or empty (depends on what's in the BLOB table);
     // what matters is no panic.

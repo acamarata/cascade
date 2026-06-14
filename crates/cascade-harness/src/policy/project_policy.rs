@@ -195,8 +195,7 @@ reason   = "test deny"
 
         // Build without going through the full tier resolution (no HOME manipulation).
         // Test the merge function directly.
-        let cfg_content = std::fs::read_to_string(dir.path().join(".cascade/config.toml"))
-            .unwrap();
+        let cfg_content = std::fs::read_to_string(dir.path().join(".cascade/config.toml")).unwrap();
         let cfg: CascadeConfig = toml::from_str(&cfg_content).unwrap();
 
         let tier_configs = vec![(TierName::PPC, cfg.policy)];
@@ -228,14 +227,15 @@ reason   = "test deny"
             reason: "PRC relaxed to require-approval".to_string(),
         };
 
-        let gci_cfg = PolicyTableConfig { rules: vec![gci_rule] };
-        let prc_cfg = PolicyTableConfig { rules: vec![prc_rule] };
+        let gci_cfg = PolicyTableConfig {
+            rules: vec![gci_rule],
+        };
+        let prc_cfg = PolicyTableConfig {
+            rules: vec![prc_rule],
+        };
 
         // GCI first (highest precedence), PRC second (overrides).
-        let merged = PolicySet::merge(&[
-            (TierName::GCI, gci_cfg),
-            (TierName::PRC, prc_cfg),
-        ]);
+        let merged = PolicySet::merge(&[(TierName::GCI, gci_cfg), (TierName::PRC, prc_cfg)]);
 
         assert_eq!(merged.len(), 1, "same-id rules collapse to one");
         assert_eq!(

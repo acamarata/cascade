@@ -259,9 +259,18 @@ mod tests {
         let json = serde_json::to_string(&spec).unwrap();
 
         // camelCase fields must appear in the JSON
-        assert!(json.contains("\"systemPromptRef\""), "expected camelCase systemPromptRef, got: {json}");
-        assert!(json.contains("\"toolGrantsRef\""), "expected camelCase toolGrantsRef");
-        assert!(json.contains("\"modelPref\"") || !json.contains("modelPref"), "unexpected field");
+        assert!(
+            json.contains("\"systemPromptRef\""),
+            "expected camelCase systemPromptRef, got: {json}"
+        );
+        assert!(
+            json.contains("\"toolGrantsRef\""),
+            "expected camelCase toolGrantsRef"
+        );
+        assert!(
+            json.contains("\"modelPref\"") || !json.contains("modelPref"),
+            "unexpected field"
+        );
 
         let decoded: AgentSpec = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.id, "cascade.ceo");
@@ -282,7 +291,9 @@ mod tests {
 
     #[test]
     fn runtime_wasm_serde() {
-        let rt = Runtime::Wasm { plugin_id: "my-plugin".into() };
+        let rt = Runtime::Wasm {
+            plugin_id: "my-plugin".into(),
+        };
         let json = serde_json::to_string(&rt).unwrap();
         let decoded: Runtime = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, rt);
@@ -290,10 +301,19 @@ mod tests {
 
     #[test]
     fn role_from_task_kind_known() {
-        assert_eq!(AgentRole::from_task_kind("code.write"), Some(AgentRole::Coder));
-        assert_eq!(AgentRole::from_task_kind("pr.review"), Some(AgentRole::Reviewer));
+        assert_eq!(
+            AgentRole::from_task_kind("code.write"),
+            Some(AgentRole::Coder)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("pr.review"),
+            Some(AgentRole::Reviewer)
+        );
         assert_eq!(AgentRole::from_task_kind("triage"), Some(AgentRole::Triage));
-        assert_eq!(AgentRole::from_task_kind("email.draft"), Some(AgentRole::Emailer));
+        assert_eq!(
+            AgentRole::from_task_kind("email.draft"),
+            Some(AgentRole::Emailer)
+        );
     }
 
     #[test]

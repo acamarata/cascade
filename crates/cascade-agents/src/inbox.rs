@@ -303,7 +303,10 @@ impl AgentInbox {
     pub fn register_agent(&self, agent_id: impl Into<String>) {
         let id = agent_id.into();
         let mut inner = self.inner.write().expect("inbox poisoned");
-        inner.queues.entry(id).or_insert_with(|| AgentQueue::new(self.cap));
+        inner
+            .queues
+            .entry(id)
+            .or_insert_with(|| AgentQueue::new(self.cap));
     }
 
     /// Unregister and discard the queue for `agent_id`.
@@ -321,11 +324,7 @@ impl AgentInbox {
     ///
     /// The message is cloned for each recipient. Each clone gets a fresh id so
     /// recipients can independently acknowledge or drain their copy.
-    pub fn send(
-        &self,
-        msg: AgentMessage,
-        resolver: &dyn RoleResolver,
-    ) -> Result<(), InboxError> {
+    pub fn send(&self, msg: AgentMessage, resolver: &dyn RoleResolver) -> Result<(), InboxError> {
         let recipients = self.resolve_recipients(&msg.to, resolver);
         for agent_id in &recipients {
             let mut clone = msg.clone();
@@ -335,7 +334,9 @@ impl AgentInbox {
             let queue = inner
                 .queues
                 .get_mut(agent_id)
-                .ok_or_else(|| InboxError::UnknownAgent { agent_id: agent_id.clone() })?;
+                .ok_or_else(|| InboxError::UnknownAgent {
+                    agent_id: agent_id.clone(),
+                })?;
             queue.push(clone.clone(), agent_id)?;
             drop(inner);
             self.store.mark_delivered(&clone.id, agent_id)?;
@@ -347,7 +348,9 @@ impl AgentInbox {
     pub fn peek(&self, agent_id: &str) -> Result<Option<AgentMessage>, InboxError> {
         let inner = self.inner.read().expect("inbox poisoned");
         match inner.queues.get(agent_id) {
-            None => Err(InboxError::UnknownAgent { agent_id: agent_id.to_owned() }),
+            None => Err(InboxError::UnknownAgent {
+                agent_id: agent_id.to_owned(),
+            }),
             Some(q) => Ok(q.messages.first().cloned()),
         }
     }
@@ -356,7 +359,9 @@ impl AgentInbox {
     pub fn receive(&self, agent_id: &str) -> Result<Option<AgentMessage>, InboxError> {
         let mut inner = self.inner.write().expect("inbox poisoned");
         match inner.queues.get_mut(agent_id) {
-            None => Err(InboxError::UnknownAgent { agent_id: agent_id.to_owned() }),
+            None => Err(InboxError::UnknownAgent {
+                agent_id: agent_id.to_owned(),
+            }),
             Some(q) => {
                 if q.messages.is_empty() {
                     Ok(None)
@@ -371,7 +376,9 @@ impl AgentInbox {
     pub fn drain(&self, agent_id: &str) -> Result<Vec<AgentMessage>, InboxError> {
         let mut inner = self.inner.write().expect("inbox poisoned");
         match inner.queues.get_mut(agent_id) {
-            None => Err(InboxError::UnknownAgent { agent_id: agent_id.to_owned() }),
+            None => Err(InboxError::UnknownAgent {
+                agent_id: agent_id.to_owned(),
+            }),
             Some(q) => Ok(std::mem::take(&mut q.messages)),
         }
     }
@@ -380,7 +387,9 @@ impl AgentInbox {
     pub fn queue_len(&self, agent_id: &str) -> Result<usize, InboxError> {
         let inner = self.inner.read().expect("inbox poisoned");
         match inner.queues.get(agent_id) {
-            None => Err(InboxError::UnknownAgent { agent_id: agent_id.to_owned() }),
+            None => Err(InboxError::UnknownAgent {
+                agent_id: agent_id.to_owned(),
+            }),
             Some(q) => Ok(q.messages.len()),
         }
     }
@@ -410,7 +419,9 @@ impl AgentInbox {
         task.assigned_agent_id = Some(to_agent.to_owned());
         let msg = AgentMessage::new(
             from_agent,
-            MessageTarget::Agent { agent_id: to_agent.to_owned() },
+            MessageTarget::Agent {
+                agent_id: to_agent.to_owned(),
+            },
             MessageKind::Handoff {},
             Some(task.id.clone()),
             body,
@@ -452,11 +463,14 @@ impl AgentInbox {
     ) -> Result<(), InboxError> {
         let mut inner = self.inner.write().expect("inbox poisoned");
         if inner.pending_approvals.remove(task_id).is_none() {
-            return Err(InboxError::NoApprovalRequest { task_id: task_id.to_owned() });
+            return Err(InboxError::NoApprovalRequest {
+                task_id: task_id.to_owned(),
+            });
         }
-        inner
-            .approval_decisions
-            .insert(task_id.to_owned(), MessageKind::ApprovalDecision { approved, note });
+        inner.approval_decisions.insert(
+            task_id.to_owned(),
+            MessageKind::ApprovalDecision { approved, note },
+        );
         Ok(())
     }
 
@@ -523,7 +537,9 @@ mod tests {
     fn simple_msg(from: &str, to_agent: &str) -> AgentMessage {
         AgentMessage::new(
             from,
-            MessageTarget::Agent { agent_id: to_agent.to_owned() },
+            MessageTarget::Agent {
+                agent_id: to_agent.to_owned(),
+            },
             MessageKind::Request {},
             None,
             serde_json::json!({"note": "hello"}),
@@ -561,7 +577,9 @@ mod tests {
 
         let msg = AgentMessage::new(
             "agent.ceo",
-            MessageTarget::Role { role: AgentRole::Coder },
+            MessageTarget::Role {
+                role: AgentRole::Coder,
+            },
             MessageKind::Notify {},
             None,
             serde_json::json!({"action": "start"}),
@@ -647,7 +665,9 @@ mod tests {
         assert!(inbox.has_pending_approval(&task_id));
         assert!(inbox.poll_approval_decision(&task_id).is_none());
 
-        inbox.resolve_approval(&task_id, true, Some("looks good".into())).unwrap();
+        inbox
+            .resolve_approval(&task_id, true, Some("looks good".into()))
+            .unwrap();
         assert!(!inbox.has_pending_approval(&task_id));
 
         let decision = inbox.poll_approval_decision(&task_id).unwrap();
@@ -666,7 +686,9 @@ mod tests {
     #[test]
     fn resolve_approval_without_prior_request_errors() {
         let inbox = AgentInbox::new();
-        let err = inbox.resolve_approval("nonexistent-task", true, None).unwrap_err();
+        let err = inbox
+            .resolve_approval("nonexistent-task", true, None)
+            .unwrap_err();
         assert!(matches!(err, InboxError::NoApprovalRequest { .. }));
     }
 
@@ -679,8 +701,12 @@ mod tests {
         inbox.register_agent("agent.coder1");
         let resolver = make_resolver();
 
-        inbox.send(simple_msg("agent.ceo", "agent.coder1"), &resolver).unwrap();
-        inbox.send(simple_msg("agent.ceo", "agent.coder1"), &resolver).unwrap();
+        inbox
+            .send(simple_msg("agent.ceo", "agent.coder1"), &resolver)
+            .unwrap();
+        inbox
+            .send(simple_msg("agent.ceo", "agent.coder1"), &resolver)
+            .unwrap();
 
         let err = inbox
             .send(simple_msg("agent.ceo", "agent.coder1"), &resolver)
@@ -698,7 +724,9 @@ mod tests {
         for i in 0..3_u32 {
             let msg = AgentMessage::new(
                 "agent.ceo",
-                MessageTarget::Agent { agent_id: "agent.coder1".to_owned() },
+                MessageTarget::Agent {
+                    agent_id: "agent.coder1".to_owned(),
+                },
                 MessageKind::Notify {},
                 None,
                 serde_json::json!({"seq": i}),
@@ -721,7 +749,9 @@ mod tests {
         let inbox = make_inbox_with_agents();
         let resolver = make_resolver();
 
-        inbox.send(simple_msg("agent.ceo", "agent.coder1"), &resolver).unwrap();
+        inbox
+            .send(simple_msg("agent.ceo", "agent.coder1"), &resolver)
+            .unwrap();
 
         let peeked = inbox.peek("agent.coder1").unwrap().unwrap();
         let received = inbox.receive("agent.coder1").unwrap().unwrap();
@@ -736,14 +766,22 @@ mod tests {
     fn agent_message_serde_camel_case() {
         let msg = AgentMessage::new(
             "agent.ceo",
-            MessageTarget::Agent { agent_id: "agent.coder1".to_owned() },
+            MessageTarget::Agent {
+                agent_id: "agent.coder1".to_owned(),
+            },
             MessageKind::Request {},
             Some("task-123".to_owned()),
             serde_json::json!({"x": 1}),
         );
         let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains("\"fromAgent\""), "expected camelCase fromAgent in: {json}");
-        assert!(json.contains("\"taskRef\""), "expected camelCase taskRef in: {json}");
+        assert!(
+            json.contains("\"fromAgent\""),
+            "expected camelCase fromAgent in: {json}"
+        );
+        assert!(
+            json.contains("\"taskRef\""),
+            "expected camelCase taskRef in: {json}"
+        );
         let decoded: AgentMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.from_agent, "agent.ceo");
         assert_eq!(decoded.task_ref.as_deref(), Some("task-123"));

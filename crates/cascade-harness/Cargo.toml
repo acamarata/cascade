@@ -19,8 +19,8 @@ bundled-policy-wasm = ["wasm-policy"]
 [dependencies]
 cascade-types   = { workspace = true }
 cascade-core    = { workspace = true }
-cascade-rag     = { path = "../cascade-rag" }
-cascade-mcp     = { path = "../cascade-mcp" }
+cascade-rag     = { path = "../cascade-rag", version = "0.9.0" }
+cascade-mcp     = { path = "../cascade-mcp", version = "0.9.0" }
 async-trait     = { workspace = true }
 serde           = { workspace = true }
 serde_json      = { workspace = true }

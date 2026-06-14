@@ -240,7 +240,8 @@ mod tests {
         assert_eq!(del_val["deleted"], true);
 
         // Second delete returns false (not found)
-        let delete_again = handle_task_delete(store.clone(), serde_json::json!({ "id": task_id })).await;
+        let delete_again =
+            handle_task_delete(store.clone(), serde_json::json!({ "id": task_id })).await;
         let del_val2 = assert_ok_json(delete_again);
         assert_eq!(del_val2["deleted"], false);
     }

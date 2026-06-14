@@ -30,12 +30,7 @@ use async_trait::async_trait;
 use clap::{Args, Subcommand};
 
 use cascade_ccapi::{
-    auth,
-    bridge::BridgeConfig,
-    driver::MockDriver,
-    make_live_driver,
-    quota::QuotaGuard,
-    run_bridge,
+    auth, bridge::BridgeConfig, driver::MockDriver, make_live_driver, quota::QuotaGuard, run_bridge,
 };
 use cascade_types::error::{CascadeError, Result};
 use std::sync::Arc;
@@ -60,8 +55,7 @@ To enable (at your own risk):
 
   3. Re-run: cascade ccapi start";
 
-const RISK_REMINDER: &str =
-    "WARNING: CC API proxy is EXPERIMENTAL. It may violate Anthropic ToS. \
+const RISK_REMINDER: &str = "WARNING: CC API proxy is EXPERIMENTAL. It may violate Anthropic ToS. \
      See .github/docs/cc-api-proxy-beta.md";
 
 // ── Args ──────────────────────────────────────────────────────────────────────
@@ -126,7 +120,9 @@ impl Command for CcApiArgs {
 /// Reads `~/.cascade/config.toml`. If the file doesn't exist or fails to
 /// parse, returns `false` (safe default).
 fn is_cc_api_proxy_enabled() -> bool {
-    let Some(home) = dirs::home_dir() else { return false };
+    let Some(home) = dirs::home_dir() else {
+        return false;
+    };
     let config_path = home.join(".cascade").join("config.toml");
     let Ok(contents) = std::fs::read_to_string(&config_path) else {
         return false;
@@ -156,9 +152,30 @@ impl Command for CcApiStatusArgs {
             });
             println!("{}", serde_json::to_string_pretty(&json).unwrap());
         } else {
-            println!("CC API Proxy: {}", if enabled { "ENABLED (experimental)" } else { "disabled" });
-            println!("Claude Code : {}", if cc_status.installed { "installed" } else { "not found" });
-            println!("CC auth     : {}", if cc_status.authenticated { "authenticated" } else { "not authenticated" });
+            println!(
+                "CC API Proxy: {}",
+                if enabled {
+                    "ENABLED (experimental)"
+                } else {
+                    "disabled"
+                }
+            );
+            println!(
+                "Claude Code : {}",
+                if cc_status.installed {
+                    "installed"
+                } else {
+                    "not found"
+                }
+            );
+            println!(
+                "CC auth     : {}",
+                if cc_status.authenticated {
+                    "authenticated"
+                } else {
+                    "not authenticated"
+                }
+            );
             if let Some(hint) = &cc_status.account_hint {
                 println!("CC account  : {hint}");
             }
@@ -229,7 +246,11 @@ impl Command for CcApiStartArgs {
             }
         };
 
-        let driver_label = if self.mock { "MockDriver" } else { "LiveCcDriver" };
+        let driver_label = if self.mock {
+            "MockDriver"
+        } else {
+            "LiveCcDriver"
+        };
         let config = BridgeConfig {
             host: "127.0.0.1".into(),
             port: self.port,
@@ -258,9 +279,7 @@ impl Command for CcApiStopArgs {
     async fn run(&self) -> Result<()> {
         if !is_cc_api_proxy_enabled() {
             eprintln!("{DISABLED_MSG}");
-            return Err(CascadeError::Other(
-                "cc_api_proxy is disabled".into(),
-            ));
+            return Err(CascadeError::Other("cc_api_proxy is disabled".into()));
         }
         // The bridge runs in the foreground — there is no separate PID to stop.
         // Future: check a PID file written by `cascade ccapi start --detach`.

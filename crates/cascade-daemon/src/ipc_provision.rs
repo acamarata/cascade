@@ -171,7 +171,10 @@ where
             update_status(
                 state,
                 &email,
-                &format!("GFP provisioning: 0/{} keys created\u{2026}", effective_target),
+                &format!(
+                    "GFP provisioning: 0/{} keys created\u{2026}",
+                    effective_target
+                ),
             )
             .await;
             let client = GoogleProvisionClient::new(oauth_token);
@@ -445,15 +448,8 @@ mod tests {
             client_id: None,
             client_secret: None,
         };
-        let result = handle_provision_google_start_multi(
-            req,
-            &state,
-            3,
-            None,
-            None,
-            |_, _| async {},
-        )
-        .await;
+        let result =
+            handle_provision_google_start_multi(req, &state, 3, None, None, |_, _| async {}).await;
         assert!(matches!(result, ProvisionResult::Error { .. }));
     }
 
@@ -540,8 +536,7 @@ mod tests {
             );
         }
 
-        let status =
-            handle_provision_google_status("status@example.com".to_string(), &state).await;
+        let status = handle_provision_google_status("status@example.com".to_string(), &state).await;
         assert_eq!(status.keys_created, 2);
         assert_eq!(status.keys_target, 5);
         assert_eq!(status.status, "running");

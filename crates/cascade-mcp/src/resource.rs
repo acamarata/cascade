@@ -55,7 +55,7 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use cascade_core::pbd::store::{PbdStore, resolve_phases_root};
+use cascade_core::pbd::store::{resolve_phases_root, PbdStore};
 
 use crate::error::McpServerError;
 use crate::handler::McpHandler;
@@ -413,8 +413,7 @@ async fn read_pbd_resource(rest: &str) -> Result<Option<String>, McpServerError>
             let store = PbdStore::new(resolve_phases_root(None));
             match store.read_current() {
                 Ok(current) => {
-                    let json = serde_json::to_string(&current)
-                        .unwrap_or_else(|_| "{}".into());
+                    let json = serde_json::to_string(&current).unwrap_or_else(|_| "{}".into());
                     Ok(Some(json))
                 }
                 Err(e) => Err(McpServerError::Internal {
@@ -455,7 +454,9 @@ async fn read_pbd_resource(rest: &str) -> Result<Option<String>, McpServerError>
                 }
                 Err(e) => {
                     // Return None (not found) rather than error for missing tickets
-                    if e.to_string().contains("No such file") || e.to_string().contains("os error 2") {
+                    if e.to_string().contains("No such file")
+                        || e.to_string().contains("os error 2")
+                    {
                         Ok(None)
                     } else {
                         Err(McpServerError::Internal {

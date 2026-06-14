@@ -164,11 +164,10 @@ pub fn load_spec_from_file(path: &Path) -> Result<AgentSpec, LibraryError> {
         source: e,
     })?;
 
-    let raw: RawAgentEntry =
-        serde_yaml::from_str(&content).map_err(|e| LibraryError::Parse {
-            file: path.to_path_buf(),
-            detail: e.to_string(),
-        })?;
+    let raw: RawAgentEntry = serde_yaml::from_str(&content).map_err(|e| LibraryError::Parse {
+        file: path.to_path_buf(),
+        detail: e.to_string(),
+    })?;
 
     Ok(raw.into())
 }
@@ -201,10 +200,7 @@ pub fn validate_agent_library(agents_dir: &Path) -> Result<Vec<LibraryIssue>, st
             continue;
         }
 
-        let rel = path
-            .strip_prefix(agents_dir)
-            .unwrap_or(&path)
-            .to_path_buf();
+        let rel = path.strip_prefix(agents_dir).unwrap_or(&path).to_path_buf();
 
         // Attempt to parse raw YAML
         let content = match std::fs::read_to_string(&path) {
@@ -284,10 +280,13 @@ mod tests {
 
         impl TmpDir {
             pub fn new(name: &str) -> Self {
-                let p = std::env::temp_dir().join(format!("cascade-agents-test-{name}-{}", std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .subsec_nanos()));
+                let p = std::env::temp_dir().join(format!(
+                    "cascade-agents-test-{name}-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .subsec_nanos()
+                ));
                 std::fs::create_dir_all(&p).unwrap();
                 TmpDir(p)
             }
@@ -367,7 +366,10 @@ runtime:
         fs::write(tmp.path().join("agent.yaml"), MISSING_FIELD_YAML).unwrap();
         let issues = validate_agent_library(tmp.path()).unwrap();
         let errors: Vec<_> = issues.iter().filter(|i| i.is_error()).collect();
-        assert!(!errors.is_empty(), "expected a parse error for missing role");
+        assert!(
+            !errors.is_empty(),
+            "expected a parse error for missing role"
+        );
     }
 
     #[test]

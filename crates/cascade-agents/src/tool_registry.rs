@@ -178,10 +178,7 @@ impl ToolRegistry {
             Some(g) => g,
             None => {
                 return GrantDecision::Denied {
-                    reason: format!(
-                        "agent '{}' has no grant for tool '{}'",
-                        agent_id, tool_id
-                    ),
+                    reason: format!("agent '{}' has no grant for tool '{}'", agent_id, tool_id),
                 }
             }
         };

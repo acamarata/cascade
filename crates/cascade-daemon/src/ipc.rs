@@ -160,13 +160,12 @@ impl IpcServer {
 
         // Kanban task store (E-P8-01): tasks.db in the config dir.
         let tasks_db_path = config_dir.join("tasks.db");
-        let task_conn = open_tasks_db(&tasks_db_path)
-            .unwrap_or_else(|e| {
-                tracing::warn!(%e, "failed to open tasks.db; task IPC will return errors");
-                // Fallback: in-memory db so the daemon still starts.
-                let conn = rusqlite::Connection::open_in_memory().unwrap();
-                std::sync::Arc::new(std::sync::Mutex::new(conn))
-            });
+        let task_conn = open_tasks_db(&tasks_db_path).unwrap_or_else(|e| {
+            tracing::warn!(%e, "failed to open tasks.db; task IPC will return errors");
+            // Fallback: in-memory db so the daemon still starts.
+            let conn = rusqlite::Connection::open_in_memory().unwrap();
+            std::sync::Arc::new(std::sync::Mutex::new(conn))
+        });
         let task_store = Arc::new(KanbanTaskStore::new(task_conn));
 
         Ok(Self {
@@ -537,11 +536,11 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
                 return match typed_req.method.as_str() {
                     "task_create" => handle_task_create(ts, params_val).await,
-                    "task_get"    => handle_task_get(ts, params_val).await,
+                    "task_get" => handle_task_get(ts, params_val).await,
                     "task_update" => handle_task_update(ts, params_val).await,
-                    "task_list"   => handle_task_list(ts, params_val).await,
+                    "task_list" => handle_task_list(ts, params_val).await,
                     "task_delete" => handle_task_delete(ts, params_val).await,
-                    "task_move"   => handle_task_move(ts, params_val).await,
+                    "task_move" => handle_task_move(ts, params_val).await,
                     other => Response::err(-32601, format!("method not found: {other}")),
                 };
             }

@@ -86,8 +86,10 @@ impl AgentRegistry {
     /// Create a registry pre-loaded with the built-in first-party specs.
     pub fn with_builtins() -> Self {
         let reg = Self::new();
-        reg.register(crate::spec::builtin_ceo()).expect("builtin ceo");
-        reg.register(crate::spec::builtin_coder()).expect("builtin coder");
+        reg.register(crate::spec::builtin_ceo())
+            .expect("builtin ceo");
+        reg.register(crate::spec::builtin_coder())
+            .expect("builtin coder");
         reg
     }
 
@@ -203,10 +205,7 @@ impl AgentRegistry {
             .map_err(|e| RegistryError::LibraryLoad(e.to_string()))?;
 
         // Hard errors block loading; warnings are returned to caller.
-        let hard: Vec<&LibraryIssue> = issues
-            .iter()
-            .filter(|i| i.is_error())
-            .collect();
+        let hard: Vec<&LibraryIssue> = issues.iter().filter(|i| i.is_error()).collect();
 
         if !hard.is_empty() {
             let msgs: Vec<String> = hard.iter().map(|i| i.to_string()).collect();

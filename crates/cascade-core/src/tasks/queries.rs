@@ -40,7 +40,11 @@ impl KanbanTaskStore {
         let tags_json = serde_json::to_string(&task.tags)
             .map_err(|e| CascadeError::Other(format!("serialize tags: {e}")))?;
         let blockers_json = serde_json::to_string(
-            &task.blockers.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
+            &task
+                .blockers
+                .iter()
+                .map(|u| u.to_string())
+                .collect::<Vec<_>>(),
         )
         .map_err(|e| CascadeError::Other(format!("serialize blockers: {e}")))?;
 
@@ -206,10 +210,7 @@ impl KanbanTaskStore {
             .map_err(|e| CascadeError::Other(format!("prepare list: {e}")))?;
 
         let tasks = stmt
-            .query_map(
-                rusqlite::params_from_iter(bind_values.iter()),
-                row_to_task,
-            )
+            .query_map(rusqlite::params_from_iter(bind_values.iter()), row_to_task)
             .map_err(|e| CascadeError::Other(format!("list query: {e}")))?
             .map(|r| r.map_err(|e| CascadeError::Other(format!("row deserialization: {e}"))))
             .collect::<Result<Vec<_>>>()?;
@@ -231,7 +232,11 @@ impl KanbanTaskStore {
         let tags_json = serde_json::to_string(&task.tags)
             .map_err(|e| CascadeError::Other(format!("serialize tags: {e}")))?;
         let blockers_json = serde_json::to_string(
-            &task.blockers.iter().map(|u| u.to_string()).collect::<Vec<_>>(),
+            &task
+                .blockers
+                .iter()
+                .map(|u| u.to_string())
+                .collect::<Vec<_>>(),
         )
         .map_err(|e| CascadeError::Other(format!("serialize blockers: {e}")))?;
 

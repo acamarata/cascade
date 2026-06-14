@@ -58,7 +58,10 @@ impl Command for HealthArgs {
         let report = run_health_check(&root, &config);
 
         if self.json {
-            println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).unwrap_or_default()
+            );
         } else {
             print_human(&report);
         }
@@ -83,7 +86,10 @@ fn print_human(report: &cascade_core::eie::HealthReport) {
     println!();
 
     if !report.file_size_issues.is_empty() {
-        println!("  Oversized Files ({} flagged):", report.file_size_issues.len());
+        println!(
+            "  Oversized Files ({} flagged):",
+            report.file_size_issues.len()
+        );
         println!("  {:<50} {:>8}  {:>8}", "FILE", "LINES", "CAP");
         println!("  {}", "─".repeat(70));
         for issue in &report.file_size_issues {
@@ -102,10 +108,7 @@ fn print_human(report: &cascade_core::eie::HealthReport) {
             "  Near-Duplicate Pairs ({} flagged):",
             report.duplication_issues.len()
         );
-        println!(
-            "  {:<35}  {:<35}  {:>7}",
-            "FILE A", "FILE B", "SHARED"
-        );
+        println!("  {:<35}  {:<35}  {:>7}", "FILE A", "FILE B", "SHARED");
         println!("  {}", "─".repeat(80));
         for issue in &report.duplication_issues {
             println!(

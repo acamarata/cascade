@@ -266,18 +266,21 @@ async fn run_status(args: &CeoStatusArgs) -> Result<()> {
 async fn run_approvals(args: &CeoApprovalsArgs) -> Result<()> {
     let client = IpcClient::new()?;
 
-    let approvals: Vec<ApprovalSummary> =
-        client.send("ceo_approvals", serde_json::Value::Null).await?;
+    let approvals: Vec<ApprovalSummary> = client
+        .send("ceo_approvals", serde_json::Value::Null)
+        .await?;
 
     if args.json {
         let raw = serde_json::to_string_pretty(
             &approvals
                 .iter()
-                .map(|a| json!({
-                    "taskId": a.task_id,
-                    "description": a.description,
-                    "accessLevel": a.access_level,
-                }))
+                .map(|a| {
+                    json!({
+                        "taskId": a.task_id,
+                        "description": a.description,
+                        "accessLevel": a.access_level,
+                    })
+                })
                 .collect::<Vec<_>>(),
         )
         .unwrap_or_default();
@@ -308,7 +311,10 @@ async fn run_approve(args: &CeoApproveArgs) -> Result<()> {
 
     let result: serde_json::Value = client.send("ceo_approve", params).await?;
 
-    let approved = result.get("approved").and_then(|v| v.as_bool()).unwrap_or(false);
+    let approved = result
+        .get("approved")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     if approved {
         println!("Approved: {}", args.task_id);
     } else {
@@ -329,7 +335,10 @@ async fn run_deny(args: &CeoDenyArgs) -> Result<()> {
 
     let result: serde_json::Value = client.send("ceo_deny", params).await?;
 
-    let denied = result.get("denied").and_then(|v| v.as_bool()).unwrap_or(false);
+    let denied = result
+        .get("denied")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     if denied {
         println!("Denied: {}", args.task_id);
     } else {

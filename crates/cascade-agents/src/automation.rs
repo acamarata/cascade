@@ -284,15 +284,14 @@ impl OutboundSink for DiskSink {
         let json = serde_json::to_string(draft).map_err(|e| AutomationError::Internal {
             message: format!("DiskSink serialize failed: {e}"),
         })?;
-        let mut f =
-            std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)
-                .map_err(|e| AutomationError::Io {
-                    path: self.path.display().to_string(),
-                    message: e.to_string(),
-                })?;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|e| AutomationError::Io {
+                path: self.path.display().to_string(),
+                message: e.to_string(),
+            })?;
         writeln!(f, "{json}").map_err(|e| AutomationError::Io {
             path: self.path.display().to_string(),
             message: e.to_string(),
@@ -410,7 +409,9 @@ impl AutomationRunner {
         automation.validate()?;
 
         if !automation.enabled {
-            return Err(AutomationError::Disabled { id: automation.id.clone() });
+            return Err(AutomationError::Disabled {
+                id: automation.id.clone(),
+            });
         }
 
         match &automation.target {
@@ -458,21 +459,21 @@ impl AutomationRunner {
                         v => v.to_string(),
                     };
                     let kind = detect_draft_kind(&flow.id);
-                    let draft =
-                        self.create_draft(automation, content, kind, HashMap::new()).await?;
-                    let approval =
-                        ApprovalRequest {
-                            task_id: format!("automation:{}", automation.id),
-                            tool_call: crate::context::ToolCall {
-                                call_id: draft.id.clone(),
-                                tool_id: "automation.outbound".into(),
-                                args: serde_json::json!({ "draft_id": draft.id }),
-                            },
-                            reason: format!(
-                                "outbound action from automation '{}' requires approval",
-                                automation.id
-                            ),
-                        };
+                    let draft = self
+                        .create_draft(automation, content, kind, HashMap::new())
+                        .await?;
+                    let approval = ApprovalRequest {
+                        task_id: format!("automation:{}", automation.id),
+                        tool_call: crate::context::ToolCall {
+                            call_id: draft.id.clone(),
+                            tool_id: "automation.outbound".into(),
+                            args: serde_json::json!({ "draft_id": draft.id }),
+                        },
+                        reason: format!(
+                            "outbound action from automation '{}' requires approval",
+                            automation.id
+                        ),
+                    };
                     approval_requests.push(approval);
                     drafts.push(draft);
                 }
@@ -503,7 +504,9 @@ impl AutomationRunner {
                     automation.id, tool
                 );
                 let kind = DraftKind::Generic;
-                let draft = self.create_draft(automation, content, kind, HashMap::new()).await?;
+                let draft = self
+                    .create_draft(automation, content, kind, HashMap::new())
+                    .await?;
                 let approval = ApprovalRequest {
                     task_id: format!("automation:{}", automation.id),
                     tool_call: crate::context::ToolCall {
@@ -657,24 +660,34 @@ impl AutomationRunner {
             })?;
 
         draft.approved = true;
-        self.sink.send(&draft).await.map_err(|e| AutomationError::SinkError(e.to_string()))
+        self.sink
+            .send(&draft)
+            .await
+            .map_err(|e| AutomationError::SinkError(e.to_string()))
     }
 
     /// Deny a draft: remove it from pending without calling the sink.
     ///
     /// Returns `Err` if the draft id is unknown.
     pub fn deny_draft(&self, draft_id: &str) -> Result<(), AutomationError> {
-        self.pending_drafts.lock().unwrap().remove(draft_id).ok_or_else(|| {
-            AutomationError::Internal {
+        self.pending_drafts
+            .lock()
+            .unwrap()
+            .remove(draft_id)
+            .ok_or_else(|| AutomationError::Internal {
                 message: format!("draft '{draft_id}' not found in pending set"),
-            }
-        })?;
+            })?;
         Ok(())
     }
 
     /// Return all pending (unresolved) draft ids.
     pub fn pending_draft_ids(&self) -> Vec<String> {
-        self.pending_drafts.lock().unwrap().keys().cloned().collect()
+        self.pending_drafts
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
     }
 }
 
@@ -790,7 +803,11 @@ fn agent_spec_for_role(role: AgentRole) -> crate::spec::AgentSpec {
         name: format!("{role:?} Agent"),
         role,
         tier: Tier::T2,
-        capabilities: vec![Capability::LlmCall, Capability::EmailDraft, Capability::Triage],
+        capabilities: vec![
+            Capability::LlmCall,
+            Capability::EmailDraft,
+            Capability::Triage,
+        ],
         model_pref: None,
         system_prompt_ref: None,
         tool_grants_ref: None,
@@ -852,7 +869,10 @@ mod tests {
                 assistant_text: self.text.clone(),
                 tool_calls: vec![],
                 done: true,
-                usage: TokenUsage { prompt_tokens: 10, completion_tokens: 10 },
+                usage: TokenUsage {
+                    prompt_tokens: 10,
+                    completion_tokens: 10,
+                },
             })
         }
     }
@@ -880,14 +900,20 @@ mod tests {
                         args: serde_json::json!({ "to": "alice@example.com", "body": "Hello" }),
                     }],
                     done: false,
-                    usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+                    usage: TokenUsage {
+                        prompt_tokens: 5,
+                        completion_tokens: 5,
+                    },
                 })
             } else {
                 Ok(StepOutcome {
                     assistant_text: "done".into(),
                     tool_calls: vec![],
                     done: true,
-                    usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+                    usage: TokenUsage {
+                        prompt_tokens: 5,
+                        completion_tokens: 5,
+                    },
                 })
             }
         }
@@ -909,7 +935,9 @@ mod tests {
     /// Build a `ChainExecutor` that completes a 1-step prompt chain cleanly.
     fn clean_chain_executor() -> Arc<ChainExecutor> {
         let registry = Arc::new(ToolRegistry::new());
-        let provider = Arc::new(FixedProvider { text: "drafted email body here".into() });
+        let provider = Arc::new(FixedProvider {
+            text: "drafted email body here".into(),
+        });
         let invoker = Arc::new(NoopInvoker);
         let agent_exec = Arc::new(
             AgentExecutor::builder()
@@ -949,7 +977,9 @@ mod tests {
             );
             r
         });
-        let provider = Arc::new(OutboundProvider { call_emitted: Arc::new(Mutex::new(false)) });
+        let provider = Arc::new(OutboundProvider {
+            call_emitted: Arc::new(Mutex::new(false)),
+        });
         Arc::new(
             AgentExecutor::builder()
                 .provider_router(provider)
@@ -962,7 +992,9 @@ mod tests {
     fn clean_agent_executor() -> Arc<AgentExecutor> {
         Arc::new(
             AgentExecutor::builder()
-                .provider_router(Arc::new(FixedProvider { text: "summary output".into() }))
+                .provider_router(Arc::new(FixedProvider {
+                    text: "summary output".into(),
+                }))
                 .tool_invoker(Arc::new(NoopInvoker))
                 .build(),
         )
@@ -1006,7 +1038,9 @@ mod tests {
             description: None,
             enabled: true,
             trigger: AutomationTrigger::Manual {},
-            target: AutomationTarget::Chain { chain_ref: "email-draft".into() },
+            target: AutomationTarget::Chain {
+                chain_ref: "email-draft".into(),
+            },
         };
 
         let mut ctx = ChainContext::new();
@@ -1042,7 +1076,9 @@ mod tests {
             name: "Agent Email Draft".into(),
             description: None,
             enabled: true,
-            trigger: AutomationTrigger::Hook { event: "inbox.message.received".into() },
+            trigger: AutomationTrigger::Hook {
+                event: "inbox.message.received".into(),
+            },
             target: AutomationTarget::Agent {
                 role: AgentRole::Emailer,
                 goal: "Draft a welcome email".into(),
@@ -1115,7 +1151,10 @@ mod tests {
             .unwrap();
 
         runner.deny_draft(&draft.id).unwrap();
-        assert!(sink.drain().is_empty(), "sink must NOT be called after denial");
+        assert!(
+            sink.drain().is_empty(),
+            "sink must NOT be called after denial"
+        );
 
         // Draft is no longer pending
         assert!(!runner.pending_draft_ids().contains(&draft.id));
@@ -1141,7 +1180,8 @@ mod tests {
             automations.len()
         );
         for a in &automations {
-            a.validate().unwrap_or_else(|e| panic!("automation '{}' invalid: {e}", a.id));
+            a.validate()
+                .unwrap_or_else(|e| panic!("automation '{}' invalid: {e}", a.id));
         }
     }
 
@@ -1168,12 +1208,17 @@ mod tests {
             description: Some("Draft an outbound email from a user prompt.".into()),
             enabled: true,
             trigger: AutomationTrigger::Manual {},
-            target: AutomationTarget::Chain { chain_ref: "email-draft".into() },
+            target: AutomationTarget::Chain {
+                chain_ref: "email-draft".into(),
+            },
         };
 
         auto.validate().unwrap();
         let mut ctx = ChainContext::new();
-        ctx.insert("input".into(), serde_json::json!("Draft a welcome email to new customers"));
+        ctx.insert(
+            "input".into(),
+            serde_json::json!("Draft a welcome email to new customers"),
+        );
 
         let outcome = runner.run(&auto, ctx).await.unwrap();
         assert!(outcome.success);
@@ -1197,7 +1242,9 @@ mod tests {
             name: "Inbox Triage".into(),
             description: Some("Categorise and draft response to inbox messages.".into()),
             enabled: true,
-            trigger: AutomationTrigger::InboxEvent { source: "email".into() },
+            trigger: AutomationTrigger::InboxEvent {
+                source: "email".into(),
+            },
             target: AutomationTarget::Agent {
                 role: AgentRole::Triage,
                 goal: "Triage the incoming message and draft a response".into(),
@@ -1228,8 +1275,12 @@ mod tests {
             name: "Scheduled Weekly Summary".into(),
             description: Some("Generate and draft a weekly activity summary.".into()),
             enabled: true,
-            trigger: AutomationTrigger::Scheduled { cron: "0 9 * * 1".into() },
-            target: AutomationTarget::Chain { chain_ref: "weekly-summary".into() },
+            trigger: AutomationTrigger::Scheduled {
+                cron: "0 9 * * 1".into(),
+            },
+            target: AutomationTarget::Chain {
+                chain_ref: "weekly-summary".into(),
+            },
         };
 
         auto.validate().unwrap();
@@ -1248,9 +1299,15 @@ mod tests {
     fn trigger_serde_round_trip() {
         let triggers = vec![
             AutomationTrigger::Manual {},
-            AutomationTrigger::Hook { event: "pr.opened".into() },
-            AutomationTrigger::Scheduled { cron: "0 9 * * 1-5".into() },
-            AutomationTrigger::InboxEvent { source: "github".into() },
+            AutomationTrigger::Hook {
+                event: "pr.opened".into(),
+            },
+            AutomationTrigger::Scheduled {
+                cron: "0 9 * * 1-5".into(),
+            },
+            AutomationTrigger::InboxEvent {
+                source: "github".into(),
+            },
         ];
         for t in triggers {
             let json = serde_json::to_string(&t).unwrap();

@@ -171,7 +171,9 @@ pub fn migrate_folder(
             println!(
                 "  [dry-run] move {}  →  {}",
                 src.display(),
-                to_dir.join(src.strip_prefix(from_dir).unwrap_or(src)).display()
+                to_dir
+                    .join(src.strip_prefix(from_dir).unwrap_or(src))
+                    .display()
             );
         }
         return Ok(MigrateResult {
@@ -391,10 +393,16 @@ mod tests {
         // Source removed, destination populated.
         assert!(!from.exists(), "source should be gone");
         assert!(to.exists(), "destination should exist");
-        assert!(to.join("CASCADE.md").exists(), "CASCADE.md should be present");
+        assert!(
+            to.join("CASCADE.md").exists(),
+            "CASCADE.md should be present"
+        );
         assert!(to.join("memory").join("decisions.md").exists());
         // entries_moved: CASCADE.md + memory/ + memory/decisions.md = 3
-        assert!(result.entries_moved >= 2, "expected at least 2 entries moved");
+        assert!(
+            result.entries_moved >= 2,
+            "expected at least 2 entries moved"
+        );
     }
 
     #[test]

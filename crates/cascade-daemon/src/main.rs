@@ -191,7 +191,7 @@ async fn main() {
     // provider. Never blocks startup — missing models are skipped silently.
     try_register_local_models(&provider_registry);
 
-        // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
+    // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
     // Probe localhost:11434 with a 500 ms timeout. If Ollama is running,
     // register the adapter as "ollama". If absent, skip silently — the
     // daemon must never block startup waiting for an optional local LLM.

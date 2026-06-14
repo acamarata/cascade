@@ -49,7 +49,7 @@ use cascade_providers::{connect_provider_at, Credential, ProviderKind};
 use cascade_types::{
     config::AiFolder,
     error::{CascadeError, Result},
-    paths::{subdirs, CASCADE_MD_NAME, CLAUDE_MD_NAME, AGENTS_MD_NAME},
+    paths::{subdirs, AGENTS_MD_NAME, CASCADE_MD_NAME, CLAUDE_MD_NAME},
 };
 use clap::Args;
 use serde::Serialize;
@@ -213,7 +213,13 @@ impl Command for InitArgs {
 
         // 6. Dry-run path.
         if self.dry_run {
-            return self.run_dry_run(&ai_dir, &folder_name, tier_label, already_existed, &provider_kind);
+            return self.run_dry_run(
+                &ai_dir,
+                &folder_name,
+                tier_label,
+                already_existed,
+                &provider_kind,
+            );
         }
 
         // 7. Scaffold directories (idempotent — create_dir_all is a no-op if already present).
@@ -295,7 +301,9 @@ impl Command for InitArgs {
         }
 
         // 12. Provider connect.
-        let provider_connected = self.connect_provider_headless(provider_kind.as_ref(), &ai_dir).await?;
+        let provider_connected = self
+            .connect_provider_headless(provider_kind.as_ref(), &ai_dir)
+            .await?;
 
         // 13. Emit output.
         let result = InitResult {
@@ -325,12 +333,18 @@ impl Command for InitArgs {
         } else {
             println!("{}", result.message);
             if !provider_connected.is_empty() {
-                println!("Provider '{}' connected and stored in OS keychain.", provider_connected);
+                println!(
+                    "Provider '{}' connected and stored in OS keychain.",
+                    provider_connected
+                );
             } else if self.provider.as_deref() != Some("local") && self.provider.is_none() {
                 println!("Next step: cascade provider add --kind <PROVIDER> --api-key <KEY>");
             }
             if self.provider.as_deref() == Some("local") {
-                println!("Next step: cascade models download --model {}", self.model.as_deref().unwrap_or("<model-id>"));
+                println!(
+                    "Next step: cascade models download --model {}",
+                    self.model.as_deref().unwrap_or("<model-id>")
+                );
             }
         }
 
@@ -361,13 +375,15 @@ impl InitArgs {
             )));
         }
 
-        ProviderKind::from_slug(slug).ok_or_else(|| {
-            CascadeError::Other(format!(
-                "Unknown provider '{}'. Supported: anthropic, openai, gemini, openrouter, \
+        ProviderKind::from_slug(slug)
+            .ok_or_else(|| {
+                CascadeError::Other(format!(
+                    "Unknown provider '{}'. Supported: anthropic, openai, gemini, openrouter, \
                  groq, mistral, deepseek, together, cohere, local.",
-                slug
-            ))
-        }).map(Some)
+                    slug
+                ))
+            })
+            .map(Some)
     }
 
     /// Call `connect_provider_at` using an `InMemoryKeychain` that delegates to
@@ -383,11 +399,7 @@ impl InitArgs {
             return Ok(String::new());
         };
 
-        let api_key = self
-            .api_key
-            .as_deref()
-            .unwrap_or("")
-            .to_owned();
+        let api_key = self.api_key.as_deref().unwrap_or("").to_owned();
 
         if api_key.is_empty() {
             return Err(CascadeError::Other(
@@ -443,10 +455,7 @@ impl InitArgs {
             files_written.push(format!("{}/.gitignore", folder_name));
         }
 
-        let provider_name = provider_kind
-            .as_ref()
-            .map(|k| k.id())
-            .unwrap_or_default();
+        let provider_name = provider_kind.as_ref().map(|k| k.id()).unwrap_or_default();
 
         if self.json {
             let result = InitResult {
@@ -457,7 +466,11 @@ impl InitArgs {
                 files_written,
                 provider_connected: provider_name,
                 idempotent: already_existed,
-                message: format!("[dry-run] would initialise {} cascade at {}", tier.to_uppercase(), ai_dir.display()),
+                message: format!(
+                    "[dry-run] would initialise {} cascade at {}",
+                    tier.to_uppercase(),
+                    ai_dir.display()
+                ),
             };
             let json = serde_json::to_string_pretty(&result)
                 .map_err(|e| CascadeError::Other(e.to_string()))?;
@@ -774,13 +787,18 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "connect_provider_at should succeed: {result:?}");
+        assert!(
+            result.is_ok(),
+            "connect_provider_at should succeed: {result:?}"
+        );
         let connected = result.unwrap();
         assert_eq!(connected.id, "anthropic");
         assert!(connected.healthy);
 
         // Secret stored in keychain.
-        let stored = kc.get_key(cascade_providers::PROVIDER_KEYCHAIN_SERVICE, "anthropic").unwrap();
+        let stored = kc
+            .get_key(cascade_providers::PROVIDER_KEYCHAIN_SERVICE, "anthropic")
+            .unwrap();
         assert_eq!(stored, "sk-headless-test");
     }
 
@@ -849,7 +867,10 @@ mod tests {
             json: false,
         };
         let result = args.resolve_provider_kind();
-        assert!(result.is_err(), "should error when api-key missing for cloud provider");
+        assert!(
+            result.is_err(),
+            "should error when api-key missing for cloud provider"
+        );
     }
 
     #[test]
@@ -866,7 +887,10 @@ mod tests {
             json: false,
         };
         let result = args.resolve_provider_kind().unwrap();
-        assert!(result.is_none(), "local provider returns None (handled downstream)");
+        assert!(
+            result.is_none(),
+            "local provider returns None (handled downstream)"
+        );
     }
 
     #[test]

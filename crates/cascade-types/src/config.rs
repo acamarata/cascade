@@ -98,10 +98,11 @@ pub struct HarnessMcpConfig {
 /// - `Claude`  — `.claude`
 /// - `Codex`   — `.codex`
 /// - `Custom`  — any other folder name supplied by the user
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AiFolder {
     /// Use `.cascade/` (default).
+    #[default]
     Cascade,
     /// Use `.claude/` (Claude Code convention).
     Claude,
@@ -111,12 +112,6 @@ pub enum AiFolder {
     Opencode,
     /// Arbitrary folder name.
     Custom(String),
-}
-
-impl Default for AiFolder {
-    fn default() -> Self {
-        AiFolder::Cascade
-    }
 }
 
 impl AiFolder {

@@ -49,11 +49,7 @@ impl CcStatus {
     /// assert!(status.installed);
     /// assert!(status.authenticated);
     /// ```
-    pub fn fixture(
-        installed: bool,
-        authenticated: bool,
-        account_hint: Option<&str>,
-    ) -> Self {
+    pub fn fixture(installed: bool, authenticated: bool, account_hint: Option<&str>) -> Self {
         Self {
             installed,
             authenticated,
@@ -98,7 +94,12 @@ pub fn detect() -> CcStatus {
 
     let (authenticated, account_hint) = check_auth();
 
-    CcStatus { installed, authenticated, account_hint, binary_path }
+    CcStatus {
+        installed,
+        authenticated,
+        account_hint,
+        binary_path,
+    }
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -220,10 +221,20 @@ mod tests {
 
     #[test]
     fn ready_requires_both_flags() {
-        let installed_only = CcStatus { installed: true, authenticated: false, account_hint: None, binary_path: None };
+        let installed_only = CcStatus {
+            installed: true,
+            authenticated: false,
+            account_hint: None,
+            binary_path: None,
+        };
         assert!(!installed_only.ready());
 
-        let both = CcStatus { installed: true, authenticated: true, account_hint: None, binary_path: None };
+        let both = CcStatus {
+            installed: true,
+            authenticated: true,
+            account_hint: None,
+            binary_path: None,
+        };
         assert!(both.ready());
     }
 }

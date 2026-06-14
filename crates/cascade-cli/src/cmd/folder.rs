@@ -120,8 +120,7 @@ impl Command for FolderSetArgs {
             PathBuf::from(home).join(".cascade").join("config.toml")
         } else {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            find_project_config(&cwd)
-                .unwrap_or_else(|| cwd.join(".cascade").join("config.toml"))
+            find_project_config(&cwd).unwrap_or_else(|| cwd.join(".cascade").join("config.toml"))
         };
 
         // Read → edit (just ai_folder) → write via toml_edit for round-trip safety.
@@ -204,13 +203,13 @@ impl Command for FolderMigrateArgs {
         let result = migrate_folder(&from, &to, self.dry_run)?;
 
         if self.dry_run {
-            println!(
-                "[dry-run] {} entries would be moved.",
-                result.entries_moved
-            );
+            println!("[dry-run] {} entries would be moved.", result.entries_moved);
         } else {
             println!("Moved {} entries.", result.entries_moved);
-            println!("Run `cascade folder set {}` to update your config.", to_name);
+            println!(
+                "Run `cascade folder set {}` to update your config.",
+                to_name
+            );
         }
 
         Ok(())
@@ -233,12 +232,11 @@ fn resolve_dir(explicit: Option<&std::path::Path>) -> Result<PathBuf> {
 /// Try to load the `ai_folder` setting from the nearest `config.toml`.
 /// Returns `None` if no config is found or the key is absent.
 async fn load_ai_folder_pref(dir: &std::path::Path) -> Option<AiFolder> {
-    let config_path = find_project_config(dir)
-        .or_else(|| {
-            let home = std::env::var("HOME").ok()?;
-            let p = PathBuf::from(home).join(".cascade").join("config.toml");
-            p.exists().then_some(p)
-        })?;
+    let config_path = find_project_config(dir).or_else(|| {
+        let home = std::env::var("HOME").ok()?;
+        let p = PathBuf::from(home).join(".cascade").join("config.toml");
+        p.exists().then_some(p)
+    })?;
 
     let raw = tokio::fs::read_to_string(&config_path).await.ok()?;
     let table: toml::Value = raw.parse().ok()?;

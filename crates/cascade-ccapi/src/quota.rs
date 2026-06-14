@@ -165,7 +165,10 @@ mod tests {
         assert!(result.is_err(), "second request should be rate-limited");
         match result.unwrap_err() {
             CcApiError::QuotaExceeded(msg) => {
-                assert!(msg.contains("rate limit"), "error message should mention rate limit");
+                assert!(
+                    msg.contains("rate limit"),
+                    "error message should mention rate limit"
+                );
             }
             other => panic!("unexpected error variant: {other:?}"),
         }
@@ -174,14 +177,17 @@ mod tests {
     #[test]
     fn quota_refill_replenishes_tokens() {
         let guard = QuotaGuard::new(60); // burst = 5
-        // Drain all 5 tokens.
+                                         // Drain all 5 tokens.
         for _ in 0..5 {
             let _ = guard.check();
         }
         assert!(guard.check().is_err(), "exhausted bucket should reject");
         // Refill.
         guard.refill();
-        assert!(guard.check().is_ok(), "after refill, a request should succeed");
+        assert!(
+            guard.check().is_ok(),
+            "after refill, a request should succeed"
+        );
     }
 
     #[test]

@@ -94,15 +94,27 @@ pub struct CheckResult {
 
 impl CheckResult {
     fn pass(name: impl Into<String>) -> Self {
-        Self { name: name.into(), status: CheckStatus::Pass, detail: String::new() }
+        Self {
+            name: name.into(),
+            status: CheckStatus::Pass,
+            detail: String::new(),
+        }
     }
 
     fn warn(name: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { name: name.into(), status: CheckStatus::Warn, detail: detail.into() }
+        Self {
+            name: name.into(),
+            status: CheckStatus::Warn,
+            detail: detail.into(),
+        }
     }
 
     fn fail(name: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { name: name.into(), status: CheckStatus::Fail, detail: detail.into() }
+        Self {
+            name: name.into(),
+            status: CheckStatus::Fail,
+            detail: detail.into(),
+        }
     }
 }
 
@@ -352,7 +364,11 @@ fn check_config_integrity(cwd: &std::path::Path) -> CheckResult {
     // Project config (nearest ancestor with .cascade/config.toml).
     if let Some(proj_cfg) = cwd.ancestors().find_map(|a| {
         let c = a.join(".cascade").join("config.toml");
-        if c.exists() { Some(c) } else { None }
+        if c.exists() {
+            Some(c)
+        } else {
+            None
+        }
     }) {
         match std::fs::read_to_string(&proj_cfg) {
             Ok(raw) => {
@@ -452,7 +468,12 @@ mod tests {
     fn ai_folder_pass_when_cascade_md_exists() {
         let dir = setup_valid_dir();
         let result = check_ai_folder(dir.path());
-        assert_eq!(result.status, CheckStatus::Pass, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Pass,
+            "detail: {}",
+            result.detail
+        );
     }
 
     #[test]
@@ -460,7 +481,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let result = check_ai_folder(dir.path());
         assert_eq!(result.status, CheckStatus::Fail);
-        assert!(result.detail.contains("does not exist") || result.detail.contains("run `cascade init`"));
+        assert!(
+            result.detail.contains("does not exist")
+                || result.detail.contains("run `cascade init`")
+        );
     }
 
     #[test]
@@ -479,7 +503,12 @@ mod tests {
     async fn cascade_resolves_pass_with_valid_setup() {
         let dir = setup_valid_dir();
         let result = check_cascade_resolves(dir.path()).await;
-        assert_eq!(result.status, CheckStatus::Pass, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Pass,
+            "detail: {}",
+            result.detail
+        );
     }
 
     #[tokio::test]
@@ -487,7 +516,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let result = check_cascade_resolves(dir.path()).await;
         // An empty dir with no .cascade should produce empty/no-tier output → FAIL
-        assert_eq!(result.status, CheckStatus::Fail, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Fail,
+            "detail: {}",
+            result.detail
+        );
     }
 
     // ── check_daemon ──────────────────────────────────────────────────────────
@@ -529,8 +563,16 @@ mod tests {
         let result = check_ai_provider();
         unsafe { std::env::remove_var("HOME") };
 
-        assert_eq!(result.status, CheckStatus::Fail, "detail: {}", result.detail);
-        assert!(result.detail.contains("cascade provider add") || result.detail.contains("cascade models download"));
+        assert_eq!(
+            result.status,
+            CheckStatus::Fail,
+            "detail: {}",
+            result.detail
+        );
+        assert!(
+            result.detail.contains("cascade provider add")
+                || result.detail.contains("cascade models download")
+        );
     }
 
     #[test]
@@ -539,7 +581,11 @@ mod tests {
         // Simulate a local model by creating ~/.cascade/models/<model_id>/ directory.
         // scan_installed_models() scans for directories matching known catalog entries.
         let home = TempDir::new().unwrap();
-        let models_dir = home.path().join(".cascade").join("models").join("gemma-2-2b");
+        let models_dir = home
+            .path()
+            .join(".cascade")
+            .join("models")
+            .join("gemma-2-2b");
         fs::create_dir_all(&models_dir).unwrap();
         // Write a fake weight file so the dir is non-trivially present.
         fs::write(models_dir.join("model.gguf"), b"fake").unwrap();
@@ -549,7 +595,12 @@ mod tests {
         unsafe { std::env::remove_var("HOME") };
 
         // scan_installed_models() checks for the dir — should report available.
-        assert_eq!(result.status, CheckStatus::Pass, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Pass,
+            "detail: {}",
+            result.detail
+        );
     }
 
     // ── check_config_integrity ────────────────────────────────────────────────
@@ -562,7 +613,12 @@ mod tests {
         let result = check_config_integrity(home.path());
         unsafe { std::env::remove_var("HOME") };
 
-        assert_eq!(result.status, CheckStatus::Pass, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Pass,
+            "detail: {}",
+            result.detail
+        );
     }
 
     #[test]
@@ -571,13 +627,22 @@ mod tests {
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         fs::create_dir_all(&cascade_dir).unwrap();
-        fs::write(cascade_dir.join("config.toml"), "[settings]\nkey = \"value\"\n").unwrap();
+        fs::write(
+            cascade_dir.join("config.toml"),
+            "[settings]\nkey = \"value\"\n",
+        )
+        .unwrap();
 
         unsafe { std::env::set_var("HOME", home.path()) };
         let result = check_config_integrity(home.path());
         unsafe { std::env::remove_var("HOME") };
 
-        assert_eq!(result.status, CheckStatus::Pass, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Pass,
+            "detail: {}",
+            result.detail
+        );
     }
 
     #[test]
@@ -592,7 +657,12 @@ mod tests {
         let result = check_config_integrity(home.path());
         unsafe { std::env::remove_var("HOME") };
 
-        assert_eq!(result.status, CheckStatus::Fail, "detail: {}", result.detail);
+        assert_eq!(
+            result.status,
+            CheckStatus::Fail,
+            "detail: {}",
+            result.detail
+        );
         assert!(result.detail.contains("parse error"));
     }
 
@@ -681,10 +751,30 @@ mod tests {
         unsafe { std::env::remove_var("HOME") };
 
         // Folder + cascade + config must PASS.
-        assert_eq!(folder.status, CheckStatus::Pass, "folder: {}", folder.detail);
-        assert_eq!(resolves.status, CheckStatus::Pass, "resolves: {}", resolves.detail);
-        assert_eq!(config.status, CheckStatus::Pass, "config: {}", config.detail);
-        assert_eq!(provider.status, CheckStatus::Pass, "provider: {}", provider.detail);
+        assert_eq!(
+            folder.status,
+            CheckStatus::Pass,
+            "folder: {}",
+            folder.detail
+        );
+        assert_eq!(
+            resolves.status,
+            CheckStatus::Pass,
+            "resolves: {}",
+            resolves.detail
+        );
+        assert_eq!(
+            config.status,
+            CheckStatus::Pass,
+            "config: {}",
+            config.detail
+        );
+        assert_eq!(
+            provider.status,
+            CheckStatus::Pass,
+            "provider: {}",
+            provider.detail
+        );
         // Daemon may WARN (no real socket in tempdir) — not a hard failure.
         assert!(daemon.status != CheckStatus::Fail || daemon.status == CheckStatus::Warn);
         // Keychain: PASS or FAIL (real OS keychain; not WARN).

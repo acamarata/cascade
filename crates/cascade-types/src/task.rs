@@ -18,10 +18,11 @@ use uuid::Uuid;
 // ── Core enumerations ────────────────────────────────────────────────────────
 
 /// Board column / lifecycle state for a kanban Task.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TaskStatus {
     /// Not started; sits in the backlog.
+    #[default]
     Backlog,
     /// Committed to the current cycle but not started.
     Todo,
@@ -33,12 +34,6 @@ pub enum TaskStatus {
     Done,
     /// Removed from the active board; kept for history.
     Archived,
-}
-
-impl Default for TaskStatus {
-    fn default() -> Self {
-        TaskStatus::Backlog
-    }
 }
 
 impl std::fmt::Display for TaskStatus {
@@ -56,19 +51,14 @@ impl std::fmt::Display for TaskStatus {
 }
 
 /// Priority level for a kanban Task.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TaskPriority {
     Low,
+    #[default]
     Med,
     High,
     Urgent,
-}
-
-impl Default for TaskPriority {
-    fn default() -> Self {
-        TaskPriority::Med
-    }
 }
 
 // ── Core type ────────────────────────────────────────────────────────────────

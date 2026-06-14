@@ -398,10 +398,7 @@ impl Command for PolicyShowArgs {
                 r.decision.to_string(),
                 r.reason,
             );
-            println!(
-                "  (from tier: {})",
-                entry.source_tier.short_name()
-            );
+            println!("  (from tier: {})", entry.source_tier.short_name());
         }
 
         println!("{}", "─".repeat(80));
@@ -583,8 +580,7 @@ mod tests {
     fn write_project_policy(project_root: &std::path::Path, toml: &str) {
         let cascade_dir = project_root.join(".cascade");
         std::fs::create_dir_all(&cascade_dir).unwrap();
-        let mut f =
-            std::fs::File::create(cascade_dir.join("config.toml")).unwrap();
+        let mut f = std::fs::File::create(cascade_dir.join("config.toml")).unwrap();
         f.write_all(toml.as_bytes()).unwrap();
     }
 

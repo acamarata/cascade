@@ -355,9 +355,8 @@ impl PbdStore {
                             if wave.status == WaveStatus::Active || wave.status == WaveStatus::Qa {
                                 ptr.active_wave = Some(wave.id.clone());
                                 for sprint_id in &wave.sprints {
-                                    let sprint_path = self.sprint_path(
-                                        &phase.id, epic_id, wave_id, sprint_id,
-                                    );
+                                    let sprint_path =
+                                        self.sprint_path(&phase.id, epic_id, wave_id, sprint_id);
                                     if !sprint_path.exists() {
                                         continue;
                                     }
@@ -368,11 +367,7 @@ impl PbdStore {
                                         ptr.active_sprint = Some(sprint.id.clone());
                                         for ticket_id in &sprint.tickets {
                                             let t_path = self.ticket_path(
-                                                &phase.id,
-                                                epic_id,
-                                                wave_id,
-                                                sprint_id,
-                                                ticket_id,
+                                                &phase.id, epic_id, wave_id, sprint_id, ticket_id,
                                             );
                                             if !t_path.exists() {
                                                 continue;
@@ -439,11 +434,7 @@ impl PbdStore {
         Ok(phases)
     }
 
-    pub fn transition_phase(
-        &self,
-        phase_id: &str,
-        new_status: PhaseStatus,
-    ) -> Result<()> {
+    pub fn transition_phase(&self, phase_id: &str, new_status: PhaseStatus) -> Result<()> {
         let mut phase = self.load_phase(phase_id)?;
         if !phase.status.can_transition_to(&new_status) {
             return Err(CascadeError::Other(format!(
@@ -778,13 +769,7 @@ impl PbdStore {
         }
         ticket.status = new_status;
         self.save_ticket(phase_id, epic_id, wave_id, &ticket)?;
-        self.emit_event(
-            EventLevel::Ticket,
-            ticket_id,
-            &from,
-            &to,
-            note,
-        )?;
+        self.emit_event(EventLevel::Ticket, ticket_id, &from, &to, note)?;
         self.regen_index()?;
         self.regen_current()
     }
@@ -876,6 +861,5 @@ pub fn resolve_phases_root(explicit: Option<&Path>) -> PathBuf {
         return p.to_path_buf();
     }
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    locate_phases_root(&cwd)
-        .unwrap_or_else(|| cwd.join(".cascade").join("phases"))
+    locate_phases_root(&cwd).unwrap_or_else(|| cwd.join(".cascade").join("phases"))
 }

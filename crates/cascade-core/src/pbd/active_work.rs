@@ -25,8 +25,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::pbd::schema::{TicketStatus, SprintStatus};
-use crate::pbd::store::{PbdStore, locate_phases_root, resolve_phases_root};
+use crate::pbd::schema::{SprintStatus, TicketStatus};
+use crate::pbd::store::{locate_phases_root, resolve_phases_root, PbdStore};
 use cascade_types::{
     error::Result,
     task::{TaskFilter, TaskStatus},
@@ -88,10 +88,7 @@ impl ActiveWorkBlock {
         out.push_str("## Active Work (Cascade-managed — do not edit)\n\n");
 
         if let Some(sprint_id) = &self.sprint_id {
-            let title = self
-                .sprint_title
-                .as_deref()
-                .unwrap_or("(untitled sprint)");
+            let title = self.sprint_title.as_deref().unwrap_or("(untitled sprint)");
             out.push_str(&format!("**Active sprint:** {} — {}\n\n", sprint_id, title));
 
             if self.tickets.is_empty() {
@@ -203,16 +200,19 @@ pub fn build_active_work(
                 .find(|e| e.kind == "wave" && Some(&e.id) == sprint_e.parent.as_ref())
                 .or_else(|| {
                     // Parent field holds wave_id
-                    index.entries.iter().find(|e| {
-                        e.kind == "wave" && sprint_e.parent.as_deref() == Some(&e.id)
-                    })
+                    index
+                        .entries
+                        .iter()
+                        .find(|e| e.kind == "wave" && sprint_e.parent.as_deref() == Some(&e.id))
                 });
             let _ = wave_id; // We use the ticket entries in INDEX directly
 
             // Collect ticket entries whose parent is our sprint
-            for entry in index.entries.iter().filter(|e| {
-                e.kind == "ticket" && e.parent.as_deref() == Some(sprint_id.as_str())
-            }) {
+            for entry in index
+                .entries
+                .iter()
+                .filter(|e| e.kind == "ticket" && e.parent.as_deref() == Some(sprint_id.as_str()))
+            {
                 let status = entry.status.clone();
                 // Only include non-done, non-archived tickets
                 if matches!(status.as_str(), "done" | "archived") {
@@ -367,10 +367,7 @@ mod tests {
             wave_id: "w01".into(),
             title: "Sprint 1".into(),
             status: SprintStatus::Active,
-            tickets: vec![
-                "T-P1-E01-W01-S01-01".into(),
-                "T-P1-E01-W01-S01-02".into(),
-            ],
+            tickets: vec!["T-P1-E01-W01-S01-01".into(), "T-P1-E01-W01-S01-02".into()],
             note: None,
         };
         store.create_sprint("p1", "e01", &sprint).unwrap();
@@ -422,7 +419,11 @@ mod tests {
 
         let block = build_active_work(Some(&phases_root), 800, None).unwrap();
 
-        assert_eq!(block.sprint_id.as_deref(), Some("s01"), "sprint_id must be s01");
+        assert_eq!(
+            block.sprint_id.as_deref(),
+            Some("s01"),
+            "sprint_id must be s01"
+        );
         assert_eq!(block.tickets_total, 2, "two tickets in sprint");
         assert!(
             block.tickets.iter().any(|t| t.id == "T-P1-E01-W01-S01-01"),
@@ -534,11 +535,13 @@ mod tests {
         t_todo.status = TaskStatus::Todo;
         store.create(&t_todo).unwrap();
 
-        let block =
-            build_active_work_with_tasks(Some(&phases_root), 800, &store, None).unwrap();
+        let block = build_active_work_with_tasks(Some(&phases_root), 800, &store, None).unwrap();
 
         // Only InProgress + Todo included, not Done
-        assert_eq!(block.tasks_total, 2, "only InProgress and Todo tasks included");
+        assert_eq!(
+            block.tasks_total, 2,
+            "only InProgress and Todo tasks included"
+        );
         assert!(
             block.tasks.iter().all(|t| t.status != "done"),
             "Done tasks must not appear"

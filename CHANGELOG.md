@@ -6,7 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-06-11
+## [0.9.0] - 2026-06-14
 
 First stable release. Cascade is a FOSS context manager for AI coding
 agents: one place to keep instructions, knowledge, and guardrails that

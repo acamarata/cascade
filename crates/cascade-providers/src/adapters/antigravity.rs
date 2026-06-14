@@ -418,11 +418,8 @@ mod tests {
     #[test]
     fn generate_antigravity_config_writes_file() {
         let ws = TempDir::new().unwrap();
-        let out = generate_antigravity_cascade_config(
-            ws.path(),
-            "unix://~/.cascade/cascade.sock",
-        )
-        .expect("generate failed");
+        let out = generate_antigravity_cascade_config(ws.path(), "unix://~/.cascade/cascade.sock")
+            .expect("generate failed");
 
         assert!(out.exists());
         let content = std::fs::read_to_string(&out).unwrap();

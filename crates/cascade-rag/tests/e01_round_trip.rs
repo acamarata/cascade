@@ -422,7 +422,9 @@ async fn fts_vs_hybrid_parity() {
             rerank_enabled: false,
             ..Default::default()
         };
-        search(query, &cfg, conn_s, embed_arc, None, None).await.unwrap()
+        search(query, &cfg, conn_s, embed_arc, None, None)
+            .await
+            .unwrap()
     };
 
     // Hybrid (FTS5 + dense vectors via MockEmbedModel cosine path)
@@ -437,7 +439,9 @@ async fn fts_vs_hybrid_parity() {
             rerank_enabled: false,
             ..Default::default()
         };
-        search(query, &cfg, conn_s, embed_arc, None, None).await.unwrap()
+        search(query, &cfg, conn_s, embed_arc, None, None)
+            .await
+            .unwrap()
     };
 
     // Both should produce results for the seeded content.

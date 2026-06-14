@@ -118,8 +118,11 @@ impl Command for ListArgs {
                     "downloaded": downloaded,
                 }));
             }
-            println!("{}", serde_json::to_string_pretty(&rows)
-                .map_err(|e| CascadeError::Other(e.to_string()))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&rows)
+                    .map_err(|e| CascadeError::Other(e.to_string()))?
+            );
             return Ok(());
         }
 
@@ -159,9 +162,8 @@ impl Command for DownloadArgs {
         })?;
 
         // Check if already present (idempotent).
-        let model_dir = model_dir_path_home(id).ok_or_else(|| {
-            CascadeError::Other("cannot determine HOME directory".to_string())
-        })?;
+        let model_dir = model_dir_path_home(id)
+            .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
         let weight_file = model_dir.join(entry.filename);
 
         if weight_file.exists() {
@@ -232,9 +234,8 @@ impl Command for RemoveArgs {
             )));
         }
 
-        let model_dir = model_dir_path_home(id).ok_or_else(|| {
-            CascadeError::Other("cannot determine HOME directory".to_string())
-        })?;
+        let model_dir = model_dir_path_home(id)
+            .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
 
         if !model_dir.is_dir() {
             println!("Model '{}' is not downloaded (nothing to remove).", id);
@@ -303,9 +304,18 @@ mod tests {
     #[test]
     fn models_catalog_ids_match_expected() {
         let ids: Vec<&str> = models().iter().map(|e| e.model_id).collect();
-        assert!(ids.contains(&"gemma-2-2b"), "catalog must contain gemma-2-2b");
-        assert!(ids.contains(&"llama-3.2-3b"), "catalog must contain llama-3.2-3b");
-        assert!(ids.contains(&"phi-3-mini"), "catalog must contain phi-3-mini");
+        assert!(
+            ids.contains(&"gemma-2-2b"),
+            "catalog must contain gemma-2-2b"
+        );
+        assert!(
+            ids.contains(&"llama-3.2-3b"),
+            "catalog must contain llama-3.2-3b"
+        );
+        assert!(
+            ids.contains(&"phi-3-mini"),
+            "catalog must contain phi-3-mini"
+        );
     }
 
     // ── list command (text output) ────────────────────────────────────────────
@@ -365,7 +375,10 @@ mod tests {
         };
         // Should return Ok immediately without hitting network.
         let result = args.run().await;
-        assert!(result.is_ok(), "should skip download when file present: {result:?}");
+        assert!(
+            result.is_ok(),
+            "should skip download when file present: {result:?}"
+        );
     }
 
     // ── remove — not downloaded ───────────────────────────────────────────────
@@ -380,7 +393,10 @@ mod tests {
         };
         // Dir doesn't exist → should print and return Ok (not Err).
         let result = args.run().await;
-        assert!(result.is_ok(), "remove when not present must not error: {result:?}");
+        assert!(
+            result.is_ok(),
+            "remove when not present must not error: {result:?}"
+        );
     }
 
     // ── remove — unknown model ────────────────────────────────────────────────
@@ -435,8 +451,14 @@ mod tests {
 
         let found = scan_installed_models();
         let ids: Vec<&str> = found.iter().map(|(id, _)| id.as_str()).collect();
-        assert!(ids.contains(&"local:gemma-2-2b"), "must find gemma-2-2b; got: {ids:?}");
-        assert!(ids.contains(&"local:phi-3-mini"), "must find phi-3-mini; got: {ids:?}");
+        assert!(
+            ids.contains(&"local:gemma-2-2b"),
+            "must find gemma-2-2b; got: {ids:?}"
+        );
+        assert!(
+            ids.contains(&"local:phi-3-mini"),
+            "must find phi-3-mini; got: {ids:?}"
+        );
     }
 
     #[test]
@@ -447,7 +469,10 @@ mod tests {
         let _home = with_fake_home();
         // No model dirs created.
         let found = scan_installed_models();
-        assert!(found.is_empty(), "must be empty when no models are installed");
+        assert!(
+            found.is_empty(),
+            "must be empty when no models are installed"
+        );
     }
 
     // ── disk-space guard (unit test of error enum) ────────────────────────────
@@ -474,6 +499,8 @@ mod tests {
         let args = DownloadArgs {
             id: "gemma-2-2b".to_string(),
         };
-        args.run().await.expect("should download and verify gemma-2-2b");
+        args.run()
+            .await
+            .expect("should download and verify gemma-2-2b");
     }
 }

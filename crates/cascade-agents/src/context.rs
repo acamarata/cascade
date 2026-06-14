@@ -390,7 +390,11 @@ mod tests {
             .messages(existing)
             .build()
             .await;
-        let system_msgs: Vec<_> = ctx.messages.iter().filter(|m| m.role == ContextRole::System).collect();
+        let system_msgs: Vec<_> = ctx
+            .messages
+            .iter()
+            .filter(|m| m.role == ContextRole::System)
+            .collect();
         assert_eq!(system_msgs.len(), 1);
         assert_eq!(system_msgs[0].content, "custom system");
     }
@@ -410,7 +414,10 @@ mod tests {
             assistant_text: "final answer".into(),
             tool_calls: vec![],
             done: true,
-            usage: TokenUsage { prompt_tokens: 10, completion_tokens: 5 },
+            usage: TokenUsage {
+                prompt_tokens: 10,
+                completion_tokens: 5,
+            },
         };
         assert!(outcome.done);
         assert_eq!(outcome.usage.total(), 15);

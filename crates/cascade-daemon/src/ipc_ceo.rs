@@ -17,15 +17,13 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use cascade_agents::ceo::{CeoOrchestrator, FounderDirective, Plan, Planner, SubGoal};
 #[cfg(test)]
 use cascade_agents::ceo::MockPlanner;
-use cascade_agents::context::{AgentRunContext, StepOutcome, ToolCall, TokenUsage};
-use cascade_agents::executor::{
-    AgentExecutorBuilder, ExecutorError, ProviderRouter, ToolInvoker,
-};
+use cascade_agents::ceo::{CeoOrchestrator, FounderDirective, Plan, Planner, SubGoal};
+use cascade_agents::context::{AgentRunContext, StepOutcome, TokenUsage, ToolCall};
+use cascade_agents::executor::{AgentExecutorBuilder, ExecutorError, ProviderRouter, ToolInvoker};
 use cascade_agents::registry::AgentRegistry;
-use cascade_agents::spec::{AgentRole, AgentSpec, builtin_ceo, builtin_coder};
+use cascade_agents::spec::{builtin_ceo, builtin_coder, AgentRole, AgentSpec};
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::info;
@@ -47,7 +45,10 @@ impl ProviderRouter for NopRouter {
             assistant_text: "task complete (nop router)".into(),
             tool_calls: vec![],
             done: true,
-            usage: TokenUsage { prompt_tokens: 1, completion_tokens: 1 },
+            usage: TokenUsage {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+            },
         })
     }
 }
@@ -166,9 +167,10 @@ pub async fn handle_ceo_directive(
 ) -> Result<Value, String> {
     info!(goal = %params.goal, "ceo_directive: received");
 
-    let session_dir = runtime.session_base_dir.as_ref().map(|base| {
-        base.join(Uuid::new_v4().to_string())
-    });
+    let session_dir = runtime
+        .session_base_dir
+        .as_ref()
+        .map(|base| base.join(Uuid::new_v4().to_string()));
 
     let ceo = CeoOrchestrator::new(
         runtime.registry.clone(),
@@ -209,10 +211,7 @@ pub fn handle_ceo_approvals(runtime: &CeoRuntime) -> Result<Value, String> {
 }
 
 /// Handle `ceo_approve` — approve a pending action.
-pub fn handle_ceo_approve(
-    runtime: &CeoRuntime,
-    params: CeoApproveParams,
-) -> Result<Value, String> {
+pub fn handle_ceo_approve(runtime: &CeoRuntime, params: CeoApproveParams) -> Result<Value, String> {
     let guard = runtime.orchestrator.lock().unwrap();
     match &*guard {
         None => Err("no active CEO session".into()),
@@ -283,7 +282,10 @@ mod tests {
         };
         handle_ceo_directive(&runtime, params).await.unwrap();
         let status = handle_ceo_status(&runtime).unwrap();
-        assert!(status.get("sessionId").is_some(), "status must include sessionId");
+        assert!(
+            status.get("sessionId").is_some(),
+            "status must include sessionId"
+        );
     }
 
     // ── T3: ceo_approvals + approve ──────────────────────────────────────────
@@ -294,7 +296,11 @@ mod tests {
         let runtime = make_runtime();
         handle_ceo_directive(
             &runtime,
-            CeoDirectiveParams { goal: "contact customers".into(), constraints: vec![], session_id: None },
+            CeoDirectiveParams {
+                goal: "contact customers".into(),
+                constraints: vec![],
+                session_id: None,
+            },
         )
         .await
         .unwrap();
@@ -305,18 +311,28 @@ mod tests {
             // No outbound task in this mock run — approve with nonexistent id should error
             let result = handle_ceo_approve(
                 &runtime,
-                CeoApproveParams { task_id: "nonexistent".into(), note: None },
+                CeoApproveParams {
+                    task_id: "nonexistent".into(),
+                    note: None,
+                },
             );
             assert!(result.is_err());
         } else {
             let task_id = approvals[0]["taskId"].as_str().unwrap().to_string();
             handle_ceo_approve(
                 &runtime,
-                CeoApproveParams { task_id: task_id.clone(), note: Some("go ahead".into()) },
+                CeoApproveParams {
+                    task_id: task_id.clone(),
+                    note: Some("go ahead".into()),
+                },
             )
             .unwrap();
             let remaining = handle_ceo_approvals(&runtime).unwrap();
-            assert!(remaining.as_array().unwrap().iter().all(|a| a["taskId"] != task_id));
+            assert!(remaining
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|a| a["taskId"] != task_id));
         }
     }
 

@@ -20,10 +20,10 @@ use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
 
 use cascade_core::pbd::{
-    self,
+    self, index_pbd, index_repo,
     schema::{Phase, PhaseStatus, Ticket, TicketStatus},
     store::{resolve_phases_root, PbdStore},
-    validate, index_repo, index_pbd,
+    validate,
 };
 
 use super::Command;
@@ -109,10 +109,22 @@ impl PbdCurrentArgs {
         if json {
             println!("{}", serde_json::to_string_pretty(&ptr).unwrap_or_default());
         } else {
-            println!("active_phase:  {}", ptr.active_phase.as_deref().unwrap_or("—"));
-            println!("active_epic:   {}", ptr.active_epic.as_deref().unwrap_or("—"));
-            println!("active_wave:   {}", ptr.active_wave.as_deref().unwrap_or("—"));
-            println!("active_sprint: {}", ptr.active_sprint.as_deref().unwrap_or("—"));
+            println!(
+                "active_phase:  {}",
+                ptr.active_phase.as_deref().unwrap_or("—")
+            );
+            println!(
+                "active_epic:   {}",
+                ptr.active_epic.as_deref().unwrap_or("—")
+            );
+            println!(
+                "active_wave:   {}",
+                ptr.active_wave.as_deref().unwrap_or("—")
+            );
+            println!(
+                "active_sprint: {}",
+                ptr.active_sprint.as_deref().unwrap_or("—")
+            );
             if ptr.active_tickets.is_empty() {
                 println!("active_tickets: (none)");
             } else {
@@ -165,7 +177,10 @@ impl PhaseArgs {
             PhaseSubcmd::List => {
                 let phases = store.list_phases()?;
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&phases).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&phases).unwrap_or_default()
+                    );
                 } else {
                     for p in &phases {
                         println!("[{}] {} — {:?}", p.id, p.title, p.status);
@@ -307,7 +322,10 @@ impl TicketArgs {
                 let tickets =
                     store.list_tickets(&a.phase_id, &a.epic_id, &a.wave_id, &a.sprint_id)?;
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&tickets).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&tickets).unwrap_or_default()
+                    );
                 } else {
                     for t in &tickets {
                         println!("[{}] {} — {:?}", t.id, t.title, t.status);
@@ -419,7 +437,10 @@ impl SprintArgs {
             SprintSubcmd::List(a) => {
                 let sprints = store.list_sprints(&a.phase_id, &a.epic_id, &a.wave_id)?;
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&sprints).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&sprints).unwrap_or_default()
+                    );
                 } else {
                     for s in &sprints {
                         println!("[{}] {} — {:?}", s.id, s.title, s.status);
@@ -457,7 +478,10 @@ impl EpicArgs {
             EpicSubcmd::List(a) => {
                 let epics = store.list_epics(&a.phase_id)?;
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&epics).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&epics).unwrap_or_default()
+                    );
                 } else {
                     for e in &epics {
                         println!("[{}] {} — {:?}", e.id, e.title, e.status);
@@ -497,7 +521,10 @@ impl WaveArgs {
             WaveSubcmd::List(a) => {
                 let waves = store.list_waves(&a.phase_id, &a.epic_id)?;
                 if json {
-                    println!("{}", serde_json::to_string_pretty(&waves).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&waves).unwrap_or_default()
+                    );
                 } else {
                     for w in &waves {
                         println!("[{}] {} — {:?}", w.id, w.title, w.status);
@@ -581,8 +608,7 @@ pub struct EowArgs {
 
 impl EowArgs {
     fn run_with(&self, store: &PbdStore, json: bool) -> Result<()> {
-        let result =
-            pbd::run_eow(store, &self.phase_id, &self.epic_id, &self.wave_id)?;
+        let result = pbd::run_eow(store, &self.phase_id, &self.epic_id, &self.wave_id)?;
         print_protocol_result(&result, json);
         if !result.success {
             return Err(CascadeError::Other("EOW failed — see errors above".into()));
@@ -658,7 +684,10 @@ impl ValidateArgs {
                         .as_ref()
                         .map(|p| format!("  [{}]", p.display()))
                         .unwrap_or_default();
-                    println!("[{}] [{}] {}{}", level, issue.check, issue.message, path_suffix);
+                    println!(
+                        "[{}] [{}] {}{}",
+                        level, issue.check, issue.message, path_suffix
+                    );
                 }
             }
             if !result.repaired.is_empty() {
@@ -703,7 +732,10 @@ impl IndexArgs {
         // Index the source repo
         let list = index_repo(&self.repo_path, &masters_dir)?;
         if json {
-            println!("{}", serde_json::to_string_pretty(&list).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&list).unwrap_or_default()
+            );
         } else {
             println!(
                 "Indexed '{}': {} entities → {}",
@@ -717,14 +749,8 @@ impl IndexArgs {
         if self.pbd {
             let (phases, tickets) = index_pbd(store, &masters_dir)?;
             if !json {
-                println!(
-                    "MASTER-PHASES.yaml: {} phases",
-                    phases.phases.len()
-                );
-                println!(
-                    "MASTER-TICKETS.yaml: {} tickets",
-                    tickets.tickets.len()
-                );
+                println!("MASTER-PHASES.yaml: {} phases", phases.phases.len());
+                println!("MASTER-TICKETS.yaml: {} tickets", tickets.tickets.len());
             }
         }
 

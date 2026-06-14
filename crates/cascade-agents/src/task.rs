@@ -122,11 +122,7 @@ impl AgentTask {
     }
 
     /// Create a child `AgentTask` beneath `parent`.
-    pub fn new_child(
-        goal: impl Into<String>,
-        role: AgentRole,
-        parent: &AgentTask,
-    ) -> Self {
+    pub fn new_child(goal: impl Into<String>, role: AgentRole, parent: &AgentTask) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             goal: goal.into(),
@@ -221,7 +217,10 @@ mod tests {
         let mut task = AgentTask::new_root("serde test", AgentRole::Reviewer);
         task.assigned_agent_id = Some("cascade.ceo".into());
         let json = serde_json::to_string(&task).unwrap();
-        assert!(json.contains("\"assignedRole\""), "expected camelCase assignedRole");
+        assert!(
+            json.contains("\"assignedRole\""),
+            "expected camelCase assignedRole"
+        );
         assert!(json.contains("\"rootId\""), "expected camelCase rootId");
         let decoded: AgentTask = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.assigned_role, AgentRole::Reviewer);

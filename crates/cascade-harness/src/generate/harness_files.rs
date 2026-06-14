@@ -273,11 +273,12 @@ fn replace_active_work_block(content: &str, block_text: &str) -> String {
         if begin_pos <= end_pos {
             let end_of_end = end_pos + ACTIVE_WORK_END.len();
             // Remove leading newline before begin marker if present
-            let trim_start = if begin_pos > 0 && content.as_bytes().get(begin_pos - 1) == Some(&b'\n') {
-                begin_pos - 1
-            } else {
-                begin_pos
-            };
+            let trim_start =
+                if begin_pos > 0 && content.as_bytes().get(begin_pos - 1) == Some(&b'\n') {
+                    begin_pos - 1
+                } else {
+                    begin_pos
+                };
             let mut result = content[..trim_start].to_string();
             result.push_str(block_text);
             // Preserve content after the end marker
@@ -513,22 +514,21 @@ fn is_binary_on_path(binary_name: &str) -> bool {
         .map(|paths| {
             std::env::split_paths(&paths).any(|dir| {
                 let candidate = dir.join(binary_name);
-                candidate.is_file()
-                    || {
-                        // macOS / Linux: check with executable permission.
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::PermissionsExt;
-                            candidate
-                                .metadata()
-                                .map(|m| m.permissions().mode() & 0o111 != 0)
-                                .unwrap_or(false)
-                        }
-                        #[cfg(not(unix))]
-                        {
-                            candidate.exists()
-                        }
+                candidate.is_file() || {
+                    // macOS / Linux: check with executable permission.
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        candidate
+                            .metadata()
+                            .map(|m| m.permissions().mode() & 0o111 != 0)
+                            .unwrap_or(false)
                     }
+                    #[cfg(not(unix))]
+                    {
+                        candidate.exists()
+                    }
+                }
             })
         })
         .unwrap_or(false)
@@ -730,10 +730,7 @@ mod tests {
             .collect();
 
         for ((id_b, mt_b), (id_a, mt_a)) in mtimes_before.iter().zip(mtimes_after.iter()) {
-            assert_eq!(
-                id_b, id_a,
-                "harness order changed between runs"
-            );
+            assert_eq!(id_b, id_a, "harness order changed between runs");
             assert_eq!(
                 mt_b, mt_a,
                 "harness={id_b}: mtime should not change on idempotent run"
@@ -750,8 +747,13 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let resolved = mock_resolved("test dry run");
 
-        generate_for_harnesses(&resolved, tmp.path(), HarnessKind::ALL, /* dry_run= */ true)
-            .unwrap();
+        generate_for_harnesses(
+            &resolved,
+            tmp.path(),
+            HarnessKind::ALL,
+            /* dry_run= */ true,
+        )
+        .unwrap();
 
         for harness in HarnessKind::ALL {
             let dest = tmp.path().join(harness.output_filename());
@@ -821,10 +823,7 @@ mod tests {
 
             // Override PATH so aider is "installed".
             let orig_path = std::env::var("PATH").unwrap_or_default();
-            std::env::set_var(
-                "PATH",
-                format!("{}:{}", bin_dir.display(), orig_path),
-            );
+            std::env::set_var("PATH", format!("{}:{}", bin_dir.display(), orig_path));
 
             let resolved = mock_resolved("init instructions");
             let detected = init_from_installed(&resolved, workspace.path(), false).unwrap();
@@ -910,10 +909,19 @@ mod tests {
         assert!(changed, "file should be modified");
 
         let content = fs::read_to_string(&dest).unwrap();
-        assert!(content.contains(ACTIVE_WORK_BEGIN), "must contain begin marker");
+        assert!(
+            content.contains(ACTIVE_WORK_BEGIN),
+            "must contain begin marker"
+        );
         assert!(content.contains(ACTIVE_WORK_END), "must contain end marker");
-        assert!(content.contains("T-P1-E01-W01-S01-01"), "must contain ticket id");
-        assert!(content.contains("# Instructions"), "original content must be preserved");
+        assert!(
+            content.contains("T-P1-E01-W01-S01-01"),
+            "must contain ticket id"
+        );
+        assert!(
+            content.contains("# Instructions"),
+            "original content must be preserved"
+        );
     }
 
     // ── test 9: inject_active_work_section is idempotent (replaces on re-run) ─
@@ -926,8 +934,8 @@ mod tests {
         let dest = tmp.path().join("CLAUDE.md");
         fs::write(&dest, "# Instructions\n\nDo good work.\n").unwrap();
 
-        let make_block = |sprint: &str, ticket_title: &str| {
-            cascade_core::pbd::active_work::ActiveWorkBlock {
+        let make_block =
+            |sprint: &str, ticket_title: &str| cascade_core::pbd::active_work::ActiveWorkBlock {
                 sprint_id: Some(sprint.into()),
                 sprint_title: Some("Sprint".into()),
                 tickets: vec![cascade_core::pbd::active_work::ActiveTicketEntry {
@@ -939,8 +947,7 @@ mod tests {
                 tickets_total: 1,
                 tasks: vec![],
                 tasks_total: 0,
-            }
-        };
+            };
 
         // First injection
         inject_active_work_section(&dest, &make_block("s01", "First title"), false).unwrap();
@@ -952,13 +959,25 @@ mod tests {
         // Only one begin/end pair must exist
         let begin_count = content.matches(ACTIVE_WORK_BEGIN).count();
         let end_count = content.matches(ACTIVE_WORK_END).count();
-        assert_eq!(begin_count, 1, "must have exactly 1 active-work begin marker; got {begin_count}");
-        assert_eq!(end_count, 1, "must have exactly 1 active-work end marker; got {end_count}");
+        assert_eq!(
+            begin_count, 1,
+            "must have exactly 1 active-work begin marker; got {begin_count}"
+        );
+        assert_eq!(
+            end_count, 1,
+            "must have exactly 1 active-work end marker; got {end_count}"
+        );
 
         // Should contain updated sprint, not original
         assert!(content.contains("s02"), "must show updated sprint id");
-        assert!(content.contains("Updated title"), "must show updated ticket title");
-        assert!(!content.contains("First title"), "old ticket title must not remain");
+        assert!(
+            content.contains("Updated title"),
+            "must show updated ticket title"
+        );
+        assert!(
+            !content.contains("First title"),
+            "old ticket title must not remain"
+        );
     }
 
     // ── test 10: inject with empty block removes section ─────────────────────
@@ -982,9 +1001,18 @@ mod tests {
         assert!(changed, "file should be modified when removing section");
 
         let content = fs::read_to_string(&dest).unwrap();
-        assert!(!content.contains(ACTIVE_WORK_BEGIN), "begin marker must be removed");
-        assert!(!content.contains(ACTIVE_WORK_END), "end marker must be removed");
-        assert!(content.contains("# Instructions"), "original content preserved");
+        assert!(
+            !content.contains(ACTIVE_WORK_BEGIN),
+            "begin marker must be removed"
+        );
+        assert!(
+            !content.contains(ACTIVE_WORK_END),
+            "end marker must be removed"
+        );
+        assert!(
+            content.contains("# Instructions"),
+            "original content preserved"
+        );
     }
 
     // ── test 11: dry-run inject writes nothing ─────────────────────────────────

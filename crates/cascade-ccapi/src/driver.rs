@@ -54,12 +54,18 @@ pub struct OutputChunk {
 impl OutputChunk {
     /// Construct a non-terminal chunk.
     pub fn text(text: impl Into<String>) -> Self {
-        Self { text: text.into(), done: false }
+        Self {
+            text: text.into(),
+            done: false,
+        }
     }
 
     /// Construct the terminal sentinel chunk.
     pub fn done() -> Self {
-        Self { text: String::new(), done: true }
+        Self {
+            text: String::new(),
+            done: true,
+        }
     }
 }
 
@@ -125,12 +131,18 @@ impl Default for MockDriver {
 impl MockDriver {
     /// Construct a mock that returns the given canned response.
     pub fn with_response(response: impl Into<String>) -> Self {
-        Self { canned_response: response.into(), force_error: false }
+        Self {
+            canned_response: response.into(),
+            force_error: false,
+        }
     }
 
     /// Construct a mock that always returns a driver error.
     pub fn failing() -> Self {
-        Self { canned_response: String::new(), force_error: true }
+        Self {
+            canned_response: String::new(),
+            force_error: true,
+        }
     }
 }
 
@@ -212,7 +224,11 @@ mod tests {
         assert!(chunks.len() >= 2, "expected at least 2 chunks");
         assert!(chunks.last().unwrap().done, "last chunk must be done");
         // Text of non-done chunks should contain the words.
-        let text: String = chunks.iter().filter(|c| !c.done).map(|c| c.text.clone()).collect();
+        let text: String = chunks
+            .iter()
+            .filter(|c| !c.done)
+            .map(|c| c.text.clone())
+            .collect();
         assert!(text.contains("hello"), "text should contain 'hello'");
         assert!(text.contains("world"), "text should contain 'world'");
     }
@@ -232,8 +248,15 @@ mod tests {
     async fn mock_driver_default_response() {
         let driver = MockDriver::default();
         let chunks = driver.send_prompt("anything").await.unwrap();
-        let text: String = chunks.iter().filter(|c| !c.done).map(|c| c.text.clone()).collect();
-        assert!(!text.is_empty(), "default mock should return non-empty text");
+        let text: String = chunks
+            .iter()
+            .filter(|c| !c.done)
+            .map(|c| c.text.clone())
+            .collect();
+        assert!(
+            !text.is_empty(),
+            "default mock should return non-empty text"
+        );
     }
 
     #[tokio::test]

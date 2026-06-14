@@ -24,11 +24,15 @@ pub mod masters;
 pub mod protocol;
 pub mod schema;
 pub mod store;
-pub mod validate;
 #[cfg(test)]
 mod tests;
+pub mod validate;
 
 // Convenience re-exports
+pub use active_work::{
+    build_active_work, build_active_work_with_tasks, ActiveTaskEntry, ActiveTicketEntry,
+    ActiveWorkBlock,
+};
 pub use masters::{
     index_pbd, index_repo, MasterEntity, MasterList, MasterPhaseEntry, MasterPhases,
     MasterTicketEntry, MasterTickets,
@@ -42,7 +46,3 @@ pub use schema::{
 };
 pub use store::{locate_phases_root, resolve_phases_root, PbdStore};
 pub use validate::{validate, Issue, IssueLevel, ValidationResult};
-pub use active_work::{
-    build_active_work, build_active_work_with_tasks, ActiveTaskEntry, ActiveTicketEntry,
-    ActiveWorkBlock,
-};

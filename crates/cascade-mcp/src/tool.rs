@@ -59,8 +59,8 @@ use tracing::debug;
 
 use cascade_core::cascade_resolution::resolve_cascade_full;
 use cascade_core::pbd::active_work::build_active_work;
-use cascade_core::pbd::store::{PbdStore, resolve_phases_root};
 use cascade_core::pbd::schema::{PbdEvent, TicketStatus};
+use cascade_core::pbd::store::{resolve_phases_root, PbdStore};
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::error::Result;
 
@@ -199,9 +199,7 @@ impl ToolRegistry {
             }
             // PBD tools (E-P8-04)
             "cascade.get_current" => tool_result(handle_get_current(&args).await),
-            "cascade.update_ticket_status" => {
-                tool_result(handle_update_ticket_status(&args).await)
-            }
+            "cascade.update_ticket_status" => tool_result(handle_update_ticket_status(&args).await),
             "cascade.append_event" => tool_result(handle_append_event(&args).await),
             "cascade.get_sprint" => tool_result(handle_get_sprint(&args).await),
             "cascade.read_phase_status" => tool_result(handle_read_phase_status(&args).await),
@@ -984,9 +982,7 @@ fn cascade_provide_harness_context_tool() -> McpTool {
 /// ## Harness identity
 /// Accepted as the `harness` argument (request-context propagation is a future
 /// enhancement; the arg is sufficient per spec).
-async fn handle_provide_harness_context(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+async fn handle_provide_harness_context(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let harness = args
         .get("harness")
         .and_then(|v| v.as_str())
@@ -1050,7 +1046,7 @@ async fn handle_provide_harness_context(
     // call build_active_work_with_tasks instead.
     let active_work = build_active_work(
         cascade_core::pbd::store::locate_phases_root(cwd).as_deref(),
-        800, // 800-token budget per E-P8-07 spec
+        800,  // 800-token budget per E-P8-07 spec
         None, // kanban tasks: omitted without daemon task DB
     )
     .unwrap_or_default();
@@ -1401,8 +1397,7 @@ async fn handle_get_current(args: &Value) -> std::result::Result<Value, JsonRpcE
         );
     }
 
-    let text = serde_json::to_string(&obj)
-        .unwrap_or_else(|_| "{}".into());
+    let text = serde_json::to_string(&obj).unwrap_or_else(|_| "{}".into());
 
     Ok(serde_json::json!({
         "content": [{ "type": "text", "text": text }],
@@ -1414,9 +1409,7 @@ async fn handle_get_current(args: &Value) -> std::result::Result<Value, JsonRpcE
 ///
 /// Looks up the ticket in the INDEX to find its full path, then delegates to
 /// `PbdStore::transition_ticket`. Validates the status enum and transition graph.
-async fn handle_update_ticket_status(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+async fn handle_update_ticket_status(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let ticket_id = args
         .get("ticket_id")
         .and_then(|v| v.as_str())
@@ -1492,9 +1485,8 @@ async fn handle_append_event(args: &Value) -> std::result::Result<Value, JsonRpc
     // Inject ts if missing before deserializing (PbdEvent requires ts)
     let mut event_val = event_val;
     if let Value::Object(ref mut map) = event_val {
-        map.entry("ts").or_insert_with(|| {
-            Value::String(chrono::Utc::now().to_rfc3339())
-        });
+        map.entry("ts")
+            .or_insert_with(|| Value::String(chrono::Utc::now().to_rfc3339()));
     }
     let event: PbdEvent = serde_json::from_value(event_val)
         .map_err(|e| JsonRpcError::invalid_params(format!("invalid event JSON: {e}")))?;
@@ -1581,8 +1573,7 @@ async fn handle_get_sprint(args: &Value) -> std::result::Result<Value, JsonRpcEr
     .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
     .map_err(|e| JsonRpcError::internal(format!("get_sprint: {e}")))?;
 
-    let sprint_val: Value = serde_json::from_str(&sprint_json)
-        .unwrap_or(Value::Null);
+    let sprint_val: Value = serde_json::from_str(&sprint_json).unwrap_or(Value::Null);
 
     Ok(serde_json::json!({
         "content": [{ "type": "text", "text": sprint_json }],
@@ -1591,10 +1582,11 @@ async fn handle_get_sprint(args: &Value) -> std::result::Result<Value, JsonRpcEr
 }
 
 /// `cascade.read_phase_status` — compact status summary for a phase.
-async fn handle_read_phase_status(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
-    let phase_id_filter = args.get("phase_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+async fn handle_read_phase_status(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let phase_id_filter = args
+        .get("phase_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
 
     let summary = tokio::task::spawn_blocking(move || {
@@ -1647,9 +1639,18 @@ async fn handle_read_phase_status(
 
 /// `cascade.list_tickets` — list tickets with optional filters.
 async fn handle_list_tickets(args: &Value) -> std::result::Result<Value, JsonRpcError> {
-    let status_filter = args.get("status").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let sprint_filter = args.get("sprint_id").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let phase_filter = args.get("phase_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let status_filter = args
+        .get("status")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let sprint_filter = args
+        .get("sprint_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let phase_filter = args
+        .get("phase_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
 
     let tickets = tokio::task::spawn_blocking(move || {
@@ -1710,8 +1711,14 @@ async fn handle_list_tickets(args: &Value) -> std::result::Result<Value, JsonRpc
 /// and issues HTTP checks. `base_url` overrides the host. In tests, callers
 /// can point `routes_file` at a seeded temp file and `base_url` at a mock server.
 async fn handle_check_routes(args: &Value) -> std::result::Result<Value, JsonRpcError> {
-    let routes_file = args.get("routes_file").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let base_url = args.get("base_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let routes_file = args
+        .get("routes_file")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let base_url = args
+        .get("base_url")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let timeout_ms = args
         .get("timeout_ms")
         .and_then(|v| v.as_u64())
@@ -1793,7 +1800,10 @@ async fn handle_check_routes(args: &Value) -> std::result::Result<Value, JsonRpc
     let all_ok = results.iter().all(|r| r["ok"].as_bool().unwrap_or(false));
     let text = format!(
         "{}/{} routes ok",
-        results.iter().filter(|r| r["ok"].as_bool().unwrap_or(false)).count(),
+        results
+            .iter()
+            .filter(|r| r["ok"].as_bool().unwrap_or(false))
+            .count(),
         results.len()
     );
 
@@ -1938,7 +1948,9 @@ fn resolve_ticket_coords(
             ))
         })?;
     let wave_id = sprint_entry.parent.as_deref().ok_or_else(|| {
-        cascade_types::error::CascadeError::Other(format!("sprint '{sprint_id}' has no wave in INDEX"))
+        cascade_types::error::CascadeError::Other(format!(
+            "sprint '{sprint_id}' has no wave in INDEX"
+        ))
     })?;
     let wave_entry = index
         .entries
@@ -1962,9 +1974,7 @@ fn resolve_ticket_coords(
             ))
         })?;
     let phase_id = epic_entry.parent.as_deref().ok_or_else(|| {
-        cascade_types::error::CascadeError::Other(format!(
-            "epic '{epic_id}' has no phase in INDEX"
-        ))
+        cascade_types::error::CascadeError::Other(format!("epic '{epic_id}' has no phase in INDEX"))
     })?;
     Ok(TicketCoords {
         phase_id: phase_id.to_string(),
@@ -1981,12 +1991,16 @@ fn ticket_in_phase(
     phase_id: &str,
 ) -> bool {
     // ticket -> sprint -> wave -> epic -> phase
-    let ticket = entries.iter().find(|e| e.kind == "ticket" && e.id == ticket_id);
+    let ticket = entries
+        .iter()
+        .find(|e| e.kind == "ticket" && e.id == ticket_id);
     let sprint_id = match ticket.and_then(|t| t.parent.as_deref()) {
         Some(s) => s,
         None => return false,
     };
-    let sprint = entries.iter().find(|e| e.kind == "sprint" && e.id == sprint_id);
+    let sprint = entries
+        .iter()
+        .find(|e| e.kind == "sprint" && e.id == sprint_id);
     let wave_id = match sprint.and_then(|s| s.parent.as_deref()) {
         Some(w) => w,
         None => return false,
@@ -2038,7 +2052,11 @@ fn parse_routes_yaml(yaml: &str) -> Vec<RouteEntry> {
             // Flush previous
             if let Some((path, method, expected)) = current.take() {
                 if !path.is_empty() {
-                    routes.push(RouteEntry { path, method, expected_status: expected });
+                    routes.push(RouteEntry {
+                        path,
+                        method,
+                        expected_status: expected,
+                    });
                 }
             }
             let path = trimmed
@@ -2051,7 +2069,11 @@ fn parse_routes_yaml(yaml: &str) -> Vec<RouteEntry> {
             current = Some((path, "GET".into(), None));
         } else if let Some(ref mut c) = current {
             if trimmed.starts_with("method:") {
-                c.1 = trimmed.strip_prefix("method:").unwrap_or("GET").trim().to_string();
+                c.1 = trimmed
+                    .strip_prefix("method:")
+                    .unwrap_or("GET")
+                    .trim()
+                    .to_string();
             } else if trimmed.starts_with("expected_status:") {
                 if let Ok(code) = trimmed
                     .strip_prefix("expected_status:")
@@ -2067,7 +2089,11 @@ fn parse_routes_yaml(yaml: &str) -> Vec<RouteEntry> {
     // Flush last entry
     if let Some((path, method, expected)) = current {
         if !path.is_empty() {
-            routes.push(RouteEntry { path, method, expected_status: expected });
+            routes.push(RouteEntry {
+                path,
+                method,
+                expected_status: expected,
+            });
         }
     }
     routes
@@ -2615,7 +2641,10 @@ mod tests {
 
             // Must not be an error.
             assert!(
-                result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+                result
+                    .get("isError")
+                    .map(|v| v == &Value::Bool(false))
+                    .unwrap_or(true),
                 "harness={harness} should succeed: {result}"
             );
 
@@ -2854,7 +2883,10 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "get_current should succeed: {result}"
         );
         let content = result["content"].as_array().expect("content array");
@@ -2877,7 +2909,10 @@ mod tests {
         let result = reg.call(&params).await.expect("no protocol error");
         // Empty phases → no error, empty current
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "empty tree should not be an error: {result}"
         );
         let current = &result["current"];
@@ -2903,7 +2938,10 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "valid transition must succeed: {result}"
         );
         assert_eq!(
@@ -2923,7 +2961,17 @@ mod tests {
         use cascade_core::pbd::schema::TicketStatus;
         use cascade_core::pbd::store::PbdStore;
         let store = PbdStore::new(tmp.path().join("phases"));
-        store.transition_ticket("p1", "e01", "w01", "s01", "T-P1-E01-01", TicketStatus::Done, None).unwrap();
+        store
+            .transition_ticket(
+                "p1",
+                "e01",
+                "w01",
+                "s01",
+                "T-P1-E01-01",
+                TicketStatus::Done,
+                None,
+            )
+            .unwrap();
 
         let reg = ToolRegistry::new();
         let params = serde_json::json!({
@@ -2986,7 +3034,10 @@ mod tests {
             });
             let result = reg.call(&params).await.expect("no protocol error");
             assert!(
-                result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+                result
+                    .get("isError")
+                    .map(|v| v == &Value::Bool(false))
+                    .unwrap_or(true),
                 "append_event must succeed: {result}"
             );
         }
@@ -2995,7 +3046,11 @@ mod tests {
         let events_path = phases_root.join("events.jsonl");
         let content = std::fs::read_to_string(&events_path).expect("events.jsonl must exist");
         let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
-        assert_eq!(lines.len(), 2, "two events must be appended; got: {content}");
+        assert_eq!(
+            lines.len(),
+            2,
+            "two events must be appended; got: {content}"
+        );
         let first: Value = serde_json::from_str(lines[0]).unwrap();
         let second: Value = serde_json::from_str(lines[1]).unwrap();
         assert_eq!(first["from"].as_str(), Some("planned"));
@@ -3038,12 +3093,18 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "get_sprint must succeed: {result}"
         );
         let sprint = &result["sprint"];
         assert_eq!(sprint["id"].as_str(), Some("s01"), "sprint.id must be s01");
-        assert!(!sprint["tickets"].is_null(), "sprint.tickets must be present");
+        assert!(
+            !sprint["tickets"].is_null(),
+            "sprint.tickets must be present"
+        );
     }
 
     /// cascade.get_sprint — unknown sprint returns is_error.
@@ -3079,11 +3140,19 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "list_tickets must succeed: {result}"
         );
         let tickets = result["tickets"].as_array().expect("tickets must be array");
-        assert_eq!(tickets.len(), 1, "should find exactly one ticket; got {}", tickets.len());
+        assert_eq!(
+            tickets.len(),
+            1,
+            "should find exactly one ticket; got {}",
+            tickets.len()
+        );
     }
 
     /// cascade.list_tickets — status filter.
@@ -3130,7 +3199,10 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "missing routes file must not be is_error (just not_found flag): {result}"
         );
         assert_eq!(
@@ -3170,13 +3242,24 @@ mod tests {
         let result = reg.call(&params).await.expect("no protocol error");
         // Must not be a tool-level error — connection refused becomes ok=false in the routes array
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "check_routes must not bubble network errors as is_error: {result}"
         );
         let routes = result["routes"].as_array().expect("routes must be array");
         assert_eq!(routes.len(), 1, "one route must be in result");
-        assert_eq!(routes[0]["path"].as_str(), Some("/healthz"), "path must match");
-        assert_eq!(routes[0]["ok"].as_bool(), Some(false), "connection refused must be ok=false");
+        assert_eq!(
+            routes[0]["path"].as_str(),
+            Some("/healthz"),
+            "path must match"
+        );
+        assert_eq!(
+            routes[0]["ok"].as_bool(),
+            Some(false),
+            "connection refused must be ok=false"
+        );
     }
 
     /// cascade.scan_inbox — finds seeded .md error files.
@@ -3205,14 +3288,26 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "scan_inbox must succeed: {result}"
         );
-        let messages = result["messages"].as_array().expect("messages must be array");
-        assert_eq!(messages.len(), 3, "must find 3 messages; got {}", messages.len());
+        let messages = result["messages"]
+            .as_array()
+            .expect("messages must be array");
+        assert_eq!(
+            messages.len(),
+            3,
+            "must find 3 messages; got {}",
+            messages.len()
+        );
         // Verify subject extraction
         assert!(
-            messages.iter().any(|m| m["subject"].as_str().unwrap_or("").contains("CI failure")),
+            messages
+                .iter()
+                .any(|m| m["subject"].as_str().unwrap_or("").contains("CI failure")),
             "must extract CI failure subjects"
         );
         assert_eq!(result["count"].as_u64(), Some(3), "count must be 3");
@@ -3228,7 +3323,10 @@ mod tests {
         });
         let result = reg.call(&params).await.expect("no protocol error");
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "missing inbox must not be is_error: {result}"
         );
         assert_eq!(
@@ -3252,11 +3350,7 @@ mod tests {
         // Scaffold a minimal cascade tree so resolve_cascade_full finds something.
         let cascade_dir = tmp.path().join(".cascade");
         std::fs::create_dir_all(&cascade_dir).unwrap();
-        std::fs::write(
-            cascade_dir.join("CASCADE.md"),
-            "# Test\nInstructions.",
-        )
-        .unwrap();
+        std::fs::write(cascade_dir.join("CASCADE.md"), "# Test\nInstructions.").unwrap();
 
         let reg = ToolRegistry::new();
         let params = serde_json::json!({
@@ -3270,7 +3364,10 @@ mod tests {
 
         // Must not be error
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "provide_harness_context must succeed: {result}"
         );
 
@@ -3285,10 +3382,7 @@ mod tests {
         );
         // With no phases tree, active_work should indicate empty state
         let aw = &result["active_work"];
-        assert!(
-            aw.is_object(),
-            "active_work must be a JSON object: {aw}"
-        );
+        assert!(aw.is_object(), "active_work must be a JSON object: {aw}");
     }
 
     /// provide_harness_context active_work reflects active sprint when phases tree exists.
@@ -3311,33 +3405,57 @@ mod tests {
         store.init().unwrap();
 
         let phase = Phase {
-            id: "p1".into(), title: "P1".into(), status: PhaseStatus::Building,
-            epics: vec!["e01".into()], started_at: None, closed_at: None, note: None,
+            id: "p1".into(),
+            title: "P1".into(),
+            status: PhaseStatus::Building,
+            epics: vec!["e01".into()],
+            started_at: None,
+            closed_at: None,
+            note: None,
         };
         store.create_phase(&phase).unwrap();
 
         let epic = Epic {
-            id: "e01".into(), phase_id: "p1".into(), title: "E1".into(),
-            status: EpicStatus::Active, waves: vec!["w01".into()], depends_on: vec![], note: None,
+            id: "e01".into(),
+            phase_id: "p1".into(),
+            title: "E1".into(),
+            status: EpicStatus::Active,
+            waves: vec!["w01".into()],
+            depends_on: vec![],
+            note: None,
         };
         store.create_epic(&epic).unwrap();
 
         let wave = Wave {
-            id: "w01".into(), epic_id: "e01".into(), title: "W1".into(),
-            status: WaveStatus::Active, sprints: vec!["s01".into()], note: None,
+            id: "w01".into(),
+            epic_id: "e01".into(),
+            title: "W1".into(),
+            status: WaveStatus::Active,
+            sprints: vec!["s01".into()],
+            note: None,
         };
         store.create_wave("p1", &wave).unwrap();
 
         let sprint = Sprint {
-            id: "s01".into(), wave_id: "w01".into(), title: "Active Sprint".into(),
-            status: SprintStatus::Active, tickets: vec!["T-P1-E01-W01-S01-01".into()], note: None,
+            id: "s01".into(),
+            wave_id: "w01".into(),
+            title: "Active Sprint".into(),
+            status: SprintStatus::Active,
+            tickets: vec!["T-P1-E01-W01-S01-01".into()],
+            note: None,
         };
         store.create_sprint("p1", "e01", &sprint).unwrap();
 
         let ticket = Ticket {
-            id: "T-P1-E01-W01-S01-01".into(), sprint_id: "s01".into(),
-            title: "Do the thing".into(), status: TicketStatus::Active,
-            steps: vec![], depends_on: vec![], repo: None, weight: None, note: None,
+            id: "T-P1-E01-W01-S01-01".into(),
+            sprint_id: "s01".into(),
+            title: "Do the thing".into(),
+            status: TicketStatus::Active,
+            steps: vec![],
+            depends_on: vec![],
+            repo: None,
+            weight: None,
+            note: None,
             blocked_reason: None,
         };
         store.create_ticket("p1", "e01", "w01", &ticket).unwrap();
@@ -3353,7 +3471,10 @@ mod tests {
         let result = reg.call(&params).await.expect("no protocol error");
 
         assert!(
-            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            result
+                .get("isError")
+                .map(|v| v == &Value::Bool(false))
+                .unwrap_or(true),
             "must succeed: {result}"
         );
 

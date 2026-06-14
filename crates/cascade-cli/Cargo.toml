@@ -23,14 +23,14 @@ path = "src/main.rs"
 cascade-core    = { workspace = true }
 cascade-types   = { workspace = true }
 cascade-harness = { workspace = true }
-cascade-ccapi   = { path = "../cascade-ccapi", version = "1.0.0" }
-cascade-rag     = { path = "../cascade-rag", version = "1.0.0" }
-cascade-plugins = { path = "../cascade-plugins", version = "1.0.0" }
-cascade-mcp     = { path = "../cascade-mcp", version = "1.0.0" }
-cascade-keychain = { path = "../cascade-keychain", version = "1.0.0" }
-cascade-audit = { path = "../cascade-audit", version = "1.0.0" }
-cascade-local-llm = { path = "../cascade-local-llm", version = "1.0.0" }
-cascade-providers = { path = "../cascade-providers", version = "1.0.0" }
+cascade-ccapi   = { path = "../cascade-ccapi", version = "0.9.0" }
+cascade-rag     = { path = "../cascade-rag", version = "0.9.0" }
+cascade-plugins = { path = "../cascade-plugins", version = "0.9.0" }
+cascade-mcp     = { path = "../cascade-mcp", version = "0.9.0" }
+cascade-keychain = { path = "../cascade-keychain", version = "0.9.0" }
+cascade-audit = { path = "../cascade-audit", version = "0.9.0" }
+cascade-local-llm = { path = "../cascade-local-llm", version = "0.9.0" }
+cascade-providers = { path = "../cascade-providers", version = "0.9.0" }
 rusqlite      = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }

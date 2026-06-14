@@ -46,8 +46,8 @@ impl Default for HealthConfig {
 
 /// Source-file extensions we analyse (by language).
 static SOURCE_EXTENSIONS: &[&str] = &[
-    "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "kt", "swift", "dart",
-    "cpp", "cc", "c", "h", "hpp", "cs", "rb", "php",
+    "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "kt", "swift", "dart", "cpp", "cc", "c",
+    "h", "hpp", "cs", "rb", "php",
 ];
 
 /// Directory names always skipped regardless of `.gitignore`.
@@ -196,7 +196,10 @@ fn build_summary(report: &HealthReport) -> String {
     } else {
         let mut parts = Vec::new();
         if fs > 0 {
-            parts.push(format!("{fs} oversized file{}", if fs == 1 { "" } else { "s" }));
+            parts.push(format!(
+                "{fs} oversized file{}",
+                if fs == 1 { "" } else { "s" }
+            ));
         }
         if dup > 0 {
             parts.push(format!(

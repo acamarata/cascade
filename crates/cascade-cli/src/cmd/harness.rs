@@ -303,9 +303,7 @@ impl Command for HarnessGenerateArgs {
                 .map_err(|e| CascadeError::Other(format!("write_single_file failed: {e}")))?;
         } else {
             generate_for_harnesses(&resolved, &workspace, harnesses, self.dry_run)
-                .map_err(|e| {
-                    CascadeError::Other(format!("generate_for_harnesses failed: {e}"))
-                })?;
+                .map_err(|e| CascadeError::Other(format!("generate_for_harnesses failed: {e}")))?;
         }
 
         Ok(())

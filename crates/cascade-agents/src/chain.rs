@@ -23,14 +23,14 @@
 //! SPORT: cascade-agents / chain — E-P6-08
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::path::Path;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::executor::{ExecutorError, ProviderRouter, ToolInvoker, AgentExecutor};
-use crate::context::{ToolCall, AgentRunContext, AgentRunContextBuilder};
+use crate::context::{AgentRunContext, AgentRunContextBuilder, ToolCall};
+use crate::executor::{AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker};
 use crate::grants::{AccessLevel, GrantDecision};
 use crate::spec::{AgentRole, AgentSpec, Runtime};
 use crate::task::TaskStatus;
@@ -227,23 +227,34 @@ impl ChainFlow {
                     }
                 }
                 if seen.contains(output.as_str()) {
-                    errors.push(ChainValidationError::DuplicateOutput { key: output.clone() });
+                    errors.push(ChainValidationError::DuplicateOutput {
+                        key: output.clone(),
+                    });
                 }
                 seen.insert(output.clone());
             }
             ChainStep::ToolCall { output, .. } => {
                 if seen.contains(output.as_str()) {
-                    errors.push(ChainValidationError::DuplicateOutput { key: output.clone() });
+                    errors.push(ChainValidationError::DuplicateOutput {
+                        key: output.clone(),
+                    });
                 }
                 seen.insert(output.clone());
             }
             ChainStep::AgentTask { output, .. } => {
                 if seen.contains(output.as_str()) {
-                    errors.push(ChainValidationError::DuplicateOutput { key: output.clone() });
+                    errors.push(ChainValidationError::DuplicateOutput {
+                        key: output.clone(),
+                    });
                 }
                 seen.insert(output.clone());
             }
-            ChainStep::Map { over, step: inner, output, .. } => {
+            ChainStep::Map {
+                over,
+                step: inner,
+                output,
+                ..
+            } => {
                 if !seen.contains(over.as_str()) {
                     errors.push(ChainValidationError::UnresolvedRef {
                         step_kind: "map".into(),
@@ -255,11 +266,18 @@ impl ChainFlow {
                 child_seen.insert("_item".into());
                 self.validate_step(inner, &mut child_seen, errors, depth + 1);
                 if seen.contains(output.as_str()) {
-                    errors.push(ChainValidationError::DuplicateOutput { key: output.clone() });
+                    errors.push(ChainValidationError::DuplicateOutput {
+                        key: output.clone(),
+                    });
                 }
                 seen.insert(output.clone());
             }
-            ChainStep::Branch { cond, then_step, else_step, .. } => {
+            ChainStep::Branch {
+                cond,
+                then_step,
+                else_step,
+                ..
+            } => {
                 if !seen.contains(cond.as_str()) {
                     errors.push(ChainValidationError::UnresolvedRef {
                         step_kind: "branch".into(),
@@ -287,7 +305,9 @@ impl ChainFlow {
                     });
                 }
                 if seen.contains(output.as_str()) {
-                    errors.push(ChainValidationError::DuplicateOutput { key: output.clone() });
+                    errors.push(ChainValidationError::DuplicateOutput {
+                        key: output.clone(),
+                    });
                 }
                 seen.insert(output.clone());
             }
@@ -296,11 +316,13 @@ impl ChainFlow {
 
     /// Load a `ChainFlow` from a YAML file at `path`.
     pub fn load_from_file(path: &Path) -> Result<Self, ChainError> {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            ChainError::YamlLoad { path: path.display().to_string(), message: e.to_string() }
+        let content = std::fs::read_to_string(path).map_err(|e| ChainError::YamlLoad {
+            path: path.display().to_string(),
+            message: e.to_string(),
         })?;
-        let flow: ChainFlow = serde_yaml::from_str(&content).map_err(|e| {
-            ChainError::YamlLoad { path: path.display().to_string(), message: e.to_string() }
+        let flow: ChainFlow = serde_yaml::from_str(&content).map_err(|e| ChainError::YamlLoad {
+            path: path.display().to_string(),
+            message: e.to_string(),
         })?;
         Ok(flow)
     }
@@ -308,8 +330,9 @@ impl ChainFlow {
     /// Load all `ChainFlow` values from YAML files in `dir`.
     pub fn load_library(dir: &Path) -> Result<Vec<Self>, ChainError> {
         let mut flows = vec![];
-        let rd = std::fs::read_dir(dir).map_err(|e| {
-            ChainError::YamlLoad { path: dir.display().to_string(), message: e.to_string() }
+        let rd = std::fs::read_dir(dir).map_err(|e| ChainError::YamlLoad {
+            path: dir.display().to_string(),
+            message: e.to_string(),
         })?;
         for entry in rd.flatten() {
             let p = entry.path();
@@ -475,7 +498,11 @@ impl ChainExecutor {
             let errors = self.validate_with_initial_keys(flow, &initial_keys);
             if !errors.is_empty() {
                 return Err(ChainError::ValidationFailed(
-                    errors.iter().map(|e| format!("{e:?}")).collect::<Vec<_>>().join("; ")
+                    errors
+                        .iter()
+                        .map(|e| format!("{e:?}"))
+                        .collect::<Vec<_>>()
+                        .join("; "),
                 ));
             }
         }
@@ -484,17 +511,14 @@ impl ChainExecutor {
         let mut step_counter: u32 = 0;
 
         for step in &flow.steps {
-            self.exec_step(
-                step,
-                &mut initial_ctx,
-                &mut traces,
-                &mut step_counter,
-                0,
-            )
-            .await?;
+            self.exec_step(step, &mut initial_ctx, &mut traces, &mut step_counter, 0)
+                .await?;
         }
 
-        Ok(ChainResult { context: initial_ctx, traces })
+        Ok(ChainResult {
+            context: initial_ctx,
+            traces,
+        })
     }
 
     /// Validate while treating `initial_keys` as already-resolved outputs.
@@ -522,8 +546,12 @@ impl ChainExecutor {
         traces: &'a mut Vec<ChainStepTrace>,
         counter: &'a mut u32,
         depth: u32,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ChainError>> + Send + 'a>> {
-        Box::pin(async move { self.exec_step_inner(step, ctx, traces, counter, depth).await })
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ChainError>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.exec_step_inner(step, ctx, traces, counter, depth)
+                .await
+        })
     }
 
     async fn exec_step_inner(
@@ -535,17 +563,26 @@ impl ChainExecutor {
         depth: u32,
     ) -> Result<(), ChainError> {
         if *counter >= self.max_steps {
-            return Err(ChainError::StepBudgetExceeded { max: self.max_steps, at: *counter });
+            return Err(ChainError::StepBudgetExceeded {
+                max: self.max_steps,
+                at: *counter,
+            });
         }
         if depth > self.max_depth {
-            return Err(ChainError::DepthExceeded { max: self.max_depth });
+            return Err(ChainError::DepthExceeded {
+                max: self.max_depth,
+            });
         }
         *counter += 1;
 
         let idx = *counter - 1;
 
         match step {
-            ChainStep::Prompt { template, inputs, output } => {
+            ChainStep::Prompt {
+                template,
+                inputs,
+                output,
+            } => {
                 let rendered = render_template(template, ctx);
                 // Build a minimal AgentSpec + context for the provider.
                 let spec = minimal_spec();
@@ -573,7 +610,9 @@ impl ChainExecutor {
                     .unwrap_or(AccessLevel::Write);
 
                 // For chain executor we use a synthetic agent id
-                let decision = self.tool_registry.check("chain.executor", tool, required_level);
+                let decision = self
+                    .tool_registry
+                    .check("chain.executor", tool, required_level);
 
                 match decision {
                     GrantDecision::NeedsApproval { .. } => {
@@ -594,7 +633,10 @@ impl ChainExecutor {
                             success: false,
                             error: Some(reason.clone()),
                         });
-                        return Err(ChainError::ToolDenied { tool: tool.clone(), reason });
+                        return Err(ChainError::ToolDenied {
+                            tool: tool.clone(),
+                            reason,
+                        });
                     }
                     GrantDecision::Granted => {}
                 }
@@ -606,9 +648,14 @@ impl ChainExecutor {
                     args: rendered_args,
                     call_id: format!("chain-step-{idx}"),
                 };
-                let result = self.invoker.invoke(&call).await.map_err(|e| {
-                    ChainError::ToolFailed { tool: tool.clone(), message: e.to_string() }
-                })?;
+                let result =
+                    self.invoker
+                        .invoke(&call)
+                        .await
+                        .map_err(|e| ChainError::ToolFailed {
+                            tool: tool.clone(),
+                            message: e.to_string(),
+                        })?;
                 ctx.insert(output.clone(), Value::String(result));
                 traces.push(ChainStepTrace {
                     step_index: idx,
@@ -636,10 +683,15 @@ impl ChainExecutor {
                     error: None,
                 });
             }
-            ChainStep::Map { over, step: inner, output } => {
-                let array = ctx.get(over).cloned().ok_or_else(|| {
-                    ChainError::MapNotArray { key: over.clone() }
-                })?;
+            ChainStep::Map {
+                over,
+                step: inner,
+                output,
+            } => {
+                let array = ctx
+                    .get(over)
+                    .cloned()
+                    .ok_or_else(|| ChainError::MapNotArray { key: over.clone() })?;
                 let items = match &array {
                     Value::Array(arr) => arr.clone(),
                     _ => return Err(ChainError::MapNotArray { key: over.clone() }),
@@ -648,7 +700,8 @@ impl ChainExecutor {
                 for item in items {
                     let mut item_ctx = ctx.clone();
                     item_ctx.insert("_item".into(), item);
-                    self.exec_step(inner, &mut item_ctx, traces, counter, depth + 1).await?;
+                    self.exec_step(inner, &mut item_ctx, traces, counter, depth + 1)
+                        .await?;
                     // Collect the inner step's output key
                     let inner_output_key = step_output_key(inner);
                     if let Some(val) = inner_output_key.and_then(|k| item_ctx.get(&k)) {
@@ -664,13 +717,19 @@ impl ChainExecutor {
                     error: None,
                 });
             }
-            ChainStep::Branch { cond, then_step, else_step } => {
+            ChainStep::Branch {
+                cond,
+                then_step,
+                else_step,
+            } => {
                 let cond_val = ctx.get(cond).cloned().unwrap_or(Value::Null);
                 let is_truthy = is_truthy(&cond_val);
                 if is_truthy {
-                    self.exec_step(then_step, ctx, traces, counter, depth + 1).await?;
+                    self.exec_step(then_step, ctx, traces, counter, depth + 1)
+                        .await?;
                 } else if let Some(else_s) = else_step {
-                    self.exec_step(else_s, ctx, traces, counter, depth + 1).await?;
+                    self.exec_step(else_s, ctx, traces, counter, depth + 1)
+                        .await?;
                 }
                 // Branch itself has no output key; it delegates to sub-steps.
                 traces.push(ChainStepTrace {
@@ -688,7 +747,8 @@ impl ChainExecutor {
                 let mut sub_traces: Vec<ChainStepTrace> = vec![];
                 for s in steps {
                     let mut par_ctx = ctx.clone();
-                    self.exec_step(s, &mut par_ctx, &mut sub_traces, counter, depth + 1).await?;
+                    self.exec_step(s, &mut par_ctx, &mut sub_traces, counter, depth + 1)
+                        .await?;
                     // Merge outputs back
                     for (k, v) in par_ctx {
                         ctx.entry(k).or_insert(v);
@@ -703,7 +763,11 @@ impl ChainExecutor {
                     error: None,
                 });
             }
-            ChainStep::Transform { fn_ref, input, output } => {
+            ChainStep::Transform {
+                fn_ref,
+                input,
+                output,
+            } => {
                 let input_val = ctx.get(input).cloned().unwrap_or(Value::Null);
                 let result = apply_transform(fn_ref, &input_val)?;
                 ctx.insert(output.clone(), result);
@@ -781,19 +845,35 @@ fn is_truthy(val: &Value) -> bool {
 fn apply_transform(fn_ref: &str, input: &Value) -> Result<Value, ChainError> {
     match fn_ref {
         "join" => {
-            let items = input.as_array().ok_or_else(|| ChainError::UnknownTransform { fn_ref: "join (input must be array)".into() })?;
-            let joined = items.iter().map(|v| match v {
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            }).collect::<Vec<_>>().join(", ");
+            let items = input
+                .as_array()
+                .ok_or_else(|| ChainError::UnknownTransform {
+                    fn_ref: "join (input must be array)".into(),
+                })?;
+            let joined = items
+                .iter()
+                .map(|v| match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
             Ok(Value::String(joined))
         }
         "first" => {
-            let items = input.as_array().ok_or_else(|| ChainError::UnknownTransform { fn_ref: "first (input must be array)".into() })?;
+            let items = input
+                .as_array()
+                .ok_or_else(|| ChainError::UnknownTransform {
+                    fn_ref: "first (input must be array)".into(),
+                })?;
             Ok(items.first().cloned().unwrap_or(Value::Null))
         }
         "last" => {
-            let items = input.as_array().ok_or_else(|| ChainError::UnknownTransform { fn_ref: "last (input must be array)".into() })?;
+            let items = input
+                .as_array()
+                .ok_or_else(|| ChainError::UnknownTransform {
+                    fn_ref: "last (input must be array)".into(),
+                })?;
             Ok(items.last().cloned().unwrap_or(Value::Null))
         }
         "length" => {
@@ -816,7 +896,9 @@ fn apply_transform(fn_ref: &str, input: &Value) -> Result<Value, ChainError> {
                 _ => return Ok(Value::Null),
             };
             let n: f64 = s.parse().unwrap_or(0.0);
-            Ok(Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
+            Ok(Value::Number(
+                serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
+            ))
         }
         "uppercase" => {
             let s = input.as_str().unwrap_or("").to_uppercase();
@@ -826,7 +908,9 @@ fn apply_transform(fn_ref: &str, input: &Value) -> Result<Value, ChainError> {
             let s = input.as_str().unwrap_or("").to_lowercase();
             Ok(Value::String(s))
         }
-        other => Err(ChainError::UnknownTransform { fn_ref: other.to_string() }),
+        other => Err(ChainError::UnknownTransform {
+            fn_ref: other.to_string(),
+        }),
     }
 }
 
@@ -919,9 +1003,15 @@ impl ChainExecutorBuilder {
     /// Panics if `provider_router`, `tool_invoker`, or `agent_executor` was not set.
     pub fn build(self) -> ChainExecutor {
         ChainExecutor {
-            provider: self.provider.expect("ChainExecutorBuilder: provider_router must be set"),
-            invoker: self.invoker.expect("ChainExecutorBuilder: tool_invoker must be set"),
-            agent_executor: self.agent_executor.expect("ChainExecutorBuilder: agent_executor must be set"),
+            provider: self
+                .provider
+                .expect("ChainExecutorBuilder: provider_router must be set"),
+            invoker: self
+                .invoker
+                .expect("ChainExecutorBuilder: tool_invoker must be set"),
+            agent_executor: self
+                .agent_executor
+                .expect("ChainExecutorBuilder: agent_executor must be set"),
             tool_registry: self.tool_registry,
             max_steps: self.max_steps,
             max_depth: self.max_depth,
@@ -992,13 +1082,13 @@ pub fn builtin_triage_branch_respond() -> ChainFlow {
 mod tests {
     use super::*;
     use crate::context::{StepOutcome, TokenUsage};
-    use crate::executor::{ExecutorError, ProviderRouter, ToolInvoker, AgentExecutor};
+    use crate::executor::{AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker};
     use crate::grants::{AccessLevel, ToolGrant};
     use crate::spec::AgentSpec;
     use crate::tool_registry::{ToolDescriptor, ToolRegistry};
+    use serde_json::json;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::{Arc, Mutex};
-    use serde_json::json;
     use tempfile::TempDir;
 
     // ── Mock provider ─────────────────────────────────────────────────────────
@@ -1008,20 +1098,34 @@ mod tests {
     }
     impl ScriptedProvider {
         fn new(responses: Vec<&str>) -> Self {
-            Self { responses: Mutex::new(responses.iter().map(|s| s.to_string()).collect()) }
+            Self {
+                responses: Mutex::new(responses.iter().map(|s| s.to_string()).collect()),
+            }
         }
     }
 
     #[async_trait::async_trait]
     impl ProviderRouter for ScriptedProvider {
-        async fn step(&self, _spec: &AgentSpec, _ctx: &AgentRunContext) -> Result<StepOutcome, ExecutorError> {
-            let text = self.responses.lock().unwrap().drain(..1).next()
+        async fn step(
+            &self,
+            _spec: &AgentSpec,
+            _ctx: &AgentRunContext,
+        ) -> Result<StepOutcome, ExecutorError> {
+            let text = self
+                .responses
+                .lock()
+                .unwrap()
+                .drain(..1)
+                .next()
                 .unwrap_or_else(|| "done".into());
             Ok(StepOutcome {
                 assistant_text: text,
                 tool_calls: vec![],
                 done: true,
-                usage: TokenUsage { prompt_tokens: 5, completion_tokens: 5 },
+                usage: TokenUsage {
+                    prompt_tokens: 5,
+                    completion_tokens: 5,
+                },
             })
         }
     }
@@ -1032,9 +1136,15 @@ mod tests {
         count: Arc<AtomicU32>,
     }
     impl EchoInvoker {
-        fn new() -> Self { Self { count: Arc::new(AtomicU32::new(0)) } }
+        fn new() -> Self {
+            Self {
+                count: Arc::new(AtomicU32::new(0)),
+            }
+        }
         #[allow(dead_code)]
-        fn count(&self) -> u32 { self.count.load(Ordering::SeqCst) }
+        fn count(&self) -> u32 {
+            self.count.load(Ordering::SeqCst)
+        }
     }
     #[async_trait::async_trait]
     impl ToolInvoker for EchoInvoker {
@@ -1054,7 +1164,7 @@ mod tests {
                 .tool_invoker(invoker)
                 .max_steps(10)
                 .token_budget(50_000)
-                .build()
+                .build(),
         )
     }
 
@@ -1131,17 +1241,15 @@ mod tests {
             id: "branch-true".into(),
             name: "Branch True".into(),
             description: None,
-            steps: vec![
-                ChainStep::Branch {
-                    cond: "flag".into(),
-                    then_step: Box::new(ChainStep::Prompt {
-                        template: "then branch".into(),
-                        inputs: vec![],
-                        output: "result".into(),
-                    }),
-                    else_step: None,
-                },
-            ],
+            steps: vec![ChainStep::Branch {
+                cond: "flag".into(),
+                then_step: Box::new(ChainStep::Prompt {
+                    template: "then branch".into(),
+                    inputs: vec![],
+                    output: "result".into(),
+                }),
+                else_step: None,
+            }],
         };
 
         let mut ctx = ChainContext::new();
@@ -1167,21 +1275,19 @@ mod tests {
             id: "branch-false".into(),
             name: "Branch False".into(),
             description: None,
-            steps: vec![
-                ChainStep::Branch {
-                    cond: "flag".into(),
-                    then_step: Box::new(ChainStep::Prompt {
-                        template: "then branch".into(),
-                        inputs: vec![],
-                        output: "result".into(),
-                    }),
-                    else_step: Some(Box::new(ChainStep::Prompt {
-                        template: "else branch".into(),
-                        inputs: vec![],
-                        output: "result".into(),
-                    })),
-                },
-            ],
+            steps: vec![ChainStep::Branch {
+                cond: "flag".into(),
+                then_step: Box::new(ChainStep::Prompt {
+                    template: "then branch".into(),
+                    inputs: vec![],
+                    output: "result".into(),
+                }),
+                else_step: Some(Box::new(ChainStep::Prompt {
+                    template: "else branch".into(),
+                    inputs: vec![],
+                    output: "result".into(),
+                })),
+            }],
         };
 
         let mut ctx = ChainContext::new();
@@ -1208,17 +1314,15 @@ mod tests {
             id: "map-test".into(),
             name: "Map Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::Map {
-                    over: "items".into(),
-                    step: Box::new(ChainStep::Prompt {
-                        template: "process: {{_item}}".into(),
-                        inputs: vec!["_item".into()],
-                        output: "processed".into(),
-                    }),
-                    output: "results".into(),
-                },
-            ],
+            steps: vec![ChainStep::Map {
+                over: "items".into(),
+                step: Box::new(ChainStep::Prompt {
+                    template: "process: {{_item}}".into(),
+                    inputs: vec!["_item".into()],
+                    output: "processed".into(),
+                }),
+                output: "results".into(),
+            }],
         };
 
         let mut ctx = ChainContext::new();
@@ -1245,22 +1349,20 @@ mod tests {
             id: "parallel-test".into(),
             name: "Parallel Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::Parallel {
-                    steps: vec![
-                        ChainStep::Prompt {
-                            template: "branch A".into(),
-                            inputs: vec![],
-                            output: "out_a".into(),
-                        },
-                        ChainStep::Prompt {
-                            template: "branch B".into(),
-                            inputs: vec![],
-                            output: "out_b".into(),
-                        },
-                    ],
-                },
-            ],
+            steps: vec![ChainStep::Parallel {
+                steps: vec![
+                    ChainStep::Prompt {
+                        template: "branch A".into(),
+                        inputs: vec![],
+                        output: "out_a".into(),
+                    },
+                    ChainStep::Prompt {
+                        template: "branch B".into(),
+                        inputs: vec![],
+                        output: "out_b".into(),
+                    },
+                ],
+            }],
         };
 
         let ctx = ChainContext::new();
@@ -1281,12 +1383,14 @@ mod tests {
         );
 
         let registry = Arc::new(ToolRegistry::new());
-        registry.register_tool(ToolDescriptor {
-            id: "email.send".into(),
-            name: "Send Email".into(),
-            description: "Send email".into(),
-            required_level: AccessLevel::Outbound,
-        }).unwrap();
+        registry
+            .register_tool(ToolDescriptor {
+                id: "email.send".into(),
+                name: "Send Email".into(),
+                description: "Send email".into(),
+                required_level: AccessLevel::Outbound,
+            })
+            .unwrap();
         registry.set_grants(
             "chain.executor",
             vec![ToolGrant {
@@ -1302,13 +1406,11 @@ mod tests {
             id: "outbound-test".into(),
             name: "Outbound Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::ToolCall {
-                    tool: "email.send".into(),
-                    args: json!({ "to": "user@example.com", "body": "Hello" }),
-                    output: "email_result".into(),
-                },
-            ],
+            steps: vec![ChainStep::ToolCall {
+                tool: "email.send".into(),
+                args: json!({ "to": "user@example.com", "body": "Hello" }),
+                output: "email_result".into(),
+            }],
         };
 
         let ctx = ChainContext::new();
@@ -1348,7 +1450,10 @@ mod tests {
     #[test]
     fn yaml_library_loads_multiple_files() {
         let dir = TempDir::new().unwrap();
-        for flow in [builtin_research_summarize_draft(), builtin_triage_branch_respond()] {
+        for flow in [
+            builtin_research_summarize_draft(),
+            builtin_triage_branch_respond(),
+        ] {
             let yaml = serde_yaml::to_string(&flow).unwrap();
             std::fs::write(dir.path().join(format!("{}.yaml", flow.id)), yaml).unwrap();
         }
@@ -1364,16 +1469,16 @@ mod tests {
             id: "bad".into(),
             name: "Bad".into(),
             description: None,
-            steps: vec![
-                ChainStep::Prompt {
-                    template: "use {{missing_key}}".into(),
-                    inputs: vec!["missing_key".into()],
-                    output: "out".into(),
-                },
-            ],
+            steps: vec![ChainStep::Prompt {
+                template: "use {{missing_key}}".into(),
+                inputs: vec!["missing_key".into()],
+                output: "out".into(),
+            }],
         };
         let errs = flow.validate().unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ChainValidationError::UnresolvedRef { key, .. } if key == "missing_key")));
+        assert!(errs.iter().any(
+            |e| matches!(e, ChainValidationError::UnresolvedRef { key, .. } if key == "missing_key")
+        ));
     }
 
     #[test]
@@ -1396,7 +1501,9 @@ mod tests {
             ],
         };
         let errs = flow.validate().unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ChainValidationError::DuplicateOutput { key } if key == "out")));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ChainValidationError::DuplicateOutput { key } if key == "out")));
     }
 
     #[test]
@@ -1420,7 +1527,12 @@ mod tests {
     async fn budget_guard_trips_on_large_map() {
         // Map 10 items with max_steps = 3 → should trip on step 4
         let provider = Arc::new(ScriptedProvider::new(
-            (0..10).map(|i| format!("r{i}")).collect::<Vec<_>>().iter().map(|s| s.as_str()).collect()
+            (0..10)
+                .map(|i| format!("r{i}"))
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|s| s.as_str())
+                .collect(),
         ));
         let invoker = Arc::new(EchoInvoker::new());
         let agent_exec = make_agent_executor(
@@ -1441,23 +1553,27 @@ mod tests {
             id: "budget-test".into(),
             name: "Budget Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::Map {
-                    over: "items".into(),
-                    step: Box::new(ChainStep::Prompt {
-                        template: "process {{_item}}".into(),
-                        inputs: vec!["_item".into()],
-                        output: "processed".into(),
-                    }),
-                    output: "results".into(),
-                },
-            ],
+            steps: vec![ChainStep::Map {
+                over: "items".into(),
+                step: Box::new(ChainStep::Prompt {
+                    template: "process {{_item}}".into(),
+                    inputs: vec!["_item".into()],
+                    output: "processed".into(),
+                }),
+                output: "results".into(),
+            }],
         };
 
         let mut ctx = ChainContext::new();
-        ctx.insert("items".into(), json!(["a","b","c","d","e","f","g","h","i","j"]));
+        ctx.insert(
+            "items".into(),
+            json!(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]),
+        );
         let err = exec.run(&flow, ctx).await.unwrap_err();
-        assert!(matches!(err, ChainError::StepBudgetExceeded { .. }), "expected budget exceeded, got: {err}");
+        assert!(
+            matches!(err, ChainError::StepBudgetExceeded { .. }),
+            "expected budget exceeded, got: {err}"
+        );
     }
 
     // ── T10: Transform steps ──────────────────────────────────────────────────
@@ -1477,19 +1593,20 @@ mod tests {
             id: "transform-test".into(),
             name: "Transform Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::Transform {
-                    fn_ref: "join".into(),
-                    input: "tags".into(),
-                    output: "joined".into(),
-                },
-            ],
+            steps: vec![ChainStep::Transform {
+                fn_ref: "join".into(),
+                input: "tags".into(),
+                output: "joined".into(),
+            }],
         };
 
         let mut ctx = ChainContext::new();
         ctx.insert("tags".into(), json!(["rust", "async", "agents"]));
         let result = exec.run(&flow, ctx).await.unwrap();
-        assert_eq!(result.context.get("joined"), Some(&json!("rust, async, agents")));
+        assert_eq!(
+            result.context.get("joined"),
+            Some(&json!("rust, async, agents"))
+        );
     }
 
     // ── T11: ToolCall granted → executes ─────────────────────────────────────
@@ -1504,12 +1621,14 @@ mod tests {
         );
 
         let registry = Arc::new(ToolRegistry::new());
-        registry.register_tool(ToolDescriptor {
-            id: "cascade.search".into(),
-            name: "Search".into(),
-            description: "Semantic search".into(),
-            required_level: AccessLevel::Search,
-        }).unwrap();
+        registry
+            .register_tool(ToolDescriptor {
+                id: "cascade.search".into(),
+                name: "Search".into(),
+                description: "Semantic search".into(),
+                required_level: AccessLevel::Search,
+            })
+            .unwrap();
         registry.set_grants(
             "chain.executor",
             vec![ToolGrant {
@@ -1525,13 +1644,11 @@ mod tests {
             id: "search-test".into(),
             name: "Search Test".into(),
             description: None,
-            steps: vec![
-                ChainStep::ToolCall {
-                    tool: "cascade.search".into(),
-                    args: json!({ "query": "{{query}}" }),
-                    output: "search_result".into(),
-                },
-            ],
+            steps: vec![ChainStep::ToolCall {
+                tool: "cascade.search".into(),
+                args: json!({ "query": "{{query}}" }),
+                output: "search_result".into(),
+            }],
         };
 
         let mut ctx = ChainContext::new();

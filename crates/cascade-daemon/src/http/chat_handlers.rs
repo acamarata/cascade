@@ -250,7 +250,11 @@ mod tests {
 
     impl StreamingMockProvider {
         fn new(id: &'static str, chunks: Vec<&'static str>, healthy: bool) -> Self {
-            Self { id, chunks, healthy }
+            Self {
+                id,
+                chunks,
+                healthy,
+            }
         }
     }
 
@@ -456,7 +460,11 @@ mod tests {
         registry
             .register(
                 "openai".into(),
-                Arc::new(StreamingMockProvider::new("openai", vec!["from-openai"], true)),
+                Arc::new(StreamingMockProvider::new(
+                    "openai",
+                    vec!["from-openai"],
+                    true,
+                )),
             )
             .unwrap();
         registry
@@ -482,8 +490,14 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         let body = collect_sse(resp.into_body()).await;
 
-        assert!(body.contains("\"anthropic\""), "served_by must say anthropic: {body}");
-        assert!(body.contains("from-anthropic"), "token must come from anthropic: {body}");
+        assert!(
+            body.contains("\"anthropic\""),
+            "served_by must say anthropic: {body}"
+        );
+        assert!(
+            body.contains("from-anthropic"),
+            "token must come from anthropic: {body}"
+        );
         assert!(!body.contains("from-openai"), "must not use openai: {body}");
     }
 

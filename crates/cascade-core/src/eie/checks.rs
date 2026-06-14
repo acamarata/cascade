@@ -263,8 +263,7 @@ mod tests {
 
     #[test]
     fn duplication_check_flags_shared_windows() {
-        let shared_block: Vec<&str> =
-            vec!["fn foo() {", "let x = 1;", "let y = 2;", "x + y", "}"];
+        let shared_block: Vec<&str> = vec!["fn foo() {", "let x = 1;", "let y = 2;", "x + y", "}"];
         let check = DuplicationCheck {
             window_size: 5,
             min_shared: 1,
@@ -283,8 +282,14 @@ mod tests {
             window_size: 5,
             min_shared: 1,
         };
-        let file_a = make_entry("a.rs", vec!["line_a1", "line_a2", "line_a3", "line_a4", "line_a5"]);
-        let file_b = make_entry("b.rs", vec!["line_b1", "line_b2", "line_b3", "line_b4", "line_b5"]);
+        let file_a = make_entry(
+            "a.rs",
+            vec!["line_a1", "line_a2", "line_a3", "line_a4", "line_a5"],
+        );
+        let file_b = make_entry(
+            "b.rs",
+            vec!["line_b1", "line_b2", "line_b3", "line_b4", "line_b5"],
+        );
         let mut report = empty_report();
         check.run(&[file_a, file_b], &mut report);
         assert!(report.duplication_issues.is_empty());

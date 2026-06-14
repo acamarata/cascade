@@ -69,8 +69,8 @@ pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, Impo
 
 pub use google_oauth::{validate_gemini_key, GoogleOAuthClient, GoogleToken};
 pub use google_provision::{
-    GoogleProvisionClient, ProvisionError, ProvisionMultiResult, ProvisionOptions,
-    ProvisionedKey, ProvisioningCheckpoint,
+    GoogleProvisionClient, ProvisionError, ProvisionMultiResult, ProvisionOptions, ProvisionedKey,
+    ProvisioningCheckpoint,
 };
 
 // E-P5-08 exports — CLI-accessible provider credential connect/validate path.
@@ -81,6 +81,6 @@ pub use connect::{
 };
 
 // E-P7-06 exports — subscription detect+config adapters (DETECT+CONFIG mode only).
-pub use adapters::cursor::{generate_cursor_cascade_config, CursorAdapter};
 pub use adapters::antigravity::{generate_antigravity_cascade_config, AntigravityAdapter};
+pub use adapters::cursor::{generate_cursor_cascade_config, CursorAdapter};
 pub use auto_auth_import::scan_antigravity;

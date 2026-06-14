@@ -13,13 +13,11 @@
 //!   `ExternalCheckSeam` that callers can implement and inject.
 //! - These functions are pure filesystem operations: they never shell out.
 
-use chrono::Utc;
 use cascade_types::error::{CascadeError, Result};
+use chrono::Utc;
 
 use super::{
-    schema::{
-        EpicStatus, PhaseStatus, SprintStatus, StepStatus, TicketStatus, WaveStatus,
-    },
+    schema::{EpicStatus, PhaseStatus, SprintStatus, StepStatus, TicketStatus, WaveStatus},
     store::PbdStore,
 };
 
@@ -163,13 +161,7 @@ pub fn run_eos(
         });
     }
 
-    store.transition_sprint(
-        phase_id,
-        epic_id,
-        wave_id,
-        sprint_id,
-        SprintStatus::Done,
-    )?;
+    store.transition_sprint(phase_id, epic_id, wave_id, sprint_id, SprintStatus::Done)?;
 
     let sidecar = write_sidecar(
         store,
@@ -246,11 +238,7 @@ pub fn run_eow(
 /// Run the EOE (end-of-epic) checklist.
 ///
 /// Verifies all waves are `done`. Transitions epic to `done`.
-pub fn run_eoe(
-    store: &PbdStore,
-    phase_id: &str,
-    epic_id: &str,
-) -> Result<ProtocolResult> {
+pub fn run_eoe(store: &PbdStore, phase_id: &str, epic_id: &str) -> Result<ProtocolResult> {
     let epic = store.load_epic(phase_id, epic_id)?;
     let mut errors: Vec<String> = Vec::new();
 

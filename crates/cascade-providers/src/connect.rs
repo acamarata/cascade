@@ -265,19 +265,18 @@ pub async fn validate_api_key(
     let effective_base = base_url.unwrap_or_else(|| kind.base_url());
 
     match kind {
-        ProviderKind::Anthropic => {
-            validate_anthropic(api_key, effective_base, &http).await
-        }
-        ProviderKind::Gemini => {
-            validate_gemini(api_key, effective_base, &http).await
-        }
+        ProviderKind::Anthropic => validate_anthropic(api_key, effective_base, &http).await,
+        ProviderKind::Gemini => validate_gemini(api_key, effective_base, &http).await,
         ProviderKind::OpenRouter => {
-            validate_openai_compat(api_key, &format!("{effective_base}/api/v1/models"), &http)
-                .await
+            validate_openai_compat(api_key, &format!("{effective_base}/api/v1/models"), &http).await
         }
         ProviderKind::Groq => {
-            validate_openai_compat(api_key, &format!("{effective_base}/openai/v1/models"), &http)
-                .await
+            validate_openai_compat(
+                api_key,
+                &format!("{effective_base}/openai/v1/models"),
+                &http,
+            )
+            .await
         }
         // OpenAI-compatible: /v1/models with Bearer auth
         ProviderKind::OpenAI
@@ -330,17 +329,13 @@ async fn validate_gemini(
     let url = format!("{base_url}/v1beta/models?key={api_key}");
     debug!("Validating Gemini API key via models endpoint (key redacted from logs)");
 
-    let resp = http
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                ProviderError::Timeout { secs: 30 }
-            } else {
-                ProviderError::NetworkError(e.to_string())
-            }
-        })?;
+    let resp = http.get(&url).send().await.map_err(|e| {
+        if e.is_timeout() {
+            ProviderError::Timeout { secs: 30 }
+        } else {
+            ProviderError::NetworkError(e.to_string())
+        }
+    })?;
 
     map_status(resp.status(), "gemini")
 }
@@ -439,22 +434,18 @@ pub async fn connect_provider_at(
             validate_api_key(&kind, key, base_url_override).await?;
 
             // 2. Store in keychain. Never log the key value.
-            keychain
-                .set_key(KEYCHAIN_SERVICE, &id, key)
-                .map_err(|e| {
-                    ProviderError::InvalidResponse(format!("keychain write failed: {e}"))
-                })?;
+            keychain.set_key(KEYCHAIN_SERVICE, &id, key).map_err(|e| {
+                ProviderError::InvalidResponse(format!("keychain write failed: {e}"))
+            })?;
         }
         Credential::OAuth => {
             // OAuth path: the PKCE flow already stored the token in keychain.
             // We just need to verify the token is actually there.
-            keychain
-                .get_key(KEYCHAIN_SERVICE, &id)
-                .map_err(|_| {
-                    ProviderError::CredentialNotFound(format!(
-                        "OAuth token not found in keychain for '{id}'; complete the OAuth flow first"
-                    ))
-                })?;
+            keychain.get_key(KEYCHAIN_SERVICE, &id).map_err(|_| {
+                ProviderError::CredentialNotFound(format!(
+                    "OAuth token not found in keychain for '{id}'; complete the OAuth flow first"
+                ))
+            })?;
         }
     }
 
@@ -509,9 +500,7 @@ pub fn list_providers_at(
 
     // Mark unhealthy if keychain entry is absent.
     for p in &mut out {
-        p.healthy = keychain
-            .get_key(KEYCHAIN_SERVICE, &p.id)
-            .is_ok();
+        p.healthy = keychain.get_key(KEYCHAIN_SERVICE, &p.id).is_ok();
     }
 
     // Sort by id for stable output.
@@ -577,17 +566,39 @@ mod tests {
 
     #[test]
     fn provider_kind_from_slug() {
-        assert_eq!(ProviderKind::from_slug("anthropic"), Some(ProviderKind::Anthropic));
-        assert_eq!(ProviderKind::from_slug("OPENAI"), Some(ProviderKind::OpenAI));
-        assert_eq!(ProviderKind::from_slug("gemini"), Some(ProviderKind::Gemini));
+        assert_eq!(
+            ProviderKind::from_slug("anthropic"),
+            Some(ProviderKind::Anthropic)
+        );
+        assert_eq!(
+            ProviderKind::from_slug("OPENAI"),
+            Some(ProviderKind::OpenAI)
+        );
+        assert_eq!(
+            ProviderKind::from_slug("gemini"),
+            Some(ProviderKind::Gemini)
+        );
         assert!(ProviderKind::from_slug("unknown-provider-xyz").is_none());
     }
 
     #[test]
     fn provider_kind_from_slug_all_known() {
-        let slugs = ["anthropic","openai","gemini","openrouter","groq","mistral","deepseek","together","cohere"];
+        let slugs = [
+            "anthropic",
+            "openai",
+            "gemini",
+            "openrouter",
+            "groq",
+            "mistral",
+            "deepseek",
+            "together",
+            "cohere",
+        ];
         for s in slugs {
-            assert!(ProviderKind::from_slug(s).is_some(), "slug '{s}' should parse");
+            assert!(
+                ProviderKind::from_slug(s).is_some(),
+                "slug '{s}' should parse"
+            );
         }
     }
 

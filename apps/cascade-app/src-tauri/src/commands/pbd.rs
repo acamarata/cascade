@@ -24,10 +24,10 @@ use serde_json::Value;
 
 use cascade_core::pbd::{
     schema::{Ticket, TicketStatus},
-    store::{PbdStore, resolve_phases_root},
+    store::{resolve_phases_root, PbdStore},
 };
-use tauri::Emitter;
 use cascade_types::error::CascadeError;
+use tauri::Emitter;
 
 use crate::error::CascadeError as AppError;
 
@@ -308,12 +308,18 @@ pub fn pbd_update_ticket_status(
         .ok_or_else(|| AppError::Custom(format!("ticket '{ticket_id}' not found in INDEX")))?;
 
     // Resolve parent chain: ticket → sprint → wave → epic → phase
-    let coords = resolve_ticket_coords(&store, &entry.id, entry.parent.as_deref())
-        .map_err(app_err)?;
+    let coords =
+        resolve_ticket_coords(&store, &entry.id, entry.parent.as_deref()).map_err(app_err)?;
 
     // Read old status for the response
     let ticket = store
-        .load_ticket(&coords.phase_id, &coords.epic_id, &coords.wave_id, &coords.sprint_id, &ticket_id)
+        .load_ticket(
+            &coords.phase_id,
+            &coords.epic_id,
+            &coords.wave_id,
+            &coords.sprint_id,
+            &ticket_id,
+        )
         .map_err(app_err)?;
     let old_status = ticket.status.as_str().to_string();
 
@@ -360,7 +366,9 @@ pub fn pbd_list_tickets(
         for epic in epics {
             let waves = store.list_waves(&phase.id, &epic.id).map_err(app_err)?;
             for wave in waves {
-                let sprints = store.list_sprints(&phase.id, &epic.id, &wave.id).map_err(app_err)?;
+                let sprints = store
+                    .list_sprints(&phase.id, &epic.id, &wave.id)
+                    .map_err(app_err)?;
                 for sprint in sprints {
                     let tickets = store
                         .list_tickets(&phase.id, &epic.id, &wave.id, &sprint.id)
@@ -457,7 +465,9 @@ fn resolve_ticket_coords(
     sprint_id: Option<&str>,
 ) -> Result<TicketCoords, CascadeError> {
     let sprint_id = sprint_id.ok_or_else(|| {
-        CascadeError::Other(format!("ticket '{ticket_id}' has no parent sprint in INDEX"))
+        CascadeError::Other(format!(
+            "ticket '{ticket_id}' has no parent sprint in INDEX"
+        ))
     })?;
 
     let index = store.read_index()?;

@@ -151,10 +151,8 @@ impl ProvisioningCheckpoint {
         let tmp_path = path.with_extension("json.tmp");
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
-        std::fs::write(&tmp_path, &json)
-            .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
-        std::fs::rename(&tmp_path, path)
-            .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        std::fs::write(&tmp_path, &json).map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        std::fs::rename(&tmp_path, path).map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
         Ok(())
     }
 }
@@ -440,7 +438,10 @@ impl GoogleProvisionClient {
                 let api_key = format!("AIza-dry-run-key-{}", project_n);
                 let project_id = project_id_candidate.clone();
                 pool_register_fn(api_key.clone(), project_id.clone()).await;
-                keys.push(ProvisionedKey { api_key, project_id: project_id.clone() });
+                keys.push(ProvisionedKey {
+                    api_key,
+                    project_id: project_id.clone(),
+                });
                 checkpoint.keys_created += 1;
                 checkpoint.created_project_ids.push(project_id);
                 checkpoint.last_ts = std::time::SystemTime::now()
@@ -452,7 +453,10 @@ impl GoogleProvisionClient {
             }
 
             match self.full_auto(account_email, project_n).await {
-                Ok(ProvisionResult::Success { api_key, project_id }) => {
+                Ok(ProvisionResult::Success {
+                    api_key,
+                    project_id,
+                }) => {
                     // Register in pool.
                     pool_register_fn(api_key.clone(), project_id.clone()).await;
 
@@ -465,7 +469,10 @@ impl GoogleProvisionClient {
                         .as_secs();
                     let _ = checkpoint.save(cp_path);
 
-                    keys.push(ProvisionedKey { api_key, project_id });
+                    keys.push(ProvisionedKey {
+                        api_key,
+                        project_id,
+                    });
                 }
                 Ok(ProvisionResult::Error { message }) => {
                     // Rate-limit / quota heuristic: treat RESOURCE_EXHAUSTED / 429 as soft stop.
@@ -944,7 +951,10 @@ mod tests {
         assert_eq!(result.keys.len(), 3);
         assert_eq!(result.effective_ceiling, 3);
         assert!(!result.rate_limited);
-        assert!(!result.tos_warning.is_empty(), "ToS warning must be present");
+        assert!(
+            !result.tos_warning.is_empty(),
+            "ToS warning must be present"
+        );
 
         let pool = registered.lock().await;
         assert_eq!(pool.len(), 3, "pool register called 3 times");
@@ -1026,14 +1036,18 @@ mod tests {
             .await;
 
         Mock::given(method("POST"))
-            .and(path_regex(r"/v1/projects/cascade-gemini-1/services/.*:enable"))
+            .and(path_regex(
+                r"/v1/projects/cascade-gemini-1/services/.*:enable",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
             .up_to_n_times(1)
             .mount(&server)
             .await;
 
         Mock::given(method("POST"))
-            .and(path_regex(r"/v2/projects/cascade-gemini-1/locations/global/keys"))
+            .and(path_regex(
+                r"/v2/projects/cascade-gemini-1/locations/global/keys",
+            ))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "name": "projects/cascade-gemini-1/locations/global/keys/key-1"
             })))
@@ -1118,7 +1132,8 @@ mod tests {
 
         // First run: create 2 keys.
         let result1 = client
-            .full_auto_multi("user@example.com", 2, &opts, Some(&cp_path), |_, _| async {})
+            .full_auto_multi("user@example.com", 2, &opts, Some(&cp_path), |_, _| async {
+            })
             .await;
         assert_eq!(result1.keys_created, 2);
 
@@ -1131,9 +1146,13 @@ mod tests {
         // Second run: request 2 more (total ceiling 5). The checkpoint marks 2 done,
         // so the loop starts from project_n=3 and creates 2 more.
         let result2 = client
-            .full_auto_multi("user@example.com", 4, &opts, Some(&cp_path), |_, _| async {})
+            .full_auto_multi("user@example.com", 4, &opts, Some(&cp_path), |_, _| async {
+            })
             .await;
-        assert_eq!(result2.keys_created, 2, "only 2 new keys should be created on resume");
+        assert_eq!(
+            result2.keys_created, 2,
+            "only 2 new keys should be created on resume"
+        );
 
         let cp2 = ProvisioningCheckpoint::load(&cp_path);
         assert_eq!(cp2.keys_created, 4);
@@ -1154,9 +1173,10 @@ mod tests {
             auto_max: true, // allow count > default ceiling for this test
         };
 
-        let pool = std::sync::Arc::new(tokio::sync::Mutex::new(
-            std::collections::HashMap::<String, String>::new(),
-        ));
+        let pool = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::<
+            String,
+            String,
+        >::new()));
         let pool_clone = pool.clone();
 
         let result = client
@@ -1207,13 +1227,7 @@ mod tests {
             ..Default::default()
         };
         let result = client
-            .full_auto_multi(
-                "tos@example.com",
-                1,
-                &opts,
-                Some(&cp_path),
-                |_, _| async {},
-            )
+            .full_auto_multi("tos@example.com", 1, &opts, Some(&cp_path), |_, _| async {})
             .await;
         assert!(
             result.tos_warning.contains("Terms of Service"),

@@ -108,10 +108,14 @@ mod tests {
         store.create_wave("p1", &wave).expect("create wave");
 
         let sprint = mk_sprint("s01", "w01");
-        store.create_sprint("p1", "e01", &sprint).expect("create sprint");
+        store
+            .create_sprint("p1", "e01", &sprint)
+            .expect("create sprint");
 
         let ticket = mk_ticket("t01", "s01");
-        store.create_ticket("p1", "e01", "w01", &ticket).expect("create ticket");
+        store
+            .create_ticket("p1", "e01", "w01", &ticket)
+            .expect("create ticket");
     }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
@@ -133,10 +137,14 @@ mod tests {
         let waves = store.list_waves("p1", "e01").expect("list waves");
         assert_eq!(waves.len(), 1);
 
-        let sprints = store.list_sprints("p1", "e01", "w01").expect("list sprints");
+        let sprints = store
+            .list_sprints("p1", "e01", "w01")
+            .expect("list sprints");
         assert_eq!(sprints.len(), 1);
 
-        let tickets = store.list_tickets("p1", "e01", "w01", "s01").expect("list tickets");
+        let tickets = store
+            .list_tickets("p1", "e01", "w01", "s01")
+            .expect("list tickets");
         assert_eq!(tickets.len(), 1);
         assert_eq!(tickets[0].status, TicketStatus::Planned);
     }
@@ -149,11 +157,15 @@ mod tests {
         build_hierarchy(&store);
 
         // Phase: planning → ready_to_build → building
-        store.transition_phase("p1", PhaseStatus::ReadyToBuild).expect("phase transition");
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .expect("phase transition");
         let p = store.load_phase("p1").unwrap();
         assert_eq!(p.status, PhaseStatus::ReadyToBuild);
 
-        store.transition_phase("p1", PhaseStatus::Building).expect("phase to building");
+        store
+            .transition_phase("p1", PhaseStatus::Building)
+            .expect("phase to building");
         let p = store.load_phase("p1").unwrap();
         assert_eq!(p.status, PhaseStatus::Building);
 
@@ -181,21 +193,11 @@ mod tests {
 
         // Phase: planning → qa is invalid (must go via ready_to_build → building → qa)
         let result = store.transition_phase("p1", PhaseStatus::Qa);
-        assert!(
-            result.is_err(),
-            "planning → qa should be rejected"
-        );
+        assert!(result.is_err(), "planning → qa should be rejected");
 
         // Ticket: planned → done is invalid
-        let result = store.transition_ticket(
-            "p1",
-            "e01",
-            "w01",
-            "s01",
-            "t01",
-            TicketStatus::Done,
-            None,
-        );
+        let result =
+            store.transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Done, None);
         assert!(result.is_err(), "planned → done should be rejected");
     }
 
@@ -216,7 +218,11 @@ mod tests {
 
         let events = store.read_events().expect("read events");
         // At minimum the two transitions were appended
-        assert!(events.len() >= 2, "events should be appended, got {}", events.len());
+        assert!(
+            events.len() >= 2,
+            "events should be appended, got {}",
+            events.len()
+        );
 
         // Verify ordering: earlier events have earlier or equal timestamps
         for i in 1..events.len() {
@@ -251,11 +257,19 @@ mod tests {
         build_hierarchy(&store);
 
         // Activate the hierarchy
-        store.transition_phase("p1", PhaseStatus::ReadyToBuild).unwrap();
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
         store.transition_phase("p1", PhaseStatus::Building).unwrap();
-        store.transition_epic("p1", "e01", EpicStatus::Active).unwrap();
-        store.transition_wave("p1", "e01", "w01", WaveStatus::Active).unwrap();
-        store.transition_sprint("p1", "e01", "w01", "s01", SprintStatus::Active).unwrap();
+        store
+            .transition_epic("p1", "e01", EpicStatus::Active)
+            .unwrap();
+        store
+            .transition_wave("p1", "e01", "w01", WaveStatus::Active)
+            .unwrap();
+        store
+            .transition_sprint("p1", "e01", "w01", "s01", SprintStatus::Active)
+            .unwrap();
         store
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
             .unwrap();
@@ -284,7 +298,9 @@ mod tests {
         store.save_ticket("p1", "e01", "w01", &ticket).unwrap();
 
         // Activate through the hierarchy
-        store.transition_phase("p1", PhaseStatus::ReadyToBuild).unwrap();
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
         store.transition_phase("p1", PhaseStatus::Building).unwrap();
         store
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
@@ -316,7 +332,9 @@ mod tests {
         ticket.steps.push(step);
         store.save_ticket("p1", "e01", "w01", &ticket).unwrap();
 
-        store.transition_phase("p1", PhaseStatus::ReadyToBuild).unwrap();
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
         store.transition_phase("p1", PhaseStatus::Building).unwrap();
         store
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
@@ -352,11 +370,19 @@ mod tests {
         build_hierarchy(&store);
 
         // Activate hierarchy
-        store.transition_phase("p1", PhaseStatus::ReadyToBuild).unwrap();
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
         store.transition_phase("p1", PhaseStatus::Building).unwrap();
-        store.transition_epic("p1", "e01", EpicStatus::Active).unwrap();
-        store.transition_wave("p1", "e01", "w01", WaveStatus::Active).unwrap();
-        store.transition_sprint("p1", "e01", "w01", "s01", SprintStatus::Active).unwrap();
+        store
+            .transition_epic("p1", "e01", EpicStatus::Active)
+            .unwrap();
+        store
+            .transition_wave("p1", "e01", "w01", WaveStatus::Active)
+            .unwrap();
+        store
+            .transition_sprint("p1", "e01", "w01", "s01", SprintStatus::Active)
+            .unwrap();
         store
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
             .unwrap();
@@ -403,12 +429,28 @@ mod tests {
 
         // pending → running is valid
         store
-            .transition_step("p1", "e01", "w01", "s01", "t01", "step1", StepStatus::Running)
+            .transition_step(
+                "p1",
+                "e01",
+                "w01",
+                "s01",
+                "t01",
+                "step1",
+                StepStatus::Running,
+            )
             .expect("pending → running");
 
         // running → passed is valid
         store
-            .transition_step("p1", "e01", "w01", "s01", "t01", "step1", StepStatus::Passed)
+            .transition_step(
+                "p1",
+                "e01",
+                "w01",
+                "s01",
+                "t01",
+                "step1",
+                StepStatus::Passed,
+            )
             .expect("running → passed");
 
         // passed → running is INVALID

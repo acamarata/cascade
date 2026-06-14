@@ -90,11 +90,7 @@ mod tests {
         let conn = conn_arc.lock().unwrap();
         // Table must exist
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM kanban_tasks",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM kanban_tasks", [], |r| r.get(0))
             .expect("table not created");
         assert_eq!(count, 0);
     }

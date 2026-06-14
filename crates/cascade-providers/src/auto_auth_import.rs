@@ -1083,7 +1083,10 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
 
-        assert!(!results.is_empty(), "expected antigravity via ~/.antigravity");
+        assert!(
+            !results.is_empty(),
+            "expected antigravity via ~/.antigravity"
+        );
         assert_eq!(results[0].email_or_hint, "ag2@example.com");
     }
 
@@ -1107,9 +1110,7 @@ mod tests {
             None => std::env::remove_var("HOME"),
         }
 
-        let has_ag = results
-            .iter()
-            .any(|a| a.source == AuthSource::Antigravity);
+        let has_ag = results.iter().any(|a| a.source == AuthSource::Antigravity);
         assert!(has_ag, "scan_all must include Antigravity results");
     }
 }

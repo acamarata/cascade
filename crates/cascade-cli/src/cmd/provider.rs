@@ -130,13 +130,9 @@ impl Command for AddArgs {
         let name = kind.display_name().to_string();
 
         let kc = platform_keychain();
-        let result = connect_provider(
-            kind,
-            Credential::ApiKey(self.api_key.clone()),
-            kc.as_ref(),
-        )
-        .await
-        .map_err(|e| CascadeError::Other(e.to_string()))?;
+        let result = connect_provider(kind, Credential::ApiKey(self.api_key.clone()), kc.as_ref())
+            .await
+            .map_err(|e| CascadeError::Other(e.to_string()))?;
 
         println!(
             "Connected: {} ({}) — stored in OS keychain",
@@ -163,7 +159,9 @@ impl Command for ListArgs {
         }
 
         if providers.is_empty() {
-            println!("No providers connected. Use `cascade provider add --kind <KIND> --api-key <KEY>`.");
+            println!(
+                "No providers connected. Use `cascade provider add --kind <KIND> --api-key <KEY>`."
+            );
             return Ok(());
         }
 
@@ -248,7 +246,17 @@ mod tests {
 
     #[test]
     fn parse_kind_known_slugs() {
-        for slug in ["anthropic", "openai", "gemini", "openrouter", "groq", "mistral", "deepseek", "together", "cohere"] {
+        for slug in [
+            "anthropic",
+            "openai",
+            "gemini",
+            "openrouter",
+            "groq",
+            "mistral",
+            "deepseek",
+            "together",
+            "cohere",
+        ] {
             let r = parse_kind(slug);
             assert!(r.is_ok(), "slug '{slug}' should parse");
         }
@@ -259,7 +267,10 @@ mod tests {
         let r = parse_kind("totally-unknown-provider");
         assert!(r.is_err());
         let msg = r.unwrap_err().to_string();
-        assert!(msg.contains("totally-unknown-provider"), "error should mention the bad slug");
+        assert!(
+            msg.contains("totally-unknown-provider"),
+            "error should mention the bad slug"
+        );
     }
 
     #[test]

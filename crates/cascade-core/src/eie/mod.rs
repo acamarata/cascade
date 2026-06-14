@@ -28,4 +28,4 @@ pub mod runner;
 
 pub use checks::{Check, DuplicationCheck, FileSizeCheck};
 pub use report::{DuplicationIssue, FileSizeIssue, HealthReport};
-pub use runner::{HealthConfig, all_checks, run_health_check};
+pub use runner::{all_checks, run_health_check, HealthConfig};

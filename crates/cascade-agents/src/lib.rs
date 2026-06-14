@@ -46,7 +46,7 @@ pub use ceo::{
 
 pub use context::{
     AgentRunContext, AgentRunContextBuilder, ContextMessage, ContextProvider, ContextRole,
-    NoopContextProvider, StepOutcome, ToolCall, ToolResult, TokenUsage,
+    NoopContextProvider, StepOutcome, TokenUsage, ToolCall, ToolResult,
 };
 pub use executor::{
     AgentExecutor, AgentExecutorBuilder, ApprovalRequest, ChildTaskRequest, ExecutorError,
@@ -54,8 +54,8 @@ pub use executor::{
 };
 pub use grants::{AccessLevel, GrantDecision, ToolGrant};
 pub use inbox::{
-    AgentInbox, AgentMessage, InboxError, InboxStore, MemoryInboxStore, MessageKind,
-    MessageTarget, RoleResolver, StaticRoleResolver, DEFAULT_INBOX_CAP,
+    AgentInbox, AgentMessage, InboxError, InboxStore, MemoryInboxStore, MessageKind, MessageTarget,
+    RoleResolver, StaticRoleResolver, DEFAULT_INBOX_CAP,
 };
 pub use library::{validate_agent_library, LibraryIssue, LibraryIssueKind};
 pub use registry::AgentRegistry;
@@ -72,8 +72,7 @@ pub use automation::{
 
 // chain module re-exports
 pub use chain::{
-    builtin_research_summarize_draft, builtin_triage_branch_respond,
-    ChainContext, ChainError, ChainExecutor, ChainExecutorBuilder,
-    ChainFlow, ChainResult, ChainStep, ChainStepTrace, ChainValidationError,
-    CHAIN_DEFAULT_MAX_DEPTH, CHAIN_DEFAULT_MAX_STEPS,
+    builtin_research_summarize_draft, builtin_triage_branch_respond, ChainContext, ChainError,
+    ChainExecutor, ChainExecutorBuilder, ChainFlow, ChainResult, ChainStep, ChainStepTrace,
+    ChainValidationError, CHAIN_DEFAULT_MAX_DEPTH, CHAIN_DEFAULT_MAX_STEPS,
 };
