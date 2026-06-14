@@ -16,6 +16,7 @@ members = [
     "crates/cascade-local-llm",
     "crates/cascade-pdk",
     "crates/cascade-pdk-macro",
+    "crates/cascade-ccapi",
     "apps/cascade-app/src-tauri",
     "plugins/github-issues",
     "plugins/linear",

@@ -206,7 +206,7 @@ async fn round_trip_fts_finds_seeded_content() {
     let results = {
         let conn_s = open_file_db(&db_path);
         let ea: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
-        search("tiers", &cfg, conn_s, ea, None)
+        search("tiers", &cfg, conn_s, ea, None, None)
             .await
             .expect("search should not fail")
     };
@@ -232,7 +232,7 @@ async fn round_trip_fts_finds_seeded_content() {
     let results_lib = {
         let conn_s = open_file_db(&db_path);
         let ea: Arc<dyn cascade_rag::embed::EmbedModel> = Arc::new(MockEmbedModel::new(1024));
-        search("retrieval", &cfg, conn_s, ea, None)
+        search("retrieval", &cfg, conn_s, ea, None, None)
             .await
             .expect("search for retrieval should not fail")
     };
@@ -344,7 +344,7 @@ async fn changed_file_re_ingest_reflected_in_results() {
             fts5_enabled: true,
             ..Default::default()
         };
-        let before = search("qibla direction", &cfg, conn_s, embed_arc, None)
+        let before = search("qibla direction", &cfg, conn_s, embed_arc, None, None)
             .await
             .unwrap();
         let has_qibla = before
@@ -380,7 +380,7 @@ async fn changed_file_re_ingest_reflected_in_results() {
             fts5_enabled: true,
             ..Default::default()
         };
-        let after = search("qibla direction", &cfg, conn_s, embed_arc, None)
+        let after = search("qibla direction", &cfg, conn_s, embed_arc, None, None)
             .await
             .unwrap();
         assert!(
@@ -422,7 +422,7 @@ async fn fts_vs_hybrid_parity() {
             rerank_enabled: false,
             ..Default::default()
         };
-        search(query, &cfg, conn_s, embed_arc, None).await.unwrap()
+        search(query, &cfg, conn_s, embed_arc, None, None).await.unwrap()
     };
 
     // Hybrid (FTS5 + dense vectors via MockEmbedModel cosine path)
@@ -437,7 +437,7 @@ async fn fts_vs_hybrid_parity() {
             rerank_enabled: false,
             ..Default::default()
         };
-        search(query, &cfg, conn_s, embed_arc, None).await.unwrap()
+        search(query, &cfg, conn_s, embed_arc, None, None).await.unwrap()
     };
 
     // Both should produce results for the seeded content.
@@ -493,7 +493,7 @@ async fn rerank_seam_exercised() {
         ..Default::default()
     };
 
-    let results = search("retrieval", &cfg, conn_s, embed_arc, Some(rr))
+    let results = search("retrieval", &cfg, conn_s, embed_arc, Some(rr), None)
         .await
         .expect("rerank path must not error");
 
@@ -621,6 +621,7 @@ async fn synthetic_100_chunks_five_queries() {
             &cfg,
             Arc::clone(&conn_arc),
             Arc::clone(&embed_arc),
+            None,
             None,
         )
         .await
@@ -772,7 +773,7 @@ async fn slow_full_50_files() {
             rerank_enabled: false,
             ..Default::default()
         };
-        let results = search(query, &cfg, conn_s, ea, None)
+        let results = search(query, &cfg, conn_s, ea, None, None)
             .await
             .unwrap_or_default();
         let rr = results
@@ -808,7 +809,7 @@ async fn slow_full_50_files() {
             rerank_enabled: false,
             ..Default::default()
         };
-        let results = search(query, &cfg, conn_s, ea, None)
+        let results = search(query, &cfg, conn_s, ea, None, None)
             .await
             .unwrap_or_default();
         let rr = results

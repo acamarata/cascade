@@ -11,7 +11,6 @@
 
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
-import { DashboardPage } from '../pages/DashboardPage'
 import { InboxPage } from '../pages/InboxPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { SearchPage } from '../pages/SearchPage'
@@ -29,6 +28,9 @@ import { ProjectMapPage } from '../pages/ProjectMapPage'
 import { RagExplorerPage } from '../pages/RagExplorerPage'
 import { TasksPage } from '../pages/TasksPage'
 import { PewsPage } from '../pages/PewsPage'
+import { PersonalVaultPage } from '../pages/PersonalVaultPage'
+import { InstructionsPage } from '../pages/InstructionsPage'
+import { ChatPage } from '../features/chat/ChatPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -66,15 +68,18 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
        */}
       {launchWizard && <Route path="*" element={<Navigate to="/onboarding" replace />} />}
 
-      {/* Root → redirect to dashboard */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Root → redirect to chat (E-P9-03: chat is the new home) */}
+      <Route path="/" element={<Navigate to="/chat" replace />} />
 
       {/* Standalone routes — no app chrome */}
       <Route path="/onboarding" element={<WizardLayout />} />
 
       {/* Authenticated routes — wrapped in persistent app chrome */}
       <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
+        {/* E-P9-03: in-app prompt box — the chat page */}
+        <Route path="/chat" element={<ChatPage />} />
+        {/* Legacy /dashboard redirect to /chat */}
+        <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/settings" element={<SettingsPage />} />
@@ -102,6 +107,10 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/tasks" element={<TasksPage />} />
         {/* E-P8-05: PEWS mutation tree */}
         <Route path="/pews" element={<PewsPage />} />
+        {/* E-P9-01: Personal (PCI) vault */}
+        <Route path="/vault/personal" element={<PersonalVaultPage />} />
+        {/* E-P9-02: Instructions as knowledge object */}
+        <Route path="/vault/instructions" element={<InstructionsPage />} />
       </Route>
 
       {/* Catch-all */}

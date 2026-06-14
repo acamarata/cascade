@@ -5,6 +5,10 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// E-P9-06: CC API proxy experimental bridge (default-off)
+pub mod ccapi;
+// E-P9-05: EIE engineering-excellence health check
+pub mod health;
 // E-P8-03: native PBD phase-tracking engine
 pub mod pbd;
 // E-P6-04: T0 CEO / Founder orchestrator
@@ -158,6 +162,11 @@ pub enum Commands {
     Subs(subs::SubsArgs),
     /// Phase-Based Development engine (phases, epics, waves, sprints, tickets, steps).
     Pbd(pbd::PbdArgs),
+    /// Run EIE engineering-excellence health checks on a project (E-P9-05).
+    Health(health::HealthArgs),
+    /// Manage the EXPERIMENTAL CC API proxy bridge (E-P9-06, default-off).
+    #[command(name = "ccapi")]
+    CcApi(ccapi::CcApiArgs),
 }
 
 impl Commands {
@@ -202,6 +211,8 @@ impl Commands {
             Commands::Ceo(args) => args.run().await,
             Commands::Subs(args) => args.run().await,
             Commands::Pbd(args) => args.run().await,
+            Commands::Health(args) => args.run().await,
+            Commands::CcApi(args) => args.run().await,
         }
     }
 }

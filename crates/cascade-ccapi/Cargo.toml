@@ -1,0 +1,44 @@
+[package]
+name = "cascade-ccapi"
+description = "EXPERIMENTAL: HTTP+SSE bridge that drives the interactive Claude Code CLI (default-off, opt-in)"
+readme = "README.md"
+keywords = ["cascade", "claude-code", "api", "proxy", "experimental"]
+categories = ["development-tools"]
+publish = false   # Not published — internal experimental crate
+
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[dependencies]
+cascade-types     = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+async-trait       = { workspace = true }
+thiserror         = { workspace = true }
+tokio             = { workspace = true }
+tracing           = { workspace = true }
+chrono            = { workspace = true }
+uuid              = { workspace = true }
+dirs              = "5"
+
+# HTTP server for the bridge — same version as cascade-mcp.
+axum              = { version = "0.7", features = ["macros"] }
+tower             = "0.4"
+tower-http        = { version = "0.5", features = ["cors"] }
+http              = "1"
+tokio-stream      = { version = "0.1", features = ["sync"] }
+
+[dev-dependencies]
+tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower             = { version = "0.4", features = ["util"] }
+
+[features]
+# Gate the real PTY-driving implementation behind a feature flag so that
+# normal builds (tests, CI) never attempt to spawn an actual `claude` process.
+# The MockDriver is always available and is the tested default.
+live_cc = []
+
+default = []

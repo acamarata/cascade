@@ -127,5 +127,5 @@ pub use index_manager::{resolve_db_path, IndexManager, IndexRegistry, SourceInfo
 pub use ingest::{IngestConfig, IngestPipeline, IngestResult, IngestStats};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
 pub use retrieve::rrf::RrfRetriever;
-pub use search::{search, SearchConfig};
+pub use search::{search, HydeLlm, SearchConfig};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};

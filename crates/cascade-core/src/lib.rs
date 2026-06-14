@@ -53,6 +53,7 @@
 //! ```
 
 pub mod ai_folder;
+pub mod eie;
 pub mod pbd;
 pub mod tasks;
 pub mod auth_detector;

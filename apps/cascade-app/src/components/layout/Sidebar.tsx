@@ -13,29 +13,31 @@ import { useRef, useState } from 'react'
 import {
   BarChart2,
   BookOpen,
+  BookText,
   Brain,
   ClipboardList,
   Database,
   GitFork,
   Inbox,
   KanbanSquare,
-  LayoutDashboard,
   LayoutGrid,
   Library,
+  MessageSquare,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
+  UserCircle2,
 } from 'lucide-react'
 import { useArrowNav } from '../../hooks/useArrowNav'
 import { NavItem } from './NavItem'
 
 const NAV_ITEMS = [
   {
-    to: '/dashboard',
-    icon: <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />,
-    label: 'Dashboard',
+    to: '/chat',
+    icon: <MessageSquare className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Chat',
   },
   { to: '/inbox', icon: <Inbox className="h-4 w-4 shrink-0" aria-hidden="true" />, label: 'Inbox' },
   {
@@ -82,6 +84,16 @@ const NAV_ITEMS = [
     to: '/vault/memory',
     icon: <Brain className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Memory',
+  },
+  {
+    to: '/vault/personal',
+    icon: <UserCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Personal Vault',
+  },
+  {
+    to: '/vault/instructions',
+    icon: <BookText className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Instructions',
   },
   {
     to: '/rag-explorer',

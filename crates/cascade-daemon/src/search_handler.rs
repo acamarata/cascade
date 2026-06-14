@@ -255,7 +255,7 @@ impl RagSearchHandler {
         let embed = Arc::clone(&self.embed);
         let t0 = Instant::now();
 
-        let citations = search(&params.query, &config, conn_arc, embed, None)
+        let citations = search(&params.query, &config, conn_arc, embed, None, None)
             .await
             .map_err(|e| format!("search: {e}"))?;
 

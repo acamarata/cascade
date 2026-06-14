@@ -80,6 +80,18 @@ vec          = ["dep:sqlite-vec"]
 # Opt in via cascade.toml: [rag] multi_vec = true
 # Requires the rag-multivec feature to be compiled in.
 rag-multivec = []
+# bge_m3_native_sparse: UPGRADE PATH — compiles the native BGE-M3 sparse
+# (SPLADE-style) embedding path into the sparse retrieval tier.
+# This feature is a compile-time GUARD, not a runtime enabler.  The sparse
+# tier always defaults to TF-IDF unless:
+#   1. This feature is compiled in, AND
+#   2. check_bge_m3_sparse_available() returns true at runtime.
+# Currently check_bge_m3_sparse_available() always returns false because
+# fastembed 3.14.1 does not ship a BGE-M3 sparse model.  When fastembed
+# exposes SparseModel::BGEM3, enable this feature and update the capability
+# check.  The build NEVER fails with this feature enabled — it is purely
+# additive.  Implies fastembed.
+bge_m3_native_sparse = ["dep:fastembed"]
 html-parser  = ["dep:scraper"]
 pdf-parser   = ["dep:pdf-extract"]
 docx-parser  = ["dep:docx-rs"]

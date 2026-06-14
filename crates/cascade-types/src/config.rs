@@ -199,10 +199,58 @@ pub struct CascadeConfig {
     /// Default: 512 KiB.
     pub max_cascade_size_bytes: Option<usize>,
 
+    /// Experimental / beta features.
+    ///
+    /// All flags in this block default to `false`. Enabling them may violate
+    /// third-party Terms of Service, may break without warning, and is not
+    /// covered by the Cascade stability guarantee.
+    pub experimental: ExperimentalConfig,
+
     /// Arbitrary extra keys for forward compatibility. Keys starting with `_`
     /// are reserved for internal use.
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
+}
+
+// ── ExperimentalConfig ────────────────────────────────────────────────────────
+
+/// `[experimental]` — opt-in beta features.
+///
+/// **ALL flags default to `false`.** Enabling any flag is an explicit opt-in;
+/// Cascade will never activate experimental behaviour automatically.
+///
+/// # TOML example
+///
+/// ```toml
+/// [experimental]
+/// # WARNING: May violate the Anthropic Claude Code Terms of Service.
+/// # Read .github/docs/cc-api-proxy-beta.md before enabling.
+/// cc_api_proxy = false   # DEFAULT: off — change to true only after reading the risk doc
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct ExperimentalConfig {
+    /// **EXPERIMENTAL — OFF BY DEFAULT.**
+    ///
+    /// When `true`, `cascade ccapi start` will launch an HTTP+SSE bridge that
+    /// drives the interactive Claude Code CLI (`claude`) to expose a
+    /// `/v1/messages`-compatible API endpoint.
+    ///
+    /// **Risk:** This wraps the Claude Code interactive terminal process via a
+    /// PTY/pipe. Anthropic's Terms of Service permit the subscription tier only
+    /// for interactive use. Using this bridge for automated/programmatic access
+    /// may violate those terms and result in account suspension.
+    ///
+    /// **Maintenance risk:** Claude Code's terminal output format is not a stable
+    /// API. Any CC release can break the bridge without notice.
+    ///
+    /// **Security note:** The bridge listens on a local port (default 7190) with
+    /// no authentication by default. Bind it to 127.0.0.1 only.
+    ///
+    /// Read `.github/docs/cc-api-proxy-beta.md` for full details before enabling.
+    ///
+    /// Default: `false` (disabled).
+    pub cc_api_proxy: bool,
 }
 
 // ── ProviderConfig ────────────────────────────────────────────────────────────

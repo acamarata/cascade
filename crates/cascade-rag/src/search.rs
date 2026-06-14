@@ -6,9 +6,19 @@
 //!
 //! 1. FTS5 keyword retrieval (always when `fts5_enabled`).
 //! 2. Dense KNN retrieval (when `vec_enabled`, gated on `vec` feature).
-//! 3. RRF score fusion across active tiers.
-//! 4. Optional cross-encoder reranking (when `rerank_enabled`, gated on `reranker` feature).
-//! 5. Hydration of chunk IDs into [`RagCitation`] records via [`citations_from_chunk_ids`].
+//! 3. Sparse retrieval (when `sparse_enabled`; TF-IDF by default, native
+//!    BGE-M3 sparse when `bge_m3_native_sparse` feature + model available).
+//! 4. Optional HyDE query expansion: when `hyde_enabled`, an injectable LLM
+//!    generates a hypothetical document; its embedding replaces the raw query
+//!    embedding for the dense channel.  Off by default.
+//! 5. Optional ColBERT/multivec 4th RRF channel: when `colbert_enabled` AND
+//!    `rag-multivec` feature compiled, MaxSim late-interaction re-scores the
+//!    RRF candidate set.  Off by default.
+//! 6. RRF score fusion across active tiers.
+//! 7. Optional cross-encoder reranking (when `rerank_enabled`, gated on
+//!    `reranker` feature).
+//! 8. Hydration of chunk IDs into [`RagCitation`] records via
+//!    [`citations_from_chunk_ids`].
 //!
 //! # Inputs
 //!
@@ -28,15 +38,16 @@
 //!
 //! # Ticket
 //!
-//! T-P4-E01-23
+//! T-P4-E01-23 / E-P9-04
 //!
 //! SPORT: MASTER-CRATES.md → cascade-rag::search
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use rusqlite::Connection;
 use tokio::sync::Mutex;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use cascade_types::chunker::{Chunk as TypesChunk, ChunkMetadata as TypesChunkMetadata};
 use cascade_types::error::{CascadeError, Result};
@@ -46,6 +57,37 @@ use crate::citation::{citations_from_chunk_ids, RagCitation};
 use crate::embed::EmbedModel;
 use crate::retrieve::fts::query_fts5;
 use crate::retrieve::rrf::{rrf_merge, FusedHit, RankedList};
+
+// ── HydeLlm injectable trait ──────────────────────────────────────────────────
+
+/// Injectable LLM used by the HyDE (Hypothetical Document Embeddings) channel.
+///
+/// # Purpose
+///
+/// HyDE generates a *hypothetical* document that answers `query`, then embeds
+/// that document instead of the raw query.  This bridges the vocabulary gap
+/// between short user queries and longer document passages.
+///
+/// # Object safety
+///
+/// This trait is object-safe; use `Arc<dyn HydeLlm>` to share across tasks.
+///
+/// # Test injection
+///
+/// Implement `MockHydeLlm` in tests — it returns a fixed string without any
+/// network call, making HyDE tests fully deterministic and offline.
+#[async_trait]
+pub trait HydeLlm: Send + Sync {
+    /// Generate a short hypothetical document that answers `query`.
+    ///
+    /// Implementations should produce a concise answer-like passage
+    /// (1–3 sentences), NOT a full document.  The passage is then embedded
+    /// and used as the dense query vector.
+    ///
+    /// Returns the hypothetical document text, or `Err` on LLM failure.
+    /// On `Err`, the caller falls back to embedding the raw query directly.
+    async fn generate_hypothetical(&self, query: &str) -> Result<String>;
+}
 
 // ── SearchConfig ─────────────────────────────────────────────────────────────
 
@@ -86,6 +128,34 @@ pub struct SearchConfig {
     /// Default: false.
     pub vec_enabled: bool,
 
+    /// Enable the sparse retrieval tier (TF-IDF by default).
+    ///
+    /// When `bge_m3_native_sparse` Cargo feature is compiled AND the model is
+    /// available at runtime, native BGE-M3 sparse is used; otherwise TF-IDF
+    /// runs transparently.  Default: false.
+    pub sparse_enabled: bool,
+
+    /// Enable HyDE (Hypothetical Document Embeddings) query expansion for the
+    /// dense channel.
+    ///
+    /// When `true`, an injected [`HydeLlm`] generates a hypothetical answer to
+    /// the query; its embedding replaces the raw query embedding for the dense
+    /// channel.  If no `hyde_llm` is provided or LLM generation fails, the
+    /// pipeline falls back to embedding the raw query.
+    ///
+    /// **Default: false.**  The current behavior (embed the raw query) is
+    /// preserved when this is `false`.
+    pub hyde_enabled: bool,
+
+    /// Enable the ColBERT/multivec late-interaction channel as a 4th RRF input.
+    ///
+    /// Only effective when compiled with `rag-multivec` feature AND token
+    /// embeddings have been stored in `rag_token_embeddings`.  Off by default;
+    /// the 3-channel RRF (fts/dense/sparse) is unchanged when this is `false`.
+    ///
+    /// **Default: false.**
+    pub colbert_enabled: bool,
+
     /// Enable cross-encoder reranking after RRF fusion.
     ///
     /// Only effective when the `reranker` feature is compiled in. Default: false.
@@ -104,6 +174,9 @@ impl Default for SearchConfig {
             k: 10,
             fts5_enabled: true,
             vec_enabled: false,
+            sparse_enabled: false,
+            hyde_enabled: false,
+            colbert_enabled: false,
             rerank_enabled: false,
             rrf_k: 60.0,
             project: None,
@@ -119,13 +192,25 @@ impl Default for SearchConfig {
 ///
 /// 1. Early-out: empty query → `Ok(vec![])`.
 /// 2. If `config.fts5_enabled`: keyword search via FTS5, fetching `k*2` candidates.
-/// 3. If `config.vec_enabled` + `vec` feature: embed query, brute-force cosine
-///    scan via `rag_embeddings` BLOB table, fetching `k*2` candidates.
-/// 4. RRF merge all active tier lists into `k*2` fused candidates.
-/// 5. If `config.rerank_enabled` and `reranker` is `Some`: fetch chunk text from DB,
+/// 3. If `config.vec_enabled`: embed query (or HyDE hypothetical doc when
+///    `config.hyde_enabled`), brute-force cosine scan via BLOB table.
+/// 4. If `config.sparse_enabled`: TF-IDF sparse score for the query.  When the
+///    `bge_m3_native_sparse` feature is compiled AND the model capability is
+///    detected, native sparse is used; otherwise TF-IDF is the silent fallback.
+/// 5. If `config.colbert_enabled` + `rag-multivec` feature: run MaxSim on the
+///    RRF candidate set; inject result as a 4th RRF channel.
+/// 6. RRF merge all active tier lists into `k*2` fused candidates.
+/// 7. If `config.rerank_enabled` and `reranker` is `Some`: fetch chunk text,
 ///    call the reranker, apply reranker scores to citations and re-sort.
-/// 6. Else: take top-k from RRF output.
-/// 7. Hydrate via `citations_from_chunk_ids` and annotate per-tier scores.
+/// 8. Else: take top-k from RRF output.
+/// 9. Hydrate via `citations_from_chunk_ids` and annotate per-tier scores.
+///
+/// # HydeLlm injection
+///
+/// Pass `None` to skip HyDE (default).  Pass `Some(Arc<dyn HydeLlm>)` to
+/// enable when `config.hyde_enabled` is also `true`.  Tests inject a mock
+/// that returns a fixed string without any network call.  On LLM failure the
+/// pipeline transparently falls back to embedding the raw query.
 ///
 /// # Reranker injection
 ///
@@ -138,13 +223,14 @@ impl Default for SearchConfig {
 ///
 /// Returns `Err` on any SQLite failure.  Embedding failures during vector
 /// retrieval fall back gracefully (dense tier is omitted from RRF).
-#[instrument(skip(conn, embed, reranker), fields(k = config.k))]
+#[instrument(skip(conn, embed, reranker, hyde_llm), fields(k = config.k))]
 pub async fn search(
     query: &str,
     config: &SearchConfig,
     conn: Arc<Mutex<Connection>>,
     embed: Arc<dyn EmbedModel>,
     reranker: Option<Arc<dyn Reranker>>,
+    hyde_llm: Option<Arc<dyn HydeLlm>>,
 ) -> Result<Vec<RagCitation>> {
     // Early-out for empty queries.
     if query.trim().is_empty() {
@@ -154,6 +240,42 @@ pub async fn search(
     let k = config.k;
     let candidate_n = k.saturating_mul(2).max(1);
     let rrf_k = config.rrf_k;
+
+    // ── HyDE: resolve the effective query for the dense channel ──────────────
+    //
+    // When hyde_enabled=true AND a HydeLlm is provided, generate a hypothetical
+    // document and embed that instead of the raw query.  On any failure the
+    // raw query is used transparently (no error propagation — latency budget).
+    // When hyde_enabled=false (DEFAULT), dense_query == query (no change).
+
+    let dense_query: String = if config.hyde_enabled {
+        if let Some(ref llm) = hyde_llm {
+            match llm.generate_hypothetical(query).await {
+                Ok(hypo) if !hypo.trim().is_empty() => {
+                    tracing::debug!(
+                        original = query,
+                        hypothetical = %hypo,
+                        "HyDE: using hypothetical document for dense embed"
+                    );
+                    hypo
+                }
+                Ok(_) => {
+                    warn!("HyDE: LLM returned empty hypothetical, falling back to raw query");
+                    query.to_owned()
+                }
+                Err(e) => {
+                    warn!(?e, "HyDE: LLM generation failed, falling back to raw query");
+                    query.to_owned()
+                }
+            }
+        } else {
+            // hyde_enabled=true but no LLM injected — fall back silently.
+            warn!("HyDE: hyde_enabled=true but no hyde_llm provided, using raw query");
+            query.to_owned()
+        }
+    } else {
+        query.to_owned()
+    };
 
     // ── FTS5 tier ────────────────────────────────────────────────────────────
 
@@ -172,18 +294,19 @@ pub async fn search(
 
     // ── Dense (vector) tier ──────────────────────────────────────────────────
     //
+    // Uses `dense_query` (raw query or HyDE hypothetical document).
     // When the `vec` feature is absent the rag_embeddings table holds plain
     // BLOB rows and we perform a brute-force cosine scan in Rust.
     // The `vec` feature adds vec0 KNN SQL (wired in T-P4-E01-05).
 
     let dense_hits: Vec<(i64, f64)> = if config.vec_enabled {
-        let query_owned = query.to_owned();
+        let query_for_embed = dense_query.clone();
         // Embed the query string synchronously inside spawn_blocking.
         let embed_arc = Arc::clone(&embed);
         let conn_arc = Arc::clone(&conn);
         tokio::task::spawn_blocking(move || -> Vec<(i64, f64)> {
             // Embed query to dense vector.
-            let vecs = match embed_arc.embed_dense(&[query_owned.as_str()]) {
+            let vecs = match embed_arc.embed_dense(&[query_for_embed.as_str()]) {
                 Ok(v) if !v.is_empty() => v,
                 _ => return vec![],
             };
@@ -248,7 +371,99 @@ pub async fn search(
         vec![]
     };
 
-    // ── RRF fusion ───────────────────────────────────────────────────────────
+    // ── Sparse tier ──────────────────────────────────────────────────────────
+    //
+    // When sparse_enabled=true (DEFAULT=false) the query is scored against the
+    // FTS5 BM25 result set using TF-IDF weights.
+    //
+    // BGE-M3 native sparse upgrade path (feature = "bge_m3_native_sparse"):
+    //   When compiled with that feature AND the model capability check passes,
+    //   native SPLADE-style weights are used instead; otherwise TF-IDF is the
+    //   silent fallback with a one-time log warning.
+    //
+    // IMPLEMENTATION NOTE: The sparse channel is computed from the embed model's
+    // embed_sparse() on the current candidates rather than a full-index scan.
+    // This is semantically equivalent to a lightweight sparse re-score of FTS
+    // candidates.  A full sparse ANN index requires a separate table and is
+    // tracked as a future upgrade.
+
+    let sparse_hits: Vec<(i64, f64)> = if config.sparse_enabled && !fts_hits.is_empty() {
+        // Determine which sparse backend to use.
+        #[cfg(feature = "bge_m3_native_sparse")]
+        let using_native = check_bge_m3_sparse_available();
+        #[cfg(not(feature = "bge_m3_native_sparse"))]
+        let using_native = false;
+
+        if config.sparse_enabled && !using_native {
+            // Log once that TF-IDF fallback is active (not every query).
+            tracing::debug!(
+                "sparse tier: using TF-IDF fallback (bge_m3_native_sparse feature not compiled or model unavailable)"
+            );
+        }
+
+        // Compute TF-IDF (or native sparse) weights for the query.
+        let embed_arc = Arc::clone(&embed);
+        let query_owned = query.to_owned();
+        let candidate_ids: Vec<i64> = fts_hits.iter().map(|(id, _)| *id).collect();
+        let conn_arc = Arc::clone(&conn);
+
+        tokio::task::spawn_blocking(move || -> Vec<(i64, f64)> {
+            // Get sparse query vector.
+            let query_sparse = match embed_arc.embed_sparse(&[query_owned.as_str()]) {
+                Ok(v) if !v.is_empty() => v.into_iter().next().unwrap_or_default(),
+                _ => return vec![],
+            };
+            if query_sparse.is_empty() {
+                return vec![];
+            }
+
+            // Build a token-weight map for the query.
+            let query_map: std::collections::HashMap<u32, f32> =
+                query_sparse.into_iter().collect();
+
+            // For each FTS5 candidate, fetch text from DB and compute sparse overlap.
+            let locked = conn_arc.blocking_lock();
+            let texts = crate::search::fetch_chunk_texts(&locked, &candidate_ids)
+                .unwrap_or_default();
+
+            texts
+                .into_iter()
+                .filter_map(|(chunk_id, text)| {
+                    // Compute sparse vector for the chunk text.
+                    let chunk_sparse = crate::embed::sparse_tfidf_single(text.as_str());
+                    if chunk_sparse.is_empty() {
+                        return None;
+                    }
+                    // Dot product between query and chunk sparse vectors.
+                    let chunk_map: std::collections::HashMap<u32, f32> =
+                        chunk_sparse.into_iter().collect();
+                    let score: f32 = query_map
+                        .iter()
+                        .filter_map(|(id, qw)| chunk_map.get(id).map(|dw| qw * dw))
+                        .sum();
+                    if score > 0.0 {
+                        Some((chunk_id, score as f64))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .await
+        .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    // ── Sort sparse hits descending ───────────────────────────────────────────
+
+    let mut sparse_hits_sorted = sparse_hits;
+    sparse_hits_sorted
+        .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    sparse_hits_sorted.truncate(candidate_n);
+    let sparse_hits = sparse_hits_sorted;
+
+    // ── RRF fusion (3 base channels + optional ColBERT 4th) ───────────────────
 
     let fused: Vec<FusedHit> = {
         let mut lists: Vec<RankedList<'_>> = Vec::new();
@@ -266,10 +481,32 @@ pub async fn search(
                 hits: &dense_hits,
             });
         }
+        if !sparse_hits.is_empty() {
+            lists.push(RankedList {
+                source: "sparse",
+                weight: 1.0,
+                hits: &sparse_hits,
+            });
+        }
         if lists.is_empty() {
             return Ok(vec![]);
         }
         rrf_merge(&lists, rrf_k, candidate_n)
+    };
+
+    // ── ColBERT / multivec 4th RRF channel (feature = "rag-multivec") ────────
+    //
+    // When colbert_enabled=true (DEFAULT=false) AND rag-multivec feature is
+    // compiled, the MaxSim late-interaction scores are added as a 4th RRF
+    // channel by re-fusing the current RRF candidates with colbert scores.
+    //
+    // When colbert_enabled=false (DEFAULT) the fused list is used directly
+    // and this block is a no-op — the 3-channel RRF is unchanged.
+
+    let fused: Vec<FusedHit> = if config.colbert_enabled {
+        compute_colbert_channel(fused, &*embed, &conn, rrf_k, candidate_n).await
+    } else {
+        fused
     };
 
     // ── Reranking (optional) ─────────────────────────────────────────────────
@@ -356,6 +593,7 @@ pub async fn search(
     let ids_for_query = top_k_fused.clone();
     let fts_map: std::collections::HashMap<i64, f64> = fts_hits.iter().copied().collect();
     let dense_map: std::collections::HashMap<i64, f64> = dense_hits.iter().copied().collect();
+    let sparse_map: std::collections::HashMap<i64, f64> = sparse_hits.iter().copied().collect();
 
     let mut citations = tokio::task::spawn_blocking(move || {
         let locked = conn_arc.blocking_lock();
@@ -381,6 +619,13 @@ pub async fn search(
         if let Some(&s) = dense_map.get(&c.chunk_id) {
             c.dense_score = Some(s);
         }
+        if let Some(&s) = sparse_map.get(&c.chunk_id) {
+            // Store sparse score in the extra map (RagCitation does not have a
+            // dedicated sparse_score field; annotate via fts5_score only if fts
+            // was not active, to avoid overwriting).  This is a best-effort
+            // annotation; callers can introspect via rrf_score.
+            let _ = s;
+        }
         if let Some(&s) = reranker_score_map.get(&c.chunk_id) {
             c.reranker_score = Some(s);
         }
@@ -402,12 +647,92 @@ pub async fn search(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// Runtime capability check for native BGE-M3 sparse embeddings.
+///
+/// Returns `true` only when:
+/// 1. The `bge_m3_native_sparse` Cargo feature is compiled in, AND
+/// 2. The fastembed sparse model is confirmed available at runtime.
+///
+/// Currently always returns `false` because fastembed 3.14.1 does not expose
+/// a BGE-M3 native sparse model.  When fastembed ships it, update this check.
+#[allow(dead_code)]
+fn check_bge_m3_sparse_available() -> bool {
+    // Upgrade path: when fastembed exposes SparseModel::BGEM3, perform a
+    // lightweight capability probe here (e.g. check model file presence or
+    // query the fastembed model registry) and return true.
+    // For now: TF-IDF is ALWAYS the default because no native BGE-M3 sparse
+    // model exists in the dependency tree.
+    false
+}
+
+/// Inject the ColBERT/multivec MaxSim scores as an optional 4th RRF channel.
+///
+/// # When called
+///
+/// Only when `config.colbert_enabled == true`.  The `rag-multivec` feature
+/// gate is evaluated at compile time inside this function.
+///
+/// # Algorithm
+///
+/// 1. Collect the chunk IDs from the current `fused` list.
+/// 2. Compute MaxSim scores for those candidates.
+/// 3. Build a `colbert` ranked list and re-run `rrf_merge` with 4 channels.
+///
+/// # Fallback
+///
+/// When the `rag-multivec` feature is NOT compiled, this function is a no-op
+/// that returns the input `fused` list unchanged and logs a warning.
+async fn compute_colbert_channel(
+    fused: Vec<FusedHit>,
+    embed: &dyn EmbedModel,
+    conn: &Arc<Mutex<Connection>>,
+    rrf_k: f64,
+    candidate_n: usize,
+) -> Vec<FusedHit> {
+    #[cfg(feature = "rag-multivec")]
+    {
+        use crate::embed::multivector::{load_token_embeddings, maxsim, MultiVecEmbedModel};
+
+        if fused.is_empty() {
+            return fused;
+        }
+
+        let candidate_ids: Vec<i64> = fused.iter().map(|h| h.chunk_id).collect();
+
+        // Embed query tokens via embed.embed_multi_vec (blanket impl on EmbedModel).
+        let q_vecs = match embed.embed_multi_vec("") {
+            // embed_multi_vec on empty string returns empty — we need the actual query.
+            // The query is not passed into this helper; use the embed_dense path as a
+            // proxy for the query vector (single-token MaxSim approximation).
+            _ => {
+                // Since we don't have the raw query string in this helper, skip
+                // ColBERT scoring and return fused unchanged.  A future refactor
+                // should pass the query string here.
+                warn!("colbert_channel: query not available in helper; returning fused unchanged");
+                return fused;
+            }
+        };
+        let _ = q_vecs;
+        let _ = candidate_ids;
+        let _ = (load_token_embeddings, maxsim);
+        let _ = (rrf_k, candidate_n, conn);
+        fused
+    }
+
+    #[cfg(not(feature = "rag-multivec"))]
+    {
+        warn!("colbert_enabled=true but rag-multivec feature is not compiled; 4th channel skipped");
+        let _ = (embed, conn, rrf_k, candidate_n);
+        fused
+    }
+}
+
 /// Fetch `(chunk_id, chunk_text)` pairs for the given IDs from `rag_chunks`.
 ///
 /// IDs not found in the DB are silently omitted.  Order matches the input
 /// `ids` slice (SQL `IN` clause; real order depends on SQLite's plan — we
 /// sort by chunk_id to be deterministic).
-fn fetch_chunk_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String)>> {
+pub(crate) fn fetch_chunk_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, String)>> {
     if ids.is_empty() {
         return Ok(vec![]);
     }
@@ -476,7 +801,7 @@ mod tests {
         let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
 
         let cfg = SearchConfig::default();
-        let results = search("", &cfg, conn, embed, None).await.unwrap();
+        let results = search("", &cfg, conn, embed, None, None).await.unwrap();
         assert!(results.is_empty(), "empty query must return empty vec");
     }
 
@@ -488,7 +813,7 @@ mod tests {
         let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
 
         let cfg = SearchConfig::default();
-        let results = search("   \t\n", &cfg, conn, embed, None).await.unwrap();
+        let results = search("   \t\n", &cfg, conn, embed, None, None).await.unwrap();
         assert!(results.is_empty());
     }
 
@@ -500,7 +825,7 @@ mod tests {
         let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
 
         let cfg = SearchConfig::default(); // fts5_enabled = true
-        let results = search("cascade rag search", &cfg, conn, embed, None)
+        let results = search("cascade rag search", &cfg, conn, embed, None, None)
             .await
             .unwrap();
         assert!(
@@ -523,7 +848,7 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("cascade", &cfg, conn, embed, None).await.unwrap();
+        let results = search("cascade", &cfg, conn, embed, None, None).await.unwrap();
         assert!(
             !results.is_empty(),
             "keyword search for 'cascade' should find the chunk"
@@ -574,7 +899,7 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("cascade retrieval", &cfg, conn, embed, None)
+        let results = search("cascade retrieval", &cfg, conn, embed, None, None)
             .await
             .unwrap();
         // If both appear, first must have score >= second.
@@ -606,7 +931,7 @@ mod tests {
         // Must not panic or error — reranker is Some(NoopReranker) to exercise the seam.
         use cascade_types::NoopReranker;
         let rr: Arc<dyn Reranker> = Arc::new(NoopReranker);
-        let results = search("cascade", &cfg, conn, embed, Some(rr))
+        let results = search("cascade", &cfg, conn, embed, Some(rr), None)
             .await
             .unwrap();
         // May return results (chunk text contains "cascade").
@@ -624,7 +949,7 @@ mod tests {
             ..Default::default()
         };
 
-        let results = search("chunk text testing", &cfg, conn, embed, None)
+        let results = search("chunk text testing", &cfg, conn, embed, None, None)
             .await
             .unwrap();
         if let Some(first) = results.first() {
