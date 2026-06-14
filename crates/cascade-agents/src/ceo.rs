@@ -5,20 +5,24 @@
 //!   values, coordinate via the `AgentExecutor`, collect `ApprovalRequest` events,
 //!   and produce a `FounderReport`. Persists orchestration state to
 //!   `<ai-folder>/agents/sessions/<id>/` so sessions are resumable.
+//!
 //! Inputs:
 //!   - `FounderDirective` — free-text goal + optional constraints
 //!   - `Planner` impl — decomposes a directive into an ordered plan
 //!   - `AgentRegistry` — resolves specs for child roles
 //!   - `AgentExecutor` — executes child tasks
+//!
 //! Outputs:
 //!   - `FounderReport` — session id + summary + per-subtask outcomes + pending approvals
 //!   - Persisted session files under `<session_dir>/`
+//!
 //! Constraints:
 //!   - NEVER auto-execute Outbound actions — all park as `ApprovalRequest` and
 //!     surface via `pending_approvals()`.
 //!   - `Planner` is injectable; tests use `MockPlanner` (deterministic, no LLM).
 //!   - State is persisted as JSON; sessions are resumable via `CeoOrchestrator::resume`.
 //!   - Conversational: `send_followup()` continues the session with new context.
+//!
 //! SPORT: cascade-agents / ceo — E-P6-04
 
 use std::collections::HashMap;
@@ -180,6 +184,15 @@ impl SessionState {
     }
 }
 
+// ── Internal type aliases ─────────────────────────────────────────────────────
+
+/// Join handle carrying a single executor result; used in parallel sub-goal waves.
+type SubGoalHandle =
+    tokio::task::JoinHandle<Result<AgentTask, crate::executor::ExecutorError>>;
+
+/// One entry in the pending parallel wave: (goal, role, task_id, join handle).
+type WaveEntry = (String, AgentRole, String, SubGoalHandle);
+
 // ── CeoError ─────────────────────────────────────────────────────────────────
 
 /// Errors produced by `CeoOrchestrator`.
@@ -310,48 +323,104 @@ impl CeoOrchestrator {
             "CEO: plan produced"
         );
 
-        // Spawn child tasks for each sub-goal
+        // Spawn child tasks for each sub-goal.
+        //
+        // Sub-goals are partitioned into sequential "waves": consecutive sub-goals
+        // with `parallel: true` form a wave and run concurrently via a `JoinSet`;
+        // a sub-goal with `parallel: false` (or the end of a parallel run) flushes
+        // any open wave first and then runs sequentially.
+        //
+        // This preserves the intent of the planner's ordering while delivering
+        // true concurrency for parallel-flagged sub-goals.
         let mut outcomes: Vec<SubTaskOutcome> = vec![];
+
+        // Pending parallel wave: each entry is (goal, role, task_id, JoinHandle).
+        // We flush (join_all) when we hit a sequential goal or the end of the list.
+        let mut parallel_wave: Vec<WaveEntry> = vec![];
+
+        let flush_wave = |wave: Vec<WaveEntry>| async move {
+                let mut wave_outcomes: Vec<SubTaskOutcome> = Vec::with_capacity(wave.len());
+                for (goal, role, task_id, handle) in wave {
+                    let result = match handle.await {
+                        Ok(inner) => inner,
+                        Err(e) => Err(crate::executor::ExecutorError::SpawnFailed(e.to_string())),
+                    };
+                    let (status, error, parked) = match result {
+                        Ok(finished_task) => {
+                            if finished_task.status == TaskStatus::Pending {
+                                warn!(task_id = %task_id, "CEO: task parked for approval");
+                                (TaskStatus::Pending, None, true)
+                            } else {
+                                (finished_task.status, None, false)
+                            }
+                        }
+                        Err(e) => (TaskStatus::Failed, Some(e.to_string()), false),
+                    };
+                    wave_outcomes.push(SubTaskOutcome {
+                        task_id,
+                        goal,
+                        role,
+                        status,
+                        error,
+                        parked_for_approval: parked,
+                    });
+                }
+                wave_outcomes
+            };
+
         for sub_goal in &plan.sub_goals {
             let spec = self.resolve_spec(sub_goal.role)?;
             let task = AgentTask::new_root(sub_goal.goal.clone(), sub_goal.role);
             let task_id = task.id.clone();
 
-            // Register in session state
+            // Register task in session state before launching.
             {
                 let mut state = self.state.lock().unwrap();
                 state.tasks.push(task.clone());
                 state.updated_at = Utc::now();
             }
 
-            // Run via executor
-            let result = self.executor.run_task(spec, task).await;
-
-            let (status, error, parked) = match result {
-                Ok(finished_task) => {
-                    // Collect any approval requests from the executor's store
-                    // (task may have been parked for approval)
-                    if finished_task.status == TaskStatus::Pending {
-                        warn!(
-                            task_id = %task_id,
-                            "CEO: task parked for approval"
-                        );
-                        (TaskStatus::Pending, None, true)
-                    } else {
-                        (finished_task.status, None, false)
-                    }
+            if sub_goal.parallel {
+                // Accumulate into the current parallel wave.
+                let executor = Arc::clone(&self.executor);
+                let handle = tokio::spawn(async move { executor.run_task(spec, task).await });
+                parallel_wave.push((sub_goal.goal.clone(), sub_goal.role, task_id, handle));
+            } else {
+                // Flush any open parallel wave first.
+                if !parallel_wave.is_empty() {
+                    let wave = std::mem::take(&mut parallel_wave);
+                    let mut wave_outcomes = flush_wave(wave).await;
+                    outcomes.append(&mut wave_outcomes);
                 }
-                Err(e) => (TaskStatus::Failed, Some(e.to_string()), false),
-            };
+                // Run this sub-goal sequentially.
+                let result = self.executor.run_task(spec, task).await;
+                let (status, error, parked) = match result {
+                    Ok(finished_task) => {
+                        if finished_task.status == TaskStatus::Pending {
+                            warn!(task_id = %task_id, "CEO: task parked for approval");
+                            (TaskStatus::Pending, None, true)
+                        } else {
+                            (finished_task.status, None, false)
+                        }
+                    }
+                    Err(e) => (TaskStatus::Failed, Some(e.to_string()), false),
+                };
+                outcomes.push(SubTaskOutcome {
+                    task_id,
+                    goal: sub_goal.goal.clone(),
+                    role: sub_goal.role,
+                    status,
+                    error,
+                    parked_for_approval: parked,
+                });
+            }
+        }
 
-            outcomes.push(SubTaskOutcome {
-                task_id: task_id.clone(),
-                goal: sub_goal.goal.clone(),
-                role: sub_goal.role,
-                status,
-                error,
-                parked_for_approval: parked,
-            });
+        // Flush any trailing parallel wave.
+        if !parallel_wave.is_empty() {
+            let wave = std::mem::take(&mut parallel_wave);
+            let mut wave_outcomes = flush_wave(wave).await;
+            outcomes.append(&mut wave_outcomes);
         }
 
         // Collect pending approvals from the executor store

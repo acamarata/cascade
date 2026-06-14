@@ -14,7 +14,6 @@
 //! - These functions are pure filesystem operations: they never shell out.
 
 use cascade_types::error::{CascadeError, Result};
-use chrono::Utc;
 
 use super::{
     schema::{EpicStatus, PhaseStatus, SprintStatus, StepStatus, TicketStatus, WaveStatus},

@@ -123,22 +123,20 @@ impl CursorAdapter {
             None => return vec![],
         };
 
-        let mut candidates = Vec::new();
+        // Linux / cross-platform path
+        let mut candidates = vec![home
+            .join(".config")
+            .join("Cursor")
+            .join("User")
+            .join("globalStorage")
+            .join("storage.json")];
 
-        // macOS primary path
+        // macOS primary path (inserted at front so it takes priority)
         #[cfg(target_os = "macos")]
-        candidates.push(
+        candidates.insert(
+            0,
             home.join("Library")
                 .join("Application Support")
-                .join("Cursor")
-                .join("User")
-                .join("globalStorage")
-                .join("storage.json"),
-        );
-
-        // Linux / cross-platform path
-        candidates.push(
-            home.join(".config")
                 .join("Cursor")
                 .join("User")
                 .join("globalStorage")

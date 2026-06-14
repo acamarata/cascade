@@ -279,6 +279,7 @@ mod tests {
     fn mock_resolved() -> ResolvedCascade {
         ResolvedCascade {
             merged_instructions: "## Test Instructions\n\nAlways use Cascade.".into(),
+            on_demand_rules: vec![],
             mcp_server_url: "unix://~/.cascade/cascade.sock".into(),
             tiers_found: vec![
                 TierResult {

@@ -388,7 +388,7 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
             }
         }
         // Walk epics
-        let epic_dirs = match fs::read_dir(&entry.path()) {
+        let epic_dirs = match fs::read_dir(entry.path()) {
             Ok(d) => d,
             Err(_) => continue,
         };
@@ -407,7 +407,7 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
                 }
             }
             // Walk waves
-            let wave_dirs = match fs::read_dir(&epic_entry.path()) {
+            let wave_dirs = match fs::read_dir(epic_entry.path()) {
                 Ok(d) => d,
                 Err(_) => continue,
             };
@@ -426,7 +426,7 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
                     }
                 }
                 // Walk sprints
-                let sprint_dirs = match fs::read_dir(&wave_entry.path()) {
+                let sprint_dirs = match fs::read_dir(wave_entry.path()) {
                     Ok(d) => d,
                     Err(_) => continue,
                 };
@@ -445,7 +445,7 @@ fn check_status_values(store: &PbdStore, result: &mut ValidationResult) {
                         }
                     }
                     // Walk ticket dirs
-                    let ticket_dirs = match fs::read_dir(&sprint_entry.path()) {
+                    let ticket_dirs = match fs::read_dir(sprint_entry.path()) {
                         Ok(d) => d,
                         Err(_) => continue,
                     };

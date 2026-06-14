@@ -3,15 +3,18 @@
 //! Purpose: Thin Tauri IPC command wrappers for the Cascade Kanban task store.
 //!   Delegates all logic to the daemon's JSON-RPC task_* handlers via IpcClient.
 //!
-//! Inputs:  JSON params from the React frontend via Tauri invoke.
+//! Inputs: JSON params from the React frontend via Tauri invoke.
+//!
 //! Outputs: Result<serde_json::Value, String> (Tauri 2 IPC requirement).
+//!
 //! Constraints:
 //!   - Naming: snake_case here → camelCase on the JS side (Tauri auto-transform).
 //!   - All params / results use cascade_types::task wire types (camelCase serde).
 //!   - State is not used; IpcClient is instantiated per-call via make_client().
 //!   - Every command uses `send::<Value, Value>` to pass params verbatim to the daemon.
+//!
 //! SPORT: MASTER-COMMANDS.md — task_create, task_get, task_list, task_update,
-//!        task_delete, task_move (E-P8-02)
+//!     task_delete, task_move (E-P8-02)
 
 use serde_json::Value;
 use tauri::State;

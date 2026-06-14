@@ -444,11 +444,8 @@ fn bge_m3_sparse_capability_check_returns_false() {
         // Feature compiled in but model still not available → TF-IDF fallback.
         // The feature is an upgrade gate, not a guarantee of model availability.
     }
-    // If we reach here, the check is verified behaviorally.
-    assert!(
-        true,
-        "TF-IDF is always the default; no model download required for sparse=on"
-    );
+    // VERIFIED: TF-IDF is always the default; no model download required for sparse=on.
+    // Reaching this point without hanging confirms the behavioral check.
 }
 
 // ── 4. ColBERT / multivec 4th channel ────────────────────────────────────────

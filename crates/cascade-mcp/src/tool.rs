@@ -55,6 +55,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 use tracing::debug;
 
 use cascade_core::cascade_resolution::resolve_cascade_full;
@@ -63,10 +64,19 @@ use cascade_core::pbd::schema::{PbdEvent, TicketStatus};
 use cascade_core::pbd::store::{resolve_phases_root, PbdStore};
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::error::Result;
+use cascade_types::retriever::{RetrieveOpts, Retriever};
 
 use crate::auth::McpAuth;
 use crate::paths as mcp_paths;
 use crate::server::JsonRpcError;
+
+/// Shared interior-mutable slot holding an optional live [`Retriever`].
+///
+/// The slot is `None` until a background task opens the index and injects a
+/// real retriever.  Search handlers read-lock, clone the `Option` out, then
+/// drop the guard *before* any `.await` — the guard is never held across an
+/// await point.
+pub type RetrieverSlot = Arc<RwLock<Option<Arc<dyn Retriever>>>>;
 
 // ── Tool definition types ─────────────────────────────────────────────────────
 
@@ -95,24 +105,77 @@ pub struct ConnectionContext {
 
 /// Handles `tools/list` and `tools/call` for the MCP server.
 ///
-/// Holds an optional [`McpAuth`] reference used to gate `cascade.memory.write`.
+/// Holds an optional [`McpAuth`] reference used to gate `cascade.memory.write`
+/// and a shared [`RetrieverSlot`] for the `cascade.search` live RAG pipeline.
+///
+/// ## Retriever injection
+///
+/// The slot starts empty (`None`).  Call [`ToolRegistry::with_retriever`] to
+/// fill it synchronously at construction time (tests), or call
+/// [`ToolRegistry::retriever_slot`] to get a clonable handle that a background
+/// task can write into after the server is already serving `initialize`.
+/// When the slot is `None`, `cascade.search` returns a graceful "index not
+/// ready" message rather than real hits.
 pub struct ToolRegistry {
-    /// Stored for future use when the real cascade-rag backend is wired in.
-    /// Currently the auth gate is enforced via `ConnectionContext` in
-    /// `call_with_context` without consulting this field directly.
+    /// Auth backend for the `cascade.memory.write` gate.
     #[allow(dead_code)]
     auth: Option<Arc<McpAuth>>,
+    /// Shared slot for the live RAG retriever.  `None` = index not yet ready.
+    retriever: RetrieverSlot,
 }
 
 impl ToolRegistry {
-    /// Create a registry without an auth backend (memory.write always rejected).
+    /// Create a registry without an auth backend or retriever.
+    ///
+    /// `cascade.memory.write` calls are always rejected; `cascade.search`
+    /// returns an "index not ready" message until a retriever is injected.
     pub fn new() -> Self {
-        Self { auth: None }
+        Self {
+            auth: None,
+            retriever: Arc::new(RwLock::new(None)),
+        }
     }
 
     /// Create a registry with an [`McpAuth`] backend for the memory.write gate.
     pub fn with_auth(auth: Arc<McpAuth>) -> Self {
-        Self { auth: Some(auth) }
+        Self {
+            auth: Some(auth),
+            retriever: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Synchronously fill the retriever slot so that `cascade.search` returns
+    /// real hits.
+    ///
+    /// Intended for construction-time injection (tests, daemon).  For
+    /// post-construction background injection use [`ToolRegistry::retriever_slot`].
+    ///
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use cascade_mcp::tool::ToolRegistry;
+    /// # use cascade_types::retriever::NoopRetriever;
+    /// let registry = ToolRegistry::new().with_retriever(Arc::new(NoopRetriever));
+    /// ```
+    pub fn with_retriever(self, retriever: Arc<dyn Retriever>) -> Self {
+        // `try_write` on a freshly created, uncontested lock always succeeds.
+        if let Ok(mut slot) = self.retriever.try_write() {
+            *slot = Some(retriever);
+        }
+        self
+    }
+
+    /// Return a clone of the shared [`RetrieverSlot`] so that a background
+    /// task can inject a retriever after the server is already running.
+    ///
+    /// The background task should:
+    /// 1. Open the index (async I/O).
+    /// 2. Acquire a write-lock on the slot.
+    /// 3. Store `Some(Arc::new(retriever))`.
+    /// 4. Drop the write-lock.
+    ///
+    /// Subsequent `cascade.search` calls will then return real hits.
+    pub fn retriever_slot(&self) -> RetrieverSlot {
+        Arc::clone(&self.retriever)
     }
 
     /// Handle `tools/list` — enumerate all available tools with their schemas.
@@ -178,10 +241,22 @@ impl ToolRegistry {
 
         debug!(tool = name, authenticated = ctx.authenticated, "tools/call");
 
+        // Snapshot the retriever slot: acquire the read-lock, clone the Option
+        // out, then drop the guard BEFORE any .await so we never hold a lock
+        // across an await point.
+        let retriever_snapshot: Option<Arc<dyn Retriever>> = {
+            let guard = self.retriever.read().await;
+            guard.clone()
+        };
+
         match name {
             "cascade.read" => tool_result(handle_read(&args).await),
-            "cascade.search" => tool_result(handle_search(&args).await),
-            "cascade.search_codebase" => tool_result(handle_search_codebase(&args).await),
+            "cascade.search" => {
+                tool_result(handle_search(&args, retriever_snapshot).await)
+            }
+            "cascade.search_codebase" => {
+                tool_result(handle_search_codebase(&args, retriever_snapshot).await)
+            }
             "cascade.inbox.list" => tool_result(handle_inbox_list(&args).await),
             "cascade.inbox.send" => tool_result(handle_inbox_send(&args).await),
             "cascade.master_lists" => tool_result(handle_master_lists(&args).await),
@@ -214,6 +289,17 @@ impl ToolRegistry {
 impl Default for ToolRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ── Search filter helper ──────────────────────────────────────────────────────
+
+/// Build [`RetrieveOpts`] from `cascade.search` args.
+fn build_retrieve_opts(limit: usize, tier_filter: Option<&str>) -> RetrieveOpts {
+    RetrieveOpts {
+        k: limit,
+        min_score: None,
+        tier_filter: tier_filter.map(str::to_owned),
     }
 }
 
@@ -537,9 +623,22 @@ async fn handle_read(args: &Value) -> std::result::Result<Value, JsonRpcError> {
 
 /// `cascade.search` — hybrid RAG query.
 ///
-/// Delegates to cascade-rag's retrieval pipeline. Returns results with
-/// citations (file_path, start_line, end_line, score, rank, strategy).
-async fn handle_search(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+/// Executes the live RRF retrieval pipeline when a [`Retriever`] is injected,
+/// returning ranked chunks with citations (file, start_line, end_line, score,
+/// rank, strategy).  Falls back to a graceful "index not ready" message when
+/// the retriever has not been wired in yet.
+///
+/// # Arguments (from JSON)
+/// - `query`    — natural-language search string (required)
+/// - `limit`    — max results, 1–20 (default 10)
+/// - `project`  — optional project name filter (metadata only; passed to opts)
+/// - `tier`     — optional cascade tier filter forwarded to [`RetrieveOpts`]
+/// - `strategy` — retrieval strategy label (informational; actual strategy is
+///   determined by the injected retriever's implementation)
+async fn handle_search(
+    args: &Value,
+    retriever: Option<Arc<dyn Retriever>>,
+) -> std::result::Result<Value, JsonRpcError> {
     let query = args
         .get("query")
         .and_then(|v| v.as_str())
@@ -559,25 +658,105 @@ async fn handle_search(args: &Value) -> std::result::Result<Value, JsonRpcError>
 
     debug!(query, limit, strategy, project = ?project_filter, "cascade.search");
 
-    // Stub: real impl calls cascade-rag's Retriever via Arc<dyn Retriever>
-    // injected into ToolRegistry at construction. For now return mock structure.
+    // Graceful degradation when the retriever is not yet wired in.
+    let ret = match retriever {
+        None => {
+            return Ok(serde_json::json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!(
+                        "cascade.search: index not ready (query={query:?}). \
+                         Run `cascade index rebuild` then restart the MCP server."
+                    )
+                }],
+                "citations": [],
+                "metadata": {
+                    "strategy": strategy,
+                    "limit": limit,
+                    "project": project_filter,
+                    "tier": tier_filter,
+                    "ready": false,
+                }
+            }));
+        }
+        Some(r) => r,
+    };
+
+    // Execute the live retrieval pipeline.
+    let opts = build_retrieve_opts(limit, tier_filter);
+    let hits = ret
+        .retrieve(query, &opts)
+        .await
+        .map_err(|e| JsonRpcError::internal(format!("retrieval failed: {e}")))?;
+
+    // Build citation objects and the human-readable text block.
+    let mut citations = Vec::with_capacity(hits.len());
+    let mut text_parts = Vec::with_capacity(hits.len());
+
+    for hit in &hits {
+        let file = hit
+            .file_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| hit.chunk_id.clone());
+        let start = hit.start_line.unwrap_or(0);
+        let end = hit.end_line.unwrap_or(0);
+
+        citations.push(serde_json::json!({
+            "chunk_id":   hit.chunk_id,
+            "file_path":  file,
+            "start_line": start,
+            "end_line":   end,
+            "score":      (hit.score * 1000.0).round() / 1000.0,
+            "rank":       hit.rank,
+            "tier":       hit.tier,
+        }));
+
+        text_parts.push(format!(
+            "<!-- {file}:{start}-{end} score:{:.3} rank:{} -->\n{}",
+            hit.score,
+            hit.rank,
+            hit.text.trim()
+        ));
+    }
+
+    let result_text = if hits.is_empty() {
+        format!("cascade.search: no results for {query:?}")
+    } else {
+        text_parts.join("\n\n")
+    };
+
     Ok(serde_json::json!({
-        "content": [{
-            "type": "text",
-            "text": format!("Search results for '{}' (strategy={}, limit={}): [index not ready — run `cascade index rebuild`]", query, strategy, limit)
-        }],
-        "citations": [],
+        "content": [{ "type": "text", "text": result_text }],
+        "citations": citations,
         "metadata": {
-            "strategy": strategy,
-            "limit": limit,
-            "project": project_filter,
-            "tier": tier_filter,
+            "strategy":      strategy,
+            "limit":         limit,
+            "hits_returned": hits.len(),
+            "project":       project_filter,
+            "tier":          tier_filter,
+            "ready":         true,
         }
     }))
 }
 
 /// `cascade.search_codebase` — code-aware search.
-async fn handle_search_codebase(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+///
+/// # Current status
+///
+/// The tree-sitter code index path (`code-chunker` feature) is not yet wired
+/// into a separate code [`Retriever`] at construction time.  Until a dedicated
+/// code index is available this handler falls back to the general-purpose
+/// retriever (same as `cascade.search`) when one is injected, and returns an
+/// "index not ready" message otherwise.
+///
+/// TODO(E11.1-followup): wire a `code_retriever: Option<Arc<dyn Retriever>>`
+/// field into `ToolRegistry` backed by a tree-sitter chunked index, and add a
+/// `lang` filter to `RetrieveOpts` so callers can constrain by language.
+async fn handle_search_codebase(
+    args: &Value,
+    retriever: Option<Arc<dyn Retriever>>,
+) -> std::result::Result<Value, JsonRpcError> {
     let query = args
         .get("query")
         .and_then(|v| v.as_str())
@@ -591,12 +770,66 @@ async fn handle_search_codebase(args: &Value) -> std::result::Result<Value, Json
 
     debug!(query, limit, lang = ?lang, "cascade.search_codebase");
 
+    // Use the general-purpose retriever as a best-effort fallback until a
+    // dedicated code index (tree-sitter chunker + code-aware embed path) is
+    // wired in.  When `lang` is set we include it as a note in the result.
+    let ret = match retriever {
+        None => {
+            return Ok(serde_json::json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!(
+                        "cascade.search_codebase: code index not ready \
+                         (query={query:?} lang={lang:?}). \
+                         Run `cascade index rebuild` then restart the MCP server."
+                    )
+                }],
+                "results": [],
+                "metadata": { "ready": false }
+            }));
+        }
+        Some(r) => r,
+    };
+
+    let opts = build_retrieve_opts(limit, None);
+    let hits = ret
+        .retrieve(query, &opts)
+        .await
+        .map_err(|e| JsonRpcError::internal(format!("code retrieval failed: {e}")))?;
+
+    let mut results = Vec::with_capacity(hits.len());
+    for hit in &hits {
+        let file = hit
+            .file_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| hit.chunk_id.clone());
+        results.push(serde_json::json!({
+            "chunk_id":   hit.chunk_id,
+            "file_path":  file,
+            "start_line": hit.start_line.unwrap_or(0),
+            "end_line":   hit.end_line.unwrap_or(0),
+            "score":      (hit.score * 1000.0).round() / 1000.0,
+            "rank":       hit.rank,
+            "text":       hit.text.trim(),
+            "lang":       lang,
+        }));
+    }
+
+    let text = if hits.is_empty() {
+        format!("cascade.search_codebase: no results for {query:?} (lang={lang:?})")
+    } else {
+        format!(
+            "cascade.search_codebase: {} result(s) for {query:?} (lang={lang:?}, \
+             note: using general-purpose index; dedicated code index pending E11.1-followup)",
+            hits.len()
+        )
+    };
+
     Ok(serde_json::json!({
-        "content": [{
-            "type": "text",
-            "text": format!("Code search for '{}' (lang={:?}, limit={}): [code index not ready]", query, lang, limit)
-        }],
-        "results": []
+        "content": [{ "type": "text", "text": text }],
+        "results": results,
+        "metadata": { "ready": true, "lang": lang }
     }))
 }
 
@@ -1491,7 +1724,7 @@ async fn handle_append_event(args: &Value) -> std::result::Result<Value, JsonRpc
     let event: PbdEvent = serde_json::from_value(event_val)
         .map_err(|e| JsonRpcError::invalid_params(format!("invalid event JSON: {e}")))?;
 
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let store = PbdStore::new(&root);
         store.init()?;
         store.append_event(&event)
@@ -1499,8 +1732,6 @@ async fn handle_append_event(args: &Value) -> std::result::Result<Value, JsonRpc
     .await
     .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
     .map_err(|e| JsonRpcError::internal(format!("append_event: {e}")))?;
-
-    let _ = result;
     Ok(serde_json::json!({
         "content": [{ "type": "text", "text": "event appended" }]
     }))
@@ -3548,5 +3779,119 @@ mod tests {
                 "PBD tool '{tool}' must be in tools/list; found: {names:?}"
             );
         }
+    }
+
+    // ── cascade.search live RAG integration ───────────────────────────────────
+
+    /// Build a tiny in-memory `RagIndex` with two fixture docs, wrap it in an
+    /// `RrfRetriever` (FTS-only mode — no embeddings required), inject it into
+    /// a `ToolRegistry`, and assert that `cascade.search` returns real hits.
+    ///
+    /// This is the primary integration test for the E11.1 search wiring.
+    #[tokio::test]
+    async fn search_live_rrf_returns_real_hits() {
+        use cascade_rag::index::RagIndex;
+        use cascade_rag::retrieve::rrf::{RrfConfig, RrfRetriever};
+        use cascade_types::NoopEmbeddingProvider;
+
+        // Build a temp-file index (RagIndex::open needs a real path; it uses
+        // SQLite WAL which doesn't work with ":memory:" across threads).
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let db_path = tmp.path().join("test.db");
+        let idx = Arc::new(RagIndex::open(&db_path).await.expect("RagIndex::open"));
+
+        // Ingest three fixture chunks.
+        idx.upsert_chunk("c1", None, Some(1), Some(5), "prayer times fajr dhuhr asr maghrib isha", None)
+            .await
+            .expect("upsert c1");
+        idx.upsert_chunk("c2", None, Some(10), Some(15), "hijri calendar month ramadan shawwal dhul-hijja", None)
+            .await
+            .expect("upsert c2");
+        idx.upsert_chunk("c3", None, Some(20), Some(25), "qibla direction great circle mecca bearing", None)
+            .await
+            .expect("upsert c3");
+
+        // FTS-only retriever (no embedding model required for the test).
+        let retriever: Arc<dyn Retriever> = Arc::new(RrfRetriever::new(
+            Arc::clone(&idx),
+            Arc::new(NoopEmbeddingProvider),
+            RrfConfig {
+                use_vec: false,
+                ..RrfConfig::default()
+            },
+        ));
+
+        let reg = ToolRegistry::new().with_retriever(Arc::clone(&retriever));
+
+        // Query for "prayer" — should hit c1.
+        let params = serde_json::json!({
+            "name": "cascade.search",
+            "arguments": { "query": "prayer fajr", "limit": 5 }
+        });
+        let result = reg.call(&params).await.expect("call must not protocol-error");
+
+        // Must not be an error result.
+        assert!(
+            result.get("isError").is_none() || result["isError"] == serde_json::Value::Bool(false),
+            "search must not return isError; got: {result}"
+        );
+
+        // Citations array must contain at least one entry.
+        let citations = result["citations"].as_array().expect("citations must be array");
+        assert!(
+            !citations.is_empty(),
+            "cascade.search must return at least one citation for 'prayer fajr'; got: {result}"
+        );
+
+        // chunk_id "c1" must appear in citations.
+        let ids: Vec<&str> = citations
+            .iter()
+            .filter_map(|c| c.get("chunk_id").and_then(|v| v.as_str()))
+            .collect();
+        assert!(
+            ids.contains(&"c1"),
+            "citation for c1 (prayer chunk) must be present; found: {ids:?}"
+        );
+
+        // metadata.ready must be true.
+        assert_eq!(
+            result["metadata"]["ready"],
+            serde_json::Value::Bool(true),
+            "metadata.ready must be true when retriever is wired"
+        );
+    }
+
+    /// When no retriever is injected, `cascade.search` returns gracefully with
+    /// `ready: false` rather than an error.
+    #[tokio::test]
+    async fn search_no_retriever_returns_not_ready() {
+        let reg = ToolRegistry::new(); // no retriever
+        let params = serde_json::json!({
+            "name": "cascade.search",
+            "arguments": { "query": "anything", "limit": 5 }
+        });
+        let result = reg.call(&params).await.expect("call must not protocol-error");
+
+        // Must not be is_error.
+        assert!(
+            result.get("isError").is_none() || result["isError"] == serde_json::Value::Bool(false),
+            "no-retriever search must not be is_error"
+        );
+
+        // ready flag must be false.
+        assert_eq!(
+            result["metadata"]["ready"],
+            serde_json::Value::Bool(false),
+            "metadata.ready must be false when no retriever is wired"
+        );
+
+        // Text must explain the situation.
+        let text = result["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            text.contains("index not ready"),
+            "response text must mention 'index not ready'; got: {text:?}"
+        );
     }
 }

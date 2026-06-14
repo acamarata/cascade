@@ -4,15 +4,19 @@
 //!   send requests, responses, handoffs, notifications, and approval
 //!   request/decisions to one another without coupling to the executor or
 //!   the project-level cascade inbox.
+//!
 //! Inputs: `AgentMessage` values produced by agents or the executor.
+//!
 //! Outputs: messages delivered in send-order per recipient; handoffs transfer
 //!   `AgentTask` ownership; approval decisions unblock parked executor steps.
+//!
 //! Constraints:
 //!   - Distinct from the filesystem-based project inbox (`cascade.inbox.*`).
 //!   - Thread-safe via `Arc<RwLock<_>>` for the queue store.
 //!   - Backpressure cap enforced per-recipient queue.
 //!   - `InboxStore` is injectable for durable persistence (in-memory default).
 //!   - Serde uses `camelCase` rename; all enum variants are struct-style.
+//!
 //! SPORT: cascade-agents / inbox — E-P6-05
 
 use std::collections::HashMap;

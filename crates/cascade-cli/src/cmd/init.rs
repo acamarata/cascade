@@ -174,14 +174,12 @@ impl Command for InitArgs {
         };
 
         // Ensure the base directory exists.
-        if !base.exists() {
-            if !self.dry_run {
-                std::fs::create_dir_all(&base).map_err(|e| CascadeError::Io {
-                    path: base.clone(),
-                    operation: "create base directory",
-                    source: e,
-                })?;
-            }
+        if !base.exists() && !self.dry_run {
+            std::fs::create_dir_all(&base).map_err(|e| CascadeError::Io {
+                path: base.clone(),
+                operation: "create base directory",
+                source: e,
+            })?;
         }
 
         // 2. Resolve the AI folder name.

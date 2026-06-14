@@ -50,7 +50,7 @@ pub use context::{
 };
 pub use executor::{
     AgentExecutor, AgentExecutorBuilder, ApprovalRequest, ChildTaskRequest, ExecutorError,
-    ProviderRouter, TaskStore, ToolInvoker,
+    ProviderRouter, TaskStore, ToolInvoker, SUBAGENT_CONTEXT_PREFIX,
 };
 pub use grants::{AccessLevel, GrantDecision, ToolGrant};
 pub use inbox::{
@@ -72,7 +72,8 @@ pub use automation::{
 
 // chain module re-exports
 pub use chain::{
-    builtin_research_summarize_draft, builtin_triage_branch_respond, ChainContext, ChainError,
-    ChainExecutor, ChainExecutorBuilder, ChainFlow, ChainResult, ChainStep, ChainStepTrace,
-    ChainValidationError, CHAIN_DEFAULT_MAX_DEPTH, CHAIN_DEFAULT_MAX_STEPS,
+    builtin_research_summarize_draft, builtin_triage_branch_respond, parallel_concurrency_cap,
+    ChainContext, ChainError, ChainExecutor, ChainExecutorBuilder, ChainFlow, ChainResult,
+    ChainStep, ChainStepTrace, ChainValidationError, CHAIN_DEFAULT_MAX_DEPTH,
+    CHAIN_DEFAULT_MAX_STEPS, PARALLEL_CAP_MAX,
 };

@@ -243,7 +243,7 @@ async fn run_status(args: &CeoStatusArgs) -> Result<()> {
         println!("{}", report.summary);
         if !report.sub_tasks.is_empty() {
             println!();
-            println!("{:<40} {:<12} {}", "Task", "Status", "Summary");
+            println!("{:<40} {:<12} Summary", "Task", "Status");
             println!("{}", "-".repeat(70));
             for t in &report.sub_tasks {
                 let summary = t.summary.as_deref().unwrap_or("—");
@@ -288,7 +288,7 @@ async fn run_approvals(args: &CeoApprovalsArgs) -> Result<()> {
     } else if approvals.is_empty() {
         println!("No actions pending approval.");
     } else {
-        println!("{:<36} {:<12} {}", "Task ID", "Access", "Description");
+        println!("{:<36} {:<12} Description", "Task ID", "Access");
         println!("{}", "-".repeat(70));
         for a in &approvals {
             println!("{:<36} {:<12} {}", a.task_id, a.access_level, a.description);

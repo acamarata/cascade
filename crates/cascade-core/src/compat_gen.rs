@@ -335,9 +335,11 @@ mod tests {
         ResolvedContext {
             instructions: "Always use snake_case.".to_string(),
             rules: vec![],
+            on_demand_rules: vec![],
             memory_paths: vec![],
             task_paths: vec![],
             tier_sources,
+            model_registry: cascade_types::model_registry::ModelRegistry::default(),
             resolved_at: "2026-06-02T00:00:00Z".to_string(),
         }
     }

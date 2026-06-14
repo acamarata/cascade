@@ -744,6 +744,7 @@ impl PbdStore {
         Ok(tickets)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn transition_ticket(
         &self,
         phase_id: &str,
@@ -776,6 +777,7 @@ impl PbdStore {
 
     // ── Step helpers ──────────────────────────────────────────────────────────
 
+    #[allow(clippy::too_many_arguments)]
     pub fn transition_step(
         &self,
         phase_id: &str,

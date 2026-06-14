@@ -3,12 +3,16 @@
 //! Purpose: define the task seam between the registry/dispatch layers and the
 //!   execution engine (E-P6-02/03). The dispatch engine drops in by populating
 //!   tasks and watching their status transitions.
+//!
 //! Inputs: created by the CEO/orchestrator when a goal is decomposed.
+//!
 //! Outputs: consumed by the execution engine; final status stored for observability.
+//!
 //! Constraints:
 //!   - DISTINCT from the user-facing kanban `Task` in P8; named `AgentTask`.
 //!   - Parent/child hierarchy allows tree-shaped work decomposition.
 //!   - All fields serde camelCase; no execution engine imports.
+//!
 //! SPORT: cascade-agents / task — E-P6-01
 
 use chrono::{DateTime, Utc};

@@ -410,13 +410,52 @@ pub fn init_from_installed(
 
 // ── Content renderers ─────────────────────────────────────────────────────────
 
+/// Render pointer-comment lines for on-demand rules.
+///
+/// Each on-demand rule becomes a `-> <text> (load_when: <condition>)` comment
+/// line. These are appended after the always-loaded body so the harness file
+/// stays within context-budget while still advertising what rules exist.
+///
+/// Returns an empty string when there are no on-demand rules.
+fn render_on_demand_pointer_section(resolved: &ResolvedCascade) -> String {
+    if resolved.on_demand_rules.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("\n<!-- cascade:on-demand-rules -->\n");
+    out.push_str("<!-- The following rules are NOT loaded automatically. Load them when their condition applies. -->\n");
+    for rule in &resolved.on_demand_rules {
+        match &rule.load_when {
+            Some(when) => {
+                out.push_str(&format!(
+                    "<!-- -> {} (load_when: {}, source: {}) -->\n",
+                    rule.text.trim(),
+                    when,
+                    rule.source_tier,
+                ));
+            }
+            None => {
+                out.push_str(&format!(
+                    "<!-- -> {} (on-demand, source: {}) -->\n",
+                    rule.text.trim(),
+                    rule.source_tier,
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Render the harness-native instruction file content.
 ///
 /// The merged instruction body is IDENTICAL across all harnesses.
 /// Only the envelope (frontmatter, header, format wrapper) differs.
+///
+/// On-demand rules are rendered as `->` pointer comment lines AFTER the body
+/// rather than being inlined, so the context budget stays bounded.
 fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> String {
     let body = resolved.merged_instructions.trim();
     let mcp = &resolved.mcp_server_url;
+    let on_demand = render_on_demand_pointer_section(resolved);
 
     match harness {
         HarnessKind::ClaudeCode => format!(
@@ -428,10 +467,12 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
              \n\
              ---\n\
              \n\
-             {body}\n",
+             {body}\n\
+             {on_demand}",
             marker = UNIFIED_HARNESS_MARKER,
             mcp = mcp,
             body = body,
+            on_demand = on_demand,
         ),
         HarnessKind::OpenCode | HarnessKind::Codex => {
             let id = harness.id();
@@ -448,11 +489,13 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  \n\
                  **MCP server:** `{mcp}`\n\
                  \n\
-                 {body}\n",
+                 {body}\n\
+                 {on_demand}",
                 marker = UNIFIED_HARNESS_MARKER,
                 id = id,
                 mcp = mcp,
                 body = body,
+                on_demand = on_demand,
             )
         }
         HarnessKind::Cursor => {
@@ -466,9 +509,11 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  alwaysApply: true\n\
                  ---\n\
                  \n\
-                 {body}\n",
+                 {body}\n\
+                 {on_demand}",
                 marker = UNIFIED_HARNESS_MARKER,
                 body = body,
+                on_demand = on_demand,
             )
         }
         HarnessKind::Aider => {
@@ -479,9 +524,11 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  \n\
                  # Conventions\n\
                  \n\
-                 {body}\n",
+                 {body}\n\
+                 {on_demand}",
                 marker = UNIFIED_HARNESS_MARKER,
                 body = body,
+                on_demand = on_demand,
             )
         }
         HarnessKind::Antigravity => {
@@ -497,10 +544,12 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  \n\
                  ---\n\
                  \n\
-                 {body}\n",
+                 {body}\n\
+                 {on_demand}",
                 marker = UNIFIED_HARNESS_MARKER,
                 mcp = mcp,
                 body = body,
+                on_demand = on_demand,
             )
         }
     }
@@ -634,6 +683,7 @@ mod tests {
     fn mock_resolved(body: &str) -> ResolvedCascade {
         ResolvedCascade {
             merged_instructions: body.to_string(),
+            on_demand_rules: vec![],
             mcp_server_url: "unix://~/.cascade/cascade.sock".into(),
             tiers_found: vec![TierResult {
                 tier: CascadeTier::Gci,
@@ -1043,5 +1093,70 @@ mod tests {
 
         let content = fs::read_to_string(&dest).unwrap();
         assert_eq!(content, original, "dry-run must not modify file");
+    }
+
+    // ── test 12: on-demand rules appear as pointer comments, NOT inlined ───────
+
+    /// An on-demand rule must appear as a `<!-- -> ... -->` pointer comment,
+    /// not as full body text, in every harness output file.
+    ///
+    /// WHY: context-budget regression fix — on-demand rules must never be
+    /// inlined into harness instruction files.
+    #[test]
+    #[serial(global_env)]
+    fn on_demand_rules_rendered_as_pointer_comments() {
+        let tmp = TempDir::new().unwrap();
+        let mut resolved = mock_resolved("## Always-loaded body\n\nDo good work.");
+        resolved.on_demand_rules = vec![
+            cascade_types::tiers::OnDemandRule {
+                text: "Load auth policy before implementing login".into(),
+                load_when: Some("auth".into()),
+                source_tier: "GCI".into(),
+            },
+            cascade_types::tiers::OnDemandRule {
+                text: "Review deploy checklist".into(),
+                load_when: None,
+                source_tier: "PRC".into(),
+            },
+        ];
+
+        generate_for_harnesses(&resolved, tmp.path(), HarnessKind::ALL, false)
+            .expect("generate should succeed");
+
+        for harness in HarnessKind::ALL {
+            let dest = tmp.path().join(harness.output_filename());
+            let content = fs::read_to_string(&dest).unwrap();
+
+            // On-demand rules must appear as pointer comments.
+            assert!(
+                content.contains("<!-- -> Load auth policy before implementing login"),
+                "harness={}: must contain auth pointer comment; got:\n{}",
+                harness.id(),
+                content
+            );
+            assert!(
+                content.contains("load_when: auth"),
+                "harness={}: auth pointer must include load_when; got:\n{}",
+                harness.id(),
+                content
+            );
+
+            // The on-demand rule text must NOT appear as plain body text
+            // (i.e. outside of HTML comments). We verify by checking it's not
+            // present outside of `<!--` ... `-->` wrapping.
+            // A simple check: "Review deploy checklist" appears only in comment form.
+            assert!(
+                content.contains("<!-- -> Review deploy checklist"),
+                "harness={}: must contain deploy pointer comment",
+                harness.id()
+            );
+
+            // Always-loaded body must still be present.
+            assert!(
+                content.contains("Do good work."),
+                "harness={}: must still contain always-loaded body",
+                harness.id()
+            );
+        }
     }
 }

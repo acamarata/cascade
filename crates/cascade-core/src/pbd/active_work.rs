@@ -25,11 +25,10 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::pbd::schema::{SprintStatus, TicketStatus};
-use crate::pbd::store::{locate_phases_root, resolve_phases_root, PbdStore};
+use crate::pbd::store::{resolve_phases_root, PbdStore};
 use cascade_types::{
     error::Result,
-    task::{TaskFilter, TaskStatus},
+    task::TaskStatus,
 };
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -312,14 +311,13 @@ pub fn build_active_work_with_tasks(
 mod tests {
     use super::*;
     use crate::pbd::schema::{
-        CurrentPointers, Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket,
+        Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Ticket,
         TicketStatus, Wave, WaveStatus,
     };
     use crate::pbd::store::PbdStore;
     use crate::tasks::{open_tasks_db, KanbanTaskStore};
     use cascade_types::task::{Task, TaskStatus};
     use serial_test::serial;
-    use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
     // ── Helpers ───────────────────────────────────────────────────────────────

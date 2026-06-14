@@ -2,12 +2,16 @@
 //!
 //! Purpose: register, retrieve, list, and remove agent specs; match agents by
 //!   capability tag; route task-kind strings to the best-matching spec.
+//!
 //! Inputs: `AgentSpec` values produced by `crate::library` or built-in fixtures.
+//!
 //! Outputs: `&AgentSpec` references via `get`, `Vec<&AgentSpec>` for list/find.
+//!
 //! Constraints:
 //!   - Thread-safe via `Arc<RwLock<_>>` — safe to clone and share across tasks.
 //!   - No execution engine references — registry is lookup-only.
 //!   - The registry is loadable from an on-disk agent library directory.
+//!
 //! SPORT: cascade-agents / registry — E-P6-01
 
 use std::collections::HashMap;

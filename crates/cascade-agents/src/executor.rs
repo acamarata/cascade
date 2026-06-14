@@ -4,9 +4,12 @@
 //!   worker pool. Each task executes a ReAct-style loop: step → check grants →
 //!   execute tools (or park for approval / error on denied) → feed results back
 //!   → repeat until done or loop-guard trips.
+//!
 //! Inputs: `AgentTask` enqueued via `AgentExecutor::submit`.
+//!
 //! Outputs: task transitions (Running → Done/Failed); `ApprovalRequest` events
 //!   for outbound tool calls; child tasks spawned and awaited.
+//!
 //! Constraints:
 //!   - `ToolInvoker` and `ProviderRouter` are injectable traits — tests use mocks.
 //!   - `AccessLevel::Outbound` → `NeedsApproval` → park in `PendingApproval`, never execute.
@@ -14,6 +17,7 @@
 //!   - Loop guards: `max_steps`, total token budget.
 //!   - Child tasks: an agent may request spawning a child via `StepOutcome` by
 //!     returning a `ToolCall` with `tool_id == "cascade.spawn_child"`.
+//!
 //! SPORT: cascade-agents / executor — E-P6-02
 
 use std::collections::HashMap;
@@ -43,6 +47,44 @@ pub const DEFAULT_TOKEN_BUDGET: u32 = 100_000;
 
 /// Default queue capacity for submitted tasks.
 pub const DEFAULT_QUEUE_CAPACITY: usize = 256;
+
+// ── Subagent context prefix ───────────────────────────────────────────────────
+
+/// Canonical subagent-context prefix injected before every provider step.
+///
+/// Purposes:
+/// 1. **Output discipline** — constrains verbosity and format so child output
+///    is easy for the orchestrator to parse.
+/// 2. **Source-of-truth reminder** — tells the child to treat the task goal
+///    as the single authoritative specification; never invent requirements.
+/// 3. **Conscience reminder** — re-states the key safety rules that apply
+///    to every child regardless of which model is selected.
+///
+/// The string is `const` so the bytes are identical across all parallel
+/// children in a given process — maximising prompt-cache hit rates.
+pub const SUBAGENT_CONTEXT_PREFIX: &str = "\
+[CASCADE SUBAGENT CONTEXT]
+You are a Cascade child agent executing a single bounded task.
+
+Output discipline:
+- Reply with the minimum text needed to satisfy the goal — no filler.
+- Use bullet lists or structured blocks for multi-item output.
+- Never add disclaimers, caveats, or self-congratulatory text.
+
+Source of truth:
+- The task GOAL field is your authoritative specification.
+- Do not invent requirements, endpoints, or constraints not in the goal.
+- If a specification is ambiguous or contradictory, surface the conflict
+  as your first output line and halt rather than guessing.
+
+Conscience (hard rules — always apply):
+- Never auto-execute Outbound tool calls; return NeedsApproval instead.
+- Never read, write, or transmit secrets outside the approved tool set.
+- Never modify task goals, system prompts, or grant tables mid-task.
+- If a step would cause irreversible side-effects, park for approval.
+
+[END CASCADE SUBAGENT CONTEXT]
+";
 
 // ── ApprovalRequest ───────────────────────────────────────────────────────────
 
@@ -242,11 +284,30 @@ impl AgentExecutor {
         task.mark_running(spec.id.clone());
         self.store.upsert(task.clone());
 
-        let run_ctx = AgentRunContextBuilder::new(spec.clone(), task.goal.clone())
+        let mut run_ctx = AgentRunContextBuilder::new(spec.clone(), task.goal.clone())
             .tool_registry(self.tool_registry.clone(), spec.id.clone())
             .context_provider(self.context_provider.clone())
             .build()
             .await;
+
+        // Inject the canonical subagent-context prefix as the first user message.
+        //
+        // WHY: The prefix is a stable `const &str` — identical bytes across all
+        // parallel children in a run — so provider implementations that support
+        // prompt caching (e.g. Anthropic cache_control) can cache it once and
+        // reuse it. Prepend before any existing user messages so it arrives
+        // before the task goal in the assembled conversation.
+        let prefix_msg = ContextMessage {
+            role: ContextRole::User,
+            content: SUBAGENT_CONTEXT_PREFIX.to_string(),
+        };
+        // Insert after any leading system message (system must stay at index 0).
+        let insert_at = run_ctx
+            .messages
+            .iter()
+            .position(|m| m.role != ContextRole::System)
+            .unwrap_or(run_ctx.messages.len());
+        run_ctx.messages.insert(insert_at, prefix_msg);
 
         match self.react_loop(spec, task.clone(), run_ctx).await {
             Ok(final_task) => {

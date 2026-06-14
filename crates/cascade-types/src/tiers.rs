@@ -4,12 +4,141 @@
 //! including display names, short names (acronyms), inbox naming rules,
 //! default filesystem paths, and the [`ResolvedContext`] type produced by
 //! the cascade-resolve engine.
+//!
+//! # Always-loaded vs on-demand rules
+//!
+//! Rules contributed by a tier can be marked `on_demand = true` in `config.toml`.
+//! On-demand rules are **not** inlined into harness files; they appear as
+//! `->` pointer comments so that context-budget stays bounded. The resolver
+//! separates them into [`ResolvedContext::on_demand_rules`].
+//!
+//! # Back-compatibility
+//!
+//! The `rules` field in `config.toml` supports two shapes that both deserialise
+//! into [`Rule`]:
+//!
+//! ```toml
+//! # bare string (old shape — always-loaded):
+//! rules = ["Never commit secrets", "Run tests before push"]
+//!
+//! # table shape (new):
+//! [[rules]]
+//! text = "Load auth rules before implementing login"
+//! on_demand = true
+//! load_when = "auth"
+//!
+//! [[rules]]
+//! text = "Always use snake_case"
+//! # on_demand defaults to false → always-loaded
+//! ```
+//!
+//! Old configs with plain strings continue to deserialise without any change.
 
 use crate::hook::HookConfigEntry;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+// ── Rule ─────────────────────────────────────────────────────────────────────
+
+/// A single rule snippet contributed by a cascade tier.
+///
+/// Deserialises from either a bare `String` (back-compat) or a TOML table:
+///
+/// ```toml
+/// # Old shape — always-loaded rule:
+/// rules = ["Never commit secrets"]
+///
+/// # New shape — on-demand rule:
+/// [[rules]]
+/// text = "Load auth docs before implementing login"
+/// on_demand = true
+/// load_when = "auth"
+/// ```
+///
+/// When deserialised from a bare string, `on_demand` defaults to `false`
+/// and `load_when` defaults to `None`, preserving full back-compatibility.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Rule {
+    /// A bare string (old config format). Always loaded into context.
+    Plain(String),
+    /// A structured rule with explicit metadata.
+    Structured(RuleEntry),
+}
+
+impl Rule {
+    /// The rule text.
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Plain(s) => s,
+            Self::Structured(e) => &e.text,
+        }
+    }
+
+    /// Returns `true` if this rule should be deferred to on-demand loading.
+    pub fn on_demand(&self) -> bool {
+        match self {
+            Self::Plain(_) => false,
+            Self::Structured(e) => e.on_demand,
+        }
+    }
+
+    /// The condition string that triggers loading (e.g. `"auth"`, `"database"`).
+    ///
+    /// `None` for always-loaded rules and for on-demand rules without a
+    /// specific trigger (they are still deferred, just without a named trigger).
+    pub fn load_when(&self) -> Option<&str> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Structured(e) => e.load_when.as_deref(),
+        }
+    }
+}
+
+/// The structured form of a [`Rule`] entry in `config.toml`.
+///
+/// Used when `[[rules]]` array-of-tables syntax is preferred over bare strings.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
+pub struct RuleEntry {
+    /// The rule text body.
+    pub text: String,
+
+    /// When `true`, this rule is NOT inlined into harness files; it is emitted
+    /// as a `-> name (load_when: …)` pointer comment instead.
+    ///
+    /// Default: `false` (always loaded).
+    #[serde(default)]
+    pub on_demand: bool,
+
+    /// A condition keyword that tells the harness when to load this rule.
+    ///
+    /// Examples: `"auth"`, `"database"`, `"deployment"`.
+    /// When absent, the rule is still on-demand but without a named trigger.
+    #[serde(default)]
+    pub load_when: Option<String>,
+}
+
+/// A resolved on-demand rule entry carrying pointer metadata for harness rendering.
+///
+/// Stored in [`ResolvedContext::on_demand_rules`]. Harness renderers emit these
+/// as `-> <text> (load_when: <condition>)` comment lines rather than inlining
+/// the full rule body.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OnDemandRule {
+    /// The rule text (used as the pointer label).
+    pub text: String,
+
+    /// The trigger condition, if any.
+    pub load_when: Option<String>,
+
+    /// Which tier contributed this on-demand rule.
+    pub source_tier: String,
+}
+
+// ── TierName ──────────────────────────────────────────────────────────────────
 
 /// The six cascade instruction tiers with nomenclature support.
 ///
@@ -134,14 +263,32 @@ impl std::fmt::Display for TierName {
 /// Deserialised from `{tier_dir}/config.toml`. All fields are optional; a
 /// missing field leaves the corresponding merged value unchanged.
 ///
-/// # TOML shape
+/// # TOML shape — back-compatible
 ///
+/// Old format (bare strings) still works:
 /// ```toml
 /// instructions = "Always use snake_case identifiers."
 /// rules = ["Never commit secrets", "Run tests before push"]
 /// memory_paths = ["/home/user/.cascade/memory/decisions.md"]
 /// task_paths   = ["~/.cascade/tasks/active.md"]
 /// ```
+///
+/// New format with on-demand rules:
+/// ```toml
+/// instructions = "Always use snake_case identifiers."
+/// rules = ["Never commit secrets"]
+///
+/// [[rules]]
+/// text = "Load auth policy before implementing login flows"
+/// on_demand = true
+/// load_when = "auth"
+/// ```
+///
+/// Both formats can be mixed in the same `config.toml`.
+/// Any entry without `on_demand = true` behaves identically to the old format.
+///
+/// The optional `[models]` table maps tiers to model IDs
+/// (see [`crate::model_registry::ModelOverrides`]).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "snake_case")]
 pub struct TierConfig {
@@ -151,12 +298,15 @@ pub struct TierConfig {
     /// same directory as the plain-text instructions value.
     pub instructions: Option<String>,
 
-    /// Ordered list of rule snippets contributed by this tier.
+    /// Ordered list of rule entries contributed by this tier.
+    ///
+    /// Each entry is either a plain `String` (always-loaded, back-compat) or a
+    /// [`Rule`] table with optional `on_demand` and `load_when` fields.
     ///
     /// Rules from all tiers are **accumulated** (not replaced): GCI rules appear
     /// first in the merged output, PAC rules appear last.
     #[serde(default)]
-    pub rules: Vec<String>,
+    pub rules: Vec<Rule>,
 
     /// Filesystem paths to memory files (decisions.md, lessons.md, etc.)
     /// contributed by this tier.  Accumulated across tiers.
@@ -184,6 +334,15 @@ pub struct TierConfig {
     /// ```
     #[serde(default)]
     pub hooks: Vec<HookConfigEntry>,
+
+    /// Optional per-tier model-ID overrides.
+    ///
+    /// Maps to the `[models]` table in `config.toml`. When present, the
+    /// resolver merges these into the workspace [`ModelRegistry`].
+    ///
+    /// [`ModelRegistry`]: crate::model_registry::ModelRegistry
+    #[serde(default)]
+    pub models: Option<crate::model_registry::ModelOverrides>,
 }
 
 /// The fully resolved cascade context produced by
@@ -195,14 +354,16 @@ pub struct TierConfig {
 ///
 /// # Merge semantics
 ///
-/// | Field           | Merge rule                                              |
-/// |-----------------|---------------------------------------------------------|
-/// | `instructions`  | Highest-tier non-empty value wins (GCI beats PAC)      |
-/// | `rules`         | Accumulated; GCI rules prepended (appear first)         |
-/// | `memory_paths`  | Accumulated; GCI paths prepended                        |
-/// | `task_paths`    | Accumulated; GCI paths prepended                        |
-/// | `tier_sources`  | Map from [`TierName`] → resolved `.cascade/` dir path  |
-/// | `resolved_at`   | ISO-8601 UTC timestamp of when resolution ran           |
+/// | Field              | Merge rule                                                  |
+/// |--------------------|-------------------------------------------------------------|
+/// | `instructions`     | Highest-tier non-empty value wins (GCI beats PAC)           |
+/// | `rules`            | Always-loaded rules; GCI rules prepended (appear first)     |
+/// | `on_demand_rules`  | Deferred rules; GCI first; NOT inlined into harness files   |
+/// | `memory_paths`     | Accumulated; GCI paths prepended                            |
+/// | `task_paths`       | Accumulated; GCI paths prepended                            |
+/// | `tier_sources`     | Map from [`TierName`] → resolved `.cascade/` dir path       |
+/// | `model_registry`   | Built-in defaults, overridden by lowest tier that sets them |
+/// | `resolved_at`      | ISO-8601 UTC timestamp of when resolution ran               |
 ///
 /// This type is `Serialize + Deserialize` for forward-compatible IPC exposure
 /// in E-03.
@@ -211,8 +372,19 @@ pub struct ResolvedContext {
     /// The winning instruction text (highest-tier non-empty value wins).
     pub instructions: String,
 
-    /// All rules from all tiers, accumulated highest-tier-first.
+    /// Always-loaded rules from all tiers, accumulated highest-tier-first.
+    ///
+    /// These are inlined verbatim into harness instruction files. To keep
+    /// context budgets bounded, prefer moving large reference rules to
+    /// [`on_demand_rules`] with an appropriate `load_when` trigger.
     pub rules: Vec<String>,
+
+    /// On-demand rules that must NOT be inlined into harness files.
+    ///
+    /// Harness renderers emit these as pointer comment lines:
+    /// `-> <text> (load_when: <condition>)`. The full text is carried for
+    /// tooling that wants to display or validate on-demand rules.
+    pub on_demand_rules: Vec<OnDemandRule>,
 
     /// All memory file paths from all tiers, accumulated highest-tier-first.
     pub memory_paths: Vec<PathBuf>,
@@ -226,9 +398,15 @@ pub struct ResolvedContext {
     /// (GCI first since `GCI < PCI < ... < PAC` by `Ord`).
     pub tier_sources: BTreeMap<TierName, PathBuf>,
 
+    /// Model registry built from built-in defaults, then successively overridden
+    /// by each tier's `[models]` table (lowest tier wins on conflict, i.e. PAC
+    /// beats GCI for model selection, since the most-specific scope knows best).
+    pub model_registry: crate::model_registry::ModelRegistry,
+
     /// ISO-8601 UTC timestamp of when resolution ran, e.g. `"2026-06-02T12:34:56Z"`.
     pub resolved_at: String,
 }
+
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -337,6 +515,7 @@ mod tests {
         let ctx = ResolvedContext::default();
         assert!(ctx.instructions.is_empty());
         assert!(ctx.rules.is_empty());
+        assert!(ctx.on_demand_rules.is_empty());
         assert!(ctx.tier_sources.is_empty());
     }
 
@@ -347,5 +526,74 @@ mod tests {
         assert!(cfg.rules.is_empty());
         assert!(cfg.memory_paths.is_empty());
         assert!(cfg.task_paths.is_empty());
+        assert!(cfg.models.is_none());
+    }
+
+    // ── Rule back-compat: bare string still deserialises ─────────────────────
+
+    /// Old config.toml with plain string rules must still deserialise.
+    ///
+    /// WHY: back-compatibility is a hard requirement — existing configs must
+    /// not break after the Rule struct is introduced.
+    #[test]
+    fn rule_bare_string_back_compat() {
+        let toml_str = r#"rules = ["Never commit secrets", "Run tests before push"]"#;
+        let cfg: TierConfig = toml::from_str(toml_str).expect("old rule format must parse");
+        assert_eq!(cfg.rules.len(), 2);
+        assert_eq!(cfg.rules[0].text(), "Never commit secrets");
+        assert!(!cfg.rules[0].on_demand());
+        assert_eq!(cfg.rules[1].text(), "Run tests before push");
+        assert!(!cfg.rules[1].on_demand());
+    }
+
+    // ── Rule structured form: on_demand = true ────────────────────────────────
+
+    /// Structured rule with on_demand = true deserialises correctly.
+    #[test]
+    fn rule_structured_on_demand() {
+        let toml_str = r#"
+[[rules]]
+text = "Load auth docs before implementing login"
+on_demand = true
+load_when = "auth"
+
+[[rules]]
+text = "Always use snake_case"
+"#;
+        let cfg: TierConfig = toml::from_str(toml_str).expect("structured rule must parse");
+        assert_eq!(cfg.rules.len(), 2);
+
+        let r0 = &cfg.rules[0];
+        assert_eq!(r0.text(), "Load auth docs before implementing login");
+        assert!(r0.on_demand());
+        assert_eq!(r0.load_when(), Some("auth"));
+
+        let r1 = &cfg.rules[1];
+        assert_eq!(r1.text(), "Always use snake_case");
+        assert!(!r1.on_demand());
+        assert!(r1.load_when().is_none());
+    }
+
+    // ── Rule mixed format (plain + structured) ────────────────────────────────
+
+    /// A config can mix plain string rules with structured rules.
+    #[test]
+    fn rule_mixed_plain_and_structured() {
+        // TOML does not allow mixing inline array items with [[array]] tables in
+        // the same key. Instead, use all [[rules]] tables for the mixed case.
+        let toml_str = r#"
+[[rules]]
+text = "plain rule"
+
+[[rules]]
+text = "deferred rule"
+on_demand = true
+load_when = "deploy"
+"#;
+        let cfg: TierConfig = toml::from_str(toml_str).expect("mixed rules must parse");
+        assert_eq!(cfg.rules.len(), 2);
+        assert!(!cfg.rules[0].on_demand());
+        assert!(cfg.rules[1].on_demand());
+        assert_eq!(cfg.rules[1].load_when(), Some("deploy"));
     }
 }

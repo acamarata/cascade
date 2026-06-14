@@ -157,6 +157,27 @@ impl IndexManager {
         &self.project_root
     }
 
+    /// Open a [`RagIndex`] backed by this manager's SQLite database.
+    ///
+    /// Returns a fresh `Arc<RagIndex>` each call, sharing the same on-disk WAL
+    /// file.  SQLite WAL mode allows the `RagIndex` read path to coexist with
+    /// the `IndexManager` write connection without blocking.
+    ///
+    /// # Use cases
+    ///
+    /// - Injecting an `RrfRetriever::fts_only` into the MCP `ToolRegistry` so
+    ///   `cascade.search` returns live hits instead of "index not ready".
+    /// - Integration tests that need a retriever wired to a real DB.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error from [`RagIndex::open`] (e.g. the DB file cannot be
+    /// read, or migrations fail).
+    pub async fn open_rag_index(&self) -> Result<Arc<crate::index::RagIndex>> {
+        let idx = crate::index::RagIndex::open(&self.db_path).await?;
+        Ok(Arc::new(idx))
+    }
+
     // ── Tier-aware source registration ────────────────────────────────────────
 
     /// Register (upsert) a source path with its cascade tier tag.

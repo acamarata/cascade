@@ -6,6 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-14
+
+Parity Program P11 — foundational correctness. First increment toward Cascade
+fully replacing a hand-built multi-harness AI-coding setup.
+
+### Added
+
+- Model-tier registry mapping execution tiers (T0–T3) to provider/model ids,
+  configurable per cascade tier via a `[models]` table.
+- Always-loaded vs on-demand rule distinction in the resolver: on-demand rules
+  render as pointer references in generated harness files instead of being
+  inlined, restoring per-turn context-budget discipline.
+- Subagent-context prefix injected before each agent provider step for
+  prompt-cache-stable multi-agent runs.
+
+### Changed
+
+- `cascade.search` executes the live RRF retrieval pipeline (FTS5) when an index
+  is available, returning real hits with citations instead of a placeholder. The
+  retriever builds in the background so the MCP `initialize` handshake is never
+  blocked on index I/O.
+- Chain and orchestration now run independent branches/sub-goals truly
+  concurrently, bounded by a CPU-aware semaphore, instead of sequentially.
+
+### Fixed
+
+- cargo-deny bans: pinned internal path-dependency versions on all plugin and
+  example crates (resolves the v0.9.0 release pipeline's cargo-deny failure).
+- clippy: resolved doc-comment and unused-import warnings workspace-wide so
+  `clippy --workspace --all-targets -- -D warnings` is clean.
+
 ## [0.9.0] - 2026-06-14
 
 First stable release. Cascade is a FOSS context manager for AI coding

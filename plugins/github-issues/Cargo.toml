@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 [dependencies]
-cascade-pdk = { path = "../../crates/cascade-pdk", version = "0.9.0" }
+cascade-pdk = { path = "../../crates/cascade-pdk", version = "0.9.1" }
 serde       = { version = "1", default-features = false, features = ["derive", "alloc"] }
 serde_json  = { version = "1", default-features = false, features = ["alloc"] }
 
@@ -20,7 +20,7 @@ serde_json  = { version = "1", default-features = false, features = ["alloc"] }
 [dev-dependencies]
 # Pure-logic unit tests don't need the test-harness (wasmtime runner).
 # The test-harness feature can be added when wasm32-wasip1 target is available.
-cascade-pdk = { path = "../../crates/cascade-pdk", version = "0.9.0" }
+cascade-pdk = { path = "../../crates/cascade-pdk", version = "0.9.1" }
 serde_json  = "1"
 
 # ── Build target ─────────────────────────────────────────────────────────────

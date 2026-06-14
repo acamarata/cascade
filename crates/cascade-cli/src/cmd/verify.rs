@@ -700,7 +700,7 @@ mod tests {
         assert_eq!(checks_arr[0]["status"].as_str().unwrap(), "pass");
         assert_eq!(checks_arr[1]["status"].as_str().unwrap(), "warn");
         assert_eq!(checks_arr[2]["status"].as_str().unwrap(), "fail");
-        assert_eq!(parsed["ok"].as_bool().unwrap(), false);
+        assert!(!parsed["ok"].as_bool().unwrap());
     }
 
     #[test]
@@ -714,7 +714,7 @@ mod tests {
         let output = VerifyOutput { checks, ok };
         let json = serde_json::to_string(&output).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed["ok"].as_bool().unwrap(), true);
+        assert!(parsed["ok"].as_bool().unwrap());
     }
 
     // ── Full all-green fixture ────────────────────────────────────────────────
@@ -784,7 +784,7 @@ mod tests {
         );
 
         // ok is true iff folder+resolves+provider+config pass and daemon is only WARN.
-        let all = vec![folder, resolves, daemon, provider, config, keychain];
+        let all = [folder, resolves, daemon, provider, config, keychain];
         let ok = all.iter().all(|c| c.status != CheckStatus::Fail);
         // Not strictly required to be true here (keychain may FAIL in CI),
         // but at minimum the non-keychain checks should all pass.

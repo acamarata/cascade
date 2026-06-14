@@ -5,15 +5,18 @@
 //!   (send email, file ticket, publish) produces a DRAFT artifact + an
 //!   `ApprovalRequest` and NEVER auto-executes. On approval the draft is forwarded
 //!   to an `OutboundSink` impl; on denial it is discarded.
+//!
 //! Inputs:
 //!   - `Automation` — loaded from `<ai-folder>/library/automations/*.yaml`
 //!   - `AutomationTrigger` — how the workflow starts (manual, hook, scheduled, inbox)
 //!   - `OutboundSink` — injectable for email / ticket delivery (Noop + Disk impls)
+//!
 //! Outputs:
 //!   - `DraftArtifact` — the proposed content, saved to
 //!     `<ai-folder>/agents/drafts/<id>.json`
 //!   - `ApprovalRequest` from the executor (surfaces in the CEO channel)
 //!   - `AutomationOutcome` per run
+//!
 //! Constraints:
 //!   - SAFE DEFAULT: outbound steps always produce a draft + `ApprovalRequest`.
 //!     The `OutboundSink::send` method is ONLY called after explicit approval.
@@ -25,6 +28,7 @@
 //!   - YAML files under `<ai-folder>/library/automations/*.yaml` are loadable via
 //!     `Automation::load_library`.
 //!   - serde: `camelCase` field names; struct enum variants only (repo rule).
+//!
 //! SPORT: cascade-agents / automation — E-P6-07
 
 use std::collections::HashMap;

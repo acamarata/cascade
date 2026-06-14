@@ -4,6 +4,7 @@
 //! All tests are deterministic and serialized via `#[serial(global_env)]`.
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use serial_test::serial;
     use tempfile::TempDir;

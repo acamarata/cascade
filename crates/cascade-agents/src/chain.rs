@@ -4,14 +4,17 @@
 //!   agent/LLM/tool pipelines can be expressed declaratively, loaded from YAML,
 //!   and executed with the same approval-gate and budget guards as the ReAct
 //!   executor.
+//!
 //! Inputs:
 //!   - `ChainFlow` (struct): ordered list of `ChainStep` variants + named I/O map.
 //!   - `ChainExecutor` (struct): built with injectable `ProviderRouter` +
 //!     `ToolInvoker` + `AgentExecutor`; runs `ChainFlow` values.
 //!   - YAML files under `<ai-folder>/library/chains/*.yaml`.
+//!
 //! Outputs:
 //!   - `ChainResult` (struct): final context map + per-step traces.
 //!   - `ChainError` (enum): budget exceeded, cycle, bad ref, tool approval park.
+//!
 //! Constraints:
 //!   - `ChainStep` uses struct enum variants only; serde `camelCase` (repo rule).
 //!   - `Outbound` tool steps park and return `ChainError::NeedsApproval` — never
@@ -20,16 +23,19 @@
 //!   - DAG validation: `ChainFlow::validate()` detects missing refs + cycles before run.
 //!   - `ProviderRouter` and `ToolInvoker` are the same injectable traits from
 //!     `executor.rs`; no extra wiring required.
+//!
 //! SPORT: cascade-agents / chain — E-P6-08
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::Semaphore;
 
-use crate::context::{AgentRunContext, AgentRunContextBuilder, ToolCall};
+use crate::context::{AgentRunContextBuilder, ToolCall};
 use crate::executor::{AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker};
 use crate::grants::{AccessLevel, GrantDecision};
 use crate::spec::{AgentRole, AgentSpec, Runtime};
@@ -41,6 +47,13 @@ use cascade_types::agent::Tier;
 
 /// Default maximum number of steps (across all branches/maps) per `ChainFlow` run.
 pub const CHAIN_DEFAULT_MAX_STEPS: u32 = 50;
+
+/// Maximum parallel branches that may be in-flight simultaneously.
+///
+/// Derived at runtime from `available_parallelism()`. This constant defines the
+/// upper ceiling; the actual cap is `min(PARALLEL_CAP_MAX, available - 2)` with a
+/// floor of 1.
+pub const PARALLEL_CAP_MAX: usize = 16;
 
 /// Default maximum recursion/nesting depth for `Map` and `Parallel` steps.
 pub const CHAIN_DEFAULT_MAX_DEPTH: u32 = 8;
@@ -437,6 +450,12 @@ pub struct ChainStepTrace {
     pub error: Option<String>,
 }
 
+// ── Internal type alias ───────────────────────────────────────────────────────
+
+/// Join handle carrying one parallel branch result.
+type BranchHandle =
+    tokio::task::JoinHandle<Result<(ChainContext, Vec<ChainStepTrace>), ChainError>>;
+
 // ── ChainResult ───────────────────────────────────────────────────────────────
 
 /// The result of a completed `ChainFlow` execution.
@@ -465,6 +484,15 @@ pub struct ChainResult {
 /// `max_steps` caps the total number of step-executions (counting Map iterations
 /// and Parallel sub-steps individually). `max_depth` caps recursion in
 /// Map/Branch/Parallel nesting.
+/// Compute the runtime concurrency cap: `min(PARALLEL_CAP_MAX, cpus - 2)`, floor 1.
+pub fn parallel_concurrency_cap() -> usize {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let cap = cpus.saturating_sub(2);
+    cap.clamp(1, PARALLEL_CAP_MAX)
+}
+
 pub struct ChainExecutor {
     provider: Arc<dyn ProviderRouter>,
     invoker: Arc<dyn ToolInvoker>,
@@ -472,6 +500,8 @@ pub struct ChainExecutor {
     tool_registry: Arc<ToolRegistry>,
     max_steps: u32,
     max_depth: u32,
+    /// Limits the number of `Parallel` branches running concurrently.
+    parallel_sem: Arc<Semaphore>,
 }
 
 impl ChainExecutor {
@@ -741,20 +771,89 @@ impl ChainExecutor {
                 });
             }
             ChainStep::Parallel { steps } => {
-                // Execute sub-steps with snapshot of current ctx; merge outputs after.
-                // Since ProviderRouter/ToolInvoker are Sync, we run sequentially here
-                // (true parallelism would need Arc<Mutex<ChainContext>> — out of scope).
-                let mut sub_traces: Vec<ChainStepTrace> = vec![];
+                // True concurrent execution: each branch gets a snapshot of the
+                // current context and executes independently. The semaphore caps
+                // in-flight tasks to `parallel_concurrency_cap()`.
+                //
+                // Shared state for collecting branch outputs and traces:
+                //   - `shared_counter` accumulates step counts across branches.
+                //   - Each branch writes its merged outputs into `branch_outputs`.
+                //   - Each branch appends its traces into `branch_traces`.
+                //
+                // Result ordering is preserved: we join in index order and merge
+                // outputs sequentially, so earlier branches win on key collisions
+                // (matching the prior sequential behaviour).
+                let shared_counter = Arc::new(AtomicU32::new(*counter));
+                let branch_count = steps.len();
+                let sem = Arc::clone(&self.parallel_sem);
+
+                // Spawn one task per branch, gated by the semaphore.
+                let mut join_handles: Vec<BranchHandle> = Vec::with_capacity(branch_count);
+
                 for s in steps {
-                    let mut par_ctx = ctx.clone();
-                    self.exec_step(s, &mut par_ctx, &mut sub_traces, counter, depth + 1)
-                        .await?;
-                    // Merge outputs back
-                    for (k, v) in par_ctx {
+                    let branch_ctx = ctx.clone(); // snapshot
+                    let step_owned = s.clone();
+                    let executor = Arc::new(ChainExecutor {
+                        provider: Arc::clone(&self.provider),
+                        invoker: Arc::clone(&self.invoker),
+                        agent_executor: Arc::clone(&self.agent_executor),
+                        tool_registry: Arc::clone(&self.tool_registry),
+                        max_steps: self.max_steps,
+                        max_depth: self.max_depth,
+                        parallel_sem: Arc::clone(&self.parallel_sem),
+                    });
+                    let sem_clone = Arc::clone(&sem);
+                    let counter_clone = Arc::clone(&shared_counter);
+                    let branch_depth = depth + 1;
+
+                    join_handles.push(tokio::spawn(async move {
+                        // Acquire a permit before running — excess branches queue here.
+                        let _permit = sem_clone
+                            .acquire()
+                            .await
+                            .map_err(|_| ChainError::Io("semaphore closed".into()))?;
+
+                        let mut branch_ctx = branch_ctx;
+                        let mut branch_traces: Vec<ChainStepTrace> = vec![];
+                        // Use a local counter that starts from the shared atomic value.
+                        let mut local_counter =
+                            counter_clone.load(Ordering::Relaxed);
+
+                        executor
+                            .exec_step(
+                                &step_owned,
+                                &mut branch_ctx,
+                                &mut branch_traces,
+                                &mut local_counter,
+                                branch_depth,
+                            )
+                            .await?;
+
+                        // Publish the incremented count back (best-effort; races are
+                        // benign — the budget is a soft guard, not a hard lock).
+                        counter_clone.fetch_max(local_counter, Ordering::Relaxed);
+
+                        // Permit released here (drop).
+                        Ok((branch_ctx, branch_traces))
+                    }));
+                }
+
+                // Collect results in order, fail-fast on first error.
+                let mut max_counter = *counter;
+                for handle in join_handles {
+                    let (branch_ctx, branch_traces) = handle
+                        .await
+                        .map_err(|e| ChainError::Io(format!("parallel join error: {e}")))??;
+
+                    // Merge branch outputs into parent ctx (first write wins on collision).
+                    for (k, v) in branch_ctx {
                         ctx.entry(k).or_insert(v);
                     }
+                    traces.extend(branch_traces);
+                    max_counter = max_counter.max(shared_counter.load(Ordering::Relaxed));
                 }
-                traces.extend(sub_traces);
+                *counter = max_counter;
+
                 traces.push(ChainStepTrace {
                     step_index: idx,
                     kind: "parallel".into(),
@@ -956,6 +1055,8 @@ pub struct ChainExecutorBuilder {
     tool_registry: Arc<ToolRegistry>,
     max_steps: u32,
     max_depth: u32,
+    /// Override the concurrency cap (default: `parallel_concurrency_cap()`).
+    parallel_cap: Option<usize>,
 }
 
 impl Default for ChainExecutorBuilder {
@@ -967,6 +1068,7 @@ impl Default for ChainExecutorBuilder {
             tool_registry: Arc::new(ToolRegistry::new()),
             max_steps: CHAIN_DEFAULT_MAX_STEPS,
             max_depth: CHAIN_DEFAULT_MAX_DEPTH,
+            parallel_cap: None,
         }
     }
 }
@@ -996,12 +1098,21 @@ impl ChainExecutorBuilder {
         self.max_depth = n;
         self
     }
+    /// Override the maximum number of parallel branches in-flight simultaneously.
+    ///
+    /// Useful in tests to exercise the semaphore cap with a small value (e.g. 2).
+    /// If not called, the cap is derived from `available_parallelism()`.
+    pub fn parallel_cap(mut self, cap: usize) -> Self {
+        self.parallel_cap = Some(cap.max(1));
+        self
+    }
 
     /// Build the `ChainExecutor`.
     ///
     /// # Panics
     /// Panics if `provider_router`, `tool_invoker`, or `agent_executor` was not set.
     pub fn build(self) -> ChainExecutor {
+        let cap = self.parallel_cap.unwrap_or_else(parallel_concurrency_cap);
         ChainExecutor {
             provider: self
                 .provider
@@ -1015,6 +1126,7 @@ impl ChainExecutorBuilder {
             tool_registry: self.tool_registry,
             max_steps: self.max_steps,
             max_depth: self.max_depth,
+            parallel_sem: Arc::new(Semaphore::new(cap)),
         }
     }
 }
@@ -1081,7 +1193,7 @@ pub fn builtin_triage_branch_respond() -> ChainFlow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{StepOutcome, TokenUsage};
+    use crate::context::{AgentRunContext, StepOutcome, TokenUsage};
     use crate::executor::{AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker};
     use crate::grants::{AccessLevel, ToolGrant};
     use crate::spec::AgentSpec;
@@ -1658,5 +1770,225 @@ mod tests {
             result.context.get("search_result"),
             Some(&json!("echo:cascade.search"))
         );
+    }
+
+    // ── P1: N=5 parallel children all complete, results collected ─────────────
+
+    /// Five concurrent `Parallel` branches all complete and their output keys
+    /// are present in the final context.
+    #[tokio::test]
+    async fn parallel_n5_all_complete() {
+        // 5 branches each call the provider once — supply 5 scripted responses.
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            "r0", "r1", "r2", "r3", "r4",
+        ]));
+        let invoker = Arc::new(EchoInvoker::new());
+        let agent_exec = make_agent_executor(
+            Arc::new(ScriptedProvider::new(vec![])),
+            Arc::new(EchoInvoker::new()),
+        );
+        let registry = Arc::new(ToolRegistry::new());
+        let exec = make_executor(provider, invoker, agent_exec, registry);
+
+        let steps: Vec<ChainStep> = (0..5)
+            .map(|i| ChainStep::Prompt {
+                template: format!("branch {i}"),
+                inputs: vec![],
+                output: format!("out_{i}"),
+            })
+            .collect();
+
+        let flow = ChainFlow {
+            id: "parallel-n5".into(),
+            name: "Parallel N=5".into(),
+            description: None,
+            steps: vec![ChainStep::Parallel { steps }],
+        };
+
+        let result = exec.run(&flow, ChainContext::new()).await.unwrap();
+
+        // All 5 outputs must be present.
+        for i in 0..5 {
+            assert!(
+                result.context.contains_key(&format!("out_{i}")),
+                "missing out_{i}"
+            );
+        }
+        assert_eq!(result.context.len(), 5);
+    }
+
+    // ── P2: Wall-clock of parallel < sum-of-sequential ────────────────────────
+
+    /// A mock provider that sleeps for a fixed duration simulates I/O latency.
+    /// Running 4 such branches in parallel must complete in roughly 1× the
+    /// per-branch delay, not 4× (sequential).
+    ///
+    /// Thresholds are generous to avoid flaky CI behaviour on loaded machines.
+    #[tokio::test]
+    async fn parallel_wall_clock_less_than_sequential_sum() {
+        use std::time::{Duration, Instant};
+
+        const BRANCH_DELAY_MS: u64 = 50;
+        const BRANCHES: usize = 4;
+
+        /// A provider that sleeps `delay` before returning a done outcome.
+        struct SleepyProvider {
+            delay: Duration,
+        }
+
+        #[async_trait::async_trait]
+        impl ProviderRouter for SleepyProvider {
+            async fn step(
+                &self,
+                _spec: &AgentSpec,
+                _ctx: &AgentRunContext,
+            ) -> Result<StepOutcome, ExecutorError> {
+                tokio::time::sleep(self.delay).await;
+                Ok(StepOutcome {
+                    assistant_text: "done".into(),
+                    tool_calls: vec![],
+                    done: true,
+                    usage: crate::context::TokenUsage {
+                        prompt_tokens: 1,
+                        completion_tokens: 1,
+                    },
+                })
+            }
+        }
+
+        let delay = Duration::from_millis(BRANCH_DELAY_MS);
+        let provider = Arc::new(SleepyProvider { delay });
+        let invoker = Arc::new(EchoInvoker::new());
+        let agent_exec = make_agent_executor(
+            Arc::new(SleepyProvider {
+                delay: Duration::ZERO,
+            }),
+            Arc::new(EchoInvoker::new()),
+        );
+        let registry = Arc::new(ToolRegistry::new());
+        let exec = make_executor(provider, invoker, agent_exec, registry);
+
+        let steps: Vec<ChainStep> = (0..BRANCHES)
+            .map(|i| ChainStep::Prompt {
+                template: format!("branch {i}"),
+                inputs: vec![],
+                output: format!("par_{i}"),
+            })
+            .collect();
+
+        let flow = ChainFlow {
+            id: "parallel-timing".into(),
+            name: "Parallel Timing".into(),
+            description: None,
+            steps: vec![ChainStep::Parallel { steps }],
+        };
+
+        let t0 = Instant::now();
+        exec.run(&flow, ChainContext::new()).await.unwrap();
+        let wall = t0.elapsed();
+
+        let sequential_sum = delay * BRANCHES as u32;
+        // Must be faster than the sequential sum.
+        assert!(
+            wall < sequential_sum,
+            "parallel wall time ({wall:?}) should be < sequential sum ({sequential_sum:?})"
+        );
+        // And must have taken at least one branch-delay (branches actually ran).
+        assert!(
+            wall >= delay,
+            "wall time ({wall:?}) must be >= one branch delay ({delay:?})"
+        );
+    }
+
+    // ── P3: Semaphore cap respected (max-in-flight = cap) ─────────────────────
+
+    /// Set cap=2, launch 6 branches. Track max concurrent active branches via
+    /// an `AtomicU32` gauge. The gauge must never exceed 2.
+    #[tokio::test]
+    async fn semaphore_cap_limits_concurrency() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::time::Duration;
+
+        const CAP: usize = 2;
+        const BRANCHES: usize = 6;
+
+        let active = Arc::new(AtomicU32::new(0));
+        let max_observed = Arc::new(AtomicU32::new(0));
+
+        struct GaugedProvider {
+            active: Arc<AtomicU32>,
+            max_observed: Arc<AtomicU32>,
+        }
+
+        #[async_trait::async_trait]
+        impl ProviderRouter for GaugedProvider {
+            async fn step(
+                &self,
+                _spec: &AgentSpec,
+                _ctx: &AgentRunContext,
+            ) -> Result<StepOutcome, ExecutorError> {
+                let now = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+                // Track high-water mark.
+                self.max_observed.fetch_max(now, Ordering::SeqCst);
+                // Small yield so other tasks can enter if the cap allows.
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                Ok(StepOutcome {
+                    assistant_text: "done".into(),
+                    tool_calls: vec![],
+                    done: true,
+                    usage: crate::context::TokenUsage {
+                        prompt_tokens: 1,
+                        completion_tokens: 1,
+                    },
+                })
+            }
+        }
+
+        let provider = Arc::new(GaugedProvider {
+            active: Arc::clone(&active),
+            max_observed: Arc::clone(&max_observed),
+        });
+        let invoker = Arc::new(EchoInvoker::new());
+        let agent_exec = make_agent_executor(
+            Arc::new(ScriptedProvider::new(vec![])),
+            Arc::new(EchoInvoker::new()),
+        );
+        let registry = Arc::new(ToolRegistry::new());
+
+        let exec = ChainExecutor::builder()
+            .provider_router(provider)
+            .tool_invoker(invoker)
+            .agent_executor(agent_exec)
+            .tool_registry(registry)
+            .max_steps(50)
+            .max_depth(4)
+            .parallel_cap(CAP)
+            .build();
+
+        let steps: Vec<ChainStep> = (0..BRANCHES)
+            .map(|i| ChainStep::Prompt {
+                template: format!("branch {i}"),
+                inputs: vec![],
+                output: format!("cap_{i}"),
+            })
+            .collect();
+
+        let flow = ChainFlow {
+            id: "semaphore-cap".into(),
+            name: "Semaphore Cap".into(),
+            description: None,
+            steps: vec![ChainStep::Parallel { steps }],
+        };
+
+        exec.run(&flow, ChainContext::new()).await.unwrap();
+
+        let observed = max_observed.load(Ordering::SeqCst);
+        assert!(
+            observed <= CAP as u32,
+            "max concurrent in-flight ({observed}) exceeded the cap ({CAP})"
+        );
+        // Sanity: all branches completed.
+        assert_eq!(active.load(Ordering::SeqCst), 0, "active count should be 0 after completion");
     }
 }

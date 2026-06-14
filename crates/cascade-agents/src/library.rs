@@ -3,16 +3,20 @@
 //! Purpose: define the YAML schema for agent library entries under
 //!   `<ai-folder>/library/agents/*.yaml`; provide `validate_agent_library(dir)`
 //!   used by `cascade doctor` and `AgentRegistry::load_from_library`.
+//!
 //! Inputs: a directory path containing agent YAML files.
+//!
 //! Outputs:
 //!   - `Vec<LibraryIssue>` from `validate_agent_library` (errors + warnings).
 //!   - `AgentSpec` from `load_spec_from_file` (single-file parse path).
+//!
 //! Constraints:
 //!   - `id`, `version`, `name`, `role`, `tier`, `runtime` are required fields.
 //!   - `capabilities` defaults to empty vec.
 //!   - Unknown fields are allowed (forward-compat) but trigger a warning.
 //!   - Files that don't parse as valid YAML produce a hard error.
 //!   - Role and tier values must be valid enum variants.
+//!
 //! SPORT: cascade-agents / library — E-P6-09
 
 use std::collections::HashSet;

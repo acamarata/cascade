@@ -156,8 +156,8 @@ impl Command for SubsListArgs {
         } else {
             // Table output
             println!(
-                "{:<14} {:<10} {:<8} {:<16} {}",
-                "SUBSCRIPTION", "INSTALLED", "AUTHED", "MODE", "IDENTITY"
+                "{:<14} {:<10} {:<8} {:<16} IDENTITY",
+                "SUBSCRIPTION", "INSTALLED", "AUTHED", "MODE"
             );
             println!("{}", "─".repeat(72));
             for e in &entries {

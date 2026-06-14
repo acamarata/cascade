@@ -25,7 +25,7 @@
 //!
 //! Entity: cascade-providers / connect_provider (E-P5-08)
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -226,7 +226,7 @@ fn providers_json_path() -> PathBuf {
     cascade_types::paths::global_cascade_dir().join(PROVIDERS_JSON_NAME)
 }
 
-fn providers_json_path_at(cascade_dir: &PathBuf) -> PathBuf {
+fn providers_json_path_at(cascade_dir: &Path) -> PathBuf {
     cascade_dir.join(PROVIDERS_JSON_NAME)
 }
 

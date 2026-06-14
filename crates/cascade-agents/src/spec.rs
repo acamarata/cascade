@@ -3,12 +3,16 @@
 //! Purpose: define the immutable identity contract for an agent: its role,
 //!   capability tags, tier mapping, model preference, system prompt reference,
 //!   tool grant reference, and runtime (native or WASM plugin).
+//!
 //! Inputs: constructed programmatically or deserialized from on-disk YAML.
+//!
 //! Outputs: used by `AgentRegistry` for routing and capability matching.
+//!
 //! Constraints:
 //!   - Serde uses camelCase; enum variants are struct-style (repo rule).
 //!   - No execution engine references — this is the type layer only.
 //!   - Must be `Clone + Send + Sync` for the registry's `Arc<RwLock<_>>` store.
+//!
 //! SPORT: cascade-agents / spec — E-P6-01
 
 use cascade_types::agent::Tier;

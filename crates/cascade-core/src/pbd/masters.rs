@@ -253,8 +253,8 @@ fn scan_typescript(repo_path: &Path) -> Vec<MasterEntity> {
                 ("export", "export interface "),
                 ("export", "export enum "),
             ] {
-                if trimmed.starts_with(prefix) {
-                    if let Some(name) = extract_identifier(&trimmed[prefix.len()..]) {
+                if let Some(stripped) = trimmed.strip_prefix(prefix) {
+                    if let Some(name) = extract_identifier(stripped) {
                         let key = format!("{kind}:{name}:{rel_path}");
                         if seen.insert(key) {
                             entities.push(MasterEntity {
@@ -361,8 +361,8 @@ fn scan_rust(repo_path: &Path) -> Vec<MasterEntity> {
                 ("pub_type", "pub type "),
                 ("pub_use", "pub use "),
             ] {
-                if trimmed.starts_with(prefix) {
-                    if let Some(name) = extract_identifier(&trimmed[prefix.len()..]) {
+                if let Some(stripped) = trimmed.strip_prefix(prefix) {
+                    if let Some(name) = extract_identifier(stripped) {
                         let key = format!("{kind}:{name}:{rel_path}");
                         if seen.insert(key) {
                             entities.push(MasterEntity {

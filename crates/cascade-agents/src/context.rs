@@ -2,14 +2,18 @@
 //!
 //! Purpose: build the per-task execution envelope from an `AgentSpec` + task goal
 //!   + conversation history + granted tools + injectable RAG context.
+//!
 //! Inputs: `AgentSpec`, goal string, messages, `ToolRegistry`, optional
 //!   `ContextProvider` impl, session id.
+//!
 //! Outputs: `AgentRunContext` — the complete runtime view passed into `run_agent_step`.
+//!
 //! Constraints:
 //!   - `ContextProvider` is an injectable trait; `NoopContextProvider` is the
 //!     built-in no-op so callers that don't need RAG pay nothing.
 //!   - `StepOutcome` is defined here (shared with executor.rs).
 //!   - No live I/O in the context assembly path — all I/O is in the provider call.
+//!
 //! SPORT: cascade-agents / context — E-P6-03
 
 use std::sync::Arc;

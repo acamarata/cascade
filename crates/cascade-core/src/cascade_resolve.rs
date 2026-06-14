@@ -46,7 +46,8 @@
 use std::path::{Path, PathBuf};
 
 use cascade_types::error::{CascadeError, Result};
-use cascade_types::tiers::{ResolvedContext, TierConfig, TierName};
+use cascade_types::model_registry::ModelRegistry;
+use cascade_types::tiers::{OnDemandRule, ResolvedContext, TierConfig, TierName};
 use tracing::debug;
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -126,16 +127,25 @@ impl CascadeResolver {
 
         // Build the ResolvedContext from the found tiers.
         // GCI is first in `found` (highest precedence).
+        //
         // Merge algorithm:
-        //   instructions  → first non-empty value (GCI wins because it's first)
-        //   rules         → accumulate GCI first
-        //   memory_paths  → accumulate GCI first
-        //   task_paths    → accumulate GCI first
+        //   instructions    → first non-empty value (GCI wins because it's first)
+        //   rules           → always-loaded rules accumulated GCI first
+        //   on_demand_rules → deferred rules accumulated GCI first; NOT inlined
+        //   memory_paths    → accumulate GCI first
+        //   task_paths      → accumulate GCI first
+        //   model_registry  → built-in defaults, each tier's [models] applied in
+        //                     order (PAC applies last → lowest tier wins, i.e.
+        //                     most-specific scope overrides less-specific)
         let mut instructions = String::new();
         let mut rules: Vec<String> = Vec::new();
+        let mut on_demand_rules: Vec<OnDemandRule> = Vec::new();
         let mut memory_paths: Vec<PathBuf> = Vec::new();
         let mut task_paths: Vec<PathBuf> = Vec::new();
         let mut tier_sources = std::collections::BTreeMap::new();
+        // Start from defaults; each tier's [models] overrides in GCI→PAC order
+        // (last write wins, so PAC — lowest tier, most specific — wins).
+        let mut model_registry = ModelRegistry::default();
 
         for (tier, cascade_dir, config) in &found {
             // instructions: first non-empty value wins (GCI is first, so it wins)
@@ -146,10 +156,27 @@ impl CascadeResolver {
                     }
                 }
             }
-            // vecs: accumulate; GCI contributes first → its entries appear first
-            rules.extend(config.rules.iter().cloned());
+
+            // Partition rules into always-loaded vs on-demand.
+            for rule in &config.rules {
+                if rule.on_demand() {
+                    on_demand_rules.push(OnDemandRule {
+                        text: rule.text().to_owned(),
+                        load_when: rule.load_when().map(ToOwned::to_owned),
+                        source_tier: tier.short_name().to_owned(),
+                    });
+                } else {
+                    rules.push(rule.text().to_owned());
+                }
+            }
+
             memory_paths.extend(config.memory_paths.iter().cloned());
             task_paths.extend(config.task_paths.iter().cloned());
+
+            // Apply model overrides — last tier (PAC) wins.
+            if let Some(ov) = &config.models {
+                model_registry.apply_overrides(ov);
+            }
 
             tier_sources.insert(*tier, cascade_dir.clone());
         }
@@ -159,9 +186,11 @@ impl CascadeResolver {
         Ok(ResolvedContext {
             instructions,
             rules,
+            on_demand_rules,
             memory_paths,
             task_paths,
             tier_sources,
+            model_registry,
             resolved_at,
         })
     }
@@ -570,5 +599,126 @@ rules = ["project-rule-1"]
             result.is_ok(),
             "malformed config.toml should not cause resolve_cascade to return Err"
         );
+    }
+
+    // ── test 11: on-demand rules are separated from always-loaded rules ────────
+
+    /// An on-demand rule must NOT appear in ctx.rules; it appears in ctx.on_demand_rules.
+    ///
+    /// WHY: context-budget regression fix — on-demand rules must never be inlined.
+    ///
+    /// Setup uses separate HOME and project dirs so the GCI and PPC tiers are
+    /// distinct; otherwise both resolve to the same .cascade/ and accumulate
+    /// duplicates (which is correct behaviour, just not what this test verifies).
+    #[test]
+    #[serial(global_env)]
+    fn on_demand_rules_separated_from_always_loaded() {
+        let fake_home = TempDir::new().unwrap();
+        let tmp_project = TempDir::new().unwrap();
+
+        // Only the project-level tier has rules — keeps accumulation predictable.
+        let cascade_dir = make_tier_dir(tmp_project.path());
+        write_config_toml(
+            &cascade_dir,
+            r#"
+[[rules]]
+text = "always rule"
+
+[[rules]]
+text = "deferred rule"
+on_demand = true
+load_when = "auth"
+"#,
+        );
+
+        let _guard = home_lock();
+        std::env::set_var("HOME", fake_home.path().to_str().unwrap());
+
+        let ctx = resolve_cascade(tmp_project.path()).expect("should resolve");
+
+        // Always-loaded rule is in ctx.rules, NOT in on_demand_rules.
+        assert!(
+            ctx.rules.contains(&"always rule".to_string()),
+            "always rule must be in ctx.rules"
+        );
+        assert!(
+            !ctx.rules.contains(&"deferred rule".to_string()),
+            "on-demand rule must NOT be in ctx.rules"
+        );
+
+        // On-demand rule is in ctx.on_demand_rules.
+        // PPC, PRC, PAC all map to the same project .cascade/ dir so each
+        // accumulates one copy → expect at least 1, all with the same text.
+        assert!(
+            !ctx.on_demand_rules.is_empty(),
+            "ctx.on_demand_rules must not be empty"
+        );
+        // Every entry must be the deferred rule (no other on-demand rules in config).
+        for od in &ctx.on_demand_rules {
+            assert_eq!(od.text, "deferred rule");
+            assert_eq!(od.load_when.as_deref(), Some("auth"));
+        }
+    }
+
+    // ── test 12: back-compat — old config without on_demand field ─────────────
+
+    /// A config.toml without any on_demand field deserialises correctly.
+    ///
+    /// WHY: existing configs must not break after the Rule struct was introduced.
+    #[test]
+    #[serial(global_env)]
+    fn back_compat_old_config_no_on_demand_field() {
+        let tmp = TempDir::new().unwrap();
+        let cascade_dir = make_tier_dir(tmp.path());
+        // Old-style config — plain string rules, no on_demand field.
+        write_config_toml(
+            &cascade_dir,
+            r#"
+instructions = "old style"
+rules = ["rule one", "rule two"]
+"#,
+        );
+
+        let _guard = home_lock();
+        std::env::set_var("HOME", tmp.path().to_str().unwrap());
+
+        let ctx = resolve_cascade(tmp.path()).expect("back-compat config must resolve");
+        assert_eq!(ctx.instructions, "old style");
+        assert!(ctx.rules.contains(&"rule one".to_string()));
+        assert!(ctx.rules.contains(&"rule two".to_string()));
+        // No on-demand rules from this config.
+        assert!(
+            ctx.on_demand_rules.is_empty(),
+            "old config must produce no on-demand rules"
+        );
+    }
+
+    // ── test 13: model registry override via config.toml ──────────────────────
+
+    /// A [models] table in config.toml overrides the default model registry.
+    #[test]
+    #[serial(global_env)]
+    fn model_registry_override_from_config_toml() {
+        let tmp = TempDir::new().unwrap();
+        let cascade_dir = make_tier_dir(tmp.path());
+        write_config_toml(
+            &cascade_dir,
+            r#"
+[models]
+t2 = { provider_id = "openai", model_id = "gpt-4o" }
+"#,
+        );
+
+        let _guard = home_lock();
+        std::env::set_var("HOME", tmp.path().to_str().unwrap());
+
+        let ctx = resolve_cascade(tmp.path()).expect("should resolve");
+        let t2 = ctx.model_registry.resolve(cascade_types::agent::Tier::T2);
+        assert_eq!(t2.provider_id, "openai");
+        assert_eq!(t2.model_id, "gpt-4o");
+
+        // Other tiers keep the default.
+        let t0 = ctx.model_registry.resolve(cascade_types::agent::Tier::T0);
+        assert_eq!(t0.provider_id, "cascade-default");
     }
 }

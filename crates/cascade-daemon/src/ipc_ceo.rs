@@ -3,15 +3,19 @@
 //! Purpose: expose `CeoOrchestrator` over the JSON-RPC typed dispatch path so
 //!   the CLI and app can submit directives, poll status, list pending approvals,
 //!   and approve/deny them.
+//!
 //! Inputs:
 //!   - JSON-RPC params for each method (see per-method structs below)
 //!   - `CeoRuntime` — shared state holding the active `CeoOrchestrator`
+//!
 //! Outputs:
 //!   - JSON `Response` (success or error)
+//!
 //! Constraints:
 //!   - `CeoOrchestrator` is behind an `Arc<Mutex<_>>`; guard is never held
 //!     across an `await` point (clone then release).
 //!   - Tests inject a `MockPlanner` — no live LLM, no disk I/O.
+//!
 //! SPORT: cascade-daemon / ipc_ceo — E-P6-04
 
 use std::sync::{Arc, Mutex};

@@ -359,6 +359,26 @@ impl McpServer {
         }
     }
 
+    /// Attach a pre-configured [`ToolRegistry`] to this server.
+    ///
+    /// Use this to inject a live retriever into the MCP server before calling
+    /// [`run`]:
+    ///
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use cascade_mcp::{McpServer, McpServerConfig};
+    /// # use cascade_mcp::tool::ToolRegistry;
+    /// # use cascade_mcp::transport::stdio::StdioTransport;
+    /// # use cascade_types::retriever::NoopRetriever;
+    /// let tools = ToolRegistry::new().with_retriever(Arc::new(NoopRetriever));
+    /// let server = McpServer::new(McpServerConfig::default(), Box::new(StdioTransport::new()))
+    ///     .with_tools(tools);
+    /// ```
+    pub fn with_tools(mut self, tools: ToolRegistry) -> Self {
+        self.tools = Arc::new(tools);
+        self
+    }
+
     /// Return a reference to the notification bus.
     ///
     /// Transports can call `subscribe()` on this before `run()` to receive

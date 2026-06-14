@@ -4,10 +4,13 @@
 //!   `task_delete`, and `task_move` to the `KanbanTaskStore`. These handlers
 //!   are called from `try_typed_dispatch` in ipc.rs.
 //!
-//! Inputs:  JSON `params` values from the typed JSON-RPC dispatch path.
+//! Inputs: JSON `params` values from the typed JSON-RPC dispatch path.
+//!
 //! Outputs: `Response` (success = JSON task(s); error = -32xxx code + message).
+//!
 //! Constraints: `KanbanTaskStore` is sync; handlers call `spawn_blocking` so the
 //!   async IPC task is never blocked on SQLite I/O.
+//!
 //! SPORT: cascade-daemon — task_create, task_update, task_list, task_get,
 //!        task_delete, task_move IPC methods
 
@@ -103,11 +106,8 @@ pub async fn handle_task_update(store: Arc<KanbanTaskStore>, params: Value) -> R
 
 /// Handle `task_list`.
 pub async fn handle_task_list(store: Arc<KanbanTaskStore>, params: Value) -> Response {
-    let p: TaskListParams = match serde_json::from_value(params) {
-        Ok(v) => v,
-        // Treat missing params as "list all"
-        Err(_) => TaskListParams::default(),
-    };
+    // Treat missing/invalid params as "list all"
+    let p: TaskListParams = serde_json::from_value(params).unwrap_or_default();
 
     let result = spawn_blocking(move || store.list(&p.filter)).await;
 

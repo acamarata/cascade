@@ -3,13 +3,17 @@
 //! Purpose: define the `ToolGrant` (per-agent allow-list) and `AccessLevel`
 //!   enum that governs what an agent may do with a given tool. `Outbound`
 //!   access (email/ticket/publish) requires explicit approval by default.
+//!
 //! Inputs: a `ToolGrant` set loaded from the agent library or constructed in code.
+//!
 //! Outputs: `GrantDecision` returned by `check(agent, tool, level)`.
+//!
 //! Constraints:
 //!   - `Outbound` always resolves to `NeedsApproval` unless explicitly overridden
 //!     with `approved: true` in the grant (safe default, per E-P6-06 spec).
 //!   - No async — grant checking is a pure synchronous lookup.
 //!   - serde camelCase; STRUCT variants only.
+//!
 //! SPORT: cascade-agents / grants — E-P6-06
 
 use serde::{Deserialize, Serialize};

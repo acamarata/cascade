@@ -2,14 +2,18 @@
 //!
 //! Purpose: register tool descriptors (from MCP or the agent library) and
 //!   resolve which tools an agent may use at a given access level.
+//!
 //! Inputs: `ToolDescriptor` registrations; `ToolGrant` lists per agent.
+//!
 //! Outputs:
 //!   - `tools_for(agent_id)` → granted `Vec<ToolDescriptor>`.
 //!   - `check(agent_id, tool_id, level)` → `GrantDecision`.
+//!
 //! Constraints:
 //!   - Thread-safe via `Arc<RwLock<_>>`.
 //!   - `Outbound` level always `NeedsApproval` unless grant has `approved: true`.
 //!   - A tool not listed in an agent's grants resolves to `Denied`.
+//!
 //! SPORT: cascade-agents / tool_registry — E-P6-06
 
 use std::collections::HashMap;

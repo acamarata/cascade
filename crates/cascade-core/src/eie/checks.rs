@@ -84,7 +84,7 @@ impl Check for FileSizeCheck {
             })
             .collect();
         // Worst offenders first.
-        issues.sort_by(|a, b| b.lines.cmp(&a.lines));
+        issues.sort_by_key(|b| std::cmp::Reverse(b.lines));
         report.file_size_issues.extend(issues);
     }
 }
@@ -173,7 +173,7 @@ impl Check for DuplicationCheck {
             })
             .collect();
         // Most-shared first.
-        issues.sort_by(|a, b| b.shared_windows.cmp(&a.shared_windows));
+        issues.sort_by_key(|b| std::cmp::Reverse(b.shared_windows));
         report.duplication_issues.extend(issues);
     }
 }

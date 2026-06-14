@@ -73,7 +73,8 @@ pub struct TierResult {
 ///
 /// | Field                 | Rule |
 /// |-----------------------|------|
-/// | `merged_instructions` | All tier instruction blocks concatenated, GCI first |
+/// | `merged_instructions` | All always-loaded tier instruction blocks, GCI first |
+/// | `on_demand_rules`     | Deferred rules — NOT inlined into harness files |
 /// | `mcp_server_url`      | Lowest tier that declares it wins (most specific) |
 /// | `tiers_found`         | All 6 tiers recorded; `found: false` when absent |
 /// | `working_dir`         | The canonicalised cwd passed to the resolver |
@@ -81,9 +82,19 @@ pub struct TierResult {
 pub struct ResolvedCascade {
     /// Concatenated instruction text from all found tiers, tier-ordered (GCI first).
     ///
+    /// Contains ONLY always-loaded content. On-demand rules are kept separate
+    /// in [`on_demand_rules`] and must not be inlined into harness files.
+    ///
     /// Tiers are separated by a `--- <TIER> ---` comment so callers can see
     /// provenance within the merged string.
     pub merged_instructions: String,
+
+    /// On-demand rules that should NOT be inlined into harness instruction files.
+    ///
+    /// Harness renderers emit these as pointer comment lines:
+    /// `-> <text> (load_when: <condition>)` to bound context-budget usage.
+    #[serde(default)]
+    pub on_demand_rules: Vec<cascade_types::tiers::OnDemandRule>,
 
     /// MCP server URL for the cascade daemon.
     ///
@@ -176,6 +187,7 @@ impl CascadeResolutionEngine {
 
         Ok(ResolvedCascade {
             merged_instructions,
+            on_demand_rules: Vec::new(),
             mcp_server_url,
             tiers_found: tier_results,
             working_dir,
