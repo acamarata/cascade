@@ -18,9 +18,11 @@ import {
   Database,
   GitFork,
   Inbox,
+  KanbanSquare,
   LayoutDashboard,
   LayoutGrid,
   Library,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -36,6 +38,11 @@ const NAV_ITEMS = [
     label: 'Dashboard',
   },
   { to: '/inbox', icon: <Inbox className="h-4 w-4 shrink-0" aria-hidden="true" />, label: 'Inbox' },
+  {
+    to: '/tasks',
+    icon: <KanbanSquare className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Tasks',
+  },
   {
     to: '/search',
     icon: <Search className="h-4 w-4 shrink-0" aria-hidden="true" />,
@@ -60,6 +67,11 @@ const NAV_ITEMS = [
     to: '/project-map',
     icon: <GitFork className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Project Map',
+  },
+  {
+    to: '/pews',
+    icon: <Network className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'PEWS',
   },
   {
     to: '/vault',

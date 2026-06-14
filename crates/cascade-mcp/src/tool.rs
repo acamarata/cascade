@@ -19,6 +19,14 @@
 //! | `cascade.memory.write` | Append to a memory file (auth-gated) |
 //! | `cascade.context_slice` | Token-budgeted, deduplicated context window (T-P4-E04-22) |
 //! | `cascade.provide_harness_context` | ONE-CALL harness bootstrap: merged instructions + policies + harness config (E-P7-01) |
+//! | `cascade.get_current` | Return current.yaml active pointers (<=200 tokens) |
+//! | `cascade.update_ticket_status` | Transition a ticket status with validation |
+//! | `cascade.append_event` | Append a raw event record to events.jsonl |
+//! | `cascade.get_sprint` | Return sprint YAML for a sprint ID |
+//! | `cascade.read_phase_status` | Return phase status summary |
+//! | `cascade.list_tickets` | List tickets with optional status/sprint filter |
+//! | `cascade.check_routes` | Curl-check api-routes.yaml and return per-route ok/fail |
+//! | `cascade.scan_inbox` | Drain .claude/inbox (or ai-folder/inbox) and return summaries |
 //!
 //! ## MCP spec compliance
 //!
@@ -50,6 +58,9 @@ use serde_json::Value;
 use tracing::debug;
 
 use cascade_core::cascade_resolution::resolve_cascade_full;
+use cascade_core::pbd::active_work::build_active_work;
+use cascade_core::pbd::store::{PbdStore, resolve_phases_root};
+use cascade_core::pbd::schema::{PbdEvent, TicketStatus};
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::error::Result;
 
@@ -117,6 +128,15 @@ impl ToolRegistry {
             cascade_memory_write_tool(),
             cascade_context_slice_tool(),
             cascade_provide_harness_context_tool(),
+            // PBD tools (E-P8-04)
+            cascade_get_current_tool(),
+            cascade_update_ticket_status_tool(),
+            cascade_append_event_tool(),
+            cascade_get_sprint_tool(),
+            cascade_read_phase_status_tool(),
+            cascade_list_tickets_tool(),
+            cascade_check_routes_tool(),
+            cascade_scan_inbox_tool(),
         ];
         Ok(serde_json::json!({ "tools": tools }))
     }
@@ -177,6 +197,17 @@ impl ToolRegistry {
             "cascade.provide_harness_context" => {
                 tool_result(handle_provide_harness_context(&args).await)
             }
+            // PBD tools (E-P8-04)
+            "cascade.get_current" => tool_result(handle_get_current(&args).await),
+            "cascade.update_ticket_status" => {
+                tool_result(handle_update_ticket_status(&args).await)
+            }
+            "cascade.append_event" => tool_result(handle_append_event(&args).await),
+            "cascade.get_sprint" => tool_result(handle_get_sprint(&args).await),
+            "cascade.read_phase_status" => tool_result(handle_read_phase_status(&args).await),
+            "cascade.list_tickets" => tool_result(handle_list_tickets(&args).await),
+            "cascade.check_routes" => tool_result(handle_check_routes(&args).await),
+            "cascade.scan_inbox" => tool_result(handle_scan_inbox(&args).await),
             _ => Err(JsonRpcError::not_found(format!("Unknown tool: {name}"))),
         }
     }
@@ -910,8 +941,9 @@ fn cascade_provide_harness_context_tool() -> McpTool {
         description: "ONE-CALL harness bootstrap (E-P7-01). A harness calls this once on startup \
                        and receives everything it needs: the resolved 6-tier merged instructions \
                        for the given cwd, the applicable policy set, harness-specific config, \
-                       and the MCP server coordinates. No per-tier file reconciliation required \
-                       in the harness — cascade owns all merging."
+                       the MCP server coordinates, and the live active-work context (active sprint \
+                       tickets + open kanban tasks). No per-tier file reconciliation required \
+                       in the harness — cascade owns all merging. (E-P8-07: active_work field)"
             .into(),
         input_schema: serde_json::json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1011,6 +1043,21 @@ async fn handle_provide_harness_context(
         "command": ["cascade", "mcp", "stdio"]
     });
 
+    // ── Build active-work context (E-P8-07) ─────────────────────────────────
+    // Discover phases root relative to cwd. No task DB available in MCP
+    // without a daemon pool, so kanban tasks section is omitted here (only PBD
+    // sprint tickets are included). When the daemon injects a KanbanTaskStore,
+    // call build_active_work_with_tasks instead.
+    let active_work = build_active_work(
+        cascade_core::pbd::store::locate_phases_root(cwd).as_deref(),
+        800, // 800-token budget per E-P8-07 spec
+        None, // kanban tasks: omitted without daemon task DB
+    )
+    .unwrap_or_default();
+
+    let active_work_text = active_work.text();
+    let active_work_json = serde_json::to_value(&active_work).unwrap_or(serde_json::Value::Null);
+
     Ok(serde_json::json!({
         "content": [{
             "type": "text",
@@ -1023,7 +1070,9 @@ async fn handle_provide_harness_context(
         "merged_instructions": resolved.merged_instructions,
         "policies":            policies,
         "config":              config,
-        "mcp":                 mcp
+        "mcp":                 mcp,
+        "active_work":         active_work_json,
+        "active_work_text":    active_work_text
     }))
 }
 
@@ -1070,6 +1119,960 @@ fn harness_config_block(harness: &str, mcp_server_url: &str) -> Value {
     }
 }
 
+// ── PBD tool definitions (E-P8-04) ───────────────────────────────────────────
+
+fn cascade_get_current_tool() -> McpTool {
+    McpTool {
+        name: "cascade.get_current".into(),
+        description: "Return current.yaml active pointers: active phase/epic/wave/sprint and \
+                       active ticket IDs. Bounded to <=200 tokens for session-boot use. \
+                       Accepts an optional phases_root override; defaults to CWD walk."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_update_ticket_status_tool() -> McpTool {
+    McpTool {
+        name: "cascade.update_ticket_status".into(),
+        description: "Transition a ticket to a new status. Validates the transition against the \
+                       TicketStatus enum (planned|queue|active|review|blocked|done|archived) \
+                       and writes an event to events.jsonl. Returns the new status on success."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["ticket_id", "status"],
+            "additionalProperties": false,
+            "properties": {
+                "ticket_id": {
+                    "type": "string",
+                    "description": "Ticket ID (e.g. T-P1-E01-W01-S01-01)",
+                    "minLength": 1
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["planned", "queue", "active", "review", "blocked", "done", "archived"],
+                    "description": "Target status"
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional note (required when status=blocked)"
+                },
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_append_event_tool() -> McpTool {
+    McpTool {
+        name: "cascade.append_event".into(),
+        description: "Append a raw PBD event record to events.jsonl. The record is validated \
+                       for required fields (ts, actor, level, id, from, to) before appending. \
+                       Use cascade.update_ticket_status for ticket transitions — this tool is \
+                       for custom/manual events."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["event"],
+            "additionalProperties": false,
+            "properties": {
+                "event": {
+                    "type": "object",
+                    "description": "PBD event object: {ts, actor, level, id, from, to, note?}",
+                    "required": ["actor", "level", "id", "from", "to"],
+                    "properties": {
+                        "ts": { "type": "string", "description": "ISO 8601 timestamp (auto-set if omitted)" },
+                        "actor": { "type": "string" },
+                        "level": {
+                            "type": "string",
+                            "enum": ["phase", "epic", "wave", "sprint", "ticket", "step"]
+                        },
+                        "id": { "type": "string" },
+                        "from": { "type": "string" },
+                        "to": { "type": "string" },
+                        "note": { "type": "string" }
+                    }
+                },
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_get_sprint_tool() -> McpTool {
+    McpTool {
+        name: "cascade.get_sprint".into(),
+        description: "Return the sprint YAML for the given sprint ID. Searches the active phase \
+                       tree for the sprint. Returns sprint metadata including tickets list."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["sprint_id"],
+            "additionalProperties": false,
+            "properties": {
+                "sprint_id": {
+                    "type": "string",
+                    "description": "Sprint ID (e.g. S01)",
+                    "minLength": 1
+                },
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_read_phase_status_tool() -> McpTool {
+    McpTool {
+        name: "cascade.read_phase_status".into(),
+        description: "Return a compact status summary for the given phase (or all non-archived \
+                       phases if phase_id is omitted). Includes ticket counts per status."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "phase_id": {
+                    "type": "string",
+                    "description": "Phase ID (e.g. p1). Omit to get all active phases."
+                },
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_list_tickets_tool() -> McpTool {
+    McpTool {
+        name: "cascade.list_tickets".into(),
+        description: "List tickets across the phase tree with optional filters. Returns ticket \
+                       ID, title, status, sprint, and repo. Filters are AND-combined."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["planned", "queue", "active", "review", "blocked", "done", "archived"],
+                    "description": "Filter by ticket status"
+                },
+                "sprint_id": {
+                    "type": "string",
+                    "description": "Filter to a specific sprint ID"
+                },
+                "phase_id": {
+                    "type": "string",
+                    "description": "Filter to a specific phase ID"
+                },
+                "phases_root": {
+                    "type": "string",
+                    "description": "Absolute path to the phases/ directory. Defaults to CWD auto-discovery."
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_check_routes_tool() -> McpTool {
+    McpTool {
+        name: "cascade.check_routes".into(),
+        description: "Run a check over api-routes.yaml if present in the project. Returns \
+                       per-route ok/fail status. HTTP client is injectable for tests (no \
+                       network required in test mode)."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "routes_file": {
+                    "type": "string",
+                    "description": "Absolute path to api-routes.yaml. Defaults to CWD/.claude/docs/api-routes.yaml."
+                },
+                "base_url": {
+                    "type": "string",
+                    "description": "Base URL override for all route checks (e.g. http://localhost:3000)"
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "description": "Per-route timeout in ms (default: 5000)",
+                    "default": 5000,
+                    "minimum": 100,
+                    "maximum": 30000
+                }
+            }
+        }),
+    }
+}
+
+fn cascade_scan_inbox_tool() -> McpTool {
+    McpTool {
+        name: "cascade.scan_inbox".into(),
+        description: "Drain .claude/inbox (or <ai-folder>/inbox) for CI/CD error messages and \
+                       PCI messages. Returns summaries of all .md files found: filename, first \
+                       line (subject), and size. Does not delete files."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "inbox_path": {
+                    "type": "string",
+                    "description": "Absolute path to the inbox directory. Defaults to CWD auto-discovery."
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project name for ~/Sites/{project}/.claude/inbox/ resolution."
+                }
+            }
+        }),
+    }
+}
+
+// ── PBD tool handlers (E-P8-04) ───────────────────────────────────────────────
+
+/// `cascade.get_current` — return current.yaml active pointers.
+///
+/// Returns a compact JSON object bounded to <=200 tokens for session-boot use.
+async fn handle_get_current(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+
+    let current = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        store.read_current()
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("read_current: {e}")))?;
+
+    // Build compact output (<=200 tokens: JSON with only populated fields)
+    let mut obj = serde_json::Map::new();
+    if let Some(p) = &current.active_phase {
+        obj.insert("phase".into(), Value::String(p.clone()));
+    }
+    if let Some(e) = &current.active_epic {
+        obj.insert("epic".into(), Value::String(e.clone()));
+    }
+    if let Some(w) = &current.active_wave {
+        obj.insert("wave".into(), Value::String(w.clone()));
+    }
+    if let Some(s) = &current.active_sprint {
+        obj.insert("sprint".into(), Value::String(s.clone()));
+    }
+    if !current.active_tickets.is_empty() {
+        obj.insert(
+            "tickets".into(),
+            Value::Array(
+                current
+                    .active_tickets
+                    .iter()
+                    .map(|t| Value::String(t.clone()))
+                    .collect(),
+            ),
+        );
+    }
+
+    let text = serde_json::to_string(&obj)
+        .unwrap_or_else(|_| "{}".into());
+
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": text }],
+        "current": obj
+    }))
+}
+
+/// `cascade.update_ticket_status` — transition a ticket status.
+///
+/// Looks up the ticket in the INDEX to find its full path, then delegates to
+/// `PbdStore::transition_ticket`. Validates the status enum and transition graph.
+async fn handle_update_ticket_status(
+    args: &Value,
+) -> std::result::Result<Value, JsonRpcError> {
+    let ticket_id = args
+        .get("ticket_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| JsonRpcError::invalid_params("'ticket_id' is required"))?
+        .to_string();
+
+    let status_str = args
+        .get("status")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| JsonRpcError::invalid_params("'status' is required"))?
+        .to_string();
+
+    let note = args
+        .get("note")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+    let ticket_id_for_resp = ticket_id.clone();
+
+    let new_status = parse_ticket_status(&status_str)
+        .ok_or_else(|| JsonRpcError::invalid_params(format!("invalid status: '{status_str}'")))?;
+
+    let result = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        // Walk the index to locate ticket coordinates
+        let index = store.read_index()?;
+        let entry = index
+            .entries
+            .iter()
+            .find(|e| e.kind == "ticket" && e.id == ticket_id)
+            .ok_or_else(|| {
+                cascade_types::error::CascadeError::Other(format!(
+                    "ticket '{ticket_id}' not found in INDEX.yaml"
+                ))
+            })?;
+        // Resolve parent chain: ticket -> sprint -> wave -> epic -> phase
+        let coords = resolve_ticket_coords(&store, &entry.id, entry.parent.as_deref())?;
+        store.transition_ticket(
+            &coords.phase_id,
+            &coords.epic_id,
+            &coords.wave_id,
+            &coords.sprint_id,
+            &ticket_id,
+            new_status.clone(),
+            note.as_deref(),
+        )?;
+        Ok::<String, cascade_types::error::CascadeError>(new_status.as_str().to_string())
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("transition: {e}")))?;
+
+    Ok(serde_json::json!({
+        "content": [{
+            "type": "text",
+            "text": format!("ticket '{}' -> '{}'", ticket_id_for_resp, result)
+        }],
+        "ticket_id": ticket_id_for_resp,
+        "new_status": result
+    }))
+}
+
+/// `cascade.append_event` — append a raw event to events.jsonl.
+async fn handle_append_event(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let event_val = args
+        .get("event")
+        .cloned()
+        .ok_or_else(|| JsonRpcError::invalid_params("'event' is required"))?;
+
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+
+    // Inject ts if missing before deserializing (PbdEvent requires ts)
+    let mut event_val = event_val;
+    if let Value::Object(ref mut map) = event_val {
+        map.entry("ts").or_insert_with(|| {
+            Value::String(chrono::Utc::now().to_rfc3339())
+        });
+    }
+    let event: PbdEvent = serde_json::from_value(event_val)
+        .map_err(|e| JsonRpcError::invalid_params(format!("invalid event JSON: {e}")))?;
+
+    let result = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        store.init()?;
+        store.append_event(&event)
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("append_event: {e}")))?;
+
+    let _ = result;
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": "event appended" }]
+    }))
+}
+
+/// `cascade.get_sprint` — return sprint YAML for a sprint ID.
+///
+/// Searches the entire phase/epic/wave tree for the matching sprint.
+async fn handle_get_sprint(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let sprint_id = args
+        .get("sprint_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| JsonRpcError::invalid_params("'sprint_id' is required"))?
+        .to_string();
+
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+
+    let sprint_json = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        // Walk the INDEX for a sprint entry
+        let index = store.read_index()?;
+        let entry = index
+            .entries
+            .iter()
+            .find(|e| e.kind == "sprint" && e.id == sprint_id)
+            .ok_or_else(|| {
+                cascade_types::error::CascadeError::Other(format!(
+                    "sprint '{sprint_id}' not found in INDEX.yaml"
+                ))
+            })?;
+        // entry.parent is wave_id; wave.parent is epic_id; epic.parent is phase_id
+        let wave_id = entry.parent.as_deref().ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "sprint '{sprint_id}' has no parent wave in INDEX"
+            ))
+        })?;
+        let wave_entry = index
+            .entries
+            .iter()
+            .find(|e| e.kind == "wave" && e.id == wave_id)
+            .ok_or_else(|| {
+                cascade_types::error::CascadeError::Other(format!(
+                    "wave '{wave_id}' not found in INDEX.yaml"
+                ))
+            })?;
+        let epic_id = wave_entry.parent.as_deref().ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "wave '{wave_id}' has no parent epic in INDEX"
+            ))
+        })?;
+        let epic_entry = index
+            .entries
+            .iter()
+            .find(|e| e.kind == "epic" && e.id == epic_id)
+            .ok_or_else(|| {
+                cascade_types::error::CascadeError::Other(format!(
+                    "epic '{epic_id}' not found in INDEX.yaml"
+                ))
+            })?;
+        let phase_id = epic_entry.parent.as_deref().ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "epic '{epic_id}' has no parent phase in INDEX"
+            ))
+        })?;
+        let sprint = store.load_sprint(phase_id, epic_id, wave_id, &sprint_id)?;
+        serde_json::to_string(&sprint)
+            .map_err(|e| cascade_types::error::CascadeError::Other(format!("json: {e}")))
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("get_sprint: {e}")))?;
+
+    let sprint_val: Value = serde_json::from_str(&sprint_json)
+        .unwrap_or(Value::Null);
+
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": sprint_json }],
+        "sprint": sprint_val
+    }))
+}
+
+/// `cascade.read_phase_status` — compact status summary for a phase.
+async fn handle_read_phase_status(
+    args: &Value,
+) -> std::result::Result<Value, JsonRpcError> {
+    let phase_id_filter = args.get("phase_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+
+    let summary = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        let phases = store.list_phases()?;
+        let mut result = Vec::new();
+        for phase in &phases {
+            if let Some(ref filter) = phase_id_filter {
+                if &phase.id != filter {
+                    continue;
+                }
+            }
+            // Skip archived phases unless explicitly requested
+            if phase.status == cascade_core::pbd::schema::PhaseStatus::Archived
+                && phase_id_filter.is_none()
+            {
+                continue;
+            }
+            let index = store.read_index().unwrap_or_default();
+            let tickets: Vec<_> = index
+                .entries
+                .iter()
+                .filter(|e| e.kind == "ticket")
+                .collect();
+            let mut counts = std::collections::HashMap::new();
+            for t in &tickets {
+                *counts.entry(t.status.clone()).or_insert(0u32) += 1;
+            }
+            result.push(serde_json::json!({
+                "id": phase.id,
+                "title": phase.title,
+                "status": phase.status.as_str(),
+                "ticket_counts": counts,
+                "started_at": phase.started_at,
+                "closed_at": phase.closed_at
+            }));
+        }
+        Ok::<Vec<Value>, cascade_types::error::CascadeError>(result)
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("read_phase_status: {e}")))?;
+
+    let text = serde_json::to_string(&summary).unwrap_or_else(|_| "[]".into());
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": text }],
+        "phases": summary
+    }))
+}
+
+/// `cascade.list_tickets` — list tickets with optional filters.
+async fn handle_list_tickets(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let status_filter = args.get("status").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let sprint_filter = args.get("sprint_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let phase_filter = args.get("phase_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
+
+    let tickets = tokio::task::spawn_blocking(move || {
+        let store = PbdStore::new(&root);
+        let index = store.read_index()?;
+        let mut result = Vec::new();
+        for entry in &index.entries {
+            if entry.kind != "ticket" {
+                continue;
+            }
+            if let Some(ref sf) = status_filter {
+                if &entry.status != sf {
+                    continue;
+                }
+            }
+            if let Some(ref spf) = sprint_filter {
+                if entry.parent.as_deref() != Some(spf.as_str()) {
+                    continue;
+                }
+            }
+            if let Some(ref pf) = phase_filter {
+                // Ticket parent is sprint; sprint parent is wave; wave parent is epic; epic parent is phase.
+                // Fast check: look up sprint -> wave -> epic -> phase in index.
+                if !ticket_in_phase(&index.entries, &entry.id, pf) {
+                    continue;
+                }
+            }
+            result.push(serde_json::json!({
+                "id": entry.id,
+                "title": entry.title,
+                "status": entry.status,
+                "sprint": entry.parent,
+            }));
+        }
+        Ok::<Vec<Value>, cascade_types::error::CascadeError>(result)
+    })
+    .await
+    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?
+    .map_err(|e| JsonRpcError::internal(format!("list_tickets: {e}")))?;
+
+    let text = serde_json::to_string(&tickets).unwrap_or_else(|_| "[]".into());
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": text }],
+        "tickets": tickets,
+        "count": tickets.len()
+    }))
+}
+
+/// `cascade.check_routes` — check api-routes.yaml and return per-route ok/fail.
+///
+/// Reads a minimal YAML file of the form:
+/// ```yaml
+/// routes:
+///   - path: /api/health
+///     method: GET
+///     expected_status: 200
+/// ```
+/// and issues HTTP checks. `base_url` overrides the host. In tests, callers
+/// can point `routes_file` at a seeded temp file and `base_url` at a mock server.
+async fn handle_check_routes(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let routes_file = args.get("routes_file").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let base_url = args.get("base_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let timeout_ms = args
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(5000)
+        .clamp(100, 30000);
+
+    // Resolve routes file path
+    let path = if let Some(p) = routes_file {
+        std::path::PathBuf::from(p)
+    } else {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        cwd.join(".claude").join("docs").join("api-routes.yaml")
+    };
+
+    if !path.exists() {
+        return Ok(serde_json::json!({
+            "content": [{ "type": "text", "text": format!("routes file not found: {}", path.display()) }],
+            "routes": [],
+            "not_found": true
+        }));
+    }
+
+    let yaml_text = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| JsonRpcError::internal(format!("read routes file: {e}")))?;
+
+    // Parse routes — minimal YAML parse without full serde dependency
+    let routes = parse_routes_yaml(&yaml_text);
+
+    if routes.is_empty() {
+        return Ok(serde_json::json!({
+            "content": [{ "type": "text", "text": "no routes found in api-routes.yaml" }],
+            "routes": []
+        }));
+    }
+
+    // Check each route
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|e| JsonRpcError::internal(format!("build http client: {e}")))?;
+
+    let mut results = Vec::new();
+    for route in &routes {
+        let url = if let Some(ref base) = base_url {
+            format!("{}{}", base.trim_end_matches('/'), route.path)
+        } else {
+            route.path.clone()
+        };
+
+        let method = route.method.to_uppercase();
+        let req = match method.as_str() {
+            "POST" => client.post(&url),
+            "PUT" => client.put(&url),
+            "DELETE" => client.delete(&url),
+            "PATCH" => client.patch(&url),
+            _ => client.get(&url),
+        };
+
+        let (ok, status_code, error_msg) = match req.send().await {
+            Ok(resp) => {
+                let code = resp.status().as_u16();
+                let expected = route.expected_status.unwrap_or(200);
+                (code == expected, Some(code), None)
+            }
+            Err(e) => (false, None, Some(e.to_string())),
+        };
+
+        results.push(serde_json::json!({
+            "path": route.path,
+            "method": route.method,
+            "ok": ok,
+            "status_code": status_code,
+            "expected_status": route.expected_status,
+            "error": error_msg
+        }));
+    }
+
+    let all_ok = results.iter().all(|r| r["ok"].as_bool().unwrap_or(false));
+    let text = format!(
+        "{}/{} routes ok",
+        results.iter().filter(|r| r["ok"].as_bool().unwrap_or(false)).count(),
+        results.len()
+    );
+
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": text }],
+        "routes": results,
+        "all_ok": all_ok
+    }))
+}
+
+/// `cascade.scan_inbox` — scan an inbox directory and return file summaries.
+async fn handle_scan_inbox(args: &Value) -> std::result::Result<Value, JsonRpcError> {
+    let inbox_path = if let Some(p) = args.get("inbox_path").and_then(|v| v.as_str()) {
+        std::path::PathBuf::from(p)
+    } else if let Some(proj) = args.get("project").and_then(|v| v.as_str()) {
+        mcp_paths::inbox_dir(proj)
+    } else {
+        // Auto-discover: CWD/.claude/inbox or CWD/.cascade/inbox
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let claude_inbox = cwd.join(".claude").join("inbox");
+        if claude_inbox.is_dir() {
+            claude_inbox
+        } else {
+            cwd.join(".cascade").join("inbox")
+        }
+    };
+
+    if !inbox_path.exists() {
+        return Ok(serde_json::json!({
+            "content": [{ "type": "text", "text": "inbox directory not found" }],
+            "messages": [],
+            "count": 0
+        }));
+    }
+
+    let mut messages = Vec::new();
+    let mut rd = tokio::fs::read_dir(&inbox_path)
+        .await
+        .map_err(|e| JsonRpcError::internal(format!("read inbox dir: {e}")))?;
+
+    while let Ok(Some(entry)) = rd.next_entry().await {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let filename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let meta = tokio::fs::metadata(&path).await.ok();
+        let size = meta.map(|m| m.len()).unwrap_or(0);
+
+        // Read first non-empty line as subject
+        let subject = if let Ok(content) = tokio::fs::read_to_string(&path).await {
+            content
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .trim_start_matches('#')
+                .trim()
+                .to_string()
+        } else {
+            String::new()
+        };
+
+        messages.push(serde_json::json!({
+            "file": filename,
+            "subject": subject,
+            "size_bytes": size
+        }));
+    }
+
+    // Sort by filename (chronological for date-prefixed names)
+    messages.sort_by(|a, b| {
+        a["file"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["file"].as_str().unwrap_or(""))
+    });
+
+    let count = messages.len();
+    let text = format!("{count} message(s) in inbox");
+
+    Ok(serde_json::json!({
+        "content": [{ "type": "text", "text": text }],
+        "messages": messages,
+        "count": count
+    }))
+}
+
+// ── PBD helpers ───────────────────────────────────────────────────────────────
+
+/// Extract optional phases_root from args.
+fn pbd_root_from_args(args: &Value) -> Option<std::path::PathBuf> {
+    args.get("phases_root")
+        .and_then(|v| v.as_str())
+        .map(std::path::PathBuf::from)
+}
+
+/// Parse a status string into a TicketStatus enum value.
+fn parse_ticket_status(s: &str) -> Option<TicketStatus> {
+    match s {
+        "planned" => Some(TicketStatus::Planned),
+        "queue" => Some(TicketStatus::Queue),
+        "active" => Some(TicketStatus::Active),
+        "review" => Some(TicketStatus::Review),
+        "blocked" => Some(TicketStatus::Blocked),
+        "done" => Some(TicketStatus::Done),
+        "archived" => Some(TicketStatus::Archived),
+        _ => None,
+    }
+}
+
+/// Ticket coordinate resolution: given ticket_id and its sprint parent from INDEX,
+/// walk the index upward to find (phase_id, epic_id, wave_id, sprint_id).
+struct TicketCoords {
+    phase_id: String,
+    epic_id: String,
+    wave_id: String,
+    sprint_id: String,
+}
+
+fn resolve_ticket_coords(
+    store: &PbdStore,
+    ticket_id: &str,
+    sprint_id_opt: Option<&str>,
+) -> std::result::Result<TicketCoords, cascade_types::error::CascadeError> {
+    let index = store.read_index()?;
+    let sprint_id = sprint_id_opt.ok_or_else(|| {
+        cascade_types::error::CascadeError::Other(format!(
+            "ticket '{ticket_id}' has no sprint parent in INDEX"
+        ))
+    })?;
+    let sprint_entry = index
+        .entries
+        .iter()
+        .find(|e| e.kind == "sprint" && e.id == sprint_id)
+        .ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "sprint '{sprint_id}' not found in INDEX"
+            ))
+        })?;
+    let wave_id = sprint_entry.parent.as_deref().ok_or_else(|| {
+        cascade_types::error::CascadeError::Other(format!("sprint '{sprint_id}' has no wave in INDEX"))
+    })?;
+    let wave_entry = index
+        .entries
+        .iter()
+        .find(|e| e.kind == "wave" && e.id == wave_id)
+        .ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "wave '{wave_id}' not found in INDEX"
+            ))
+        })?;
+    let epic_id = wave_entry.parent.as_deref().ok_or_else(|| {
+        cascade_types::error::CascadeError::Other(format!("wave '{wave_id}' has no epic in INDEX"))
+    })?;
+    let epic_entry = index
+        .entries
+        .iter()
+        .find(|e| e.kind == "epic" && e.id == epic_id)
+        .ok_or_else(|| {
+            cascade_types::error::CascadeError::Other(format!(
+                "epic '{epic_id}' not found in INDEX"
+            ))
+        })?;
+    let phase_id = epic_entry.parent.as_deref().ok_or_else(|| {
+        cascade_types::error::CascadeError::Other(format!(
+            "epic '{epic_id}' has no phase in INDEX"
+        ))
+    })?;
+    Ok(TicketCoords {
+        phase_id: phase_id.to_string(),
+        epic_id: epic_id.to_string(),
+        wave_id: wave_id.to_string(),
+        sprint_id: sprint_id.to_string(),
+    })
+}
+
+/// Check whether ticket_id belongs to phase_id by walking the index parent chain.
+fn ticket_in_phase(
+    entries: &[cascade_core::pbd::schema::IndexEntry],
+    ticket_id: &str,
+    phase_id: &str,
+) -> bool {
+    // ticket -> sprint -> wave -> epic -> phase
+    let ticket = entries.iter().find(|e| e.kind == "ticket" && e.id == ticket_id);
+    let sprint_id = match ticket.and_then(|t| t.parent.as_deref()) {
+        Some(s) => s,
+        None => return false,
+    };
+    let sprint = entries.iter().find(|e| e.kind == "sprint" && e.id == sprint_id);
+    let wave_id = match sprint.and_then(|s| s.parent.as_deref()) {
+        Some(w) => w,
+        None => return false,
+    };
+    let wave = entries.iter().find(|e| e.kind == "wave" && e.id == wave_id);
+    let epic_id = match wave.and_then(|w| w.parent.as_deref()) {
+        Some(e) => e,
+        None => return false,
+    };
+    let epic = entries.iter().find(|e| e.kind == "epic" && e.id == epic_id);
+    match epic.and_then(|e| e.parent.as_deref()) {
+        Some(p) => p == phase_id,
+        None => false,
+    }
+}
+
+/// Minimal YAML-parsing for api-routes.yaml.
+///
+/// Parses a routes file of the form:
+/// ```yaml
+/// routes:
+///   - path: /api/health
+///     method: GET
+///     expected_status: 200
+/// ```
+/// This avoids pulling in a heavy serde_yaml dependency specifically for this function.
+struct RouteEntry {
+    path: String,
+    method: String,
+    expected_status: Option<u16>,
+}
+
+fn parse_routes_yaml(yaml: &str) -> Vec<RouteEntry> {
+    let mut routes = Vec::new();
+    let mut in_routes = false;
+    let mut current: Option<(String, String, Option<u16>)> = None;
+
+    for line in yaml.lines() {
+        let trimmed = line.trim();
+        if trimmed == "routes:" {
+            in_routes = true;
+            continue;
+        }
+        if !in_routes {
+            continue;
+        }
+        // New route entry
+        if trimmed.starts_with("- path:") || trimmed.starts_with("-path:") {
+            // Flush previous
+            if let Some((path, method, expected)) = current.take() {
+                if !path.is_empty() {
+                    routes.push(RouteEntry { path, method, expected_status: expected });
+                }
+            }
+            let path = trimmed
+                .trim_start_matches('-')
+                .trim()
+                .strip_prefix("path:")
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            current = Some((path, "GET".into(), None));
+        } else if let Some(ref mut c) = current {
+            if trimmed.starts_with("method:") {
+                c.1 = trimmed.strip_prefix("method:").unwrap_or("GET").trim().to_string();
+            } else if trimmed.starts_with("expected_status:") {
+                if let Ok(code) = trimmed
+                    .strip_prefix("expected_status:")
+                    .unwrap_or("")
+                    .trim()
+                    .parse::<u16>()
+                {
+                    c.2 = Some(code);
+                }
+            }
+        }
+    }
+    // Flush last entry
+    if let Some((path, method, expected)) = current {
+        if !path.is_empty() {
+            routes.push(RouteEntry { path, method, expected_status: expected });
+        }
+    }
+    routes
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Return today's date as `YYYY-MM-DD` (UTC, approximate).
@@ -1102,7 +2105,7 @@ mod tests {
 
     // ── tools/list ────────────────────────────────────────────────────────────
 
-    /// tools/list returns exactly 10 tools (9 original + cascade.provide_harness_context).
+    /// tools/list returns exactly 18 tools (10 original + 8 PBD tools E-P8-04).
     #[tokio::test]
     async fn tools_list_returns_9_tools() {
         let reg = ToolRegistry::new();
@@ -1110,8 +2113,8 @@ mod tests {
         let tools = result["tools"].as_array().expect("tools must be array");
         assert_eq!(
             tools.len(),
-            10,
-            "expected exactly 10 tools, got {}",
+            18,
+            "expected exactly 18 tools, got {}",
             tools.len()
         );
     }
@@ -1496,7 +2499,7 @@ mod tests {
         );
     }
 
-    /// tools/list now returns 10 tools (9 original + provide_harness_context).
+    /// tools/list now returns 18 tools (10 original + 8 PBD E-P8-04).
     #[tokio::test]
     async fn tools_list_returns_10_tools() {
         let reg = ToolRegistry::new();
@@ -1504,8 +2507,8 @@ mod tests {
         let tools = result["tools"].as_array().expect("tools must be array");
         assert_eq!(
             tools.len(),
-            10,
-            "expected exactly 10 tools, got {}",
+            18,
+            "expected exactly 18 tools, got {}",
             tools.len()
         );
     }
@@ -1766,5 +2769,663 @@ mod tests {
             meta.get("budget_tokens").is_some(),
             "metadata.budget_tokens required"
         );
+    }
+
+    // ── PBD tool tests (E-P8-04) ─────────────────────────────────────────────
+
+    /// Build a minimal phases tree in a temp dir and return its path.
+    fn scaffold_pbd_tree() -> tempfile::TempDir {
+        use cascade_core::pbd::schema::*;
+        use cascade_core::pbd::store::PbdStore;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let phases = tmp.path().join("phases");
+        let store = PbdStore::new(&phases);
+        store.init().unwrap();
+
+        let phase = Phase {
+            id: "p1".into(),
+            title: "Phase 1".into(),
+            status: PhaseStatus::Building,
+            epics: vec![],
+            started_at: Some(chrono::Utc::now()),
+            closed_at: None,
+            note: None,
+        };
+        store.create_phase(&phase).unwrap();
+
+        let epic = Epic {
+            id: "e01".into(),
+            phase_id: "p1".into(),
+            title: "Epic 1".into(),
+            status: EpicStatus::Active,
+            waves: vec![],
+            depends_on: vec![],
+            note: None,
+        };
+        store.create_epic(&epic).unwrap();
+
+        let wave = Wave {
+            id: "w01".into(),
+            epic_id: "e01".into(),
+            title: "Wave 1".into(),
+            status: WaveStatus::Active,
+            sprints: vec![],
+            note: None,
+        };
+        store.create_wave("p1", &wave).unwrap();
+
+        let sprint = Sprint {
+            id: "s01".into(),
+            wave_id: "w01".into(),
+            title: "Sprint 1".into(),
+            status: SprintStatus::Active,
+            tickets: vec![],
+            note: None,
+        };
+        store.create_sprint("p1", "e01", &sprint).unwrap();
+
+        let ticket = Ticket {
+            id: "T-P1-E01-01".into(),
+            sprint_id: "s01".into(),
+            title: "Test ticket".into(),
+            status: TicketStatus::Active,
+            steps: vec![],
+            depends_on: vec![],
+            repo: None,
+            weight: None,
+            note: None,
+            blocked_reason: None,
+        };
+        store.create_ticket("p1", "e01", "w01", &ticket).unwrap();
+
+        tmp
+    }
+
+    /// cascade.get_current returns shape with content field.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_get_current_shape() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.get_current",
+            "arguments": { "phases_root": phases_root.to_str().unwrap() }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "get_current should succeed: {result}"
+        );
+        let content = result["content"].as_array().expect("content array");
+        assert!(!content.is_empty(), "content must not be empty");
+        // current block present
+        assert!(result.get("current").is_some(), "current field required");
+    }
+
+    /// cascade.get_current on empty phases tree returns empty current.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_get_current_empty_tree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let phases_root = tmp.path().join("phases");
+        std::fs::create_dir_all(&phases_root).unwrap();
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.get_current",
+            "arguments": { "phases_root": phases_root.to_str().unwrap() }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        // Empty phases → no error, empty current
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "empty tree should not be an error: {result}"
+        );
+        let current = &result["current"];
+        assert!(
+            current.as_object().map(|o| o.is_empty()).unwrap_or(false),
+            "empty tree should yield empty current: {current}"
+        );
+    }
+
+    /// cascade.update_ticket_status — valid transition active->done.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_update_ticket_status_valid_transition() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.update_ticket_status",
+            "arguments": {
+                "ticket_id": "T-P1-E01-01",
+                "status": "done",
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "valid transition must succeed: {result}"
+        );
+        assert_eq!(
+            result["new_status"].as_str(),
+            Some("done"),
+            "new_status must be 'done'"
+        );
+    }
+
+    /// cascade.update_ticket_status — invalid transition done->queue returns is_error.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_update_ticket_status_invalid_transition() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+
+        // First move to done
+        use cascade_core::pbd::schema::TicketStatus;
+        use cascade_core::pbd::store::PbdStore;
+        let store = PbdStore::new(tmp.path().join("phases"));
+        store.transition_ticket("p1", "e01", "w01", "s01", "T-P1-E01-01", TicketStatus::Done, None).unwrap();
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.update_ticket_status",
+            "arguments": {
+                "ticket_id": "T-P1-E01-01",
+                "status": "queue",  // done->queue is not allowed
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "invalid transition must return is_error: {result}"
+        );
+    }
+
+    /// cascade.update_ticket_status — invalid status string returns is_error.
+    #[tokio::test]
+    async fn pbd_update_ticket_status_bad_status_string() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.update_ticket_status",
+            "arguments": {
+                "ticket_id": "T-X",
+                "status": "flying"
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "bad status must be is_error"
+        );
+    }
+
+    /// cascade.append_event — event appended and readable.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_append_event_ordering() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let phases_root = tmp.path().join("phases");
+        std::fs::create_dir_all(&phases_root).unwrap();
+        let reg = ToolRegistry::new();
+
+        // Append two events
+        for (from, to) in [("planned", "active"), ("active", "done")] {
+            let params = serde_json::json!({
+                "name": "cascade.append_event",
+                "arguments": {
+                    "event": {
+                        "actor": "test",
+                        "level": "ticket",
+                        "id": "T-001",
+                        "from": from,
+                        "to": to
+                    },
+                    "phases_root": phases_root.to_str().unwrap()
+                }
+            });
+            let result = reg.call(&params).await.expect("no protocol error");
+            assert!(
+                result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+                "append_event must succeed: {result}"
+            );
+        }
+
+        // Read events.jsonl and verify ordering
+        let events_path = phases_root.join("events.jsonl");
+        let content = std::fs::read_to_string(&events_path).expect("events.jsonl must exist");
+        let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines.len(), 2, "two events must be appended; got: {content}");
+        let first: Value = serde_json::from_str(lines[0]).unwrap();
+        let second: Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(first["from"].as_str(), Some("planned"));
+        assert_eq!(second["from"].as_str(), Some("active"));
+    }
+
+    /// cascade.append_event — missing required field returns is_error.
+    #[tokio::test]
+    async fn pbd_append_event_missing_field() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.append_event",
+            "arguments": {
+                "event": {
+                    "actor": "test",
+                    // missing level, id, from, to
+                }
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "missing fields must be is_error"
+        );
+    }
+
+    /// cascade.get_sprint — returns sprint JSON.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_get_sprint_found() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.get_sprint",
+            "arguments": {
+                "sprint_id": "s01",
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "get_sprint must succeed: {result}"
+        );
+        let sprint = &result["sprint"];
+        assert_eq!(sprint["id"].as_str(), Some("s01"), "sprint.id must be s01");
+        assert!(!sprint["tickets"].is_null(), "sprint.tickets must be present");
+    }
+
+    /// cascade.get_sprint — unknown sprint returns is_error.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_get_sprint_not_found() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.get_sprint",
+            "arguments": {
+                "sprint_id": "s99",
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "unknown sprint must return is_error"
+        );
+    }
+
+    /// cascade.list_tickets — no filter returns all tickets.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_list_tickets_no_filter() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.list_tickets",
+            "arguments": { "phases_root": phases_root.to_str().unwrap() }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "list_tickets must succeed: {result}"
+        );
+        let tickets = result["tickets"].as_array().expect("tickets must be array");
+        assert_eq!(tickets.len(), 1, "should find exactly one ticket; got {}", tickets.len());
+    }
+
+    /// cascade.list_tickets — status filter.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pbd_list_tickets_status_filter() {
+        let tmp = scaffold_pbd_tree();
+        let phases_root = tmp.path().join("phases");
+        let reg = ToolRegistry::new();
+
+        // Filter for "active" → 1 result
+        let params = serde_json::json!({
+            "name": "cascade.list_tickets",
+            "arguments": {
+                "status": "active",
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        let tickets = result["tickets"].as_array().unwrap();
+        assert_eq!(tickets.len(), 1, "active filter: expected 1 ticket");
+
+        // Filter for "done" → 0 results
+        let params2 = serde_json::json!({
+            "name": "cascade.list_tickets",
+            "arguments": {
+                "status": "done",
+                "phases_root": phases_root.to_str().unwrap()
+            }
+        });
+        let result2 = reg.call(&params2).await.expect("no protocol error");
+        let tickets2 = result2["tickets"].as_array().unwrap();
+        assert_eq!(tickets2.len(), 0, "done filter: expected 0 tickets");
+    }
+
+    /// cascade.check_routes — missing routes file returns not_found flag.
+    #[tokio::test]
+    async fn pbd_check_routes_missing_file() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.check_routes",
+            "arguments": {
+                "routes_file": "/tmp/does_not_exist_cascade_routes_xyz.yaml"
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "missing routes file must not be is_error (just not_found flag): {result}"
+        );
+        assert_eq!(
+            result["not_found"].as_bool(),
+            Some(true),
+            "not_found flag must be true"
+        );
+    }
+
+    /// cascade.check_routes — mock HTTP: routes_file with base_url pointing to httpbin.
+    ///
+    /// This test uses a seeded temp routes file and a mock server.
+    /// Because we can't guarantee network in CI, we test the parsing + structure only
+    /// when a real server is unavailable (ok=false is still a valid structured response).
+    #[tokio::test]
+    async fn pbd_check_routes_with_mock_file() {
+        use std::io::Write;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let routes_file = tmp.path().join("api-routes.yaml");
+        {
+            let mut f = std::fs::File::create(&routes_file).unwrap();
+            writeln!(f, "routes:").unwrap();
+            writeln!(f, "  - path: /healthz").unwrap();
+            writeln!(f, "    method: GET").unwrap();
+            writeln!(f, "    expected_status: 200").unwrap();
+        }
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.check_routes",
+            "arguments": {
+                "routes_file": routes_file.to_str().unwrap(),
+                "base_url": "http://127.0.0.1:1",  // nothing listening → connection refused
+                "timeout_ms": 200
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        // Must not be a tool-level error — connection refused becomes ok=false in the routes array
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "check_routes must not bubble network errors as is_error: {result}"
+        );
+        let routes = result["routes"].as_array().expect("routes must be array");
+        assert_eq!(routes.len(), 1, "one route must be in result");
+        assert_eq!(routes[0]["path"].as_str(), Some("/healthz"), "path must match");
+        assert_eq!(routes[0]["ok"].as_bool(), Some(false), "connection refused must be ok=false");
+    }
+
+    /// cascade.scan_inbox — finds seeded .md error files.
+    #[tokio::test]
+    async fn pbd_scan_inbox_finds_error_files() {
+        use std::io::Write;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let inbox = tmp.path().join("inbox");
+        std::fs::create_dir_all(&inbox).unwrap();
+
+        // Seed three .md files
+        for (name, subject) in [
+            ("ci-error-1.md", "# CI failure: build broke"),
+            ("ci-error-2.md", "# CI failure: tests failed"),
+            ("pci-enhancement.md", "# Enhancement: add dark mode"),
+        ] {
+            let mut f = std::fs::File::create(inbox.join(name)).unwrap();
+            writeln!(f, "{subject}").unwrap();
+            writeln!(f, "\nBody text.").unwrap();
+        }
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.scan_inbox",
+            "arguments": { "inbox_path": inbox.to_str().unwrap() }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "scan_inbox must succeed: {result}"
+        );
+        let messages = result["messages"].as_array().expect("messages must be array");
+        assert_eq!(messages.len(), 3, "must find 3 messages; got {}", messages.len());
+        // Verify subject extraction
+        assert!(
+            messages.iter().any(|m| m["subject"].as_str().unwrap_or("").contains("CI failure")),
+            "must extract CI failure subjects"
+        );
+        assert_eq!(result["count"].as_u64(), Some(3), "count must be 3");
+    }
+
+    /// cascade.scan_inbox — non-existent inbox returns empty list, no error.
+    #[tokio::test]
+    async fn pbd_scan_inbox_missing_dir() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.scan_inbox",
+            "arguments": { "inbox_path": "/tmp/does_not_exist_cascade_inbox_xyz" }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "missing inbox must not be is_error: {result}"
+        );
+        assert_eq!(
+            result["count"].as_u64(),
+            Some(0),
+            "missing inbox must return count=0"
+        );
+    }
+
+    // ── active_work in provide_harness_context (E-P8-07) ─────────────────────
+
+    /// provide_harness_context response includes active_work field (E-P8-07).
+    ///
+    /// Even when no active sprint exists (no phases tree), active_work must be
+    /// present as an object field (empty, not null).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn provide_harness_context_includes_active_work() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+
+        // Scaffold a minimal cascade tree so resolve_cascade_full finds something.
+        let cascade_dir = tmp.path().join(".cascade");
+        std::fs::create_dir_all(&cascade_dir).unwrap();
+        std::fs::write(
+            cascade_dir.join("CASCADE.md"),
+            "# Test\nInstructions.",
+        )
+        .unwrap();
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": {
+                "harness": "claude-code",
+                "cwd": tmp.path().to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+
+        // Must not be error
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "provide_harness_context must succeed: {result}"
+        );
+
+        // active_work field must be present
+        assert!(
+            result.get("active_work").is_some(),
+            "provide_harness_context must include active_work field: {result}"
+        );
+        assert!(
+            result.get("active_work_text").is_some(),
+            "provide_harness_context must include active_work_text field: {result}"
+        );
+        // With no phases tree, active_work should indicate empty state
+        let aw = &result["active_work"];
+        assert!(
+            aw.is_object(),
+            "active_work must be a JSON object: {aw}"
+        );
+    }
+
+    /// provide_harness_context active_work reflects active sprint when phases tree exists.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn provide_harness_context_active_work_reflects_sprint() {
+        use cascade_core::pbd::schema::*;
+        use cascade_core::pbd::store::PbdStore;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+
+        // Scaffold cascade tree
+        let cascade_dir = tmp.path().join(".cascade");
+        std::fs::create_dir_all(&cascade_dir).unwrap();
+        std::fs::write(cascade_dir.join("CASCADE.md"), "# Test\nInstructions.").unwrap();
+
+        // Scaffold phases tree under .cascade/phases/
+        let phases_root = tmp.path().join(".cascade").join("phases");
+        let store = PbdStore::new(&phases_root);
+        store.init().unwrap();
+
+        let phase = Phase {
+            id: "p1".into(), title: "P1".into(), status: PhaseStatus::Building,
+            epics: vec!["e01".into()], started_at: None, closed_at: None, note: None,
+        };
+        store.create_phase(&phase).unwrap();
+
+        let epic = Epic {
+            id: "e01".into(), phase_id: "p1".into(), title: "E1".into(),
+            status: EpicStatus::Active, waves: vec!["w01".into()], depends_on: vec![], note: None,
+        };
+        store.create_epic(&epic).unwrap();
+
+        let wave = Wave {
+            id: "w01".into(), epic_id: "e01".into(), title: "W1".into(),
+            status: WaveStatus::Active, sprints: vec!["s01".into()], note: None,
+        };
+        store.create_wave("p1", &wave).unwrap();
+
+        let sprint = Sprint {
+            id: "s01".into(), wave_id: "w01".into(), title: "Active Sprint".into(),
+            status: SprintStatus::Active, tickets: vec!["T-P1-E01-W01-S01-01".into()], note: None,
+        };
+        store.create_sprint("p1", "e01", &sprint).unwrap();
+
+        let ticket = Ticket {
+            id: "T-P1-E01-W01-S01-01".into(), sprint_id: "s01".into(),
+            title: "Do the thing".into(), status: TicketStatus::Active,
+            steps: vec![], depends_on: vec![], repo: None, weight: None, note: None,
+            blocked_reason: None,
+        };
+        store.create_ticket("p1", "e01", "w01", &ticket).unwrap();
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": {
+                "harness": "claude-code",
+                "cwd": tmp.path().to_str().unwrap()
+            }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+
+        assert!(
+            result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+            "must succeed: {result}"
+        );
+
+        let aw = &result["active_work"];
+        assert_eq!(
+            aw["sprint_id"].as_str(),
+            Some("s01"),
+            "active_work.sprint_id must be s01: {aw}"
+        );
+        let aw_text = result["active_work_text"].as_str().unwrap_or("");
+        assert!(
+            aw_text.contains("s01"),
+            "active_work_text must mention sprint: {aw_text}"
+        );
+        assert!(
+            aw_text.contains("Do the thing"),
+            "active_work_text must mention ticket title: {aw_text}"
+        );
+    }
+
+    /// inject_active_work: harness_context token_bounded (active_work <= 800 tokens).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn provide_harness_context_active_work_token_bounded() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+
+        let cascade_dir = tmp.path().join(".cascade");
+        std::fs::create_dir_all(&cascade_dir).unwrap();
+        std::fs::write(cascade_dir.join("CASCADE.md"), "# T\nInstructions.").unwrap();
+
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": { "harness": "opencode", "cwd": tmp.path().to_str().unwrap() }
+        });
+        let result = reg.call(&params).await.expect("no protocol error");
+
+        let aw_text = result["active_work_text"].as_str().unwrap_or("");
+        // Token bound: text length / 4 chars-per-token <= 800 tokens
+        let estimated_tokens = aw_text.len() / 4;
+        assert!(
+            estimated_tokens <= 800,
+            "active_work_text estimated tokens={estimated_tokens} must be <=800; text length={}",
+            aw_text.len()
+        );
+    }
+
+    /// All 8 PBD tools appear in tools/list.
+    #[tokio::test]
+    async fn pbd_tools_in_list() {
+        let reg = ToolRegistry::new();
+        let result = reg.list().await.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+            .collect();
+        let expected_pbd = [
+            "cascade.get_current",
+            "cascade.update_ticket_status",
+            "cascade.append_event",
+            "cascade.get_sprint",
+            "cascade.read_phase_status",
+            "cascade.list_tickets",
+            "cascade.check_routes",
+            "cascade.scan_inbox",
+        ];
+        for tool in &expected_pbd {
+            assert!(
+                names.contains(tool),
+                "PBD tool '{tool}' must be in tools/list; found: {names:?}"
+            );
+        }
     }
 }

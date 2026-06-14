@@ -44,12 +44,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cascade_core::cascade_resolution::ResolvedCascade;
+use cascade_core::pbd::active_work::ActiveWorkBlock;
 use cascade_types::error::{CascadeError, Result};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Idempotency marker — written near the top of every generated harness file.
 pub const UNIFIED_HARNESS_MARKER: &str = "<!-- cascade:unified-harness -->";
+
+/// Delimiter for the injected active-work section.
+/// Used to find and replace the section on re-runs (idempotent).
+pub const ACTIVE_WORK_BEGIN: &str = "<!-- cascade:active-work-begin -->";
+pub const ACTIVE_WORK_END: &str = "<!-- cascade:active-work-end -->";
 
 // ── Harness identity ──────────────────────────────────────────────────────────
 
@@ -190,6 +196,106 @@ pub fn generate_for_harnesses(
     }
 
     Ok(written)
+}
+
+/// Inject or replace the active-work section in a harness instruction file.
+///
+/// Finds the `<!-- cascade:active-work-begin -->` … `<!-- cascade:active-work-end -->`
+/// delimiters and replaces the block with the current active-work content.
+/// If no delimiters are present, appends the section to the end of the file.
+///
+/// When `active_work.is_empty()`, the section is removed if present (idempotent).
+///
+/// # Arguments
+/// * `dest`         — path to the existing harness instruction file.
+/// * `active_work`  — the built active-work block.
+/// * `dry_run`      — if true, print planned changes without writing.
+///
+/// # Returns
+/// `true` if the file was modified, `false` if no change was needed.
+pub fn inject_active_work_section(
+    dest: &Path,
+    active_work: &ActiveWorkBlock,
+    dry_run: bool,
+) -> Result<bool> {
+    // Build the replacement block (delimited so we can find it on re-runs).
+    let block_text = if active_work.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n{begin}\n{body}{end}\n",
+            begin = ACTIVE_WORK_BEGIN,
+            body = active_work.text(),
+            end = ACTIVE_WORK_END,
+        )
+    };
+
+    if !dest.exists() {
+        // Nothing to inject into — skip silently.
+        return Ok(false);
+    }
+
+    let existing = fs::read_to_string(dest).map_err(|e| CascadeError::Io {
+        path: dest.to_path_buf(),
+        operation: "read harness file for active-work injection",
+        source: e,
+    })?;
+
+    let new_content = replace_active_work_block(&existing, &block_text);
+
+    if new_content == existing {
+        return Ok(false); // no change
+    }
+
+    if dry_run {
+        println!(
+            "[dry-run] would inject active-work section into {} ({} bytes)",
+            dest.display(),
+            block_text.len()
+        );
+        return Ok(false);
+    }
+
+    atomic_write(dest, &new_content)?;
+    Ok(true)
+}
+
+/// Replace (or append) the active-work delimited block within `content`.
+///
+/// - If both delimiters exist: replaces everything between them (inclusive).
+/// - If no delimiters exist and `block_text` is non-empty: appends.
+/// - If no delimiters exist and `block_text` is empty: returns `content` unchanged.
+fn replace_active_work_block(content: &str, block_text: &str) -> String {
+    if let (Some(begin_pos), Some(end_pos)) = (
+        content.find(ACTIVE_WORK_BEGIN),
+        content.find(ACTIVE_WORK_END),
+    ) {
+        if begin_pos <= end_pos {
+            let end_of_end = end_pos + ACTIVE_WORK_END.len();
+            // Remove leading newline before begin marker if present
+            let trim_start = if begin_pos > 0 && content.as_bytes().get(begin_pos - 1) == Some(&b'\n') {
+                begin_pos - 1
+            } else {
+                begin_pos
+            };
+            let mut result = content[..trim_start].to_string();
+            result.push_str(block_text);
+            // Preserve content after the end marker
+            let after = &content[end_of_end..];
+            result.push_str(after);
+            return result;
+        }
+    }
+
+    // No existing section — append if non-empty
+    if block_text.is_empty() {
+        return content.to_string();
+    }
+
+    let mut result = content.trim_end().to_string();
+    result.push('\n');
+    result.push_str(block_text);
+    result
 }
 
 /// Write a single merged file containing the full cascade body.
@@ -774,5 +880,140 @@ mod tests {
             !mdc.exists(),
             ".cursor/rules/cascade.mdc must NOT be written in dry-run"
         );
+    }
+
+    // ── test 8: inject_active_work_section appends when no delimiters ─────────
+
+    /// inject_active_work_section appends the section when no existing block.
+    #[test]
+    #[serial(global_env)]
+    fn inject_active_work_appends_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        let dest = tmp.path().join("CLAUDE.md");
+        fs::write(&dest, "# Instructions\n\nDo good work.\n").unwrap();
+
+        let active = cascade_core::pbd::active_work::ActiveWorkBlock {
+            sprint_id: Some("s01".into()),
+            sprint_title: Some("Sprint 1".into()),
+            tickets: vec![cascade_core::pbd::active_work::ActiveTicketEntry {
+                id: "T-P1-E01-W01-S01-01".into(),
+                title: "Build the thing".into(),
+                status: "active".into(),
+                depends_on: vec![],
+            }],
+            tickets_total: 1,
+            tasks: vec![],
+            tasks_total: 0,
+        };
+
+        let changed = inject_active_work_section(&dest, &active, false).unwrap();
+        assert!(changed, "file should be modified");
+
+        let content = fs::read_to_string(&dest).unwrap();
+        assert!(content.contains(ACTIVE_WORK_BEGIN), "must contain begin marker");
+        assert!(content.contains(ACTIVE_WORK_END), "must contain end marker");
+        assert!(content.contains("T-P1-E01-W01-S01-01"), "must contain ticket id");
+        assert!(content.contains("# Instructions"), "original content must be preserved");
+    }
+
+    // ── test 9: inject_active_work_section is idempotent (replaces on re-run) ─
+
+    /// Re-running inject_active_work_section replaces the old block, not dupe.
+    #[test]
+    #[serial(global_env)]
+    fn inject_active_work_is_idempotent() {
+        let tmp = TempDir::new().unwrap();
+        let dest = tmp.path().join("CLAUDE.md");
+        fs::write(&dest, "# Instructions\n\nDo good work.\n").unwrap();
+
+        let make_block = |sprint: &str, ticket_title: &str| {
+            cascade_core::pbd::active_work::ActiveWorkBlock {
+                sprint_id: Some(sprint.into()),
+                sprint_title: Some("Sprint".into()),
+                tickets: vec![cascade_core::pbd::active_work::ActiveTicketEntry {
+                    id: "T-01".into(),
+                    title: ticket_title.into(),
+                    status: "active".into(),
+                    depends_on: vec![],
+                }],
+                tickets_total: 1,
+                tasks: vec![],
+                tasks_total: 0,
+            }
+        };
+
+        // First injection
+        inject_active_work_section(&dest, &make_block("s01", "First title"), false).unwrap();
+        // Second injection (different sprint)
+        inject_active_work_section(&dest, &make_block("s02", "Updated title"), false).unwrap();
+
+        let content = fs::read_to_string(&dest).unwrap();
+
+        // Only one begin/end pair must exist
+        let begin_count = content.matches(ACTIVE_WORK_BEGIN).count();
+        let end_count = content.matches(ACTIVE_WORK_END).count();
+        assert_eq!(begin_count, 1, "must have exactly 1 active-work begin marker; got {begin_count}");
+        assert_eq!(end_count, 1, "must have exactly 1 active-work end marker; got {end_count}");
+
+        // Should contain updated sprint, not original
+        assert!(content.contains("s02"), "must show updated sprint id");
+        assert!(content.contains("Updated title"), "must show updated ticket title");
+        assert!(!content.contains("First title"), "old ticket title must not remain");
+    }
+
+    // ── test 10: inject with empty block removes section ─────────────────────
+
+    /// When active_work is empty, inject_active_work_section removes existing section.
+    #[test]
+    #[serial(global_env)]
+    fn inject_active_work_removes_when_empty() {
+        let tmp = TempDir::new().unwrap();
+        let dest = tmp.path().join("CLAUDE.md");
+        // Pre-populate with an existing active-work section
+        let initial = format!(
+            "# Instructions\n\n{begin}\n## Active Work\n- ticket here\n{end}\n\nDo work.\n",
+            begin = ACTIVE_WORK_BEGIN,
+            end = ACTIVE_WORK_END
+        );
+        fs::write(&dest, &initial).unwrap();
+
+        let empty_block = cascade_core::pbd::active_work::ActiveWorkBlock::default();
+        let changed = inject_active_work_section(&dest, &empty_block, false).unwrap();
+        assert!(changed, "file should be modified when removing section");
+
+        let content = fs::read_to_string(&dest).unwrap();
+        assert!(!content.contains(ACTIVE_WORK_BEGIN), "begin marker must be removed");
+        assert!(!content.contains(ACTIVE_WORK_END), "end marker must be removed");
+        assert!(content.contains("# Instructions"), "original content preserved");
+    }
+
+    // ── test 11: dry-run inject writes nothing ─────────────────────────────────
+
+    #[test]
+    #[serial(global_env)]
+    fn inject_active_work_dry_run_writes_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let dest = tmp.path().join("CLAUDE.md");
+        let original = "# Instructions\n\nDo work.\n";
+        fs::write(&dest, original).unwrap();
+
+        let active = cascade_core::pbd::active_work::ActiveWorkBlock {
+            sprint_id: Some("s01".into()),
+            sprint_title: Some("Sprint 1".into()),
+            tickets: vec![],
+            tickets_total: 0,
+            tasks: vec![cascade_core::pbd::active_work::ActiveTaskEntry {
+                title: "Some task".into(),
+                status: "todo".into(),
+                tags: vec![],
+            }],
+            tasks_total: 1,
+        };
+
+        let changed = inject_active_work_section(&dest, &active, /* dry_run= */ true).unwrap();
+        assert!(!changed, "dry-run must return false (no write)");
+
+        let content = fs::read_to_string(&dest).unwrap();
+        assert_eq!(content, original, "dry-run must not modify file");
     }
 }

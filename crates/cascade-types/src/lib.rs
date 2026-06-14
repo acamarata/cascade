@@ -80,6 +80,7 @@ pub mod rag;
 pub mod reranker;
 pub mod retriever;
 pub mod scheduled_task;
+pub mod task;
 pub mod template;
 pub mod tiers;
 pub mod usage;
@@ -121,6 +122,11 @@ pub use quota_store::{
 };
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
+pub use task::{
+    Task, TaskCreateParams, TaskCreateResult, TaskDeleteParams, TaskDeleteResult, TaskFilter,
+    TaskGetParams, TaskGetResult, TaskListParams, TaskListResult, TaskMoveParams, TaskMoveResult,
+    TaskPriority, TaskStatus, TaskUpdateParams, TaskUpdateResult,
+};
 pub use template::{
     ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult,
 };

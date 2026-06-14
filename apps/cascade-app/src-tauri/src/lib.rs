@@ -211,6 +211,19 @@ pub fn run() {
             rag_commands::rag_ingest_file,
             rag_commands::rag_index_stats,
             rag_commands::rag_search,
+            // E-P8-02: Kanban task IPC commands
+            commands::tasks::task_create,
+            commands::tasks::task_get,
+            commands::tasks::task_list,
+            commands::tasks::task_update,
+            commands::tasks::task_delete,
+            commands::tasks::task_move,
+            // E-P8-05: PBD PEWS tree + mutation commands
+            commands::pbd::pbd_get_tree,
+            commands::pbd::pbd_get_current,
+            commands::pbd::pbd_update_ticket_status,
+            commands::pbd::pbd_list_tickets,
+            commands::pbd::pbd_watch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

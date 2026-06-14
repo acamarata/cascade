@@ -27,6 +27,8 @@ import { LibraryPanel } from '../features/library/LibraryPanel'
 import { ContextPanel } from '../features/context/ContextPanel'
 import { ProjectMapPage } from '../pages/ProjectMapPage'
 import { RagExplorerPage } from '../pages/RagExplorerPage'
+import { TasksPage } from '../pages/TasksPage'
+import { PewsPage } from '../pages/PewsPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -96,6 +98,10 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/project-map" element={<ProjectMapPage />} />
         {/* T-P4-E01-27: RAG Explorer panel */}
         <Route path="/rag-explorer" element={<RagExplorerPage />} />
+        {/* E-P8-02: Kanban tasks board */}
+        <Route path="/tasks" element={<TasksPage />} />
+        {/* E-P8-05: PEWS mutation tree */}
+        <Route path="/pews" element={<PewsPage />} />
       </Route>
 
       {/* Catch-all */}

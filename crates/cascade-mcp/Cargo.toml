@@ -23,6 +23,12 @@ thiserror          = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-trait        = { workspace = true }
+# chrono for PBD event timestamps (E-P8-04)
+chrono             = { workspace = true }
+# HTTP client for cascade.check_routes (E-P8-04)
+reqwest            = { version = "0.12", features = ["json"] }
+# YAML serialization for ticket resources (E-P8-04)
+serde_yaml         = { workspace = true }
 # Auth token scheme (T-P4-E02-06)
 hmac          = "0.12"
 sha2          = "0.10"

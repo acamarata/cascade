@@ -1,8 +1,8 @@
 /**
- * Purpose: Inbox placeholder page — replaced by E-04 inbox content.
+ * Purpose: Inbox placeholder page.
  * Inputs:  None.
  * Outputs: <main> with h1 heading for route identification.
- * Constraints: Placeholder only.
+ * Constraints: Placeholder only. Kanban board lives at /tasks (E-P8-02).
  * SPORT: MASTER-ROUTES.md — /inbox
  */
 

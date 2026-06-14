@@ -473,11 +473,11 @@ async fn tools_list_returns_all_tools() {
                 "tools/list must return result: {val}"
             );
             let tools = val["result"]["tools"].as_array().expect("tools array");
-            // 10 tools: 8 original + cascade.context_slice + cascade.provide_harness_context
+            // 18 tools: 10 original + 8 PBD tools (E-P8-04)
             assert_eq!(
                 tools.len(),
-                10,
-                "expected exactly 10 tools, got {}",
+                18,
+                "expected exactly 18 tools, got {}",
                 tools.len()
             );
 

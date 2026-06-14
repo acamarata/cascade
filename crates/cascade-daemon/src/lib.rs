@@ -60,4 +60,7 @@ pub mod volume_watcher;
 // T-P4-E04-12/13: delta bundle format, snapshot layout, Ed25519 verification
 pub mod updates;
 
+// E-P8-01: kanban Task IPC handlers (task_create/update/list/get/delete/move)
+pub mod ipc_tasks;
+
 pub use config::Config;

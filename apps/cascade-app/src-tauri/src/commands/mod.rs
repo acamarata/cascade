@@ -46,6 +46,10 @@ pub mod library;
 pub mod context;
 // T-P3-E07-12: Project maps data providers (project graph, cascade tier tree, PEWS DAG)
 pub mod maps;
+// E-P8-02: Kanban task IPC commands (create/get/list/update/delete/move)
+pub mod tasks;
+// E-P8-05: PBD PEWS tree visualization + mutation IPC commands
+pub mod pbd;
 
 use serde::{Deserialize, Serialize};
 use std::env;

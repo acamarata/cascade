@@ -37,9 +37,15 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
+use cascade_core::tasks::{open_tasks_db, KanbanTaskStore};
+
 use crate::chunk_cache::ChunkCache;
 use crate::event_bus::EventBus;
 use crate::healthcheck::HealthState;
+use crate::ipc_tasks::{
+    handle_task_create, handle_task_delete, handle_task_get, handle_task_list, handle_task_move,
+    handle_task_update,
+};
 use crate::ipc_usage_analytics::{
     handle_usage_history, handle_usage_ledger, handle_usage_summary, new_summary_cache,
     SummaryCache,
@@ -119,6 +125,9 @@ pub struct IpcServer {
     /// CEO orchestrator runtime (E-P6-04).
     /// Shared via Arc so connection tasks can call CEO IPC methods concurrently.
     ceo_runtime: Arc<crate::ipc_ceo::CeoRuntime>,
+    /// Kanban Task store (E-P8-01).
+    /// SQLite-backed; opened at daemon start from config_dir/tasks.db.
+    task_store: Arc<KanbanTaskStore>,
 }
 
 impl IpcServer {
@@ -149,6 +158,17 @@ impl IpcServer {
         let ceo_session_dir = config_dir.join("agents").join("sessions");
         let ceo_runtime = Arc::new(crate::ipc_ceo::CeoRuntime::new(Some(ceo_session_dir)));
 
+        // Kanban task store (E-P8-01): tasks.db in the config dir.
+        let tasks_db_path = config_dir.join("tasks.db");
+        let task_conn = open_tasks_db(&tasks_db_path)
+            .unwrap_or_else(|e| {
+                tracing::warn!(%e, "failed to open tasks.db; task IPC will return errors");
+                // Fallback: in-memory db so the daemon still starts.
+                let conn = rusqlite::Connection::open_in_memory().unwrap();
+                std::sync::Arc::new(std::sync::Mutex::new(conn))
+            });
+        let task_store = Arc::new(KanbanTaskStore::new(task_conn));
+
         Ok(Self {
             socket_path,
             health,
@@ -159,6 +179,7 @@ impl IpcServer {
             query_cache,
             embed_cache,
             ceo_runtime,
+            task_store,
         })
     }
 
@@ -508,6 +529,21 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                     };
                 }
                 _ => {}
+            }
+
+            // ── Kanban Task methods (E-P8-01) ─────────────────────────────
+            if typed_req.method.starts_with("task_") {
+                let ts = Arc::clone(&server.task_store);
+                let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                return match typed_req.method.as_str() {
+                    "task_create" => handle_task_create(ts, params_val).await,
+                    "task_get"    => handle_task_get(ts, params_val).await,
+                    "task_update" => handle_task_update(ts, params_val).await,
+                    "task_list"   => handle_task_list(ts, params_val).await,
+                    "task_delete" => handle_task_delete(ts, params_val).await,
+                    "task_move"   => handle_task_move(ts, params_val).await,
+                    other => Response::err(-32601, format!("method not found: {other}")),
+                };
             }
 
             // ── Cache methods (T-P4-E04-11) ───────────────────────────────

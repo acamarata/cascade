@@ -5,6 +5,8 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// E-P8-03: native PBD phase-tracking engine
+pub mod pbd;
 // E-P6-04: T0 CEO / Founder orchestrator
 pub mod ceo;
 // E-P7-06: subscription adapter detection + config-generation
@@ -154,6 +156,8 @@ pub enum Commands {
     Ceo(ceo::CeoArgs),
     /// List detected AI coding subscriptions and their auth status (E-P7-06).
     Subs(subs::SubsArgs),
+    /// Phase-Based Development engine (phases, epics, waves, sprints, tickets, steps).
+    Pbd(pbd::PbdArgs),
 }
 
 impl Commands {
@@ -197,6 +201,7 @@ impl Commands {
             Commands::Verify(args) => args.run().await,
             Commands::Ceo(args) => args.run().await,
             Commands::Subs(args) => args.run().await,
+            Commands::Pbd(args) => args.run().await,
         }
     }
 }

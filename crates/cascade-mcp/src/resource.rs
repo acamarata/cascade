@@ -21,6 +21,8 @@
 //! | `cascade://project_state` | PEWS phase status + active tasks (JSON) |
 //! | `cascade://quota_state` | CC/OC quota levels from quota-state.json |
 //! | `cascade://instructions/{tier}` | Resolved instruction text for a tier |
+//! | `cascade://pbd/current` | current.yaml as JSON (active pointers) |
+//! | `cascade://pbd/{phase}/{epic}/{wave}/{sprint}/{ticket}` | ticket.yaml as YAML text |
 //!
 //! ## Pagination
 //!
@@ -52,6 +54,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tracing::debug;
+
+use cascade_core::pbd::store::{PbdStore, resolve_phases_root};
 
 use crate::error::McpServerError;
 use crate::handler::McpHandler;
@@ -200,6 +204,10 @@ impl ContentBackend for FsContentBackend {
             // Reuse the tier_file path resolution — same files as cascade://tier/{name}
             let path = mcp_paths::tier_file(tier);
             return read_file_optional(path).await;
+        }
+
+        if let Some(rest) = uri.strip_prefix("cascade://pbd/") {
+            return read_pbd_resource(rest).await;
         }
 
         // Unknown scheme
@@ -391,6 +399,85 @@ async fn read_project_state() -> Result<Option<String>, McpServerError> {
     Ok(Some(result.to_string()))
 }
 
+/// Read a `cascade://pbd/...` resource.
+///
+/// Supported paths:
+/// - `current` → current.yaml as compact JSON
+/// - `{phase}/{epic}/{wave}/{sprint}/{ticket}` → ticket.yaml as YAML text
+///
+/// Uses CWD auto-discovery for the phases root.
+async fn read_pbd_resource(rest: &str) -> Result<Option<String>, McpServerError> {
+    if rest == "current" {
+        // Return current.yaml as JSON
+        return tokio::task::spawn_blocking(|| {
+            let store = PbdStore::new(resolve_phases_root(None));
+            match store.read_current() {
+                Ok(current) => {
+                    let json = serde_json::to_string(&current)
+                        .unwrap_or_else(|_| "{}".into());
+                    Ok(Some(json))
+                }
+                Err(e) => Err(McpServerError::Internal {
+                    detail: format!("read_current: {e}"),
+                }),
+            }
+        })
+        .await
+        .map_err(|e| McpServerError::Internal {
+            detail: format!("spawn_blocking: {e}"),
+        })?;
+    }
+
+    // Path: {phase_id}/{epic_id}/{wave_id}/{sprint_id}/{ticket_id}
+    let parts: Vec<&str> = rest.splitn(5, '/').collect();
+    if parts.len() == 5 {
+        for seg in &parts {
+            if !is_safe_segment(seg) {
+                return Err(McpServerError::InvalidParams {
+                    detail: format!("unsafe PBD path segment: {seg}"),
+                });
+            }
+        }
+        let (phase_id, epic_id, wave_id, sprint_id, ticket_id) = (
+            parts[0].to_string(),
+            parts[1].to_string(),
+            parts[2].to_string(),
+            parts[3].to_string(),
+            parts[4].to_string(),
+        );
+        return tokio::task::spawn_blocking(move || {
+            let store = PbdStore::new(resolve_phases_root(None));
+            match store.load_ticket(&phase_id, &epic_id, &wave_id, &sprint_id, &ticket_id) {
+                Ok(ticket) => {
+                    let yaml = serde_yaml::to_string(&ticket)
+                        .unwrap_or_else(|_| format!("id: {ticket_id}"));
+                    Ok(Some(yaml))
+                }
+                Err(e) => {
+                    // Return None (not found) rather than error for missing tickets
+                    if e.to_string().contains("No such file") || e.to_string().contains("os error 2") {
+                        Ok(None)
+                    } else {
+                        Err(McpServerError::Internal {
+                            detail: format!("load_ticket: {e}"),
+                        })
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|e| McpServerError::Internal {
+            detail: format!("spawn_blocking: {e}"),
+        })?;
+    }
+
+    Err(McpServerError::InvalidParams {
+        detail: format!(
+            "cascade://pbd/ path must be 'current' or '{{phase}}/{{epic}}/{{wave}}/{{sprint}}/{{ticket}}'; got: '{rest}'"
+        ),
+    })
+}
+
 // ── Static resource catalog ───────────────────────────────────────────────────
 
 /// Build the full static resource catalog.
@@ -485,6 +572,26 @@ fn build_catalog() -> Vec<McpResource> {
             mime_type: Some("application/json".into()),
         });
     }
+
+    // PBD resources (E-P8-04)
+    catalog.push(McpResource {
+        uri: "cascade://pbd/current".into(),
+        name: "PBD current pointers".into(),
+        description: Some(
+            "current.yaml active pointers (phase/epic/wave/sprint/tickets) as JSON".into(),
+        ),
+        mime_type: Some("application/json".into()),
+    });
+    // Ticket YAML template resource (URI template; clients substitute coordinates)
+    catalog.push(McpResource {
+        uri: "cascade://pbd/{phase}/{epic}/{wave}/{sprint}/{ticket}".into(),
+        name: "PBD ticket YAML".into(),
+        description: Some(
+            "ticket.yaml for a specific ticket (substitute real IDs for {phase}/{epic}/{wave}/{sprint}/{ticket})"
+                .into(),
+        ),
+        mime_type: Some("text/yaml".into()),
+    });
 
     catalog
 }
@@ -640,8 +747,11 @@ impl ResourceRegistry {
         let mime_type = if uri.starts_with("cascade://inbox/")
             || uri == "cascade://project_state"
             || uri == "cascade://quota_state"
+            || uri == "cascade://pbd/current"
         {
             "application/json"
+        } else if uri.starts_with("cascade://pbd/") {
+            "text/yaml"
         } else {
             "text/markdown"
         };

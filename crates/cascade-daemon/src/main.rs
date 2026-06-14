@@ -30,6 +30,8 @@ mod ipc_handlers;
 mod ipc_ceo;
 // T-P3-E04-29: usage analytics IPC handlers (wired in ipc.rs try_typed_dispatch)
 mod ipc_usage_analytics;
+// E-P8-01: kanban Task IPC handlers
+mod ipc_tasks;
 mod key_index;
 mod key_loader;
 mod log;
