@@ -393,6 +393,7 @@ mod tests {
     fn test_app() -> Router {
         router().with_state(DashboardState {
             token: Arc::new("test-token".to_string()),
+            provider_registry: None,
         })
     }
 

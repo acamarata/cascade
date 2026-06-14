@@ -72,6 +72,7 @@ mod tests {
     fn test_state() -> DashboardState {
         DashboardState {
             token: std::sync::Arc::new("test-token".to_string()),
+            provider_registry: None,
         }
     }
 

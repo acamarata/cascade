@@ -153,12 +153,18 @@ pub async fn cascade_provision_google_status(
             status: s.status.clone(),
             done: s.done,
             error: s.error.clone(),
+            // Per-key progress is tracked on the daemon GFP path (E-P7-04);
+            // the wizard's single-key Tauri flow reports 0 here.
+            keys_created: 0,
+            keys_target: 0,
         },
         None => ProvisionStatus {
             account_email: email,
             status: "not_started".to_string(),
             done: false,
             error: None,
+            keys_created: 0,
+            keys_target: 0,
         },
     })
 }

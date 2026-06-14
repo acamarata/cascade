@@ -94,7 +94,8 @@ pub use agent::{Agent, AgentMeta, AgentResponse, Context, NoopAgent, Tier};
 pub use cascade_tier::{CascadeTier, InboxTier};
 pub use chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document, NoopChunker};
 pub use config::{
-    AiFolder, CascadeConfig, DaemonConfig, McpConfig, PluginConfig, ProviderConfig, RagConfig,
+    AiFolder, CascadeConfig, DaemonConfig, GfpConfig, HarnessConfig, HarnessMcpConfig, McpConfig,
+    PluginConfig, ProviderConfig, RagConfig,
 };
 pub use embedding_provider::{
     EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, NoopEmbeddingProvider, ProviderKind,
@@ -108,7 +109,10 @@ pub use paths::{
     project_cascade_md, project_subdir, subdirs, AGENTS_MD_NAME, CASCADE_DIR_NAME, CASCADE_MD_NAME,
     CLAUDE_MD_NAME, DAEMON_PIPE_WIN,
 };
-pub use policy::{Decision, PolicyAction, PolicyResult};
+pub use policy::{
+    Decision, PolicyAction, PolicyResult, PolicyRule, PolicyScope, PolicySet, PolicySetEntry,
+    PolicyTableConfig,
+};
 pub use query_strategy::{
     ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind,
 };

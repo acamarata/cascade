@@ -12,6 +12,7 @@ repository.workspace = true
 
 [dependencies]
 cascade-types      = { workspace = true }
+cascade-core       = { workspace = true }
 cascade-providers  = { workspace = true }
 # context_slice tool wires directly into cascade-rag (T-P4-E04-22: no IPC double-serialization)
 cascade-rag        = { path = "../cascade-rag" }

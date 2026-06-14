@@ -1,4 +1,4 @@
-//! MCP Tools — the 8 Cascade tools exposed via JSON-RPC.
+//! MCP Tools — the Cascade tools exposed via JSON-RPC.
 //!
 //! Each tool has:
 //! - A JSON Schema definition (for `tools/list`)
@@ -18,6 +18,7 @@
 //! | `cascade.memory.read` | Read a memory file |
 //! | `cascade.memory.write` | Append to a memory file (auth-gated) |
 //! | `cascade.context_slice` | Token-budgeted, deduplicated context window (T-P4-E04-22) |
+//! | `cascade.provide_harness_context` | ONE-CALL harness bootstrap: merged instructions + policies + harness config (E-P7-01) |
 //!
 //! ## MCP spec compliance
 //!
@@ -48,6 +49,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
+use cascade_core::cascade_resolution::resolve_cascade_full;
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::error::Result;
 
@@ -114,6 +116,7 @@ impl ToolRegistry {
             cascade_memory_read_tool(),
             cascade_memory_write_tool(),
             cascade_context_slice_tool(),
+            cascade_provide_harness_context_tool(),
         ];
         Ok(serde_json::json!({ "tools": tools }))
     }
@@ -171,6 +174,9 @@ impl ToolRegistry {
                 tool_result(handle_memory_write(&args).await)
             }
             "cascade.context_slice" => tool_result(handle_context_slice(&args).await),
+            "cascade.provide_harness_context" => {
+                tool_result(handle_provide_harness_context(&args).await)
+            }
             _ => Err(JsonRpcError::not_found(format!("Unknown tool: {name}"))),
         }
     }
@@ -898,6 +904,172 @@ async fn handle_context_slice(args: &Value) -> std::result::Result<Value, JsonRp
     }))
 }
 
+fn cascade_provide_harness_context_tool() -> McpTool {
+    McpTool {
+        name: "cascade.provide_harness_context".into(),
+        description: "ONE-CALL harness bootstrap (E-P7-01). A harness calls this once on startup \
+                       and receives everything it needs: the resolved 6-tier merged instructions \
+                       for the given cwd, the applicable policy set, harness-specific config, \
+                       and the MCP server coordinates. No per-tier file reconciliation required \
+                       in the harness — cascade owns all merging."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["harness", "cwd"],
+            "additionalProperties": false,
+            "properties": {
+                "harness": {
+                    "type": "string",
+                    "description": "Harness identifier",
+                    "enum": ["claude-code", "opencode", "codex", "cursor", "aider"]
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Absolute path of the working directory the harness is operating in",
+                    "minLength": 1
+                }
+            }
+        }),
+    }
+}
+
+/// `cascade.provide_harness_context` — unified ONE-CALL harness bootstrap (E-P7-01).
+///
+/// Resolves the full 6-tier cascade for `cwd`, derives harness-specific config,
+/// and returns the complete payload the harness needs in a single round-trip.
+///
+/// ## Response shape
+/// ```json
+/// {
+///   "merged_instructions": "<full merged text, all tiers>",
+///   "policies": { "tool_use": "allow", "memory_write": "requires_auth" },
+///   "config": { /* harness-specific block */ },
+///   "mcp": { "url": "unix://~/.cascade/cascade.sock", "tool": "cascade.provide_harness_context" }
+/// }
+/// ```
+///
+/// ## Harness identity
+/// Accepted as the `harness` argument (request-context propagation is a future
+/// enhancement; the arg is sufficient per spec).
+async fn handle_provide_harness_context(
+    args: &Value,
+) -> std::result::Result<Value, JsonRpcError> {
+    let harness = args
+        .get("harness")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| JsonRpcError::invalid_params("'harness' is required"))?;
+
+    // Validate harness value against allowed enum.
+    if !matches!(
+        harness,
+        "claude-code" | "opencode" | "codex" | "cursor" | "aider"
+    ) {
+        return Err(JsonRpcError::invalid_params(format!(
+            "'harness' must be one of claude-code, opencode, codex, cursor, aider; got '{harness}'"
+        )));
+    }
+
+    let cwd_str = args
+        .get("cwd")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| JsonRpcError::invalid_params("'cwd' is required"))?;
+
+    let cwd = std::path::Path::new(cwd_str);
+
+    // ── Resolve the 6-tier cascade ───────────────────────────────────────────
+    let resolved = resolve_cascade_full(cwd).map_err(|e| {
+        JsonRpcError::internal(format!("cascade resolution failed for cwd={cwd_str}: {e}"))
+    })?;
+
+    if resolved.merged_instructions.is_empty() {
+        return Err(JsonRpcError::internal(format!(
+            "no cascade tiers found for cwd={cwd_str}; ensure .cascade/ directories exist"
+        )));
+    }
+
+    // ── Build harness-specific config block ──────────────────────────────────
+    // Each harness gets the config fields relevant to its tooling.
+    let config = harness_config_block(harness, &resolved.mcp_server_url);
+
+    // ── Build policy summary ─────────────────────────────────────────────────
+    // Minimal policy block: summarise what the harness is allowed to do.
+    // Full policy evaluation (PolicyEngine) is a future enhancement; this
+    // provides a stable schema that harnesses can start consuming today.
+    let policies = serde_json::json!({
+        "tool_use":    "allow",
+        "memory_write": "requires_auth",
+        "search":      "allow",
+        "inbox_send":  "allow"
+    });
+
+    // ── Build MCP coordinates ────────────────────────────────────────────────
+    let mcp = serde_json::json!({
+        "url":  resolved.mcp_server_url,
+        "tool": "cascade.provide_harness_context",
+        "transport": "stdio",
+        "command": ["cascade", "mcp", "stdio"]
+    });
+
+    Ok(serde_json::json!({
+        "content": [{
+            "type": "text",
+            "text": format!(
+                "Cascade context for harness={harness} cwd={cwd_str}: {} tiers resolved, {} bytes of merged instructions.",
+                resolved.tiers_found.iter().filter(|t| t.found).count(),
+                resolved.merged_instructions.len()
+            )
+        }],
+        "merged_instructions": resolved.merged_instructions,
+        "policies":            policies,
+        "config":              config,
+        "mcp":                 mcp
+    }))
+}
+
+/// Build the harness-specific config block.
+///
+/// Each harness uses a different instruction-file name and config location.
+/// This function returns the config the harness needs to self-configure without
+/// consulting any local tier files.
+fn harness_config_block(harness: &str, mcp_server_url: &str) -> Value {
+    match harness {
+        "claude-code" => serde_json::json!({
+            "instruction_file": "CLAUDE.md",
+            "settings_key":     "mcpServers.cascade",
+            "mcp_command":      ["cascade", "mcp", "stdio"],
+            "mcp_server_url":   mcp_server_url
+        }),
+        "opencode" => serde_json::json!({
+            "instruction_file":       "AGENTS.md",
+            "opencode_json_key":      "mcpServers[name=cascade]",
+            "opencode_instr_field":   "instructions",
+            "mcp_command":            "cascade mcp stdio",
+            "mcp_server_url":         mcp_server_url
+        }),
+        "codex" => serde_json::json!({
+            "instruction_file": "AGENTS.md",
+            "config_file":      "codex/config.yaml",
+            "mcp_key":          "mcp_servers.cascade",
+            "mcp_command":      ["cascade", "mcp", "stdio"],
+            "mcp_server_url":   mcp_server_url
+        }),
+        "cursor" => serde_json::json!({
+            "instruction_file": ".cursorrules",
+            "format":           "json",
+            "rules_key":        "rules",
+            "mcp_server_url":   mcp_server_url
+        }),
+        "aider" => serde_json::json!({
+            "instruction_file": "CONVENTIONS.md",
+            "alt_config":       ".aider.conf.yml",
+            "read_files":       ["CONVENTIONS.md"],
+            "mcp_server_url":   mcp_server_url
+        }),
+        _ => serde_json::json!({ "mcp_server_url": mcp_server_url }),
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Return today's date as `YYYY-MM-DD` (UTC, approximate).
@@ -930,7 +1102,7 @@ mod tests {
 
     // ── tools/list ────────────────────────────────────────────────────────────
 
-    /// tools/list returns exactly 9 tools (8 original + cascade.context_slice).
+    /// tools/list returns exactly 10 tools (9 original + cascade.provide_harness_context).
     #[tokio::test]
     async fn tools_list_returns_9_tools() {
         let reg = ToolRegistry::new();
@@ -938,8 +1110,8 @@ mod tests {
         let tools = result["tools"].as_array().expect("tools must be array");
         assert_eq!(
             tools.len(),
-            9,
-            "expected exactly 9 tools, got {}",
+            10,
+            "expected exactly 10 tools, got {}",
             tools.len()
         );
     }
@@ -1304,6 +1476,179 @@ mod tests {
         std::env::var("HOME")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"))
+    }
+
+    // ── cascade.provide_harness_context tests ─────────────────────────────────
+
+    /// Tool appears in the tools list.
+    #[tokio::test]
+    async fn provide_harness_context_in_tool_list() {
+        let reg = ToolRegistry::new();
+        let result = reg.list().await.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+            .collect();
+        assert!(
+            names.contains(&"cascade.provide_harness_context"),
+            "cascade.provide_harness_context must be in tool list; found: {names:?}"
+        );
+    }
+
+    /// tools/list now returns 10 tools (9 original + provide_harness_context).
+    #[tokio::test]
+    async fn tools_list_returns_10_tools() {
+        let reg = ToolRegistry::new();
+        let result = reg.list().await.expect("list should not fail");
+        let tools = result["tools"].as_array().expect("tools must be array");
+        assert_eq!(
+            tools.len(),
+            10,
+            "expected exactly 10 tools, got {}",
+            tools.len()
+        );
+    }
+
+    /// Unknown harness arg returns is_error: true (tool-level error, not protocol error).
+    #[tokio::test]
+    async fn provide_harness_context_unknown_harness_returns_tool_error() {
+        let reg = ToolRegistry::new();
+        // Call via the protocol error path (unknown harness → invalid_params which
+        // goes through tool_result → is_error: true).
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": { "harness": "vscode", "cwd": "/tmp" }
+        });
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "unknown harness must be tool-level error: {result}"
+        );
+    }
+
+    /// Missing harness arg returns tool-level error.
+    #[tokio::test]
+    async fn provide_harness_context_missing_harness_returns_tool_error() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": { "cwd": "/tmp" }
+        });
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "missing harness must be tool-level error"
+        );
+    }
+
+    /// Missing cwd arg returns tool-level error.
+    #[tokio::test]
+    async fn provide_harness_context_missing_cwd_returns_tool_error() {
+        let reg = ToolRegistry::new();
+        let params = serde_json::json!({
+            "name": "cascade.provide_harness_context",
+            "arguments": { "harness": "claude-code" }
+        });
+        let result = reg
+            .call(&params)
+            .await
+            .expect("should not be protocol error");
+        assert_eq!(
+            result["isError"].as_bool(),
+            Some(true),
+            "missing cwd must be tool-level error"
+        );
+    }
+
+    /// Each valid harness returns the correct instruction_file in config.
+    ///
+    /// Uses multi-thread runtime because `resolve_cascade_full` calls
+    /// `tokio::task::block_in_place` which requires the multi-threaded executor.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn provide_harness_context_config_per_harness() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+
+        // Scaffold a minimal cascade tree so resolve_cascade_full finds something.
+        let cascade_dir = tmp.path().join(".cascade");
+        std::fs::create_dir_all(&cascade_dir).unwrap();
+        std::fs::write(
+            cascade_dir.join("CASCADE.md"),
+            "# Test cascade\nTest instructions for harness context test.",
+        )
+        .unwrap();
+
+        let reg = ToolRegistry::new();
+
+        let expected_instruction_files = [
+            ("claude-code", "CLAUDE.md"),
+            ("opencode", "AGENTS.md"),
+            ("codex", "AGENTS.md"),
+            ("cursor", ".cursorrules"),
+            ("aider", "CONVENTIONS.md"),
+        ];
+
+        for (harness, expected_file) in &expected_instruction_files {
+            let params = serde_json::json!({
+                "name": "cascade.provide_harness_context",
+                "arguments": {
+                    "harness": harness,
+                    "cwd": tmp.path().to_str().unwrap()
+                }
+            });
+            let result = reg
+                .call(&params)
+                .await
+                .expect("should not be protocol error");
+
+            // Must not be an error.
+            assert!(
+                result.get("isError").map(|v| v == &Value::Bool(false)).unwrap_or(true),
+                "harness={harness} should succeed: {result}"
+            );
+
+            // merged_instructions must be non-empty.
+            let merged = result["merged_instructions"].as_str().unwrap_or("");
+            assert!(
+                !merged.is_empty(),
+                "harness={harness}: merged_instructions must be non-empty"
+            );
+
+            // config.instruction_file must match expected.
+            let instr_file = result["config"]["instruction_file"].as_str().unwrap_or("");
+            assert_eq!(
+                instr_file, *expected_file,
+                "harness={harness}: expected instruction_file={expected_file}, got={instr_file}"
+            );
+
+            // mcp block must contain the command.
+            let mcp = &result["mcp"];
+            assert!(
+                mcp.get("url").is_some(),
+                "harness={harness}: mcp.url required"
+            );
+            assert!(
+                mcp.get("command").is_some(),
+                "harness={harness}: mcp.command required"
+            );
+
+            // policies block must have tool_use = "allow".
+            let policies = &result["policies"];
+            assert_eq!(
+                policies["tool_use"].as_str(),
+                Some("allow"),
+                "harness={harness}: policies.tool_use must be 'allow'"
+            );
+        }
     }
 
     // ── cascade.context_slice tests ───────────────────────────────────────────

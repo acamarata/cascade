@@ -33,6 +33,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::body::Body;
+use cascade_providers::ProviderRegistry;
 use axum::extract::State;
 use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Method, Request, StatusCode};
 use axum::middleware::{self, Next};
@@ -69,6 +70,13 @@ pub struct DashboardState {
     /// 64-char hex bearer token for GCI write API auth.
     /// NEVER log this value at any level.
     pub token: Arc<String>,
+
+    /// Provider registry for routing chat (and future) requests.
+    ///
+    /// `None` in minimal test setups that do not need provider routing.
+    /// When `None`, the chat handler falls back to a typed "no provider"
+    /// error event rather than panicking.
+    pub provider_registry: Option<Arc<ProviderRegistry>>,
 }
 
 // ── Token generation + persistence ───────────────────────────────────────────
@@ -300,6 +308,7 @@ impl Dashboard {
         let token = generate_dashboard_token(config_dir).map_err(DashboardError::Listener)?;
         let state = DashboardState {
             token: Arc::new(token),
+            provider_registry: None,
         };
 
         Ok(Self {
@@ -361,6 +370,7 @@ mod tests {
     fn test_state(token: &str) -> DashboardState {
         DashboardState {
             token: Arc::new(token.to_string()),
+            provider_registry: None,
         }
     }
 

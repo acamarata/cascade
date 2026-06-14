@@ -60,7 +60,7 @@ async fn tools_list_returns_eight_tools() {
     let result = registry.list().await.unwrap();
     let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
     // 9 tools: 8 original + cascade.context_slice (T-P4-E04-22)
-    assert_eq!(tools.len(), 9, "expected 9 tools, got {}", tools.len());
+    assert_eq!(tools.len(), 10, "expected 10 tools, got {}", tools.len());
 
     let names: Vec<&str> = tools
         .iter()

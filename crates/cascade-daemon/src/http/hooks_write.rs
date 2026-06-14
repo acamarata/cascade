@@ -415,6 +415,7 @@ mod tests {
         // Handlers are stateless (no token check); state is required by Router type only.
         let state = DashboardState {
             token: Arc::new("test-token".to_string()),
+            provider_registry: None,
         };
         router().with_state(state)
     }

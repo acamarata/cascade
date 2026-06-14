@@ -44,6 +44,14 @@ rand = "0.10.1"
 #   cargo test -p cascade-providers --features integration_tests
 integration_tests = []
 
+# UNSAFE — DO NOT ENABLE in release builds.
+# Gates inference routing through third-party subscription tools (Cursor,
+# Antigravity). Enabling this without explicit ToS clearance from each vendor
+# constitutes a ToS violation (Unauthorized API Access / Subscription Resale).
+# This feature exists solely as a documented stub for future legal review.
+# Never set default = ["inference_routing"].
+inference_routing = []
+
 [dev-dependencies]
 # test-util enables tokio::time::pause() for instant-sleep retry tests (T-P3-E04-06)
 tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

@@ -23,9 +23,10 @@
 //! - FULL_AUTO polls project activation max 30 s at 2 s intervals.
 //! - Uses cascade-types canonical ProvisionResult (no local re-definition).
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::google_oauth::{validate_gemini_key, OAuthError};
@@ -56,7 +57,144 @@ pub enum ProvisionError {
     /// HTTP client error.
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
+    /// I/O error reading/writing the provisioning checkpoint.
+    #[error("Checkpoint I/O error: {0}")]
+    Checkpoint(String),
 }
+
+// ── ProvisionOptions ──────────────────────────────────────────────────────────
+
+/// Options controlling the GFP multi-key provisioning loop.
+///
+/// ## Purpose
+/// Provides per-call policy knobs to `full_auto_multi`. All defaults are
+/// **conservative** to protect Google accounts from ToS / abuse-detection bans.
+///
+/// ## Conservative defaults
+/// - `max_keys_per_account`: 3 — never create more than 3 keys by default.
+/// - `cooldown_secs`: 30 — 30 s between key creations.
+/// - `auto_max`: false — the ceiling can never be exceeded without opt-in.
+/// - `dry_run`: false — real provisioning unless explicitly simulated.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvisionOptions {
+    /// Hard ceiling on the number of API keys created per Google account in one
+    /// `full_auto_multi` call. The effective limit is `min(count, max_keys_per_account)`.
+    pub max_keys_per_account: u32,
+
+    /// Seconds to wait between successive key creations for the same account.
+    /// Zero disables the cooldown (not recommended for production use).
+    pub cooldown_secs: u64,
+
+    /// When `false` (safe default), `count` is always capped at
+    /// `max_keys_per_account`. When `true`, `count` may exceed the ceiling.
+    ///
+    /// **Never set to `true` without explicit user opt-in.**
+    pub auto_max: bool,
+
+    /// When `true`, simulate the provisioning loop without calling GCP APIs.
+    /// Useful for integration tests and UI smoke tests.
+    pub dry_run: bool,
+}
+
+impl Default for ProvisionOptions {
+    fn default() -> Self {
+        Self {
+            max_keys_per_account: 3,
+            cooldown_secs: 30,
+            auto_max: false,
+            dry_run: false,
+        }
+    }
+}
+
+// ── Provisioning checkpoint ───────────────────────────────────────────────────
+
+/// Persisted state written after each successful key creation.
+///
+/// Stored at `~/.cascade/provisioning-state.json`. A re-run reads this and
+/// skips already-created keys (idempotent by project_id presence in the pool).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProvisioningCheckpoint {
+    /// The Google account email being provisioned.
+    pub account_email: String,
+    /// Number of keys successfully created so far.
+    pub keys_created: u32,
+    /// Unix timestamp (seconds) of the last successful key creation.
+    pub last_ts: u64,
+    /// Project IDs already created (used to skip on resume).
+    pub created_project_ids: Vec<String>,
+}
+
+impl ProvisioningCheckpoint {
+    /// Default path: `~/.cascade/provisioning-state.json`.
+    pub fn default_path() -> PathBuf {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join(".cascade")
+            .join("provisioning-state.json")
+    }
+
+    /// Load checkpoint from disk; returns a fresh default if absent or unreadable.
+    pub fn load(path: &Path) -> Self {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    /// Write checkpoint atomically (tmp + rename).
+    pub fn save(&self, path: &Path) -> Result<(), ProvisionError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        }
+        let tmp_path = path.with_extension("json.tmp");
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        std::fs::write(&tmp_path, &json)
+            .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        std::fs::rename(&tmp_path, path)
+            .map_err(|e| ProvisionError::Checkpoint(e.to_string()))?;
+        Ok(())
+    }
+}
+
+// ── ProvisionMultiResult ──────────────────────────────────────────────────────
+
+/// Result of a `full_auto_multi` provisioning loop run.
+///
+/// Partial success is valid: if the loop hit a rate-limit or the ceiling, it
+/// stops gracefully and reports how many keys were created.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvisionMultiResult {
+    /// Keys successfully provisioned in this run (api_key + project_id pairs).
+    pub keys: Vec<ProvisionedKey>,
+    /// How many keys were created (may be less than `count` if capped or failed).
+    pub keys_created: u32,
+    /// The effective ceiling that was applied.
+    pub effective_ceiling: u32,
+    /// True if the loop was stopped by a rate-limit or quota error (partial success).
+    pub rate_limited: bool,
+    /// User-visible ToS/safety warning — always present to surface the risk.
+    pub tos_warning: String,
+    /// Any per-key errors encountered (non-fatal if some keys succeeded).
+    pub errors: Vec<String>,
+}
+
+/// A single successfully provisioned key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvisionedKey {
+    /// The Gemini API key string.
+    pub api_key: String,
+    /// The GCP project ID created.
+    pub project_id: String,
+}
+
+/// ToS warning surfaced on every `full_auto_multi` result.
+const TOS_WARNING: &str =
+    "WARNING: Creating multiple GCP API keys on a real Google account may violate \
+     Google Cloud Terms of Service or trigger abuse detection. Use conservative \
+     defaults (max 3 keys, 30s cooldown). You are responsible for compliance.";
 
 // ── Internal GCP response shapes ─────────────────────────────────────────────
 
@@ -213,6 +351,151 @@ impl GoogleProvisionClient {
             Err(e) => Ok(ProvisionResult::Error {
                 message: format!("Failed to create API key: {}", e),
             }),
+        }
+    }
+
+    /// Execute FULL_AUTO multi-key provisioning loop for one Google account.
+    ///
+    /// # Purpose
+    /// Creates up to `count` API keys for `account_email`, registering each
+    /// into the pool (via `pool_register_fn`) after creation. Conservative
+    /// defaults in `opts` protect real accounts from ToS / abuse-detection bans.
+    ///
+    /// ## Loop behaviour
+    /// 1. Load `~/.cascade/provisioning-state.json` checkpoint (resume support).
+    /// 2. Compute `effective_ceiling = if opts.auto_max { count } else { min(count, opts.max_keys_per_account) }`.
+    /// 3. For each key to create (starting from `checkpoint.keys_created`):
+    ///    a. If `opts.cooldown_secs > 0` and not the first key, sleep `cooldown_secs`.
+    ///    b. Call `full_auto(&email, project_n)`.
+    ///    c. On success → call `pool_register_fn`, save checkpoint.
+    ///    d. On rate-limit / quota error → stop gracefully (partial success ok).
+    ///
+    /// # Inputs
+    /// - `account_email`: Google account email.
+    /// - `count`: number of keys to create (capped by ceiling unless `auto_max`).
+    /// - `opts`: `ProvisionOptions` controlling ceiling, cooldown, dry-run.
+    /// - `checkpoint_path`: where to persist the checkpoint (`None` = default path).
+    /// - `pool_register_fn`: callback invoked with each provisioned key + project_id.
+    ///
+    /// # Outputs
+    /// `ProvisionMultiResult` (always Ok — errors are surfaced inside the struct).
+    pub async fn full_auto_multi<F, Fut>(
+        &self,
+        account_email: &str,
+        count: u32,
+        opts: &ProvisionOptions,
+        checkpoint_path: Option<&Path>,
+        pool_register_fn: F,
+    ) -> ProvisionMultiResult
+    where
+        F: Fn(String, String) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = ()> + Send,
+    {
+        let cp_path_owned = checkpoint_path
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(ProvisioningCheckpoint::default_path);
+        let cp_path = cp_path_owned.as_path();
+
+        // Determine effective ceiling.
+        let effective_ceiling = if opts.auto_max {
+            count
+        } else {
+            count.min(opts.max_keys_per_account)
+        };
+
+        // Load resume checkpoint.
+        let mut checkpoint = ProvisioningCheckpoint::load(cp_path);
+        // Reset if this is a new account.
+        if checkpoint.account_email != account_email {
+            checkpoint = ProvisioningCheckpoint {
+                account_email: account_email.to_string(),
+                ..Default::default()
+            };
+        }
+
+        let already_created = checkpoint.keys_created;
+        let mut keys: Vec<ProvisionedKey> = Vec::new();
+        let mut errors: Vec<String> = Vec::new();
+        let mut rate_limited = false;
+
+        for i in already_created..effective_ceiling {
+            // Cooldown between keys (skip before the very first key of this run).
+            if i > already_created && opts.cooldown_secs > 0 && !opts.dry_run {
+                tokio::time::sleep(Duration::from_secs(opts.cooldown_secs)).await;
+            }
+
+            let project_n = i + 1; // project suffix: cascade-gemini-1, -2, …
+
+            // Skip if this project was already created in a previous run.
+            let project_id_candidate = format!("cascade-gemini-{}", project_n);
+            if checkpoint
+                .created_project_ids
+                .contains(&project_id_candidate)
+            {
+                continue;
+            }
+
+            if opts.dry_run {
+                // Dry-run: emit a synthetic key without hitting GCP APIs.
+                let api_key = format!("AIza-dry-run-key-{}", project_n);
+                let project_id = project_id_candidate.clone();
+                pool_register_fn(api_key.clone(), project_id.clone()).await;
+                keys.push(ProvisionedKey { api_key, project_id: project_id.clone() });
+                checkpoint.keys_created += 1;
+                checkpoint.created_project_ids.push(project_id);
+                checkpoint.last_ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let _ = checkpoint.save(cp_path);
+                continue;
+            }
+
+            match self.full_auto(account_email, project_n).await {
+                Ok(ProvisionResult::Success { api_key, project_id }) => {
+                    // Register in pool.
+                    pool_register_fn(api_key.clone(), project_id.clone()).await;
+
+                    // Update checkpoint after each key (resumable).
+                    checkpoint.keys_created += 1;
+                    checkpoint.created_project_ids.push(project_id.clone());
+                    checkpoint.last_ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let _ = checkpoint.save(cp_path);
+
+                    keys.push(ProvisionedKey { api_key, project_id });
+                }
+                Ok(ProvisionResult::Error { message }) => {
+                    // Rate-limit / quota heuristic: treat RESOURCE_EXHAUSTED / 429 as soft stop.
+                    let is_rate_limit = message.contains("429")
+                        || message.contains("RESOURCE_EXHAUSTED")
+                        || message.contains("quota")
+                        || message.contains("rate");
+                    if is_rate_limit {
+                        rate_limited = true;
+                        errors.push(format!("Key {}: rate-limited — {}", project_n, message));
+                        break; // Graceful partial stop.
+                    }
+                    errors.push(format!("Key {}: {}", project_n, message));
+                }
+                Err(e) => {
+                    errors.push(format!("Key {}: transport error — {}", project_n, e));
+                }
+                Ok(_) => {
+                    errors.push(format!("Key {}: unexpected result variant", project_n));
+                }
+            }
+        }
+
+        ProvisionMultiResult {
+            keys_created: keys.len() as u32,
+            keys,
+            effective_ceiling,
+            rate_limited,
+            tos_warning: TOS_WARNING.to_string(),
+            errors,
         }
     }
 
@@ -620,5 +903,322 @@ mod tests {
         // NOTE: We skip running this test to avoid 30s wait; the error path is covered
         // by the GcpApi error test above. Marking as compile-check only.
         let _ = base;
+    }
+
+    // ── GFP multi-key provisioning loop tests ────────────────────────────────
+
+    /// Dry-run: loop creates exactly N keys up to effective ceiling.
+    #[tokio::test]
+    async fn gfp_dry_run_creates_n_keys() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("gfp-test-cp.json");
+
+        let client = GoogleProvisionClient::new("tok".to_string());
+        let opts = ProvisionOptions {
+            dry_run: true,
+            max_keys_per_account: 5,
+            cooldown_secs: 0,
+            auto_max: false,
+        };
+
+        let registered = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<String>::new()));
+        let reg_clone = registered.clone();
+
+        let result = client
+            .full_auto_multi(
+                "user@example.com",
+                3,
+                &opts,
+                Some(&cp_path),
+                move |api_key, _project_id| {
+                    let r = reg_clone.clone();
+                    async move {
+                        r.lock().await.push(api_key);
+                    }
+                },
+            )
+            .await;
+
+        assert_eq!(result.keys_created, 3, "expected 3 keys");
+        assert_eq!(result.keys.len(), 3);
+        assert_eq!(result.effective_ceiling, 3);
+        assert!(!result.rate_limited);
+        assert!(!result.tos_warning.is_empty(), "ToS warning must be present");
+
+        let pool = registered.lock().await;
+        assert_eq!(pool.len(), 3, "pool register called 3 times");
+    }
+
+    /// Ceiling caps count: requesting 10 with max_keys_per_account=3 yields 3.
+    #[tokio::test]
+    async fn gfp_ceiling_caps_count() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("gfp-ceiling-cp.json");
+
+        let client = GoogleProvisionClient::new("tok".to_string());
+        let opts = ProvisionOptions {
+            dry_run: true,
+            max_keys_per_account: 3,
+            cooldown_secs: 0,
+            auto_max: false,
+        };
+
+        let result = client
+            .full_auto_multi(
+                "user@example.com",
+                10, // request 10 but ceiling is 3
+                &opts,
+                Some(&cp_path),
+                |_, _| async {},
+            )
+            .await;
+
+        assert_eq!(result.effective_ceiling, 3, "ceiling must cap at 3");
+        assert_eq!(result.keys_created, 3);
+    }
+
+    /// auto_max=false (default) prevents exceeding ceiling.
+    #[tokio::test]
+    async fn gfp_auto_max_off_by_default() {
+        let opts = ProvisionOptions::default();
+        assert!(!opts.auto_max, "auto_max must default to false");
+        assert_eq!(opts.max_keys_per_account, 3, "conservative ceiling default");
+        assert_eq!(opts.cooldown_secs, 30, "conservative cooldown default");
+    }
+
+    /// Rate-limit error triggers graceful stop (partial success).
+    #[tokio::test]
+    async fn gfp_rate_limit_stops_gracefully() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("gfp-rate-limit-cp.json");
+
+        // Use wiremock: first key succeeds, second returns 429 RESOURCE_EXHAUSTED.
+        // Wiremock matches in reverse mount order (last = highest priority).
+        // Mount the fallback (429) FIRST so it has lower priority than the one-time
+        // success mock that we mount AFTER it.
+        let server = MockServer::start().await;
+        let base = server.uri();
+
+        // First key: full success path.
+        // Mount the one-time success mock FIRST (FIFO: first mounted = first tried).
+        // Once consumed (up_to_n_times(1)), the 429 fallback mounted after will be used.
+        Mock::given(method("POST"))
+            .and(path("/v1/projects"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-1",
+                "lifecycleState": "ACTIVE"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/projects/cascade-gemini-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "projectId": "cascade-gemini-1",
+                "lifecycleState": "ACTIVE"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"/v1/projects/cascade-gemini-1/services/.*:enable"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"/v2/projects/cascade-gemini-1/locations/global/keys"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "name": "projects/cascade-gemini-1/locations/global/keys/key-1"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v2/projects/.*/keys/.*/keyString"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "keyString": "AIza-key-1"
+            })))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+
+        // Fallback: any subsequent POST /v1/projects → 429 (rate-limited).
+        // Mount AFTER the one-time success mock so it's tried second (FIFO order).
+        Mock::given(method("POST"))
+            .and(path("/v1/projects"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(serde_json::json!({
+                "error": { "message": "RESOURCE_EXHAUSTED: quota exceeded" }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GoogleProvisionClient::new_with_bases(
+            "tok".into(),
+            base.clone(),
+            base.clone(),
+            base.clone(),
+        );
+        let opts = ProvisionOptions {
+            dry_run: false,
+            max_keys_per_account: 5,
+            cooldown_secs: 0,
+            auto_max: false,
+        };
+
+        let registered = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<String>::new()));
+        let reg_clone = registered.clone();
+
+        let result = client
+            .full_auto_multi(
+                "user@example.com",
+                2,
+                &opts,
+                Some(&cp_path),
+                move |api_key, _| {
+                    let r = reg_clone.clone();
+                    async move {
+                        r.lock().await.push(api_key);
+                    }
+                },
+            )
+            .await;
+
+        assert_eq!(result.keys_created, 1, "first key succeeded");
+        assert!(result.rate_limited, "should mark as rate-limited");
+        assert!(!result.errors.is_empty(), "rate-limit error captured");
+        assert!(!result.tos_warning.is_empty());
+
+        let pool = registered.lock().await;
+        assert_eq!(pool.len(), 1, "only 1 key registered");
+    }
+
+    /// Checkpoint is written after each key and resumed on next call.
+    #[tokio::test]
+    async fn gfp_checkpoint_written_and_resumed() {
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("provisioning-state.json");
+
+        let client = GoogleProvisionClient::new("tok".to_string());
+        let opts = ProvisionOptions {
+            dry_run: true,
+            max_keys_per_account: 5,
+            cooldown_secs: 0,
+            auto_max: false,
+        };
+
+        // First run: create 2 keys.
+        let result1 = client
+            .full_auto_multi("user@example.com", 2, &opts, Some(&cp_path), |_, _| async {})
+            .await;
+        assert_eq!(result1.keys_created, 2);
+
+        // Checkpoint should be saved.
+        let cp = ProvisioningCheckpoint::load(&cp_path);
+        assert_eq!(cp.keys_created, 2);
+        assert_eq!(cp.account_email, "user@example.com");
+        assert_eq!(cp.created_project_ids.len(), 2);
+
+        // Second run: request 2 more (total ceiling 5). The checkpoint marks 2 done,
+        // so the loop starts from project_n=3 and creates 2 more.
+        let result2 = client
+            .full_auto_multi("user@example.com", 4, &opts, Some(&cp_path), |_, _| async {})
+            .await;
+        assert_eq!(result2.keys_created, 2, "only 2 new keys should be created on resume");
+
+        let cp2 = ProvisioningCheckpoint::load(&cp_path);
+        assert_eq!(cp2.keys_created, 4);
+    }
+
+    /// Each key is registered in the mock pool.
+    #[tokio::test]
+    async fn gfp_registers_each_key_in_pool() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("gfp-pool-reg-cp.json");
+
+        let client = GoogleProvisionClient::new("tok".to_string());
+        let opts = ProvisionOptions {
+            dry_run: true,
+            max_keys_per_account: 10,
+            cooldown_secs: 0,
+            auto_max: true, // allow count > default ceiling for this test
+        };
+
+        let pool = std::sync::Arc::new(tokio::sync::Mutex::new(
+            std::collections::HashMap::<String, String>::new(),
+        ));
+        let pool_clone = pool.clone();
+
+        let result = client
+            .full_auto_multi(
+                "pool@example.com",
+                4,
+                &opts,
+                Some(&cp_path),
+                move |api_key, project_id| {
+                    let p = pool_clone.clone();
+                    async move {
+                        p.lock().await.insert(project_id, api_key);
+                    }
+                },
+            )
+            .await;
+
+        assert_eq!(result.keys_created, 4);
+        let pool_map = pool.lock().await;
+        assert_eq!(pool_map.len(), 4, "4 distinct entries in mock pool");
+        for i in 1..=4u32 {
+            let pid = format!("cascade-gemini-{}", i);
+            assert!(pool_map.contains_key(&pid), "missing project {}", pid);
+        }
+    }
+
+    /// ProvisionOptions defaults are conservative.
+    #[test]
+    fn gfp_provision_options_defaults_are_conservative() {
+        let opts = ProvisionOptions::default();
+        assert_eq!(opts.max_keys_per_account, 3);
+        assert_eq!(opts.cooldown_secs, 30);
+        assert!(!opts.auto_max, "auto_max must default OFF");
+        assert!(!opts.dry_run);
+    }
+
+    /// ToS warning is always surfaced.
+    #[tokio::test]
+    async fn gfp_tos_warning_always_present() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let cp_path = tmp.path().join("gfp-tos-cp.json");
+
+        let client = GoogleProvisionClient::new("tok".to_string());
+        let opts = ProvisionOptions {
+            dry_run: true,
+            cooldown_secs: 0,
+            ..Default::default()
+        };
+        let result = client
+            .full_auto_multi(
+                "tos@example.com",
+                1,
+                &opts,
+                Some(&cp_path),
+                |_, _| async {},
+            )
+            .await;
+        assert!(
+            result.tos_warning.contains("Terms of Service"),
+            "ToS warning must mention Terms of Service: {}",
+            result.tos_warning
+        );
     }
 }

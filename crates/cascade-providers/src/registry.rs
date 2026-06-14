@@ -263,6 +263,84 @@ impl ProviderRegistry {
         }
         None
     }
+
+    /// Pick the best provider for a chat request using a health-aware fallback
+    /// chain.
+    ///
+    /// # Selection order
+    ///
+    /// 1. **Explicit selection** — `preferred_id` when supplied and registered.
+    /// 2. **Default by routing table** — `default_for_task(Chat)`, which walks
+    ///    the priority list and returns the first *registered* provider.
+    /// 3. **First healthy cloud provider** — iterates all registered adapters,
+    ///    calls `health_check()` concurrently, returns the first that passes.
+    ///    Providers with an id starting with `"local"` are skipped in this pass.
+    /// 4. **Local fallback** — returns the first registered adapter whose id
+    ///    starts with `"local"` regardless of health (local models may not
+    ///    implement `health_check`).
+    ///
+    /// Returns `(adapter, provider_id)` on success, or `None` when no provider
+    /// is available at all.
+    ///
+    /// # Notes
+    ///
+    /// This method releases the read lock before awaiting health checks to avoid
+    /// holding a lock across async `.await` points.
+    pub async fn pick_for_chat(
+        &self,
+        preferred_id: Option<&str>,
+    ) -> Option<(Arc<dyn ProviderAdapter + Send + Sync>, String)> {
+        // ── Step 1: explicit selection ────────────────────────────────────────
+        if let Some(id) = preferred_id {
+            if let Some(arc) = self.get(id) {
+                return Some((arc, id.to_string()));
+            }
+        }
+
+        // ── Step 2: routing-table default ─────────────────────────────────────
+        if let Some(arc) = self.default_for_task(&TaskType::Chat) {
+            let id = arc.provider_info().id;
+            return Some((arc, id));
+        }
+
+        // ── Steps 3 + 4: health-based scan ────────────────────────────────────
+        // Collect all adapters under the read lock; release before awaiting.
+        let pairs: Vec<(String, Arc<dyn ProviderAdapter + Send + Sync>)> = {
+            let map = self
+                .adapters
+                .read()
+                .expect("ProviderRegistry adapter lock poisoned");
+            map.iter()
+                .map(|(id, arc)| (id.clone(), arc.clone()))
+                .collect()
+        };
+
+        if pairs.is_empty() {
+            return None;
+        }
+
+        // Step 3 — first healthy cloud provider.
+        let cloud_pairs: Vec<_> = pairs
+            .iter()
+            .filter(|(id, _)| !id.starts_with("local"))
+            .cloned()
+            .collect();
+
+        for (id, arc) in &cloud_pairs {
+            if arc.health_check().await.is_ok() {
+                return Some((arc.clone(), id.clone()));
+            }
+        }
+
+        // Step 4 — any local provider as final fallback.
+        for (id, arc) in &pairs {
+            if id.starts_with("local") {
+                return Some((arc.clone(), id.clone()));
+            }
+        }
+
+        None
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -531,5 +609,159 @@ mod tests {
         let list = registry.list();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "noop");
+    }
+
+    // ── pick_for_chat ─────────────────────────────────────────────────────────
+
+    /// A mock adapter with configurable id and health status for pick_for_chat tests.
+    struct HealthMock {
+        id: &'static str,
+        healthy: bool,
+    }
+
+    impl HealthMock {
+        fn healthy(id: &'static str) -> Arc<dyn ProviderAdapter + Send + Sync> {
+            Arc::new(HealthMock { id, healthy: true })
+        }
+        fn unhealthy(id: &'static str) -> Arc<dyn ProviderAdapter + Send + Sync> {
+            Arc::new(HealthMock { id, healthy: false })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ProviderAdapter for HealthMock {
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            Err(ProviderError::NotImplemented)
+        }
+
+        async fn complete_stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<
+            Pin<Box<dyn futures_core::Stream<Item = Result<StreamChunk, ProviderError>> + Send>>,
+            ProviderError,
+        > {
+            Err(ProviderError::NotImplemented)
+        }
+
+        async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
+            Err(ProviderError::NotImplemented)
+        }
+
+        async fn health_check(&self) -> Result<(), ProviderError> {
+            if self.healthy {
+                Ok(())
+            } else {
+                Err(ProviderError::NetworkError("mock unhealthy".into()))
+            }
+        }
+
+        fn provider_info(&self) -> ProviderInfo {
+            ProviderInfo {
+                id: self.id.into(),
+                name: format!("HealthMock({})", self.id),
+                auth_method: AuthMethod::None,
+                base_url: String::new(),
+                capabilities: ProviderCapabilities {
+                    supports_streaming: false,
+                    supports_vision: false,
+                    max_context_tokens: 0,
+                    supports_function_calling: false,
+                },
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_returns_none_on_empty_registry() {
+        let registry = ProviderRegistry::new();
+        assert!(registry.pick_for_chat(None).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_explicit_wins_over_routing_default() {
+        let registry = ProviderRegistry::new();
+        // "openai" is routing-table default for Chat.
+        registry
+            .register("openai".into(), HealthMock::healthy("openai"))
+            .unwrap();
+        registry
+            .register("mymodel".into(), HealthMock::healthy("mymodel"))
+            .unwrap();
+
+        let (_, id) = registry
+            .pick_for_chat(Some("mymodel"))
+            .await
+            .expect("should pick explicit mymodel");
+        assert_eq!(id, "mymodel");
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_routing_default_when_no_preferred() {
+        let registry = ProviderRegistry::new();
+        // Only "anthropic" in registry — priority 2 for Chat.
+        registry
+            .register("anthropic".into(), HealthMock::healthy("anthropic"))
+            .unwrap();
+
+        let (_, id) = registry
+            .pick_for_chat(None)
+            .await
+            .expect("should pick anthropic via routing");
+        assert_eq!(id, "anthropic");
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_healthy_cloud_when_no_routing_match() {
+        let registry = ProviderRegistry::new();
+        // "cloud-x" not in routing table → skip routing step → health scan.
+        registry
+            .register("cloud-x".into(), HealthMock::healthy("cloud-x"))
+            .unwrap();
+
+        let (_, id) = registry
+            .pick_for_chat(None)
+            .await
+            .expect("should find cloud-x via health scan");
+        assert_eq!(id, "cloud-x");
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_local_fallback_when_no_healthy_cloud() {
+        // Custom routing table with no entries so routing step is skipped.
+        let routing = RoutingTable {
+            table: HashMap::new(),
+        };
+        let registry = ProviderRegistry::with_routing(routing);
+        registry
+            .register("cloud-broken".into(), HealthMock::unhealthy("cloud-broken"))
+            .unwrap();
+        registry
+            .register("local:llama".into(), HealthMock::unhealthy("local:llama"))
+            .unwrap();
+
+        let (_, id) = registry
+            .pick_for_chat(None)
+            .await
+            .expect("should fall back to local");
+        assert_eq!(id, "local:llama");
+    }
+
+    #[tokio::test]
+    async fn pick_for_chat_returns_none_when_all_unavailable() {
+        // No local providers, no healthy cloud.
+        let routing = RoutingTable {
+            table: HashMap::new(),
+        };
+        let registry = ProviderRegistry::with_routing(routing);
+        registry
+            .register("broken".into(), HealthMock::unhealthy("broken"))
+            .unwrap();
+
+        let result = registry.pick_for_chat(None).await;
+        assert!(result.is_none());
     }
 }

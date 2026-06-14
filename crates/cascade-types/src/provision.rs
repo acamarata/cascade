@@ -57,6 +57,12 @@ pub struct ProvisionStatus {
     pub done: bool,
     /// Non-empty if provisioning ended with an error.
     pub error: Option<String>,
+    /// For multi-key runs: number of keys successfully created so far.
+    #[serde(default)]
+    pub keys_created: u32,
+    /// For multi-key runs: total target (effective ceiling).
+    #[serde(default)]
+    pub keys_target: u32,
 }
 
 /// Result of a provisioning attempt.

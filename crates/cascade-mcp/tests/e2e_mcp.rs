@@ -10,7 +10,7 @@
 //! ### Primitive tests
 //! 4.  `resources_list_returns_cascade_uris`   — resources/list over Unix socket
 //! 5.  `resources_read_gci_returns_content`    — resources/read cascade://tier/gci
-//! 6.  `tools_list_returns_8_tools`            — exactly 8 tools
+//! 6.  `tools_list_returns_all_tools`            — exactly 8 tools
 //! 7.  `tools_call_cascade_search`             — cascade.search with "authentication"
 //! 8.  `prompts_get_cascade_context`           — prompts/get cascade-context → PromptMessage
 //! 9.  `logging_setlevel_filters_events`       — logging/setLevel error
@@ -452,10 +452,10 @@ async fn resources_read_gci_returns_content() {
         .await;
 }
 
-// ── 6. tools_list_returns_8_tools ─────────────────────────────────────────────
+// ── 6. tools_list_returns_all_tools ─────────────────────────────────────────────
 
 #[tokio::test(flavor = "current_thread")]
-async fn tools_list_returns_8_tools() {
+async fn tools_list_returns_all_tools() {
     let local = LocalSet::new();
     local
         .run_until(async {
@@ -473,11 +473,11 @@ async fn tools_list_returns_8_tools() {
                 "tools/list must return result: {val}"
             );
             let tools = val["result"]["tools"].as_array().expect("tools array");
-            // 9 tools: 8 original + cascade.context_slice (T-P4-E04-22)
+            // 10 tools: 8 original + cascade.context_slice + cascade.provide_harness_context
             assert_eq!(
                 tools.len(),
-                9,
-                "expected exactly 9 tools, got {}",
+                10,
+                "expected exactly 10 tools, got {}",
                 tools.len()
             );
 

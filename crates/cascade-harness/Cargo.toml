@@ -29,6 +29,7 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true }
 tracing         = { workspace = true }
 chrono          = { workspace = true }
+toml            = "0.8"
 sysinfo         = "0.31"
 dirs            = "5"
 wasmtime        = { workspace = true, optional = true }

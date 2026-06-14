@@ -26,6 +26,63 @@ use crate::query_strategy::StrategyKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// ── HarnessConfig ─────────────────────────────────────────────────────────────
+
+/// The `[harness]` table in `cascade.toml` — per-harness configuration block.
+///
+/// Consumed by `provide_harness_context` to tailor cascade context injection
+/// for each AI harness (Claude Code, OpenCode, Codex, etc.).
+///
+/// # TOML shape
+///
+/// ```toml
+/// [harness]
+/// model_preference   = "claude-opus-4-5"
+/// enabled_tools      = ["bash", "read", "write", "mcp_tool"]
+/// max_context_tokens = 100000
+///
+/// [harness.mcp]
+/// transport = "unix"
+/// socket    = "~/.cascade/mcp.sock"
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct HarnessConfig {
+    /// Preferred model identifier for this project (harness-agnostic string).
+    /// When absent, the harness's own default is used.
+    pub model_preference: Option<String>,
+
+    /// Explicit list of tool identifiers that should be enabled for this project.
+    /// An empty list means "use the harness default tool set".
+    #[serde(default)]
+    pub enabled_tools: Vec<String>,
+
+    /// Maximum number of tokens to include in the injected cascade context.
+    /// `None` means no project-level cap (harness default applies).
+    pub max_context_tokens: Option<u32>,
+
+    /// MCP connection settings for this harness instance.
+    #[serde(default)]
+    pub mcp: HarnessMcpConfig,
+}
+
+/// MCP-specific overrides within the `[harness]` block.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct HarnessMcpConfig {
+    /// Transport type: `"unix"` (default), `"http"`, or `"stdio"`.
+    pub transport: Option<String>,
+
+    /// Unix socket path override. Defaults to `~/.cascade/mcp.sock`.
+    pub socket: Option<std::path::PathBuf>,
+
+    /// HTTP base URL for the `"http"` transport.
+    pub url: Option<String>,
+
+    /// Request timeout in seconds for MCP calls from this harness.
+    pub timeout_secs: Option<u64>,
+}
+
 // ── AiFolder ──────────────────────────────────────────────────────────────────
 
 /// Which AI folder name Cascade uses to store its working files.
@@ -118,11 +175,22 @@ pub struct CascadeConfig {
     /// Daemon process settings.
     pub daemon: DaemonConfig,
 
+    /// Per-harness configuration (model prefs, enabled tools, MCP settings).
+    /// Consumed by `provide_harness_context`; canonical type defined in cascade-types.
+    pub harness: HarnessConfig,
+
+    /// Policy rules for this tier.
+    /// Merged with rules from other tiers into an effective `PolicySet` at runtime.
+    pub policy: crate::policy::PolicyTableConfig,
+
     /// Which AI folder name Cascade uses (`.cascade`, `.claude`, `.codex`, or custom).
     ///
     /// Written by `cascade folder set <name>` and read by every path-resolution
     /// helper. Defaults to `cascade` (→ `.cascade`).
     pub ai_folder: AiFolder,
+
+    /// GFP (Gemini Free Pool) multi-key provisioning policy.
+    pub gfp: GfpConfig,
 
     /// Which cascade tiers are active. An empty vec means all tiers are active.
     pub active_tiers: Vec<CascadeTier>,
@@ -325,6 +393,60 @@ impl Default for DaemonConfig {
             debounce_ms: 50,
             event_queue_size: 256,
             idle_timeout_secs: None,
+        }
+    }
+}
+
+// ── GfpConfig ─────────────────────────────────────────────────────────────────
+
+/// `[gfp]` — Gemini Free Pool multi-key provisioning policy.
+///
+/// Controls how many GCP API keys `full_auto_multi` may create per account,
+/// how long to wait between key creations, and whether automatic ceiling
+/// expansion is permitted.
+///
+/// **Conservative by default.** These defaults protect real Google accounts
+/// from ToS / abuse-detection bans. Do NOT raise `max_keys_per_account`
+/// without understanding the implications.
+///
+/// # TOML example
+///
+/// ```toml
+/// [gfp]
+/// max_keys_per_account = 3
+/// cooldown_secs        = 30
+/// auto_max             = false  # SAFE DEFAULT — never raise without explicit opt-in
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct GfpConfig {
+    /// Hard ceiling on the number of GCP API keys created per Google account.
+    ///
+    /// `full_auto_multi` will never create more than this many keys regardless
+    /// of the `count` requested. Conservative default: 3.
+    pub max_keys_per_account: u32,
+
+    /// Seconds to wait between successive key creations for the same account.
+    ///
+    /// Reduces the risk of hitting Google's abuse-detection heuristics.
+    /// Conservative default: 30 seconds.
+    pub cooldown_secs: u64,
+
+    /// When `false` (default), the `count` argument to `full_auto_multi` is
+    /// always capped at `max_keys_per_account`. When `true`, `count` may
+    /// exceed the ceiling — the caller must explicitly opt in.
+    ///
+    /// **SAFE DEFAULT: false.** Never set this to `true` without reading the
+    /// Google Cloud Terms of Service on API key limits and project quotas.
+    pub auto_max: bool,
+}
+
+impl Default for GfpConfig {
+    fn default() -> Self {
+        Self {
+            max_keys_per_account: 3,
+            cooldown_secs: 30,
+            auto_max: false,
         }
     }
 }

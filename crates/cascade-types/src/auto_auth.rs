@@ -26,6 +26,8 @@ pub enum AuthSource {
     Codex,
     /// Cursor (`~/Library/Application Support/Cursor/`)
     Cursor,
+    /// Antigravity (`~/.config/antigravity/` or `~/Library/Application Support/Antigravity/`)
+    Antigravity,
     /// Environment variable (e.g. `ANTHROPIC_API_KEY`)
     EnvVar,
 }

@@ -377,6 +377,80 @@ pub fn scan_cursor() -> Vec<DiscoveredAccount> {
     vec![]
 }
 
+// ── Antigravity scanner ───────────────────────────────────────────────────────
+
+/// Scan Antigravity for an authenticated account.
+///
+/// # Purpose
+/// Reads `~/.config/antigravity/config.json` (Linux/macOS cross-platform path)
+/// and `~/Library/Application Support/Antigravity/config.json` (macOS native).
+/// Extracts `email` / `user.email` if present.
+///
+/// # Outputs
+/// Up to one `DiscoveredAccount` with `source=Antigravity`, `importable=false`.
+///
+/// # Constraints
+/// - Read-only. No file is written or modified.
+/// - Auth token value is never extracted or logged.
+pub fn scan_antigravity() -> Vec<DiscoveredAccount> {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return vec![],
+    };
+
+    let mut candidates = vec![
+        home.join(".config").join("antigravity").join("config.json"),
+        home.join(".antigravity").join("config.json"),
+    ];
+
+    // macOS: also check Application Support
+    #[cfg(target_os = "macos")]
+    candidates.push(
+        home.join("Library")
+            .join("Application Support")
+            .join("Antigravity")
+            .join("config.json"),
+    );
+
+    for config_path in &candidates {
+        if !config_path.exists() {
+            continue;
+        }
+        let contents = match std::fs::read_to_string(config_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let json: serde_json::Value = match serde_json::from_str(&contents) {
+            Ok(j) => j,
+            Err(_) => continue,
+        };
+
+        let email = json
+            .get("email")
+            .or_else(|| json.get("user").and_then(|u| u.get("email")))
+            .or_else(|| json.get("userEmail"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let hint = if email.is_empty() {
+            "Antigravity (account unknown)".to_string()
+        } else {
+            email
+        };
+
+        return vec![DiscoveredAccount {
+            source: AuthSource::Antigravity,
+            email_or_hint: hint,
+            provider: "anthropic".to_string(),
+            auth_type: AuthType::OAuthToken,
+            importable: false,
+        }];
+    }
+
+    vec![]
+}
+
 // ── Env var scanner ───────────────────────────────────────────────────────────
 
 /// Scan environment variables for API keys.
@@ -431,6 +505,7 @@ pub fn scan_all() -> Vec<DiscoveredAccount> {
     results.extend(scan_opencode());
     results.extend(scan_codex());
     results.extend(scan_cursor());
+    results.extend(scan_antigravity());
     results.extend(scan_env_vars());
     results
 }
@@ -940,5 +1015,101 @@ mod tests {
             json.contains("\"claudeCode\""),
             "expected claudeCode source, got: {json}"
         );
+    }
+
+    // ── Antigravity scan ─────────────────────────────────────────────────────
+
+    #[test]
+    #[serial(global_env)]
+    fn scan_antigravity_detects_email_in_config_json() {
+        let tmp = TempDir::new().unwrap();
+        write_file(
+            &tmp,
+            ".config/antigravity/config.json",
+            r#"{"email":"ag@example.com","token":"tok123"}"#,
+        );
+
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp.path());
+
+        let results = scan_antigravity();
+
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert!(!results.is_empty(), "expected antigravity account");
+        let acc = &results[0];
+        assert_eq!(acc.source, AuthSource::Antigravity);
+        assert_eq!(acc.email_or_hint, "ag@example.com");
+        assert!(!acc.importable);
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn scan_antigravity_returns_empty_when_not_installed() {
+        let tmp = TempDir::new().unwrap();
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp.path());
+
+        let results = scan_antigravity();
+
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert!(results.is_empty(), "no config → no accounts");
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn scan_antigravity_fallback_dot_antigravity() {
+        let tmp = TempDir::new().unwrap();
+        write_file(
+            &tmp,
+            ".antigravity/config.json",
+            r#"{"userEmail":"ag2@example.com"}"#,
+        );
+
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp.path());
+
+        let results = scan_antigravity();
+
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert!(!results.is_empty(), "expected antigravity via ~/.antigravity");
+        assert_eq!(results[0].email_or_hint, "ag2@example.com");
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn scan_all_includes_antigravity() {
+        let tmp = TempDir::new().unwrap();
+        write_file(
+            &tmp,
+            ".config/antigravity/config.json",
+            r#"{"email":"ag@example.com"}"#,
+        );
+
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp.path());
+
+        let results = scan_all();
+
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+
+        let has_ag = results
+            .iter()
+            .any(|a| a.source == AuthSource::Antigravity);
+        assert!(has_ag, "scan_all must include Antigravity results");
     }
 }

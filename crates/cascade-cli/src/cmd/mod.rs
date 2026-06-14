@@ -7,6 +7,8 @@
 pub mod backup;
 // E-P6-04: T0 CEO / Founder orchestrator
 pub mod ceo;
+// E-P7-06: subscription adapter detection + config-generation
+pub mod subs;
 // E-P5-04: post-init healthcheck gate
 pub mod verify;
 // E-P5-08: provider credential CLI (add/list/remove/test)
@@ -150,6 +152,8 @@ pub enum Commands {
     Verify(verify::VerifyArgs),
     /// Submit directives to the CEO/Founder AI orchestrator.
     Ceo(ceo::CeoArgs),
+    /// List detected AI coding subscriptions and their auth status (E-P7-06).
+    Subs(subs::SubsArgs),
 }
 
 impl Commands {
@@ -192,6 +196,7 @@ impl Commands {
             Commands::Provider(args) => args.run().await,
             Commands::Verify(args) => args.run().await,
             Commands::Ceo(args) => args.run().await,
+            Commands::Subs(args) => args.run().await,
         }
     }
 }
