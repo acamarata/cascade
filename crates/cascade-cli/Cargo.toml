@@ -29,7 +29,7 @@ cascade-plugins = { path = "../cascade-plugins", version = "0.9.1" }
 cascade-mcp     = { path = "../cascade-mcp", version = "0.9.1" }
 cascade-keychain = { path = "../cascade-keychain", version = "0.9.1" }
 cascade-audit = { path = "../cascade-audit", version = "0.9.1" }
-cascade-local-llm = { path = "../cascade-local-llm", version = "0.9.1" }
+cascade-local-llm = { path = "../cascade-local-llm", version = "0.9.1", optional = true }
 cascade-providers = { path = "../cascade-providers", version = "0.9.1" }
 rusqlite      = { workspace = true }
 async-trait   = { workspace = true }
@@ -44,6 +44,9 @@ tracing-subscriber = { workspace = true }
 notify        = { workspace = true }
 chrono        = { workspace = true }
 dirs          = "5"
+
+[features]
+local-llm = ["dep:cascade-local-llm"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

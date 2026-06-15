@@ -24,7 +24,7 @@ cascade-tray      = { workspace = true }
 cascade-keychain  = { path = "../cascade-keychain", version = "0.9.1" }
 cascade-audit     = { path = "../cascade-audit", version = "0.9.1" }
 cascade-providers = { workspace = true }
-cascade-local-llm = { path = "../cascade-local-llm", version = "0.9.1" }
+cascade-local-llm = { path = "../cascade-local-llm", version = "0.9.1", optional = true }
 secrecy       = "0.8"
 tokio         = { workspace = true }
 tracing       = { workspace = true }
@@ -70,6 +70,7 @@ tempfile      = "3"
 
 [features]
 tcp-ipc = []
+local-llm = ["dep:cascade-local-llm"]
 
 [build-dependencies]
 base64 = "0.22"

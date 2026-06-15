@@ -155,6 +155,27 @@ Capabilities local can't do, that justify the migration beyond mere replacement:
 
 ---
 
+## Inbox-sourced roadmap additions (2026-06-15)
+
+Folded in from the acamarata project inbox. Two coherent themes.
+
+### Theme S — Security & prompt-injection hardening → **P13** (runtime integration), new epic **E13.4**
+- **E13.4.1 Injection-aware UserPromptSubmit hook** (HIGH) — scan each incoming user message against an injection pattern set before any tool dispatch; on hit log + warn; on critical (direct deny-list-override attempt) halt the turn; sensitivity `strict|moderate|log-only` in settings. Cascade ships it as a default hook. The deny-list is currently the only guard under bypassPermissions — this adds a pre-dispatch gate.
+- **E13.4.2 Deny-list injection audit** — cross-reference every deny-list pattern vs OWASP LLM Top-10 + published jailbreak/Pliny techniques; add encoding-variant coverage (base64/URL/unicode-homoglyph) and chained-command heuristics (sequences that individually pass but collectively violate); document in `deny-list-audit.md`. (Audit + heuristics, not just doc.)
+- **E13.4.3 Agent prompt-size gate** — count tokens in the assembled agent system prompt at spawn; warn > 2000, error/block > 4000 (configurable `agent_prompt_max_warn|error`); emit top-3 largest sections on warn; per-agent-type telemetry. Pairs with E12 model-profile routing (right-size prompt AND model).
+- **E13.4.4 RTK injection telemetry** (LOW) — scan intercepted Bash command strings for injection-ish patterns; log hits to a separate telemetry file (observability only, no blocking); weekly summary in `rtk gain --history`.
+
+### Theme M — Model behavioral-profile routing → **P12**, extends the P11 model-tier registry
+- **E12.x Behavioral-profile metadata + routing** — add per-model behavioral profile (defaultFormat, toolUseTrigger, refusalSensitivity, bestFor) to the model registry built in P11; route agent spawns by profile match, not tier alone (same tier ≠ same defaults across Claude/Gemini). Avoids formatting fights / spurious tool-use / refusal false-positives.
+
+### External @acamarata packages Cascade consumes (separate repos — spin up via PCI)
+- **`@acamarata/prompt-guard`** — zero-dep TS injection detection/sanitization (`scanPrompt`/`sanitizePrompt`, modes escape|block|tag). Cascade's hook (E13.4.1) consumes it.
+- **`@acamarata/model-profiles`** — versioned LLM behavioral-profile data (`getProfile`/`getBestModelFor`). E12.x routing consumes it.
+
+> The ~30 other inbox `audit-*` messages target *other* acamarata repos (ali/curtain/nrel/dart/python/npm) — out of scope for the cascade phase plan; left for their owning repos.
+
+---
+
 ## Quality protocol (every phase)
 
 1. Build agents work in isolated worktrees, crate-grouped to avoid conflicts.

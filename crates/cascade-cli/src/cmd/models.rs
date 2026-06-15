@@ -30,10 +30,13 @@
 //!
 //! Entity: cascade-cli / models subcommand (E-P5-07)
 
+#[cfg(feature = "local-llm")]
 use std::path::PathBuf;
+#[cfg(feature = "local-llm")]
 use std::sync::Arc;
 
 use async_trait::async_trait;
+#[cfg(feature = "local-llm")]
 use cascade_local_llm::downloader::{find_model, models};
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
@@ -103,46 +106,52 @@ impl Command for ModelsArgs {
 #[async_trait]
 impl Command for ListArgs {
     async fn run(&self) -> Result<()> {
-        let catalog = models();
+        #[cfg(not(feature = "local-llm"))]
+        return Err(local_llm_not_built());
 
-        if self.json {
-            // JSON output: array of objects with id, size_bytes, downloaded
-            let mut rows = Vec::new();
-            for entry in catalog {
-                let dir = model_dir_path_home(entry.model_id);
-                let downloaded = dir.map(|d| d.is_dir()).unwrap_or(false);
-                rows.push(serde_json::json!({
-                    "id": entry.model_id,
-                    "hf_repo": entry.hf_repo,
-                    "size_bytes": entry.size_bytes,
-                    "downloaded": downloaded,
-                }));
+        #[cfg(feature = "local-llm")]
+        {
+            let catalog = models();
+
+            if self.json {
+                // JSON output: array of objects with id, size_bytes, downloaded
+                let mut rows = Vec::new();
+                for entry in catalog {
+                    let dir = model_dir_path_home(entry.model_id);
+                    let downloaded = dir.map(|d| d.is_dir()).unwrap_or(false);
+                    rows.push(serde_json::json!({
+                        "id": entry.model_id,
+                        "hf_repo": entry.hf_repo,
+                        "size_bytes": entry.size_bytes,
+                        "downloaded": downloaded,
+                    }));
+                }
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&rows)
+                        .map_err(|e| CascadeError::Other(e.to_string()))?
+                );
+                return Ok(());
             }
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&rows)
-                    .map_err(|e| CascadeError::Other(e.to_string()))?
-            );
-            return Ok(());
-        }
 
-        // Human-readable table
-        println!("{:<18} {:<10} {:<40} STATUS", "MODEL ID", "SIZE", "HF REPO");
-        println!("{}", "-".repeat(80));
-        for entry in catalog {
-            let size_gb = entry.size_bytes as f64 / 1e9;
-            let dir = model_dir_path_home(entry.model_id);
-            let status = match dir {
-                Some(d) if d.is_dir() => "downloaded",
-                _ => "not downloaded",
-            };
-            println!(
-                "{:<18} {:>6.1}GB  {:<40} {}",
-                entry.model_id, size_gb, entry.hf_repo, status
-            );
-        }
+            // Human-readable table
+            println!("{:<18} {:<10} {:<40} STATUS", "MODEL ID", "SIZE", "HF REPO");
+            println!("{}", "-".repeat(80));
+            for entry in catalog {
+                let size_gb = entry.size_bytes as f64 / 1e9;
+                let dir = model_dir_path_home(entry.model_id);
+                let status = match dir {
+                    Some(d) if d.is_dir() => "downloaded",
+                    _ => "not downloaded",
+                };
+                println!(
+                    "{:<18} {:>6.1}GB  {:<40} {}",
+                    entry.model_id, size_gb, entry.hf_repo, status
+                );
+            }
 
-        Ok(())
+            Ok(())
+        }
     }
 }
 
@@ -151,70 +160,76 @@ impl Command for ListArgs {
 #[async_trait]
 impl Command for DownloadArgs {
     async fn run(&self) -> Result<()> {
-        let id = self.id.as_str();
+        #[cfg(not(feature = "local-llm"))]
+        return Err(local_llm_not_built());
 
-        // Validate model id against catalog.
-        let entry = find_model(id).ok_or_else(|| {
-            CascadeError::Other(format!(
-                "unknown model id '{}'. Run 'cascade models list' to see available models.",
-                id
-            ))
-        })?;
+        #[cfg(feature = "local-llm")]
+        {
+            let id = self.id.as_str();
 
-        // Check if already present (idempotent).
-        let model_dir = model_dir_path_home(id)
-            .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
-        let weight_file = model_dir.join(entry.filename);
+            // Validate model id against catalog.
+            let entry = find_model(id).ok_or_else(|| {
+                CascadeError::Other(format!(
+                    "unknown model id '{}'. Run 'cascade models list' to see available models.",
+                    id
+                ))
+            })?;
 
-        if weight_file.exists() {
-            println!("✓ {} already downloaded at {}", id, weight_file.display());
-            return Ok(());
-        }
+            // Check if already present (idempotent).
+            let model_dir = model_dir_path_home(id)
+                .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
+            let weight_file = model_dir.join(entry.filename);
 
-        println!(
-            "Downloading {} ({:.1}GB) from {}",
-            id,
-            entry.size_bytes as f64 / 1e9,
-            entry.hf_url()
-        );
-        println!("Destination: {}", model_dir.display());
-        println!();
-
-        // Progress tracking with a simple inline bar.
-        let last_pct = Arc::new(std::sync::Mutex::new(-1i32));
-        let last_pct_clone = last_pct.clone();
-
-        let result = cascade_local_llm::download_model(id, move |progress| {
-            let pct = progress.pct as i32;
-            let mut last = last_pct_clone.lock().unwrap();
-            // Only reprint when percentage changes to avoid spamming.
-            if pct > *last {
-                *last = pct;
-                let filled = (pct as usize * 40) / 100;
-                let bar = format!(
-                    "[{}{}] {}%  ({:.1}/{:.1}GB)",
-                    "#".repeat(filled),
-                    "-".repeat(40 - filled),
-                    pct,
-                    progress.bytes_received as f64 / 1e9,
-                    progress.total_bytes as f64 / 1e9,
-                );
-                eprint!("\r{}", bar);
+            if weight_file.exists() {
+                println!("✓ {} already downloaded at {}", id, weight_file.display());
+                return Ok(());
             }
-        })
-        .await;
 
-        eprintln!(); // newline after progress bar
+            println!(
+                "Downloading {} ({:.1}GB) from {}",
+                id,
+                entry.size_bytes as f64 / 1e9,
+                entry.hf_url()
+            );
+            println!("Destination: {}", model_dir.display());
+            println!();
 
-        match result {
-            Ok(path) => {
-                println!("✓ Download complete: {}", path.display());
-                println!(
-                    "  Register with daemon: restart 'cascade daemon' to pick up the new model."
-                );
-                Ok(())
+            // Progress tracking with a simple inline bar.
+            let last_pct = Arc::new(std::sync::Mutex::new(-1i32));
+            let last_pct_clone = last_pct.clone();
+
+            let result = cascade_local_llm::download_model(id, move |progress| {
+                let pct = progress.pct as i32;
+                let mut last = last_pct_clone.lock().unwrap();
+                // Only reprint when percentage changes to avoid spamming.
+                if pct > *last {
+                    *last = pct;
+                    let filled = (pct as usize * 40) / 100;
+                    let bar = format!(
+                        "[{}{}] {}%  ({:.1}/{:.1}GB)",
+                        "#".repeat(filled),
+                        "-".repeat(40 - filled),
+                        pct,
+                        progress.bytes_received as f64 / 1e9,
+                        progress.total_bytes as f64 / 1e9,
+                    );
+                    eprint!("\r{}", bar);
+                }
+            })
+            .await;
+
+            eprintln!(); // newline after progress bar
+
+            match result {
+                Ok(path) => {
+                    println!("✓ Download complete: {}", path.display());
+                    println!(
+                        "  Register with daemon: restart 'cascade daemon' to pick up the new model."
+                    );
+                    Ok(())
+                }
+                Err(e) => Err(CascadeError::Other(e.to_string())),
             }
-            Err(e) => Err(CascadeError::Other(e.to_string())),
         }
     }
 }
@@ -224,50 +239,65 @@ impl Command for DownloadArgs {
 #[async_trait]
 impl Command for RemoveArgs {
     async fn run(&self) -> Result<()> {
-        let id = self.id.as_str();
+        #[cfg(not(feature = "local-llm"))]
+        return Err(local_llm_not_built());
 
-        // Validate model id.
-        if find_model(id).is_none() {
-            return Err(CascadeError::Other(format!(
-                "unknown model id '{}'. Run 'cascade models list' to see available models.",
-                id
-            )));
-        }
+        #[cfg(feature = "local-llm")]
+        {
+            let id = self.id.as_str();
 
-        let model_dir = model_dir_path_home(id)
-            .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
+            // Validate model id.
+            if find_model(id).is_none() {
+                return Err(CascadeError::Other(format!(
+                    "unknown model id '{}'. Run 'cascade models list' to see available models.",
+                    id
+                )));
+            }
 
-        if !model_dir.is_dir() {
-            println!("Model '{}' is not downloaded (nothing to remove).", id);
-            return Ok(());
-        }
+            let model_dir = model_dir_path_home(id)
+                .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
 
-        if !self.yes {
-            // Ask for confirmation.
-            eprint!("Remove {} at {}? [y/N] ", id, model_dir.display());
-            let mut input = String::new();
-            std::io::stdin()
-                .read_line(&mut input)
-                .map_err(|e| CascadeError::Other(e.to_string()))?;
-            if !input.trim().eq_ignore_ascii_case("y") {
-                println!("Aborted.");
+            if !model_dir.is_dir() {
+                println!("Model '{}' is not downloaded (nothing to remove).", id);
                 return Ok(());
             }
+
+            if !self.yes {
+                // Ask for confirmation.
+                eprint!("Remove {} at {}? [y/N] ", id, model_dir.display());
+                let mut input = String::new();
+                std::io::stdin()
+                    .read_line(&mut input)
+                    .map_err(|e| CascadeError::Other(e.to_string()))?;
+                if !input.trim().eq_ignore_ascii_case("y") {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+            }
+
+            tokio::fs::remove_dir_all(&model_dir)
+                .await
+                .map_err(|e| CascadeError::Other(e.to_string()))?;
+
+            println!("✓ Removed {} from disk.", id);
+            Ok(())
         }
-
-        tokio::fs::remove_dir_all(&model_dir)
-            .await
-            .map_err(|e| CascadeError::Other(e.to_string()))?;
-
-        println!("✓ Removed {} from disk.", id);
-        Ok(())
     }
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
+/// Return a `CascadeError` explaining that local LLM support was not compiled in.
+fn local_llm_not_built() -> cascade_types::error::CascadeError {
+    CascadeError::Other(
+        "local LLM support is not built in — reinstall or build with `--features local-llm`"
+            .to_string(),
+    )
+}
+
 /// Return `~/.cascade/models/<model_id>` using `$HOME` env var first
 /// (test-isolation-safe), falling back to `dirs::home_dir()`.
+#[cfg(feature = "local-llm")]
 fn model_dir_path_home(model_id: &str) -> Option<PathBuf> {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -277,7 +307,7 @@ fn model_dir_path_home(model_id: &str) -> Option<PathBuf> {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-#[cfg(test)]
+#[cfg(all(test, feature = "local-llm"))]
 mod tests {
     use super::*;
     use serial_test::serial;

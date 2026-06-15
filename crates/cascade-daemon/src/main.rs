@@ -407,7 +407,11 @@ async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
 /// Registration failures (e.g. duplicate ID) are logged at WARN and skipped —
 /// a bad local model must never block daemon startup.
 ///
+/// When the `local-llm` feature is disabled this is a no-op — candle/gemm are
+/// not compiled and no local model paths are scanned.
+///
 /// SPORT: MASTER-RUST-CRATES.md — cascade-daemon: local LLM registration (E-P5-07)
+#[cfg(feature = "local-llm")]
 fn try_register_local_models(registry: &Arc<ProviderRegistry>) {
     use cascade_local_llm::scan_installed_models;
 
@@ -422,6 +426,12 @@ fn try_register_local_models(registry: &Arc<ProviderRegistry>) {
             Err(e) => warn!(provider_id, error = %e, "local LLM registration failed (skipping)"),
         }
     }
+}
+
+/// No-op stub used when the `local-llm` feature is not enabled.
+#[cfg(not(feature = "local-llm"))]
+fn try_register_local_models(_registry: &Arc<ProviderRegistry>) {
+    info!("local LLM support not built in (build with --features local-llm to enable)");
 }
 
 /// Write a one-line crash sentinel so the next start can surface a message.

@@ -302,8 +302,11 @@ fn check_ai_provider() -> CheckResult {
     let cloud_providers = cascade_providers::list_providers(kc.as_ref());
     let has_cloud = cloud_providers.iter().any(|p| p.healthy);
 
-    // Check local models: at least one weight directory present.
+    // Check local models: at least one weight directory present (opt-in `local-llm` feature).
+    #[cfg(feature = "local-llm")]
     let local_models = cascade_local_llm::scan_installed_models();
+    #[cfg(not(feature = "local-llm"))]
+    let local_models: Vec<(String, ())> = Vec::new();
     let has_local = !local_models.is_empty();
 
     if has_cloud || has_local {

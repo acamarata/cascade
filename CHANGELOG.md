@@ -6,10 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [0.9.1] - 2026-06-14
+## [0.9.1] - 2026-06-15
 
-Parity Program P11 — foundational correctness. First increment toward Cascade
-fully replacing a hand-built multi-harness AI-coding setup.
+Parity Program P11 — foundational correctness + cross-platform build hardening.
+First increment toward Cascade fully replacing a hand-built multi-harness
+AI-coding setup. Linux/macOS verified locally via Docker + native (GitHub Actions
+quota was exhausted this cycle; CI will re-confirm on reset).
 
 ### Added
 
@@ -29,13 +31,25 @@ fully replacing a hand-built multi-harness AI-coding setup.
   blocked on index I/O.
 - Chain and orchestration now run independent branches/sub-goals truly
   concurrently, bounded by a CPU-aware semaphore, instead of sequentially.
+- `cascade-local-llm` (candle/gemma on-device inference) is now an opt-in
+  feature (`--features local-llm`). The default daemon/CLI build no longer pulls
+  the candle/gemm ML stack, so it builds cleanly on Linux. RAG embeddings are
+  unaffected (they use fastembed/ONNX, not candle).
 
 ### Fixed
 
+- **Linux Secret Service keychain** rewritten against oo7's real async API — it
+  previously used `oo7::blocking`, which exists in no oo7 version, so the Linux
+  backend had never compiled.
+- **Windows keychain**: `CredEnumerateW` flags now use the `CRED_ENUMERATE_FLAGS`
+  newtype required by `windows-0.58` (was a type error that never compiled).
+- Platform-conditional clippy lints across the daemon-side crates; the full Linux
+  daemon/CLI tree now builds and passes `clippy -D warnings`.
 - cargo-deny bans: pinned internal path-dependency versions on all plugin and
   example crates (resolves the v0.9.0 release pipeline's cargo-deny failure).
-- clippy: resolved doc-comment and unused-import warnings workspace-wide so
-  `clippy --workspace --all-targets -- -D warnings` is clean.
+- CI pipeline repairs: cargo-deny direct invocation, pnpm setup ordering + a root
+  `package.json`, qmllint flag, and a darwin-scoped CC override (a global one had
+  broken the Windows MSVC build).
 
 ## [0.9.0] - 2026-06-14
 
