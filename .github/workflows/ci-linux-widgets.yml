@@ -28,13 +28,14 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y gjs
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Enable corepack
-        run: corepack enable
+          cache: 'pnpm'
 
       - name: Install dev dependencies
         working-directory: apps/cascade-widget-linux/gnome

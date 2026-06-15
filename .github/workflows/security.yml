@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read    # Required by gitleaks-action to list PR commits.
   security-events: write # Required for uploading SARIF results.
 
 jobs:
@@ -51,19 +52,28 @@ jobs:
   # ── cargo-deny ─────────────────────────────────────────────────────────────
   # License compliance + duplicate dependency detection + banned crate check.
   # Config lives in deny.toml at the workspace root.
+  #
+  # Direct invocation (not EmbarkStudios/cargo-deny-action) to avoid the
+  # musl-container toolchain conflict: the action runs in a musl Docker image
+  # that tries to install the rust-toolchain.toml toolchain as
+  # stable-x86_64-unknown-linux-musl, which is not installed. Running cargo-deny
+  # directly on the ubuntu runner sidesteps the container entirely.
   cargo-deny:
     name: cargo-deny
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
         with:
-          # deny.toml at workspace root is auto-discovered by cargo-deny-action@v2.
-          # command defaults to "check"; arguments lists which checks to run.
-          command: check
-          arguments: --all-features licenses bans advisories sources
+          tool: cargo-deny
+
+      - name: Run cargo-deny
+        run: cargo deny --all-features check
 
   # ── gitleaks ───────────────────────────────────────────────────────────────
   # Scans the repository history for accidentally committed secrets.

@@ -220,14 +220,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-deny
-        run: cargo binstall --no-confirm cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
 
       - name: Run cargo deny
-        run: cargo deny check
+        # Override RUSTC_WRAPPER: the workspace-level env sets it to sccache,
+        # but sccache is not installed in this job. cargo-deny only needs `cargo
+        # metadata` (no compilation), so RUSTC_WRAPPER must be cleared.
+        env:
+          RUSTC_WRAPPER: ""
+        run: cargo deny --all-features check
 
   # ── coverage ──────────────────────────────────────────────────────────────
   # Coverage measurement via cargo-llvm-cov + nextest, uploaded to Codecov.

@@ -23,3 +23,14 @@ daemon-serial = { max-threads = 1 }
 [[profile.default.overrides]]
 filter = 'binary(integration) & (package(cascade-daemon) | package(cascade-cli))'
 test-group = 'daemon-serial'
+
+# CI profile — used by GitHub Actions (`cargo nextest run --profile ci`).
+# Inherits all default settings; adds one retry for flaky network-bound tests
+# and lowers the slow-timeout to match the CI runner budget.
+[profile.ci]
+retries = 1
+slow-timeout = { period = "30s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+filter = 'binary(integration) & (package(cascade-daemon) | package(cascade-cli))'
+test-group = 'daemon-serial'
