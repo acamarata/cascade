@@ -1270,6 +1270,7 @@ dependencies = [
 name = "cascade-keychain"
 version = "0.9.1"
 dependencies = [
+ "futures-lite 2.6.1",
  "oo7",
  "security-framework 2.11.1",
  "thiserror 1.0.69",
