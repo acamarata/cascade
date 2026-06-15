@@ -14,8 +14,10 @@ tracing = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "2.11"
 
+# `unstable` exposes oo7's synchronous `blocking::Keyring` API used by linux.rs;
+# without it the `blocking` module is private (#[cfg(feature = "unstable")]).
 [target.'cfg(target_os = "linux")'.dependencies]
-oo7 = "0.3"
+oo7 = { version = "0.3", features = ["unstable"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Security_Credentials"] }

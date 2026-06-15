@@ -6,6 +6,8 @@ settings:
 
 importers:
 
+  .: {}
+
   apps/cascade-app:
     dependencies:
       '@codemirror/autocomplete':
