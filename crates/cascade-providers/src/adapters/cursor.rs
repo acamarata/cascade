@@ -123,7 +123,9 @@ impl CursorAdapter {
             None => return vec![],
         };
 
-        // Linux / cross-platform path
+        // Linux / cross-platform path. Mutated only under the macOS/Windows cfg
+        // blocks below; immutable on other targets.
+        #[allow(unused_mut)]
         let mut candidates = vec![home
             .join(".config")
             .join("Cursor")

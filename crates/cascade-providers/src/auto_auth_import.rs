@@ -26,6 +26,8 @@
 //! - JWT payload decode is best-effort; malformed tokens are skipped.
 
 use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, ImportResult};
+// `warn` is referenced only in non-Linux cfg paths; keep the import on all targets.
+#[allow(unused_imports)]
 use tracing::warn;
 
 // ── Claude Code scanner ───────────────────────────────────────────────────────
@@ -398,6 +400,8 @@ pub fn scan_antigravity() -> Vec<DiscoveredAccount> {
         None => return vec![],
     };
 
+    // Mutated only under the macOS cfg block below; immutable on other targets.
+    #[allow(unused_mut)]
     let mut candidates = vec![
         home.join(".config").join("antigravity").join("config.json"),
         home.join(".antigravity").join("config.json"),

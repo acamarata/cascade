@@ -178,6 +178,7 @@ pub struct LinuxSecretService;
 #[cfg(target_os = "linux")]
 #[async_trait]
 impl KeyStorage for LinuxSecretService {
+    #[cfg_attr(not(feature = "keychain-linux"), allow(unused_variables))]
     async fn get(&self, key_id: &str) -> Result<SecretBytes> {
         #[cfg(feature = "keychain-linux")]
         {
@@ -228,6 +229,7 @@ impl KeyStorage for LinuxSecretService {
         }
     }
 
+    #[cfg_attr(not(feature = "keychain-linux"), allow(unused_variables))]
     async fn put(&self, key_id: &str, bytes: SecretBytes) -> Result<()> {
         #[cfg(feature = "keychain-linux")]
         {

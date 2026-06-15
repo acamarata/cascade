@@ -115,6 +115,8 @@ impl AntigravityAdapter {
             None => return vec![],
         };
 
+        // Mutated only under the macOS cfg block below; immutable on other targets.
+        #[allow(unused_mut)]
         let mut candidates = vec![
             home.join(".config").join("antigravity").join("config.json"),
             home.join(".antigravity").join("config.json"),

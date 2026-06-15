@@ -157,7 +157,11 @@ pub enum UninstallMode {
 
 #[derive(Debug)]
 enum Action {
+    // LaunchAgent actions are constructed only on macOS; other targets never build
+    // them but still reference them in the `describe`/`apply` match arms.
+    #[allow(dead_code)]
     UnloadLaunchAgent { plist: PathBuf },
+    #[allow(dead_code)]
     RemoveLaunchAgentPlist { plist: PathBuf },
     RemoveSymlink { path: PathBuf },
     RestoreArchive { tool_id: String },

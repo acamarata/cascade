@@ -163,7 +163,9 @@ impl Keychain for WindowsKeychain {
         tracing::debug!(service, "Windows keychain: list_keys");
         // Windows Credential Manager's CredEnumerateW supports a filter prefix.
         // We filter by "cascade/<service>/" and strip the prefix to return account names.
-        use windows::Win32::Security::Credentials::{CredEnumerateW, CREDENTIALW as CW};
+        use windows::Win32::Security::Credentials::{
+            CredEnumerateW, CRED_ENUMERATE_FLAGS, CREDENTIALW as CW,
+        };
         let prefix = Self::service_prefix(service);
         let prefix_wide: Vec<u16> = OsStr::new(&prefix)
             .encode_wide()
@@ -175,7 +177,7 @@ impl Keychain for WindowsKeychain {
         let result = unsafe {
             CredEnumerateW(
                 PWSTR(prefix_wide.as_ptr() as *mut u16),
-                0,
+                CRED_ENUMERATE_FLAGS(0),
                 &mut count,
                 &mut ppcredentials,
             )
