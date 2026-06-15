@@ -33,6 +33,7 @@ pub mod executor;
 pub mod grants;
 pub mod inbox;
 pub mod library;
+pub mod model_profile;
 pub mod registry;
 pub mod spec;
 pub mod task;
@@ -69,6 +70,9 @@ pub use automation::{
     AutomationTarget, AutomationTrigger, DiskSink, DraftArtifact, DraftKind, NoopSink,
     OutboundSink,
 };
+
+// model_profile re-exports (E-P12-01)
+pub use model_profile::{code_task_shape, resolve_by_tier, resolve_model, structured_task_shape};
 
 // chain module re-exports
 pub use chain::{
