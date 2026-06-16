@@ -12,6 +12,28 @@
 //! `->` pointer comments so that context-budget stays bounded. The resolver
 //! separates them into [`ResolvedContext::on_demand_rules`].
 //!
+//! # Canonical variables (`vars`)
+//!
+//! Every tier may declare a `[vars]` table in `config.toml` that maps
+//! namespaced keys to string values:
+//!
+//! ```toml
+//! [vars]
+//! "cascade.model.t1" = "claude-opus-4-5"
+//! "infra.prod_ip"    = "1.2.3.4"
+//! ```
+//!
+//! Variables from all tiers are merged with **lower (more-specific) tier
+//! overrides higher (less-specific) tier on key collision** — the opposite
+//! of the `instructions` precedence, but matches the `model_registry` pattern
+//! where the most-specific scope knows best.
+//!
+//! After merging, the resolver performs token substitution: every occurrence
+//! of `${ns.key}` in merged instruction text (and on-demand rule bodies) is
+//! replaced with the corresponding value from the merged vars map.  Unknown
+//! tokens are left verbatim; `$${ns.key}` is an escape for a literal
+//! `${ns.key}`.  Substitution runs AFTER `@import` expansion.
+//!
 //! # Back-compatibility
 //!
 //! The `rules` field in `config.toml` supports two shapes that both deserialise
@@ -33,12 +55,25 @@
 //! ```
 //!
 //! Old configs with plain strings continue to deserialise without any change.
+//! Existing configs without a `[vars]` table parse without any change.
 
 use crate::hook::HookConfigEntry;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+// ── Vars ──────────────────────────────────────────────────────────────────────
+
+/// A map of namespaced canonical variable keys to their string values.
+///
+/// Keys follow the `namespace.sub_key` convention (e.g. `cascade.model.t1`,
+/// `infra.prod_ip`).  Any string is technically valid as a key, but the
+/// dotted-namespace style is the convention so that `${ns.key}` tokens in
+/// instruction text are readable and searchable.
+///
+/// This is a type alias for [`BTreeMap`] so serialisation preserves key order.
+pub type VarsMap = BTreeMap<String, String>;
 
 // ── Rule ─────────────────────────────────────────────────────────────────────
 
@@ -343,6 +378,25 @@ pub struct TierConfig {
     /// [`ModelRegistry`]: crate::model_registry::ModelRegistry
     #[serde(default)]
     pub models: Option<crate::model_registry::ModelOverrides>,
+
+    /// Canonical variable definitions for this tier.
+    ///
+    /// Maps to the `[vars]` table in `config.toml`:
+    ///
+    /// ```toml
+    /// [vars]
+    /// "cascade.model.t1" = "claude-opus-4-5"
+    /// "infra.prod_ip"    = "1.2.3.4"
+    /// ```
+    ///
+    /// Absent tiers (no `[vars]` table) contribute an empty map.  Merging
+    /// across tiers follows a lower-tier-overrides-higher rule: the most
+    /// specific scope (PAC) wins on key collision.
+    ///
+    /// Serde `default` ensures existing configs without a `[vars]` table
+    /// continue to parse without error.
+    #[serde(default)]
+    pub vars: VarsMap,
 }
 
 /// The fully resolved cascade context produced by
@@ -354,16 +408,17 @@ pub struct TierConfig {
 ///
 /// # Merge semantics
 ///
-/// | Field              | Merge rule                                                  |
-/// |--------------------|-------------------------------------------------------------|
-/// | `instructions`     | Highest-tier non-empty value wins (GCI beats PAC)           |
-/// | `rules`            | Always-loaded rules; GCI rules prepended (appear first)     |
-/// | `on_demand_rules`  | Deferred rules; GCI first; NOT inlined into harness files   |
-/// | `memory_paths`     | Accumulated; GCI paths prepended                            |
-/// | `task_paths`       | Accumulated; GCI paths prepended                            |
-/// | `tier_sources`     | Map from [`TierName`] → resolved `.cascade/` dir path       |
-/// | `model_registry`   | Built-in defaults, overridden by lowest tier that sets them |
-/// | `resolved_at`      | ISO-8601 UTC timestamp of when resolution ran               |
+/// | Field              | Merge rule                                                        |
+/// |--------------------|-------------------------------------------------------------------|
+/// | `instructions`     | Highest-tier non-empty value wins (GCI beats PAC)                 |
+/// | `rules`            | Always-loaded rules; GCI rules prepended (appear first)           |
+/// | `on_demand_rules`  | Deferred rules; GCI first; NOT inlined into harness files         |
+/// | `memory_paths`     | Accumulated; GCI paths prepended                                  |
+/// | `task_paths`       | Accumulated; GCI paths prepended                                  |
+/// | `tier_sources`     | Map from [`TierName`] → resolved `.cascade/` dir path             |
+/// | `model_registry`   | Built-in defaults, overridden by lowest tier that sets them       |
+/// | `vars`             | Lower tier (PAC) overrides higher tier (GCI) on key collision     |
+/// | `resolved_at`      | ISO-8601 UTC timestamp of when resolution ran                     |
 ///
 /// This type is `Serialize + Deserialize` for forward-compatible IPC exposure
 /// in E-03.
@@ -402,6 +457,18 @@ pub struct ResolvedContext {
     /// by each tier's `[models]` table (lowest tier wins on conflict, i.e. PAC
     /// beats GCI for model selection, since the most-specific scope knows best).
     pub model_registry: crate::model_registry::ModelRegistry,
+
+    /// Merged canonical variable map.
+    ///
+    /// Built from all tiers' `[vars]` tables.  Lower-tier values override
+    /// higher-tier values on key collision (same precedence as `model_registry`:
+    /// PAC knows best).
+    ///
+    /// Token substitution (`${ns.key}`) in merged instruction text uses this
+    /// map.  `cascade doctor` also uses it to detect hardcoded literal values
+    /// that should be interpolations instead.
+    #[serde(default)]
+    pub vars: VarsMap,
 
     /// ISO-8601 UTC timestamp of when resolution ran, e.g. `"2026-06-02T12:34:56Z"`.
     pub resolved_at: String,
@@ -526,6 +593,47 @@ mod tests {
         assert!(cfg.memory_paths.is_empty());
         assert!(cfg.task_paths.is_empty());
         assert!(cfg.models.is_none());
+        assert!(cfg.vars.is_empty(), "vars must default to empty map");
+    }
+
+    // ── vars: back-compat — no [vars] table ──────────────────────────────────
+
+    /// Existing config.toml without a [vars] section must parse without error.
+    ///
+    /// WHY: back-compatibility is a hard requirement — every field is serde
+    /// `default`, so an absent `[vars]` must yield an empty map.
+    #[test]
+    fn vars_absent_is_empty_map() {
+        let toml_str = r#"instructions = "Old config, no vars.""#;
+        let cfg: TierConfig = toml::from_str(toml_str).expect("old config must parse");
+        assert!(cfg.vars.is_empty(), "absent [vars] must yield empty map");
+    }
+
+    // ── vars: basic key=value parsing ────────────────────────────────────────
+
+    /// A `[vars]` table with two entries parses into the expected map.
+    #[test]
+    fn vars_parse_key_value() {
+        let toml_str = r#"
+[vars]
+"cascade.model.t1" = "claude-opus-4-5"
+"infra.prod_ip"    = "1.2.3.4"
+"#;
+        let cfg: TierConfig = toml::from_str(toml_str).expect("[vars] must parse");
+        assert_eq!(cfg.vars.get("cascade.model.t1"), Some(&"claude-opus-4-5".to_string()));
+        assert_eq!(cfg.vars.get("infra.prod_ip"), Some(&"1.2.3.4".to_string()));
+    }
+
+    // ── vars: round-trip serialisation ───────────────────────────────────────
+
+    /// TierConfig with vars round-trips through serde_json without data loss.
+    #[test]
+    fn vars_round_trip_json() {
+        let mut cfg = TierConfig::default();
+        cfg.vars.insert("ns.key".to_string(), "value".to_string());
+        let json = serde_json::to_string(&cfg).expect("serialise");
+        let back: TierConfig = serde_json::from_str(&json).expect("deserialise");
+        assert_eq!(back.vars.get("ns.key"), Some(&"value".to_string()));
     }
 
     // ── Rule back-compat: bare string still deserialises ─────────────────────

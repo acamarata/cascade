@@ -280,6 +280,7 @@ mod tests {
         ResolvedCascade {
             merged_instructions: "## Test Instructions\n\nAlways use Cascade.".into(),
             on_demand_rules: vec![],
+            vars: Default::default(),
             mcp_server_url: "unix://~/.cascade/cascade.sock".into(),
             tiers_found: vec![
                 TierResult {

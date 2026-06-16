@@ -47,7 +47,7 @@ use std::path::{Path, PathBuf};
 
 use cascade_types::error::{CascadeError, Result};
 use cascade_types::model_registry::ModelRegistry;
-use cascade_types::tiers::{OnDemandRule, ResolvedContext, TierConfig, TierName};
+use cascade_types::tiers::{OnDemandRule, ResolvedContext, TierConfig, TierName, VarsMap};
 use tracing::debug;
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -146,6 +146,9 @@ impl CascadeResolver {
         // Start from defaults; each tier's [models] overrides in GCI→PAC order
         // (last write wins, so PAC — lowest tier, most specific — wins).
         let mut model_registry = ModelRegistry::default();
+        // Vars: GCI contributes first; each subsequent tier (PAC last) overwrites
+        // on key collision so the most-specific scope wins.
+        let mut vars = VarsMap::new();
 
         for (tier, cascade_dir, config) in &found {
             // instructions: first non-empty value wins (GCI is first, so it wins)
@@ -178,6 +181,11 @@ impl CascadeResolver {
                 model_registry.apply_overrides(ov);
             }
 
+            // Merge vars — later tier (PAC) overwrites earlier (GCI) on collision.
+            for (k, v) in &config.vars {
+                vars.insert(k.clone(), v.clone());
+            }
+
             tier_sources.insert(*tier, cascade_dir.clone());
         }
 
@@ -191,6 +199,7 @@ impl CascadeResolver {
             task_paths,
             tier_sources,
             model_registry,
+            vars,
             resolved_at,
         })
     }
@@ -693,7 +702,65 @@ rules = ["rule one", "rule two"]
         );
     }
 
-    // ── test 13: model registry override via config.toml ──────────────────────
+    // ── test 13: vars merge — lower tier overrides higher tier ────────────────
+
+    /// Lower tier (PPC) var overrides GCI var on key collision.
+    ///
+    /// WHY: canonical vars have the same "most-specific wins" precedence as
+    /// model_registry — the project scope knows its own IP / model IDs better
+    /// than the global scope.
+    #[test]
+    #[serial(global_env)]
+    fn vars_lower_tier_overrides_higher() {
+        let tmp_home = TempDir::new().unwrap();
+        let tmp_project = TempDir::new().unwrap();
+
+        let gci_dir = make_tier_dir(tmp_home.path());
+        write_config_toml(
+            &gci_dir,
+            r#"
+[vars]
+"infra.prod_ip" = "1.1.1.1"
+"cascade.shared" = "global-value"
+"#,
+        );
+
+        let ppc_dir = make_tier_dir(tmp_project.path());
+        write_config_toml(
+            &ppc_dir,
+            r#"
+[vars]
+"infra.prod_ip" = "2.2.2.2"
+"cascade.local" = "project-value"
+"#,
+        );
+
+        let _guard = home_lock();
+        std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
+
+        let ctx = resolve_cascade(tmp_project.path()).expect("vars merge must succeed");
+
+        // PPC overrides GCI on shared key
+        assert_eq!(
+            ctx.vars.get("infra.prod_ip").map(|s| s.as_str()),
+            Some("2.2.2.2"),
+            "lower tier must override higher tier on key collision"
+        );
+        // GCI-only key survives
+        assert_eq!(
+            ctx.vars.get("cascade.shared").map(|s| s.as_str()),
+            Some("global-value"),
+            "GCI-only var must be present in merged map"
+        );
+        // PPC-only key survives
+        assert_eq!(
+            ctx.vars.get("cascade.local").map(|s| s.as_str()),
+            Some("project-value"),
+            "PPC-only var must be present in merged map"
+        );
+    }
+
+    // ── test 14: model registry override via config.toml ──────────────────────
 
     /// A [models] table in config.toml overrides the default model registry.
     #[test]
