@@ -7,3 +7,7 @@ oc-session-log.md
 
 # Track the repo's own PRC instruction file
 !CASCADE.md
+
+# Track the agent/prompt/template library (versioned content)
+!library/
+!library/**
