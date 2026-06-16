@@ -66,6 +66,7 @@ pub mod discovery;
 pub mod eie;
 pub mod hook_store;
 pub mod import_expand;
+pub mod injection_scan;
 pub mod inbox;
 pub mod library;
 pub mod loader;
@@ -88,6 +89,7 @@ pub mod worktree_store;
 
 // Re-export the most commonly used top-level items.
 pub use discovery::{DiscoveredTier, TierDiscovery};
+pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};
 pub use hook_store::HookStore;
 pub use quota_store::{read_quota_store, write_quota_store};
 pub use resolution::{ResolvedCascade, Resolver};
