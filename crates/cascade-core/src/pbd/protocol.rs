@@ -5,13 +5,14 @@
 //! - Verify all children are in a terminal state before closing the parent.
 //! - Update the parent YAML + emit an event.
 //! - Write a sidecar `.done` marker file.
+//! - Run external verification checks via the [`ExternalChecks`] seam.
 //! - Return a structured report.
 //!
-//! # Constraints
-//! - External-check hooks (curl, Gmail scan, deploy verification) are NOT run
-//!   here — they are E-P8-04 work. Instead, `run_eop` returns an
-//!   `ExternalCheckSeam` that callers can implement and inject.
-//! - These functions are pure filesystem operations: they never shell out.
+//! # External checks
+//! Real build, test, and health-endpoint verification lives in
+//! [`crate::pbd::external_checks::RealExternalChecks`]. Pass
+//! [`NoExternalChecks`] (or the CLI `--skip-externals` flag) for dry runs.
+//! Deploy and outbound side-effects are never triggered by this module.
 
 use cascade_types::error::{CascadeError, Result};
 
@@ -32,17 +33,36 @@ pub struct ProtocolResult {
     pub sidecar_path: Option<std::path::PathBuf>,
 }
 
-/// Injectable seam for external checks (E-P8-04).
-/// Callers implement this trait to add curl/deploy/Gmail checks to `eop`.
+/// Injectable seam for external verification at every PBD phase gate.
+///
+/// Implement this trait to plug build commands, test runners, and HTTP health
+/// probes into `run_eot`, `run_eos`, and `run_eop`. Return an empty `Vec` when
+/// all checks pass; any string in the returned `Vec` is treated as a gate
+/// failure and surfaces in the [`ProtocolResult`] error list.
+///
+/// Deploy and outbound side-effects **must not** be triggered inside
+/// implementations of this trait. Those actions must be performed externally
+/// and verified by their own CI/CD gate. See
+/// [`crate::pbd::external_checks::RealExternalChecks`] for the built-in
+/// provider; pass [`NoExternalChecks`] for dry runs.
 pub trait ExternalChecks: Send + Sync {
-    fn run_checks(&self, phase_id: &str) -> Result<Vec<String>>;
+    /// Run all configured checks for the given entity context.
+    ///
+    /// `context_id` is a slash-separated entity path, e.g.:
+    /// - `"p1/e01/w01/s01/t01"` from `run_eot`
+    /// - `"p1/e01/w01/s01"` from `run_eos`
+    /// - `"p1"` from `run_eop`
+    ///
+    /// Return an empty `Vec` if every check passed, or one message per failure.
+    fn run_checks(&self, context_id: &str) -> Result<Vec<String>>;
 }
 
-/// No-op seam used when no external checks are wired.
+/// No-op implementation used for dry runs and when no external checks are
+/// configured. All gates pass immediately.
 pub struct NoExternalChecks;
 
 impl ExternalChecks for NoExternalChecks {
-    fn run_checks(&self, _phase_id: &str) -> Result<Vec<String>> {
+    fn run_checks(&self, _context_id: &str) -> Result<Vec<String>> {
         Ok(vec![])
     }
 }
@@ -51,8 +71,11 @@ impl ExternalChecks for NoExternalChecks {
 
 /// Run the EOT (end-of-ticket) checklist.
 ///
-/// Verifies all steps are `passed` or `skipped` (none may be `pending` or `failed`).
-/// If checks pass, transitions the ticket to `done` and writes a sidecar.
+/// 1. Verifies all steps are `passed` or `skipped` (none may be `pending` or
+///    `failed`).
+/// 2. Runs external checks supplied via the `checks` seam (build commands,
+///    health probes, etc.). Pass [`NoExternalChecks`] for a dry run.
+/// 3. If all gates pass, transitions the ticket to `done` and writes a sidecar.
 pub fn run_eot(
     store: &PbdStore,
     phase_id: &str,
@@ -60,6 +83,7 @@ pub fn run_eot(
     wave_id: &str,
     sprint_id: &str,
     ticket_id: &str,
+    checks: &dyn ExternalChecks,
 ) -> Result<ProtocolResult> {
     let ticket = store.load_ticket(phase_id, epic_id, wave_id, sprint_id, ticket_id)?;
     let mut errors: Vec<String> = Vec::new();
@@ -78,6 +102,16 @@ pub fn run_eot(
             }
             StepStatus::Passed | StepStatus::Skipped => {}
         }
+    }
+
+    // Run external checks
+    let context_id = format!(
+        "{}/{}/{}/{}/{}",
+        phase_id, epic_id, wave_id, sprint_id, ticket_id
+    );
+    match checks.run_checks(&context_id) {
+        Ok(ext_errors) => errors.extend(ext_errors),
+        Err(e) => errors.push(format!("External check error: {e}")),
     }
 
     if !errors.is_empty() {
@@ -102,16 +136,7 @@ pub fn run_eot(
     )?;
 
     // Write sidecar
-    let sidecar = write_sidecar(
-        store,
-        &format!(
-            "{}/{}/{}/{}/{}",
-            phase_id, epic_id, wave_id, sprint_id, ticket_id
-        ),
-        "ticket",
-        ticket_id,
-        "done",
-    )?;
+    let sidecar = write_sidecar(store, &context_id, "ticket", ticket_id, "done")?;
 
     Ok(ProtocolResult {
         level: "ticket",
@@ -126,13 +151,16 @@ pub fn run_eot(
 
 /// Run the EOS (end-of-sprint) checklist.
 ///
-/// Verifies all tickets are `done` or `archived`. Transitions sprint to `done`.
+/// 1. Verifies all tickets are `done` or `archived`.
+/// 2. Runs external checks via the `checks` seam.
+/// 3. Transitions sprint to `done`.
 pub fn run_eos(
     store: &PbdStore,
     phase_id: &str,
     epic_id: &str,
     wave_id: &str,
     sprint_id: &str,
+    checks: &dyn ExternalChecks,
 ) -> Result<ProtocolResult> {
     let sprint = store.load_sprint(phase_id, epic_id, wave_id, sprint_id)?;
     let mut errors: Vec<String> = Vec::new();
@@ -150,6 +178,13 @@ pub fn run_eos(
         }
     }
 
+    // Run external checks
+    let context_id = format!("{}/{}/{}/{}", phase_id, epic_id, wave_id, sprint_id);
+    match checks.run_checks(&context_id) {
+        Ok(ext_errors) => errors.extend(ext_errors),
+        Err(e) => errors.push(format!("External check error: {e}")),
+    }
+
     if !errors.is_empty() {
         return Ok(ProtocolResult {
             level: "sprint",
@@ -162,13 +197,7 @@ pub fn run_eos(
 
     store.transition_sprint(phase_id, epic_id, wave_id, sprint_id, SprintStatus::Done)?;
 
-    let sidecar = write_sidecar(
-        store,
-        &format!("{}/{}/{}/{}", phase_id, epic_id, wave_id, sprint_id),
-        "sprint",
-        sprint_id,
-        "done",
-    )?;
+    let sidecar = write_sidecar(store, &context_id, "sprint", sprint_id, "done")?;
 
     Ok(ProtocolResult {
         level: "sprint",
@@ -284,8 +313,12 @@ pub fn run_eoe(store: &PbdStore, phase_id: &str, epic_id: &str) -> Result<Protoc
 
 /// Run the EOP (end-of-phase) YAML lifecycle + verification.
 ///
-/// External checks (curl/Gmail/deploy) are injectable via `checks` seam.
-/// Passes `NoExternalChecks` to skip externals (E-P8-04 will wire them).
+/// 1. Verifies all epics are `done`.
+/// 2. Runs external checks (build, health probes) via the `checks` seam.
+/// 3. Transitions phase to `shipped` and writes a sidecar.
+///
+/// Pass [`NoExternalChecks`] or use `--skip-externals` on the CLI for a dry
+/// run that skips all external gates.
 pub fn run_eop(
     store: &PbdStore,
     phase_id: &str,
