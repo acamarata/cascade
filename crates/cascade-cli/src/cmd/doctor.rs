@@ -217,6 +217,129 @@ impl Command for DoctorArgs {
             }
         }
 
+        // ── Dangling / broken pointers ─────────────────────────────────────
+        // Advisory by default; --strict escalates to FAIL.
+        {
+            let resolved = cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
+            match resolved {
+                Ok(ref rc) => {
+                    let findings = cascade_core::lint_dangling::lint_dangling(rc);
+                    if findings.is_empty() {
+                        checks.push(Check {
+                            name: "Dangling references",
+                            status: CheckStatus::Pass,
+                            detail: String::new(),
+                        });
+                    } else {
+                        let dangle_status = if self.strict {
+                            any_fail = true;
+                            CheckStatus::Fail
+                        } else {
+                            CheckStatus::Warn
+                        };
+                        for finding in &findings {
+                            let name: &'static str = Box::leak(
+                                format!("Dangling reference ({:?})", finding.tier)
+                                    .into_boxed_str(),
+                            );
+                            checks.push(Check {
+                                name,
+                                status: dangle_status,
+                                detail: format!(
+                                    "'{}' → {} (not found)",
+                                    finding.raw_ref,
+                                    finding.resolved_path.display()
+                                ),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    checks.push(Check {
+                        name: "Dangling references",
+                        status: CheckStatus::Warn,
+                        detail: format!("could not resolve cascade: {e}"),
+                    });
+                }
+            }
+        }
+
+        // ── Hand-edited generated files ────────────────────────────────────
+        {
+            let scan_dirs: Vec<PathBuf> = tiers
+                .iter()
+                .map(|t| t.cascade_dir.clone())
+                .collect();
+            let findings = cascade_core::lint_generated::lint_generated(&scan_dirs);
+            if findings.is_empty() {
+                checks.push(Check {
+                    name: "Generated files integrity",
+                    status: CheckStatus::Pass,
+                    detail: String::new(),
+                });
+            } else {
+                for finding in &findings {
+                    checks.push(Check {
+                        name: "Generated file edited by hand",
+                        status: CheckStatus::Warn,
+                        detail: format!(
+                            "{} — edits will be overwritten on next resolve",
+                            finding.path.display()
+                        ),
+                    });
+                }
+            }
+        }
+
+        // ── Cross-tier value conflicts ─────────────────────────────────────
+        // Advisory by default; --strict escalates to FAIL.
+        {
+            let resolved = cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
+            match resolved {
+                Ok(ref rc) => {
+                    let findings = cascade_core::lint_conflicts::lint_conflicts(rc);
+                    if findings.is_empty() {
+                        checks.push(Check {
+                            name: "Cross-tier value conflicts",
+                            status: CheckStatus::Pass,
+                            detail: String::new(),
+                        });
+                    } else {
+                        let conflict_status = if self.strict {
+                            any_fail = true;
+                            CheckStatus::Fail
+                        } else {
+                            CheckStatus::Warn
+                        };
+                        for finding in &findings {
+                            let name: &'static str = Box::leak(
+                                format!(
+                                    "Cross-tier conflict ({:?} vs {:?})",
+                                    finding.tier_a, finding.tier_b
+                                )
+                                .into_boxed_str(),
+                            );
+                            checks.push(Check {
+                                name,
+                                status: conflict_status,
+                                detail: format!(
+                                    "'{}' = '{}' vs '{}' — resolve conflict or document the override",
+                                    finding.key, finding.value_a, finding.value_b
+                                ),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    checks.push(Check {
+                        name: "Cross-tier value conflicts",
+                        status: CheckStatus::Warn,
+                        detail: format!("could not resolve cascade: {e}"),
+                    });
+                }
+            }
+        }
+
         // ── Audit log + security tokens (T-P2-E07-18) ─────────────────────
         if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
             let cascade_dir = home.join(".cascade");
