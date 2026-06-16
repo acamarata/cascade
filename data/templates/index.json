@@ -347,6 +347,60 @@
       "stacks": ["rust-binary"],
       "project_shapes": [],
       "description": "Rust binary crate conventions: Clap v4, tracing, Tokio async runtime, file layout, and common pitfalls."
+    },
+    {
+      "id": "rule-destructive-action-deny-list",
+      "file": "rules/destructive-action-deny-list.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Require explicit same-turn confirmation before any irreversible or high-impact action."
+    },
+    {
+      "id": "rule-autonomous-verification",
+      "file": "rules/autonomous-verification.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Never ask the user something you can verify yourself with available tools."
+    },
+    {
+      "id": "rule-output-conciseness-and-structure",
+      "file": "rules/output-conciseness-and-structure.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Keep responses concise, structured, and free of filler."
+    },
+    {
+      "id": "rule-excellence-in-engineering",
+      "file": "rules/excellence-in-engineering.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Framework-native layout, DRY, typed boundaries, tests, size caps, and comment blocks on every reusable unit."
+    },
+    {
+      "id": "rule-anti-drift",
+      "file": "rules/anti-drift.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Source-of-truth documents beat conversation; never invent features; verify before marking done."
+    },
+    {
+      "id": "rule-version-lock",
+      "file": "rules/version-lock.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Version bumps in any package manifest require an approved release plan before execution."
     }
   ]
 }
