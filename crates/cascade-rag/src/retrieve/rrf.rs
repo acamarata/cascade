@@ -33,6 +33,7 @@ use cascade_types::{
 };
 
 use super::curated::CuratedRetriever;
+use super::exclusion::{ExclusionConfig, ExclusionSet};
 use super::fts::FtsRetriever;
 use super::recency::RecencyRetriever;
 use super::vector::VectorRetriever;
@@ -259,19 +260,38 @@ impl Default for RrfConfig {
 /// FTS5-only.  When `use_fts = false`, falls back to dense search.  Channels 3
 /// and 4 are enabled by default but silently no-op when their data is absent.
 ///
+/// ## Privacy isolation
+///
+/// An [`ExclusionSet`] compiled from caller-supplied [`ExclusionConfig`] is
+/// applied at **two layers**:
+///
+/// - **Layer 1 (pre):** excluded paths are stripped from each channel's raw
+///   `(chunk_id, score)` list before those lists enter RRF fusion.
+/// - **Layer 2 (post):** the fully fused `Vec<RetrievalHit>` is filtered again
+///   before being returned.  This belt-and-suspenders pass catches any hit that
+///   slipped through a channel without an available path at layer 1.
+///
+/// Pass [`ExclusionConfig`] via [`RrfRetriever::new_with_exclusion`].
+/// [`RrfRetriever::new`] applies no exclusion (equivalent to an empty config).
+///
 /// # Example
 ///
 /// ```rust,no_run
 /// # use std::sync::Arc;
 /// # use cascade_rag::index::RagIndex;
 /// # use cascade_rag::retrieve::rrf::{RrfRetriever, RrfConfig};
+/// # use cascade_rag::retrieve::exclusion::ExclusionConfig;
 /// # use cascade_types::NoopEmbeddingProvider;
 /// # use cascade_types::Retriever;
 /// # async fn example() -> cascade_types::error::Result<()> {
 /// let idx = Arc::new(RagIndex::open("/tmp/cascade.db").await?);
 /// let embedder = Arc::new(NoopEmbeddingProvider);
-/// let retriever = RrfRetriever::new(idx, embedder, RrfConfig::default());
-/// let hits = retriever.retrieve("prayer time", &Default::default()).await?;
+/// let exclusion = ExclusionConfig::from_patterns(["/home/user/medical/"]);
+/// let retriever = RrfRetriever::new_with_exclusion(
+///     idx, embedder, RrfConfig::default(), exclusion,
+/// );
+/// let hits = retriever.retrieve("appointment", &Default::default()).await?;
+/// // hits will never contain documents from /home/user/medical/
 /// # Ok(())
 /// # }
 /// ```
@@ -283,18 +303,46 @@ pub struct RrfRetriever {
     /// Document recency channel.
     recency: Option<RecencyRetriever>,
     config: RrfConfig,
+    /// Compiled exclusion set (defense-in-depth privacy isolation).
+    /// Applied at layer 1 (per-channel pre-filter) and layer 2 (post-fusion filter).
+    exclusion: ExclusionSet,
 }
 
 impl RrfRetriever {
-    /// Construct an RRF retriever with all enabled channels.
+    /// Construct an RRF retriever with all enabled channels and **no exclusion**.
     ///
     /// Channels 3 (curated) and 4 (recency) are created unconditionally when
     /// their flags are set; they degrade to empty results if the underlying
     /// tables are missing or empty.
+    ///
+    /// For privacy-isolated deployments, use [`new_with_exclusion`] instead.
+    ///
+    /// [`new_with_exclusion`]: RrfRetriever::new_with_exclusion
     pub fn new(
         index: Arc<RagIndex>,
         embedder: Arc<dyn EmbeddingProvider>,
         config: RrfConfig,
+    ) -> Self {
+        Self::new_with_exclusion(index, embedder, config, ExclusionConfig::default())
+    }
+
+    /// Construct an RRF retriever with all enabled channels and caller-supplied
+    /// **scope exclusion**.
+    ///
+    /// The resolver / daemon builds an [`ExclusionConfig`] from the project's
+    /// privacy configuration and passes it here.  The compiled [`ExclusionSet`]
+    /// is applied at two layers:
+    ///
+    /// - **Layer 1 (pre):** per-channel raw hit lists are filtered before RRF.
+    /// - **Layer 2 (post):** the fused result list is filtered before return.
+    ///
+    /// An empty `ExclusionConfig` (the default) is a no-op — no filtering is
+    /// applied and performance is unaffected.
+    pub fn new_with_exclusion(
+        index: Arc<RagIndex>,
+        embedder: Arc<dyn EmbeddingProvider>,
+        config: RrfConfig,
+        exclusion_config: ExclusionConfig,
     ) -> Self {
         let fts = FtsRetriever::new(Arc::clone(&index));
         let vec = if config.use_vec {
@@ -312,16 +360,18 @@ impl RrfRetriever {
         } else {
             None
         };
+        let exclusion = ExclusionSet::compile(&exclusion_config);
         Self {
             fts,
             vec,
             curated,
             recency,
             config,
+            exclusion,
         }
     }
 
-    /// Construct an FTS-only retriever (no embeddings required).
+    /// Construct an FTS-only retriever (no embeddings required, no exclusion).
     ///
     /// Curated-description and recency channels are also disabled to avoid
     /// unnecessary index look-ups in contexts where only keyword search is
@@ -339,6 +389,7 @@ impl RrfRetriever {
                 use_recency: false,
                 ..Default::default()
             },
+            exclusion: ExclusionSet::default(),
         }
     }
 }
@@ -408,10 +459,41 @@ impl Retriever for RrfRetriever {
         // rrf_merge operates on i64 chunk IDs.  Curated and recency IDs come
         // back as strings (from RagIndex) because the shared Retriever trait
         // uses String IDs.  We parse them here.
-        let fts_pairs: Vec<(i64, f64)> = hits_to_pairs(&fts_hits);
-        let vec_pairs: Vec<(i64, f64)> = hits_to_pairs(&vec_hits);
-        let curated_pairs: Vec<(i64, f64)> = hits_to_pairs(&curated_hits);
-        let recency_pairs: Vec<(i64, f64)> = hits_to_pairs(&recency_hits);
+        //
+        // Layer 1 (pre-filter): strip excluded paths from every channel's raw
+        // pair list before they enter RRF fusion.  The `file_path` field on
+        // RetrievalHit carries the source path when available; we use it as
+        // the key into the exclusion set.  Hits with no path are kept
+        // (fail-open) — layer 2 catches them if they do have a path after
+        // the hit-map join.
+        let path_str = |h: &RetrievalHit| -> Option<String> {
+            h.file_path.as_ref().and_then(|p| p.to_str()).map(str::to_string)
+        };
+
+        let fts_pairs: Vec<(i64, f64)> = {
+            let raw = hits_to_pairs(&fts_hits);
+            self.exclusion.filter_pairs(&raw, |id| {
+                fts_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+            })
+        };
+        let vec_pairs: Vec<(i64, f64)> = {
+            let raw = hits_to_pairs(&vec_hits);
+            self.exclusion.filter_pairs(&raw, |id| {
+                vec_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+            })
+        };
+        let curated_pairs: Vec<(i64, f64)> = {
+            let raw = hits_to_pairs(&curated_hits);
+            self.exclusion.filter_pairs(&raw, |id| {
+                curated_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+            })
+        };
+        let recency_pairs: Vec<(i64, f64)> = {
+            let raw = hits_to_pairs(&recency_hits);
+            self.exclusion.filter_pairs(&raw, |id| {
+                recency_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+            })
+        };
 
         // ── Assemble RankedList inputs ──────────────────────────────────────
         let mut lists: Vec<RankedList<'_>> = Vec::with_capacity(4);
@@ -490,6 +572,12 @@ impl Retriever for RrfRetriever {
                 })
             })
             .collect();
+
+        // ── Layer 2 (post-filter): belt-and-suspenders exclusion pass ───────
+        // Applied after fusion so that any hit that leaked through layer 1
+        // (e.g. because it had no file_path at the channel level but gained one
+        // from the hit-map join) is still removed before being returned.
+        let results = self.exclusion.filter_hits(results);
 
         Ok(results)
     }
@@ -891,5 +979,229 @@ mod tests {
 
         // doc=1 wins because recency has zero weight.
         assert_eq!(fused_zero[0].chunk_id, 1, "zero-weight recency must not override FTS");
+    }
+
+    // ── Adversarial exclusion tests ───────────────────────────────────────────
+    //
+    // These tests prove that a locked doc CANNOT surface via any channel, even
+    // when its content/recency/description would otherwise rank it #1.
+    //
+    // Strategy: use ExclusionSet directly on pair lists (simulating layer 1 of
+    // the retriever) and on RetrievalHit lists (layer 2).  The tests are
+    // channel-by-channel plus a full 5-channel fusion scenario.
+
+    use super::super::exclusion::{ExclusionConfig, ExclusionSet};
+    use cascade_types::retriever::RetrievalHit;
+    use std::path::PathBuf;
+
+    /// Build a RetrievalHit with the given chunk_id and file_path.
+    fn hit(chunk_id: i64, file_path: Option<&str>, score: f32) -> RetrievalHit {
+        RetrievalHit {
+            chunk_id: chunk_id.to_string(),
+            text: "content".to_string(),
+            file_path: file_path.map(PathBuf::from),
+            start_line: None,
+            end_line: None,
+            score,
+            rank: 0,
+            tier: None,
+        }
+    }
+
+    /// The locked doc would rank #1 on FTS alone.  After layer-1 exclusion it
+    /// must not appear in the pair list.
+    #[test]
+    fn adversarial_fts_channel_locked_doc_absent() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+
+        // Locked doc (id=999) would be rank-1 on FTS; public doc (id=1) is rank-2.
+        let raw_fts: Vec<(i64, f64)> = vec![(999, 0.99), (1, 0.5)];
+
+        let filtered = ex.filter_pairs(&raw_fts, |id| match id {
+            999 => Some("/locked/secret.md".to_string()),
+            1   => Some("/public/safe.md".to_string()),
+            _   => None,
+        });
+
+        assert!(
+            !filtered.iter().any(|(id, _)| *id == 999),
+            "locked doc must not appear in FTS pair list after layer-1 exclusion"
+        );
+        assert!(
+            filtered.iter().any(|(id, _)| *id == 1),
+            "public doc must still appear"
+        );
+    }
+
+    /// The locked doc would rank #1 on vector alone.
+    #[test]
+    fn adversarial_vector_channel_locked_doc_absent() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+        let raw_vec: Vec<(i64, f64)> = vec![(999, 0.98), (2, 0.6)];
+
+        let filtered = ex.filter_pairs(&raw_vec, |id| match id {
+            999 => Some("/locked/secret.md".to_string()),
+            _   => None,
+        });
+
+        assert!(!filtered.iter().any(|(id, _)| *id == 999));
+    }
+
+    /// The locked doc would rank #1 on the curated-description channel.
+    #[test]
+    fn adversarial_curated_channel_locked_doc_absent() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+        let raw_curated: Vec<(i64, f64)> = vec![(999, 0.97), (3, 0.7)];
+
+        let filtered = ex.filter_pairs(&raw_curated, |id| match id {
+            999 => Some("/locked/meta.md".to_string()),
+            _   => None,
+        });
+
+        assert!(!filtered.iter().any(|(id, _)| *id == 999));
+    }
+
+    /// The locked doc would rank #1 on the recency channel (newest file).
+    #[test]
+    fn adversarial_recency_channel_locked_doc_absent() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+        let raw_recency: Vec<(i64, f64)> = vec![(999, 1.0), (4, 0.8)];
+
+        let filtered = ex.filter_pairs(&raw_recency, |id| match id {
+            999 => Some("/locked/diary.md".to_string()),
+            _   => None,
+        });
+
+        assert!(!filtered.iter().any(|(id, _)| *id == 999));
+    }
+
+    /// Full 5-channel fusion: even when the locked doc ranks #1 in ALL 5
+    /// channels, it must be absent from the fused result after layer-1 filtering.
+    #[test]
+    fn adversarial_five_channel_fusion_locked_doc_absent() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+
+        // Locked doc is rank-1 everywhere; public docs are rank-2.
+        let raw_fts:    Vec<(i64, f64)> = vec![(999, 0.99), (1, 0.5)];
+        let raw_vec:    Vec<(i64, f64)> = vec![(999, 0.98), (2, 0.6)];
+        let raw_curated:Vec<(i64, f64)> = vec![(999, 0.97), (3, 0.7)];
+        let raw_recency:Vec<(i64, f64)> = vec![(999, 1.0),  (4, 0.8)];
+        let raw_sparse: Vec<(i64, f64)> = vec![(999, 0.95), (5, 0.4)];
+
+        let path_of = |id: i64| match id {
+            999 => Some("/locked/top-secret.md".to_string()),
+            _   => None,
+        };
+
+        let fts_pairs     = ex.filter_pairs(&raw_fts,     path_of);
+        let vec_pairs     = ex.filter_pairs(&raw_vec,     path_of);
+        let curated_pairs = ex.filter_pairs(&raw_curated, path_of);
+        let recency_pairs = ex.filter_pairs(&raw_recency, path_of);
+        let sparse_pairs  = ex.filter_pairs(&raw_sparse,  path_of);
+
+        // None of the filtered lists must contain the locked id.
+        for (label, pairs) in [
+            ("fts",     &fts_pairs),
+            ("vec",     &vec_pairs),
+            ("curated", &curated_pairs),
+            ("recency", &recency_pairs),
+            ("sparse",  &sparse_pairs),
+        ] {
+            assert!(
+                !pairs.iter().any(|(id, _)| *id == 999),
+                "locked doc must not appear in {label} channel after layer-1 exclusion"
+            );
+        }
+
+        // Fuse the clean lists — locked id must not appear in fusion output.
+        let lists = vec![
+            RankedList { source: "fts5",    weight: 1.0, hits: &fts_pairs },
+            RankedList { source: "dense",   weight: 1.0, hits: &vec_pairs },
+            RankedList { source: "curated", weight: 0.8, hits: &curated_pairs },
+            RankedList { source: "recency", weight: 0.5, hits: &recency_pairs },
+            RankedList { source: "sparse",  weight: 1.0, hits: &sparse_pairs },
+        ];
+        let fused = rrf_merge(&lists, 60.0, 20);
+        assert!(
+            !fused.iter().any(|h| h.chunk_id == 999),
+            "locked doc must not appear in 5-channel RRF fusion output"
+        );
+    }
+
+    /// Prefix exclusion: a directory-locked prefix excludes ALL children.
+    #[test]
+    fn adversarial_prefix_locks_all_children() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/private"]));
+
+        let paths_to_check = [
+            "/private/a.md",
+            "/private/sub/b.md",
+            "/private/sub/deep/c.pdf",
+            "/private/",
+        ];
+        for p in paths_to_check {
+            assert!(ex.is_excluded(p), "'{p}' must be excluded under /private prefix");
+        }
+        // Sibling path must not be excluded.
+        assert!(!ex.is_excluded("/private-other/file.md"));
+        assert!(!ex.is_excluded("/public/file.md"));
+    }
+
+    /// Layer-2 post-filter: a locked doc that somehow slips past layer 1 (e.g.
+    /// it had no file_path at the channel level) is caught by filter_hits.
+    #[test]
+    fn adversarial_layer2_catches_leaked_hit() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+
+        // Simulate a hit that came through layer 1 without a path (kept, fail-open)
+        // but now has a file_path set (e.g. from the hit-map join in RrfRetriever).
+        let hits = vec![
+            hit(999, Some("/locked/leaked.md"), 0.99), // would-be winner, locked
+            hit(1,   Some("/public/safe.md"),   0.85),
+            hit(2,   None,                      0.70), // no path → kept
+        ];
+
+        let filtered = ex.filter_hits(hits);
+
+        assert!(
+            !filtered.iter().any(|h| h.chunk_id == "999"),
+            "layer-2 must catch the locked hit that leaked past layer 1"
+        );
+        assert!(filtered.iter().any(|h| h.chunk_id == "1"));
+        assert!(filtered.iter().any(|h| h.chunk_id == "2"));
+    }
+
+    /// Removing the exclusion makes the locked doc appear (proves the test is real).
+    #[test]
+    fn removing_exclusion_unlocks_doc() {
+        // With exclusion — doc 999 must not appear.
+        let ex_on = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
+        let hits_on = vec![
+            hit(999, Some("/locked/secret.md"), 0.99),
+            hit(1,   Some("/public/safe.md"),   0.85),
+        ];
+        let filtered_on = ex_on.filter_hits(hits_on);
+        assert!(!filtered_on.iter().any(|h| h.chunk_id == "999"));
+
+        // Without exclusion — doc 999 must appear.
+        let ex_off = ExclusionSet::compile(&ExclusionConfig::default());
+        let hits_off = vec![
+            hit(999, Some("/locked/secret.md"), 0.99),
+            hit(1,   Some("/public/safe.md"),   0.85),
+        ];
+        let filtered_off = ex_off.filter_hits(hits_off);
+        assert!(
+            filtered_off.iter().any(|h| h.chunk_id == "999"),
+            "with no exclusion, the doc must appear (proves test is real)"
+        );
+    }
+
+    /// Empty exclusion config = no filtering; existing tests remain unaffected.
+    #[test]
+    fn empty_exclusion_no_filtering_regression() {
+        let ex = ExclusionSet::compile(&ExclusionConfig::default());
+        let pairs: Vec<(i64, f64)> = vec![(1, 0.9), (2, 0.8), (3, 0.7)];
+        let filtered = ex.filter_pairs(&pairs, |_| Some("/any/path.md".to_string()));
+        assert_eq!(filtered.len(), 3, "empty exclusion must not filter anything");
     }
 }
