@@ -5,6 +5,8 @@
 //! The `main` entry point dispatches through [`Commands::run`].
 
 pub mod backup;
+// P13: harness settings writer (cascade configure)
+pub mod configure;
 // E-P9-06: CC API proxy experimental bridge (default-off)
 pub mod ccapi;
 // E-P9-05: EIE engineering-excellence health check
@@ -167,6 +169,8 @@ pub enum Commands {
     /// Manage the EXPERIMENTAL CC API proxy bridge (E-P9-06, default-off).
     #[command(name = "ccapi")]
     CcApi(ccapi::CcApiArgs),
+    /// Write Cascade-managed values into a harness runtime config (P13).
+    Configure(configure::ConfigureArgs),
 }
 
 impl Commands {
@@ -213,6 +217,7 @@ impl Commands {
             Commands::Pbd(args) => args.run().await,
             Commands::Health(args) => args.run().await,
             Commands::CcApi(args) => args.run().await,
+            Commands::Configure(args) => args.run().await,
         }
     }
 }
