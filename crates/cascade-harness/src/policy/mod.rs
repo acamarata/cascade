@@ -21,6 +21,7 @@
 
 pub mod dispatch;
 pub mod engine;
+pub mod patterns;
 pub mod project_policy;
 pub mod simple;
 #[cfg(feature = "wasm-policy")]
