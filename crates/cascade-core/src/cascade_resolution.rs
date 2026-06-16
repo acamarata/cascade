@@ -37,6 +37,7 @@ use cascade_types::cascade_tier::CascadeTier;
 use cascade_types::error::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::import_expand::expand_imports;
 use crate::resolution::Resolver;
 
 // ── Default MCP socket URL ────────────────────────────────────────────────────
@@ -288,15 +289,38 @@ impl CascadeResolutionEngine {
 /// Concatenate instruction text from found tiers, with tier-separator comments.
 ///
 /// GCI appears first (index 0 in `tier_results` which is precedence-ordered).
+///
+/// Before concatenation, each tier's instruction text is scanned for `@import`
+/// directives (lines whose first non-whitespace token starts with `@` and
+/// resolves to a readable file).  Matching lines are replaced by the referenced
+/// file's contents.  The base directory for import resolution is the tier's
+/// `path_searched` directory — the `.cascade/` folder that contributed the
+/// instruction text.  See [`expand_imports`] for full syntax and cycle-guard
+/// semantics.
 fn build_merged_instructions(tier_results: &[TierResult]) -> String {
     let parts: Vec<String> = tier_results
         .iter()
         .filter(|tr| tr.found && !tr.instructions.trim().is_empty())
         .map(|tr| {
+            // Determine the base directory for import resolution.
+            // `path_searched` is the `.cascade/` directory (or the CASCADE.md
+            // file path for older resolver paths).  Normalise to the directory.
+            let base_dir = if tr.path_searched.is_file() {
+                tr.path_searched
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| tr.path_searched.clone())
+            } else {
+                tr.path_searched.clone()
+            };
+
+            // Expand @imports before formatting the tier block.
+            let expanded = expand_imports(&tr.instructions, &base_dir);
+
             format!(
                 "<!-- cascade-tier: {} -->\n{}",
                 tr.tier.acronym(),
-                tr.instructions.trim_end()
+                expanded.trim_end()
             )
         })
         .collect();

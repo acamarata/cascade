@@ -64,6 +64,7 @@ pub mod derived;
 pub mod discovery;
 pub mod eie;
 pub mod hook_store;
+pub mod import_expand;
 pub mod inbox;
 pub mod library;
 pub mod loader;
