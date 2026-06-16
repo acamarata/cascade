@@ -21,8 +21,10 @@
 //!
 //! SPORT: MASTER-LIBS.md → cascade-rag::retrieve
 
+pub mod curated;
 pub mod fts;
 pub mod hyde;
+pub mod recency;
 pub mod rrf;
 pub mod vector;
 

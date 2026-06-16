@@ -342,6 +342,61 @@ impl RagIndex {
         Ok(batch.len())
     }
 
+    // ── Curated-description query ────────────────────────────────────────────
+
+    /// Query the curated-description FTS table (`rag_chunk_meta_fts5`) and
+    /// translate source-document matches into chunk IDs.
+    ///
+    /// Returns `(chunk_id_string, normalised_score)` pairs ordered by descending
+    /// relevance.  The chunk ID is the `id` of the first (lowest `chunk_index`)
+    /// chunk under the matched source document.  When a source has no chunks,
+    /// that source is silently skipped.
+    ///
+    /// Returns an empty `Vec` on SQL errors rather than propagating, so the RRF
+    /// fusion degrades gracefully when the meta table does not exist or is empty.
+    pub async fn curated_query(&self, query: &str, k: usize) -> Result<Vec<(String, f64)>> {
+        use crate::retrieve::curated::{first_chunk_for_source, query_curated_fts};
+
+        let conn = self.conn.lock().await;
+
+        let source_hits = match query_curated_fts(&conn, query, k) {
+            Ok(h) => h,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let mut out = Vec::with_capacity(source_hits.len());
+        for (source_id, score) in source_hits {
+            match first_chunk_for_source(&conn, source_id) {
+                Ok(Some(chunk_id)) => out.push((chunk_id.to_string(), score)),
+                Ok(None) => {}  // source has no chunks yet — skip
+                Err(_) => {}    // ignore per-row errors
+            }
+        }
+
+        Ok(out)
+    }
+
+    /// Return chunk IDs ordered by source document recency.
+    ///
+    /// Uses `rag_sources.mtime` (preferred) or `indexed_at` (fallback) as the
+    /// recency timestamp.  Returns `(chunk_id_string, normalised_score)` pairs.
+    /// Returns empty `Vec` on SQL errors.
+    pub async fn recency_query(&self, k: usize) -> Result<Vec<(String, f64)>> {
+        use crate::retrieve::recency::query_by_recency;
+
+        let conn = self.conn.lock().await;
+
+        let hits = match query_by_recency(&conn, k) {
+            Ok(h) => h,
+            Err(_) => return Ok(vec![]),
+        };
+
+        Ok(hits
+            .into_iter()
+            .map(|(chunk_id, score)| (chunk_id.to_string(), score))
+            .collect())
+    }
+
     // ── FTS5 query ───────────────────────────────────────────────────────────
 
     /// Execute an FTS5 BM25 query, returning top-K (chunk_id, bm25_score) pairs.

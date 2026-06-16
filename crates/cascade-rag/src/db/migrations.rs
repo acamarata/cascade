@@ -20,11 +20,13 @@
 //! | 6           | 0006_token_embeddings.sql     | `rag-multivec`|
 //! | 7           | 0007_index_state.sql          | always        |
 //! | 8           | 0008_context_fingerprints.sql | always        |
+//! | 9           | 0009_chunk_meta.sql           | always        |
 //!
 //! Both paths (vec and blob) advance to `user_version=5`.
 //! Migration 6 advances to `user_version=6` only when `rag-multivec` is enabled.
 //! Migration 7 advances to `user_version=7` (index_state).
 //! Migration 8 advances to `user_version=8` (context_fingerprints — T-P4-E04-21).
+//! Migration 9 advances to `user_version=9` (curated-description metadata table).
 //!
 //! SPORT: MASTER-TABLES.md → rag_sources, rag_chunks, rag_citations, rag_fts5,
 //!        rag_embeddings, rag_sparse_embeddings, index_state, context_fingerprints
@@ -49,6 +51,8 @@ const SQL_0006: &str = include_str!("../../migrations/0006_token_embeddings.sql"
 const SQL_0007: &str = include_str!("../../migrations/0007_index_state.sql");
 // 0008: context_fingerprints table for cross-session chunk dedup (T-P4-E04-21).
 const SQL_0008: &str = include_str!("../../migrations/0008_context_fingerprints.sql");
+// 0009: curated document-level metadata for the description+title+tags retrieval channel.
+const SQL_0009: &str = include_str!("../../migrations/0009_chunk_meta.sql");
 
 /// Apply all pending migrations to `conn`.
 ///
@@ -114,6 +118,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         set_user_version(conn, 8)?;
     }
 
+    // Migration 9: curated document-level metadata (description/title/tags FTS channel).
+    if version < 9 {
+        apply(conn, SQL_0009)?;
+        set_user_version(conn, 9)?;
+    }
+
     Ok(())
 }
 
@@ -171,10 +181,10 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
 
-        // Migrations 0007 (index_state) and 0008 (context_fingerprints) run
-        // unconditionally, so every configuration lands on user_version=8.
-        // (Migration 6 is rag-multivec-only; versions may skip it.)
-        assert_eq!(version, 8, "expected final user_version=8");
+        // Migrations 0007 (index_state), 0008 (context_fingerprints), and 0009
+        // (chunk_meta) run unconditionally, so every configuration lands on
+        // user_version=9. (Migration 6 is rag-multivec-only; versions may skip it.)
+        assert_eq!(version, 9, "expected final user_version=9");
     }
 
     // --- db::migrations::idempotent ------------------------------------------
@@ -187,7 +197,7 @@ mod tests {
         let version: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 8, "idempotent: final user_version=8");
+        assert_eq!(version, 9, "idempotent: final user_version=9");
     }
 
     // --- db::migrations::tables_exist ----------------------------------------
