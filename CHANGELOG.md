@@ -6,6 +6,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-16
+
+Parity Program P12 — content parity. Cascade now ships useful defaults and
+richer instruction handling.
+
+### Added
+
+- Model behavioral-profile routing: the model-tier registry carries per-model
+  profiles (default format, tool-use trigger, refusal sensitivity, best-for);
+  agent spawns can route by profile match within a tier, falling back to pure
+  tier resolution when no profiles are configured.
+- `@import` expansion in instruction resolution — `@path` references are inlined
+  at resolution time (relative to the tier's `.cascade/` dir) with nested
+  imports, cycle detection, missing-file tolerance, and a depth cap.
+- Default behavioral-rule library — six generic shippable guardrails
+  (destructive-action deny-list, autonomous-verification, output-conciseness,
+  excellence-in-engineering, anti-drift, version-lock) as `tier = "any"`
+  templates.
+- Per-language coding-standard templates — TypeScript, Rust, Python, Go (stack
+  targeted) plus universal Git and Security standards.
+- Cross-tier no-duplicate lint via `cascade doctor` — flags when a lower tier
+  repeats a higher tier's content verbatim.
+- All shipped content is fresh and fully generic (no personal/infra detail).
+
+### Fixed
+
+- `cascade verify` tests that assumed local-model availability are now gated
+  behind the opt-in `local-llm` feature; the empty-dir resolution test is
+  hermetic (isolates `HOME`).
+
+### CI
+
+- Distribution publish/update workflows now skip cleanly when their secret is
+  absent instead of failing.
+
+### Security
+
+- Bumped wasmtime + wasmtime-wasi 36.0.10 → 36.0.11 to clear RUSTSEC-2026-0182
+  (GHSA-3p27-qvp9-27qf), staying within the 36.x LTS line.
+
+### Verification
+
+Built + tested on Linux (Docker `rust:1.96`) and native macOS; clippy
+`-D warnings` clean. GitHub Actions quota was exhausted this cycle — CI will
+re-confirm on reset.
+
 ## [0.9.1] - 2026-06-15
 
 Parity Program P11 — foundational correctness + cross-platform build hardening.
