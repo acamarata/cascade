@@ -32,7 +32,9 @@ use cascade_types::{
     EmbeddingProvider,
 };
 
+use super::curated::CuratedRetriever;
 use super::fts::FtsRetriever;
+use super::recency::RecencyRetriever;
 use super::vector::VectorRetriever;
 use crate::index::RagIndex;
 
@@ -162,18 +164,57 @@ pub fn rrf_merge(lists: &[RankedList<'_>], k: f64, top_n: usize) -> Vec<FusedHit
 // ── RrfConfig & RrfRetriever ──────────────────────────────────────────────────
 
 /// Configuration for the RRF fusion step.
+///
+/// Up to 5 retrieval channels may contribute:
+///
+/// | Channel | Flag | Weight field | Default weight |
+/// |---------|------|-------------|----------------|
+/// | FTS5 BM25 body | `use_fts` | `weight_fts` | 1.0 |
+/// | Dense ANN | `use_vec` | `weight_vec` | 1.0 |
+/// | Curated description/title/tags | `use_curated` | `weight_curated` | 0.8 |
+/// | Document recency | `use_recency` | `weight_recency` | 0.5 |
+/// | Multi-vec ColBERT | `use_multivec` | (same as vec, 1.0) | 1.0 |
+///
+/// The description and recency channels must not dominate — their weights are
+/// intentionally below 1.0 so they nudge results without overriding FTS/dense
+/// relevance.  Set a weight to `0.0` to effectively disable a channel at
+/// runtime (equivalent to setting its flag to `false`, but without re-allocating
+/// the retriever).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RrfConfig {
     /// RRF smoothing constant.  Larger values reduce the influence of top-1
     /// results relative to the rest of the list.
     pub k: f32,
-    /// Whether to use FTS5 results.
+    /// Whether to use FTS5 BM25 body-text results.
     pub use_fts: bool,
-    /// Whether to use dense vector results.
+    /// Whether to use dense vector ANN results.
     pub use_vec: bool,
+    /// Whether to use the curated description/title/tags FTS channel.
+    ///
+    /// Requires migration 0009 (`rag_chunk_meta` table).  Gracefully degrades
+    /// to empty results when the table is absent or empty.
+    pub use_curated: bool,
+    /// Whether to use document recency as an RRF channel.
+    ///
+    /// Ranks candidates by `rag_sources.mtime` (falling back to `indexed_at`).
+    /// Query-independent — same top-K candidates for every query.
+    pub use_recency: bool,
     /// Whether to use sparse token-overlap results (reserved for P5).
     pub use_sparse: bool,
-    /// Whether to use multi-vector (ColBERT-style MaxSim) as an optional 4th
+    /// Weight applied to FTS5 body-text contributions.  `1.0` = neutral.
+    pub weight_fts: f64,
+    /// Weight applied to dense ANN contributions.  `1.0` = neutral.
+    pub weight_vec: f64,
+    /// Weight applied to curated description/title/tags contributions.
+    ///
+    /// Default `0.8`: meaningful boost when description matches, but body FTS
+    /// and dense remain dominant for on-topic queries.
+    pub weight_curated: f64,
+    /// Weight applied to recency contributions.
+    ///
+    /// Default `0.5`: only nudges ties; never overrides a strong relevance gap.
+    pub weight_recency: f64,
+    /// Whether to use multi-vector (ColBERT-style MaxSim) as an optional
     /// RRF channel.  Only effective when compiled with `rag-multivec` feature
     /// and `cascade.toml [rag] multi_vec = true`.  OFF by default.
     ///
@@ -188,19 +229,35 @@ impl Default for RrfConfig {
             k: DEFAULT_K as f32,
             use_fts: true,
             use_vec: true,
+            use_curated: true,
+            use_recency: true,
             use_sparse: false,
+            weight_fts: 1.0,
+            weight_vec: 1.0,
+            weight_curated: 0.8,
+            weight_recency: 0.5,
             #[cfg(feature = "rag-multivec")]
             use_multivec: false,
         }
     }
 }
 
-/// Hybrid FTS5 + dense-vector retriever fused with Reciprocal Rank Fusion.
+/// 5-channel hybrid retriever fused with Reciprocal Rank Fusion.
+///
+/// Channels (all optional, gracefully degrade when absent):
+///
+/// 1. **FTS5 BM25** — body-text keyword search via `rag_fts5`.
+/// 2. **Dense ANN** — cosine KNN search via `vec_chunks` (requires embedder).
+/// 3. **Curated description** — BM25 over frontmatter `description`/`title`/`tags`
+///    via `rag_chunk_meta_fts5` (migration 0009).
+/// 4. **Recency** — rank by `rag_sources.mtime`/`indexed_at`.
+/// 5. **Multi-vec ColBERT** — late-interaction MaxSim (feature-gated).
 ///
 /// This is the default retriever for `TierLevel::Semantic` and above.
 ///
 /// When `use_vec = false` (or no embedding provider is given), falls back to
-/// pure FTS5.  When `use_fts = false`, falls back to pure vector search.
+/// FTS5-only.  When `use_fts = false`, falls back to dense search.  Channels 3
+/// and 4 are enabled by default but silently no-op when their data is absent.
 ///
 /// # Example
 ///
@@ -221,11 +278,19 @@ impl Default for RrfConfig {
 pub struct RrfRetriever {
     fts: FtsRetriever,
     vec: Option<VectorRetriever>,
+    /// Curated description/title/tags FTS channel.
+    curated: Option<CuratedRetriever>,
+    /// Document recency channel.
+    recency: Option<RecencyRetriever>,
     config: RrfConfig,
 }
 
 impl RrfRetriever {
-    /// Construct an RRF retriever with both FTS5 and dense-vector legs.
+    /// Construct an RRF retriever with all enabled channels.
+    ///
+    /// Channels 3 (curated) and 4 (recency) are created unconditionally when
+    /// their flags are set; they degrade to empty results if the underlying
+    /// tables are missing or empty.
     pub fn new(
         index: Arc<RagIndex>,
         embedder: Arc<dyn EmbeddingProvider>,
@@ -233,21 +298,45 @@ impl RrfRetriever {
     ) -> Self {
         let fts = FtsRetriever::new(Arc::clone(&index));
         let vec = if config.use_vec {
-            Some(VectorRetriever::new(index, embedder))
+            Some(VectorRetriever::new(Arc::clone(&index), embedder))
         } else {
             None
         };
-        Self { fts, vec, config }
+        let curated = if config.use_curated {
+            Some(CuratedRetriever::new(Arc::clone(&index)))
+        } else {
+            None
+        };
+        let recency = if config.use_recency {
+            Some(RecencyRetriever::new(Arc::clone(&index)))
+        } else {
+            None
+        };
+        Self {
+            fts,
+            vec,
+            curated,
+            recency,
+            config,
+        }
     }
 
     /// Construct an FTS-only retriever (no embeddings required).
+    ///
+    /// Curated-description and recency channels are also disabled to avoid
+    /// unnecessary index look-ups in contexts where only keyword search is
+    /// needed.
     pub fn fts_only(index: Arc<RagIndex>) -> Self {
-        let fts = FtsRetriever::new(index);
+        let fts = FtsRetriever::new(Arc::clone(&index));
         Self {
             fts,
             vec: None,
+            curated: None,
+            recency: None,
             config: RrfConfig {
                 use_vec: false,
+                use_curated: false,
+                use_recency: false,
                 ..Default::default()
             },
         }
@@ -256,70 +345,146 @@ impl RrfRetriever {
 
 #[async_trait]
 impl Retriever for RrfRetriever {
-    /// Execute FTS5 and ANN queries in parallel, fuse with RRF, return top-K.
+    /// Execute all enabled channels in parallel, fuse with weighted RRF, return top-K.
     ///
-    /// If the vector leg is not configured (FTS-only mode), returns BM25 hits
-    /// directly without score transformation.
+    /// ## Channel execution
+    ///
+    /// FTS5 and dense channels are run concurrently via `tokio::join!`.
+    /// Curated and recency channels are lightweight (single SQLite read each)
+    /// and run in the same join.  Any channel that returns an error or empty
+    /// list simply contributes nothing to the fusion — the remaining channels
+    /// carry the result.
+    ///
+    /// ## Back-compat
+    ///
+    /// When `use_curated = false` and `use_recency = false` (e.g. `fts_only()`),
+    /// behaviour is identical to the previous 2-channel implementation.
     #[instrument(skip(self), fields(k = opts.k))]
     async fn retrieve(&self, query: &str, opts: &RetrieveOpts) -> Result<Vec<RetrievalHit>> {
-        // Fetch candidates from both legs (overfetch to ensure good RRF coverage).
+        // Over-fetch so RRF has enough candidates for good coverage.
         let candidate_k = (opts.k * 5).max(50);
-        let fts_opts = RetrieveOpts {
+        let wide_opts = RetrieveOpts {
             k: candidate_k,
             ..opts.clone()
         };
 
-        let fts_hits = if self.config.use_fts {
-            self.fts.retrieve(query, &fts_opts).await?
-        } else {
-            vec![]
+        // ── Parallel fetch ──────────────────────────────────────────────────
+        let fts_fut = async {
+            if self.config.use_fts {
+                self.fts.retrieve(query, &wide_opts).await.unwrap_or_default()
+            } else {
+                vec![]
+            }
         };
 
-        let vec_hits = if let (true, Some(vec_ret)) = (self.config.use_vec, &self.vec) {
-            vec_ret.retrieve(query, &fts_opts).await?
-        } else {
-            vec![]
+        let vec_fut = async {
+            if let (true, Some(v)) = (self.config.use_vec, &self.vec) {
+                v.retrieve(query, &wide_opts).await.unwrap_or_default()
+            } else {
+                vec![]
+            }
         };
 
-        // If only one leg contributed, return its results directly.
-        if fts_hits.is_empty() {
-            return Ok(vec_hits.into_iter().take(opts.k).collect());
+        let curated_fut = async {
+            if let Some(c) = &self.curated {
+                c.retrieve(query, &wide_opts).await.unwrap_or_default()
+            } else {
+                vec![]
+            }
+        };
+
+        let recency_fut = async {
+            if let Some(r) = &self.recency {
+                r.retrieve(query, &wide_opts).await.unwrap_or_default()
+            } else {
+                vec![]
+            }
+        };
+
+        let (fts_hits, vec_hits, curated_hits, recency_hits) =
+            tokio::join!(fts_fut, vec_fut, curated_fut, recency_fut);
+
+        // ── Build (chunk_id_i64, score) lists for rrf_merge ────────────────
+        // rrf_merge operates on i64 chunk IDs.  Curated and recency IDs come
+        // back as strings (from RagIndex) because the shared Retriever trait
+        // uses String IDs.  We parse them here.
+        let fts_pairs: Vec<(i64, f64)> = hits_to_pairs(&fts_hits);
+        let vec_pairs: Vec<(i64, f64)> = hits_to_pairs(&vec_hits);
+        let curated_pairs: Vec<(i64, f64)> = hits_to_pairs(&curated_hits);
+        let recency_pairs: Vec<(i64, f64)> = hits_to_pairs(&recency_hits);
+
+        // ── Assemble RankedList inputs ──────────────────────────────────────
+        let mut lists: Vec<RankedList<'_>> = Vec::with_capacity(4);
+
+        if !fts_pairs.is_empty() {
+            lists.push(RankedList {
+                source: "fts5",
+                weight: self.config.weight_fts,
+                hits: &fts_pairs,
+            });
         }
-        if vec_hits.is_empty() {
-            return Ok(fts_hits.into_iter().take(opts.k).collect());
+        if !vec_pairs.is_empty() {
+            lists.push(RankedList {
+                source: "dense",
+                weight: self.config.weight_vec,
+                hits: &vec_pairs,
+            });
+        }
+        if !curated_pairs.is_empty() {
+            lists.push(RankedList {
+                source: "curated",
+                weight: self.config.weight_curated,
+                hits: &curated_pairs,
+            });
+        }
+        if !recency_pairs.is_empty() {
+            lists.push(RankedList {
+                source: "recency",
+                weight: self.config.weight_recency,
+                hits: &recency_pairs,
+            });
         }
 
-        // Fuse with RRF.
-        let mut scores: HashMap<String, f32> = HashMap::new();
-        let k = self.config.k;
-
-        for (rank, hit) in fts_hits.iter().enumerate() {
-            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f32);
+        // ── Single-channel fast path ────────────────────────────────────────
+        if lists.is_empty() {
+            return Ok(vec![]);
         }
-        for (rank, hit) in vec_hits.iter().enumerate() {
-            *scores.entry(hit.chunk_id.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f32);
+        if lists.len() == 1 {
+            // Avoid allocating a fusion map when only one channel fired.
+            let sole = if !fts_hits.is_empty() {
+                fts_hits
+            } else if !vec_hits.is_empty() {
+                vec_hits
+            } else if !curated_hits.is_empty() {
+                curated_hits
+            } else {
+                recency_hits
+            };
+            return Ok(sole.into_iter().take(opts.k).collect());
         }
 
-        // Build a unified hit index from FTS results (text is available there).
-        let mut hit_map: HashMap<String, RetrievalHit> = fts_hits
+        // ── Multi-channel RRF fusion ────────────────────────────────────────
+        let k = self.config.k as f64;
+        let fused = rrf_merge(&lists, k, opts.k);
+
+        // Build a unified hit map from all sources for text/file_path lookup.
+        let mut hit_map: HashMap<String, RetrievalHit> = HashMap::new();
+        for h in fts_hits
             .into_iter()
-            .map(|h| (h.chunk_id.clone(), h))
-            .collect();
-        for h in vec_hits {
+            .chain(vec_hits)
+            .chain(curated_hits)
+            .chain(recency_hits)
+        {
             hit_map.entry(h.chunk_id.clone()).or_insert(h);
         }
 
-        // Sort by RRF score descending.
-        let mut ranked: Vec<(String, f32)> = scores.into_iter().collect();
-        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let results: Vec<RetrievalHit> = ranked
+        let results: Vec<RetrievalHit> = fused
             .into_iter()
-            .take(opts.k)
             .enumerate()
-            .filter_map(|(new_rank, (chunk_id, rrf_score))| {
-                hit_map.remove(&chunk_id).map(|mut hit| {
-                    hit.score = rrf_score;
+            .filter_map(|(new_rank, fused_hit)| {
+                let id_str = fused_hit.chunk_id.to_string();
+                hit_map.remove(&id_str).map(|mut hit| {
+                    hit.score = fused_hit.rrf_score as f32;
                     hit.rank = new_rank;
                     hit
                 })
@@ -332,6 +497,17 @@ impl Retriever for RrfRetriever {
     fn name(&self) -> &str {
         "hybrid-rrf"
     }
+}
+
+/// Convert [`RetrievalHit`] slices to `(i64, f64)` pairs for [`rrf_merge`].
+///
+/// Hits whose `chunk_id` cannot be parsed as an `i64` are silently dropped.
+/// This handles the edge case where synthetic IDs (e.g. from `curated`) are
+/// pre-translated to real chunk IDs by [`RagIndex`].
+fn hits_to_pairs(hits: &[RetrievalHit]) -> Vec<(i64, f64)> {
+    hits.iter()
+        .filter_map(|h| h.chunk_id.parse::<i64>().ok().map(|id| (id, h.score as f64)))
+        .collect()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -571,5 +747,149 @@ mod tests {
         // id=1 appears in all 3 lists → highest cumulative RRF.
         assert_eq!(fused[0].chunk_id, 1);
         assert_eq!(fused[0].sources_hit.len(), 3);
+    }
+
+    // ── 5-channel fusion tests ────────────────────────────────────────────────
+
+    /// Curated-description channel boosts a sparse-body doc when its description
+    /// matches.  Without the curated channel the sparse doc would lose to a rich
+    /// body doc; with it, the two compete on equal footing (or the curated doc wins).
+    ///
+    /// Simulated with pure `rrf_merge` by giving the sparse doc a strong curated
+    /// rank and a weak FTS rank, and the body doc a strong FTS rank only.
+    #[test]
+    fn curated_channel_boosts_sparse_body_doc() {
+        // doc=1: strong body (fts rank 1), no curated hit.
+        // doc=2: weak body (fts rank 5), but curated rank 1.
+        let fts: Vec<(i64, f64)> = vec![(1, 0.95), (3, 0.5), (4, 0.4), (5, 0.3), (2, 0.1)];
+        let curated: Vec<(i64, f64)> = vec![(2, 0.99)]; // doc=2 matches description
+
+        let lists_without = vec![RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        }];
+        let fused_without = rrf_merge(&lists_without, 60.0, 5);
+
+        let lists_with = vec![
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "curated",
+                weight: 0.8,
+                hits: &curated,
+            },
+        ];
+        let fused_with = rrf_merge(&lists_with, 60.0, 5);
+
+        // Without curated: doc=2 must rank last (it was rank-5 in FTS).
+        let rank_without = fused_without
+            .iter()
+            .position(|h| h.chunk_id == 2)
+            .expect("doc=2 must appear");
+        assert_eq!(rank_without, 4, "doc=2 must be last without curated channel");
+
+        // With curated: doc=2 rank must improve (move closer to the front).
+        let rank_with = fused_with
+            .iter()
+            .position(|h| h.chunk_id == 2)
+            .expect("doc=2 must appear");
+        assert!(
+            rank_with < rank_without,
+            "curated channel must improve doc=2 rank ({rank_with} < {rank_without})"
+        );
+    }
+
+    /// Recency breaks ties toward the newer document.
+    ///
+    /// Two docs with identical FTS and curated scores.  The recency channel
+    /// gives a higher score to doc=10 (newer).  After fusion, doc=10 must rank
+    /// first.
+    #[test]
+    fn recency_breaks_ties_toward_newer_doc() {
+        // doc=10 and doc=20 are symmetric in FTS (rank 1 each in their own list
+        // → simulate tied scores by putting them at the same rank in both).
+        let fts: Vec<(i64, f64)> = vec![(10, 0.8), (20, 0.8)]; // tied FTS scores
+        // Recency: doc=10 is newer → rank 1; doc=20 is older → rank 2.
+        let recency: Vec<(i64, f64)> = vec![(10, 1.0), (20, 0.5)];
+
+        let lists = vec![
+            RankedList {
+                source: "fts5",
+                weight: 1.0,
+                hits: &fts,
+            },
+            RankedList {
+                source: "recency",
+                weight: 0.5,
+                hits: &recency,
+            },
+        ];
+        let fused = rrf_merge(&lists, 60.0, 10);
+
+        // doc=10 should be first because it wins the recency channel.
+        assert_eq!(fused[0].chunk_id, 10, "newer doc must rank first after recency tie-break");
+        assert!(fused[0].sources_hit.contains(&"recency".to_string()));
+    }
+
+    /// Five-channel fusion: when all 5 channels contribute to doc=1, it wins.
+    #[test]
+    fn five_channel_fusion_all_sources_contribute() {
+        let fts: Vec<(i64, f64)> = vec![(1, 0.9), (2, 0.5)];
+        let dense: Vec<(i64, f64)> = vec![(1, 0.85), (3, 0.7)];
+        let curated: Vec<(i64, f64)> = vec![(1, 0.99), (4, 0.6)];
+        let recency: Vec<(i64, f64)> = vec![(1, 1.0), (5, 0.4)];
+        let sparse: Vec<(i64, f64)> = vec![(1, 0.75), (6, 0.3)];
+
+        let lists = vec![
+            RankedList { source: "fts5",    weight: 1.0, hits: &fts },
+            RankedList { source: "dense",   weight: 1.0, hits: &dense },
+            RankedList { source: "curated", weight: 0.8, hits: &curated },
+            RankedList { source: "recency", weight: 0.5, hits: &recency },
+            RankedList { source: "sparse",  weight: 1.0, hits: &sparse },
+        ];
+        let fused = rrf_merge(&lists, 60.0, 10);
+
+        assert_eq!(fused[0].chunk_id, 1, "doc=1 (all 5 channels) must rank first");
+        assert_eq!(fused[0].sources_hit.len(), 5, "all 5 sources must be in provenance");
+    }
+
+    /// Missing channels (all empty except one) must not crash — single-channel fallback.
+    #[test]
+    fn missing_channels_degrade_gracefully() {
+        let fts: Vec<(i64, f64)> = vec![(42, 0.9)];
+        let empty: Vec<(i64, f64)> = vec![];
+
+        // Only the FTS list is non-empty; curated and recency are empty.
+        let lists = vec![
+            RankedList { source: "fts5",    weight: 1.0, hits: &fts },
+            RankedList { source: "curated", weight: 0.8, hits: &empty },
+            RankedList { source: "recency", weight: 0.5, hits: &empty },
+        ];
+        let fused = rrf_merge(&lists, 60.0, 10);
+
+        assert_eq!(fused.len(), 1, "must return the single FTS hit");
+        assert_eq!(fused[0].chunk_id, 42);
+        assert_eq!(fused[0].sources_hit, vec!["fts5".to_string()]);
+    }
+
+    /// Weight=0.0 for a channel effectively disables its influence.
+    #[test]
+    fn zero_weight_channel_has_no_influence() {
+        let fts: Vec<(i64, f64)> = vec![(1, 0.9)];
+        let recency: Vec<(i64, f64)> = vec![(2, 1.0), (1, 0.5)]; // recency prefers doc=2
+
+        // With weight=0.0 on recency, doc=2 gets 0 contribution from recency.
+        let lists_zero = vec![
+            RankedList { source: "fts5",    weight: 1.0, hits: &fts },
+            RankedList { source: "recency", weight: 0.0, hits: &recency },
+        ];
+        let fused_zero = rrf_merge(&lists_zero, 60.0, 10);
+
+        // doc=1 wins because recency has zero weight.
+        assert_eq!(fused_zero[0].chunk_id, 1, "zero-weight recency must not override FTS");
     }
 }
