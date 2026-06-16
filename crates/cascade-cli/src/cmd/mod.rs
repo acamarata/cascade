@@ -55,6 +55,8 @@ pub mod plugin;
 pub mod resolve;
 pub mod restore;
 pub mod search;
+// P12: snapshot list/restore for pre-generation file capture
+pub mod snapshot;
 pub mod setup_oc;
 pub mod status;
 pub mod template;
@@ -121,6 +123,8 @@ pub enum Commands {
     Backup(backup::BackupArgs),
     /// Restore an archived tool's files to their original paths.
     Restore(restore::RestoreArgs),
+    /// List and restore pre-generation derived-file snapshots.
+    Snapshot(snapshot::SnapshotArgs),
     /// Manage Cascade context templates (list, apply, diff, upgrade).
     Template(template::TemplateArgs),
     /// MCP server token and client setup.
@@ -198,6 +202,7 @@ impl Commands {
             Commands::Completions(args) => args.run().await,
             Commands::Backup(args) => args.run().await,
             Commands::Restore(args) => args.run().await,
+            Commands::Snapshot(args) => args.run().await,
             Commands::Template(args) => args.run().await,
             Commands::Mcp(args) => args.run().await,
             Commands::GenerateInstructions(args) => args.run().await,
