@@ -340,6 +340,7 @@ mod tests {
             task_paths: vec![],
             tier_sources,
             model_registry: cascade_types::model_registry::ModelRegistry::default(),
+            vars: Default::default(),
             resolved_at: "2026-06-02T00:00:00Z".to_string(),
         }
     }

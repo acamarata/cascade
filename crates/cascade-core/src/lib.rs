@@ -58,6 +58,7 @@ pub mod cache;
 pub mod cascade_resolution;
 pub mod cascade_resolve;
 pub mod lint_duplication;
+pub mod var_substitute;
 pub mod compat_gen;
 pub mod config;
 pub mod context_pack;

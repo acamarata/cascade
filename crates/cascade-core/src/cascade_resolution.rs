@@ -39,6 +39,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::import_expand::expand_imports;
 use crate::resolution::Resolver;
+use crate::var_substitute::substitute_vars;
+use cascade_types::tiers::VarsMap;
 
 // ── Default MCP socket URL ────────────────────────────────────────────────────
 
@@ -74,8 +76,9 @@ pub struct TierResult {
 ///
 /// | Field                 | Rule |
 /// |-----------------------|------|
-/// | `merged_instructions` | All always-loaded tier instruction blocks, GCI first |
+/// | `merged_instructions` | All always-loaded tier instruction blocks, GCI first, with `${…}` tokens substituted |
 /// | `on_demand_rules`     | Deferred rules — NOT inlined into harness files |
+/// | `vars`                | Merged canonical var map; lower tier wins on collision |
 /// | `mcp_server_url`      | Lowest tier that declares it wins (most specific) |
 /// | `tiers_found`         | All 6 tiers recorded; `found: false` when absent |
 /// | `working_dir`         | The canonicalised cwd passed to the resolver |
@@ -88,6 +91,9 @@ pub struct ResolvedCascade {
     ///
     /// Tiers are separated by a `--- <TIER> ---` comment so callers can see
     /// provenance within the merged string.
+    ///
+    /// `@import` directives are expanded and `${ns.key}` tokens are substituted
+    /// using the merged [`vars`] map before this field is populated.
     pub merged_instructions: String,
 
     /// On-demand rules that should NOT be inlined into harness instruction files.
@@ -96,6 +102,14 @@ pub struct ResolvedCascade {
     /// `-> <text> (load_when: <condition>)` to bound context-budget usage.
     #[serde(default)]
     pub on_demand_rules: Vec<cascade_types::tiers::OnDemandRule>,
+
+    /// Merged canonical variable map built from all tiers' `[vars]` tables.
+    ///
+    /// Lower tier (PAC) overrides higher tier (GCI) on key collision.
+    /// Exposed here so callers can inspect or further process the var map
+    /// (e.g. `cascade doctor` uses it for missed-reference detection).
+    #[serde(default)]
+    pub vars: VarsMap,
 
     /// MCP server URL for the cascade daemon.
     ///
@@ -179,9 +193,14 @@ impl CascadeResolutionEngine {
         // Build per-tier TierResult list (all 6 tiers, found or not).
         let tier_results = self.build_tier_results(&base_result);
 
+        // Merge canonical vars from all tiers — lower tier (later in precedence
+        // list) wins on key collision, matching model_registry semantics.
+        let vars = build_merged_vars(&self.cwd, &tier_results);
+
         // Merge instructions: iterate in precedence order (GCI first), separate
         // with tier-labelled comments so callers can see provenance.
-        let merged_instructions = build_merged_instructions(&tier_results);
+        // @import expansion runs first, then ${…} token substitution.
+        let merged_instructions = build_merged_instructions(&tier_results, &vars);
 
         // MCP server URL: lowest-tier (most specific) value wins.
         let mcp_server_url = extract_mcp_server_url(&self.cwd, &tier_results);
@@ -189,6 +208,7 @@ impl CascadeResolutionEngine {
         Ok(ResolvedCascade {
             merged_instructions,
             on_demand_rules: Vec::new(),
+            vars,
             mcp_server_url,
             tiers_found: tier_results,
             working_dir,
@@ -290,14 +310,19 @@ impl CascadeResolutionEngine {
 ///
 /// GCI appears first (index 0 in `tier_results` which is precedence-ordered).
 ///
-/// Before concatenation, each tier's instruction text is scanned for `@import`
-/// directives (lines whose first non-whitespace token starts with `@` and
-/// resolves to a readable file).  Matching lines are replaced by the referenced
-/// file's contents.  The base directory for import resolution is the tier's
-/// `path_searched` directory — the `.cascade/` folder that contributed the
-/// instruction text.  See [`expand_imports`] for full syntax and cycle-guard
-/// semantics.
-fn build_merged_instructions(tier_results: &[TierResult]) -> String {
+/// # Pipeline per tier
+///
+/// 1. `@import` expansion — lines beginning with `@path` are replaced by the
+///    referenced file's contents (see [`expand_imports`]).
+/// 2. `${ns.key}` token substitution — tokens are replaced with values from the
+///    merged `vars` map (see [`substitute_vars`]).  Unknown tokens are left
+///    verbatim; `$${…}` is the escape for a literal `${…}`.
+///
+/// # Arguments
+///
+/// * `tier_results` — ordered tier results (GCI first).
+/// * `vars` — the merged canonical variable map used for `${…}` substitution.
+fn build_merged_instructions(tier_results: &[TierResult], vars: &VarsMap) -> String {
     let parts: Vec<String> = tier_results
         .iter()
         .filter(|tr| tr.found && !tr.instructions.trim().is_empty())
@@ -314,18 +339,76 @@ fn build_merged_instructions(tier_results: &[TierResult]) -> String {
                 tr.path_searched.clone()
             };
 
-            // Expand @imports before formatting the tier block.
+            // Step 1: expand @imports.
             let expanded = expand_imports(&tr.instructions, &base_dir);
+
+            // Step 2: substitute ${ns.key} tokens.
+            let substituted = substitute_vars(&expanded, vars);
 
             format!(
                 "<!-- cascade-tier: {} -->\n{}",
                 tr.tier.acronym(),
-                expanded.trim_end()
+                substituted.trim_end()
             )
         })
         .collect();
 
     parts.join("\n\n")
+}
+
+/// Build a merged [`VarsMap`] from every found tier's `config.toml` `[vars]` table.
+///
+/// Iterates tiers in precedence order (GCI first → PAC last).  Each tier's vars
+/// are inserted with `entry.or_insert` first, then overwritten by lower-tier
+/// (more-specific) values.  The net effect is that PAC's value wins on collision.
+///
+/// # Arguments
+///
+/// * `cwd`          — the working directory (used to locate tier config files).
+/// * `tier_results` — ordered tier results; `path_searched` points to the
+///   `.cascade/` directory for each found tier.
+fn build_merged_vars(cwd: &Path, tier_results: &[TierResult]) -> VarsMap {
+    // We iterate GCI-first but want lower-tier (PAC) to win.
+    // Strategy: collect in GCI-first order, then let each later tier overwrite.
+    let mut vars = VarsMap::new();
+
+    for tr in tier_results {
+        if !tr.found {
+            continue;
+        }
+
+        // Locate config.toml for this tier.
+        let config_dir = if tr.path_searched.is_file() {
+            tr.path_searched
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| tr.path_searched.clone())
+        } else {
+            tr.path_searched.clone()
+        };
+
+        let config_toml = config_dir.join("config.toml");
+        let alt_config_toml = cwd.join(".cascade").join("config.toml");
+
+        // Try the tier-specific path first, then cwd fallback.
+        for path in [&config_toml, &alt_config_toml] {
+            if let Ok(raw) = std::fs::read_to_string(path) {
+                if let Ok(table) = raw.parse::<toml::Table>() {
+                    if let Some(vars_table) = table.get("vars").and_then(|v| v.as_table()) {
+                        for (k, v) in vars_table {
+                            if let Some(s) = v.as_str() {
+                                // Lower tier (later in loop) overwrites higher tier.
+                                vars.insert(k.clone(), s.to_owned());
+                            }
+                        }
+                        break; // Found config.toml for this tier — stop fallback search.
+                    }
+                }
+            }
+        }
+    }
+
+    vars
 }
 
 /// Extract the `mcp_server_url` from the lowest (most specific) tier's
@@ -641,5 +724,113 @@ mod tests {
             .find(|t| t.tier == CascadeTier::Pac)
             .unwrap();
         assert!(!pac.found, "PAC must be missing, not an error");
+    }
+
+    // ── test 7: ${…} tokens substituted in merged instructions ───────────────
+
+    /// A `${ns.key}` token in a tier's instruction text is replaced with the
+    /// var value after resolution.
+    ///
+    /// WHY: end-to-end proof that the substitution pipeline runs inside
+    /// `resolve_cascade_full`.
+    #[test]
+    #[serial(global_env)]
+    fn var_tokens_substituted_in_merged_instructions() {
+        let _guard = home_lock();
+        let tmp_home = TempDir::new().unwrap();
+        let tmp_project = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
+
+        let project_cascade = make_cascade_dir(tmp_project.path());
+        write_config_toml(
+            &project_cascade,
+            r#"
+[vars]
+"infra.host" = "prod.example.com"
+
+"#,
+        );
+        write_cascade_md(&project_cascade, "Deploy to ${infra.host} today.");
+
+        let result = resolve_cascade_full(tmp_project.path()).expect("should resolve");
+        assert!(
+            result.merged_instructions.contains("prod.example.com"),
+            "token must be substituted: {:?}",
+            result.merged_instructions
+        );
+        assert!(
+            !result.merged_instructions.contains("${infra.host}"),
+            "raw token must be gone after substitution: {:?}",
+            result.merged_instructions
+        );
+    }
+
+    // ── test 8: escape $${…} produces literal ${…} ───────────────────────────
+
+    /// `$${ns.key}` in instruction text produces a literal `${ns.key}`.
+    ///
+    /// WHY: authors sometimes need to document the interpolation syntax itself
+    /// without triggering substitution.
+    #[test]
+    #[serial(global_env)]
+    fn escape_produces_literal_token_in_merged() {
+        let _guard = home_lock();
+        let tmp_home = TempDir::new().unwrap();
+        let tmp_project = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
+
+        let project_cascade = make_cascade_dir(tmp_project.path());
+        write_config_toml(
+            &project_cascade,
+            r#"
+[vars]
+"ns.key" = "replaced"
+"#,
+        );
+        write_cascade_md(&project_cascade, "Example: $${ns.key} produces literal.");
+
+        let result = resolve_cascade_full(tmp_project.path()).expect("should resolve");
+        assert!(
+            result.merged_instructions.contains("${ns.key}"),
+            "escaped token must appear as literal in output: {:?}",
+            result.merged_instructions
+        );
+        assert!(
+            !result.merged_instructions.contains("replaced"),
+            "escaped token value must not appear: {:?}",
+            result.merged_instructions
+        );
+    }
+
+    // ── test 9: vars carried on ResolvedCascade ───────────────────────────────
+
+    /// The `vars` field on `ResolvedCascade` carries the merged map.
+    ///
+    /// WHY: `cascade doctor` and other consumers need the raw map, not just
+    /// the post-substitution text.
+    #[test]
+    #[serial(global_env)]
+    fn resolved_cascade_carries_vars_map() {
+        let _guard = home_lock();
+        let tmp_home = TempDir::new().unwrap();
+        let tmp_project = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
+
+        let project_cascade = make_cascade_dir(tmp_project.path());
+        write_config_toml(
+            &project_cascade,
+            r#"
+[vars]
+"team.name" = "engineering"
+"#,
+        );
+        write_cascade_md(&project_cascade, "Hello ${team.name}.");
+
+        let result = resolve_cascade_full(tmp_project.path()).expect("should resolve");
+        assert_eq!(
+            result.vars.get("team.name").map(String::as_str),
+            Some("engineering"),
+            "vars map must be present on ResolvedCascade"
+        );
     }
 }

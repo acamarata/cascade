@@ -684,6 +684,7 @@ mod tests {
         ResolvedCascade {
             merged_instructions: body.to_string(),
             on_demand_rules: vec![],
+            vars: Default::default(),
             mcp_server_url: "unix://~/.cascade/cascade.sock".into(),
             tiers_found: vec![TierResult {
                 tier: CascadeTier::Gci,
