@@ -15,6 +15,7 @@ pub mod health;
 pub mod pbd;
 // E-P6-04: T0 CEO / Founder orchestrator
 pub mod ceo;
+pub mod check;
 // E-P7-06: subscription adapter detection + config-generation
 pub mod subs;
 // E-P5-04: post-init healthcheck gate
@@ -160,6 +161,9 @@ pub enum Commands {
     Verify(verify::VerifyArgs),
     /// Submit directives to the CEO/Founder AI orchestrator.
     Ceo(ceo::CeoArgs),
+
+    /// Local content checks (e.g. `cascade check injection` for the injection-guard hook).
+    Check(check::CheckArgs),
     /// List detected AI coding subscriptions and their auth status (E-P7-06).
     Subs(subs::SubsArgs),
     /// Phase-Based Development engine (phases, epics, waves, sprints, tickets, steps).
@@ -213,6 +217,7 @@ impl Commands {
             Commands::Provider(args) => args.run().await,
             Commands::Verify(args) => args.run().await,
             Commands::Ceo(args) => args.run().await,
+            Commands::Check(args) => args.run().await,
             Commands::Subs(args) => args.run().await,
             Commands::Pbd(args) => args.run().await,
             Commands::Health(args) => args.run().await,

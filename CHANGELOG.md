@@ -6,6 +6,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-06-16
+
+Parity Program P13 — runtime integration + security hardening. Cascade can now
+reach into the harness runtime and ships injection-aware guards.
+
+### Added
+
+- `cascade configure --harness claude-code` — idempotently writes a
+  Cascade-managed block into the harness `settings.json` (an `env` block and a
+  `permissions.deny` array derived from the policy engine's 42 deny patterns).
+  Dry-run by default; `--apply` writes atomically; user keys are never touched
+  (everything lives under a single `_cascade_managed` key).
+- Prompt-injection scanner (`cascade_core::injection_scan`) — instruction-
+  override, system-prompt-extraction, deny-list-override, jailbreak-framing, and
+  encoded-payload detection with an ordered risk model and configurable
+  sensitivity.
+- `cascade check injection` + `scripts/hooks/injection-guard.sh` — a
+  `UserPromptSubmit` hook that scans the prompt and gates on exit code (0 clean,
+  1 warn, 2 halt) so injections are caught before tool dispatch. Contract in
+  `.github/docs/injection-hook.md`.
+- Agent prompt-size gate — agent system prompts are token-estimated at spawn;
+  warn above 2000, error/refuse above 4000 (configurable), with the three
+  largest sections reported.
+
+### Changed (security)
+
+- Destructive deny-list — full parity (10 → 42 patterns) with injection-resilient
+  evaluation: base64/URL/unicode-homoglyph normalization + chained-command
+  splitting. OWASP LLM Top-10 mapping in `.github/docs/deny-list-audit.md`.
+
+### Verification
+
+Built + tested on Linux (Docker `rust:1.96`) and native macOS; clippy
+`-D warnings` clean. GitHub Actions quota was exhausted this cycle — CI will
+re-confirm on reset.
+
 ## [0.9.2] - 2026-06-16
 
 Parity Program P12 — content parity. Cascade now ships useful defaults and

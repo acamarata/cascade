@@ -1,6 +1,6 @@
 [package]
 name = "cascade-app"
-version = "0.9.2"
+version = "0.9.3"
 license = "MIT"
 edition = "2021"
 rust-version = "1.85"
@@ -28,14 +28,14 @@ tauri-plugin-shell   = "2"
 
 # cascade-types provides the frozen JSON-RPC 2.0 wire types (T-P2-E03).
 # cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
-cascade-types     = { path = "../../../crates/cascade-types", version = "0.9.2" }
-cascade-cli       = { path = "../../../crates/cascade-cli", version = "0.9.2" }
-cascade-audit     = { path = "../../../crates/cascade-audit", version = "0.9.2" }
+cascade-types     = { path = "../../../crates/cascade-types", version = "0.9.3" }
+cascade-cli       = { path = "../../../crates/cascade-cli", version = "0.9.3" }
+cascade-audit     = { path = "../../../crates/cascade-audit", version = "0.9.3" }
 # T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
-cascade-providers = { path = "../../../crates/cascade-providers", version = "0.9.2" }
+cascade-providers = { path = "../../../crates/cascade-providers", version = "0.9.3" }
 # E-P5-08: OS keychain access for provider_connect (platform_keychain)
-cascade-keychain  = { path = "../../../crates/cascade-keychain", version = "0.9.2" }
-cascade-core  = { path = "../../../crates/cascade-core", version = "0.9.2" }    # T-P3-E04-15: read_providers_store
+cascade-keychain  = { path = "../../../crates/cascade-keychain", version = "0.9.3" }
+cascade-core  = { path = "../../../crates/cascade-core", version = "0.9.3" }    # T-P3-E04-15: read_providers_store
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)
 tokio = { version = "1", features = ["net", "io-util", "rt", "time", "sync"] }
