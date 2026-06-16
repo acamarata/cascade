@@ -26,13 +26,14 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument, warn, event, Level};
 
 use crate::context::{
     AgentRunContext, AgentRunContextBuilder, ContextMessage, ContextProvider, ContextRole,
     NoopContextProvider, StepOutcome, ToolCall, ToolResult,
 };
 use crate::grants::{AccessLevel, GrantDecision};
+use crate::prompt_gate::{check_prompt_size, PromptSizeConfig, PromptTooLarge};
 use crate::spec::AgentSpec;
 use crate::task::{AgentTask, TaskStatus};
 use crate::tool_registry::ToolRegistry;
@@ -187,6 +188,9 @@ pub enum ExecutorError {
 
     #[error("no-progress detected after {steps} consecutive steps with no new tool calls")]
     NoProgress { steps: u32 },
+
+    #[error("system prompt too large: {0}")]
+    PromptTooLarge(#[from] PromptTooLarge),
 }
 
 // ── TaskStore ─────────────────────────────────────────────────────────────────
@@ -255,6 +259,8 @@ pub struct AgentExecutor {
     approval_tx: Option<mpsc::Sender<ApprovalRequest>>,
     /// Sender for spawned child tasks (loops back into the queue in production).
     child_tx: Option<mpsc::Sender<ChildTaskRequest>>,
+    /// Prompt-size gate configuration.
+    prompt_size_cfg: PromptSizeConfig,
 }
 
 /// A request to spawn a child task.
@@ -308,6 +314,32 @@ impl AgentExecutor {
             .position(|m| m.role != ContextRole::System)
             .unwrap_or(run_ctx.messages.len());
         run_ctx.messages.insert(insert_at, prefix_msg);
+
+        // ── Prompt-size gate ─────────────────────────────────────────────────
+        //
+        // Assemble the full system-prompt text (system messages + prefix) for
+        // size estimation.  We join all messages that are visible before the
+        // first ReAct step so the estimate reflects what the model will actually
+        // receive.
+        let assembled_prompt: String = run_ctx
+            .messages
+            .iter()
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        let gate_report = check_prompt_size(&assembled_prompt, &self.prompt_size_cfg)
+            .map_err(ExecutorError::PromptTooLarge)?;
+
+        // Emit per-agent token-count telemetry regardless of threshold outcome.
+        event!(
+            Level::DEBUG,
+            task_id = %task.id,
+            agent_id = %spec.id,
+            estimated_prompt_tokens = gate_report.estimated_tokens,
+            gate_outcome = ?gate_report.outcome,
+            "prompt size gate"
+        );
 
         match self.react_loop(spec, task.clone(), run_ctx).await {
             Ok(final_task) => {
@@ -524,6 +556,7 @@ pub struct AgentExecutorBuilder {
     token_budget: u32,
     approval_tx: Option<mpsc::Sender<ApprovalRequest>>,
     child_tx: Option<mpsc::Sender<ChildTaskRequest>>,
+    prompt_size_cfg: PromptSizeConfig,
 }
 
 impl Default for AgentExecutorBuilder {
@@ -537,6 +570,7 @@ impl Default for AgentExecutorBuilder {
             token_budget: DEFAULT_TOKEN_BUDGET,
             approval_tx: None,
             child_tx: None,
+            prompt_size_cfg: PromptSizeConfig::default(),
         }
     }
 }
@@ -574,6 +608,14 @@ impl AgentExecutorBuilder {
         self.child_tx = Some(tx);
         self
     }
+    /// Override the prompt-size gate configuration.
+    ///
+    /// By default, `PromptSizeConfig::default()` is used (warn=2000, error=4000,
+    /// block_on_error=true).
+    pub fn prompt_size_config(mut self, cfg: PromptSizeConfig) -> Self {
+        self.prompt_size_cfg = cfg;
+        self
+    }
 
     /// Build the `AgentExecutor`.
     ///
@@ -594,6 +636,7 @@ impl AgentExecutorBuilder {
             store: TaskStore::new(),
             approval_tx: self.approval_tx,
             child_tx: self.child_tx,
+            prompt_size_cfg: self.prompt_size_cfg,
         }
     }
 }
@@ -1065,5 +1108,92 @@ mod tests {
         let task = AgentTask::new_root("stuck forever", AgentRole::Coder);
         let err = exec.run_task(builtin_coder(), task).await.unwrap_err();
         assert!(matches!(err, ExecutorError::NoProgress { .. }));
+    }
+
+    // ── T9: prompt gate — small prompt passes silently ────────────────────────
+
+    #[tokio::test]
+    async fn prompt_gate_small_prompt_passes() {
+        use crate::prompt_gate::PromptSizeConfig;
+
+        let registry = Arc::new(ToolRegistry::new());
+        let invoker = Arc::new(MockToolInvoker::new());
+        let exec = AgentExecutor::builder()
+            .provider_router(Arc::new(MockProvider::new(vec![done_step()])))
+            .tool_invoker(invoker)
+            .tool_registry(registry)
+            .max_steps(5)
+            .token_budget(50_000)
+            // Very tight thresholds; but the goal is a short string so it passes
+            .prompt_size_config(PromptSizeConfig {
+                warn: 5_000,
+                error: 10_000,
+                block_on_error: true,
+            })
+            .build();
+
+        let task = AgentTask::new_root("tiny task", AgentRole::Coder);
+        let result = exec.run_task(builtin_coder(), task).await;
+        assert!(result.is_ok(), "small prompt should pass the gate");
+    }
+
+    // ── T10: prompt gate — oversized prompt blocked ───────────────────────────
+
+    #[tokio::test]
+    async fn prompt_gate_oversized_prompt_blocked() {
+        use crate::prompt_gate::PromptSizeConfig;
+
+        let registry = Arc::new(ToolRegistry::new());
+        let invoker = Arc::new(MockToolInvoker::new());
+        let exec = AgentExecutor::builder()
+            .provider_router(Arc::new(MockProvider::new(vec![done_step()])))
+            .tool_invoker(invoker)
+            .tool_registry(registry)
+            .max_steps(5)
+            .token_budget(50_000)
+            // error threshold of 5 tokens — essentially anything will trip it
+            .prompt_size_config(PromptSizeConfig {
+                warn: 1,
+                error: 5,
+                block_on_error: true,
+            })
+            .build();
+
+        // Goal is a long string that pushes the assembled prompt way over 5 tokens
+        let task = AgentTask::new_root("word ".repeat(200), AgentRole::Coder);
+        let err = exec.run_task(builtin_coder(), task).await.unwrap_err();
+        assert!(
+            matches!(err, ExecutorError::PromptTooLarge(_)),
+            "oversized prompt must be blocked: {err:?}"
+        );
+    }
+
+    // ── T11: prompt gate — block_on_error=false proceeds despite large prompt ─
+
+    #[tokio::test]
+    async fn prompt_gate_oversized_not_blocked_when_flag_off() {
+        use crate::prompt_gate::PromptSizeConfig;
+
+        let registry = Arc::new(ToolRegistry::new());
+        let invoker = Arc::new(MockToolInvoker::new());
+        let exec = AgentExecutor::builder()
+            .provider_router(Arc::new(MockProvider::new(vec![done_step()])))
+            .tool_invoker(invoker)
+            .tool_registry(registry)
+            .max_steps(5)
+            .token_budget(50_000)
+            .prompt_size_config(PromptSizeConfig {
+                warn: 1,
+                error: 5,
+                block_on_error: false, // ← log only, don't block
+            })
+            .build();
+
+        let task = AgentTask::new_root("word ".repeat(200), AgentRole::Coder);
+        let result = exec.run_task(builtin_coder(), task).await;
+        assert!(
+            result.is_ok(),
+            "gate with block_on_error=false must not prevent execution"
+        );
     }
 }

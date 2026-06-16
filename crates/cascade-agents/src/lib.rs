@@ -34,6 +34,7 @@ pub mod grants;
 pub mod inbox;
 pub mod library;
 pub mod model_profile;
+pub mod prompt_gate;
 pub mod registry;
 pub mod spec;
 pub mod task;
@@ -73,6 +74,12 @@ pub use automation::{
 
 // model_profile re-exports (E-P12-01)
 pub use model_profile::{code_task_shape, resolve_by_tier, resolve_model, structured_task_shape};
+
+// prompt_gate re-exports (E-P13-01)
+pub use prompt_gate::{
+    check_prompt_size, estimate_tokens, GateOutcome, PromptSizeConfig, PromptSizeReport,
+    PromptTooLarge,
+};
 
 // chain module re-exports
 pub use chain::{
