@@ -401,6 +401,60 @@
       "stacks": [],
       "project_shapes": [],
       "description": "Version bumps in any package manifest require an approved release plan before execution."
+    },
+    {
+      "id": "standard-typescript",
+      "file": "standards/typescript.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["typescript"],
+      "project_shapes": [],
+      "description": "TypeScript coding standard: strict mode, no any, ESM, typed boundaries, co-located tests, lint-on-save."
+    },
+    {
+      "id": "standard-rust",
+      "file": "standards/rust.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["rust"],
+      "project_shapes": [],
+      "description": "Rust coding standard: clippy -D warnings, rustfmt, Result error types, no unwrap in lib code, doc comments, tests."
+    },
+    {
+      "id": "standard-python",
+      "file": "standards/python.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["python"],
+      "project_shapes": [],
+      "description": "Python coding standard: type hints, ruff/black, venv isolation, pytest, no bare except."
+    },
+    {
+      "id": "standard-go",
+      "file": "standards/go.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": ["go"],
+      "project_shapes": [],
+      "description": "Go coding standard: gofmt, error wrapping, context propagation, table-driven tests."
+    },
+    {
+      "id": "standard-git",
+      "file": "standards/git.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Universal Git standard: conventional commits, small PRs, no force-push to protected branches, no secrets committed."
+    },
+    {
+      "id": "standard-security",
+      "file": "standards/security.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Universal security baseline: no committed credentials, .env gitignored before writing, dependency auditing, least-privilege."
     }
   ]
 }
