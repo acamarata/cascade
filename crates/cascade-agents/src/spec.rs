@@ -91,6 +91,12 @@ pub enum AgentRole {
     Researcher,
     /// Documentation authoring.
     DocWriter,
+    /// Spec-vs-implementation drift detection.
+    DriftDetector,
+    /// Goal / feature gap analysis and task suggestion.
+    GapScanner,
+    /// New-project scaffolding and onboarding.
+    Onboarder,
     /// Classification and triage.
     Triage,
     /// Customer service interactions.
@@ -109,8 +115,11 @@ impl AgentRole {
     pub fn from_task_kind(kind: &str) -> Option<Self> {
         match kind {
             "code.write" | "code.edit" | "code.refactor" => Some(Self::Coder),
-            "code.review" | "pr.review" => Some(Self::Reviewer),
+            "code.review" | "pr.review" | "review" => Some(Self::Reviewer),
             "doc.write" | "doc.update" => Some(Self::DocWriter),
+            "drift.detect" | "drift.check" => Some(Self::DriftDetector),
+            "gap.scan" | "gap.check" => Some(Self::GapScanner),
+            "onboard" | "scaffold" | "init.project" => Some(Self::Onboarder),
             "research" | "search" => Some(Self::Researcher),
             "triage" | "classify" | "label" => Some(Self::Triage),
             "orchestrate" | "plan" => Some(Self::Ceo),
@@ -313,10 +322,46 @@ mod tests {
             AgentRole::from_task_kind("pr.review"),
             Some(AgentRole::Reviewer)
         );
+        assert_eq!(
+            AgentRole::from_task_kind("review"),
+            Some(AgentRole::Reviewer)
+        );
         assert_eq!(AgentRole::from_task_kind("triage"), Some(AgentRole::Triage));
         assert_eq!(
             AgentRole::from_task_kind("email.draft"),
             Some(AgentRole::Emailer)
+        );
+    }
+
+    #[test]
+    fn role_from_task_kind_new_roles() {
+        assert_eq!(
+            AgentRole::from_task_kind("drift.detect"),
+            Some(AgentRole::DriftDetector)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("drift.check"),
+            Some(AgentRole::DriftDetector)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("gap.scan"),
+            Some(AgentRole::GapScanner)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("gap.check"),
+            Some(AgentRole::GapScanner)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("onboard"),
+            Some(AgentRole::Onboarder)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("scaffold"),
+            Some(AgentRole::Onboarder)
+        );
+        assert_eq!(
+            AgentRole::from_task_kind("init.project"),
+            Some(AgentRole::Onboarder)
         );
     }
 
