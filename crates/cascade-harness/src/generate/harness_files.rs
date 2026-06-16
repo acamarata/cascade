@@ -33,8 +33,16 @@
 //!
 //! ## Idempotency marker
 //!
-//! The string `<!-- cascade:unified-harness -->` is written near the top of
-//! every generated file.  Subsequent runs detect this and skip the file.
+//! The string `<!-- cascade:unified-harness sha256=<hash> -->` is written near
+//! the top of every generated file.  The hash covers the body that follows so
+//! hand-edits are detectable.  Subsequent runs detect the base marker and skip
+//! the file (idempotent).
+//!
+//! ## Snapshot-before-regenerate
+//!
+//! Before any files are written, all target paths that currently exist are
+//! captured into `<workspace>/.cascade/snapshots/<timestamp>/`.  This allows
+//! recovery via `cascade snapshot restore` without any git dependency.
 //!
 //! ## SPORT
 //!
@@ -47,10 +55,19 @@ use cascade_core::cascade_resolution::ResolvedCascade;
 use cascade_core::pbd::active_work::ActiveWorkBlock;
 use cascade_types::error::{CascadeError, Result};
 
+use super::safe_write::{atomic_write_content, content_hash, snapshot_files};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// Idempotency marker — written near the top of every generated harness file.
+/// Base idempotency marker prefix — written near the top of every generated
+/// harness file.  The full marker line includes a content hash:
+/// `<!-- cascade:unified-harness sha256=<32hexchars> -->`.
+///
+/// Detection uses [`UNIFIED_HARNESS_MARKER_BASE`] so that files written by
+/// older versions of cascade (without hashes) are still recognised.
 pub const UNIFIED_HARNESS_MARKER: &str = "<!-- cascade:unified-harness -->";
+/// Prefix shared by all harness marker variants (with and without hash).
+pub const UNIFIED_HARNESS_MARKER_BASE: &str = "<!-- cascade:unified-harness";
 
 /// Delimiter for the injected active-work section.
 /// Used to find and replace the section on re-runs (idempotent).
@@ -143,6 +160,13 @@ impl HarnessKind {
 
 /// Generate harness-native instruction files from a resolved cascade.
 ///
+/// Before writing, all target files that already exist are captured into a
+/// timestamped snapshot under `<workspace>/.cascade/snapshots/` so they can
+/// be restored with `cascade snapshot restore` if something goes wrong.
+///
+/// Each generated file is written atomically (temp-file + rename) and carries
+/// a content hash in the marker line so hand-edits are detectable.
+///
 /// # Arguments
 /// * `resolved`    — fully merged cascade (supplies merged_instructions + mcp_server_url).
 /// * `workspace`   — directory to write the output files into.
@@ -157,7 +181,8 @@ pub fn generate_for_harnesses(
     harnesses: &[HarnessKind],
     dry_run: bool,
 ) -> Result<Vec<PathBuf>> {
-    let mut written = Vec::new();
+    // Determine which targets need writing (skip files with our marker).
+    let mut to_write: Vec<(HarnessKind, PathBuf, String)> = Vec::new();
 
     for &harness in harnesses {
         let dest = workspace.join(harness.output_filename());
@@ -169,7 +194,7 @@ pub fn generate_for_harnesses(
                 operation: "read existing harness file",
                 source: e,
             })?;
-            if existing.contains(UNIFIED_HARNESS_MARKER) {
+            if existing.contains(UNIFIED_HARNESS_MARKER_BASE) {
                 if dry_run {
                     println!(
                         "[dry-run] {} ({}): cascade marker present, skip",
@@ -181,6 +206,37 @@ pub fn generate_for_harnesses(
             }
         }
 
+        to_write.push((harness, dest, content));
+    }
+
+    if to_write.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Snapshot all targets that currently exist before overwriting any of them.
+    if !dry_run {
+        let snap_paths: Vec<PathBuf> = to_write
+            .iter()
+            .map(|(_, dest, _)| dest.clone())
+            .filter(|p| p.exists())
+            .collect();
+        if !snap_paths.is_empty() {
+            match snapshot_files(workspace, &snap_paths) {
+                Ok(Some(snap_dir)) => {
+                    println!("snapshot: {}", snap_dir.display());
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    // Snapshot failure is non-fatal: warn and continue.
+                    eprintln!("warning: snapshot failed (continuing): {e}");
+                }
+            }
+        }
+    }
+
+    let mut written = Vec::new();
+
+    for (harness, dest, content) in to_write {
         if dry_run {
             println!(
                 "[dry-run] would write {} ({}) — {} bytes",
@@ -189,7 +245,7 @@ pub fn generate_for_harnesses(
                 content.len()
             );
         } else {
-            atomic_write(&dest, &content)?;
+            atomic_write_content(&dest, &content, workspace)?;
             println!("wrote: {} ({})", dest.display(), harness.id());
             written.push(dest);
         }
@@ -256,7 +312,9 @@ pub fn inject_active_work_section(
         return Ok(false);
     }
 
-    atomic_write(dest, &new_content)?;
+    // Use the dest's own parent as the workspace context for symlink checks.
+    let ws = dest.parent().unwrap_or(dest);
+    atomic_write_content(dest, &new_content, ws)?;
     Ok(true)
 }
 
@@ -349,7 +407,8 @@ pub fn write_single_file(
         return Ok(());
     }
 
-    atomic_write(dest, &content)?;
+    let ws = dest.parent().unwrap_or(dest);
+    atomic_write_content(dest, &content, ws)?;
     println!("wrote single-file: {}", dest.display());
     Ok(())
 }
@@ -452,15 +511,18 @@ fn render_on_demand_pointer_section(resolved: &ResolvedCascade) -> String {
 ///
 /// On-demand rules are rendered as `->` pointer comment lines AFTER the body
 /// rather than being inlined, so the context budget stays bounded.
+///
+/// The marker line includes a SHA-256 content fingerprint so that hand-edits
+/// can be detected by [`super::safe_write::hash_matches`].
 fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> String {
     let body = resolved.merged_instructions.trim();
     let mcp = &resolved.mcp_server_url;
     let on_demand = render_on_demand_pointer_section(resolved);
 
-    match harness {
+    // Build the body that will follow the marker line, then hash it.
+    let body_section: String = match harness {
         HarnessKind::ClaudeCode => format!(
-            "{marker}\n\
-             <!-- cascade:harness=claude-code -->\n\
+            "<!-- cascade:harness=claude-code -->\n\
              \n\
              **MCP server:** `{mcp}`\n\
              Call `cascade.provide_harness_context` on startup for the full context payload.\n\
@@ -469,7 +531,6 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
              \n\
              {body}\n\
              {on_demand}",
-            marker = UNIFIED_HARNESS_MARKER,
             mcp = mcp,
             body = body,
             on_demand = on_demand,
@@ -477,8 +538,7 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
         HarnessKind::OpenCode | HarnessKind::Codex => {
             let id = harness.id();
             format!(
-                "{marker}\n\
-                 <!-- cascade:harness={id} -->\n\
+                "<!-- cascade:harness={id} -->\n\
                  ---\n\
                  model: \"claude-sonnet-4-6\"\n\
                  tools:\n\
@@ -491,68 +551,56 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  \n\
                  {body}\n\
                  {on_demand}",
-                marker = UNIFIED_HARNESS_MARKER,
                 id = id,
                 mcp = mcp,
                 body = body,
                 on_demand = on_demand,
             )
         }
-        HarnessKind::Cursor => {
-            // Cursor MDC format: fenced markdown with a YAML description header.
-            format!(
-                "{marker}\n\
-                 <!-- cascade:harness=cursor -->\n\
-                 ---\n\
-                 description: Cascade unified AI instructions\n\
-                 globs: [\"**/*\"]\n\
-                 alwaysApply: true\n\
-                 ---\n\
-                 \n\
-                 {body}\n\
-                 {on_demand}",
-                marker = UNIFIED_HARNESS_MARKER,
-                body = body,
-                on_demand = on_demand,
-            )
-        }
-        HarnessKind::Aider => {
-            // Aider uses CONVENTIONS.md; plain Markdown.
-            format!(
-                "{marker}\n\
-                 <!-- cascade:harness=aider -->\n\
-                 \n\
-                 # Conventions\n\
-                 \n\
-                 {body}\n\
-                 {on_demand}",
-                marker = UNIFIED_HARNESS_MARKER,
-                body = body,
-                on_demand = on_demand,
-            )
-        }
-        HarnessKind::Antigravity => {
-            // Antigravity uses a Markdown rules file in `.antigravity/`.
-            format!(
-                "{marker}\n\
-                 <!-- cascade:harness=antigravity -->\n\
-                 \n\
-                 # Cascade Context Rules\n\
-                 \n\
-                 **MCP server:** `{mcp}`  \n\
-                 Call `provide_harness_context` on startup for the full context payload.\n\
-                 \n\
-                 ---\n\
-                 \n\
-                 {body}\n\
-                 {on_demand}",
-                marker = UNIFIED_HARNESS_MARKER,
-                mcp = mcp,
-                body = body,
-                on_demand = on_demand,
-            )
-        }
-    }
+        HarnessKind::Cursor => format!(
+            "<!-- cascade:harness=cursor -->\n\
+             ---\n\
+             description: Cascade unified AI instructions\n\
+             globs: [\"**/*\"]\n\
+             alwaysApply: true\n\
+             ---\n\
+             \n\
+             {body}\n\
+             {on_demand}",
+            body = body,
+            on_demand = on_demand,
+        ),
+        HarnessKind::Aider => format!(
+            "<!-- cascade:harness=aider -->\n\
+             \n\
+             # Conventions\n\
+             \n\
+             {body}\n\
+             {on_demand}",
+            body = body,
+            on_demand = on_demand,
+        ),
+        HarnessKind::Antigravity => format!(
+            "<!-- cascade:harness=antigravity -->\n\
+             \n\
+             # Cascade Context Rules\n\
+             \n\
+             **MCP server:** `{mcp}`  \n\
+             Call `provide_harness_context` on startup for the full context payload.\n\
+             \n\
+             ---\n\
+             \n\
+             {body}\n\
+             {on_demand}",
+            mcp = mcp,
+            body = body,
+            on_demand = on_demand,
+        ),
+    };
+
+    // Compute hash of the body section that follows the marker line.
+    let hash = content_hash(&body_section);
+    format!("<!-- cascade:unified-harness sha256={hash} -->\n{body_section}")
 }
 
 // ── Detection helpers ─────────────────────────────────────────────────────────
@@ -637,36 +685,6 @@ fn home_path(rel: &str) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join(rel)
-}
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-
-fn atomic_write(path: &Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| CascadeError::Io {
-            path: parent.to_path_buf(),
-            operation: "create_dir_all",
-            source: e,
-        })?;
-    }
-
-    let tmp = {
-        let mut s = path.as_os_str().to_owned();
-        s.push(".harness.tmp");
-        PathBuf::from(s)
-    };
-
-    fs::write(&tmp, content).map_err(|e| CascadeError::Io {
-        path: tmp.clone(),
-        operation: "write_tmp",
-        source: e,
-    })?;
-
-    fs::rename(&tmp, path).map_err(|e| CascadeError::Io {
-        path: path.to_path_buf(),
-        operation: "rename",
-        source: e,
-    })
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -831,7 +849,7 @@ mod tests {
         assert!(dest.exists(), "single-file must exist");
         let content = fs::read_to_string(&dest).unwrap();
         assert!(
-            content.contains(UNIFIED_HARNESS_MARKER),
+            content.contains(UNIFIED_HARNESS_MARKER_BASE),
             "single-file must contain the marker"
         );
         assert!(
@@ -891,7 +909,7 @@ mod tests {
             );
             let content = fs::read_to_string(&conventions_md).unwrap();
             assert!(
-                content.contains(UNIFIED_HARNESS_MARKER),
+                content.contains(UNIFIED_HARNESS_MARKER_BASE),
                 "CONVENTIONS.md must contain cascade marker"
             );
         }
@@ -1158,5 +1176,135 @@ mod tests {
                 harness.id()
             );
         }
+    }
+
+    // ── test 13: generated files embed a sha256 content hash ─────────────────
+
+    /// Every generated harness file must have a marker line with sha256=...
+    ///
+    /// WHY: P12 requirement — hand-edits detectable via hash mismatch.
+    #[test]
+    #[serial(global_env)]
+    fn generated_files_embed_content_hash() {
+        let tmp = TempDir::new().unwrap();
+        let resolved = mock_resolved("## RULES\n\nHash test content.");
+
+        generate_for_harnesses(&resolved, tmp.path(), HarnessKind::ALL, false).unwrap();
+
+        for harness in HarnessKind::ALL {
+            let dest = tmp.path().join(harness.output_filename());
+            let content = fs::read_to_string(&dest).unwrap();
+
+            // Marker must include sha256= fragment.
+            assert!(
+                content.contains("<!-- cascade:unified-harness sha256="),
+                "harness={}: marker must include sha256=; got first line:\n{}",
+                harness.id(),
+                content.lines().next().unwrap_or("")
+            );
+
+            // The embedded hash must be 32 hex chars.
+            let hash_start = content.find("sha256=").expect("sha256= must be present");
+            let hash_region = &content[hash_start + "sha256=".len()..];
+            let hash: String = hash_region.chars().take(32).collect();
+            assert!(
+                hash.len() == 32 && hash.chars().all(|c| c.is_ascii_hexdigit()),
+                "harness={}: embedded hash must be 32 hex chars, got: '{hash}'",
+                harness.id()
+            );
+        }
+    }
+
+    // ── test 14: snapshot is created before overwrite ─────────────────────────
+
+    /// When an existing file would be overwritten, a snapshot is created first.
+    ///
+    /// WHY: P12 requirement — snapshot-before-regenerate must capture
+    /// pre-write content so the file can be recovered.
+    #[test]
+    #[serial(global_env)]
+    fn snapshot_created_before_overwrite() {
+        let tmp = TempDir::new().unwrap();
+        // Pre-write a file WITHOUT the cascade marker so generate will overwrite it.
+        let claude_md = tmp.path().join("CLAUDE.md");
+        fs::write(&claude_md, "# Hand-written content\n\nDo not lose this.\n").unwrap();
+
+        let resolved = mock_resolved("## RULES\n\nNew content.");
+        generate_for_harnesses(
+            &resolved,
+            tmp.path(),
+            &[HarnessKind::ClaudeCode],
+            /* dry_run= */ false,
+        )
+        .unwrap();
+
+        // A snapshot directory must exist under .cascade/snapshots/.
+        let snap_root = tmp.path().join(".cascade").join("snapshots");
+        assert!(snap_root.exists(), ".cascade/snapshots/ must be created");
+
+        let mut snap_dirs: Vec<_> = fs::read_dir(&snap_root)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        assert!(!snap_dirs.is_empty(), "at least one snapshot dir must exist");
+        snap_dirs.sort();
+
+        // The snapshot must contain a copy of the original CLAUDE.md.
+        let snap_claude = snap_dirs[0].join("CLAUDE.md");
+        assert!(snap_claude.exists(), "snapshot must contain CLAUDE.md");
+        let snap_content = fs::read_to_string(&snap_claude).unwrap();
+        assert!(
+            snap_content.contains("Hand-written content"),
+            "snapshot must preserve original content; got: {snap_content}"
+        );
+
+        // The live CLAUDE.md must now contain the new generated content.
+        let new_content = fs::read_to_string(&claude_md).unwrap();
+        assert!(
+            new_content.contains("New content"),
+            "live file must contain newly generated content"
+        );
+    }
+
+    // ── test 15: hand-edit detected via hash mismatch ─────────────────────────
+
+    /// After generation, modifying the file body causes hash_matches to return
+    /// Some(false), confirming the hand-edit detection path.
+    ///
+    /// WHY: P12 requirement — hand-edits must be detectable via hash mismatch.
+    #[test]
+    #[serial(global_env)]
+    fn hand_edit_detected_via_hash_mismatch() {
+        use crate::generate::safe_write::hash_matches;
+
+        let tmp = TempDir::new().unwrap();
+        let resolved = mock_resolved("## RULES\n\nOriginal content.");
+        generate_for_harnesses(
+            &resolved,
+            tmp.path(),
+            &[HarnessKind::ClaudeCode],
+            false,
+        )
+        .unwrap();
+
+        let dest = tmp.path().join("CLAUDE.md");
+        let original = fs::read_to_string(&dest).unwrap();
+
+        // Freshly generated file: hash must match.
+        assert_eq!(
+            hash_matches(&original),
+            Some(true),
+            "freshly generated file: hash must match"
+        );
+
+        // Simulate a hand-edit by appending text to the body.
+        let hand_edited = format!("{original}\n## HAND EDIT\n");
+        assert_eq!(
+            hash_matches(&hand_edited),
+            Some(false),
+            "hand-edited file: hash must NOT match"
+        );
     }
 }
