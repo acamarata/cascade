@@ -515,9 +515,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial(global_env)]
     async fn cascade_resolves_fail_with_empty_dir() {
         let dir = TempDir::new().unwrap();
+        // Isolate the global/personal (HOME-based) tiers so a real `~/.cascade` on
+        // the host machine doesn't satisfy resolution — point HOME at the empty dir.
+        let prev_home = std::env::var_os("HOME");
+        std::env::set_var("HOME", dir.path());
         let result = check_cascade_resolves(dir.path()).await;
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
         // An empty dir with no .cascade should produce empty/no-tier output → FAIL
         assert_eq!(
             result.status,
@@ -578,6 +587,8 @@ mod tests {
         );
     }
 
+    // The local-model AI path only exists with the opt-in `local-llm` feature.
+    #[cfg(feature = "local-llm")]
     #[test]
     #[serial(global_env)]
     fn ai_provider_pass_when_local_model_present() {
@@ -722,6 +733,8 @@ mod tests {
 
     // ── Full all-green fixture ────────────────────────────────────────────────
 
+    // Uses a local model as the AI path — only valid with the opt-in `local-llm` feature.
+    #[cfg(feature = "local-llm")]
     #[tokio::test]
     #[serial(global_env)]
     async fn all_checks_pass_on_fully_setup_tempdir() {

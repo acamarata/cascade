@@ -30,9 +30,16 @@ pub struct DoctorArgs {
     /// Attempt to auto-repair safe issues (rebuild symlinks, remove stale files).
     #[arg(long)]
     pub fix: bool,
+
+    /// Treat cross-tier content duplication findings as errors (exit non-zero).
+    ///
+    /// By default, duplication findings are advisory WARNings.  Pass this flag
+    /// in CI to enforce the "reference up, never duplicate" rule strictly.
+    #[arg(long)]
+    pub strict: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CheckStatus {
     Pass,
     Warn,
@@ -157,6 +164,57 @@ impl Command for DoctorArgs {
                 status,
                 detail,
             });
+        }
+
+        // ── Cross-tier duplication lint ────────────────────────────────────
+        // Advisory by default; --strict makes findings a FAIL.
+        {
+            let resolved =
+                cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
+            match resolved {
+                Ok(ref rc) => {
+                    let findings = cascade_core::lint_duplication::lint_duplication(rc);
+                    if findings.is_empty() {
+                        checks.push(Check {
+                            name: "Cross-tier duplication",
+                            status: CheckStatus::Pass,
+                            detail: String::new(),
+                        });
+                    } else {
+                        let dup_status = if self.strict {
+                            any_fail = true;
+                            CheckStatus::Fail
+                        } else {
+                            CheckStatus::Warn
+                        };
+                        for finding in &findings {
+                            let name: &'static str = Box::leak(
+                                format!(
+                                    "Cross-tier duplication ({:?} → {:?})",
+                                    finding.lower_tier, finding.higher_tier
+                                )
+                                .into_boxed_str(),
+                            );
+                            checks.push(Check {
+                                name,
+                                status: dup_status,
+                                detail: format!(
+                                    "'{}' — reference up instead",
+                                    finding.snippet
+                                ),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Resolution failure is non-fatal for the duplication check.
+                    checks.push(Check {
+                        name: "Cross-tier duplication",
+                        status: CheckStatus::Warn,
+                        detail: format!("could not resolve cascade: {e}"),
+                    });
+                }
+            }
         }
 
         // ── Audit log + security tokens (T-P2-E07-18) ─────────────────────
