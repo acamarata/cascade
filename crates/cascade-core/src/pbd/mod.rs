@@ -20,6 +20,7 @@
 //! ```
 
 pub mod active_work;
+pub mod external_checks;
 pub mod masters;
 pub mod protocol;
 pub mod schema;
@@ -37,6 +38,7 @@ pub use masters::{
     index_pbd, index_repo, MasterEntity, MasterList, MasterPhaseEntry, MasterPhases,
     MasterTicketEntry, MasterTickets,
 };
+pub use external_checks::{BuildCheck, CheckResult, HealthCheck, RealExternalChecks};
 pub use protocol::{
     run_eoe, run_eop, run_eos, run_eot, run_eow, ExternalChecks, NoExternalChecks, ProtocolResult,
 };

@@ -297,6 +297,9 @@ pub struct TicketCloseArgs {
     pub wave_id: String,
     #[arg(long)]
     pub sprint_id: String,
+    /// Skip external build/health checks (dry-run mode).
+    #[arg(long)]
+    pub skip_externals: bool,
 }
 
 impl TicketArgs {
@@ -346,6 +349,7 @@ impl TicketArgs {
                 println!("Ticket {} → {}", a.id, a.status);
             }
             TicketSubcmd::Close(a) => {
+                let checks = make_checks(a.skip_externals);
                 let result = pbd::run_eot(
                     store,
                     &a.phase_id,
@@ -353,6 +357,7 @@ impl TicketArgs {
                     &a.wave_id,
                     &a.sprint_id,
                     &a.id,
+                    checks.as_ref(),
                 )?;
                 print_protocol_result(&result, json);
             }
@@ -538,6 +543,21 @@ impl WaveArgs {
 
 // ── Protocol runners ──────────────────────────────────────────────────────────
 
+/// Build and return the appropriate [`ExternalChecks`] provider for the CLI.
+///
+/// When `skip_externals` is `true`, returns the no-op stub so all external
+/// gates pass immediately (useful for dry runs and testing). Otherwise returns
+/// a [`pbd::RealExternalChecks`] with default settings (no build commands or
+/// health probes configured — users extend this by subclassing the provider in
+/// their own wrappers or by passing `--skip-externals` for dry runs).
+fn make_checks(skip_externals: bool) -> Box<dyn pbd::ExternalChecks> {
+    if skip_externals {
+        Box::new(pbd::NoExternalChecks)
+    } else {
+        Box::new(pbd::RealExternalChecks::new())
+    }
+}
+
 #[derive(Debug, Args)]
 pub struct EotArgs {
     pub ticket_id: String,
@@ -549,10 +569,14 @@ pub struct EotArgs {
     pub wave_id: String,
     #[arg(long)]
     pub sprint_id: String,
+    /// Skip external build/health checks (dry-run mode).
+    #[arg(long)]
+    pub skip_externals: bool,
 }
 
 impl EotArgs {
     fn run_with(&self, store: &PbdStore, json: bool) -> Result<()> {
+        let checks = make_checks(self.skip_externals);
         let result = pbd::run_eot(
             store,
             &self.phase_id,
@@ -560,6 +584,7 @@ impl EotArgs {
             &self.wave_id,
             &self.sprint_id,
             &self.ticket_id,
+            checks.as_ref(),
         )?;
         print_protocol_result(&result, json);
         if !result.success {
@@ -578,16 +603,21 @@ pub struct EosArgs {
     pub epic_id: String,
     #[arg(long)]
     pub wave_id: String,
+    /// Skip external build/health checks (dry-run mode).
+    #[arg(long)]
+    pub skip_externals: bool,
 }
 
 impl EosArgs {
     fn run_with(&self, store: &PbdStore, json: bool) -> Result<()> {
+        let checks = make_checks(self.skip_externals);
         let result = pbd::run_eos(
             store,
             &self.phase_id,
             &self.epic_id,
             &self.wave_id,
             &self.sprint_id,
+            checks.as_ref(),
         )?;
         print_protocol_result(&result, json);
         if !result.success {
@@ -638,12 +668,15 @@ impl EoeArgs {
 #[derive(Debug, Args)]
 pub struct EopArgs {
     pub phase_id: String,
+    /// Skip external build/health checks (dry-run mode).
+    #[arg(long)]
+    pub skip_externals: bool,
 }
 
 impl EopArgs {
     fn run_with(&self, store: &PbdStore, json: bool) -> Result<()> {
-        let checks = pbd::NoExternalChecks;
-        let result = pbd::run_eop(store, &self.phase_id, &checks)?;
+        let checks = make_checks(self.skip_externals);
+        let result = pbd::run_eop(store, &self.phase_id, checks.as_ref())?;
         print_protocol_result(&result, json);
         if !result.success {
             return Err(CascadeError::Other("EOP failed — see errors above".into()));

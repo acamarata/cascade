@@ -10,7 +10,8 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::pbd::{
-        protocol::{run_eoe, run_eop, run_eos, run_eot, run_eow, NoExternalChecks},
+        external_checks::{BuildCheck, RealExternalChecks},
+        protocol::{run_eoe, run_eop, run_eos, run_eot, run_eow, ExternalChecks, NoExternalChecks},
         schema::{
             Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Step, StepStatus, Ticket,
             TicketStatus, Wave, WaveStatus,
@@ -311,7 +312,7 @@ mod tests {
             .unwrap();
 
         // EOT should fail because step1 is still pending
-        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01").expect("run eot");
+        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
         assert!(!result.success, "eot should fail with pending step");
         assert!(
             result.errors.iter().any(|e| e.contains("step1")),
@@ -344,7 +345,7 @@ mod tests {
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
             .unwrap();
 
-        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01").expect("run eot");
+        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
         assert!(result.success, "eot should succeed: {:?}", result.errors);
 
         let t = store.load_ticket("p1", "e01", "w01", "s01", "t01").unwrap();
@@ -359,7 +360,7 @@ mod tests {
         build_hierarchy(&store);
 
         // Sprint has ticket t01 still in planned state
-        let result = run_eos(&store, "p1", "e01", "w01", "s01").expect("run eos");
+        let result = run_eos(&store, "p1", "e01", "w01", "s01", &NoExternalChecks).expect("run eos");
         assert!(!result.success, "eos should fail with undone ticket");
     }
 
@@ -392,11 +393,11 @@ mod tests {
             .unwrap();
 
         // EOT
-        let eot = run_eot(&store, "p1", "e01", "w01", "s01", "t01").unwrap();
+        let eot = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).unwrap();
         assert!(eot.success, "eot: {:?}", eot.errors);
 
         // EOS
-        let eos = run_eos(&store, "p1", "e01", "w01", "s01").unwrap();
+        let eos = run_eos(&store, "p1", "e01", "w01", "s01", &NoExternalChecks).unwrap();
         assert!(eos.success, "eos: {:?}", eos.errors);
 
         // EOW
@@ -488,5 +489,146 @@ mod tests {
             assert!(!ev.from.is_empty());
             assert!(!ev.to.is_empty());
         }
+    }
+
+    // ── ExternalChecks integration ────────────────────────────────────────────
+
+    /// A mock that always injects a fixed error.
+    struct AlwaysFailChecks {
+        msg: &'static str,
+    }
+
+    impl ExternalChecks for AlwaysFailChecks {
+        fn run_checks(&self, _context_id: &str) -> cascade_types::error::Result<Vec<String>> {
+            Ok(vec![self.msg.to_string()])
+        }
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_eot_external_check_failure_blocks_gate() {
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store);
+
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
+        store.transition_phase("p1", PhaseStatus::Building).unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
+            .unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
+            .unwrap();
+
+        let bad = AlwaysFailChecks { msg: "build failed" };
+        let result =
+            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &bad).expect("run eot");
+        assert!(!result.success, "external failure should block EOT");
+        assert!(
+            result.errors.iter().any(|e| e.contains("build failed")),
+            "error should propagate: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_eos_external_check_failure_blocks_gate() {
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store);
+
+        // Make ticket done so only external check can fail
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
+        store.transition_phase("p1", PhaseStatus::Building).unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
+            .unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
+            .unwrap();
+        run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).unwrap();
+
+        let bad = AlwaysFailChecks { msg: "sprint check fail" };
+        let result =
+            run_eos(&store, "p1", "e01", "w01", "s01", &bad).expect("run eos");
+        assert!(!result.success, "external failure should block EOS");
+        assert!(
+            result.errors.iter().any(|e| e.contains("sprint check fail")),
+            "error should propagate: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_eop_external_check_failure_blocks_gate() {
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store);
+
+        // Complete the full hierarchy so only the external check can fail
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
+        store.transition_phase("p1", PhaseStatus::Building).unwrap();
+        store
+            .transition_epic("p1", "e01", EpicStatus::Active)
+            .unwrap();
+        store
+            .transition_wave("p1", "e01", "w01", WaveStatus::Active)
+            .unwrap();
+        store
+            .transition_sprint("p1", "e01", "w01", "s01", SprintStatus::Active)
+            .unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
+            .unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
+            .unwrap();
+        run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).unwrap();
+        run_eos(&store, "p1", "e01", "w01", "s01", &NoExternalChecks).unwrap();
+        run_eow(&store, "p1", "e01", "w01").unwrap();
+        run_eoe(&store, "p1", "e01").unwrap();
+
+        let bad = AlwaysFailChecks { msg: "phase check fail" };
+        let result = run_eop(&store, "p1", &bad).expect("run eop");
+        assert!(!result.success, "external failure should block EOP");
+        assert!(
+            result.errors.iter().any(|e| e.contains("phase check fail")),
+            "error should propagate: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_real_external_checks_passing_command_allows_gate() {
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store);
+
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .unwrap();
+        store.transition_phase("p1", PhaseStatus::Building).unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Queue, None)
+            .unwrap();
+        store
+            .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
+            .unwrap();
+
+        // A passing `true` command should not block EOT
+        let checks =
+            RealExternalChecks::new().with_build(BuildCheck::new("smoke", "true"));
+        let result =
+            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &checks).expect("run eot");
+        assert!(result.success, "passing command should allow EOT: {:?}", result.errors);
     }
 }
