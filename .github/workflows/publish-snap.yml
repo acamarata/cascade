@@ -7,6 +7,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      SNAPCRAFT_TOKEN: ${{ secrets.SNAPCRAFT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +20,7 @@ jobs:
           sed -i "s|/releases/download/v[^/]*/cascade_[^/]*/|/releases/download/v${VERSION}/cascade_${VERSION}_linux_x86_64.tar.gz|" snap/snapcraft.yaml
 
       - name: Publish to Snapcraft
-        if: secrets.SNAPCRAFT_TOKEN != ''
+        if: env.SNAPCRAFT_TOKEN != ''
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
@@ -27,6 +29,6 @@ jobs:
           release: stable
 
       - name: Skip Snapcraft publish
-        if: secrets.SNAPCRAFT_TOKEN == ''
+        if: env.SNAPCRAFT_TOKEN == ''
         run: |
           echo "Skipping Snapcraft publish: SNAPCRAFT_TOKEN not configured"

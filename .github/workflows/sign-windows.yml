@@ -27,7 +27,10 @@ jobs:
   sign-windows:
     name: Authenticode sign (SignPath.io)
     runs-on: ubuntu-latest
-    if: secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != ''
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+    if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
 
     steps:
       - name: Submit signing request to SignPath.io
@@ -52,7 +55,10 @@ jobs:
   skip-sign-windows:
     name: Skip signing (SignPath secrets not configured)
     runs-on: ubuntu-latest
-    if: secrets.SIGNPATH_API_TOKEN == '' || secrets.SIGNPATH_ORGANIZATION_ID == ''
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+    if: env.SIGNPATH_API_TOKEN == '' || env.SIGNPATH_ORGANIZATION_ID == ''
     steps:
       - run: |
           echo "Skipping Windows code signing: SIGNPATH_API_TOKEN or SIGNPATH_ORGANIZATION_ID not configured"

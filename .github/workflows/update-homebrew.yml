@@ -7,6 +7,8 @@ on:
 jobs:
   update-cask:
     runs-on: ubuntu-latest
+    env:
+      TAP_UPDATE_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
     steps:
       - name: Checkout cascade repo
         uses: actions/checkout@v4
@@ -29,7 +31,7 @@ jobs:
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout homebrew-cascade tap
-        if: secrets.TAP_UPDATE_TOKEN != ''
+        if: env.TAP_UPDATE_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: acamarata/homebrew-cascade
@@ -37,7 +39,7 @@ jobs:
           token: ${{ secrets.TAP_UPDATE_TOKEN }}
 
       - name: Update Casks/cascade.rb
-        if: secrets.TAP_UPDATE_TOKEN != ''
+        if: env.TAP_UPDATE_TOKEN != ''
         run: |
           VERSION="${{ steps.release.outputs.version }}"
           SHA256="${{ steps.sha256.outputs.sha256 }}"
@@ -45,7 +47,7 @@ jobs:
           sed -i "s/sha256 .*/sha256 \"${SHA256}\"/" homebrew-cascade/Casks/cascade.rb
 
       - name: Open PR in tap repo
-        if: secrets.TAP_UPDATE_TOKEN != ''
+        if: env.TAP_UPDATE_TOKEN != ''
         working-directory: homebrew-cascade
         env:
           GH_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
@@ -65,6 +67,6 @@ jobs:
             --head "${BRANCH}"
 
       - name: Skip Homebrew update
-        if: secrets.TAP_UPDATE_TOKEN == ''
+        if: env.TAP_UPDATE_TOKEN == ''
         run: |
           echo "Skipping Homebrew update: TAP_UPDATE_TOKEN not configured"
