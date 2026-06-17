@@ -315,6 +315,7 @@ mod tests {
         ResolvedCascade {
             merged_instructions: String::new(),
             on_demand_rules: Vec::new(),
+            vars: Default::default(),
             mcp_server_url: String::new(),
             tiers_found: tier_results,
             working_dir: PathBuf::from("/fake"),

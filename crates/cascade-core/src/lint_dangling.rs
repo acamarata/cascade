@@ -202,6 +202,7 @@ mod tests {
         ResolvedCascade {
             merged_instructions: instructions.to_string(),
             on_demand_rules: Vec::new(),
+            vars: Default::default(),
             mcp_server_url: String::new(),
             tiers_found,
             working_dir: cascade_dir.to_path_buf(),
