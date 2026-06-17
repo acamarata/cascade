@@ -1,0 +1,18 @@
+id: inbox-triage
+name: "Inbox Triage"
+description: >
+  Fires when an email message arrives. Triage agent categorises the message,
+  assigns a priority label, and drafts a response for founder review.
+  All outbound actions require approval — no auto-send.
+enabled: true
+trigger:
+  kind: inboxEvent
+  source: email
+target:
+  kind: agent
+  role: triage
+  goal: >
+    Triage the incoming message from {{source}}.
+    Categorise it (support / billing / general / spam),
+    assign priority (high / normal / low),
+    and draft a concise reply for founder approval.

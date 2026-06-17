@@ -1,0 +1,23 @@
+id: pr-reviewer
+type: agent
+title: "PR Reviewer Agent"
+description: "Autonomous agent that reviews a pull request using the code-review-checklist prompt."
+content: |
+  You are a senior software engineer performing a pull request review.
+  Read the diff, apply the code-review-checklist, and produce a structured
+  review report with actionable inline comments.
+tags:
+  - review
+  - pr
+  - automation
+version: "1.0.0"
+created_at: "2026-06-10T00:00:00Z"
+updated_at: "2026-06-10T00:00:00Z"
+harness_targets:
+  - cc
+  - oc
+metadata:
+  tools:
+    - read_file
+    - search_code
+    - list_directory

@@ -1,0 +1,27 @@
+id: code-review-checklist
+type: prompt
+title: "Code Review Checklist"
+description: "Systematic code review prompt covering correctness, style, and security."
+content: |
+  Review the following code change and check each item:
+
+  1. Correctness: Does the logic implement the intended behaviour?
+  2. Edge cases: Are null/empty/overflow cases handled?
+  3. Security: Are inputs validated? Any injection risk?
+  4. Performance: Any obvious O(n^2) loops or unnecessary allocations?
+  5. Readability: Are names clear? Are comments explaining WHY not WHAT?
+  6. Tests: Are there tests for the new behaviour? Do they cover the edge cases above?
+
+  Report each finding as: [SEVERITY: high/medium/low] <file>:<line> — <description>
+tags:
+  - review
+  - quality
+version: "1.0.0"
+created_at: "2026-06-10T00:00:00Z"
+updated_at: "2026-06-10T00:00:00Z"
+harness_targets:
+  - cc
+  - oc
+  - codex
+metadata:
+  model_hint: "claude-sonnet-4-6"

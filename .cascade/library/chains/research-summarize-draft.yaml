@@ -1,0 +1,18 @@
+id: research-summarize-draft
+name: "Research → Summarize → Draft"
+description: >
+  Research a topic with an agent, summarise the findings with an LLM,
+  then draft a blog post. Initial context must include key: topic.
+steps:
+  - kind: agentTask
+    role: researcher
+    goal: "Research the following topic in depth: {{topic}}"
+    output: raw_research
+  - kind: prompt
+    template: "Summarise the following research concisely:\n{{raw_research}}"
+    inputs: [raw_research]
+    output: summary
+  - kind: prompt
+    template: "Draft a professional blog post based on this summary:\n{{summary}}"
+    inputs: [summary]
+    output: draft

@@ -1,0 +1,22 @@
+id: triage-branch-respond
+name: "Triage → Branch → Respond"
+description: >
+  Triage incoming text, branch on urgency classification, draft a response
+  accordingly. Initial context must include key: input.
+steps:
+  - kind: prompt
+    template: "Classify the urgency of the following: {{input}}\nReply with just 'high' or 'low'."
+    inputs: [input]
+    output: urgency
+  - kind: branch
+    cond: urgency
+    thenStep:
+      kind: prompt
+      template: "Draft an urgent escalation response for: {{input}}"
+      inputs: [input]
+      output: response
+    elseStep:
+      kind: prompt
+      template: "Draft a standard acknowledgement for: {{input}}"
+      inputs: [input]
+      output: response

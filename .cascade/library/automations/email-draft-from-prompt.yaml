@@ -1,0 +1,12 @@
+id: email-draft-from-prompt
+name: "Email Draft from Prompt"
+description: >
+  Draft an outbound email from a user prompt and surface for founder approval.
+  Never auto-sends. Requires initial context key: prompt (the email intent).
+enabled: true
+trigger:
+  kind: manual
+target:
+  kind: agent
+  role: emailer
+  goal: "Draft a professional email for the following request: {{prompt}}"

@@ -1,0 +1,17 @@
+id: scheduled-weekly-summary
+name: "Scheduled Weekly Summary"
+description: >
+  Runs every Monday at 09:00 UTC. Generates a summary of the previous week's
+  activity and drafts it for founder review. The draft is surfaced via the
+  CEO approval channel; the founder must approve before any send occurs.
+enabled: true
+trigger:
+  kind: scheduled
+  cron: "0 9 * * 1"
+target:
+  kind: agent
+  role: generic
+  goal: >
+    Generate a concise summary of last week's project activity.
+    Cover: commits merged, issues closed, open blockers, and the plan for this week.
+    Produce the summary as a draft for the founder to review and distribute.
