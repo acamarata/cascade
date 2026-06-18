@@ -42,6 +42,7 @@ pub mod dispatch;
 pub mod doctor;
 pub mod generate_instructions;
 pub mod harness;
+pub mod import;
 pub mod inbox;
 pub mod init;
 pub mod link;
@@ -113,6 +114,8 @@ pub enum Commands {
     Migrate(migrate::MigrateArgs),
     /// Move `GEMINI_API_KEY_*` secrets from vault.env into the OS keychain.
     MigrateKeys(migrate_keys::MigrateKeysArgs),
+    /// Lossless migration engine — import a legacy `.claude/`/`.opencode/`/`.codex/` setup.
+    Import(import::ImportArgs),
     /// Diagnose cascade health and report issues.
     Doctor(doctor::DoctorArgs),
     /// Control the cascade background daemon.
@@ -197,6 +200,7 @@ impl Commands {
             Commands::Uninstall(args) => args.run().await,
             Commands::Migrate(args) => args.run().await,
             Commands::MigrateKeys(args) => args.run().await,
+            Commands::Import(args) => args.run().await,
             Commands::Doctor(args) => args.run().await,
             Commands::Daemon(args) => args.run().await,
             Commands::Completions(args) => args.run().await,
