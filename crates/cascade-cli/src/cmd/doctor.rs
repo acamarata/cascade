@@ -291,6 +291,94 @@ impl Command for DoctorArgs {
             }
         }
 
+        // ── Always-loaded context-budget lint ─────────────────────────────
+        // Advisory (Warn) by default; Error verdict escalates to FAIL.
+        {
+            let resolved = cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
+            match resolved {
+                Ok(ref rc) => {
+                    let report = cascade_core::lint_budget::lint_always_loaded_budget(
+                        rc,
+                        cascade_core::lint_budget::BudgetConfig::default(),
+                    );
+
+                    // Per-tier table.
+                    for tb in &report.per_tier {
+                        let name: &'static str = Box::leak(
+                            format!("Budget: {:?} tier", tb.tier).into_boxed_str(),
+                        );
+                        checks.push(Check {
+                            name,
+                            status: CheckStatus::Pass,
+                            detail: format!(
+                                "~{} tokens ({:.1}% of always-loaded total)",
+                                tb.est_tokens, tb.pct_of_total
+                            ),
+                        });
+                    }
+
+                    // Overall verdict.
+                    match report.verdict {
+                        cascade_core::lint_budget::Verdict::Ok => {
+                            checks.push(Check {
+                                name: "Always-loaded context budget",
+                                status: CheckStatus::Pass,
+                                detail: format!(
+                                    "~{} tokens total",
+                                    report.total_est_tokens
+                                ),
+                            });
+                        }
+                        cascade_core::lint_budget::Verdict::Warn => {
+                            checks.push(Check {
+                                name: "Always-loaded context budget",
+                                status: CheckStatus::Warn,
+                                detail: format!(
+                                    "~{} tokens — exceeds warn threshold ({}); move heavy sections to on-demand refs",
+                                    report.total_est_tokens,
+                                    cascade_core::lint_budget::DEFAULT_WARN_TOKENS
+                                ),
+                            });
+                        }
+                        cascade_core::lint_budget::Verdict::Error => {
+                            any_fail = true;
+                            checks.push(Check {
+                                name: "Always-loaded context budget",
+                                status: CheckStatus::Fail,
+                                detail: format!(
+                                    "~{} tokens — exceeds error threshold ({}); must move sections to on-demand refs",
+                                    report.total_est_tokens,
+                                    cascade_core::lint_budget::DEFAULT_ERROR_TOKENS
+                                ),
+                            });
+                        }
+                    }
+
+                    // Suggestions for top sections to move to on-demand.
+                    for sug in &report.suggestions {
+                        let name: &'static str = Box::leak(
+                            format!("Budget suggestion ({:?})", sug.tier).into_boxed_str(),
+                        );
+                        checks.push(Check {
+                            name,
+                            status: CheckStatus::Warn,
+                            detail: format!(
+                                "\"{}\" — ~{} tokens; consider moving to an on-demand reference",
+                                sug.heading, sug.est_tokens
+                            ),
+                        });
+                    }
+                }
+                Err(e) => {
+                    checks.push(Check {
+                        name: "Always-loaded context budget",
+                        status: CheckStatus::Warn,
+                        detail: format!("could not resolve cascade: {e}"),
+                    });
+                }
+            }
+        }
+
         // ── Cross-tier value conflicts ─────────────────────────────────────
         // Advisory by default; --strict escalates to FAIL.
         {
