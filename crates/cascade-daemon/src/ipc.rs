@@ -566,6 +566,108 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 };
             }
 
+            // ── cascade_resolve (E-P5-02) ─────────────────────────────────
+            if typed_req.method == "cascade_resolve" {
+                let params_val = typed_req.params.clone().unwrap_or(serde_json::Value::Null);
+                let params: cascade_types::ipc::ResolveParams =
+                    match serde_json::from_value(params_val) {
+                        Ok(p) => p,
+                        Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                    };
+
+                // Validate tier slug if provided.
+                if let Err(e) = cascade_types::ipc::validate_resolve_params(&params) {
+                    return Response::err(-32602, format!("{e}"));
+                }
+
+                // Validate format if provided.
+                let fmt = params.format.as_deref().unwrap_or("markdown");
+                if fmt != "markdown" && fmt != "json" {
+                    return Response::err(
+                        -32602,
+                        format!("invalid format `{fmt}`; must be `markdown` or `json`"),
+                    );
+                }
+
+                // Resolve cwd: use params.cwd if provided, else daemon's own cwd.
+                let cwd: std::path::PathBuf = match &params.cwd {
+                    Some(p) => {
+                        if !p.is_dir() {
+                            return Response::err(
+                                -32602,
+                                format!(
+                                    "cwd `{}` is not an existing directory",
+                                    p.display()
+                                ),
+                            );
+                        }
+                        p.clone()
+                    }
+                    None => match std::env::current_dir() {
+                        Ok(d) => d,
+                        Err(e) => {
+                            return Response::err(
+                                -32603,
+                                format!("cannot determine cwd: {e}"),
+                            )
+                        }
+                    },
+                };
+
+                // Run the resolver.
+                let resolved =
+                    match cascade_core::resolution::Resolver::new().resolve(&cwd).await {
+                        Ok(r) => r,
+                        Err(e) => return Response::err(-32603, format!("resolve failed: {e}")),
+                    };
+
+                // Audit after successful resolve.
+                crate::audit::record(
+                    cascade_audit::AuditOp::CascadeResolve,
+                    "cascaded",
+                    "cascade_resolve",
+                    &format!("resolved cwd={}", cwd.display()),
+                );
+
+                // Filter to a specific tier if requested.
+                let tier_label = params.tier.as_deref().unwrap_or("full").to_string();
+                let content = if let Some(tier_slug) = &params.tier {
+                    // Return only the content for the requested tier.
+                    // CascadeTier uses serde rename_all = "lowercase" and has
+                    // an `acronym()` method that returns the lowercase slug.
+                    let matched = resolved
+                        .tier_sources
+                        .iter()
+                        .find(|ts| ts.tier.acronym() == tier_slug.as_str());
+                    match matched {
+                        Some(ts) => ts.content.clone(),
+                        None => String::new(),
+                    }
+                } else {
+                    // Full merge across all tiers.
+                    resolved.merged_text.clone()
+                };
+
+                let result_value = if fmt == "json" {
+                    // Serialize the full ResolvedCascade as JSON inside the content field.
+                    let json_content = serde_json::to_string(&resolved)
+                        .unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"));
+                    serde_json::json!({
+                        "content": json_content,
+                        "format": "json",
+                        "tier": tier_label,
+                    })
+                } else {
+                    serde_json::json!({
+                        "content": content,
+                        "format": "markdown",
+                        "tier": tier_label,
+                    })
+                };
+
+                return Response::ok(result_value);
+            }
+
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {

@@ -5,11 +5,11 @@
 //!   `audit::record()` call when routed through `try_typed_dispatch`.
 //!   Resolves P2 residue E07-17.
 //!
-//! Implementation note: the five ops do not yet have real handlers in P3 — they
-//!   return METHOD_NOT_FOUND (-32601).  The audit hook fires at the dispatch
-//!   point before that return, wiring the audit trail for future handlers.
-//!   When a real handler lands, it moves the audit::record() call to after the
-//!   successful operation (write-then-audit ordering).
+//! Implementation note: four of the five ops (gci_write, symlink_create,
+//!   symlink_delete, key_rotation) still return METHOD_NOT_FOUND (-32601) —
+//!   their real handlers are pending in later epics.  `cascade_resolve` now
+//!   has a real handler (E-P5-02) that returns a success response; its audit
+//!   entry is emitted after the successful operation (write-then-audit ordering).
 //!
 //! Approach: spin up a real IpcServer against a temp dir that has a real audit
 //!   log path; send each of the five method names via the socket; then open the
@@ -143,8 +143,12 @@ fn privileged_request(method: &str) -> serde_json::Value {
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 /// Sending each of the five privileged method names through the IPC socket
-/// should (a) return METHOD_NOT_FOUND and (b) append an audit entry for each,
-/// with verify_chain() returning Ok with zero violations.
+/// should (a) emit an audit entry for each and (b) verify_chain() returns Ok.
+///
+/// Four methods (gci_write, symlink_create, symlink_delete, key_rotation)
+/// still return METHOD_NOT_FOUND (-32601) — their handlers are pending.
+/// `cascade_resolve` has a real handler (E-P5-02) and returns a success
+/// response; it is still audited (write-then-audit ordering).
 #[tokio::test]
 #[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
@@ -167,15 +171,27 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
         .filter(|l| !l.trim().is_empty())
         .count();
 
-    // Send each privileged method and assert METHOD_NOT_FOUND (-32601).
+    // Send each privileged method.
+    // Four still-pending methods must return METHOD_NOT_FOUND (-32601).
+    // `cascade_resolve` now has a real handler and must NOT return -32601.
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
     for (method, _expected_op) in &methods {
         let resp = send_request(&mut stream, privileged_request(method)).await;
-        let code = resp.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
-        assert_eq!(
-            code, -32601,
-            "method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
-        );
+        let code = resp.get("code").and_then(|c| c.as_i64());
+        if *method == "cascade_resolve" {
+            // Real handler: must succeed (no error code).
+            assert!(
+                code.is_none(),
+                "cascade_resolve has a real handler and must NOT return an error; got: {resp}"
+            );
+        } else {
+            // Pending handler: must return METHOD_NOT_FOUND.
+            assert_eq!(
+                code,
+                Some(-32601),
+                "method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
+            );
+        }
     }
     drop(stream);
 
