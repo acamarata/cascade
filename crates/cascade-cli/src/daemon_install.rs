@@ -27,8 +27,11 @@ use cascade_types::error::{CascadeError, Result};
 
 // ── Service label / unit name ─────────────────────────────────────────────────
 
+#[cfg(target_os = "macos")]
 const LABEL: &str = "dev.cascade.daemon";
+#[cfg(target_os = "linux")]
 const UNIT_NAME: &str = "cascade-daemon.service";
+#[cfg(windows)]
 const WIN_TASK_NAME: &str = "CascadeDaemon";
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -85,7 +88,7 @@ pub fn resolve_binary() -> Result<PathBuf> {
 
     // 1. ~/.local/bin
     let home = cascade_types::paths::home_dir();
-    let local_bin = home.join(".local").join("bin").join(&name);
+    let local_bin = home.join(".local").join("bin").join(name);
     if local_bin.is_file() {
         return Ok(local_bin);
     }
@@ -95,7 +98,7 @@ pub fn resolve_binary() -> Result<PathBuf> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| home.join(".cargo"))
         .join("bin")
-        .join(&name);
+        .join(name);
     if cargo_bin.is_file() {
         return Ok(cargo_bin);
     }
@@ -103,7 +106,7 @@ pub fn resolve_binary() -> Result<PathBuf> {
     // 3. PATH
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path_var) {
-            let candidate = dir.join(&name);
+            let candidate = dir.join(name);
             if candidate.is_file() {
                 return Ok(candidate);
             }

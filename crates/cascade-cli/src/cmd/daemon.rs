@@ -5,6 +5,11 @@
 //! - `stop` — read PID, send SIGTERM, wait for socket to disappear
 //! - `restart` — stop then start with 500 ms grace period
 //! - `status` — check socket presence + PID liveness + daemon version
+//! - `install` — register `cascaded` as a user-scoped OS service that starts
+//!   at login (launchd LaunchAgent on macOS · systemd --user unit on Linux ·
+//!   Task Scheduler ONLOGON task on Windows).  Idempotent; no admin required.
+//! - `uninstall` — remove the OS-level service registered by `install`.
+//! - `service-status` — show whether the OS-level service is registered and active.
 //!
 //! The daemon binary is expected to be `cascaded` on PATH (or adjacent to the
 //! `cascade` binary). On Windows, uses a named pipe instead of a Unix socket.
@@ -36,6 +41,16 @@ pub enum DaemonSubcmd {
     Restart(DaemonRestartArgs),
     /// Print daemon status (socket alive, PID, version).
     Status(DaemonStatusArgs),
+    /// Register cascaded as a user-scoped OS background service (launchd / systemd / schtasks).
+    Install(DaemonInstallArgs),
+    /// Remove the OS-level background service registered by `install`.
+    Uninstall(DaemonUninstallArgs),
+    /// Show whether the OS-level background service is registered and active.
+    #[command(name = "service-status")]
+    ServiceStatus(DaemonServiceStatusArgs),
+    /// Restart the OS-level background service (unload+reload on macOS/Linux; stop+run on Windows).
+    #[command(name = "service-restart")]
+    ServiceRestart(DaemonServiceRestartArgs),
 }
 
 #[derive(Debug, Args)]
@@ -58,6 +73,24 @@ pub struct DaemonStatusArgs {
     pub json: bool,
 }
 
+/// Arguments for `cascade daemon install`.
+///
+/// No flags: the binary is resolved automatically (see `daemon_install::resolve_binary`).
+#[derive(Debug, Args)]
+pub struct DaemonInstallArgs;
+
+/// Arguments for `cascade daemon uninstall`.
+#[derive(Debug, Args)]
+pub struct DaemonUninstallArgs;
+
+/// Arguments for `cascade daemon service-status`.
+#[derive(Debug, Args)]
+pub struct DaemonServiceStatusArgs;
+
+/// Arguments for `cascade daemon service-restart`.
+#[derive(Debug, Args)]
+pub struct DaemonServiceRestartArgs;
+
 #[async_trait]
 impl Command for DaemonArgs {
     async fn run(&self) -> Result<()> {
@@ -66,6 +99,10 @@ impl Command for DaemonArgs {
             DaemonSubcmd::Stop(a) => a.run().await,
             DaemonSubcmd::Restart(a) => a.run().await,
             DaemonSubcmd::Status(a) => a.run().await,
+            DaemonSubcmd::Install(a) => a.run().await,
+            DaemonSubcmd::Uninstall(a) => a.run().await,
+            DaemonSubcmd::ServiceStatus(a) => a.run().await,
+            DaemonSubcmd::ServiceRestart(a) => a.run().await,
         }
     }
 }
@@ -189,6 +226,45 @@ impl Command for DaemonStatusArgs {
             std::process::exit(1);
         }
         Ok(())
+    }
+}
+
+// ── service install / uninstall / service-status ─────────────────────────────
+//
+// These delegate entirely to `crate::daemon_install`, which contains all
+// platform-specific logic behind `#[cfg(target_os = ...)]` guards.  The three
+// command structs are thin async wrappers so they fit the Command trait.
+
+#[async_trait]
+impl Command for DaemonInstallArgs {
+    async fn run(&self) -> Result<()> {
+        let result = crate::daemon_install::install()?;
+        println!("{}", result.message);
+        if !result.service_file.is_empty() {
+            println!("service file: {}", result.service_file);
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Command for DaemonUninstallArgs {
+    async fn run(&self) -> Result<()> {
+        crate::daemon_install::uninstall()
+    }
+}
+
+#[async_trait]
+impl Command for DaemonServiceStatusArgs {
+    async fn run(&self) -> Result<()> {
+        crate::daemon_install::status()
+    }
+}
+
+#[async_trait]
+impl Command for DaemonServiceRestartArgs {
+    async fn run(&self) -> Result<()> {
+        crate::daemon_install::restart()
     }
 }
 
