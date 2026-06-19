@@ -71,6 +71,17 @@ tempfile      = "3"
 [features]
 tcp-ipc = []
 local-llm = ["dep:cascade-local-llm"]
+# GFP (Gemini Free Pool) provisioning: quota_poller, project_poller, ipc_provision,
+# ipc_pool_register, ipc_auto_auth. Default-OFF — external-network provisioning
+# surface; never enabled in the lean default binary.
+gfp = []
+# Gemini reverse-proxy subsystem (crates/cascade-daemon/src/proxy/).
+# Default-OFF — external-network surface; opt-in only.
+gemini-proxy = []
+# EXPERIMENTAL cascade-ccapi PTY-bridge driver (P6 work, ToS-gray).
+# Default-OFF, opt-in only. cascade-ccapi stays a workspace member but
+# is NOT linked into the daemon by default.
+ccapi = []
 
 [build-dependencies]
 base64 = "0.22"

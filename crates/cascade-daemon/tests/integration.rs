@@ -372,6 +372,10 @@ fn crash_sentinel_written_on_kill9() {
 /// The test config sets `quota_poller.interval_secs = 10` so the first poll
 /// fires within ~10 s. When `localhost:3761` is not available (normal in CI)
 /// the poller writes an error-state JSON — the file must still exist.
+///
+/// Gated on `gfp` feature: the quota poller is only compiled and spawned when
+/// the `gfp` feature is active. Without it, `quota-state.json` is never written.
+#[cfg(feature = "gfp")]
 #[test]
 #[serial(global_env)]
 fn quota_state_written() {

@@ -136,6 +136,8 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
     // Spawn the quota poller as a fire-and-forget Tokio task. It polls
     // localhost:3761/health every interval_secs and writes quota-state.json.
     // On proxy unavailable it writes an error-state JSON — the file always exists.
+    // Gated on gfp: quota polling is part of the GFP provisioning surface.
+    #[cfg(feature = "gfp")]
     if config.quota_poller.enabled {
         use crate::quota_poller::QuotaPoller;
         use crate::state::DaemonState;

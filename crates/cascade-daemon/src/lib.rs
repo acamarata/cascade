@@ -19,8 +19,11 @@ pub mod config;
 // T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
 pub mod loader;
 // W-05 scaffold IPC handlers (T-P3-E03-39b / T-P3-E03-40 / T-P3-E03-41)
+#[cfg(feature = "gfp")]
 pub mod ipc_auto_auth;
+#[cfg(feature = "gfp")]
 pub mod ipc_pool_register;
+#[cfg(feature = "gfp")]
 pub mod ipc_provision;
 // T-P3-E04-26: provider IPC command handlers
 pub mod ipc_providers;
@@ -40,7 +43,9 @@ pub mod ipc_handlers;
 pub mod key_index;
 pub mod log;
 pub mod provider_health;
+#[cfg(feature = "gemini-proxy")]
 pub mod proxy;
+#[cfg(feature = "gfp")]
 pub mod quota_poller;
 // T-P4-E01-26: auto-RAG file watcher (notify-based)
 pub mod rag_watcher;

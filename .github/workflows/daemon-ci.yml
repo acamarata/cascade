@@ -74,6 +74,19 @@ jobs:
       - name: Build cascaded (release)
         run: cargo build --bin cascaded --release
 
+      - name: Build cascaded (lean / default features)
+        run: cargo build -p cascade-daemon
+
+      - name: Build cascaded (all features)
+        run: cargo build -p cascade-daemon --all-features
+
+      - name: Assert lean binary excludes network surfaces
+        if: runner.os != 'Windows'
+        run: |
+          nm target/debug/cascaded 2>/dev/null | grep -iE "gemini_proxy|quota_poller|ipc_provision|ccapi" && \
+            echo "FAIL: network symbols found in lean binary" && exit 1 || \
+            echo "OK: no network provisioning symbols in lean binary"
+
       - name: Upload cascaded binary
         uses: actions/upload-artifact@v4
         with:

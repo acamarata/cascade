@@ -36,6 +36,7 @@ mod key_index;
 mod key_loader;
 mod log;
 mod provider_health;
+#[cfg(feature = "gfp")]
 mod quota_poller;
 mod regen;
 mod shutdown;
@@ -52,7 +53,9 @@ mod volume_watcher;
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::ProviderRegistry;
+#[cfg(feature = "gemini-proxy")]
 use secrecy::SecretString;
+#[cfg(feature = "gemini-proxy")]
 use std::collections::HashMap;
 use std::process;
 use std::sync::mpsc;
@@ -107,19 +110,18 @@ async fn main() {
         error!(%e, "failed to write daemon.pid");
     }
 
-    // Load API keys from the OS keychain (primary) or vault.env (fallback).
-    // load_api_keys() logs the count + source at INFO and never logs key values
-    // (keys are held as zeroize-on-drop SecretString).
-    //
+    let providers_path = config_dir.join("providers.json");
     // Build a slot_id → SecretString map for the Gemini proxy.  Enabled Gemini
     // providers are enumerated from providers.json and paired positionally with
     // the loaded keys (gemini_key_1 → index 0, gemini_key_2 → index 1, …).
     // GeminiProxy::new() accepts this map so the proxy prefers the in-memory
     // SecretString over any plaintext value in providers.json.
     // T-P3-E00-02: SecretString wiring complete.
-    let raw_keys: Vec<SecretString> = key_loader::load_api_keys();
-    let providers_path = config_dir.join("providers.json");
+    // Gated on gemini-proxy: load_api_keys() and the keychain map are only
+    // needed when the reverse-proxy surface is compiled in.
+    #[cfg(feature = "gemini-proxy")]
     let _keychain_map: HashMap<String, SecretString> = {
+        let raw_keys: Vec<SecretString> = key_loader::load_api_keys();
         let gemini_slots: Vec<String> = read_providers_store(&providers_path)
             .map(|store| {
                 store

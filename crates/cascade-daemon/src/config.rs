@@ -99,8 +99,10 @@ impl Default for WatcherConfig {
 }
 
 /// `[quota_poller]` section of config.toml.
+/// Gated on the `gfp` feature — only compiled when GFP provisioning is enabled.
+#[cfg(feature = "gfp")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(feature = "gfp", serde(default))]
 pub struct QuotaPollerConfig {
     /// Enable Gemini quota polling; default true.
     pub enabled: bool,
@@ -110,6 +112,7 @@ pub struct QuotaPollerConfig {
     pub proxy_url: String,
 }
 
+#[cfg(feature = "gfp")]
 impl Default for QuotaPollerConfig {
     fn default() -> Self {
         Self {
@@ -121,8 +124,10 @@ impl Default for QuotaPollerConfig {
 }
 
 /// `[project_poller]` section of config.toml.
+/// Gated on the `gfp` feature — only compiled when GFP provisioning is enabled.
+#[cfg(feature = "gfp")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(feature = "gfp", serde(default))]
 pub struct ProjectPollerConfig {
     /// Enable project-state polling; default true.
     pub enabled: bool,
@@ -130,6 +135,7 @@ pub struct ProjectPollerConfig {
     pub interval_secs: u64,
 }
 
+#[cfg(feature = "gfp")]
 impl Default for ProjectPollerConfig {
     fn default() -> Self {
         Self {
@@ -308,17 +314,18 @@ impl Default for BackupConfig {
 /// and cloned into the subsystems that need it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-#[derive(Default)]
 pub struct Config {
     /// `[daemon]` section.
     pub daemon: DaemonConfig,
     /// `[watcher]` section.
     pub watcher: WatcherConfig,
-    /// `[quota_poller]` section.
+    /// `[quota_poller]` section. Only present when the `gfp` feature is enabled.
+    #[cfg(feature = "gfp")]
     pub quota_poller: QuotaPollerConfig,
     /// `[quota_store]` section.
     pub quota_store: QuotaStoreConfig,
-    /// `[project_poller]` section.
+    /// `[project_poller]` section. Only present when the `gfp` feature is enabled.
+    #[cfg(feature = "gfp")]
     pub project_poller: ProjectPollerConfig,
     /// `[history]` section.
     pub history: HistoryConfig,
@@ -334,6 +341,30 @@ pub struct Config {
     /// HookStore at daemon startup. Supports all hook events and action types.
     #[serde(default)]
     pub hooks: Vec<HookConfigEntry>,
+}
+
+// WHY manual Default: Config has #[cfg(feature = "gfp")]-gated fields
+// (quota_poller, project_poller). #[derive(Default)] cannot handle conditional
+// fields — the derive macro expands to a field list that references types that
+// may not exist when the feature is off. The manual impl is the correct pattern.
+#[allow(clippy::derivable_impls)]
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            daemon: DaemonConfig::default(),
+            watcher: WatcherConfig::default(),
+            #[cfg(feature = "gfp")]
+            quota_poller: QuotaPollerConfig::default(),
+            quota_store: QuotaStoreConfig::default(),
+            #[cfg(feature = "gfp")]
+            project_poller: ProjectPollerConfig::default(),
+            history: HistoryConfig::default(),
+            scheduler: SchedulerConfig::default(),
+            proxy: ProxyConfig::default(),
+            backup: BackupConfig::default(),
+            hooks: Vec::new(),
+        }
+    }
 }
 
 impl Config {
@@ -381,7 +412,8 @@ impl Config {
             });
         }
 
-        // quota_poller.interval_secs: 10..=3600
+        // quota_poller.interval_secs: 10..=3600 (gfp feature only)
+        #[cfg(feature = "gfp")]
         if !(10..=3600).contains(&self.quota_poller.interval_secs) {
             return Err(ConfigError::InvalidValue {
                 field: "quota_poller.interval_secs".into(),
@@ -430,6 +462,7 @@ mod tests {
         let cfg = Config::default();
         assert_eq!(cfg.daemon.log_level, "info");
         assert_eq!(cfg.watcher.debounce_ms, 200);
+        #[cfg(feature = "gfp")]
         assert_eq!(cfg.quota_poller.interval_secs, 60);
         assert_eq!(cfg.history.retention_days, 90);
     }
@@ -446,6 +479,7 @@ mod tests {
         let loaded = Config::load(dir.path()).expect("load failed");
         assert_eq!(loaded.daemon.log_level, original.daemon.log_level);
         assert_eq!(loaded.watcher.debounce_ms, original.watcher.debounce_ms);
+        #[cfg(feature = "gfp")]
         assert_eq!(
             loaded.quota_poller.interval_secs,
             original.quota_poller.interval_secs
