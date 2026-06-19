@@ -566,6 +566,101 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 };
             }
 
+            // ── cascade_resolve (T-P5-E02-01) ────────────────────────────
+            // Real 6-tier resolver dispatch.  `ResolveParams` schema is frozen
+            // (ADR-P3-001): deny_unknown_fields enforced by the type itself.
+            // CWD is derived from the daemon's config_dir parent (i.e. $HOME)
+            // because `ResolveParams` carries no `cwd` field in v1 schema.
+            if typed_req.method == "cascade_resolve" {
+                let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                let params: cascade_types::ipc::ResolveParams =
+                    match serde_json::from_value(params_val) {
+                        Ok(p) => p,
+                        Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
+                    };
+
+                // Derive project root from socket_path: socket is at
+                // `<config_dir>/daemon.sock`, config_dir is `<home>/.cascade`,
+                // so home = config_dir.parent() = socket_path.parent().parent().
+                let project_root = server
+                    .socket_path
+                    .parent() // config_dir
+                    .and_then(|p| p.parent()) // home
+                    .unwrap_or(std::path::Path::new("."))
+                    .to_path_buf();
+
+                let format = params
+                    .format
+                    .as_deref()
+                    .unwrap_or("markdown")
+                    .to_string();
+
+                let result = cascade_core::cascade_resolve::resolve_cascade(&project_root);
+                return match result {
+                    Err(e) => {
+                        error!(%e, "cascade_resolve: resolver error");
+                        Response::err(-32603, format!("internal error: {e}"))
+                    }
+                    Ok(ctx) => {
+                        // Determine the tier slug to return.
+                        // If caller asked for a specific tier, return that slug;
+                        // otherwise return the highest tier that was found, or "full".
+                        let tier_slug = if let Some(requested) = &params.tier {
+                            requested.clone()
+                        } else if !ctx.tier_sources.is_empty() {
+                            // tier_sources is BTreeMap<TierName, PathBuf> ordered
+                            // GCI-first; pick the first (highest) tier found.
+                            ctx.tier_sources
+                                .keys()
+                                .next()
+                                .map(|t| t.short_name().to_lowercase())
+                                .unwrap_or_else(|| "full".to_string())
+                        } else {
+                            "full".to_string()
+                        };
+
+                        // Produce content: if a specific tier was requested,
+                        // filter to that tier's contribution; otherwise return full merged text.
+                        let content = if let Some(req_tier_str) = &params.tier {
+                            // TierName serde uses UPPERCASE; parse from the lowercase
+                            // slug the caller sends by uppercasing it.
+                            let upper = req_tier_str.to_uppercase();
+                            let tier_name: Option<cascade_types::tiers::TierName> =
+                                serde_json::from_value(serde_json::Value::String(upper)).ok();
+                            if let Some(tn) = tier_name {
+                                ctx.tier_sources
+                                    .get(&tn)
+                                    .map(|p| {
+                                        // Read the tier's CASCADE.md directly.
+                                        let md = p.join("CASCADE.md");
+                                        std::fs::read_to_string(&md).unwrap_or_default()
+                                    })
+                                    .unwrap_or_default()
+                            } else {
+                                ctx.instructions.clone()
+                            }
+                        } else {
+                            ctx.instructions.clone()
+                        };
+
+                        use cascade_audit::AuditOp;
+                        crate::audit::record(
+                            AuditOp::CascadeResolve,
+                            "cascaded",
+                            "cascade_resolve",
+                            &format!("resolved tier={tier_slug} format={format}"),
+                        );
+
+                        let res = cascade_types::ipc::ResolveResult {
+                            content,
+                            format,
+                            tier: tier_slug,
+                        };
+                        Response::ok(res)
+                    }
+                };
+            }
+
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {
@@ -587,14 +682,6 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 "symlink_delete" => {
                     crate::audit::record(
                         AuditOp::SymlinkDelete,
-                        "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
-                    );
-                }
-                "cascade_resolve" => {
-                    crate::audit::record(
-                        AuditOp::CascadeResolve,
                         "cascaded",
                         &typed_req.method,
                         "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",

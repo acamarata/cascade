@@ -62,8 +62,22 @@ pub struct TierDiscovery {
 
 impl TierDiscovery {
     /// Create a new [`TierDiscovery`] with production defaults.
+    ///
+    /// Reads `CASCADE_APC_PATH` from the environment at construction time.
+    /// If set, it overrides the default `$HOME/Sites` used by `classify_tier`
+    /// for APC detection. Precedence: explicit `with_sites()` call > env var >
+    /// default `$HOME/Sites`.
+    ///
+    /// Reading happens once at construction, not per-call, to avoid race
+    /// conditions if the env var changes at runtime (T-P5-E02-02).
     pub fn new() -> Self {
-        Self::default()
+        let sites_override = std::env::var("CASCADE_APC_PATH")
+            .ok()
+            .map(PathBuf::from);
+        Self {
+            home_override: None,
+            sites_override,
+        }
     }
 
     /// Override the home directory used for GCI detection.
@@ -76,7 +90,7 @@ impl TierDiscovery {
 
     /// Override the "all sites" parent directory for APC detection.
     ///
-    /// Intended for unit tests only.
+    /// Intended for unit tests only. Takes precedence over `CASCADE_APC_PATH`.
     pub fn with_sites(mut self, sites: PathBuf) -> Self {
         self.sites_override = Some(sites);
         self

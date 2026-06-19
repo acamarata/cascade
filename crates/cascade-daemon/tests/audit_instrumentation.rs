@@ -5,11 +5,12 @@
 //!   `audit::record()` call when routed through `try_typed_dispatch`.
 //!   Resolves P2 residue E07-17.
 //!
-//! Implementation note: the five ops do not yet have real handlers in P3 — they
-//!   return METHOD_NOT_FOUND (-32601).  The audit hook fires at the dispatch
-//!   point before that return, wiring the audit trail for future handlers.
-//!   When a real handler lands, it moves the audit::record() call to after the
-//!   successful operation (write-then-audit ordering).
+//! Implementation note: four of the five ops (gci_write, symlink_create,
+//!   symlink_delete, key_rotation) remain stubs that return METHOD_NOT_FOUND
+//!   (-32601); their audit hooks fire before that return.
+//!   `cascade_resolve` now has a REAL handler (T-P5-E02-01) that returns a
+//!   ResolveResult and fires audit::record() AFTER a successful resolve
+//!   (write-then-audit ordering per the ticket requirement).
 //!
 //! Approach: spin up a real IpcServer against a temp dir that has a real audit
 //!   log path; send each of the five method names via the socket; then open the
@@ -24,8 +25,8 @@
 //!   `CASCADE_AUDIT_LOG` env var is set.  In practice for this test we initialise
 //!   the global directly before the server starts.
 //!
-//! SPORT: MASTER-ENDPOINTS.md — audit=hook annotation for gci_write,
-//!        symlink_create, symlink_delete, cascade_resolve, key_rotation.
+//! SPORT: MASTER-ENDPOINTS.md — audit=hook for gci_write, symlink_create,
+//!        symlink_delete, key_rotation (stubs); cascade_resolve now LIVE.
 
 use std::{fs, path::PathBuf, time::Duration};
 
@@ -143,19 +144,25 @@ fn privileged_request(method: &str) -> serde_json::Value {
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 /// Sending each of the five privileged method names through the IPC socket
-/// should (a) return METHOD_NOT_FOUND and (b) append an audit entry for each,
-/// with verify_chain() returning Ok with zero violations.
+/// should (a) append an audit entry for each and (b) verify_chain() must
+/// return Ok with zero violations.
+///
+/// Behaviour per method:
+///   - gci_write / symlink_create / symlink_delete / key_rotation: still stubs
+///     returning METHOD_NOT_FOUND (-32601); audit hook fires before the return.
+///   - cascade_resolve: LIVE handler (T-P5-E02-01) returning ResolveResult;
+///     audit fires after successful resolve (write-then-audit ordering).
 #[tokio::test]
 #[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, audit_path, shutdown, handle) = start_test_server_with_audit(&tmp).await;
 
-    let methods = [
+    // Stub methods that must still return -32601.
+    let stub_methods = [
         ("gci_write", AuditOp::GciWrite),
         ("symlink_create", AuditOp::SymlinkCreate),
         ("symlink_delete", AuditOp::SymlinkDelete),
-        ("cascade_resolve", AuditOp::CascadeResolve),
         ("key_rotation", AuditOp::KeyRotation),
     ];
 
@@ -167,17 +174,46 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
         .filter(|l| !l.trim().is_empty())
         .count();
 
-    // Send each privileged method and assert METHOD_NOT_FOUND (-32601).
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-    for (method, _expected_op) in &methods {
+
+    // Stub methods: still return METHOD_NOT_FOUND (-32601).
+    for (method, _expected_op) in &stub_methods {
         let resp = send_request(&mut stream, privileged_request(method)).await;
         let code = resp.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
         assert_eq!(
             code, -32601,
-            "method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
+            "stub method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
         );
     }
+
+    // cascade_resolve: LIVE — must NOT return -32601; must return a ResolveResult.
+    let resolve_resp = send_request(
+        &mut stream,
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "cascade_resolve",
+            "params": {},
+            "protocol_version": 1
+        }),
+    )
+    .await;
+    let resolve_code = resolve_resp.get("code").and_then(|c| c.as_i64());
+    assert_ne!(
+        resolve_code,
+        Some(-32601),
+        "cascade_resolve must NOT return METHOD_NOT_FOUND after T-P5-E02-01; got: {resolve_resp}"
+    );
+    // Should be a success with a tier field.
+    assert!(
+        resolve_resp.get("tier").is_some(),
+        "cascade_resolve must return a ResolveResult with 'tier'; got: {resolve_resp}"
+    );
+
     drop(stream);
+
+    // Total dispatched = 4 stubs + 1 live = 5 methods.
+    let all_methods_count = stub_methods.len() + 1;
 
     // Give the server a moment to flush audit writes.
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -196,9 +232,8 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
         .count();
     let new_entries = entries_after.saturating_sub(entries_before);
     assert!(
-        new_entries >= methods.len(),
-        "expected at least {} new audit entries (one per privileged method), got {new_entries}",
-        methods.len()
+        new_entries >= all_methods_count,
+        "expected at least {all_methods_count} new audit entries (one per privileged method), got {new_entries}",
     );
 
     // Chain integrity must be clean.
