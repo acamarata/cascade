@@ -377,6 +377,7 @@ fn write_manifest_atomic(path: &Path, tool_archive: &ToolArchive) -> Result<(), 
         version: "1.0".to_string(),
         created_at: iso8601_now(),
         tools: Vec::new(),
+        extras: std::collections::HashMap::new(),
     });
 
     // Upsert: replace if tool_id already present, otherwise append.

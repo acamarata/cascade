@@ -264,6 +264,7 @@ mod tests {
                     size_bytes: 42,
                 }],
             }],
+            extras: std::collections::HashMap::new(),
         }
     }
 

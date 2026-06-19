@@ -17,9 +17,11 @@
 // SPORT: MASTER-COMPONENTS.md — ArchiveManifest / ToolArchive types — archive/types.rs
 // Task: T-P3-E03-15
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 // ---------------------------------------------------------------------------
 // ArchivedFile — single file/dir entry moved during archive
@@ -69,6 +71,11 @@ pub struct ToolArchive {
 ///
 /// `version` is a semver string (`"1.0"`) enabling forward-compatible schema
 /// migration. Deserializers should check this field before parsing `tools`.
+///
+/// `extras` uses `#[serde(flatten, default)]` to absorb unknown fields written
+/// by future versions of Cascade. This ensures older app versions can still
+/// parse a manifest that was created by a newer version — unknown fields are
+/// preserved in `extras` and survive a round-trip without data loss.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveManifest {
@@ -78,6 +85,10 @@ pub struct ArchiveManifest {
     pub created_at: String,
     /// All tool archives. One entry per archived tool.
     pub tools: Vec<ToolArchive>,
+    /// Forward-compat catch-all: unknown fields from future schema versions.
+    /// Absorbed on read; re-emitted on write so data is never lost.
+    #[serde(flatten, default)]
+    pub extras: HashMap<String, Value>,
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +182,7 @@ mod tests {
                     size_bytes: 1024,
                 }],
             }],
+            extras: HashMap::new(),
         };
 
         let json = serde_json::to_string(&manifest).expect("serialize failed");
@@ -262,5 +274,52 @@ mod tests {
             "missing skippedConflicts"
         );
         assert!(!json.contains("\"restored_files\""), "snake_case leak");
+    }
+
+    /// Verifies that ArchiveManifest absorbs unknown fields from a future schema
+    /// version without failing (forward-compat via `#[serde(flatten, default)]`).
+    /// Unknown fields survive a round-trip: they are preserved in `extras`.
+    #[test]
+    fn archive_manifest_forward_compat_unknown_field() {
+        // Raw JSON that a future version might write — includes known fields
+        // PLUS an unknown "author" field that this version does not declare.
+        let raw = r#"{
+            "version": "2.0",
+            "createdAt": "2026-06-19T00:00:00Z",
+            "tools": [],
+            "author": "cascade-next"
+        }"#;
+
+        // Deserialization must succeed even though "author" is unknown.
+        let roundtrip: ArchiveManifest =
+            serde_json::from_str(raw).expect("forward-compat deserialization failed");
+
+        assert_eq!(roundtrip.version, "2.0");
+        assert_eq!(roundtrip.created_at, "2026-06-19T00:00:00Z");
+        assert!(roundtrip.tools.is_empty());
+
+        // The unknown field must be captured in extras.
+        assert!(
+            roundtrip.extras.contains_key("author"),
+            "extras did not absorb unknown 'author' field"
+        );
+        assert_eq!(
+            roundtrip.extras["author"],
+            serde_json::Value::String("cascade-next".to_string())
+        );
+
+        // Serialize back: known camelCase fields must still be present.
+        let back = serde_json::to_string(&roundtrip).expect("re-serialize failed");
+        assert!(back.contains("\"version\""), "version missing after round-trip");
+        assert!(
+            back.contains("\"createdAt\""),
+            "createdAt missing after round-trip"
+        );
+        assert!(back.contains("\"tools\""), "tools missing after round-trip");
+        // The unknown field is re-emitted (no data loss).
+        assert!(
+            back.contains("\"author\""),
+            "unknown field 'author' was lost on re-serialize"
+        );
     }
 }

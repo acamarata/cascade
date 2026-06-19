@@ -50,6 +50,10 @@ pub mod maps;
 pub mod tasks;
 // E-P8-05: PBD PEWS tree visualization + mutation IPC commands
 pub mod pbd;
+// T-P5-E01-03: commands_tmp — keeps stub implementations available for reference.
+// Commands are registered from this module (commands::), NOT from commands_tmp::,
+// to avoid duplicate-name compile errors in generate_handler!.
+pub mod commands_tmp;
 
 use serde::{Deserialize, Serialize};
 use std::env;
