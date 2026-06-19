@@ -23,7 +23,6 @@
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
-use std::path::PathBuf;
 
 use cascade_cli::ipc_client::IpcClient;
 use cascade_types::ipc::{
@@ -62,7 +61,7 @@ fn make_client() -> Result<IpcClient, CascadeError> {
 ///
 /// Returns daemon PID, uptime, queue depth, RAG freshness, and version.
 /// Returns CascadeError::DaemonNotRunning if the daemon is not up.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_status(_state: State<'_, AppState>) -> Result<StatusResult, CascadeError> {
     let client = make_client()?;
     client
@@ -76,7 +75,7 @@ pub async fn cascade_status(_state: State<'_, AppState>) -> Result<StatusResult,
 ///
 /// `tier`: one of "gci", "pci", "apc", "ppc", "prc", "pac", or omit for full cascade.
 /// `format`: "markdown" (default) or "json".
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_resolve(
     tier: Option<String>,
     format: Option<String>,
@@ -94,7 +93,7 @@ pub async fn cascade_resolve(
 ///
 /// `limit`: max hits to return (daemon defaults to 10 when absent).
 /// Returns ranked SearchHit list (best match first).
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_search(
     query: String,
     limit: Option<usize>,
@@ -112,7 +111,7 @@ pub async fn cascade_search(
 ///
 /// `limit`: max items to return (all items when absent).
 /// Returns InboxSummaryResult with items in reverse-chronological order.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_inbox_list(
     limit: Option<usize>,
     _state: State<'_, AppState>,
@@ -135,7 +134,7 @@ pub async fn cascade_inbox_list(
 /// NotImplemented until T-P4-E01 adds the server-side handler and the
 /// corresponding ipc.rs types. The parameter struct is defined here so the
 /// TypeScript bindings (T-P3-E01-07) can be written against a stable shape.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_inbox_send(
     to: String,
     subject: String,
@@ -155,7 +154,7 @@ pub async fn cascade_inbox_send(
 ///
 /// `project`: absolute path to the project root or a slug registered with the daemon.
 /// `file`: filename relative to `.claude/memory/`, e.g. `"decisions.md"`.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_memory_read(
     project: String,
     file: String,
@@ -175,7 +174,7 @@ pub async fn cascade_memory_read(
 /// JS: `invoke("cascade_memory_write", { project, file, content })`
 ///
 /// `content`: full UTF-8 text to write (overwrites existing content).
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_memory_write(
     project: String,
     file: String,
@@ -200,7 +199,7 @@ pub async fn cascade_memory_write(
 /// JS: `invoke("cascade_config_get", { key })`
 ///
 /// `key`: dot-separated config key, e.g. `"daemon.socket_path"`.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_config_get(
     key: String,
     _state: State<'_, AppState>,
@@ -216,7 +215,7 @@ pub async fn cascade_config_get(
 /// JS: `invoke("cascade_config_set", { key, value })`
 ///
 /// `value`: new JSON value; type depends on the key.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn cascade_config_set(
     key: String,
     value: serde_json::Value,
@@ -238,7 +237,7 @@ pub async fn cascade_config_set(
 ///
 /// Returns running=true when the daemon responds to cascade.status.
 /// Returns running=false (not an error) when the daemon is not up.
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn get_daemon_status(_state: State<'_, AppState>) -> Result<DaemonStatus, String> {
     match make_client() {
         Err(_) => Ok(DaemonStatus {
@@ -275,7 +274,7 @@ pub async fn get_daemon_status(_state: State<'_, AppState>) -> Result<DaemonStat
 /// Shells out to `cascade daemon start` via the PATH so the Tauri app
 /// does not hard-code the daemon binary location.
 /// TODO(P3-E02): replace with cascade_core::CascadeCore::daemon_start()
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn start_daemon(_state: State<'_, AppState>) -> Result<(), String> {
     std::process::Command::new("cascade")
         .args(["daemon", "start"])
@@ -286,7 +285,7 @@ pub async fn start_daemon(_state: State<'_, AppState>) -> Result<(), String> {
 
 /// Stop the cascaded daemon via JSON-RPC daemon_stop.
 /// JS: `invoke("stop_daemon")`
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn stop_daemon(_state: State<'_, AppState>) -> Result<(), String> {
     let client = make_client().map_err(|e| e.to_string())?;
     client
@@ -303,7 +302,7 @@ pub async fn stop_daemon(_state: State<'_, AppState>) -> Result<(), String> {
 /// Load a CASCADE.md file from disk by absolute path.
 /// JS: `invoke("load_cascade_doc", { path })`
 /// TODO(T-P3-E03): delegate to cascade_core::CascadeCore::load_cascade_doc()
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn load_cascade_doc(
     path: String,
     _state: State<'_, AppState>,
@@ -318,7 +317,7 @@ pub async fn load_cascade_doc(
 /// Save a CASCADE.md document back to disk.
 /// JS: `invoke("save_cascade_doc", { path, content })`
 /// TODO(T-P3-E03): delegate to cascade_core::CascadeCore::save_cascade_doc()
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn save_cascade_doc(
     _path: String,
     _content: String,
@@ -330,7 +329,7 @@ pub async fn save_cascade_doc(
 /// Validate CASCADE.md content without saving.
 /// JS: `invoke("validate_cascade_doc", { content })`
 /// TODO(T-P3-E03): delegate to cascade_core::CascadeCore::validate_cascade_doc()
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn validate_cascade_doc(
     _content: String,
     _state: State<'_, AppState>,
@@ -348,7 +347,7 @@ pub async fn validate_cascade_doc(
 /// Run a RAG query against the indexed knowledge base (P4 scope).
 /// JS: `invoke("rag_query", { query, topK })`
 /// TODO(T-P4-E01): delegate to cascade_rag::RagEngine::query()
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub async fn rag_query(
     _query: String,
     _top_k: Option<usize>,
@@ -393,7 +392,7 @@ pub use cascade_types::ipc::{
 /// Synchronous; must not block the main thread. Size defaults: 900×700, min 600×400.
 /// # SPORT
 /// MASTER-COMMANDS.md — cascade_open_window
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub fn cascade_open_window(
     app: AppHandle,
     label: String,
@@ -432,7 +431,7 @@ pub fn cascade_open_window(
 /// Always `Ok(())`.
 /// # SPORT
 /// MASTER-COMMANDS.md — cascade_close_window
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub fn cascade_close_window(
     app: AppHandle,
     label: String,
@@ -456,7 +455,7 @@ pub fn cascade_close_window(
 /// Always `Ok(())`.
 /// # SPORT
 /// MASTER-COMMANDS.md — cascade_focus_window
-#[tauri::command]
+// #[tauri::command] — removed: commands_tmp is a reference stub; commands registered from commands::
 pub fn cascade_focus_window(
     app: AppHandle,
     label: String,
