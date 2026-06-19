@@ -1,99 +1,102 @@
 # Quickstart
 
-This guide gets you from a fresh install to a working cascade in about 30 minutes. You will end up with a global instruction file, a project-level override, and your first semantic search working.
+Get Cascade working in about 5 minutes.
 
-## Before you start
+---
 
-Make sure Cascade is installed and accessible:
+## Step 1: Install
 
-```bash
+Run the one-liner for your platform. See [Installation](Installation.md) for Homebrew, Scoop, AUR, and build-from-source options.
+
+**macOS / Linux:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
+```
+
+**Windows:**
+```powershell
+irm https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.ps1 | iex
+```
+
+Both scripts install the `cascade` binary, register the background daemon, and run a basic setup. When they finish, confirm the binary is on your PATH:
+
+```sh
 cascade --version
 ```
 
-If that fails, see the [Install](Install.md) page.
+---
 
-## Step 1: Run the setup wizard (5 min)
+## Step 2: Initialize a project
 
-```bash
-cascade init
+Navigate to the directory you want to set up, then run:
+
+```sh
+cd ~/my-project
+cascade init --accept-defaults
 ```
 
-The wizard opens in your terminal. It will:
+`--accept-defaults` skips all prompts and uses sensible defaults. It creates a `.cascade/` directory with a `CASCADE.md` skeleton and the standard subdirectories.
 
-1. Detect which AI coding tools are installed on your machine.
-2. Ask which tools you want Cascade to manage.
-3. Create `~/.cascade/CASCADE.md` — your global instruction file.
-4. Write the derived files each tool expects (`CLAUDE.md`, `AGENTS.md`, `.aider.md`, etc.) and set up symlinks where appropriate.
-5. Start the background daemon and indexer.
+To connect a cloud provider at the same time:
 
-Answer the questions; the defaults are sensible for most setups. The wizard takes about 3-5 minutes to complete.
+```sh
+cascade init --accept-defaults --provider anthropic --api-key sk-ant-...
+```
 
-## Step 2: Edit your global instructions (10 min)
+---
 
-Open `~/.cascade/CASCADE.md` in any editor. This file is your **GCI** (Global Cascade Instructions) — rules and context that apply to every project on your machine.
+## Step 3: Add a rule
 
-A starter template is already there. Add your preferences:
+Open `.cascade/CASCADE.md` in any editor. The file is plain Markdown. Add one rule:
 
 ```markdown
-# My Global Context
+# My project context
 
-## About me
-I'm a backend engineer working primarily in Rust and TypeScript.
-Prefer functional patterns. Avoid mutable global state.
-
-## Code style
-- 80-char line limit where practical
-- Explicit error handling — no silent ignores
-- Prefer composition over inheritance
+Always write tests before implementation.
 ```
 
-Save the file. Cascade detects the change and updates all derived files within a few seconds.
+Save the file. That rule is now part of your project's cascade at the PRC (Per-Repo Cascade) tier.
 
-## Step 3: Add project-level context (10 min)
+---
 
-Navigate to one of your projects:
+## Step 4: Generate harness files
 
-```bash
-cd ~/projects/my-app
-cascade edit
+Run:
+
+```sh
+cascade generate-instructions
 ```
 
-This opens (or creates) `CASCADE.md` in the current directory — your **PRC** (Per-Repo Cascade). Rules here apply only to this project, and they can override or extend your global rules.
+This reads your `.cascade/CASCADE.md` and writes the files each tool expects:
 
-Add something project-specific:
+- `.claude/CLAUDE.md` — picked up by Claude Code on next launch
+- `.claude/AGENTS.md` — symlink for OpenCode compatibility
 
-```markdown
-# my-app context
+Open your project in Claude Code (or any connected tool). The rule you just wrote appears in its context.
 
-This is a Next.js 14 App Router project using TypeScript strict mode.
-The API is at `app/api/`. Shared utilities live in `lib/`.
-Do not modify files in `generated/` — they are auto-generated.
+---
+
+## Step 5: Verify
+
+```sh
+cascade verify
 ```
 
-Save. Cascade merges this with your global context and updates the tool-specific files.
+`cascade verify` checks six requirements and exits 0 only when all pass:
 
-## Step 4: Verify the tool sees your context (2 min)
+- AI folder exists and is readable
+- Cascade resolves to non-empty output
+- Daemon is reachable
+- AI provider is configured
+- `config.toml` parses cleanly
+- OS keychain is accessible
 
-Open your AI tool in this project (Claude Code, Cursor, etc.) and ask it something context-specific:
+If any check fails, run `cascade doctor` for a detailed report with suggested fixes.
 
-```
-What patterns should I follow in this project?
-```
+---
 
-It should reflect the rules you just wrote. If it does not, run `cascade status` to check that the indexer is running and the derived files are up to date.
+## What's next
 
-## Step 5: Try a search (3 min)
-
-```bash
-cascade search "how should I handle API errors"
-```
-
-Cascade searches your instruction files and returns the most relevant context. Results include the source file and a confidence score. This is the same search the MCP server uses when a tool queries for context.
-
-## Next steps
-
-- Read [The Cascade Concept](Cascade-Concept.md) to understand the six-tier hierarchy.
-- See [Six-Tier Taxonomy](Six-Tier-Taxonomy.md) for a complete picture of GCI / PCI / APC / PPC / PRC / PAC.
-- Set up [RAG](RAG-Setup.md) to index your codebase (not just your instruction files).
-- Connect the [MCP Server](MCP-Server.md) if your tool supports it.
-- Follow a complete [tutorial](https://github.com/acamarata/cascade/tree/main/docs/handbook/src/tutorials/) for deeper walkthroughs.
+- [Cascade Concepts](Cascade-Concepts.md) — understand the six-tier model and why it works this way
+- [CLI Reference](CLI-Reference.md) — every command and flag
+- [MCP Server](MCP-Server.md) — live context injection without static files
