@@ -424,7 +424,11 @@ pub struct ProviderQuotaResult {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResolveParams {
-    /// Target tier slug, e.g. `"gci"`, `"ppi"`, `"pri"`. `None` returns the full cascade.
+    /// Working directory to resolve from. The daemon resolves cascade tiers
+    /// relative to this path. Must be an existing directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<std::path::PathBuf>,
+    /// Target tier slug, e.g. `"gci"`, `"pci"`, `"prc"`. `None` returns the full cascade.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
     /// Output format: `"markdown"` (default) or `"json"`.
@@ -970,10 +974,12 @@ mod tests {
     #[test]
     fn test_resolve_roundtrip() {
         roundtrip(&ResolveParams {
+            cwd: Some(std::path::PathBuf::from("/tmp/test")),
             tier: Some("gci".to_string()),
             format: Some("markdown".to_string()),
         });
         roundtrip(&ResolveParams {
+            cwd: None,
             tier: None,
             format: None,
         });
@@ -1088,6 +1094,7 @@ mod tests {
     #[test]
     fn validate_resolve_params_rejects_unknown_tier() {
         let p = ResolveParams {
+            cwd: None,
             tier: Some("evil".to_string()),
             format: None,
         };
@@ -1099,6 +1106,7 @@ mod tests {
         }
         // A valid tier passes.
         let ok = ResolveParams {
+            cwd: None,
             tier: Some("gci".to_string()),
             format: None,
         };
