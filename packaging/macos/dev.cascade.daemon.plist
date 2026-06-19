@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent plist for the Cascade AI context daemon.
+
+  Install location (per-user, no root required):
+    ~/Library/LaunchAgents/dev.cascade.daemon.plist
+
+  The `cascade daemon install` command writes a *rendered* copy of this
+  template to the install location, substituting the resolved `cascaded`
+  binary path for @CASCADED_BIN@ and the home directory for @HOME@.
+  Never load this file directly from packaging/ — use `cascade daemon install`.
+
+  Manual install (if cascade CLI is unavailable):
+    1. Copy this file to ~/Library/LaunchAgents/dev.cascade.daemon.plist
+    2. Replace @CASCADED_BIN@ with the full path to your cascaded binary
+       (e.g. /Users/<you>/.cargo/bin/cascaded).
+    3. Replace @HOME@ with the value of $HOME.
+    4. launchctl load -w ~/Library/LaunchAgents/dev.cascade.daemon.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.cascade.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@CASCADED_BIN@</string>
+        <string>serve</string>
+    </array>
+
+    <!--
+      RunAtLoad: start the daemon as soon as the plist is loaded (login).
+      KeepAlive: launchd will restart the daemon if it exits unexpectedly.
+    -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Throttle rapid restart loops: minimum seconds between auto-restarts. -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>StandardOutPath</key>
+    <string>@HOME@/Library/Logs/cascade-daemon.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>@HOME@/Library/Logs/cascade-daemon-err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>@HOME@</string>
+    </dict>
+</dict>
+</plist>
