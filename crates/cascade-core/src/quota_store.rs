@@ -21,7 +21,9 @@ use std::path::Path;
 use cascade_types::error::{CascadeError, Result};
 // Re-export everything from cascade-types so callers can use either crate.
 pub use cascade_types::quota_store::{
-    AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
+    AccountEntry, HistoryEntry, ModelUsage, QuotaState, QuotaStore, RateWindow,
+    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO,
+    PROVIDER_OPENAI_CODEX, QUOTA_STORE_SCHEMA_VERSION,
 };
 
 // ── Writer ────────────────────────────────────────────────────────────────────
@@ -117,15 +119,18 @@ mod tests {
                 limit: Some(10_000),
                 reset_at: Some("2026-07-01T00:00:00Z".to_string()),
                 pct_used: Some(10.0),
+                cost_usd: None,
             },
         );
         let entry = AccountEntry {
             account_id: "cc-acct1".to_string(),
             harness: "cc".to_string(),
+            provider: PROVIDER_CLAUDE_MAX.to_string(),
             models,
             week_total_used: 1_000,
             month_total_used: 4_000,
             last_polled: "2026-06-02T12:00:00Z".to_string(),
+            rate_windows: vec![],
         };
         let history = HistoryEntry {
             ts: 1_748_865_600,

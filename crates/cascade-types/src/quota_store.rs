@@ -10,8 +10,11 @@
 //! (T-P2-E02-09). [`aggregate_quota`] (T-P2-E02-30, in `cascade-core`) accepts
 //! a slice of `QuotaState` and builds the aggregated [`QuotaStore`].
 //!
+//! Schema v2 (E-P6-02): added `provider`, `cost_usd`, `rate_windows` fields
+//! to support multi-source quota tracking across all subscription providers.
+//!
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — QuotaStore / AccountEntry /
-//!        ModelUsage / HistoryEntry / QuotaState rows (T-P2-E02-29, T-P2-E02-30)
+//!        ModelUsage / HistoryEntry / QuotaState / RateWindow rows
 
 use std::collections::HashMap;
 
@@ -21,12 +24,60 @@ use serde::{Deserialize, Serialize};
 
 /// Monotonically-increasing schema version for `~/.cascade/quota-store.json`.
 ///
-/// Increment when a **breaking** change is made to [`QuotaStore`] (field
-/// removal, type change). Additive new optional fields do not need a bump
-/// because `serde(default)` handles them transparently.
-pub const QUOTA_STORE_SCHEMA_VERSION: u32 = 1;
+/// v1 → v2 (E-P6-02): added `provider` to `AccountEntry` and `QuotaState`;
+/// `cost_usd` to `ModelUsage`; `rate_windows` to `AccountEntry`.
+/// Migration note: v1 files deserialise cleanly via `serde(default)` on all
+/// new fields — no explicit migration required for additive changes.
+pub const QUOTA_STORE_SCHEMA_VERSION: u32 = 2;
+
+// ── Provider constants ────────────────────────────────────────────────────────
+
+/// Provider identifier for Anthropic Claude Max subscription accounts.
+pub const PROVIDER_CLAUDE_MAX: &str = "claude-max";
+
+/// Provider identifier for OpenAI Codex accounts.
+pub const PROVIDER_OPENAI_CODEX: &str = "openai-codex";
+
+/// Provider identifier for Google AI (agy) accounts.
+pub const PROVIDER_GOOGLE_AGY: &str = "google-agy";
+
+/// Provider identifier for GFP (Gemini Free Pool) key pools.
+pub const PROVIDER_GFP: &str = "gfp";
+
+/// Provider identifier for OC-Go dollar-metered accounts.
+pub const PROVIDER_OC_GO: &str = "oc-go";
 
 // ── Structs ───────────────────────────────────────────────────────────────────
+
+/// A rate-window snapshot for one time window within an account.
+///
+/// Purpose: carries per-window usage for rolling (5hr, weekly) and
+/// calendar (monthly, per-key-daily) windows so consumers can determine
+/// how much headroom remains without re-computing from raw snapshots.
+///
+/// Inputs:  populated by `build_rate_windows()` in `quota_aggregator`.
+/// Outputs: stored in [`AccountEntry::rate_windows`].
+/// Constraints: `limit` and `reset_at` are optional — some providers do
+///              not expose their hard limits via their health endpoints.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RateWindow {
+    /// Duration of this window in seconds (e.g. `18000` = 5 hours, `604800` = 7 days).
+    pub window_secs: u64,
+    /// Human-readable label for the window (e.g. `"5hr"`, `"weekly"`, `"monthly"`).
+    pub label: String,
+    /// Tokens used (or request count) in this window for token-based providers.
+    pub used: u64,
+    /// Hard limit for this window, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+    /// Unix epoch seconds at which this window resets, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_at: Option<i64>,
+    /// Accumulated cost in USD for dollar-metered providers (OC-Go, GFP).
+    /// For token-based providers this field is `None`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
+}
 
 /// Per-model usage snapshot within one account.
 ///
@@ -49,6 +100,10 @@ pub struct ModelUsage {
     /// Invariant: when `Some`, the value must be in `0.0..=100.0`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pct_used: Option<f32>,
+    /// Accumulated cost in USD for dollar-metered providers (OC-Go, GFP).
+    /// For token-based providers this field is `None`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
 }
 
 /// Usage snapshot for one AI account across all its models.
@@ -63,6 +118,10 @@ pub struct AccountEntry {
     pub account_id: String,
     /// Which AI harness owns this account: `"cc"`, `"oc"`, `"codex"`, `"cursor"`.
     pub harness: String,
+    /// Provider identifier — one of the `PROVIDER_*` constants.
+    /// Defaults to empty string for v1 stores deserialised without this field.
+    #[serde(default)]
+    pub provider: String,
     /// Per-model usage keyed by model identifier (e.g. `"claude-sonnet-4-6"`).
     pub models: HashMap<String, ModelUsage>,
     /// Total tokens/requests used this calendar week across all models.
@@ -71,6 +130,10 @@ pub struct AccountEntry {
     pub month_total_used: u64,
     /// ISO-8601 timestamp of the most recent successful poll for this account.
     pub last_polled: String,
+    /// Per-window rate snapshots (5hr rolling, weekly, monthly, per-key-daily).
+    /// Empty for v1 stores deserialised without this field.
+    #[serde(default)]
+    pub rate_windows: Vec<RateWindow>,
 }
 
 /// A point-in-time snapshot stored in [`QuotaStore::rolling_history`].
@@ -102,6 +165,10 @@ pub struct QuotaState {
     pub account_id: String,
     /// AI harness: `"cc"`, `"oc"`, `"codex"`, or `"cursor"`.
     pub harness: String,
+    /// Provider identifier — one of the `PROVIDER_*` constants.
+    /// Defaults to empty string for v1 snapshots without this field.
+    #[serde(default)]
+    pub provider: String,
     /// Unix epoch seconds when this snapshot was captured.
     pub ts: i64,
     /// Per-model usage at the time of the poll.
