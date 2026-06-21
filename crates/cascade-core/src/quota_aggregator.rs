@@ -4,7 +4,8 @@
 //! accepts an ordered (oldest→newest) slice of [`QuotaState`] snapshots from
 //! one or more accounts and produces the authoritative [`QuotaStore`] schema:
 //!
-//! - Per-account [`AccountEntry`] with current model usage, week/month totals.
+//! - Per-account [`AccountEntry`] with current model usage, week/month totals,
+//!   and per-source rate windows (5hr rolling, weekly, monthly, per-key-daily).
 //! - Cross-account [`QuotaStore::week_totals`] / [`QuotaStore::month_totals`]
 //!   per model.
 //! - A trimmed [`QuotaStore::rolling_history`] capped at `max_history` entries.
@@ -21,17 +22,26 @@
 //!     containing the latest snapshot's `ts`.
 //!   - Month window: calendar month (1st 00:00:00 UTC → last day) containing
 //!     the latest snapshot's `ts`.
+//!   - 5hr window: rolling `ref_ts - 18000s` (not clock-aligned).
 //!   - `Utc::now()` is called **only** for [`QuotaStore::updated_at`]; all
 //!     window arithmetic uses snapshot `ts` values exclusively.
 //!
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — aggregate_quota function (T-P2-E02-30)
+//!        build_rate_windows helper (E-P6-02 T-02)
 
 use std::collections::HashMap;
 
 use cascade_types::quota_store::{
-    AccountEntry, HistoryEntry, QuotaState, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
+    AccountEntry, HistoryEntry, QuotaState, QuotaStore, RateWindow, PROVIDER_CLAUDE_MAX,
+    PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO, PROVIDER_OPENAI_CODEX,
+    QUOTA_STORE_SCHEMA_VERSION,
 };
 use chrono::{DateTime, Datelike, TimeZone, Utc};
+
+// Window durations in seconds.
+const FIVE_HOUR_SECS: u64 = 5 * 3_600; // 18 000 s
+const WEEK_SECS: u64 = 7 * 24 * 3_600; // 604 800 s
+const DAY_SECS: u64 = 24 * 3_600; // 86 400 s
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -73,7 +83,7 @@ pub fn aggregate_quota(snapshots: &[QuotaState], max_history: usize) -> QuotaSto
     // ── Per-account aggregation ───────────────────────────────────────────────
     // Collect: for each account_id → latest snapshot (for current model state)
     // and the week/month totals computed from all snapshots in the window.
-    let accounts = build_accounts(snapshots, week_start, month_start);
+    let accounts = build_accounts(snapshots, week_start, month_start, latest_ts);
 
     // ── Cross-account week/month totals ───────────────────────────────────────
     let (week_totals, month_totals) =
@@ -100,10 +110,13 @@ pub fn aggregate_quota(snapshots: &[QuotaState], max_history: usize) -> QuotaSto
 /// - `models` / `last_polled` come from the **latest** snapshot for that account.
 /// - `week_total_used` / `month_total_used` are the sum of `used` across all
 ///   models from every snapshot whose `ts` falls inside the current window.
+/// - `rate_windows` is populated via [`build_rate_windows`] using the provider
+///   from the latest snapshot.
 fn build_accounts(
     snapshots: &[QuotaState],
     week_start: DateTime<Utc>,
     month_start: DateTime<Utc>,
+    ref_ts: i64,
 ) -> Vec<AccountEntry> {
     // Gather all distinct account_ids (preserving first-seen insertion order).
     let mut order: Vec<String> = Vec::new();
@@ -128,10 +141,12 @@ fn build_accounts(
 
         let week_total_used = sum_used_in_window(&account_snaps, week_start);
         let month_total_used = sum_used_in_window(&account_snaps, month_start);
+        let rate_windows = build_rate_windows(&account_snaps, &latest.provider, ref_ts);
 
         entries.push(AccountEntry {
             account_id: account_id.clone(),
             harness: latest.harness.clone(),
+            provider: latest.provider.clone(),
             models: latest.models.clone(),
             week_total_used,
             month_total_used,
@@ -140,9 +155,166 @@ fn build_accounts(
                 .single()
                 .map(|dt| dt.to_rfc3339())
                 .unwrap_or_default(),
+            rate_windows,
         });
     }
     entries
+}
+
+/// Build per-source rate windows for one account.
+///
+/// Purpose: compute rolling (5hr) and calendar (weekly, monthly) window usage
+/// for each provider type. Dollar-metered providers (OC-Go) sum `cost_usd`
+/// instead of token counts. GFP uses per-day request counts.
+///
+/// Inputs:
+///   - `snaps` — all snapshots for a single account (ordered oldest→newest).
+///   - `provider` — one of the `PROVIDER_*` constants.
+///   - `ref_ts` — Unix epoch seconds for the reference "now" (latest snapshot ts).
+///
+/// Outputs: a `Vec<RateWindow>` containing windows appropriate for the provider.
+/// Constraints: pure — no I/O, no wall-clock reads; all window boundaries
+///              derived from `ref_ts`.
+pub fn build_rate_windows(snaps: &[&QuotaState], provider: &str, ref_ts: i64) -> Vec<RateWindow> {
+    let five_hour_start = ref_ts - FIVE_HOUR_SECS as i64;
+    let week_start_ts = ref_ts - WEEK_SECS as i64;
+    let day_start_ts = ref_ts - DAY_SECS as i64;
+
+    match provider {
+        PROVIDER_CLAUDE_MAX => {
+            // 5hr rolling + ISO-weekly window (token-based).
+            let five_hr_used = sum_used_since(snaps, five_hour_start);
+            let weekly_used = sum_used_since(snaps, week_start_ts);
+            vec![
+                RateWindow {
+                    window_secs: FIVE_HOUR_SECS,
+                    label: "5hr".to_string(),
+                    used: five_hr_used,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: None,
+                },
+                RateWindow {
+                    window_secs: WEEK_SECS,
+                    label: "weekly".to_string(),
+                    used: weekly_used,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: None,
+                },
+            ]
+        }
+        PROVIDER_OPENAI_CODEX => {
+            // 5hr rolling only (token-based).
+            let five_hr_used = sum_used_since(snaps, five_hour_start);
+            vec![RateWindow {
+                window_secs: FIVE_HOUR_SECS,
+                label: "5hr".to_string(),
+                used: five_hr_used,
+                limit: None,
+                reset_at: None,
+                cost_usd: None,
+            }]
+        }
+        PROVIDER_GOOGLE_AGY => {
+            // 5hr rolling (token-based; Ultra tier multiplier is caller-side).
+            let five_hr_used = sum_used_since(snaps, five_hour_start);
+            vec![RateWindow {
+                window_secs: FIVE_HOUR_SECS,
+                label: "5hr".to_string(),
+                used: five_hr_used,
+                limit: None,
+                reset_at: None,
+                cost_usd: None,
+            }]
+        }
+        PROVIDER_OC_GO => {
+            // $/5hr rolling + $/month calendar (cost_usd-based, not token counts).
+            let five_hr_cost = sum_cost_since(snaps, five_hour_start);
+            let monthly_cost = sum_cost_since(snaps, month_start_of(ref_ts));
+            vec![
+                RateWindow {
+                    window_secs: FIVE_HOUR_SECS,
+                    label: "5hr".to_string(),
+                    used: 0,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: Some(five_hr_cost),
+                },
+                RateWindow {
+                    window_secs: 30 * DAY_SECS, // approximate 30-day month
+                    label: "monthly".to_string(),
+                    used: 0,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: Some(monthly_cost),
+                },
+            ]
+        }
+        PROVIDER_GFP => {
+            // Per-key request count over a rolling 24h window.
+            let day_used = sum_used_since(snaps, day_start_ts);
+            vec![RateWindow {
+                window_secs: DAY_SECS,
+                label: "daily".to_string(),
+                used: day_used,
+                limit: None,
+                reset_at: None,
+                cost_usd: None,
+            }]
+        }
+        _ => {
+            // Unknown provider — return a 5hr window as a best-effort default.
+            let five_hr_used = sum_used_since(snaps, five_hour_start);
+            vec![RateWindow {
+                window_secs: FIVE_HOUR_SECS,
+                label: "5hr".to_string(),
+                used: five_hr_used,
+                limit: None,
+                reset_at: None,
+                cost_usd: None,
+            }]
+        }
+    }
+}
+
+/// Sum the `used` field of every model across all snapshots with `ts >= since_ts`.
+///
+/// Inputs:  `snaps` — snapshots for a single account;
+///          `since_ts` — inclusive lower bound (Unix epoch seconds).
+/// Outputs: total tokens used in the window.
+fn sum_used_since(snaps: &[&QuotaState], since_ts: i64) -> u64 {
+    snaps
+        .iter()
+        .filter(|s| s.ts >= since_ts)
+        .map(|s| s.models.values().map(|m| m.used).sum::<u64>())
+        .sum()
+}
+
+/// Sum the `cost_usd` field across all models in snapshots with `ts >= since_ts`.
+///
+/// Inputs:  `snaps` — snapshots for a single account;
+///          `since_ts` — inclusive lower bound (Unix epoch seconds).
+/// Outputs: total USD cost in the window (0.0 when no cost_usd is set).
+fn sum_cost_since(snaps: &[&QuotaState], since_ts: i64) -> f64 {
+    snaps
+        .iter()
+        .filter(|s| s.ts >= since_ts)
+        .flat_map(|s| s.models.values())
+        .map(|m| m.cost_usd.unwrap_or(0.0))
+        .sum()
+}
+
+/// Return the Unix epoch seconds for midnight UTC on the 1st of the month
+/// containing `ref_ts`.
+///
+/// Constraints: pure — no I/O, no Utc::now().
+fn month_start_of(ref_ts: i64) -> i64 {
+    let dt = Utc
+        .timestamp_opt(ref_ts, 0)
+        .single()
+        .unwrap_or_else(Utc::now);
+    month_start_utc(dt).timestamp()
 }
 
 /// Sum the `used` field of every model across all snapshots whose `ts` ≥ `window_start`.
@@ -206,6 +378,7 @@ fn build_history(snapshots: &[QuotaState], max_history: usize) -> Vec<HistoryEnt
             let entry = AccountEntry {
                 account_id: s.account_id.clone(),
                 harness: s.harness.clone(),
+                provider: s.provider.clone(),
                 models: s.models.clone(),
                 week_total_used: 0, // raw snapshot; aggregation not needed in history
                 month_total_used: 0,
@@ -214,6 +387,7 @@ fn build_history(snapshots: &[QuotaState], max_history: usize) -> Vec<HistoryEnt
                     .single()
                     .map(|dt| dt.to_rfc3339())
                     .unwrap_or_default(),
+                rate_windows: vec![],
             };
             HistoryEntry {
                 ts: s.ts,
@@ -269,15 +443,56 @@ mod tests {
             limit: Some(10_000),
             reset_at: Some("2026-07-01T00:00:00Z".to_string()),
             pct_used: Some((used as f32 / 10_000.0) * 100.0),
+            cost_usd: None,
+        }
+    }
+
+    fn make_model_usage_with_cost(used: u64, cost: f64) -> ModelUsage {
+        ModelUsage {
+            used,
+            limit: None,
+            reset_at: None,
+            pct_used: None,
+            cost_usd: Some(cost),
         }
     }
 
     fn snapshot(account_id: &str, harness: &str, ts: i64, model: &str, used: u64) -> QuotaState {
+        snapshot_with_provider(account_id, harness, "", ts, model, used)
+    }
+
+    fn snapshot_with_provider(
+        account_id: &str,
+        harness: &str,
+        provider: &str,
+        ts: i64,
+        model: &str,
+        used: u64,
+    ) -> QuotaState {
         let mut models = HashMap::new();
         models.insert(model.to_string(), make_model_usage(used));
         QuotaState {
             account_id: account_id.to_string(),
             harness: harness.to_string(),
+            provider: provider.to_string(),
+            ts,
+            models,
+        }
+    }
+
+    fn snapshot_with_cost(
+        account_id: &str,
+        provider: &str,
+        ts: i64,
+        model: &str,
+        cost: f64,
+    ) -> QuotaState {
+        let mut models = HashMap::new();
+        models.insert(model.to_string(), make_model_usage_with_cost(0, cost));
+        QuotaState {
+            account_id: account_id.to_string(),
+            harness: "oc".to_string(),
+            provider: provider.to_string(),
             ts,
             models,
         }
@@ -449,5 +664,117 @@ mod tests {
             base_ts + 5 * 60,
             "oldest retained entry must be the 6th snapshot (index 5)"
         );
+    }
+
+    // ── T-P6-E02-02: per-provider rate window tests ───────────────────────────
+
+    /// 5hr rolling window boundary: snapshot exactly at ref_ts - 5h is included;
+    /// snapshot one second before is excluded.
+    #[test]
+    fn five_hour_window_boundary() {
+        let ref_ts: i64 = 1_780_401_600; // 2026-06-02T12:00:00Z
+        let boundary = ref_ts - FIVE_HOUR_SECS as i64; // exactly 5h before
+        let just_before = boundary - 1; // one second before — EXCLUDED
+
+        let snaps: Vec<QuotaState> = vec![
+            snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, just_before, "model", 500),
+            snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, boundary, "model", 300),
+            snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, ref_ts, "model", 200),
+        ];
+        let snap_refs: Vec<&QuotaState> = snaps.iter().collect();
+
+        let windows = build_rate_windows(&snap_refs, PROVIDER_CLAUDE_MAX, ref_ts);
+
+        // Claude Max has 2 windows: 5hr + weekly.
+        assert_eq!(windows.len(), 2, "claude-max must have 2 rate windows");
+        let five_hr = windows.iter().find(|w| w.label == "5hr").unwrap();
+        // boundary (300) + ref_ts (200) = 500; just_before (500) excluded.
+        assert_eq!(
+            five_hr.used, 500,
+            "5hr window should include boundary and ref_ts only"
+        );
+        let weekly = windows.iter().find(|w| w.label == "weekly").unwrap();
+        // All three snapshots fall within 7 days, so all are included.
+        assert_eq!(weekly.used, 1_000, "weekly window should include all 3 snaps");
+    }
+
+    /// OC-Go rate windows sum cost_usd, not token counts.
+    #[test]
+    fn oc_go_cost_window() {
+        let ref_ts: i64 = 1_780_401_600;
+        let five_hours_ago = ref_ts - FIVE_HOUR_SECS as i64;
+        let six_hours_ago = five_hours_ago - 3_600; // outside 5hr window
+
+        let snaps: Vec<QuotaState> = vec![
+            snapshot_with_cost("oc1", PROVIDER_OC_GO, six_hours_ago, "gpt-4o", 0.50),
+            snapshot_with_cost("oc1", PROVIDER_OC_GO, five_hours_ago, "gpt-4o", 1.20),
+            snapshot_with_cost("oc1", PROVIDER_OC_GO, ref_ts, "gpt-4o", 0.80),
+        ];
+        let snap_refs: Vec<&QuotaState> = snaps.iter().collect();
+
+        let windows = build_rate_windows(&snap_refs, PROVIDER_OC_GO, ref_ts);
+
+        // OC-Go has 2 windows: 5hr + monthly.
+        assert_eq!(windows.len(), 2, "oc-go must have 2 rate windows");
+        let five_hr = windows.iter().find(|w| w.label == "5hr").unwrap();
+        // five_hours_ago (1.20) + ref_ts (0.80) = 2.00; six_hours_ago (0.50) excluded.
+        let cost = five_hr.cost_usd.expect("cost_usd must be set for oc-go");
+        assert!(
+            (cost - 2.0_f64).abs() < 1e-9,
+            "5hr cost should be 2.00, got {cost}"
+        );
+    }
+
+    /// Multi-provider aggregation: claude-max and codex accounts in one store.
+    #[test]
+    fn multi_provider_rate_windows() {
+        let ref_ts: i64 = 1_780_401_600;
+
+        let snaps = vec![
+            snapshot_with_provider("cc1", "cc", PROVIDER_CLAUDE_MAX, ref_ts, "sonnet", 1_000),
+            snapshot_with_provider("cx1", "oc", PROVIDER_OPENAI_CODEX, ref_ts, "gpt-4o", 500),
+        ];
+
+        let store = aggregate_quota(&snaps, 0);
+
+        let cc = store
+            .accounts
+            .iter()
+            .find(|a| a.account_id == "cc1")
+            .unwrap();
+        let cx = store
+            .accounts
+            .iter()
+            .find(|a| a.account_id == "cx1")
+            .unwrap();
+
+        // Claude Max → 2 windows (5hr + weekly); Codex → 1 window (5hr).
+        assert_eq!(cc.rate_windows.len(), 2, "claude-max must have 2 windows");
+        assert_eq!(cx.rate_windows.len(), 1, "codex must have 1 window");
+        assert_eq!(cc.rate_windows[0].label, "5hr");
+        assert_eq!(cc.rate_windows[1].label, "weekly");
+        assert_eq!(cx.rate_windows[0].label, "5hr");
+    }
+
+    /// GFP accounts get a per-day request-count window.
+    #[test]
+    fn gfp_per_key_window() {
+        let ref_ts: i64 = 1_780_401_600;
+        let yesterday = ref_ts - DAY_SECS as i64 - 1; // outside daily window
+        let today = ref_ts - 3_600; // inside daily window
+
+        let snaps: Vec<QuotaState> = vec![
+            snapshot_with_provider("gfp1", "oc", PROVIDER_GFP, yesterday, "gemini", 100),
+            snapshot_with_provider("gfp1", "oc", PROVIDER_GFP, today, "gemini", 200),
+            snapshot_with_provider("gfp1", "oc", PROVIDER_GFP, ref_ts, "gemini", 150),
+        ];
+        let snap_refs: Vec<&QuotaState> = snaps.iter().collect();
+
+        let windows = build_rate_windows(&snap_refs, PROVIDER_GFP, ref_ts);
+
+        assert_eq!(windows.len(), 1, "gfp must have 1 window (daily)");
+        assert_eq!(windows[0].label, "daily");
+        // today (200) + ref_ts (150) = 350; yesterday excluded.
+        assert_eq!(windows[0].used, 350, "gfp daily window should be 350");
     }
 }

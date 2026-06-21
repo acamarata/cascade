@@ -32,6 +32,10 @@ mod ipc_ceo;
 mod ipc_usage_analytics;
 // E-P8-01: kanban Task IPC handlers
 mod ipc_tasks;
+// E-P6-02 T-04: round-robin account rotation selector
+mod rotation_selector;
+// E-P6-02 T-05: hard-stop per-window budget guard
+mod budget_guard;
 mod key_index;
 mod key_loader;
 mod log;

@@ -21,7 +21,7 @@ use std::{
 
 use assert_cmd::cargo::cargo_bin;
 use cascade_core::quota_store::{write_quota_store, QuotaStore, QUOTA_STORE_SCHEMA_VERSION};
-use cascade_types::quota_store::{AccountEntry, ModelUsage};
+use cascade_types::quota_store::{AccountEntry, ModelUsage, PROVIDER_CLAUDE_MAX};
 use std::collections::HashMap;
 use tempfile::TempDir;
 
@@ -90,6 +90,7 @@ fn make_quota_store() -> QuotaStore {
             limit: Some(1000),
             reset_at: None,
             pct_used: Some(10.0),
+            cost_usd: None, // v2 field
         },
     );
 
@@ -99,10 +100,12 @@ fn make_quota_store() -> QuotaStore {
         accounts: vec![AccountEntry {
             account_id: "test-acct-1".to_string(),
             harness: "cc".to_string(),
+            provider: PROVIDER_CLAUDE_MAX.to_string(), // v2 field
             models: model_usage,
             week_total_used: 100,
             month_total_used: 200,
             last_polled: "2026-01-01T00:00:00Z".to_string(),
+            rate_windows: vec![], // v2 field
         }],
         week_totals: HashMap::new(),
         month_totals: HashMap::new(),

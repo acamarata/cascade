@@ -9,11 +9,13 @@
 //! Constraints: no file I/O in this module; all I/O is delegated to specific
 //!              modules (config, event_bus, quota_store, etc.).
 //! SPORT: .claude/docs/MASTER-DAEMON.md — DaemonState (T-P2-E02-31)
+//!        quota_snapshot_buffer field (E-P6-02 T-06)
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use cascade_rag::workers::WorkerPool;
+use cascade_types::quota_store::QuotaState;
 
 /// In-memory daemon state.
 ///
@@ -32,6 +34,18 @@ pub struct DaemonState {
     /// Stored as serde_json::Value to remain schema-flexible across harnesses.
     pub snapshot_ring: VecDeque<serde_json::Value>,
 
+    /// Ordered accumulation buffer for typed [`QuotaState`] snapshots from all
+    /// provider pollers (E-P6-02 T-06).
+    ///
+    /// Each provider poller pushes its latest `QuotaState` here via the
+    /// `update_quota_state` IPC method. When a snapshot is added, the daemon
+    /// calls `aggregate_quota` over this buffer to rebuild `quota-store.json`.
+    ///
+    /// Oldest-first ordering is maintained by append-only push; no explicit
+    /// sorting is needed because pollers always produce monotonically increasing
+    /// `ts` values.
+    pub quota_snapshot_buffer: Vec<QuotaState>,
+
     /// Parallel embedding worker pool for the RAG indexing pipeline.
     ///
     /// `None` until the daemon initialises RAG (requires a project root).
@@ -47,7 +61,22 @@ impl DaemonState {
     pub fn new() -> Self {
         Self {
             snapshot_ring: VecDeque::new(),
+            quota_snapshot_buffer: Vec::new(),
             worker_pool: None,
+        }
+    }
+
+    /// Append a typed [`QuotaState`] snapshot to the buffer (E-P6-02 T-06).
+    ///
+    /// Inputs:  `snap` — the new snapshot from any provider poller.
+    /// Outputs: snapshot appended; oldest entries pruned if buffer exceeds
+    ///          `max_snapshots`.
+    /// Constraints: no I/O — purely in-memory.
+    pub fn push_typed_snapshot(&mut self, snap: QuotaState, max_snapshots: usize) {
+        self.quota_snapshot_buffer.push(snap);
+        if self.quota_snapshot_buffer.len() > max_snapshots {
+            let drain = self.quota_snapshot_buffer.len() - max_snapshots;
+            self.quota_snapshot_buffer.drain(..drain);
         }
     }
 

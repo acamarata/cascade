@@ -83,7 +83,7 @@ pub async fn cascade_resolve(
 ) -> Result<ResolveResult, CascadeError> {
     let client = make_client()?;
     client
-        .send::<ResolveParams, ResolveResult>("resolve", ResolveParams { tier, format })
+        .send::<ResolveParams, ResolveResult>("resolve", ResolveParams { tier, format, cwd: None })
         .await
         .map_err(CascadeError::from)
 }

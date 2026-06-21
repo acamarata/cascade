@@ -120,7 +120,9 @@ pub use query_strategy::{
     ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind,
 };
 pub use quota_store::{
-    AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
+    AccountEntry, HistoryEntry, ModelUsage, QuotaState, QuotaStore, RateWindow,
+    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO,
+    PROVIDER_OPENAI_CODEX, QUOTA_STORE_SCHEMA_VERSION,
 };
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};

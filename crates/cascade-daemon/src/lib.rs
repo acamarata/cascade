@@ -68,4 +68,10 @@ pub mod updates;
 // E-P8-01: kanban Task IPC handlers (task_create/update/list/get/delete/move)
 pub mod ipc_tasks;
 
+// E-P6-02 T-04: round-robin account rotation selector
+pub mod rotation_selector;
+
+// E-P6-02 T-05: hard-stop per-window budget guard
+pub mod budget_guard;
+
 pub use config::Config;
