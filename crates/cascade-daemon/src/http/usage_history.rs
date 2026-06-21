@@ -506,10 +506,12 @@ mod tests {
         let make_acct = |week_used: u64| AccountEntry {
             account_id: "cc-acct1".into(),
             harness: "cc".into(),
+            provider: "".into(),
             models: HashMap::new(),
             week_total_used: week_used,
             month_total_used: week_used,
             last_polled: "2026-01-01T00:00:00Z".into(),
+            rate_windows: vec![],
         };
 
         let mut store = empty_store();

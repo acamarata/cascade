@@ -668,6 +668,110 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 return Response::ok(result_value);
             }
 
+            // ── E-P6-02 T-06: Multi-provider quota IPC methods ────────────
+            match typed_req.method.as_str() {
+                "update_quota_state" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    // Home dir for config_dir resolution.
+                    let home_dir = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir)
+                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+                    let config_dir = home_dir.join(".cascade");
+                    let max_snapshots = 1000;
+                    // We don't have DaemonState here in IpcServer; use a stub path.
+                    // In a full wire this would pull from server.daemon_state.
+                    // For now write directly so the IPC path is exercised.
+                    // Full daemon_state wiring deferred to E-P6-03 (supervisor wire).
+                    use cascade_types::quota_store::QuotaState as TypedQuotaState;
+                    match serde_json::from_value::<TypedQuotaState>(params_val) {
+                        Err(e) => return Response::err(-32602, format!("invalid QuotaState: {e}")),
+                        Ok(snap) => {
+                            // Build a minimal single-snapshot store and write it.
+                            let store = cascade_core::quota_aggregator::aggregate_quota(
+                                &[snap],
+                                max_snapshots,
+                            );
+                            let path = config_dir.join("quota-store.json");
+                            match cascade_core::quota_store::write_quota_store(&path, &store) {
+                                Ok(()) => {
+                                    return Response::ok(serde_json::json!({ "status": "updated" }));
+                                }
+                                Err(e) => {
+                                    return Response::err(
+                                        -32603,
+                                        format!("failed to write quota-store: {e:?}"),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                "get_rotation_advice" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let provider = params_val
+                        .get("provider")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if provider.is_empty() {
+                        return Response::err(-32602, "missing required param: provider".to_string());
+                    }
+                    // Read the current quota store.
+                    let home_dir = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir)
+                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+                    let path = home_dir.join(".cascade/quota-store.json");
+                    match cascade_core::quota_store::read_quota_store(&path) {
+                        Err(_) => {
+                            // No store yet — return "no accounts" response.
+                            return Response::ok(serde_json::json!({
+                                "account_id": null,
+                                "exhausted": true,
+                            }));
+                        }
+                        Ok(store) => {
+                            let advice = crate::ipc_handlers::handle_get_rotation_advice(
+                                &provider, &store,
+                            );
+                            return Response::ok(advice);
+                        }
+                    }
+                }
+                "budget_check" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let params: crate::ipc_handlers::BudgetCheckParams =
+                        match serde_json::from_value(params_val) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                return Response::err(-32602, format!("invalid params: {e}"));
+                            }
+                        };
+                    // Read quota store.
+                    let home_dir = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir)
+                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+                    let path = home_dir.join(".cascade/quota-store.json");
+                    let store = cascade_core::quota_store::read_quota_store(&path)
+                        .unwrap_or_else(|_| cascade_core::quota_store::QuotaStore {
+                            schema_version: cascade_core::quota_store::QUOTA_STORE_SCHEMA_VERSION,
+                            updated_at: String::new(),
+                            accounts: vec![],
+                            week_totals: std::collections::HashMap::new(),
+                            month_totals: std::collections::HashMap::new(),
+                            rolling_history: vec![],
+                        });
+                    // Use default BudgetConfig (limits disabled) since we don't have
+                    // the config in IpcServer currently. Full config wiring in E-P6-03.
+                    let config = crate::config::BudgetConfig::default();
+                    let result = crate::ipc_handlers::handle_budget_check(params, &config, &store);
+                    return Response::ok(result);
+                }
+                _ => {}
+            }
+
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {

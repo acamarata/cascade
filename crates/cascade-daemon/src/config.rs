@@ -251,6 +251,156 @@ impl Default for ProxyConfig {
     }
 }
 
+// ── E-P6-02 T-03: Per-provider quota config structs ──────────────────────────
+
+/// Shared token-window quota config for subscription providers.
+///
+/// Used by `[quota.claude_max]` and `[quota.codex]` sections in config.toml.
+/// All fields have safe defaults; missing section = defaults apply.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProviderTokenQuotaConfig {
+    /// Enable quota tracking for this provider; default true.
+    pub enabled: bool,
+    /// Maximum tokens allowed in the 5-hour rolling window. `0` = no limit.
+    pub five_hour_token_limit: u64,
+    /// Maximum tokens allowed per week. `0` = no limit.
+    pub weekly_token_limit: u64,
+}
+
+impl Default for ProviderTokenQuotaConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            five_hour_token_limit: 0,
+            weekly_token_limit: 0,
+        }
+    }
+}
+
+/// `[quota.agy]` section — Google AI (agy) quota config.
+///
+/// Same shape as `ProviderTokenQuotaConfig` but kept separate so agy-specific
+/// fields can be added later without a breaking config change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AgyQuotaConfig {
+    /// Enable quota tracking for agy provider; default true.
+    pub enabled: bool,
+    /// Maximum tokens per 5-hour rolling window. `0` = no limit.
+    pub five_hour_token_limit: u64,
+}
+
+impl Default for AgyQuotaConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            five_hour_token_limit: 0,
+        }
+    }
+}
+
+/// `[quota.oc_go]` section — OC-Go dollar-metered quota config.
+///
+/// OC-Go uses cost_usd (not token counts) for rate windows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OcGoQuotaConfig {
+    /// Enable quota tracking for OC-Go; default true.
+    pub enabled: bool,
+    /// Maximum USD spend per 5-hour rolling window. `0.0` = no limit.
+    pub five_hour_usd_limit: f64,
+    /// Maximum USD spend per calendar month. `0.0` = no limit.
+    pub monthly_usd_limit: f64,
+}
+
+impl Default for OcGoQuotaConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            five_hour_usd_limit: 0.0,
+            monthly_usd_limit: 0.0,
+        }
+    }
+}
+
+/// `[quota]` section aggregating per-provider quota configuration.
+///
+/// All sub-sections are optional and use typed defaults so a missing
+/// `[quota]` section in config.toml is fine.
+///
+/// # TOML example
+/// ```toml
+/// [quota.claude_max]
+/// five_hour_token_limit = 100_000
+///
+/// [quota.oc_go]
+/// monthly_usd_limit = 50.0
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuotaConfig {
+    /// `[quota.claude_max]` — Claude Max subscription token limits.
+    pub claude_max: ProviderTokenQuotaConfig,
+    /// `[quota.codex]` — OpenAI Codex token limits.
+    pub codex: ProviderTokenQuotaConfig,
+    /// `[quota.agy]` — Google AI (agy) token limits.
+    pub agy: AgyQuotaConfig,
+    /// `[quota.oc_go]` — OC-Go dollar-metered limits.
+    pub oc_go: OcGoQuotaConfig,
+}
+
+impl Default for QuotaConfig {
+    fn default() -> Self {
+        Self {
+            claude_max: ProviderTokenQuotaConfig::default(),
+            codex: ProviderTokenQuotaConfig::default(),
+            agy: AgyQuotaConfig::default(),
+            oc_go: OcGoQuotaConfig::default(),
+        }
+    }
+}
+
+// ── E-P6-02 T-05: BudgetConfig ────────────────────────────────────────────────
+
+/// Per-provider hard-stop budget limits.
+///
+/// When a provider's window usage exceeds its budget limit, the `BudgetGuard`
+/// blocks new requests until the window resets.
+///
+/// `[budget.claude_max]` controls token-based limits; `[budget.oc_go]` controls
+/// cost-based limits. All fields default to `0` (disabled).
+///
+/// # TOML example
+/// ```toml
+/// [budget.claude_max]
+/// hourly_token_limit = 50_000
+///
+/// [budget.oc_go]
+/// hourly_usd_limit    = 5.0
+/// monthly_usd_limit   = 100.0
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BudgetConfig {
+    /// Hard token limit per hour for Claude Max. `0` = disabled.
+    pub claude_max_hourly_token_limit: u64,
+    /// Hard USD spend limit per hour for OC-Go. `0.0` = disabled.
+    pub oc_go_hourly_usd_limit: f64,
+    /// Hard USD spend limit per calendar month for OC-Go. `0.0` = disabled.
+    pub oc_go_monthly_usd_limit: f64,
+}
+
+impl Default for BudgetConfig {
+    fn default() -> Self {
+        Self {
+            claude_max_hourly_token_limit: 0,
+            oc_go_hourly_usd_limit: 0.0,
+            oc_go_monthly_usd_limit: 0.0,
+        }
+    }
+}
+
 /// `[backup]` section of config.toml.
 ///
 /// Controls the [`crate::backup::BackupSync`] daemon task that mirrors tier
@@ -335,6 +485,12 @@ pub struct Config {
     pub proxy: ProxyConfig,
     /// `[backup]` section.
     pub backup: BackupConfig,
+    /// `[quota]` section — per-provider quota window limits (E-P6-02 T-03).
+    #[serde(default)]
+    pub quota: QuotaConfig,
+    /// `[budget]` section — per-provider hard-stop budget limits (E-P6-02 T-05).
+    #[serde(default)]
+    pub budget: BudgetConfig,
     /// `[[hooks]]` array — hook definitions loaded from this config tier.
     ///
     /// Each entry is converted to a `HookDef` and seeded into the in-memory
@@ -362,6 +518,8 @@ impl Default for Config {
             scheduler: SchedulerConfig::default(),
             proxy: ProxyConfig::default(),
             backup: BackupConfig::default(),
+            quota: QuotaConfig::default(),
+            budget: BudgetConfig::default(),
             hooks: Vec::new(),
         }
     }

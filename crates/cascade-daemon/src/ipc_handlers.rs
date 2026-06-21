@@ -272,6 +272,132 @@ pub fn handle_read_proxy_metrics(
     Ok(snapshots)
 }
 
+// ── E-P6-02 T-06: Multi-provider IPC handlers ─────────────────────────────────
+
+/// Parameters for the `budget_check` IPC method (E-P6-02 T-05/T-06).
+#[derive(Debug, serde::Deserialize)]
+pub struct BudgetCheckParams {
+    /// Provider identifier (e.g. `"claude-max"`, `"oc-go"`).
+    pub provider: String,
+    /// Account to check.
+    pub account_id: String,
+    /// Estimated tokens for the request (0 for cost-only providers).
+    pub estimated_tokens: u64,
+    /// Estimated USD cost for the request (0.0 for token-only providers).
+    pub estimated_cost_usd: f64,
+}
+
+/// Check whether a pending request fits within the budget for a provider/account.
+///
+/// Inputs:
+///   - `params`  — `BudgetCheckParams` from the IPC caller.
+///   - `config`  — current `BudgetConfig` loaded at daemon start.
+///   - `store`   — current `QuotaStore` read from disk.
+///
+/// Outputs: JSON `{ "allow": bool, "reason": string | null }`.
+pub fn handle_budget_check(
+    params: BudgetCheckParams,
+    config: &crate::config::BudgetConfig,
+    store: &QuotaStore,
+) -> serde_json::Value {
+    let guard = crate::budget_guard::BudgetGuard::new(config.clone());
+    let result = guard.check(
+        &params.provider,
+        &params.account_id,
+        params.estimated_tokens,
+        params.estimated_cost_usd,
+        store,
+    );
+
+    match result {
+        crate::budget_guard::BudgetResult::Allow => {
+            serde_json::json!({ "allow": true, "reason": null })
+        }
+        crate::budget_guard::BudgetResult::DenyLimit { window, used, limit } => {
+            serde_json::json!({
+                "allow": false,
+                "reason": format!(
+                    "token limit exceeded in {} window: used={} limit={}",
+                    window, used, limit
+                )
+            })
+        }
+        crate::budget_guard::BudgetResult::DenyCost { spent_usd, limit_usd } => {
+            serde_json::json!({
+                "allow": false,
+                "reason": format!(
+                    "cost limit exceeded: spent=${:.4} limit=${:.4}",
+                    spent_usd, limit_usd
+                )
+            })
+        }
+    }
+}
+
+/// Append a typed [`QuotaState`] snapshot to the daemon's buffer and
+/// reaggregate the quota store to disk atomically.
+///
+/// Inputs:
+///   - `state_json`  — JSON-encoded `QuotaState`.
+///   - `daemon_state`— locked `DaemonState` (Arc<Mutex<DaemonState>>).
+///   - `config_dir`  — path to `~/.cascade/` for writing `quota-store.json`.
+///   - `max_snapshots` — ring buffer bound from `config.quota_store.max_snapshots`.
+///
+/// Outputs: updated `quota-store.json` written atomically.
+pub async fn handle_update_quota_state(
+    state_json: serde_json::Value,
+    daemon_state: &std::sync::Arc<std::sync::Mutex<crate::state::DaemonState>>,
+    config_dir: &std::path::Path,
+    max_snapshots: usize,
+) -> Result<(), IpcHandlerError> {
+    use cascade_types::quota_store::QuotaState as TypedQuotaState;
+
+    let snap: TypedQuotaState =
+        serde_json::from_value(state_json).map_err(|e| {
+            IpcHandlerError::StoreIo(std::io::Error::other(format!(
+                "invalid QuotaState JSON: {e}"
+            )))
+        })?;
+
+    // Push into the typed buffer and collect a clone for aggregation.
+    let snapshots = {
+        let mut guard = daemon_state.lock().unwrap();
+        guard.push_typed_snapshot(snap, max_snapshots);
+        guard.quota_snapshot_buffer.clone()
+    };
+
+    // Reaggregate all snapshots into a fresh QuotaStore.
+    let new_store = cascade_core::quota_aggregator::aggregate_quota(&snapshots, 1000);
+
+    // Write atomically.
+    let path = config_dir.join("quota-store.json");
+    cascade_core::quota_store::write_quota_store(&path, &new_store).map_err(|e| {
+        IpcHandlerError::StoreIo(std::io::Error::other(format!(
+            "failed to write quota-store: {e:?}"
+        )))
+    })?;
+
+    Ok(())
+}
+
+/// Return rotation advice for a provider: which account to use next.
+///
+/// Inputs:  `provider` — provider identifier string;
+///          `store`    — current `QuotaStore`.
+///
+/// Outputs: JSON `{ "account_id": string | null, "exhausted": bool }`.
+pub fn handle_get_rotation_advice(
+    provider: &str,
+    store: &QuotaStore,
+) -> serde_json::Value {
+    let account_id = crate::rotation_selector::RotationSelector::select_account(provider, store);
+    let exhausted = account_id.is_none();
+    serde_json::json!({
+        "account_id": account_id,
+        "exhausted": exhausted,
+    })
+}
+
 /// Read harness status snapshots from the in-memory cache (IPC endpoint).
 ///
 /// Returns a Vec<HarnessStatus> without spawning pgrep processes (reads from

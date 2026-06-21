@@ -6,16 +6,18 @@
 
 use cascade_core::{read_quota_store, write_quota_store};
 use cascade_types::{
-    AccountEntry, HistoryEntry, ModelUsage, QuotaStore, QUOTA_STORE_SCHEMA_VERSION,
+    AccountEntry, HistoryEntry, ModelUsage, QuotaStore, RateWindow, PROVIDER_CLAUDE_MAX,
+    QUOTA_STORE_SCHEMA_VERSION,
 };
 use std::collections::HashMap;
 use tempfile::TempDir;
 
 /// Confirm `use cascade_types::QuotaStore` and friends compile + work
-/// across the cascade-daemon crate boundary.
+/// across the cascade-daemon crate boundary (T-P2-E02-29).
+/// Also validates new v2 schema fields (E-P6-02 T-01).
 #[test]
 fn quota_store_types_accessible_from_sibling_crate() {
-    // Build a store using the re-exported types.
+    // Build a store using the re-exported types (including v2 fields).
     let mut models = HashMap::new();
     models.insert(
         "claude-sonnet-4-6".to_string(),
@@ -24,15 +26,25 @@ fn quota_store_types_accessible_from_sibling_crate() {
             limit: Some(5_000),
             reset_at: Some("2026-08-01T00:00:00Z".to_string()),
             pct_used: Some(10.0),
+            cost_usd: None,
         },
     );
     let account = AccountEntry {
         account_id: "test-account".to_string(),
         harness: "cc".to_string(),
+        provider: PROVIDER_CLAUDE_MAX.to_string(),
         models,
         week_total_used: 500,
         month_total_used: 1_500,
         last_polled: "2026-06-02T10:00:00Z".to_string(),
+        rate_windows: vec![RateWindow {
+            window_secs: 18_000,
+            label: "5hr".to_string(),
+            used: 500,
+            limit: Some(5_000),
+            reset_at: None,
+            cost_usd: None,
+        }],
     };
     let history = HistoryEntry {
         ts: 1_748_865_600,
