@@ -595,6 +595,156 @@ pub(crate) fn cascade_unlink_tool_with_home(
 }
 
 // ---------------------------------------------------------------------------
+// Filesystem primitives — symlink_create / file_write / file_copy_create
+// ---------------------------------------------------------------------------
+
+/// Create a symlink at `target` pointing to `source`.
+///
+/// # Purpose
+/// Low-level single-symlink command used by `symlinks.ts` `executeSymlinkPlan`
+/// for the non-dry-run execution path.  Differs from `setup_symlinks` in that
+/// it operates on exactly one path pair with no HOME-confinement check — the
+/// caller (TS layer) is responsible for supplying safe, already-resolved paths.
+///
+/// # Behaviour
+/// - If `target` already exists as a **symlink** (any destination), it is
+///   removed first and recreated pointing at `source`.
+/// - If `target` already exists as a **real file or directory**, returns an
+///   error — never overwrites real data.
+/// - Creates parent directories of `target` if they do not exist.
+///
+/// # Inputs
+/// - `source`: absolute path the new symlink will point to (link target).
+/// - `target`: absolute path where the symlink will be created (link location).
+///
+/// # JS
+/// `invoke("symlink_create", { source, target })`
+#[tauri::command]
+pub async fn symlink_create(source: String, target: String) -> Result<(), String> {
+    let src = std::path::Path::new(&source);
+    let tgt = std::path::Path::new(&target);
+
+    // Inspect whatever is at the target location (without following symlinks).
+    match std::fs::symlink_metadata(tgt) {
+        Ok(meta) => {
+            if meta.file_type().is_symlink() {
+                // Existing symlink — remove it so we can recreate.
+                std::fs::remove_file(tgt)
+                    .map_err(|e| format!("failed to remove existing symlink {target:?}: {e}"))?;
+            } else {
+                // Real file or directory — refuse to overwrite.
+                return Err(format!(
+                    "skipped: {target:?} is a real {} — move it first",
+                    if meta.is_dir() { "directory" } else { "file" }
+                ));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Nothing there yet — proceed.
+        }
+        Err(e) => return Err(format!("failed to stat {target:?}: {e}")),
+    }
+
+    // Ensure parent directory exists.
+    if let Some(parent) = tgt.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create parent dir {parent:?}: {e}"))?;
+    }
+
+    // Create the platform symlink.
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(src, tgt)
+            .map_err(|e| format!("symlink({source:?} → {target:?}): {e}"))?;
+    }
+    #[cfg(windows)]
+    {
+        if src.is_dir() {
+            std::os::windows::fs::symlink_dir(src, tgt)
+                .map_err(|e| format!("symlink_dir({source:?} → {target:?}): {e}"))?;
+        } else {
+            std::os::windows::fs::symlink_file(src, tgt)
+                .map_err(|e| format!("symlink_file({source:?} → {target:?}): {e}"))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Write UTF-8 `content` to `path`, creating parent directories as needed.
+///
+/// # Purpose
+/// Used by `symlinks.ts` `generateDerivedFile` when producing cursor rules
+/// (`.cursorrules`), opencode config, and similar derived files that must be
+/// real files rather than symlinks.
+///
+/// # Behaviour
+/// - Creates all missing parent directories before writing.
+/// - Uses an atomic tmp-then-rename write to avoid partial reads on concurrent
+///   access: writes to `<path>.tmp` then renames over `<path>`.
+///
+/// # Inputs
+/// - `path`: absolute destination path.
+/// - `content`: UTF-8 text to write.
+///
+/// # JS
+/// `invoke("file_write", { path, content })`
+#[tauri::command]
+pub async fn file_write(path: String, content: String) -> Result<(), String> {
+    let dest = std::path::Path::new(&path);
+
+    // Create parent directories if they do not exist.
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create parent dir {parent:?}: {e}"))?;
+    }
+
+    // Atomic write: write to a sibling .tmp file then rename into place.
+    let mut tmp_name = dest.as_os_str().to_owned();
+    tmp_name.push(".tmp");
+    let tmp_path = std::path::PathBuf::from(tmp_name);
+
+    std::fs::write(&tmp_path, content.as_bytes())
+        .map_err(|e| format!("failed to write to {tmp_path:?}: {e}"))?;
+
+    std::fs::rename(&tmp_path, dest)
+        .map_err(|e| format!("failed to rename {tmp_path:?} → {path:?}: {e}"))?;
+
+    Ok(())
+}
+
+/// Copy a file from `source` to `target`.
+///
+/// # Purpose
+/// Windows fallback used by `symlinks.ts` `executeFileCopy` when creating
+/// symlinks is not available or requires elevated privileges.  On macOS/Linux
+/// this command is still available but symlink creation is preferred.
+///
+/// # Behaviour
+/// - Creates parent directories of `target` if they do not exist.
+/// - Uses `std::fs::copy` which overwrites an existing `target` file.
+///
+/// # Inputs
+/// - `source`: absolute path of the file to copy.
+/// - `target`: absolute destination path.
+///
+/// # JS
+/// `invoke("file_copy_create", { source, target })`
+#[tauri::command]
+pub async fn file_copy_create(source: String, target: String) -> Result<(), String> {
+    let tgt = std::path::Path::new(&target);
+
+    if let Some(parent) = tgt.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create parent dir {parent:?}: {e}"))?;
+    }
+
+    std::fs::copy(&source, &target)
+        .map(|_| ())
+        .map_err(|e| format!("copy({source:?} → {target:?}): {e}"))
+}
+
+// ---------------------------------------------------------------------------
 // Tests — cascade_unlink_tool (T-P3-E03-37)
 // ---------------------------------------------------------------------------
 

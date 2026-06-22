@@ -131,6 +131,10 @@ pub fn run() {
             commands::symlinks::setup_symlinks,
             // T-P3-E03-37: Per-tool mode flip — unlink (Independent) / link (Cascade-managed)
             commands::symlinks::cascade_unlink_tool,
+            // fix-6 wizard end-to-end: symlink_create / file_write / file_copy_create
+            commands::symlinks::symlink_create,
+            commands::symlinks::file_write,
+            commands::symlinks::file_copy_create,
             // T-P3-E03-16..19: Archive / restore subsystem
             commands::archive::archive_legacy_tools,
             commands::archive::read_archive_manifest,
@@ -167,6 +171,11 @@ pub fn run() {
             commands::providers::cascade_providers_usage_today,
             // T-P3-E04-26: GFP proxy health probe
             commands::providers::cascade_check_gfp_proxy,
+            // fix-6 wizard end-to-end: GFP auto-connect + generic provider connect
+            commands::providers::cascade_providers_add_gfp,
+            commands::providers::cascade_providers_connect,
+            // fix-6 wizard end-to-end: keychain delete (provider disconnect)
+            commands::providers::keychain_delete,
             // T-P3-E04-30: Usage analytics
             commands::usage::cascade_usage_summary,
             commands::usage::cascade_usage_history,
@@ -218,6 +227,11 @@ pub fn run() {
             commands::tasks::task_update,
             commands::tasks::task_delete,
             commands::tasks::task_move,
+            // fix-6 wizard end-to-end: wizard_state read/write + dry-run log + merge audit
+            commands::wizard_state::wizard_state_read,
+            commands::wizard_state::wizard_state_write,
+            commands::wizard_state::wizard_dry_run_log,
+            commands::wizard_state::wizard_merge_audit_append,
             // E-P8-05: PBD PEWS tree + mutation commands
             commands::pbd::pbd_get_tree,
             commands::pbd::pbd_get_current,
