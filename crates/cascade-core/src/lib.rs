@@ -91,6 +91,7 @@ pub mod symlinks;
 pub mod task_store;
 pub mod tasks;
 pub mod templates;
+pub mod routing;
 pub mod watcher;
 pub mod worktree_store;
 
