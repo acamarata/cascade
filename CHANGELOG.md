@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-22
+
+Dynamic learning + taxonomy.
+
+### Added
+
+- `cascade memory capture "<text>"` — classifies a note (decision / lesson /
+  pattern + domain tags), routes it to the right memory file with a timestamp
+  and tags, and makes it retrievable. Captures learnings as you work.
+- Taxonomy auto-classification — rule-based by default, optionally GFP-assisted
+  via the free-Flash routing lane, with graceful fallback when no provider is
+  available.
+- `cascade search --scope memory` — semantic/keyword search scoped to the memory
+  corpus.
+- A shipped `dynamic-learning` behavioral rule (tier "any") that makes capturing
+  decisions/lessons/patterns part of an agent's definition of done.
+
 ## [1.2.0] - 2026-06-22
 
 Model access + privacy firewall.
