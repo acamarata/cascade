@@ -85,6 +85,7 @@ pub mod quota_store;
 pub mod resolution;
 pub mod routing_table;
 pub mod security;
+pub mod sensitivity;
 pub mod settings;
 pub mod symlinks;
 pub mod task_store;

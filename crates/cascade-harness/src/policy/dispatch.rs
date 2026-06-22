@@ -21,6 +21,7 @@ use cascade_types::policy::{PolicyAction, PolicyResult};
 
 use crate::policy::{
     engine::{PolicyChain, PolicyEvaluator},
+    sensitivity_guard::SensitivityGuardEvaluator,
     simple::SimplePolicyEvaluator,
 };
 
@@ -56,10 +57,15 @@ fn policies_dir_mtime() -> Option<SystemTime> {
 /// Loads WASM policies from `~/.cascade/policies/*.wasm` when the `wasm-policy`
 /// feature is enabled; always prepends `SimplePolicyEvaluator` as a backstop.
 fn build_chain() -> PolicyChain {
-    // Always start with the built-in SimplePolicyEvaluator as backstop.
+    // SensitivityGuardEvaluator runs FIRST: blocks sensitive content from reaching
+    // external providers (Gemini/OpenAI/GFP/OC-Go/Codex) before any other check.
+    // SimplePolicyEvaluator is the backstop for dangerous bash/git/SQL patterns.
     // mut is only exercised by the wasm-policy cfg block below.
     #[cfg_attr(not(feature = "wasm-policy"), allow(unused_mut))]
-    let mut evaluators: Vec<Box<dyn PolicyEvaluator>> = vec![Box::new(SimplePolicyEvaluator)];
+    let mut evaluators: Vec<Box<dyn PolicyEvaluator>> = vec![
+        Box::new(SensitivityGuardEvaluator),
+        Box::new(SimplePolicyEvaluator),
+    ];
 
     // If wasm-policy feature is active, also load any WASM files.
     #[cfg(feature = "wasm-policy")]

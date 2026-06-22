@@ -23,6 +23,7 @@ pub mod dispatch;
 pub mod engine;
 pub mod patterns;
 pub mod project_policy;
+pub mod sensitivity_guard;
 pub mod simple;
 #[cfg(feature = "wasm-policy")]
 pub mod wasm;
@@ -33,6 +34,7 @@ pub use project_policy::{
     build_project_policy_set, effective_policy_set, invalidate_all as invalidate_all_projects,
     invalidate_project, warm_cache,
 };
+pub use sensitivity_guard::SensitivityGuardEvaluator;
 pub use simple::SimplePolicyEvaluator;
 #[cfg(feature = "wasm-policy")]
 pub use wasm::WasmPolicyEvaluator;
