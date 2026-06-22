@@ -34,8 +34,9 @@ env:
 jobs:
   # ── Build CLI + daemon artifacts ───────────────────────────────────────────
   # Builds cascade (CLI) and cascaded (daemon) binaries with --release --locked.
-  # 5 targets: macos-14 ARM64, macos-13 x86_64, ubuntu-22.04 x86_64,
-  #            ubuntu-22.04 aarch64 (via cross-rs), windows-2022 x86_64.
+  # 5 targets, all built natively (no Docker/cross-rs): macos-14 ARM64,
+  # macos-13 x86_64, ubuntu-22.04 x86_64, ubuntu-24.04-arm aarch64,
+  # windows-2022 x86_64.
   build-cli:
     name: Build CLI (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
