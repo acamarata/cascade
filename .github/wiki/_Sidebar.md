@@ -5,9 +5,10 @@
 - [Quickstart](Quickstart)
 - [Distribution Channels](Distribution-Channels)
 - [Onboarding Wizard](onboarding-wizard)
+- [Importing an Existing Setup](Importing-an-Existing-Setup)
 
 **Concepts**
-- [Cascade Concept](Cascade-Concept)
+- [Cascade Concepts](Cascade-Concepts)
 - [Six-Tier Taxonomy](Six-Tier-Taxonomy)
 - [Architecture](Architecture)
 - [Cascade Resolution](Cascade-Resolution)

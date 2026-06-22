@@ -97,6 +97,7 @@ If any check fails, run `cascade doctor` for a detailed report with suggested fi
 
 ## What's next
 
+- [Home](Home.md) — full wiki index
 - [Cascade Concepts](Cascade-Concepts.md) — understand the six-tier model and why it works this way
 - [CLI Reference](CLI-Reference.md) — every command and flag
 - [MCP Server](MCP-Server.md) — live context injection without static files

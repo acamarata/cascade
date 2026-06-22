@@ -227,7 +227,7 @@ cascade generate-instructions --dry-run                # print diff without writ
 | Flag | Description |
 |---|---|
 | `--harness <HARNESS>` | `cc`, `oc`, or `both` (default: `both`). |
-| `--tier <TIER>` | Limit to one tier: `gci`, `pci`, `apc`, `ppc`, `prc`, `pac`. |
+| `--tier <TIER>` | Limit to one tier: `gci`, `pci`, `apc`, `ppc`, `prc`, `pac`, or `all`. |
 | `--project <PATH>` | Project path (defaults to current working directory). |
 | `--dry-run` | Print a unified diff without writing any files. |
 
@@ -259,10 +259,26 @@ cascade daemon service-restart  # unload+reload (macOS/Linux) or stop+run (Windo
 Read or write `.cascade/memory/` files.
 
 ```sh
-cascade memory read decisions.md
-cascade memory write lessons.md "lesson text"
-cascade memory list
+cascade memory read decisions.md                   # print a memory file
+cascade memory write lessons.md --content "text"   # write or overwrite
+cascade memory write lessons.md --append           # append from stdin
 ```
+
+**Options for `cascade memory write`**
+
+| Flag | Description |
+|---|---|
+| `--content <TEXT>` | Content to write. Reads from stdin when omitted. |
+| `--append` | Append to the file instead of overwriting it. |
+| `--dir <PATH>` | Target `.cascade/` directory. Defaults to the nearest `.cascade/` in CWD. |
+
+**Options for `cascade memory read`**
+
+| Flag | Description |
+|---|---|
+| `--dir <PATH>` | Source `.cascade/` directory. Defaults to the nearest `.cascade/` in CWD. |
+
+The `.md` extension is added automatically if the filename has none.
 
 ---
 
@@ -344,13 +360,22 @@ cascade update apply
 
 ## cascade mcp
 
-MCP server token and client setup. See [MCP Server](MCP-Server.md) for details.
+MCP server token management and client setup. See [MCP Server](MCP-Server.md) for details.
 
 ```sh
-cascade mcp token generate
-cascade mcp token revoke <TOKEN_ID>
-cascade mcp token list
+cascade mcp token                              # print the current auth token
+cascade mcp status                             # show transport status and active connections
+cascade mcp setup --tool claude-code           # configure Claude Code
+cascade mcp setup --tool opencode             # configure OpenCode
+cascade mcp setup --tool vscode               # configure VS Code (Continue.dev)
+cascade mcp setup --tool claude-desktop       # configure Claude Desktop
+cascade mcp setup --all                        # auto-detect and configure all clients
+cascade mcp setup --list                       # detect clients without configuring
+cascade mcp setup --dry-run                    # preview changes without writing
+cascade mcp stdio                              # start MCP server in stdio mode
 ```
+
+The `cascade mcp setup` command writes the Cascade MCP server entry into each tool's config non-destructively. Existing config entries are preserved; only the Cascade entry is upserted. Pass `--remove` to remove the Cascade entry from a config.
 
 ---
 
@@ -399,6 +424,45 @@ cascade uninstall
 
 ---
 
+## cascade subs
+
+List detected AI coding subscriptions and their auth status.
+
+```sh
+cascade subs list            # list all detected subscriptions
+cascade subs list --json     # emit as JSON
+```
+
+Scans for Claude Code, OpenCode, Codex, Cursor, and Antigravity. Reports whether each is installed (binary or config found) and whether it has an authenticated session. Read-only diagnostic — does not configure or route inference.
+
+---
+
+## cascade provider
+
+Manage AI provider credentials.
+
+```sh
+cascade provider add --kind anthropic --api-key sk-ant-...
+cascade provider list
+cascade provider remove anthropic
+cascade provider test anthropic
+```
+
+**Subcommands**
+
+| Subcommand | Description |
+|---|---|
+| `add --kind <SLUG> --api-key <KEY>` | Validate and store a provider API key in the OS keychain. |
+| `list` | Show connected providers and health status. |
+| `remove <SLUG>` | Delete a provider's keychain entry and `providers.json` record. |
+| `test <SLUG>` | Live health-check against a connected provider. |
+
+API keys are stored in the OS keychain only. They are never written to disk in plaintext. `add` validates the key against the provider's auth endpoint before any write.
+
+Valid `--kind` values: `anthropic`, `openai`, `gemini`, `local`.
+
+---
+
 ## Global flags
 
 | Flag | Short | Description |
@@ -409,4 +473,4 @@ cascade uninstall
 
 ---
 
-See also: [Cascade Concepts](Cascade-Concepts.md) · [Quickstart](Quickstart.md) · [MCP Server](MCP-Server.md)
+See also: [Home](Home.md) · [Cascade Concepts](Cascade-Concepts.md) · [Quickstart](Quickstart.md) · [MCP Server](MCP-Server.md)

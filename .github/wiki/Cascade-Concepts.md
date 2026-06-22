@@ -104,4 +104,4 @@ This means:
 
 ---
 
-See also: [Quickstart](Quickstart.md) · [CLI Reference](CLI-Reference.md) · [Six-Tier Taxonomy](Six-Tier-Taxonomy.md)
+See also: [Home](Home.md) · [Quickstart](Quickstart.md) · [CLI Reference](CLI-Reference.md) · [Six-Tier-Taxonomy](Six-Tier-Taxonomy.md)

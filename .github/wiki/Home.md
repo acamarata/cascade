@@ -14,12 +14,13 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 
 **Getting started**
 - [Install](Install.md) — macOS, Linux, Windows
-- [Quickstart](Quickstart.md) — your first cascade in 30 minutes
+- [Quickstart](Quickstart.md) — your first cascade in 5 minutes
 - [Distribution Channels](Distribution-Channels.md) — all 9 install methods
 - [Onboarding Wizard](onboarding-wizard.md) — guided setup walkthrough
+- [Importing an Existing Setup](Importing-an-Existing-Setup.md) — migrate from `.claude/`, `.opencode/`, or `.codex/`
 
 **Concepts**
-- [The Cascade Concept](Cascade-Concept.md) — why cascading instructions
+- [Cascade Concepts](Cascade-Concepts.md) — why cascading instructions
 - [Six-Tier Taxonomy](Six-Tier-Taxonomy.md) — GCI / PCI / APC / PPC / PRC / PAC
 - [Architecture](Architecture.md) — system components and data flow
 - [Cascade Resolution](Cascade-Resolution.md) — how tiers merge

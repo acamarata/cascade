@@ -76,7 +76,7 @@ An MCP-compatible server that wraps `cascade-core` and `cascade-rag`. Supports t
 
 ### cascade-cli
 
-The `cascade` binary. Thin wrapper around the daemon IPC and the library crates. Subcommands: `init`, `edit`, `sync`, `search`, `serve`, `status`, `doctor`. See [CLI Reference](CLI-Reference.md) for details.
+The `cascade` binary. Thin wrapper around the daemon IPC and the library crates. Key subcommands include `init`, `status`, `resolve`, `search`, `doctor`, `verify`, `import`, `generate-instructions`, `daemon`, `mcp`, `provider`, `subs`, and `plugin`. See [CLI Reference](CLI-Reference.md) for the full list.
 
 ### Tauri app
 
@@ -115,3 +115,7 @@ and active phase context to any AI agent working on cascade itself.
 This was bootstrapped in T-P4-E05-19 (P4 E-05). The file is tracked in git via a
 `.gitignore` negation (`!.cascade/CASCADE.md`). Runtime-only files (`*.json`,
 `temp/`) in `.cascade/` remain gitignored.
+
+---
+
+See also: [Home](Home.md) · [Cascade Concepts](Cascade-Concepts.md) · [Daemon Architecture](Daemon-Architecture.md) · [RAG Pipeline](RAG-Pipeline.md)

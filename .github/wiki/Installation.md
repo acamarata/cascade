@@ -130,4 +130,4 @@ cascade verify
 
 ---
 
-See also: [Quickstart](Quickstart.md) · [CLI Reference](CLI-Reference.md) · [Troubleshooting](Troubleshooting.md)
+See also: [Home](Home.md) · [Quickstart](Quickstart.md) · [CLI Reference](CLI-Reference.md) · [Troubleshooting](Troubleshooting.md)

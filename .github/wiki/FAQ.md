@@ -69,4 +69,4 @@ The CLI falls back to reading `.cascade/` files directly for most operations. Se
 
 ---
 
-See also: [Troubleshooting](Troubleshooting.md) · [Security](Security.md) · [Privacy](Privacy.md) · [Install](Install.md)
+See also: [Home](Home.md) · [Troubleshooting](Troubleshooting.md) · [Security](Security.md) · [Privacy](Privacy.md) · [Install](Install.md)
