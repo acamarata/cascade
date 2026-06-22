@@ -6,10 +6,10 @@
 //! react without polling.
 //!
 //! Inputs:
-//!   - `store`    — current [`QuotaStore`] (read-only); may be stale by
-//!                  seconds but is always the daemon's last-written snapshot.
+//!   - `store` — current [`QuotaStore`] (read-only); may be stale by seconds
+//!     but is always the daemon's last-written snapshot.
 //!   - `provider` — one of the `PROVIDER_*` constants from `cascade_types`.
-//!   - `bus`      — [`SharedBus`] for publishing `quota.exhausted` events.
+//!   - `bus` — [`SharedBus`] for publishing `quota.exhausted` events.
 //!
 //! Outputs:
 //!   - `select_account` returns `Some(account_id)` when a non-exhausted
@@ -103,8 +103,8 @@ impl RotationSelector {
     ///
     /// Inputs:
     ///   - `provider` — the exhausted provider string.
-    ///   - `bus`      — event bus reference (not `&self.bus` so callers can
-    ///                  pass any bus handle, useful for testing).
+    ///   - `bus` — event bus reference (not `&self.bus` so callers can
+    ///     pass any bus handle, useful for testing).
     ///
     /// Outputs: the `quota.exhausted` event is persisted in events.db.
     ///          Failures are logged as warnings; this never panics.

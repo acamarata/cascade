@@ -168,6 +168,46 @@ pub fn spawn_tray_thread(
         .expect("failed to spawn cascade-tray thread")
 }
 
+/// Read `quota-store.json` and build fleet summary strings for the tray.
+///
+/// Purpose: generate human-readable per-source quota lines for the menu-bar
+///   tooltip. Called before each tray state update to refresh fleet data.
+/// Inputs: `store_path` — path to `~/.cascade/quota-store.json`.
+/// Outputs: `Vec<String>` where each entry is formatted as
+///   `"account_id: Xk/Yk tokens"` (when a limit is known) or
+///   `"account_id: Xk used"` (when the limit is unknown).
+///   Returns an empty `Vec` when the file is missing or unreadable.
+/// Constraints: never panics; logs `warn` on read failure.
+///
+/// SPORT: `.claude/docs/MASTER-DAEMON.md` — fleet_summary_from_store (E-P6-03 v1.1)
+pub fn fleet_summary_from_store(store_path: &std::path::Path) -> Vec<String> {
+    use cascade_core::quota_store::read_quota_store;
+    match read_quota_store(store_path) {
+        Ok(store) => store
+            .accounts
+            .iter()
+            .map(|a| {
+                let tokens: u64 = a.models.values().map(|m| m.used).sum();
+                let limit: Option<u64> = a.models.values().filter_map(|m| m.limit).next();
+                match limit {
+                    Some(lim) => {
+                        format!("{}: {}k/{}k", a.account_id, tokens / 1_000, lim / 1_000)
+                    }
+                    None => format!("{}: {}k used", a.account_id, tokens / 1_000),
+                }
+            })
+            .collect(),
+        Err(e) => {
+            // Missing file is expected before first fleet tick; log at warn
+            // only when the file exists but is unreadable.
+            if store_path.exists() {
+                warn!(%e, path = %store_path.display(), "fleet: failed to read quota-store.json");
+            }
+            Vec::new()
+        }
+    }
+}
+
 /// Map a `TrayState` default (all-zero) value from a `StatusCache`.
 ///
 /// Purpose: convert the E-03 `StatusCache` fields into a `TrayState` snapshot
