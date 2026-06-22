@@ -42,6 +42,8 @@ mod log;
 mod provider_health;
 #[cfg(feature = "gfp")]
 mod quota_poller;
+#[cfg(feature = "gfp")]
+mod project_poller;
 mod regen;
 mod shutdown;
 mod state;

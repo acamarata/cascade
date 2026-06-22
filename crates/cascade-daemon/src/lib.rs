@@ -47,6 +47,8 @@ pub mod provider_health;
 pub mod proxy;
 #[cfg(feature = "gfp")]
 pub mod quota_poller;
+#[cfg(feature = "gfp")]
+pub mod project_poller;
 // T-P4-E01-26: auto-RAG file watcher (notify-based)
 pub mod rag_watcher;
 // T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)

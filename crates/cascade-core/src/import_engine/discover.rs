@@ -125,12 +125,21 @@ fn walk_dir(
         };
         let path = entry.path();
 
-        // Skip git-related and OS metadata.
+        // Skip git/OS metadata and harness-runtime directories that are not part
+        // of the instruction cascade. A real `~/.claude` holds gigabytes of
+        // session transcripts + per-project data under `projects/` (and other
+        // runtime dirs) that are NOT importable global instruction content;
+        // recursing into them makes import hang on tens of thousands of files.
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        if name == ".git" || name == ".DS_Store" || name == "node_modules" {
+        const SKIP_DIRS: &[&str] = &[
+            ".git", ".DS_Store", "node_modules", "target",
+            "projects", "todos", "shell-snapshots", "statsig", "ide",
+            ".cache", "temp", "tmp", "logs", "backups", "downloads",
+        ];
+        if SKIP_DIRS.contains(&name) {
             continue;
         }
 
@@ -151,6 +160,13 @@ fn walk_dir(
         if path.is_dir() {
             walk_dir(root, &path, files)?;
         } else {
+            // Skip non-instruction files: session transcripts (`.jsonl`), logs,
+            // lockfiles, binaries, and anything larger than 1 MiB. A real
+            // `~/.claude` can hold gigabytes of session transcripts that are not
+            // instruction-cascade content; reading them all makes import hang.
+            if is_noise_file(&path, name) {
+                continue;
+            }
             let relative_path = path
                 .strip_prefix(root)
                 .unwrap_or(&path)
@@ -161,6 +177,26 @@ fn walk_dir(
     }
 
     Ok(())
+}
+
+/// True for files that are not part of an instruction cascade and should be
+/// skipped during import discovery: session transcripts (`.jsonl`), logs,
+/// lockfiles, archives, media, binaries, or anything larger than 1 MiB
+/// (instruction files are small). Keeps import fast and focused on real
+/// instruction content (CLAUDE.md, rules, references, memory, etc.).
+fn is_noise_file(path: &Path, name: &str) -> bool {
+    const SKIP_EXT: &[&str] = &[
+        "jsonl", "log", "lock", "tmp", "bak", "zip", "gz", "tgz", "tar", "png",
+        "jpg", "jpeg", "gif", "webp", "ico", "icns", "pdf", "wasm", "bin", "db",
+        "sqlite", "sqlite3", "so", "dylib", "node",
+    ];
+    if let Some(ext) = name.rsplit('.').next() {
+        if SKIP_EXT.contains(&ext.to_ascii_lowercase().as_str()) {
+            return true;
+        }
+    }
+    // Oversized files are not instruction content (cap 1 MiB).
+    matches!(std::fs::metadata(path), Ok(m) if m.len() > 1_048_576)
 }
 
 /// Read a file and classify it into a [`SourceKind`].
