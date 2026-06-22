@@ -6,6 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-22
+
+Baked-in behavioral instruction layer.
+
+### Added
+
+- Default behavioral rules shipped with Cascade and generated into every
+  harness's files: authorization & autonomy (act-then-report within standing
+  authorization, configurable posture), vision & mission discipline (stay in
+  scope, flag missing specs, no gold-plating), and delegation & model
+  discipline (route per the model matrix, max free quotas for review). These
+  join the existing anti-drift, dynamic-learning, and excellence rules.
+- `cascade doctor` behavioral-core check — flags drift when a generated harness
+  file is missing the always-loaded behavioral rules (e.g. hand-stripped).
+
 ## [1.3.0] - 2026-06-22
 
 Dynamic learning + taxonomy.
