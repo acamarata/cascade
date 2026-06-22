@@ -43,7 +43,28 @@ Shipped as Cascade's behavioral-rule + standards library, enforced by `cascade d
 - **v1.1** — Fleet: daemon poller loop (~1min) → `~/.cascade/quota-store.json` → menu-bar widget. Onboarding wired. PBD/PEWS completeness + coding-standards library completeness.
 - **v1.2** — Model access + **sensitive-data firewall** + routing matrix (§5).
 - **v1.3** — Beyond-parity: taxonomy/auto-classify, dynamic-learning rule (capture→GFP-tag→memory), semantic corpus search, GFP pre/post-prompt pipeline.
+- **v1.4+** — Until the complete vision is fully realized: refine the baked-in behavioral instruction layer (§7), telemetry/analytics, plugin marketplace, GUI surfaces, and any remaining gaps. Keep shipping until done.
 - `cascade update` tested between each (smooth, no hiccups).
+
+## 7. Baked-in behavioral instruction layer (Cascade ships this — first-class)
+Cascade is a context manager, so it must SHIP excellent default behavioral instructions
+(a behavioral-rule library, generated into every harness's files) that make any agent
+using Cascade operate to best practice. The library encodes:
+- **Authorization & autonomy posture** — act-then-report within the user's standing
+  authorization; full trust within scope; no permission-prompt loops; confirm only
+  genuinely irreversible/outward actions. (Configurable per user; default = the
+  operator's chosen posture, not hardcoded reckless.)
+- **Anti-hallucination & anti-drift** — verify before claiming done (run the build/test);
+  source-of-truth files beat conversation; never invent features not in the spec; flag
+  missing specs/contradictions instead of guessing; name things precisely.
+- **Firm vision/mission awareness** — hold the high-level VISION/FEATURES/mission at all
+  times; keep strictly in scope and on task; re-read the active plan after compression.
+- **Dynamic learning** — capture discoveries/decisions/lessons to memory as you go
+  (decisions / lessons / patterns); use the cheap pool (GFP) to tag/classify; recall
+  before re-deriving.
+- **Delegation & model discipline** — top-tier plans/reviews, cheaper tiers execute;
+  route per the §5 matrix; max free/cheap quotas for adversarial CR/QA.
+These ship as `tier = "any"` behavioral templates + are enforceable via `cascade doctor`.
 
 ## 5. Model access + routing matrix (v1.2 core)
 **Primary = the native Claude account in Claude Code (T0)** — reserved for interactive chat/final synthesis, used sparingly.
