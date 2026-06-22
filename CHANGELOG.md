@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-22
+
+Fleet + onboarding + self-contained hardening.
+
+### Added
+
+- Fleet poller — a daemon loop refreshes `~/.cascade/quota-store.json` every
+  ~60s (configurable `[fleet]`) via a `FleetSource` trait. GFP source is live;
+  Claude/Codex/Gemini sources are stubs (return no data, never faked) pending
+  v1.2 model-access. The menu-bar tray shows a fleet usage readout.
+- Onboarding wizard wired end-to-end — provider connect/add-GFP/list, wizard
+  state persistence, filesystem/symlink/keychain commands, and automatic
+  credential detection on first run (no more silently-failing steps).
+
+### Changed
+
+- Self-contained: removed all Docker/cross-rs reliance from CI and the release
+  pipeline. Linux aarch64 now builds + tests natively on GitHub arm64 runners.
+- `cascade import` discovery is scoped to instruction content — harness-runtime
+  directories (session transcripts, caches) and non-instruction files are
+  skipped, so importing a real `~/.claude` is fast and lossless.
+
+### Fixed
+
+- `project_poller` is wired behind the `gfp` feature (was an orphaned module).
+
 ## [1.0.0] - 2026-06-22
 
 First stable release. Cascade is a standalone, local-first context manager and
