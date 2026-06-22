@@ -40,9 +40,9 @@ env:
 
 jobs:
   # ── test ─────────────────────────────────────────────────────────────────
-  # Run the full test suite across 5 target triples.
-  # Linux aarch64 uses cross-rs (no native GitHub aarch64 Linux runner available).
-  # All others use cargo-nextest natively.
+  # Run the full test suite across 5 target triples, all natively
+  # (macOS arm64/x64, Linux x64/arm64, Windows x64). No Docker, no cross-rs —
+  # Linux aarch64 uses GitHub's native arm64 runner (ubuntu-24.04-arm).
   test:
     name: test (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
@@ -65,10 +65,10 @@ jobs:
             target: x86_64-unknown-linux-gnu
             use-cross: false
 
-          # Linux aarch64 — cross-compile via cross-rs (no native runner available)
-          - runner: ubuntu-24.04
+          # Linux aarch64 — native arm64 runner (no Docker, no cross-rs)
+          - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            use-cross: true
+            use-cross: false
 
           # Windows x86_64 (native MSVC)
           - runner: windows-latest
@@ -96,16 +96,7 @@ jobs:
       - name: Install cargo-nextest
         run: cargo binstall --no-confirm cargo-nextest
 
-      - name: Install cross-rs (Linux aarch64 only)
-        if: matrix.use-cross == true
-        run: cargo binstall --no-confirm cross
-
-      - name: Run tests via cross (Linux aarch64)
-        if: matrix.use-cross == true
-        run: cross nextest run --workspace --target ${{ matrix.target }}
-
-      - name: Run tests via nextest (native)
-        if: matrix.use-cross == false
+      - name: Run tests via nextest (native, all targets)
         run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
 
   # ── integration-tests ────────────────────────────────────────────────────
@@ -133,8 +124,8 @@ jobs:
         run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
 
   # ── clippy ────────────────────────────────────────────────────────────────
-  # Run clippy with -D warnings across the full matrix.
-  # Linux aarch64 uses cross-rs for the cross-target lint.
+  # Run clippy with -D warnings across the full matrix, all natively.
+  # Linux aarch64 lints on GitHub's native arm64 runner (no Docker/cross-rs).
   clippy:
     name: clippy (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
@@ -154,9 +145,9 @@ jobs:
             target: x86_64-unknown-linux-gnu
             use-cross: false
 
-          - runner: ubuntu-24.04
+          - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            use-cross: true
+            use-cross: false
 
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
@@ -181,16 +172,7 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
-      - name: Install cross-rs (Linux aarch64 only)
-        if: matrix.use-cross == true
-        run: cargo binstall --no-confirm cross
-
-      - name: Run clippy via cross (Linux aarch64)
-        if: matrix.use-cross == true
-        run: cross clippy --workspace --target ${{ matrix.target }} -- -D warnings
-
-      - name: Run clippy natively
-        if: matrix.use-cross == false
+      - name: Run clippy natively (all targets)
         run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
 
   # ── fmt ───────────────────────────────────────────────────────────────────

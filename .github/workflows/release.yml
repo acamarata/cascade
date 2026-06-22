@@ -52,10 +52,9 @@ jobs:
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             os: linux
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             os: linux
-            use-cross: true
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
             os: windows
@@ -75,25 +74,10 @@ jobs:
         if: matrix.os == 'linux'
         run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
 
-      - name: Install cross-rs (Linux aarch64 only)
-        if: matrix.use-cross == true
-        uses: cargo-bins/cargo-binstall@main
-        # cargo-binstall is already set up; install cross via it
-      - name: Install cross binary
-        if: matrix.use-cross == true
-        run: cargo binstall --no-confirm cross
-
-      - name: Build cascade + cascaded (native)
-        if: matrix.use-cross != true
+      - name: Build cascade + cascaded (native, all targets)
         run: |
           cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli
           cargo build --release --locked --target ${{ matrix.target }} -p cascade-daemon
-
-      - name: Build cascade + cascaded (cross)
-        if: matrix.use-cross == true
-        run: |
-          cross build --release --locked --target ${{ matrix.target }} -p cascade-cli
-          cross build --release --locked --target ${{ matrix.target }} -p cascade-daemon
 
       - name: Package CLI + daemon (Linux/macOS tar.gz)
         if: matrix.os != 'windows'
