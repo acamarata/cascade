@@ -232,3 +232,70 @@ pub async fn cascade_check_gfp_proxy(_state: State<'_, AppState>) -> Result<bool
     // Ask the daemon; it handles the actual TCP probe with a 200 ms timeout.
     daemon_call::<_, bool>("cascade_check_gfp_proxy", serde_json::json!({})).await
 }
+
+// ── Wizard provider-step helpers ──────────────────────────────────────────────
+
+/// Auto-connect the Gemini Forwarding Proxy detected at localhost:3761.
+///
+/// Called by WizardProviderStep.tsx when `cascade_check_gfp_proxy` returns true.
+/// Delegates to `cascade_providers_add_apikey` with the GFP sentinel key
+/// `"gfp_proxy_localhost_3761"` so the daemon registers the provider without
+/// requiring the user to supply a real API key.
+///
+/// JS: `invoke("cascade_providers_add_gfp")`
+#[tauri::command]
+pub async fn cascade_providers_add_gfp(
+    _state: State<'_, AppState>,
+) -> Result<(), CascadeError> {
+    debug!("cascade_providers_add_gfp invoked");
+    daemon_call::<_, ()>(
+        "cascade_providers_add_apikey",
+        serde_json::json!({ "id": "gemini_gfp", "key": "gfp_proxy_localhost_3761" }),
+    )
+    .await
+}
+
+/// Connect a provider by ID and optional API key.
+///
+/// Thin convenience wrapper over `cascade_providers_add_apikey`; used by wizard
+/// steps that know the provider ID but may not have a key (OAuth providers pass
+/// `api_key: None`, resulting in an empty string forwarded to the daemon which
+/// then triggers the OAuth flow on its side).
+///
+/// JS: `invoke("cascade_providers_connect", { provider, apiKey })`
+#[tauri::command]
+pub async fn cascade_providers_connect(
+    provider: String,
+    api_key: Option<String>,
+    _state: State<'_, AppState>,
+) -> Result<(), CascadeError> {
+    debug!(provider_id = %provider, "cascade_providers_connect invoked");
+    let key = api_key.unwrap_or_default();
+    daemon_call::<_, ()>(
+        "cascade_providers_add_apikey",
+        serde_json::json!({ "id": provider, "key": key }),
+    )
+    .await
+}
+
+// ── Keychain management ───────────────────────────────────────────────────────
+
+/// Delete the OS keychain entry for a given service label (via daemon).
+///
+/// Used by the settings / provider-management UI when the user disconnects a
+/// provider and wants to remove its stored credential from the OS keychain.
+/// The daemon owns all keychain access; this command is a thin IPC shim.
+///
+/// JS: `invoke("keychain_delete", { service })`
+#[tauri::command]
+pub async fn keychain_delete(
+    service: String,
+    _state: State<'_, AppState>,
+) -> Result<(), CascadeError> {
+    debug!(service = %service, "keychain_delete invoked");
+    daemon_call::<_, ()>(
+        "keychain_delete",
+        serde_json::json!({ "service": service }),
+    )
+    .await
+}

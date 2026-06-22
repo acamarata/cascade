@@ -258,6 +258,12 @@ export function WizardProviderStep() {
   /** Live list of connected provider ids from cascade_providers_list. */
   const [connectedProviders, setConnectedProviders] = React.useState<string[]>([])
 
+  /** Auto-detected credentials found by cascade_auto_auth_scan. */
+  const [autoAuthAccounts, setAutoAuthAccounts] = React.useState<string[]>([])
+
+  /** Whether the "import existing credentials" banner is visible. */
+  const [showAutoAuthBanner, setShowAutoAuthBanner] = React.useState(false)
+
   /** Whether skip warning Alert is visible. */
   const [showSkipWarning, setShowSkipWarning] = React.useState(false)
 
@@ -271,13 +277,16 @@ export function WizardProviderStep() {
   // Refresh connected providers list
   // -------------------------------------------------------------------------
 
+  // cascade_providers_list returns Vec<ProviderListItem> structs from Rust,
+  // not string[]. Map to ids so downstream code is unaffected.
   const refreshProviders = React.useCallback(async () => {
     try {
-      const result = await invoke<string[] | undefined>('cascade_providers_list')
+      const result = await invoke<Array<{ id: string; name: string; auth_method: string; status: string; error_msg?: string; today_cost_usd?: number }> | undefined>('cascade_providers_list')
       // Guard: IPC may return undefined when command is a stub — treat as empty list
-      const list = Array.isArray(result) ? result : []
-      setConnectedProviders(list)
-      if (list.length > 0) {
+      const items = Array.isArray(result) ? result : []
+      const ids = items.map((item) => item.id)
+      setConnectedProviders(ids)
+      if (ids.length > 0) {
         updateState({ providerConnected: true })
       }
     } catch {
@@ -316,7 +325,22 @@ export function WizardProviderStep() {
       }
     }
 
+    async function runAutoAuthScan() {
+      try {
+        // cascade_auto_auth_scan returns an array of detected account descriptors.
+        const accounts = await invoke<Array<{ account_email: string; provider: string }>>('cascade_auto_auth_scan')
+        if (cancelled) return
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          setAutoAuthAccounts(accounts.map((a) => a.account_email ?? a.provider))
+          setShowAutoAuthBanner(true)
+        }
+      } catch {
+        // cascade_auto_auth_scan unavailable — non-blocking
+      }
+    }
+
     void checkGfp()
+    void runAutoAuthScan()
     // Initial provider list load
     void refreshProviders()
 
@@ -389,6 +413,44 @@ export function WizardProviderStep() {
           provider to unlock the full setup experience.
         </p>
       </div>
+
+      {/* Auto-auth import banner — shown when cascade_auto_auth_scan finds credentials */}
+      {showAutoAuthBanner && autoAuthAccounts.length > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">
+            We found existing credentials ({autoAuthAccounts.join(', ')}) — import them?
+          </span>
+          <button
+            type="button"
+            aria-label="Import existing credentials from detected harnesses"
+            onClick={async () => {
+              try {
+                await invoke<void>('cascade_auto_auth_import')
+                await refreshProviders()
+              } catch {
+                // Import failed — user can connect manually
+              }
+              setShowAutoAuthBanner(false)
+            }}
+            className="shrink-0 rounded-md border border-green-400 bg-white px-3 py-1 text-xs font-medium text-green-800 hover:bg-green-50 dark:bg-transparent dark:text-green-300 dark:border-green-600"
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss auto-import suggestion"
+            onClick={() => setShowAutoAuthBanner(false)}
+            className="shrink-0 text-xs text-green-600 underline hover:text-green-800 dark:text-green-400"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* GFP auto-detected banner */}
       {gfpDetected && (
