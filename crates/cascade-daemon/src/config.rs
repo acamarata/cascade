@@ -337,7 +337,7 @@ impl Default for OcGoQuotaConfig {
 /// [quota.oc_go]
 /// monthly_usd_limit = 50.0
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct QuotaConfig {
     /// `[quota.claude_max]` — Claude Max subscription token limits.
@@ -348,17 +348,6 @@ pub struct QuotaConfig {
     pub agy: AgyQuotaConfig,
     /// `[quota.oc_go]` — OC-Go dollar-metered limits.
     pub oc_go: OcGoQuotaConfig,
-}
-
-impl Default for QuotaConfig {
-    fn default() -> Self {
-        Self {
-            claude_max: ProviderTokenQuotaConfig::default(),
-            codex: ProviderTokenQuotaConfig::default(),
-            agy: AgyQuotaConfig::default(),
-            oc_go: OcGoQuotaConfig::default(),
-        }
-    }
 }
 
 // ── E-P6-02 T-05: BudgetConfig ────────────────────────────────────────────────
@@ -397,6 +386,37 @@ impl Default for BudgetConfig {
             claude_max_hourly_token_limit: 0,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+        }
+    }
+}
+
+/// `[fleet]` section of config.toml.
+///
+/// Controls the [`crate::fleet_poller::FleetPoller`] daemon task that
+/// aggregates quota snapshots from all configured providers into
+/// `~/.cascade/quota-store.json` every `interval_secs`.
+///
+/// # TOML example
+///
+/// ```toml
+/// [fleet]
+/// enabled = true
+/// interval_secs = 60
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FleetConfig {
+    /// Enable the fleet polling loop; default `true`.
+    pub enabled: bool,
+    /// Poll interval in seconds; default 60; valid range 10..=3600.
+    pub interval_secs: u64,
+}
+
+impl Default for FleetConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interval_secs: 60,
         }
     }
 }
@@ -491,6 +511,9 @@ pub struct Config {
     /// `[budget]` section — per-provider hard-stop budget limits (E-P6-02 T-05).
     #[serde(default)]
     pub budget: BudgetConfig,
+    /// `[fleet]` section — fleet polling loop config (E-P6-03 v1.1).
+    #[serde(default)]
+    pub fleet: FleetConfig,
     /// `[[hooks]]` array — hook definitions loaded from this config tier.
     ///
     /// Each entry is converted to a `HookDef` and seeded into the in-memory
@@ -520,6 +543,7 @@ impl Default for Config {
             backup: BackupConfig::default(),
             quota: QuotaConfig::default(),
             budget: BudgetConfig::default(),
+            fleet: FleetConfig::default(),
             hooks: Vec::new(),
         }
     }
@@ -601,6 +625,14 @@ impl Config {
             return Err(ConfigError::InvalidValue {
                 field: "history.retention_days".into(),
                 constraint: "must be in range 0..=36500 (0 = keep forever, max ~100 years)".into(),
+            });
+        }
+
+        // fleet.interval_secs: 10..=3600
+        if !(10..=3600).contains(&self.fleet.interval_secs) {
+            return Err(ConfigError::InvalidValue {
+                field: "fleet.interval_secs".into(),
+                constraint: "must be in range 10..=3600".into(),
             });
         }
 

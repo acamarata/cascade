@@ -76,4 +76,7 @@ pub mod rotation_selector;
 // E-P6-02 T-05: hard-stop per-window budget guard
 pub mod budget_guard;
 
+// E-P6-03 v1.1: fleet poller loop — periodic quota-store.json refresh
+pub mod fleet_poller;
+
 pub use config::Config;

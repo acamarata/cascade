@@ -51,6 +51,14 @@ pub struct TrayState {
 
     /// Current operational state of the cascade daemon.
     pub daemon_status: DaemonStatus,
+
+    /// Fleet quota summary for the menu-bar display (E-P6-03 v1.1).
+    ///
+    /// Each entry is formatted as `"account_id: used/limit"` or
+    /// `"account_id: used"` when no limit is known. An empty `Vec` means
+    /// no fleet data is available yet (quota-store.json absent or unreadable).
+    #[serde(default)]
+    pub fleet_summary: Vec<String>,
 }
 
 impl Default for TrayState {
@@ -61,6 +69,7 @@ impl Default for TrayState {
             active_agents: 0,
             inbox_unread: 0,
             daemon_status: DaemonStatus::Stopped,
+            fleet_summary: Vec::new(),
         }
     }
 }

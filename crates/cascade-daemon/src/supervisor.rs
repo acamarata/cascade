@@ -166,6 +166,20 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
         });
     }
 
+    // ── Fleet poller (E-P6-03 v1.1) ──────────────────────────────────────────
+    // Aggregates per-source quota snapshots into quota-store.json every
+    // interval_secs. Runs unconditionally (not gated on the `gfp` feature)
+    // because the fleet poller supports multiple providers beyond GFP.
+    if config.fleet.enabled {
+        use crate::fleet_poller::FleetPoller;
+        let fp_config = config.fleet.clone();
+        let fp_dir = config_dir.clone();
+        let fp_shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            FleetPoller::run(fp_config, fp_dir, fp_shutdown).await;
+        });
+    }
+
     // ── File watcher: publish cascade.changed events ──────────────────────────
     // Poll config_dir/CASCADE.md for modification time changes every debounce_ms.
     // When a change is detected, publish a "cascade.changed" event to the bus.

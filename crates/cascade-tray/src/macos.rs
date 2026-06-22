@@ -50,10 +50,15 @@ pub fn tooltip_string(state: &TrayState) -> String {
     } else {
         "index stale"
     };
-    format!(
+    let base = format!(
         "Cascade: {total_rules} rules | {rag_fresh} | {} agents | {} inbox",
         state.active_agents, state.inbox_unread,
-    )
+    );
+    if state.fleet_summary.is_empty() {
+        base
+    } else {
+        format!("{base} | Fleet: {}", state.fleet_summary.join(", "))
+    }
 }
 
 /// macOS implementation of [`TrayHandle`] backed by `tray-item` 0.9.
@@ -285,6 +290,7 @@ mod tests {
             active_agents: 1,
             inbox_unread: 0,
             daemon_status: DaemonStatus::Running,
+            fleet_summary: Vec::new(),
         };
 
         let result = tooltip_string(&state);
