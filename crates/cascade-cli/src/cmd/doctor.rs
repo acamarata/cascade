@@ -291,6 +291,34 @@ impl Command for DoctorArgs {
             }
         }
 
+        // ── Behavioral-core rules ──────────────────────────────────────────
+        {
+            let scan_dirs: Vec<PathBuf> = tiers
+                .iter()
+                .map(|t| t.cascade_dir.clone())
+                .collect();
+            let findings = cascade_core::lint_behavioral::lint_behavioral_core(&scan_dirs);
+            if findings.is_empty() {
+                checks.push(Check {
+                    name: "Behavioral-core rules",
+                    status: CheckStatus::Pass,
+                    detail: String::new(),
+                });
+            } else {
+                for finding in &findings {
+                    checks.push(Check {
+                        name: "Behavioral-core drift",
+                        status: CheckStatus::Warn,
+                        detail: format!(
+                            "{} — missing: {}",
+                            finding.path.display(),
+                            finding.missing_headings.join(", ")
+                        ),
+                    });
+                }
+            }
+        }
+
         // ── Always-loaded context-budget lint ─────────────────────────────
         // Advisory (Warn) by default; Error verdict escalates to FAIL.
         {

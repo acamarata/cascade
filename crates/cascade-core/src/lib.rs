@@ -61,6 +61,7 @@ pub mod lint_budget;
 pub mod lint_conflicts;
 pub mod lint_dangling;
 pub mod lint_duplication;
+pub mod lint_behavioral;
 pub mod lint_generated;
 pub mod var_substitute;
 pub mod compat_gen;

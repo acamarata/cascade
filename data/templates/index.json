@@ -464,6 +464,33 @@
       "stacks": [],
       "project_shapes": [],
       "description": "Capture decisions, lessons, and patterns to memory as you work; tag via the cheap pool; recall before re-deriving; never lose a learning."
+    },
+    {
+      "id": "rule-authorization-autonomy",
+      "file": "rules/authorization-autonomy.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Act-then-report within standing authorization; confirm only genuinely irreversible actions; no permission-prompt loops."
+    },
+    {
+      "id": "rule-vision-mission-discipline",
+      "file": "rules/vision-mission-discipline.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Hold the project vision and feature list at all times; stay in scope; flag missing specs rather than guessing."
+    },
+    {
+      "id": "rule-delegation-model-discipline",
+      "file": "rules/delegation-model-discipline.md",
+      "version": "1.0.0",
+      "tier": "any",
+      "stacks": [],
+      "project_shapes": [],
+      "description": "Top tier plans and reviews; route bulk work to cheaper tiers; max free quotas for adversarial QA; parallel independent units."
     }
   ]
 }
