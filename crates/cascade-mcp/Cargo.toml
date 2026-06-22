@@ -15,7 +15,7 @@ cascade-types      = { workspace = true }
 cascade-core       = { workspace = true }
 cascade-providers  = { workspace = true }
 # context_slice tool wires directly into cascade-rag (T-P4-E04-22: no IPC double-serialization)
-cascade-rag        = { path = "../cascade-rag", version = "1.1.0" }
+cascade-rag        = { path = "../cascade-rag", version = "1.2.0" }
 tokio              = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }

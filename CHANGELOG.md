@@ -6,6 +6,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-22
+
+Model access + privacy firewall.
+
+### Added
+
+- Sensitive-data firewall — a content classifier (PII, VA/disability,
+  custody/family, health, financial, personal-scope paths) plus a dispatch
+  guard that keeps sensitive content on Claude or local models only. It is
+  provably blocked from every external provider (Gemini, OpenAI/Codex, GFP,
+  OpenCode-Go) and never synced.
+- Local delegate-out lanes — `cascade dispatch` can route work to `codex exec`,
+  `agy -p`, `opencode run`, the GFP free-Flash pool, extra Claude accounts
+  (`claude -p`), and a local LLM. Each lane detects CLI availability and never
+  fabricates output.
+- Quota-aware routing matrix — `cascade dispatch --route <class>` selects a lane
+  by task class and live quota headroom: the primary Claude session stays
+  reserved for interactive use, extra accounts drain first, cheap work prefers
+  the free GFP pool, adversarial review prefers a different model family, and
+  sensitive work is firewalled to Claude/local. Paid-API overage is off by
+  default.
+
+### Changed
+
+- Mac tier defaults — `~/Sites` resolves to the project (APC) tier and
+  `~/Downloads` is treated as the personal scope (locked + firewalled) with no
+  configuration required.
+
 ## [1.1.0] - 2026-06-22
 
 Fleet + onboarding + self-contained hardening.
