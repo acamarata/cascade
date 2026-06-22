@@ -38,6 +38,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use cascade_core::routing::{Router, RouterConfig, RoutingDecision, TaskClass};
 use cascade_harness::policy::dispatch::evaluate_before_dispatch;
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::{
@@ -138,6 +139,47 @@ pub struct DispatchArgs {
     /// testing).
     #[arg(long, value_name = "PATH", hide = true)]
     pub binary_override: Option<PathBuf>,
+
+    /// Task class for routing-matrix selection.
+    ///
+    /// When set, the routing matrix picks the optimal lane automatically and
+    /// prints the routing decision before dispatch. When absent, dispatch
+    /// proceeds with the `--harness` flag unchanged.
+    ///
+    /// Values: interactive-chat | bulk-exec | cheap | adversarial-review |
+    ///         final-gate | sensitive
+    #[arg(long, value_name = "CLASS", value_enum)]
+    pub route: Option<TaskClassArg>,
+}
+
+/// Clap-compatible wrapper for [`TaskClass`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TaskClassArg {
+    #[value(name = "interactive-chat")]
+    InteractiveChat,
+    #[value(name = "bulk-exec")]
+    BulkExec,
+    #[value(name = "cheap")]
+    Cheap,
+    #[value(name = "adversarial-review")]
+    AdversarialReview,
+    #[value(name = "final-gate")]
+    FinalGate,
+    #[value(name = "sensitive")]
+    Sensitive,
+}
+
+impl From<TaskClassArg> for TaskClass {
+    fn from(a: TaskClassArg) -> Self {
+        match a {
+            TaskClassArg::InteractiveChat => TaskClass::InteractiveChat,
+            TaskClassArg::BulkExec => TaskClass::BulkExec,
+            TaskClassArg::Cheap => TaskClass::Cheap,
+            TaskClassArg::AdversarialReview => TaskClass::AdversarialReview,
+            TaskClassArg::FinalGate => TaskClass::FinalGate,
+            TaskClassArg::Sensitive => TaskClass::Sensitive,
+        }
+    }
 }
 
 // ── Command impl ──────────────────────────────────────────────────────────────
@@ -171,10 +213,40 @@ impl Command for DispatchArgs {
             )));
         }
 
-        // 3. Locate harness binary.
+        // 3. If --route was given, run the routing matrix and print the decision.
+        //    Reserved decisions (InteractiveChat, FinalGate) proceed normally
+        //    on the default harness. Lane decisions advise which provider to use
+        //    (the binary selection itself still uses --harness; the provider ID
+        //    is informational for the caller). FirewallDeny and AllExhausted
+        //    surface a warning but do not block dispatch (the user may override).
+        if let Some(task_class_arg) = self.route {
+            let task_class = TaskClass::from(task_class_arg);
+            let router = Router::with_config(RouterConfig::default());
+            let decision = router.select(task_class, &self.prompt);
+            print_routing_decision(task_class, &decision);
+            match &decision {
+                RoutingDecision::FirewallDeny { reason } => {
+                    return Err(CascadeError::Other(format!(
+                        "dispatch blocked by sensitivity firewall: {reason}"
+                    )));
+                }
+                RoutingDecision::AllExhausted { tried } => {
+                    eprintln!(
+                        "cascade dispatch: warning — all preferred lanes exhausted: {}; \
+                         proceeding with --harness override",
+                        tried.join(", ")
+                    );
+                }
+                RoutingDecision::Reserved { .. } | RoutingDecision::Lane { .. } => {
+                    // Continue with the subprocess dispatch below.
+                }
+            }
+        }
+
+        // 4. Locate harness binary.
         let binary = self.resolve_binary()?;
 
-        // 4. Optionally fetch context slice via ContextOptimizer (T-P4-E04-20).
+        // 5. Optionally fetch context slice via ContextOptimizer (T-P4-E04-20).
         //    In the CLI dispatch path we do not have a live RAG index connection,
         //    so we use the optimizer in "shell-only" mode: the query is echoed as
         //    a header and the budget is noted. A full RAG-backed slice requires the
@@ -184,25 +256,25 @@ impl Command for DispatchArgs {
             .as_ref()
             .map(|query| fetch_context_with_optimizer(query, self.budget_tokens));
 
-        // 5. Compose full prompt.
+        // 6. Compose full prompt.
         let full_prompt = compose_prompt(context_block.as_deref(), &self.prompt);
 
-        // 6. Resolve MCP socket path.
+        // 7. Resolve MCP socket path.
         let mcp_socket = self
             .mcp_socket
             .clone()
             .unwrap_or_else(cascade_types::paths::daemon_socket);
 
-        // 7. Build argv.
+        // 8. Build argv.
         let (bin_path, args) = self.harness.build_argv(&binary, &full_prompt);
 
-        // 8. Dry-run: print and exit.
+        // 9. Dry-run: print and exit.
         if self.dry_run {
             print_dry_run(&bin_path, &args, &mcp_socket, &repo, &full_prompt);
             return Ok(());
         }
 
-        // 9. Spawn subprocess and wait (with timeout).
+        // 10. Spawn subprocess and wait (with timeout).
         let exit_code = run_subprocess(
             &bin_path,
             &args,
@@ -321,6 +393,34 @@ fn fetch_context_with_optimizer(query: &str, budget_tokens: usize) -> String {
          \n[RAG index not active — run `cascaded start` to enable context retrieval]",
         result.tokens_used
     )
+}
+
+/// Print the routing decision to stderr so it is visible without mixing with
+/// captured stdout.
+pub fn print_routing_decision(task_class: TaskClass, decision: &RoutingDecision) {
+    match decision {
+        RoutingDecision::Lane { provider_id, reason } => {
+            eprintln!(
+                "cascade dispatch: route({task_class}) → provider={provider_id} ({reason})"
+            );
+        }
+        RoutingDecision::Reserved { provider_id, reason } => {
+            eprintln!(
+                "cascade dispatch: route({task_class}) → RESERVED provider={provider_id} ({reason})"
+            );
+        }
+        RoutingDecision::AllExhausted { tried } => {
+            eprintln!(
+                "cascade dispatch: route({task_class}) → ALL_EXHAUSTED tried=[{}]",
+                tried.join(", ")
+            );
+        }
+        RoutingDecision::FirewallDeny { reason } => {
+            eprintln!(
+                "cascade dispatch: route({task_class}) → FIREWALL_DENY: {reason}"
+            );
+        }
+    }
 }
 
 /// Print the dry-run representation.
@@ -667,6 +767,82 @@ mod tests {
         assert!(
             name_str.ends_with("-oc.md"),
             "expected -oc.md suffix, got {name_str}"
+        );
+    }
+
+    // ── routing matrix integration (dispatch wiring) ──────────────────────
+
+    #[test]
+    fn task_class_arg_converts_to_task_class() {
+        assert_eq!(TaskClass::from(TaskClassArg::InteractiveChat), TaskClass::InteractiveChat);
+        assert_eq!(TaskClass::from(TaskClassArg::BulkExec), TaskClass::BulkExec);
+        assert_eq!(TaskClass::from(TaskClassArg::Cheap), TaskClass::Cheap);
+        assert_eq!(TaskClass::from(TaskClassArg::AdversarialReview), TaskClass::AdversarialReview);
+        assert_eq!(TaskClass::from(TaskClassArg::FinalGate), TaskClass::FinalGate);
+        assert_eq!(TaskClass::from(TaskClassArg::Sensitive), TaskClass::Sensitive);
+    }
+
+    #[test]
+    fn interactive_chat_routes_to_reserved_main_claude() {
+        let router = cascade_core::routing::Router::with_config(
+            cascade_core::routing::RouterConfig { quota_store_path: None, ..Default::default() },
+        );
+        let d = router.select(TaskClass::InteractiveChat, "hello");
+        assert!(
+            matches!(d, cascade_core::routing::RoutingDecision::Reserved { ref provider_id, .. }
+                if provider_id == "claude"),
+            "InteractiveChat must be Reserved/claude, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn sensitive_task_class_never_routes_to_external() {
+        let router = cascade_core::routing::Router::with_config(
+            cascade_core::routing::RouterConfig { quota_store_path: None, ..Default::default() },
+        );
+        let d = router.select(TaskClass::Sensitive, "my ssn is 123-45-6789");
+        match &d {
+            cascade_core::routing::RoutingDecision::Lane { provider_id, .. } => {
+                assert!(
+                    provider_id == "claude"
+                        || provider_id.starts_with("acc")
+                        || provider_id == "local",
+                    "Sensitive must not route external, got: {provider_id}"
+                );
+            }
+            cascade_core::routing::RoutingDecision::AllExhausted { .. } => {}
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn print_routing_decision_does_not_panic() {
+        // Just verify no panic on all variants.
+        print_routing_decision(
+            TaskClass::Cheap,
+            &cascade_core::routing::RoutingDecision::Lane {
+                provider_id: "gfp".into(),
+                reason: "test".into(),
+            },
+        );
+        print_routing_decision(
+            TaskClass::InteractiveChat,
+            &cascade_core::routing::RoutingDecision::Reserved {
+                provider_id: "claude".into(),
+                reason: "reserved".into(),
+            },
+        );
+        print_routing_decision(
+            TaskClass::BulkExec,
+            &cascade_core::routing::RoutingDecision::AllExhausted {
+                tried: vec!["acc2".into()],
+            },
+        );
+        print_routing_decision(
+            TaskClass::Sensitive,
+            &cascade_core::routing::RoutingDecision::FirewallDeny {
+                reason: "sensitive".into(),
+            },
         );
     }
 }
