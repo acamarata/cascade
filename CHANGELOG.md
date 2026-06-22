@@ -6,6 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-22
+
+First stable release. Cascade is a standalone, local-first context manager and
+Claude Code extension: one source of truth for AI instructions, knowledge, and
+guardrails that every AI coding tool can read. DB-free (local SQLite/sqlite-vec
+only), localhost daemon only, no server.
+
+### Added (Parity Program P11-P14)
+
+- Six-tier instruction cascade (GCI > PCI > APC > PPC > PRC > PAC) with a
+  resolution engine and harness-native file generation (CLAUDE.md, AGENTS.md,
+  .cursorrules, opencode) from a single CASCADE.md.
+- `cascade import` — lossless migration of a hand-built `.claude`/`.opencode`/
+  `.codex` setup, gated by a coverage ledger + deterministic round-trip proof.
+- Canonical variables (`${ns.key}`) interpolated at resolve time.
+- `cascade doctor` drift-linter — dangling pointers, hand-edited generated
+  files, cross-tier conflicts, and an always-loaded context-budget lint.
+- Five-channel RAG fusion (FTS5 + dense vector + curated + recency via RRF) with
+  retriever-level scope exclusion for privacy.
+- `provide_harness_context` MCP tool; MCP server for five client tools.
+- `cascade verify` health gate; headless `cascade init --accept-defaults`.
+- Cross-platform daemon install (macOS launchd, Linux systemd, Windows).
+- Snapshot-before-regenerate + atomic/symlink-safe generation.
+
+### Changed (lean v1.0 scope)
+
+- GFP provisioning, gemini-proxy, and cascade-ccapi are feature-gated OFF by
+  default — the default binary is lean and offline, with no external-network
+  provisioning surface.
+
+### Security
+
+- wasmtime pinned at 36.0.11 (clears RUSTSEC-2026-0182); injection-guard hook;
+  42-pattern destructive deny-list.
+
 ## [0.9.3] - 2026-06-16
 
 Parity Program P13 — runtime integration + security hardening. Cascade can now

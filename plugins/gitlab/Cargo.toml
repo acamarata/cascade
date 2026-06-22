@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 [dependencies]
-cascade-pdk = { path = "../../crates/cascade-pdk", version = "0.9.3" }
+cascade-pdk = { path = "../../crates/cascade-pdk", version = "1.0.0" }
 serde       = { version = "1", default-features = false, features = ["derive", "alloc"] }
 serde_json  = { version = "1", default-features = false, features = ["alloc"] }
 
