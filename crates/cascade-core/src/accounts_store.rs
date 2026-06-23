@@ -121,11 +121,11 @@ pub fn default_registry() -> AccountsRegistry {
     let gfp = count_gfp_keys();
 
     let opus_sonnet_haiku_fable = || vec![
-        "claude-opus-4-5".into(), "claude-sonnet-4-6".into(),
+        "claude-opus-4-8".into(), "claude-sonnet-4-6".into(),
         "claude-haiku-4-5".into(), "claude-fable-5".into(),
     ];
     let opus_sonnet_haiku = || vec![
-        "claude-opus-4-5".into(), "claude-sonnet-4-6".into(), "claude-haiku-4-5".into(),
+        "claude-opus-4-8".into(), "claude-sonnet-4-6".into(), "claude-haiku-4-5".into(),
     ];
 
     let accounts = vec![
@@ -153,7 +153,7 @@ pub fn default_registry() -> AccountsRegistry {
             oc, 0, None, None),
         acc("gfp-pool", AccountFamily::Gfp, "gemini-free",
             vec![AccessMethod::GfpKeypool], AccountRole::Free, 1,
-            vec!["gemini-2.5-flash-preview-05-20".into()],
+            vec!["gemini-3.5-flash".into()],
             true, gfp, None, Some("GFP round-robin key pool — key-based, no CLI binary required")),
     ];
 
@@ -190,7 +190,7 @@ fn build_model_matrix() -> Vec<ModelMatrixEntry> {
         ModelRoute { account_id: "claude-acc1".into(), method: NativeCc },
     ];
     vec![
-        mme("claude-opus-4-5", Claude, "T1",
+        mme("claude-opus-4-8", Claude, "T1",
             vec![ModelRoute{account_id:"claude-acc1".into(),method:NativeCc},
                  ModelRoute{account_id:"claude-acc2".into(),method:SmithersClaudeP},
                  ModelRoute{account_id:"claude-acc3".into(),method:SmithersClaudeP},
@@ -223,7 +223,7 @@ fn build_model_matrix() -> Vec<ModelMatrixEntry> {
         mme("zen", Opencode, "T3-cheap",
             vec![ModelRoute{account_id:"opencode-acc1".into(),method:OpencodeRun}],
             vec![Grunt, PostPrompt], None),
-        mme("gemini-2.5-flash-preview-05-20", Gfp, "T3-cheap",
+        mme("gemini-3.5-flash", Gfp, "T3-cheap",
             vec![ModelRoute{account_id:"gfp-pool".into(),method:GfpKeypool}],
             vec![Grunt, Taxonomy, PostPrompt, Background],
             Some("GFP key-pool — cheapest; drain first for grunt work")),
