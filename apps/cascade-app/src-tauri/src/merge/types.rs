@@ -197,7 +197,7 @@ mod tests {
             title: "Code Quality Rules".to_string(),
             source_files: vec![MergeSourceFile {
                 tool_id: ToolId::ClaudeCode,
-                path: "/Users/admin/.claude/CLAUDE.md".to_string(),
+                path: "$HOME/.claude/CLAUDE.md".to_string(),
                 content: Some("no any types allowed".to_string()),
                 kind: FileKind::Instructions,
             }],
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(roundtrip.source_files.len(), 1);
         assert_eq!(
             roundtrip.source_files[0].path,
-            "/Users/admin/.claude/CLAUDE.md"
+            "$HOME/.claude/CLAUDE.md"
         );
     }
 
@@ -322,7 +322,7 @@ mod tests {
     #[test]
     fn write_result_camel_case() {
         let wr = WriteResult {
-            path: "/Users/admin/.cascade/CASCADE.md".to_string(),
+            path: "$HOME/.cascade/CASCADE.md".to_string(),
             bytes_written: 1024,
             section_count: 3,
         };

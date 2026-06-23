@@ -208,7 +208,12 @@ pub async fn chat_handler(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Return a sensible default model string for the given provider id.
-/// This is a best-effort hint; the provider adapter may override it.
+///
+/// This is a best-effort hint used when no model is specified in an incoming
+/// chat request; the provider adapter may override it. These IDs are provider
+/// API defaults, NOT fleet routing IDs — they intentionally differ from the
+/// fleet model matrix in `cascade_core::model_ids` (different purpose: API
+/// negotiation vs. agent harness generation).
 fn default_model_for(provider_id: &str) -> String {
     match provider_id {
         "gemini" => "gemini-2.0-flash".into(),

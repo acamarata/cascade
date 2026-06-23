@@ -157,7 +157,7 @@ fn split_kv(line: &str) -> Option<(&str, &str)> {
 ///
 /// # Inputs
 /// - `phase_root`: Absolute path to the project root whose PEWS files to read
-///   (e.g. `/Users/admin/Sites/acamarata/cascade`). The function looks for
+///   (e.g. `$HOME/Sites/acamarata/cascade`). The function looks for
 ///   `.claude/phases/current/p*/` under this root.
 ///
 /// # Outputs

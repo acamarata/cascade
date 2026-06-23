@@ -345,7 +345,7 @@ mod tests {
     // --- Case 5: source file overlap ---
     #[test]
     fn source_overlap_detected() {
-        let shared_path = "/Users/admin/.claude/CLAUDE.md";
+        let shared_path = "$HOME/.claude/CLAUDE.md";
         let result = make_result(vec![
             make_section(
                 "d1",

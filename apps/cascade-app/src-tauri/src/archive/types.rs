@@ -165,19 +165,19 @@ mod tests {
     /// A regression here breaks the Tauri IPC contract with the frontend.
     #[test]
     fn archive_manifest_roundtrip_camel_case() {
+        let tmp = std::env::temp_dir();
+        let home = tmp.join("cascade-test-home");
         let manifest = ArchiveManifest {
             version: "1.0".to_string(),
             created_at: "2026-06-09T00:00:00Z".to_string(),
             tools: vec![ToolArchive {
                 tool_id: "claude-code".to_string(),
-                original_root: PathBuf::from("/Users/admin/.claude"),
-                archive_root: PathBuf::from("/Users/admin/.cascade/legacy/claude-code"),
+                original_root: home.join(".claude"),
+                archive_root: home.join(".cascade/legacy/claude-code"),
                 archived_at: "2026-06-09T00:01:00Z".to_string(),
                 files: vec![ArchivedFile {
-                    original_path: PathBuf::from("/Users/admin/.claude/settings.json"),
-                    archived_path: PathBuf::from(
-                        "/Users/admin/.cascade/legacy/claude-code/settings.json",
-                    ),
+                    original_path: home.join(".claude/settings.json"),
+                    archived_path: home.join(".cascade/legacy/claude-code/settings.json"),
                     moved_at: "2026-06-09T00:01:00Z".to_string(),
                     size_bytes: 1024,
                 }],
@@ -245,7 +245,7 @@ mod tests {
                     available_bytes: 500_000,
                 },
                 ArchiveIssue::PermissionDenied {
-                    path: PathBuf::from("/Users/admin/.cascade/legacy"),
+                    path: std::env::temp_dir().join("cascade-test-legacy"),
                 },
             ],
         };

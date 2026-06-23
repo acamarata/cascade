@@ -569,7 +569,7 @@ mod tests {
                     "id": "s1",
                     "title": "Code Quality",
                     "content": "No any types. Strict TS.",
-                    "sourceFiles": ["/Users/admin/.claude/CLAUDE.md"]
+                    "sourceFiles": ["$HOME/.claude/CLAUDE.md"]
                 },
                 {
                     "id": "s2",
@@ -581,7 +581,7 @@ mod tests {
         }"#;
 
         let sources = vec![make_raw_source(
-            "/Users/admin/.claude/CLAUDE.md",
+            "$HOME/.claude/CLAUDE.md",
             "no any types",
         )];
         let result = parse_ai_output(4, sources, model_text, MODEL_GEMINI, "abc123".to_string())

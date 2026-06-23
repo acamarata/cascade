@@ -52,6 +52,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cascade_core::cascade_resolution::ResolvedCascade;
+use cascade_core::model_ids::DEFAULT_HARNESS_MODEL;
 use cascade_core::pbd::active_work::ActiveWorkBlock;
 use cascade_types::error::{CascadeError, Result};
 
@@ -537,10 +538,11 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
         ),
         HarnessKind::OpenCode | HarnessKind::Codex => {
             let id = harness.id();
+            let model = DEFAULT_HARNESS_MODEL;
             format!(
                 "<!-- cascade:harness={id} -->\n\
                  ---\n\
-                 model: \"claude-sonnet-4-6\"\n\
+                 model: \"{model}\"\n\
                  tools:\n\
                    - \"cascade.read\"\n\
                    - \"cascade.search\"\n\
@@ -552,6 +554,7 @@ fn render_harness_file(harness: HarnessKind, resolved: &ResolvedCascade) -> Stri
                  {body}\n\
                  {on_demand}",
                 id = id,
+                model = model,
                 mcp = mcp,
                 body = body,
                 on_demand = on_demand,

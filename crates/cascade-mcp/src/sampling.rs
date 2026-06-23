@@ -438,6 +438,9 @@ impl McpHandler for SamplingHandler {
         debug!(provider = %provider_id, "sampling: selected provider");
 
         // ── 4. Build CompletionRequest ────────────────────────────────────────
+        // These are MCP sampling fallback IDs — provider API defaults used when
+        // no model is specified in the MCP request. Intentionally different from
+        // the fleet routing IDs in `cascade_core::model_ids` (different purpose).
         let model = match provider_id.as_str() {
             "anthropic" => "claude-3-5-haiku-20241022",
             "gemini" => "gemini-2.0-flash",

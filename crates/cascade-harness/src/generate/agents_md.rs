@@ -9,7 +9,7 @@
 //! YAML frontmatter block followed by the merged instruction body:
 //! ```yaml
 //! ---
-//! model: "claude-sonnet-4-6"
+//! model: "<DEFAULT_HARNESS_MODEL from cascade_core::model_ids>"
 //! tools: ["cascade.read", "cascade.search"]
 //! context: ["gci", "asi", "ppi"]
 //! ---
@@ -35,6 +35,7 @@ use std::io::Write;
 use std::path::Path;
 
 use cascade_core::cascade_resolution::ResolvedCascade;
+use cascade_core::model_ids::DEFAULT_HARNESS_MODEL;
 use cascade_types::error::{CascadeError, Result};
 use tracing::{debug, info};
 
@@ -56,7 +57,7 @@ pub struct AgentsMdOptions {
 impl Default for AgentsMdOptions {
     fn default() -> Self {
         Self {
-            model: "claude-sonnet-4-6".into(),
+            model: DEFAULT_HARNESS_MODEL.into(),
             tools: vec!["cascade.read".into(), "cascade.search".into()],
         }
     }

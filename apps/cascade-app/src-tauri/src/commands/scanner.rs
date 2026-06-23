@@ -53,7 +53,7 @@ pub fn scan_global_homes() -> Result<Vec<LegacyToolHome>, String> {
 /// directory containing ≥1 legacy tool file. Returns an empty array (not an
 /// error) if `root` does not exist.
 ///
-/// Invoked from React as `invoke("scan_dev_tree", { root: "/Users/admin/Sites" })`.
+/// Invoked from React as `invoke("scan_dev_tree", { root: "$HOME/Sites" })`.
 ///
 /// # Errors
 /// Returns `Err(String)` on unexpected OS-level failures.
