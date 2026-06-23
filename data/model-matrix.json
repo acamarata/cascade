@@ -1,0 +1,246 @@
+{
+  "_schema": "cascade-model-matrix/1",
+  "_updated": "2026-06-23",
+  "_note": "Machine-readable best-for matrix for the Cascade accounts subsystem. No personal keys or IPs included.",
+  "models": [
+    {
+      "id": "claude-fable-5",
+      "family": "claude",
+      "provider": "anthropic",
+      "display_name": "Claude Fable-5",
+      "access_method": "pty",
+      "access_cli": "claude -p",
+      "pty_required": true,
+      "free": false,
+      "role": "extra",
+      "tier": "T1",
+      "best_for": [
+        "hardest-reasoning",
+        "architecture-decisions",
+        "final-correctness-gate",
+        "complex-code-synthesis"
+      ],
+      "avoid_for": [
+        "bulk-work",
+        "cheap-classification",
+        "background-helpers"
+      ],
+      "sensitive_safe": true,
+      "notes": "Anthropic's strongest reasoning model as of 2026-06. Scarce quota; surgical use only. Extra accounts only — acc1 is reserved."
+    },
+    {
+      "id": "claude-opus-4.8",
+      "family": "claude",
+      "provider": "anthropic",
+      "display_name": "Claude Opus-4.8",
+      "access_method": "pty",
+      "access_cli": "claude -p",
+      "pty_required": true,
+      "free": false,
+      "role": "extra",
+      "tier": "T1",
+      "best_for": [
+        "architecture-review",
+        "adversarial-cr-c",
+        "final-gate"
+      ],
+      "avoid_for": [
+        "bulk-work",
+        "cheap-classification"
+      ],
+      "sensitive_safe": true,
+      "notes": "Previous top-tier Anthropic model; use when Fable-5 quota is exhausted. Extra accounts only."
+    },
+    {
+      "id": "claude-sonnet-4.6",
+      "family": "claude",
+      "provider": "anthropic",
+      "display_name": "Claude Sonnet-4.6",
+      "access_method": "native",
+      "access_cli": "claude",
+      "pty_required": false,
+      "free": false,
+      "role": "primary-and-extra",
+      "tier": "T0-T2",
+      "best_for": [
+        "interactive-chat",
+        "bulk-execution",
+        "code-generation",
+        "docs-drafting",
+        "t2-agents"
+      ],
+      "avoid_for": [
+        "background-tasks-on-acc1"
+      ],
+      "sensitive_safe": true,
+      "notes": "Daily-driver model. acc1 (native) is reserved for T0 interactive use. acc2+ (PTY) used for background dispatch."
+    },
+    {
+      "id": "claude-haiku-4.5",
+      "family": "claude",
+      "provider": "anthropic",
+      "display_name": "Claude Haiku-4.5",
+      "access_method": "pty",
+      "access_cli": "claude -p",
+      "pty_required": true,
+      "free": false,
+      "role": "extra",
+      "tier": "T3",
+      "best_for": [
+        "fast-triage",
+        "lightweight-summaries",
+        "mechanical-sweeps",
+        "cheap-agents"
+      ],
+      "avoid_for": [
+        "complex-reasoning",
+        "adversarial-review"
+      ],
+      "sensitive_safe": true,
+      "notes": "Fastest Claude model. Extra accounts only. Not preferred for adversarial review — same family as author reduces independence."
+    },
+    {
+      "id": "gpt-5.5",
+      "family": "openai",
+      "provider": "openai",
+      "display_name": "GPT-5.5 (Codex)",
+      "access_method": "codex-exec",
+      "access_cli": "codex exec",
+      "pty_required": false,
+      "free": false,
+      "role": "extra",
+      "tier": "T1-T2",
+      "best_for": [
+        "cross-family-cr-qa",
+        "adversarial-review",
+        "independent-second-opinion",
+        "strong-general-reasoning"
+      ],
+      "avoid_for": [
+        "sensitive-data"
+      ],
+      "sensitive_safe": false,
+      "notes": "Preferred for adversarial CR/QA because different family than Claude-authored code. Requires 'codex' on PATH. External model — firewall blocks sensitive content."
+    },
+    {
+      "id": "gemini-3.1-pro",
+      "family": "google",
+      "provider": "google",
+      "display_name": "Gemini-3.1-Pro (AGY)",
+      "access_method": "agy-p",
+      "access_cli": "agy -p",
+      "pty_required": false,
+      "free": false,
+      "role": "extra",
+      "tier": "T1-T2",
+      "best_for": [
+        "large-context-research",
+        "documentation",
+        "cross-family-cr-qa",
+        "structured-output"
+      ],
+      "avoid_for": [
+        "sensitive-data"
+      ],
+      "sensitive_safe": false,
+      "notes": "Strong large-context model. Requires 'agy' on PATH. External model — firewall blocks sensitive content."
+    },
+    {
+      "id": "glm-5.2",
+      "family": "open",
+      "provider": "opencode-go",
+      "display_name": "GLM-5.2 (OpenCode-Go)",
+      "access_method": "opencode-run",
+      "access_cli": "opencode run",
+      "pty_required": false,
+      "free": false,
+      "role": "extra",
+      "tier": "T2-T3",
+      "best_for": [
+        "bulk-drafting",
+        "docs-generation",
+        "open-model-tasks"
+      ],
+      "avoid_for": [
+        "sensitive-data",
+        "high-stakes-decisions",
+        "final-gate"
+      ],
+      "sensitive_safe": false,
+      "notes": "Dollar-metered via OpenCode-Go. Weaker than frontier models; good for cost-sensitive bulk work. Requires 'opencode' on PATH."
+    },
+    {
+      "id": "gemini-3.5-flash-gfp",
+      "family": "google-free",
+      "provider": "google",
+      "display_name": "Gemini-3.5-Flash (GFP)",
+      "access_method": "api-pool",
+      "access_cli": null,
+      "pty_required": false,
+      "free": true,
+      "role": "pool",
+      "tier": "T3",
+      "best_for": [
+        "background-helpers",
+        "taxonomy-classification",
+        "post-prompt-processing",
+        "dynamic-learning-tagging",
+        "cheap-research",
+        "grunt-work"
+      ],
+      "avoid_for": [
+        "sensitive-data",
+        "final-gate",
+        "deep-reasoning"
+      ],
+      "sensitive_safe": false,
+      "notes": "Free Flash tier via key pool (~27 keys round-robin in reference deployment). No CLI — Cascade calls Gemini REST API directly. Fast and free; maximize for all cheap/classify work. Weaker than frontier models. External — firewall blocks sensitive content."
+    }
+  ],
+  "task_classes": [
+    {
+      "id": "interactive-chat",
+      "label": "T0 interactive chat / final synthesis",
+      "preferred": ["claude-sonnet-4.6"],
+      "fallback": []
+    },
+    {
+      "id": "hard-reasoning-gate",
+      "label": "Hard reasoning / final correctness gate",
+      "preferred": ["claude-fable-5", "claude-opus-4.8"],
+      "fallback": ["claude-sonnet-4.6"]
+    },
+    {
+      "id": "bulk-execution",
+      "label": "Bulk execution / code drafting / agents",
+      "preferred": ["claude-sonnet-4.6", "claude-haiku-4.5"],
+      "fallback": ["gpt-5.5", "glm-5.2"]
+    },
+    {
+      "id": "adversarial-review",
+      "label": "Adversarial CR / QA / research (cross-family)",
+      "preferred": ["gpt-5.5", "gemini-3.1-pro", "glm-5.2"],
+      "fallback": ["claude-haiku-4.5"]
+    },
+    {
+      "id": "large-context-docs",
+      "label": "Large-context research / docs",
+      "preferred": ["gemini-3.1-pro", "gpt-5.5"],
+      "fallback": ["glm-5.2", "claude-sonnet-4.6"]
+    },
+    {
+      "id": "cheap-classify",
+      "label": "Cheap / classify / taxonomy / post-prompt",
+      "preferred": ["gemini-3.5-flash-gfp"],
+      "fallback": []
+    },
+    {
+      "id": "sensitive",
+      "label": "Sensitive: PII / VA / health / custody / personal",
+      "preferred": ["claude-fable-5", "claude-opus-4.8", "claude-sonnet-4.6", "claude-haiku-4.5"],
+      "fallback": [],
+      "firewall": true,
+      "note": "External models are hard-blocked for this class. Task waits if all Claude quotas exhausted."
+    }
+  ]
+}
