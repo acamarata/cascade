@@ -6,32 +6,21 @@
  * Outputs: Radix Tabs with ProjectGraph / CascadeTierTree / PewsDag.
  * Constraints:
  *   - All three tabs call refetch on window focus (delegated to sub-components).
- *   - Default projectRoot = ~/Sites/acamarata/cascade (always present in dev).
+ *   - Default projectRoot = user's home directory (resolved at runtime via homeDir()).
  *   - Tab switching uses Radix @radix-ui/react-tabs (already installed).
  *   - Lazy imports for ProjectGraph and PewsDag to limit initial bundle size.
  * SPORT: MASTER-COMPONENTS.md — ProjectMapPanel (T-P3-E07-13)
  */
 
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { GitFork, Layers, Network } from 'lucide-react'
+import { homeDir } from '@tauri-apps/api/path'
 import { CascadeTierTree } from './CascadeTierTree'
 
 // Lazy-load graph views to avoid inflating initial bundle
 const ProjectGraph = lazy(() => import('./ProjectGraph').then((m) => ({ default: m.ProjectGraph })))
 const PewsDag = lazy(() => import('./PewsDag').then((m) => ({ default: m.PewsDag })))
-
-// ── Project selector ──────────────────────────────────────────────────────────
-
-/** Well-known cascade project roots for the selector. */
-const HOME = '/Users/admin'
-
-const KNOWN_ROOTS = [
-  { label: 'cascade (acamarata)', value: `${HOME}/Sites/acamarata/cascade` },
-  { label: 'nself', value: `${HOME}/Sites/nself` },
-  { label: 'ummeco', value: `${HOME}/Sites/ummeco` },
-  { label: 'unyeco', value: `${HOME}/Sites/unyeco` },
-]
 
 function fallbackLoader() {
   return (
@@ -45,7 +34,16 @@ function fallbackLoader() {
 
 export function ProjectMapPanel() {
   const [activeTab, setActiveTab] = useState('project-graph')
-  const [projectRoot, setProjectRoot] = useState(KNOWN_ROOTS[0]!.value)
+  const [projectRoot, setProjectRoot] = useState('')
+
+  // Resolve the user's home directory at runtime — avoids hardcoding any path.
+  useEffect(() => {
+    homeDir()
+      .then((dir) => setProjectRoot(dir))
+      .catch(() => {
+        // Not in Tauri context (e.g. Vitest) — leave as empty string.
+      })
+  }, [])
 
   return (
     <div
@@ -57,24 +55,20 @@ export function ProjectMapPanel() {
         <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h1 className="text-sm font-semibold text-foreground">Project Maps</h1>
 
-        {/* Project selector */}
+        {/* Project root input */}
         <div className="ml-auto flex items-center gap-2">
-          <label htmlFor="project-root-select" className="text-xs text-muted-foreground">
+          <label htmlFor="project-root-input" className="text-xs text-muted-foreground">
             Root:
           </label>
-          <select
-            id="project-root-select"
+          <input
+            id="project-root-input"
+            type="text"
             value={projectRoot}
             onChange={(e) => setProjectRoot(e.target.value)}
-            className="rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            aria-label="Select project root"
-          >
-            {KNOWN_ROOTS.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Enter project root path…"
+            className="w-64 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            aria-label="Project root path"
+          />
         </div>
       </header>
 

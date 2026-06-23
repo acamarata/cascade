@@ -13,17 +13,16 @@
 
 import { PewsTreePanel } from '../features/pews/PewsTreePanel'
 
-const DEFAULT_ROOT = '/Volumes/X9/Sites/acamarata/cascade'
-
 /**
  * Purpose: Route entry-point for the PEWS tree page.
  * Inputs:  None.
- * Outputs: Full-height panel mounting PewsTreePanel for the cascade project root.
+ * Outputs: Full-height panel mounting PewsTreePanel; project root defaults to
+ *   the user's home directory (resolved at runtime).
  */
 export function PewsPage() {
   return (
     <div className="h-full overflow-hidden" data-page="pews">
-      <PewsTreePanel initialPhaseRoot={DEFAULT_ROOT} />
+      <PewsTreePanel />
     </div>
   )
 }

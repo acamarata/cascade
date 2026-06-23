@@ -15,9 +15,10 @@
  * SPORT: MASTER-COMPONENTS.md — RagExplorerPanel (T-P4-E01-27)
  */
 
-import React, { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Database } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
+import { homeDir } from '@tauri-apps/api/path'
 import { SourceList } from './SourceList'
 import { IngestProgress } from './IngestProgress'
 import { SearchBar } from './SearchBar'
@@ -27,16 +28,6 @@ import { useRagSources } from './useRagSources'
 import { useRagSearch } from './useRagSearch'
 import { useRagIndexStats } from './useRagIndexStats'
 import { useIngestProgress } from './useIngestProgress'
-
-// ── Project selector (local only in P4; daemon wiring in P5) ─────────────────
-
-const HOME = '/Users/admin'
-const KNOWN_PROJECTS = [
-  { label: 'cascade (acamarata)', value: `${HOME}/Sites/acamarata/cascade` },
-  { label: 'nself', value: `${HOME}/Sites/nself` },
-  { label: 'ummeco', value: `${HOME}/Sites/ummeco` },
-  { label: 'unyeco', value: `${HOME}/Sites/unyeco` },
-]
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
@@ -56,7 +47,16 @@ export function RagExplorerPanel() {
 
   const { progress, active: ingestActive } = useIngestProgress(handleIngestComplete)
 
-  const [projectRoot, setProjectRoot] = React.useState(KNOWN_PROJECTS[0]!.value)
+  const [projectRoot, setProjectRoot] = useState('')
+
+  // Resolve the user's home directory at runtime — avoids hardcoding any path.
+  useEffect(() => {
+    homeDir()
+      .then((dir) => setProjectRoot(dir))
+      .catch(() => {
+        // Not in Tauri context (e.g. Vitest) — leave as empty string.
+      })
+  }, [])
 
   // ── Wire Tauri 2 file-drop event ──────────────────────────────────────────
   const unlistenRef = useRef<(() => void) | undefined>(undefined)
@@ -110,24 +110,20 @@ export function RagExplorerPanel() {
         <h1 className="text-lg font-semibold">RAG Explorer</h1>
         <span className="text-sm text-muted-foreground">sources · search · index stats</span>
 
-        {/* Project selector */}
+        {/* Project root input */}
         <div className="ml-auto flex items-center gap-2">
-          <label htmlFor="rag-project-select" className="text-xs text-muted-foreground">
+          <label htmlFor="rag-project-input" className="text-xs text-muted-foreground">
             Project
           </label>
-          <select
-            id="rag-project-select"
+          <input
+            id="rag-project-input"
+            type="text"
             value={projectRoot}
             onChange={(e) => setProjectRoot(e.target.value)}
-            className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Select project for RAG index"
-          >
-            {KNOWN_PROJECTS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Enter project root path…"
+            className="h-7 w-64 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Project root path for RAG index"
+          />
         </div>
       </header>
 

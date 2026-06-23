@@ -23,7 +23,7 @@
  * SPORT: MASTER-COMPONENTS.md — PewsTreePanel (E-P8-05)
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -32,6 +32,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 
+import { homeDir } from '@tauri-apps/api/path'
 import type { PhaseView, EpicView, WaveView, SprintView, TicketView, TicketStatus } from '../../types/pbd'
 import { TICKET_STATUSES } from '../../types/pbd'
 import { usePewsTree } from './usePewsTree'
@@ -43,16 +44,6 @@ import {
   ticketStatusCounts,
   TICKET_STATUS_COLORS,
 } from './pewsTree'
-
-// ── Project selector ──────────────────────────────────────────────────────────
-
-const HOME = '/Users/admin'
-const KNOWN_ROOTS = [
-  { label: 'cascade (acamarata)', value: `${HOME}/Sites/acamarata/cascade` },
-  { label: 'nself', value: `${HOME}/Sites/nself` },
-  { label: 'ummeco', value: `${HOME}/Sites/ummeco` },
-  { label: 'unyeco', value: `${HOME}/Sites/unyeco` },
-]
 
 // ── Status legend ─────────────────────────────────────────────────────────────
 
@@ -575,9 +566,17 @@ interface PewsTreePanelProps {
  * Outputs: Scrollable Phase→Epic→Wave→Sprint→Ticket tree with mutation dropdowns.
  */
 export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
-  const [phaseRoot, setPhaseRoot] = useState(
-    initialPhaseRoot ?? KNOWN_ROOTS[0]!.value,
-  )
+  const [phaseRoot, setPhaseRoot] = useState(initialPhaseRoot ?? '')
+
+  // Resolve the user's home directory at runtime — avoids hardcoding any path.
+  useEffect(() => {
+    if (initialPhaseRoot) return
+    homeDir()
+      .then((dir) => setPhaseRoot(dir))
+      .catch(() => {
+        // Not in Tauri context (e.g. Vitest) — leave as empty string.
+      })
+  }, [initialPhaseRoot])
 
   const { tree, loading, error, updateTicketStatus, refetch } = usePewsTree(phaseRoot)
 
@@ -646,23 +645,19 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
 
         {/* Actions */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Project selector */}
-          <label htmlFor="pews-root-select" className="text-xs text-muted-foreground">
+          {/* Project root input */}
+          <label htmlFor="pews-root-input" className="text-xs text-muted-foreground">
             Root:
           </label>
-          <select
-            id="pews-root-select"
+          <input
+            id="pews-root-input"
+            type="text"
             value={phaseRoot}
             onChange={(e) => setPhaseRoot(e.target.value)}
-            className="rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            aria-label="Select project root"
-          >
-            {KNOWN_ROOTS.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Enter project root path…"
+            className="w-64 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            aria-label="Project root path"
+          />
 
           {/* Refresh */}
           <button
