@@ -54,6 +54,7 @@
 
 pub mod accounts_store;
 pub mod ai_folder;
+pub mod model_ids;
 pub mod auth_detector;
 pub mod cache;
 pub mod cascade_resolution;
