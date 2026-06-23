@@ -100,8 +100,10 @@ pub mod worktree_store;
 
 // Re-export the most commonly used top-level items.
 pub use accounts_store::{
-    accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry, detect_cli,
-    read_accounts_registry, write_accounts_registry,
+    accounts_dir, accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry,
+    detect_cli, init_accounts_dir, migrate_accounts_if_needed, quota_json_path,
+    read_accounts_registry, write_accounts_readme, write_accounts_registry, write_matrix_md,
+    write_quota_json,
 };
 pub use discovery::{DiscoveredTier, TierDiscovery};
 pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};

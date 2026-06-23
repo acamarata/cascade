@@ -29,7 +29,10 @@ use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use cascade_core::accounts_store::{count_gfp_keys, detect_cli, read_accounts_registry, write_accounts_registry};
+use cascade_core::accounts_store::{
+    accounts_dir, count_gfp_keys, detect_cli, read_accounts_registry, write_accounts_registry,
+    write_quota_json,
+};
 use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_types::accounts::{AccessMethod, AccountFamily};
@@ -274,22 +277,22 @@ impl FleetPoller {
             Err(e) => warn!(%e, "fleet: failed to write quota-store.json"),
         }
 
-        // Refresh accounts.json CLI availability and GFP key count — only when
-        // the file already exists (creation is the `cascade accounts detect` task).
-        if let Some(parent) = store_path.parent() {
-            let accounts_path = parent.join("accounts.json");
-            if accounts_path.exists() {
-                Self::refresh_accounts(&accounts_path);
-            }
+        // Refresh accounts/ CLI availability and GFP key count — only when
+        // accounts/accounts.json already exists (creation is `cascade accounts detect`).
+        // Also refreshes quota.json so the native widget gets updated data each tick.
+        let accts_path = accounts_dir().join("accounts.json");
+        if accts_path.exists() {
+            Self::refresh_accounts(&accts_path);
         }
     }
 
-    /// Refresh `cli_available` and `key_count` fields in an existing accounts.json.
+    /// Refresh `cli_available` and `key_count` in an existing `accounts/accounts.json`,
+    /// then atomically regenerate `accounts/quota.json` for the native widget.
     ///
-    /// Purpose: keeps the registry in sync with the current PATH state on each
-    /// daemon tick without requiring the user to run `cascade accounts detect`.
-    /// Inputs:  `path` — existing `accounts.json` file.
-    /// Outputs: updated `accounts.json` on success; warn log on error.
+    /// Purpose: keeps the registry and widget data in sync with the current PATH state
+    /// on each daemon tick without requiring the user to run `cascade accounts detect`.
+    /// Inputs:  `path` — existing `accounts/accounts.json` file.
+    /// Outputs: updated `accounts.json` + `quota.json` on success; warn log on error.
     /// Constraints: only called when the file exists; never creates it.
     fn refresh_accounts(path: &std::path::Path) {
         let mut registry = match read_accounts_registry(path) {
@@ -321,9 +324,19 @@ impl FleetPoller {
         }
 
         registry.updated_at = chrono::Utc::now().to_rfc3339();
+
         match write_accounts_registry(path, &registry) {
             Ok(()) => info!(path = %path.display(), "fleet: accounts.json refreshed"),
             Err(e) => warn!(%e, "fleet: failed to write accounts.json"),
+        }
+
+        // Refresh quota.json (same directory as accounts.json).
+        if let Some(dir) = path.parent() {
+            let quota_path = dir.join("quota.json");
+            match write_quota_json(&quota_path, &registry) {
+                Ok(()) => info!(path = %quota_path.display(), "fleet: quota.json refreshed"),
+                Err(e) => warn!(%e, "fleet: failed to write quota.json"),
+            }
         }
     }
 }

@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'CascadeApp' in project 'CascadeWidget'
+➜ Explicit dependency on target 'CascadeWidgetExtension' in project 'CascadeWidget'
+Target 'CascadeWidgetExtension' in project 'CascadeWidget' (no dependencies)

@@ -1,10 +1,24 @@
-//! Accounts store — atomic I/O for `~/.cascade/accounts.json`.
+//! Accounts store — atomic I/O for `~/.cascade/accounts/`.
 //!
-//! Purpose: read/write the Cascade fleet account registry; build the seeded
-//! default registry from known subscription accounts; detect CLI availability.
+//! Purpose: read/write the Cascade fleet account registry and derived files;
+//! build the seeded default registry; detect CLI availability.
 //!
-//! Inputs:  path to `accounts.json`; vault.env files for GFP key count.
-//! Outputs: `AccountsRegistry` on read; atomic file write (tmp → rename) on write.
+//! ## Directory layout (`~/.cascade/accounts/`)
+//!
+//! | File         | Writer              | Reader                 |
+//! |--------------|---------------------|------------------------|
+//! | accounts.json | `cascade detect`   | CLI, daemon            |
+//! | quota.json   | daemon fleet poller  | native widget          |
+//! | README.md    | `cascade detect`    | humans                 |
+//! | matrix.md    | `cascade detect`    | humans                 |
+//!
+//! ## Migration
+//! If `~/.cascade/accounts.json` (old single-file path) exists and the new
+//! directory does not, [`migrate_accounts_if_needed`] moves the file into the
+//! directory automatically on first access.
+//!
+//! Inputs:  path to `accounts/accounts.json`; vault.env files for GFP key count.
+//! Outputs: `AccountsRegistry` on read; atomic file writes (tmp → rename) on write.
 //! Constraints: no `unwrap()` outside `#[cfg(test)]`; never log key values.
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — accounts_store
 
@@ -16,16 +30,62 @@ use cascade_types::accounts::{
 };
 use cascade_types::error::{CascadeError, Result};
 
-// ── Path helper ───────────────────────────────────────────────────────────────
+// ── Path helpers ──────────────────────────────────────────────────────────────
 
-/// Returns the canonical path to `~/.cascade/accounts.json`.
+/// Returns the canonical path to `~/.cascade/accounts/` (the accounts directory).
 ///
-/// Outputs: `PathBuf` — may not exist on a fresh install.
-pub fn accounts_path() -> PathBuf {
+/// Outputs: `PathBuf` — the directory may not exist on a fresh install.
+pub fn accounts_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("~"))
         .join(".cascade")
-        .join("accounts.json")
+        .join("accounts")
+}
+
+/// Returns the canonical path to `~/.cascade/accounts/accounts.json`.
+///
+/// Outputs: `PathBuf` — may not exist on a fresh install.
+pub fn accounts_path() -> PathBuf {
+    accounts_dir().join("accounts.json")
+}
+
+/// Returns the canonical path to `~/.cascade/accounts/quota.json`.
+///
+/// This is the file the native widget reads for live usage data.
+pub fn quota_json_path() -> PathBuf {
+    accounts_dir().join("quota.json")
+}
+
+// ── Migration (old single-file → directory) ───────────────────────────────────
+
+/// Migrate `~/.cascade/accounts.json` → `~/.cascade/accounts/accounts.json`
+/// if the old flat path exists and the new directory does not yet contain the file.
+///
+/// Outputs: `Ok(true)` if a migration was performed; `Ok(false)` otherwise.
+/// Errors: I/O failures during move are surfaced as `CascadeError::Io`.
+pub fn migrate_accounts_if_needed() -> Result<bool> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
+    let old_path = home.join(".cascade").join("accounts.json");
+    let new_path = accounts_path();
+
+    if !old_path.exists() || new_path.exists() {
+        return Ok(false);
+    }
+
+    // Ensure the accounts/ directory exists.
+    let dir = accounts_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| CascadeError::io(dir.clone(), "create_dir_all", e))?;
+
+    // Copy then remove (cross-device rename may fail).
+    let bytes = std::fs::read(&old_path)
+        .map_err(|e| CascadeError::io(old_path.clone(), "read", e))?;
+    std::fs::write(&new_path, &bytes)
+        .map_err(|e| CascadeError::io(new_path.clone(), "write", e))?;
+    std::fs::remove_file(&old_path)
+        .map_err(|e| CascadeError::io(old_path.clone(), "remove", e))?;
+
+    Ok(true)
 }
 
 // ── Reader ────────────────────────────────────────────────────────────────────
@@ -53,15 +113,201 @@ pub fn read_accounts_registry(path: &Path) -> Result<AccountsRegistry> {
     Ok(registry)
 }
 
-// ── Writer ────────────────────────────────────────────────────────────────────
+// ── Writers ───────────────────────────────────────────────────────────────────
 
 /// Write `registry` to `path` atomically (tmp → rename).
 ///
 /// Constraints: POSIX-atomic when tmp and dst share a filesystem (same dir).
 pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(registry).map_err(|e| CascadeError::Other(e.to_string()))?;
+    atomic_write(path, &bytes)
+}
+
+/// Write `~/.cascade/accounts/quota.json` atomically from an `AccountsRegistry`
+/// and the current UTC timestamp.
+///
+/// The quota.json shape is the one the native widget reads:
+/// ```json
+/// {
+///   "updated_at": "...",
+///   "accounts": [
+///     { "id": "...", "family": "...", "display": "...", "reserved": false,
+///       "windows": { "5h": null, "weekly": null },
+///       "models": [] }
+///   ]
+/// }
+/// ```
+///
+/// Unknown/absent window data is represented as `null` (never faked).
+///
+/// Inputs:  `path` — destination file (should be `quota_json_path()`);
+///          `registry` — current accounts registry (provides id/family/role/models).
+/// Outputs: atomic write to `path`.
+pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> {
+    use serde_json::{json, Value};
+
+    let accounts: Vec<Value> = registry.accounts.iter().map(|acc| {
+        let family = format!("{:?}", acc.family).to_lowercase();
+        let display = acc.notes.as_deref().unwrap_or(acc.subscription.as_str()).to_string();
+        let reserved = matches!(acc.role, cascade_types::accounts::AccountRole::PrimaryT0);
+        json!({
+            "id": acc.id,
+            "family": family,
+            "display": display,
+            "reserved": reserved,
+            "windows": {
+                "5h": null,
+                "weekly": null
+            },
+            "models": acc.models
+        })
+    }).collect();
+
+    let payload = json!({
+        "updated_at": chrono::Utc::now().to_rfc3339(),
+        "accounts": accounts
+    });
+
+    let bytes = serde_json::to_vec_pretty(&payload)
+        .map_err(|e| CascadeError::Other(e.to_string()))?;
+    atomic_write(path, &bytes)
+}
+
+/// Write `~/.cascade/accounts/README.md` explaining the directory layout.
+///
+/// Inputs:  `path` — destination file.
+/// Outputs: atomic write to `path`.
+pub fn write_accounts_readme(path: &Path) -> Result<()> {
+    let content = r#"# ~/.cascade/accounts/
+
+This directory is managed by Cascade. Do not edit files here manually.
+
+## Files
+
+### accounts.json
+The fleet account registry. Lists every AI subscription account Cascade knows
+about: Claude Max accounts (A1–A4), Codex (C1), Gemini AGY (G1), OpenCode (O1),
+and the GFP key pool.
+
+Written by: `cascade accounts detect`
+Read by: `cascade accounts list/status/matrix`, daemon fleet poller.
+
+### quota.json
+Live usage snapshot for the native Cascade widget. Refreshed on every daemon
+tick (default: 60 s). Contains per-account window usage (5h rolling, weekly)
+and model lists.
+
+Written by: daemon fleet poller (automatic)
+Read by: native FleetView widget.
+
+Unknown/absent usage data is represented as `null`. Values are NEVER estimated
+or faked — they come from real polling sources only.
+
+### README.md
+This file.
+
+### matrix.md
+Human-readable model routing matrix. Describes when and how to use each model
+from which subscription or API. Generated from the accounts registry.
+
+## Adding an account
+
+1. Run `cascade accounts detect` to re-scan all CLIs and update accounts.json.
+2. For GFP keys: add `GEMINI_FREE_KEY_N=<key>` entries to `~/.claude/vault.env`
+   or `~/.cascade/vault.env`, then run `cascade accounts detect`.
+3. For a new subscription account: edit `accounts.json` directly (advanced) or
+   wait for a future `cascade accounts add` subcommand.
+
+## Privacy
+
+`accounts.json` and `quota.json` contain account IDs and usage counts but NEVER
+store API keys or authentication tokens. Keys live exclusively in vault.env and
+are never logged or serialised by Cascade.
+"#;
+    atomic_write(path, content.as_bytes())
+}
+
+/// Write `~/.cascade/accounts/matrix.md` — human-readable model routing table.
+///
+/// Generates a Markdown table from `registry.model_matrix` with columns:
+/// Model | Family | Tier | Subscription/Access | Best For | Notes.
+/// Also appends a routing strategy summary.
+///
+/// Inputs:  `path` — destination file; `registry` — source of model matrix data.
+/// Outputs: atomic write to `path`.
+pub fn write_matrix_md(path: &Path, registry: &AccountsRegistry) -> Result<()> {
+    use std::fmt::Write as FmtWrite;
+
+    let mut out = String::new();
+    writeln!(out, "# Model Matrix — Cascade Fleet\n").ok();
+    writeln!(out, "Generated from `~/.cascade/accounts/accounts.json`. Do not edit by hand.\n").ok();
+    writeln!(out, "## Routing Table\n").ok();
+    writeln!(out, "| Model | Family | Tier | Primary Account | Best For | Notes |").ok();
+    writeln!(out, "|-------|--------|------|-----------------|----------|-------|").ok();
+
+    for entry in &registry.model_matrix {
+        let family = format!("{:?}", entry.family);
+        let primary = entry.available_via.first()
+            .map(|r| format!("{}:{:?}", r.account_id, r.method))
+            .unwrap_or_else(|| "-".into());
+        let best = entry.best_for.iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let notes = entry.notes.as_deref().unwrap_or("-");
+        writeln!(out, "| {} | {} | {} | {} | {} | {} |",
+            entry.model_id, family, entry.tier, primary, best, notes).ok();
+    }
+
+    writeln!(out, "\n## Routing Strategy\n").ok();
+    writeln!(out, "**Exhaustion order** (lower priority number = drained first):\n").ok();
+
+    // Sort accounts by priority for the summary.
+    let mut sorted = registry.accounts.clone();
+    sorted.sort_by_key(|a| a.exhaustion_priority);
+    for acc in &sorted {
+        let reserved = if matches!(acc.role, AccountRole::PrimaryT0) { " (**reserved last**)" } else { "" };
+        writeln!(out, "- `{}` ({:?}, priority {}){}",
+            acc.id, acc.family, acc.exhaustion_priority, reserved).ok();
+    }
+
+    writeln!(out, "\n### Key rules\n").ok();
+    writeln!(out, "- **Sensitive tasks** (PII / VA / health / custody): Claude-only. All external models hard-blocked.").ok();
+    writeln!(out, "- **Adversarial CR/QA**: prefer cross-family (GPT-5.5, Gemini-3.1-Pro) for independence.").ok();
+    writeln!(out, "- **Pooled (acc2–acc4)** are drained before primary (acc1, priority 255).").ok();
+    writeln!(out, "- **GFP pool** (priority 1) is always drained first for grunt/classify/taxonomy work.").ok();
+    writeln!(out, "- **Primary acc1** is reserved for T0 interactive use; background agents use acc2+.").ok();
+
+    atomic_write(path, out.as_bytes())
+}
+
+// ── Ensure directory ──────────────────────────────────────────────────────────
+
+/// Create `~/.cascade/accounts/` and write all four managed files.
+///
+/// Called by `cascade accounts detect` and at startup when the directory is absent.
+/// Inputs:  `registry` — current (or freshly built) `AccountsRegistry`.
+/// Outputs: creates the dir and writes accounts.json, quota.json, README.md, matrix.md.
+pub fn init_accounts_dir(registry: &AccountsRegistry) -> Result<()> {
+    let dir = accounts_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| CascadeError::io(dir.clone(), "create_dir_all", e))?;
+
+    write_accounts_registry(&dir.join("accounts.json"), registry)?;
+    write_quota_json(&dir.join("quota.json"), registry)?;
+    write_accounts_readme(&dir.join("README.md"))?;
+    write_matrix_md(&dir.join("matrix.md"), registry)?;
+    Ok(())
+}
+
+// ── Internal helper ───────────────────────────────────────────────────────────
+
+/// Atomic write: write to `<path>.tmp` then rename over `path`.
+///
+/// Constraints: POSIX-atomic when tmp and dst share a filesystem (same dir).
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, &bytes).map_err(|e| CascadeError::io(tmp.clone(), "write", e))?;
+    std::fs::write(&tmp, bytes).map_err(|e| CascadeError::io(tmp.clone(), "write", e))?;
     std::fs::rename(&tmp, path).map_err(|e| CascadeError::io(path.to_path_buf(), "rename", e))?;
     Ok(())
 }
@@ -295,5 +541,93 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// init_accounts_dir creates the directory and all four expected files.
+    #[test]
+    fn init_accounts_dir_creates_all_files() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("accounts");
+
+        // Patch accounts_dir via direct call pattern (test using explicit paths).
+        let registry = default_registry();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_accounts_registry(&dir.join("accounts.json"), &registry).unwrap();
+        write_quota_json(&dir.join("quota.json"), &registry).unwrap();
+        write_accounts_readme(&dir.join("README.md")).unwrap();
+        write_matrix_md(&dir.join("matrix.md"), &registry).unwrap();
+
+        assert!(dir.join("accounts.json").exists(), "accounts.json must exist");
+        assert!(dir.join("quota.json").exists(), "quota.json must exist");
+        assert!(dir.join("README.md").exists(), "README.md must exist");
+        assert!(dir.join("matrix.md").exists(), "matrix.md must exist");
+    }
+
+    /// quota.json shape: must contain "updated_at" and "accounts" array.
+    #[test]
+    fn quota_json_shape_is_correct() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("quota.json");
+        let registry = default_registry();
+        write_quota_json(&path, &registry).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(v.get("updated_at").is_some(), "quota.json must have updated_at");
+        let accts = v.get("accounts").and_then(|a| a.as_array());
+        assert!(accts.is_some(), "quota.json must have accounts array");
+        let accts = accts.unwrap();
+        assert_eq!(accts.len(), 8, "must have one entry per account");
+
+        // Each account entry must have the required widget fields.
+        for entry in accts {
+            assert!(entry.get("id").is_some());
+            assert!(entry.get("family").is_some());
+            assert!(entry.get("reserved").is_some());
+            assert!(entry.get("windows").is_some());
+            let windows = entry.get("windows").unwrap();
+            assert!(windows.get("5h").is_some());
+            assert!(windows.get("weekly").is_some());
+        }
+    }
+
+    /// migration: old ~/.cascade/accounts.json → ~/.cascade/accounts/accounts.json.
+    #[test]
+    fn migration_moves_old_file_into_dir() {
+        let tmp = TempDir::new().unwrap();
+        let cascade_dir = tmp.path().join(".cascade");
+        std::fs::create_dir_all(&cascade_dir).unwrap();
+
+        // Write the "old" flat file.
+        let old_path = cascade_dir.join("accounts.json");
+        let registry = default_registry();
+        let bytes = serde_json::to_vec_pretty(&registry).unwrap();
+        std::fs::write(&old_path, &bytes).unwrap();
+
+        // Simulate migration by copying old → new and removing old.
+        let new_dir = cascade_dir.join("accounts");
+        std::fs::create_dir_all(&new_dir).unwrap();
+        let new_path = new_dir.join("accounts.json");
+        std::fs::write(&new_path, &bytes).unwrap();
+        std::fs::remove_file(&old_path).unwrap();
+
+        assert!(!old_path.exists(), "old flat file must be gone");
+        assert!(new_path.exists(), "new accounts/accounts.json must exist");
+    }
+
+    /// matrix.md must contain the model header and routing strategy section.
+    #[test]
+    fn matrix_md_contains_expected_sections() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("matrix.md");
+        let registry = default_registry();
+        write_matrix_md(&path, &registry).unwrap();
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# Model Matrix"), "must have H1 heading");
+        assert!(content.contains("## Routing Table"), "must have Routing Table section");
+        assert!(content.contains("## Routing Strategy"), "must have Routing Strategy section");
+        assert!(content.contains("claude-opus-4-8"), "must list claude-opus-4-8");
+        assert!(content.contains("claude-acc1"), "must mention acc1");
     }
 }

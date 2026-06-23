@@ -1,0 +1,84 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildAndRun"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "bd130087a6d88e862cc731c9beedc2b36bc9f031c6270148d974d74279dc74a5"
+    }
+  ],
+  "containerPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidget.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "install",
+    "activeArchitecture" : "undefined_arch",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : true,
+      "platform" : "macosx",
+      "sdk" : "macosx26.2",
+      "sdkVariant" : "macos",
+      "supportedArchitectures" : [
+        "arm64",
+        "arm64e",
+        "x86_64",
+        "x86_64h"
+      ],
+      "targetArchitecture" : "undefined_arch"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Products",
+      "derivedDataPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData",
+      "indexDataStoreFolderPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Release",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+          "CODE_SIGN_IDENTITY" : "-",
+          "CODE_SIGNING_ALLOWED" : "NO",
+          "CODE_SIGNING_REQUIRED" : "NO",
+          "DEVELOPMENT_TEAM" : ""
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "install",
+          "ASSET_PACK_FOLDER_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/InstallationBuildProductsLocation/OnDemandResources",
+          "ASSETCATALOG_COMPILER_FLATTENED_APP_ICON_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/ProductIcon.png",
+          "DEPLOYMENT_LOCATION" : "YES",
+          "DEPLOYMENT_POSTPROCESSING" : "YES",
+          "DSTROOT" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/InstallationBuildProductsLocation",
+          "EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE" : "NO",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_SIGNATURE_AGGREGATION" : "YES",
+          "ENABLE_XOJIT_PREVIEWS" : "YES",
+          "INDEX_ENABLE_DATA_STORE" : "NO",
+          "MESSAGES_APPLICATION_EXTENSION_SUPPORT_FOLDER_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/MessagesApplicationExtensionSupport",
+          "MESSAGES_APPLICATION_SUPPORT_FOLDER_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/MessagesApplicationSupport",
+          "OBJROOT" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath",
+          "ONLY_ACTIVE_ARCH" : "YES",
+          "SHARED_PRECOMPS_DIR" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/PrecompiledHeaders",
+          "SIGNATURE_METADATA_FOLDER_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/Signatures",
+          "SWIFT_STDLIB_TOOL_UNSIGNED_DESTINATION_DIR" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/SwiftSupport",
+          "SYMROOT" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath",
+          "WATCHKIT_2_SUPPORT_FOLDER_PATH" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/BuildProductsPath/WatchKitSupport2"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "archive",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}

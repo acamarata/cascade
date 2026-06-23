@@ -1,0 +1,61 @@
+{
+  "" : {
+    "const-values" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary.d",
+    "diagnostics" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary.dia",
+    "emit-module-dependencies" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary-emit-module.dia",
+    "pch" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetExtension-primary.swiftdeps"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/CacheModel.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CacheModel.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CacheModel.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CacheModel.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/CascadeWidget.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidget.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidget.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidget.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/CascadeWidgetBundle.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetBundle.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetBundle.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/CascadeWidgetBundle.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Entry.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Entry.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Entry.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Entry.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Modifiers/MonochromeDimModifier.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MonochromeDimModifier.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MonochromeDimModifier.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MonochromeDimModifier.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Provider.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Provider.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Provider.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/Provider.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Views/EntryView.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/EntryView.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/EntryView.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/EntryView.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Views/LargeView.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/LargeView.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/LargeView.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/LargeView.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Views/MediumView.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MediumView.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MediumView.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/MediumView.o"
+  },
+  "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/CascadeWidgetExtension/Views/SmallView.swift" : {
+    "index-unit-output-path" : "/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/SmallView.o",
+    "llvm-bc" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/SmallView.bc",
+    "object" : "/Volumes/X9/Sites/acamarata/cascade/src/widget/macos/build/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/CascadeApp/IntermediateBuildFilesPath/CascadeWidget.build/Release/CascadeWidgetExtension.build/Objects-normal/x86_64/SmallView.o"
+  }
+}
