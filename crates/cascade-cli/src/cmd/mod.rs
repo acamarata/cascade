@@ -65,6 +65,8 @@ pub mod template;
 pub mod uninstall;
 pub mod unlink;
 pub mod update;
+// fleet-widget LaunchAgent management (cascade widget install/uninstall/status)
+pub mod widget;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -185,6 +187,8 @@ pub enum Commands {
     Configure(configure::ConfigureArgs),
     /// Manage the fleet account registry (list / status / matrix / detect).
     Accounts(accounts::AccountsArgs),
+    /// Manage the cascade-fleet-widget menu-bar LaunchAgent (install / uninstall / status).
+    Widget(widget::WidgetArgs),
 }
 
 impl Commands {
@@ -236,6 +240,7 @@ impl Commands {
             Commands::CcApi(args) => args.run().await,
             Commands::Configure(args) => args.run().await,
             Commands::Accounts(args) => args.run().await,
+            Commands::Widget(args)   => args.run().await,
         }
     }
 }

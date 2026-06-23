@@ -1,0 +1,23 @@
+[package]
+name = "cascade-fleet-widget"
+description = "macOS menu-bar fleet widget — shows live per-account usage from accounts.json and quota-store.json (Claw-Fleet replacement)"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+
+[[bin]]
+name = "cascade-fleet-widget"
+path = "src/main.rs"
+
+[dependencies]
+cascade-types   = { workspace = true }
+cascade-core    = { workspace = true }
+cascade-tray    = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+chrono          = { workspace = true }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+# no extra deps on non-mac; headless no-op mode compiles everywhere

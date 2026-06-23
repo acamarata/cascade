@@ -1243,6 +1243,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cascade-fleet-widget"
+version = "1.5.0"
+dependencies = [
+ "cascade-core",
+ "cascade-tray",
+ "cascade-types",
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cascade-harness"
 version = "1.5.0"
 dependencies = [
