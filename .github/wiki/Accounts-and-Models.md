@@ -73,7 +73,7 @@ The interactive wizard walks you through adding a new account. You will be asked
 - An account identifier (e.g. `claude-acc2`, `agy-work`)
 - Whether to allow paid-API overage (default: off)
 
-Accounts are stored in `~/.cascade/accounts.json`. Keys for GFP are stored there too — they never leave your machine.
+Accounts are stored in `~/.cascade/accounts/accounts.json`. Keys for GFP are stored there too — they never leave your machine.
 
 To list what is registered:
 
@@ -89,9 +89,18 @@ cascade accounts remove <id>
 
 ---
 
-## The central registry: `~/.cascade/accounts.json`
+## The central registry: `~/.cascade/accounts/`
 
-Every account Cascade knows about lives here. A minimal example:
+The accounts directory holds the registry and its derived files:
+
+| File | Written by | Read by |
+|---|---|---|
+| `accounts.json` | `cascade accounts detect` / daemon tick | CLI, daemon |
+| `quota.json` | daemon fleet poller (every ~60s tick) | native menu-bar widget |
+| `README.md` | `cascade accounts detect` | humans |
+| `matrix.md` | `cascade accounts detect` | humans |
+
+A minimal `accounts.json`:
 
 ```json
 {
@@ -114,9 +123,9 @@ Every account Cascade knows about lives here. A minimal example:
 
 ## Menu-bar / widget readout
 
-The Cascade menu-bar tray shows a live usage summary pulled from `quota-store.json`. Each row is one account or pool, with a usage bar and the time of the last successful poll.
+On macOS, Cascade ships a native menu-bar app (`NSStatusItem` + popover) that shows a live fleet table: one row per account or pool, each with its 5-hour and weekly quota windows (usage % + reset countdown), and a "updated N ago" counter. It reads `~/.cascade/accounts/quota.json`, which the daemon's fleet poller refreshes every tick (~60s).
 
-Sources without a live reader show nothing — Cascade never fabricates usage numbers.
+Sources without a live quota reader show `—` — Cascade never fabricates usage numbers.
 
 ---
 
@@ -126,7 +135,7 @@ The Gemini Flash Free Pool is a set of API keys across multiple Google accounts 
 
 This pool is maximized deliberately: Cascade routes all cheap background work here first, saving your paid quotas for tasks that actually need them. The pool grows as you add more Google accounts via `cascade accounts add`.
 
-Key values live only in `~/.cascade/accounts.json`. They are never synced, logged, or shared.
+Key values live only in `~/.cascade/accounts/accounts.json`. They are never synced, logged, or shared.
 
 ---
 

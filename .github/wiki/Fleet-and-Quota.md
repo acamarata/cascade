@@ -4,9 +4,10 @@ Cascade can track usage across all your AI accounts in one place, locally.
 
 ## How it works
 
-A background poller in the `cascaded` daemon refreshes a single store,
-`~/.cascade/quota-store.json`, about once a minute. The menu-bar tray reads it
-and shows a usage summary. Everything is local — no server, no cloud.
+A background poller in the `cascaded` daemon runs about once a minute. It
+refreshes the aggregate store `~/.cascade/quota-store.json` and, alongside it,
+`~/.cascade/accounts/quota.json` — the per-account fleet snapshot the native
+macOS menu-bar widget reads. Everything is local — no server, no cloud.
 
 ## Sources
 
