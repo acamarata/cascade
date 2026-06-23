@@ -62,7 +62,7 @@ These items require the user to take action before the corresponding distributio
 | T-P4-E05-13 | Chocolatey community feed | Submit `.nupkg` (built from `packaging/chocolatey/`) to chocolatey.org/packages/submit after the v0.1.0 release is tagged | **PENDING USER** |
 | T-P4-E05-15 | Snapcraft account + name | Create Snapcraft account, register snap name `cascade`, generate `SNAPCRAFT_TOKEN`, set via `gh secret set SNAPCRAFT_TOKEN` | **PENDING USER** |
 | T-P4-E05-16 | Flathub PR | Fork `github.com/flathub/flathub`, add `io.github.acamarata.Cascade.yml` from `flatpak/`, submit PR (SHA256 from live release asset required) | **PENDING USER** |
-| T-P4-E05-18 | GPG_PRIVATE_KEY secret | Export the Cascade release GPG key (`gpg --export-secret-keys --armor alisalaah@gmail.com`) and set `GPG_PRIVATE_KEY` + `GPG_PASSPHRASE` via `gh secret set`. Key fingerprint: `3C46 3D90 DF30 61AA 752F B850 0F57 2977 3E69 4CEA` | **PENDING USER** |
+| T-P4-E05-18 | GPG_PRIVATE_KEY secret | Export the Cascade release GPG key (`gpg --export-secret-keys --armor 3C463D90DF3061AA752FB8500F5729773E694CEA`) and set `GPG_PRIVATE_KEY` + `GPG_PASSPHRASE` via `gh secret set`. Key fingerprint: `3C46 3D90 DF30 61AA 752F B850 0F57 2977 3E69 4CEA` | **PENDING USER** |
 
 ---
 
@@ -159,7 +159,7 @@ These are the steps you must take to publish the v0.1.0 release. Steps 1–3 can
 **Immediate (no external accounts needed):**
 
 1. **Update ticket YAML statuses** — change `status: pending` to `status: done` for T-P4-E05-01 through T-P4-E05-18 (artifacts are built; YAML was not updated).
-2. **Set GPG_PRIVATE_KEY secret** — `gpg --export-secret-keys --armor alisalaah@gmail.com | gh secret set GPG_PRIVATE_KEY` then `gh secret set GPG_PASSPHRASE`.
+2. **Set GPG_PRIVATE_KEY secret** — `gpg --export-secret-keys --armor 3C463D90DF3061AA752FB8500F5729773E694CEA | gh secret set GPG_PRIVATE_KEY` then `gh secret set GPG_PASSPHRASE`.
 3. **Push the branch and tag** — `git add -A && git commit -m "feat(p4-e05): FOSS public launch artifacts"` then `git tag v0.1.0 && git push origin wip/rust-rewrite --tags`. The release.yml workflow runs on tag push and produces all platform artifacts.
 
 **Requires external enrollment (do after tag, before announcing):**

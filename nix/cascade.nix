@@ -64,7 +64,7 @@ pkgs.stdenv.mkDerivation rec {
     '';
     homepage = "https://github.com/acamarata/cascade";
     license = licenses.mit;
-    maintainers = [ { name = "Aric Camarata"; email = "alisalaah@gmail.com"; } ];
+    maintainers = [ { name = "Aric Camarata"; email = "aric.camarata@gmail.com"; } ];
     platforms = [ "x86_64-linux" "aarch64-linux" ];
     mainProgram = "cascade";
   };

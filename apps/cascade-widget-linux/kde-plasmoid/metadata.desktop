@@ -7,7 +7,7 @@ X-KDE-ServiceTypes=Plasma/Applet
 X-Plasma-API-Minimum-Version=6.0
 
 X-KDE-PluginInfo-Author=Aric Camarata
-X-KDE-PluginInfo-Email=alisalaah@gmail.com
+X-KDE-PluginInfo-Email=aric.camarata@gmail.com
 X-KDE-PluginInfo-Name=com.acamarata.cascade-fleet-dashboard
 X-KDE-PluginInfo-Version=1.0.0
 X-KDE-PluginInfo-Website=https://github.com/acamarata/cascade

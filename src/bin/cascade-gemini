@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cascade-gemini — usage collector for Gemini API (openclaw-io GCP project).
 #
-# Emits exactly 1 entry: gemini-1 = alisalaah@gmail.com (openclaw-io, paid API key).
+# Emits exactly 1 entry: gemini-1 (openclaw-io GCP project, paid API key).
 #
 # Authentication: API-key based. Cookie-based approach removed 2026-05-21.
 #
@@ -149,7 +149,7 @@ def build_entry(status: str, note: str, http_code=None,
     entry = {
         "provider":    "gemini",
         "account":     "gemini-1",
-        "email":       "alisalaah@gmail.com (openclaw-io API)",
+        "email":       "openclaw-io (GCP API project)",
         "plan_type":   "api_paid",
         "usage": {
             "five_hour":   usage_five_hour,
