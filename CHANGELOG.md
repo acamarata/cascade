@@ -8,23 +8,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [1.5.0] - 2026-06-23
 
-Accounts subsystem + fleet widget.
+Accounts subsystem + native fleet widget.
 
 ### Added
 
-- Central account registry at `~/.cascade/accounts.json` — tracks every account
-  (Claude primary + pooled, Codex, Gemini, OpenCode-Go, the GFP free-Flash key
-  pool) with its access method (native Claude Code, smithers/claude-p, codex
-  CLI, agy CLI, opencode CLI, GFP key pool), available models, detected CLI
-  availability, GFP key count, and quota links. Maintained by the daemon.
+- Account registry directory at `~/.cascade/accounts/` (`accounts.json` +
+  `quota.json` + `README.md` + `matrix.md`) — tracks every account (Claude
+  primary + pooled, Codex, Gemini, OpenCode-Go, the GFP free-Flash key pool)
+  with its access method (native Claude Code, smithers/claude-p, codex CLI, agy
+  CLI, opencode CLI, GFP key pool), available models, detected CLI availability,
+  GFP key count, and quota links. The daemon refreshes `quota.json` every tick
+  (~60s) for the widget to read.
 - `cascade accounts list | status | matrix | detect` — view and refresh the
   registry and the model best-for matrix. Keys are counted, never logged.
 - Model routing matrix + research (`.github/docs/MODEL-ROUTING.md`,
   `data/model-matrix.json`) — which model is best for which task and how it is
   accessed, with an account-exhaustion strategy that reserves the primary
   Claude session and drains pooled accounts and the free GFP pool first.
-- Cascade Fleet Übersicht desktop widget — a live desktop readout of all
-  accounts and quotas (`widgets/ubersicht/`).
+- Native macOS menu-bar fleet widget (`src/widget/macos/CascadeApp`) — an
+  `NSStatusItem` + popover showing every account with its 5-hour and weekly
+  quota windows and reset countdowns, reading `~/.cascade/accounts/quota.json`.
+  Replaces the previous Übersicht-based widget.
+
+### Fixed
+
+- Privacy: removed hardcoded developer home (`/Users/admin`) and a personal
+  project list from the shipped desktop app (home dir is now resolved at
+  runtime); removed a private email address from all public artifacts (contact
+  fields, packaging metadata, release runbook).
+- Model IDs corrected throughout to the current lineup (`claude-opus-4-8`,
+  `gemini-3.5-flash`) and routed through the canonical model registry to stop
+  drift.
 
 ## [1.4.0] - 2026-06-22
 
