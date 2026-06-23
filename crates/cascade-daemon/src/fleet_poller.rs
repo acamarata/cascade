@@ -29,8 +29,10 @@ use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use cascade_core::accounts_store::{count_gfp_keys, detect_cli, read_accounts_registry, write_accounts_registry};
 use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
+use cascade_types::accounts::{AccessMethod, AccountFamily};
 use cascade_types::quota_store::{
     QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
     PROVIDER_OPENAI_CODEX,
@@ -229,7 +231,7 @@ impl FleetPoller {
     /// Execute one polling tick across all sources and write the result.
     ///
     /// Inputs: `sources` — registered fleet sources; `store_path` — destination.
-    /// Outputs: `quota-store.json` written on success; warn log on error.
+    /// Outputs: `quota-store.json` and (if it already exists) `accounts.json` written.
     /// Constraints: synchronous — must not be called from an async context
     ///              without `spawn_blocking` if sources perform blocking I/O.
     fn tick(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
@@ -270,6 +272,58 @@ impl FleetPoller {
                 "fleet: quota-store.json updated"
             ),
             Err(e) => warn!(%e, "fleet: failed to write quota-store.json"),
+        }
+
+        // Refresh accounts.json CLI availability and GFP key count — only when
+        // the file already exists (creation is the `cascade accounts detect` task).
+        if let Some(parent) = store_path.parent() {
+            let accounts_path = parent.join("accounts.json");
+            if accounts_path.exists() {
+                Self::refresh_accounts(&accounts_path);
+            }
+        }
+    }
+
+    /// Refresh `cli_available` and `key_count` fields in an existing accounts.json.
+    ///
+    /// Purpose: keeps the registry in sync with the current PATH state on each
+    /// daemon tick without requiring the user to run `cascade accounts detect`.
+    /// Inputs:  `path` — existing `accounts.json` file.
+    /// Outputs: updated `accounts.json` on success; warn log on error.
+    /// Constraints: only called when the file exists; never creates it.
+    fn refresh_accounts(path: &std::path::Path) {
+        let mut registry = match read_accounts_registry(path) {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(%e, "fleet: failed to read accounts.json for refresh");
+                return;
+            }
+        };
+
+        let gfp_count = count_gfp_keys();
+
+        for acc in &mut registry.accounts {
+            if acc.family == AccountFamily::Gfp {
+                acc.key_count = gfp_count;
+            } else {
+                // Re-detect CLI availability from the access methods.
+                acc.cli_available = acc.access_methods.iter().any(|m| match m {
+                    AccessMethod::NativeCc => detect_cli("claude"),
+                    AccessMethod::SmithersClaudeP => {
+                        detect_cli("smithers") || detect_cli("claude-p")
+                    }
+                    AccessMethod::CodexCli => detect_cli("codex"),
+                    AccessMethod::AgyCli => detect_cli("agy"),
+                    AccessMethod::OpencodeRun => detect_cli("opencode"),
+                    AccessMethod::GfpKeypool => true,
+                });
+            }
+        }
+
+        registry.updated_at = chrono::Utc::now().to_rfc3339();
+        match write_accounts_registry(path, &registry) {
+            Ok(()) => info!(path = %path.display(), "fleet: accounts.json refreshed"),
+            Err(e) => warn!(%e, "fleet: failed to write accounts.json"),
         }
     }
 }

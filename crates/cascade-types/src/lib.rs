@@ -56,6 +56,7 @@
 
 // ── Module declarations ───────────────────────────────────────────────────────
 
+pub mod accounts;
 pub mod agent;
 pub mod auto_auth;
 pub mod cascade_tier;
@@ -93,6 +94,10 @@ pub mod usage_analytics;
 // Re-export the most commonly used items so callers can write
 // `use cascade_types::{CascadeError, CascadeTier}` without navigating sub-modules.
 
+pub use accounts::{
+    Account, AccountFamily, AccountRole, AccountsRegistry, AccessMethod, ModelMatrixEntry,
+    ModelRoute, TaskClass, ACCOUNTS_SCHEMA_VERSION,
+};
 pub use agent::{Agent, AgentMeta, AgentResponse, Context, NoopAgent, Tier};
 pub use cascade_tier::{CascadeTier, InboxTier};
 pub use chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document, NoopChunker};

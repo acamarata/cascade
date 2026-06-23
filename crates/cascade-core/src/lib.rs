@@ -52,6 +52,7 @@
 //! # }
 //! ```
 
+pub mod accounts_store;
 pub mod ai_folder;
 pub mod auth_detector;
 pub mod cache;
@@ -98,6 +99,10 @@ pub mod watcher;
 pub mod worktree_store;
 
 // Re-export the most commonly used top-level items.
+pub use accounts_store::{
+    accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry, detect_cli,
+    read_accounts_registry, write_accounts_registry,
+};
 pub use discovery::{DiscoveredTier, TierDiscovery};
 pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};
 pub use hook_store::HookStore;

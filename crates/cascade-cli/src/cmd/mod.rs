@@ -4,6 +4,7 @@
 //! [`Command::run`] which returns a [`cascade_types::error::Result<()>`].
 //! The `main` entry point dispatches through [`Commands::run`].
 
+pub mod accounts;
 pub mod backup;
 // P13: harness settings writer (cascade configure)
 pub mod configure;
@@ -182,6 +183,8 @@ pub enum Commands {
     CcApi(ccapi::CcApiArgs),
     /// Write Cascade-managed values into a harness runtime config (P13).
     Configure(configure::ConfigureArgs),
+    /// Manage the fleet account registry (list / status / matrix / detect).
+    Accounts(accounts::AccountsArgs),
 }
 
 impl Commands {
@@ -232,6 +235,7 @@ impl Commands {
             Commands::Health(args) => args.run().await,
             Commands::CcApi(args) => args.run().await,
             Commands::Configure(args) => args.run().await,
+            Commands::Accounts(args) => args.run().await,
         }
     }
 }
