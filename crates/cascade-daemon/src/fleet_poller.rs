@@ -238,6 +238,17 @@ impl FleetPoller {
     /// Constraints: synchronous — must not be called from an async context
     ///              without `spawn_blocking` if sources perform blocking I/O.
     fn tick(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
+        // Refresh accounts/ CLI availability and GFP key count, and regenerate the
+        // native widget's quota.json — on EVERY tick, independent of whether the
+        // live quota sources have data yet. This must run before the early-return
+        // below: in the common case where no source has live quota data, the widget
+        // would otherwise never see a refreshed quota.json. Only runs when
+        // accounts/accounts.json already exists (creation is `cascade accounts detect`).
+        let accts_path = accounts_dir().join("accounts.json");
+        if accts_path.exists() {
+            Self::refresh_accounts(&accts_path);
+        }
+
         let snapshots: Vec<QuotaState> = sources
             .iter()
             .filter_map(|src| {
@@ -275,14 +286,6 @@ impl FleetPoller {
                 "fleet: quota-store.json updated"
             ),
             Err(e) => warn!(%e, "fleet: failed to write quota-store.json"),
-        }
-
-        // Refresh accounts/ CLI availability and GFP key count — only when
-        // accounts/accounts.json already exists (creation is `cascade accounts detect`).
-        // Also refreshes quota.json so the native widget gets updated data each tick.
-        let accts_path = accounts_dir().join("accounts.json");
-        if accts_path.exists() {
-            Self::refresh_accounts(&accts_path);
         }
     }
 
