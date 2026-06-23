@@ -16,15 +16,15 @@ path = "src/main.rs"
 
 [dependencies]
 cascade-core      = { workspace = true }
-cascade-rag       = { path = "../cascade-rag", version = "1.4.0" }
+cascade-rag       = { path = "../cascade-rag", version = "1.5.0" }
 cascade-types     = { workspace = true }
 cascade-agents    = { workspace = true }
 async-trait       = { workspace = true }
 cascade-tray      = { workspace = true }
-cascade-keychain  = { path = "../cascade-keychain", version = "1.4.0" }
-cascade-audit     = { path = "../cascade-audit", version = "1.4.0" }
+cascade-keychain  = { path = "../cascade-keychain", version = "1.5.0" }
+cascade-audit     = { path = "../cascade-audit", version = "1.5.0" }
 cascade-providers = { workspace = true }
-cascade-local-llm = { path = "../cascade-local-llm", version = "1.4.0", optional = true }
+cascade-local-llm = { path = "../cascade-local-llm", version = "1.5.0", optional = true }
 secrecy       = "0.8"
 tokio         = { workspace = true }
 tracing       = { workspace = true }

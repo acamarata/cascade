@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-23
+
+Accounts subsystem + fleet widget.
+
+### Added
+
+- Central account registry at `~/.cascade/accounts.json` — tracks every account
+  (Claude primary + pooled, Codex, Gemini, OpenCode-Go, the GFP free-Flash key
+  pool) with its access method (native Claude Code, smithers/claude-p, codex
+  CLI, agy CLI, opencode CLI, GFP key pool), available models, detected CLI
+  availability, GFP key count, and quota links. Maintained by the daemon.
+- `cascade accounts list | status | matrix | detect` — view and refresh the
+  registry and the model best-for matrix. Keys are counted, never logged.
+- Model routing matrix + research (`.github/docs/MODEL-ROUTING.md`,
+  `data/model-matrix.json`) — which model is best for which task and how it is
+  accessed, with an account-exhaustion strategy that reserves the primary
+  Claude session and drains pooled accounts and the free GFP pool first.
+- Cascade Fleet Übersicht desktop widget — a live desktop readout of all
+  accounts and quotas (`widgets/ubersicht/`).
+
 ## [1.4.0] - 2026-06-22
 
 Baked-in behavioral instruction layer.

@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Proc-macro crate that provides #[cascade_plugin] and register_* macros.
-cascade-pdk-macro = { path = "../cascade-pdk-macro", version = "1.4.0" }
+cascade-pdk-macro = { path = "../cascade-pdk-macro", version = "1.5.0" }
 
 # Serde: wasm32-wasip1 is a full WASI target with std, so we use std features.
 serde       = { version = "1", features = ["derive"] }
