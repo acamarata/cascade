@@ -21,6 +21,7 @@ targets:
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
         DEVELOPMENT_TEAM: ""
+        INFOPLIST_FILE: "CascadeApp/Info.plist"
     entitlements:
       path: CascadeApp/CascadeApp.entitlements
       properties:

@@ -16,6 +16,7 @@
 		661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6530C23B2A451EC3F95FC7EA /* ContentView.swift */; };
 		6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */; };
 		74C612818047291ECF3847EA /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
+		76079F22B0E99CCAAD412F2F /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A3670D3BACE1F823999C10 /* QuotaStore.swift */; };
 		7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
 		7CBCF0D56C1E576C1A3A67EC /* MediumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE26AC57686229523FF30FB /* MediumView.swift */; };
 		969BB6A87AED736ED3B4F22D /* CascadeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -72,6 +73,7 @@
 		6530C23B2A451EC3F95FC7EA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		6B5C34E8893C25E333C79126 /* MenubarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarController.swift; sourceTree = "<group>"; };
 		7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarPopoverView.swift; sourceTree = "<group>"; };
+		95A3670D3BACE1F823999C10 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStore.swift; sourceTree = "<group>"; };
 		98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CascadeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CA653CE94840F17719DE2E9 /* SmallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallView.swift; sourceTree = "<group>"; };
 		B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonIPCClient.swift; sourceTree = "<group>"; };
@@ -174,6 +176,7 @@
 				F63251BBC96DE278824E772F /* Info.plist */,
 				6B5C34E8893C25E333C79126 /* MenubarController.swift */,
 				7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */,
+				95A3670D3BACE1F823999C10 /* QuotaStore.swift */,
 			);
 			path = CascadeApp;
 			sourceTree = "<group>";
@@ -313,6 +316,7 @@
 				1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */,
 				FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */,
 				3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */,
+				76079F22B0E99CCAAD412F2F /* QuotaStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

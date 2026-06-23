@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the Cascade Fleet menu-bar app.
+
+  Install:
+    cp dev.cascade.menubar.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/dev.cascade.menubar.plist
+
+  Unload:
+    launchctl unload ~/Library/LaunchAgents/dev.cascade.menubar.plist
+
+  Notes:
+  - RunAtLoad = true starts the app at login automatically.
+  - KeepAlive = false lets macOS restart it only if it crashes (not after Quit).
+  - The app uses LSMultipleInstancesProhibited so a second launch just activates
+    the existing instance — safe to have this agent load-at-login.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.cascade.menubar</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>open -a CascadeApp || open ~/Applications/CascadeApp.app</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/tmp/cascade-menubar.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/cascade-menubar.err</string>
+</dict>
+</plist>

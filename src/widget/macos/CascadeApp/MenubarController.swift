@@ -3,111 +3,116 @@ import SwiftUI
 
 // MARK: - MenubarController
 //
-// Purpose: Manage the NSStatusItem (tray icon) and NSPopover for the CascadeApp
-//          menubar companion. Queries the cascaded daemon via DaemonIPCClient for
-//          live health state; falls back to CascadeCache file-age check when the
-//          daemon is not reachable. Refreshes every 30 seconds.
-// Inputs:  DaemonIPCClient.queryStatus() — live health; nil when daemon is offline.
-//          CascadeCache.load() — file-age fallback when daemon is nil.
-// Outputs: Status-bar icon (template SF Symbol) + transient NSPopover with MenubarPopoverView.
+// Purpose: Manage the NSStatusItem (tray icon) and NSPopover for the Cascade Fleet
+//          menu-bar app. Reads ~/.cascade/accounts/quota.json every 30 seconds and
+//          on manual refresh. Drives icon state from quota freshness.
+// Inputs:  QuotaStore.load() — reads quota.json / quota-store.json from ~/.cascade/
+// Outputs: Status-bar icon (SF Symbol template) + transient NSPopover with Fleet table.
 // Constraints:
-//   Must be in CascadeApp target only — NOT the WidgetExtension process.
-//   DaemonIPCClient dispatches to a background queue and calls completion on main.
-//   Timer uses [weak self] to avoid retain cycle after statusItem deallocates.
-//   NSImage.isTemplate = true ensures automatic dark/light tint adaptation.
+//   LSUIElement = true in Info.plist ensures no Dock icon.
+//   Timer uses [weak self] to avoid retain cycle.
+//   NSImage.isTemplate = true ensures dark/light tint adaptation.
+//   Single instance enforced by NSApplication (menu-bar-only, no window).
 // Icon states:
-//   checkmark.circle.fill   — daemon healthy (status == "healthy"), cache present
-//   exclamationmark.triangle — daemon healthy but cache stale, OR daemon degraded
-//   circle.slash             — daemon not responding (nil) — no cache either
-// SPORT: .opencode/phases/sport/ — MenubarController component (P2, T-P2-E04-10)
+//   circle.grid.2x2.fill   — quota data fresh (< 120s)
+//   exclamationmark.triangle — quota data stale (>= 120s)
+//   circle.slash             — no quota file found
+// SPORT: .opencode/phases/sport/ — MenubarController component (Fleet popover)
 
 class MenubarController: NSObject {
     private var statusItem: NSStatusItem?
     private var popover = NSPopover()
     private var timer: Timer?
+    private var quota: QuotaStore?
 
     /// Install the status item, configure the click handler, and start the refresh timer.
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        updateIcon()
 
-        // Refresh every 30 seconds to match widget timeline cadence.
-        timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            self?.updateIcon()
-        }
-
-        // Wire the click handler to toggle the popover.
+        // Wire click handler first.
         if let button = statusItem?.button {
             button.action = #selector(togglePopover(_:))
             button.target = self
         }
 
-        // Embed SwiftUI popover content via NSHostingController.
-        // .transient closes the popover when the user clicks outside it.
-        popover.contentViewController = NSHostingController(
-            rootView: MenubarPopoverView(cache: CascadeCache.load() ?? .placeholder)
-        )
+        // Popover is transient — closes when user clicks outside.
         popover.behavior = .transient
+
+        // Observe manual refresh requests from the popover "Refresh" button.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRefreshNow),
+            name: .cascadeRefreshNow,
+            object: nil
+        )
+
+        // Initial load.
+        refresh()
+
+        // Refresh every 30 seconds.
+        timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.refresh()
+        }
     }
 
-    /// Query the daemon via IPC and update the icon SF Symbol + popover content.
-    ///
-    /// Priority:
-    ///  1. DaemonIPCClient.queryStatus() — live response from cascaded.
-    ///     - status == "healthy"  + cache fresh  → checkmark.circle.fill
-    ///     - status == "healthy"  + cache stale  → exclamationmark.triangle
-    ///     - status != "healthy"  (degraded etc) → exclamationmark.triangle
-    ///  2. Daemon nil (socket absent / ECONNREFUSED) → cache-age fallback:
-    ///     - cache present + fresh  → checkmark.circle.fill   (cached healthy)
-    ///     - cache present + stale  → exclamationmark.triangle
-    ///     - cache absent           → circle.slash
-    func updateIcon() {
-        DaemonIPCClient().queryStatus { [weak self] daemonStatus in
-            guard let self else { return }
-            let cache = CascadeCache.load()
-            let imageName: String
+    // MARK: - Refresh
 
-            if let ds = daemonStatus {
-                // Daemon responded — use live status as primary signal.
-                let healthy = (ds.status == "healthy")
-                let uptimeOk = (ds.uptime_seconds ?? 0) >= 10
-                if healthy && uptimeOk {
-                    // Daemon is healthy; secondary signal is cache freshness.
-                    imageName = (cache?.isStale ?? true) ? "exclamationmark.triangle" : "checkmark.circle.fill"
-                } else {
-                    // Daemon running but degraded or just started.
-                    imageName = "exclamationmark.triangle"
-                }
-            } else {
-                // Daemon not responding — fall back to cache-age check.
-                if let cache = cache {
-                    imageName = cache.isStale ? "exclamationmark.triangle" : "checkmark.circle.fill"
-                } else {
-                    imageName = "circle.slash"
-                }
-            }
+    @objc private func handleRefreshNow() {
+        refresh()
+    }
 
-            let img = NSImage(systemSymbolName: imageName, accessibilityDescription: "Cascade")
-            img?.isTemplate = true
-            self.statusItem?.button?.image = img
-
-            // Refresh the popover view with latest cache so it is current when opened.
-            if let cache = cache {
-                self.popover.contentViewController = NSHostingController(
-                    rootView: MenubarPopoverView(cache: cache)
-                )
+    /// Load quota.json, update icon, and refresh the popover content.
+    private func refresh() {
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            let store = QuotaStore.load()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.quota = store
+                self.updateIcon(store: store)
+                self.updatePopover(store: store)
             }
         }
     }
+
+    private func updateIcon(store: QuotaStore?) {
+        let imageName: String
+        if let store = store {
+            let age = store.ageSeconds ?? Int.max
+            imageName = age < 120 ? "circle.grid.2x2.fill" : "exclamationmark.triangle"
+        } else {
+            imageName = "circle.slash"
+        }
+        let img = NSImage(systemSymbolName: imageName, accessibilityDescription: "Cascade Fleet")
+        img?.isTemplate = true
+        statusItem?.button?.image = img
+    }
+
+    private func updatePopover(store: QuotaStore?) {
+        let view = MenubarPopoverView(quota: store)
+        if popover.isShown {
+            // Update in place without closing.
+            popover.contentViewController = NSHostingController(rootView: view)
+        } else {
+            popover.contentViewController = NSHostingController(rootView: view)
+        }
+    }
+
+    // MARK: - Toggle
 
     /// Toggle the NSPopover relative to the status-bar button.
     @objc func togglePopover(_ sender: Any?) {
-        if let button = statusItem?.button {
-            if popover.isShown {
-                popover.performClose(sender)
-            } else {
-                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            }
+        guard let button = statusItem?.button else { return }
+        if popover.isShown {
+            popover.performClose(sender)
+        } else {
+            // Refresh content just before showing.
+            updatePopover(store: quota)
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+
+    deinit {
+        timer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 }
