@@ -27,6 +27,7 @@
 		E18514BA80954D8BE94849DC /* CascadeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */; };
 		E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */; };
 		F25DA02DB1F660596A018B8D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */; };
+		FDCF7F11A092A26308E61B40 /* DesktopPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65087F68E271F700CD62E1E /* DesktopPanelController.swift */; };
 		FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5C34E8893C25E333C79126 /* MenubarController.swift */; };
 /* End PBXBuildFile section */
 
@@ -80,6 +81,7 @@
 		BD237574226DE3FEAE2C5E7E /* LargeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeView.swift; sourceTree = "<group>"; };
 		DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheModelTests.swift; sourceTree = "<group>"; };
 		F63251BBC96DE278824E772F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F65087F68E271F700CD62E1E /* DesktopPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopPanelController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -173,6 +175,7 @@
 				40776AF9E612F01F99F5721D /* CascadeAppApp.swift */,
 				6530C23B2A451EC3F95FC7EA /* ContentView.swift */,
 				B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */,
+				F65087F68E271F700CD62E1E /* DesktopPanelController.swift */,
 				F63251BBC96DE278824E772F /* Info.plist */,
 				6B5C34E8893C25E333C79126 /* MenubarController.swift */,
 				7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */,
@@ -314,6 +317,7 @@
 				B6C5EC9147DFB7937AAC1F90 /* CascadeAppApp.swift in Sources */,
 				661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */,
 				1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */,
+				FDCF7F11A092A26308E61B40 /* DesktopPanelController.swift in Sources */,
 				FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */,
 				3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */,
 				76079F22B0E99CCAAD412F2F /* QuotaStore.swift in Sources */,

@@ -25,14 +25,20 @@ class MenubarController: NSObject {
     private var timer: Timer?
     private var quota: QuotaStore?
 
+    /// The always-on-desktop panel. The menu-bar icon toggles its visibility, and
+    /// each refresh tick updates it alongside the popover. Owned by AppDelegate.
+    weak var desktopPanel: DesktopPanelController?
+
     /// Install the status item, configure the click handler, and start the refresh timer.
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        // Wire click handler first.
+        // Wire click handler first. Left-click toggles the desktop panel; right-click
+        // opens the popover (controls + a focused read of the same table).
         if let button = statusItem?.button {
-            button.action = #selector(togglePopover(_:))
+            button.action = #selector(statusClicked(_:))
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
         // Popover is transient — closes when user clicks outside.
@@ -59,6 +65,7 @@ class MenubarController: NSObject {
 
     @objc private func handleRefreshNow() {
         refresh()
+        desktopPanel?.refresh()
     }
 
     /// Load quota.json, update icon, and refresh the popover content.
@@ -98,6 +105,17 @@ class MenubarController: NSObject {
     }
 
     // MARK: - Toggle
+
+    /// Route the menu-bar click: right-click → popover (controls), else → toggle the
+    /// always-on-desktop panel. Falls back to the popover if no desktop panel is set.
+    @objc func statusClicked(_ sender: Any?) {
+        let isRight = NSApp.currentEvent?.type == .rightMouseUp
+        if isRight || desktopPanel == nil {
+            togglePopover(sender)
+        } else {
+            desktopPanel?.toggle()
+        }
+    }
 
     /// Toggle the NSPopover relative to the status-bar button.
     @objc func togglePopover(_ sender: Any?) {
