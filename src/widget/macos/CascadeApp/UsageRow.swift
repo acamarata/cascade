@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - UsageRow
 // Ported verbatim from ClawFleet Sources/Shared/UsageRow.swift.
@@ -96,19 +97,49 @@ struct UsageRow: View {
         }
     }
 
-    /// Credential-dead account (expired Claude OAuth / invalid Gemini key): pad the
-    /// numeric columns and surface a clear amber "re-auth" hint in the wide reset slot.
+    /// Credential-dead account (expired Claude OAuth / invalid Gemini key). The whole
+    /// data area becomes a clickable amber call-to-action that launches the right
+    /// re-auth flow: `claude auth login` for Claude, the API-key page for Gemini.
     @ViewBuilder
     private var authColumns: some View {
-        let dim = Color(hex: "#4A4D54")
-        numCell("—", color: dim)
-        numCell("—", color: dim)
-        numCell("—", color: dim)
-        if showExtra { numCell("—", color: dim) }
-        numCell("—", color: dim)
-        Text("re-auth")
-            .foregroundColor(Color(hex: "#F5A623"))
-            .frame(minWidth: 116, alignment: .trailing)
+        Button(action: reauth) {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 10))
+                Text("Click here to re-auth")
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(Color(hex: "#F5A623"))
+        .help("Sign in to refresh this account's usage data")
+    }
+
+    /// Launch the provider-appropriate re-auth flow.
+    /// - Claude: open Terminal running `claude auth login` scoped to this account's
+    ///   config dir (claude-acc1 → ~/.claude-acc1); the CLI opens the browser OAuth.
+    /// - Gemini: open the Google AI Studio API-key page to mint a fresh key.
+    private func reauth() {
+        let prov = entry.provider ?? "claude"
+        if prov == "gemini" {
+            if let url = URL(string: "https://aistudio.google.com/apikey") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+        let dir = "\(NSHomeDirectory())/.\(entry.account)"   // claude-acc1 → ~/.claude-acc1
+        let cmd = "CLAUDE_CONFIG_DIR='\(dir)' claude auth login"
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "\(cmd)"
+        end tell
+        """
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        p.arguments = ["-e", script]
+        try? p.run()
     }
 
     /// GFP free-Flash key pool: show the round-robin key count as available capacity.
