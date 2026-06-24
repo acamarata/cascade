@@ -25,12 +25,21 @@ Accounts subsystem + native fleet widget.
   `data/model-matrix.json`) — which model is best for which task and how it is
   accessed, with an account-exhaustion strategy that reserves the primary
   Claude session and drains pooled accounts and the free GFP pool first.
-- Native macOS menu-bar fleet widget (`src/widget/macos/CascadeApp`) — an
-  `NSStatusItem` + popover showing every account with its 5-hour and weekly
-  quota windows and reset countdowns, reading `~/.cascade/accounts/quota.json`.
-  Replaces the previous Übersicht-based widget.
+- Native macOS fleet widget (`src/widget/macos/CascadeApp`) — both an always-on-
+  desktop panel (the Claw-Fleet replacement) and a menu-bar `NSStatusItem` +
+  popover, showing every account with its 5-hour and weekly quota windows and
+  reset countdowns, reading `~/.cascade/accounts/quota.json` and refreshing every
+  30s. Left-click the menu-bar icon toggles the desktop panel; right-click opens
+  the popover. Installs a LaunchAgent so it starts at login. Replaces the previous
+  Übersicht-based widget.
 
 ### Fixed
+
+- Widget never appeared: a SwiftUI `App` with only a `Settings` scene under
+  `LSUIElement` did not reliably fire `applicationDidFinishLaunching`, so no UI
+  was created. Switched to a classic AppKit `NSApplication.run()` entry point, and
+  anchored the desktop panel to the primary screen (a secondary display offset the
+  position off-screen).
 
 - Privacy: removed hardcoded developer home (`/Users/admin`) and a personal
   project list from the shipped desktop app (home dir is now resolved at
