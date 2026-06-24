@@ -36,6 +36,7 @@ struct AccountEntry: Codable, Identifiable {
     var quota_opaque: Bool?
     var plan_type: String?
     var status: String?
+    var key_count: Int?
     var opencode_meta: OpencodeMeta?
 }
 

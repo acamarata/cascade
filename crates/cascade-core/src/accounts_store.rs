@@ -198,6 +198,20 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             (null_usage, Some(json!(now_epoch)), Some(opaque), None)
         };
 
+        // Did the merge resolve any real usage numbers?
+        let has_data = usage.get("five_hour").map(|v| !v.is_null()).unwrap_or(false)
+            || usage.get("seven_day").map(|v| !v.is_null()).unwrap_or(false)
+            || usage.get("seven_day_sonnet").map(|v| !v.is_null()).unwrap_or(false);
+
+        // Status drives the widget's per-row hint. Claude/Gemini accounts that
+        // resolve no data are almost always an expired-credential situation, so we
+        // surface "auth" — the row then reads "needs re-auth" instead of a silent blank.
+        let status = match acc.family {
+            AccountFamily::Gfp => "pool",
+            AccountFamily::Claude | AccountFamily::Google if !has_data => "auth",
+            _ => "ok",
+        };
+
         let mut entry = json!({
             "account": acc.id,
             "provider": provider,
@@ -205,9 +219,14 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             "usage": usage,
             "last_pull_at": last_pull_at,
             "quota_opaque": quota_opaque.unwrap_or(false),
-            "status": "ok"
+            "status": status
         });
 
+        // GFP free-Flash pool: surface the round-robin key count so the row shows
+        // capacity ("28 keys") rather than dashes.
+        if acc.family == AccountFamily::Gfp {
+            entry["key_count"] = json!(acc.key_count);
+        }
         if let Some(meta) = opencode_meta {
             entry["opencode_meta"] = meta;
         }

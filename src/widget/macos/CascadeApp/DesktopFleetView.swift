@@ -1,38 +1,40 @@
 import SwiftUI
+import AppKit
 
 // MARK: - DesktopFleetView
-// Ported from ClawFleet DesktopFleetView.swift.
-// Branding: "Claw Fleet" → "Cascade".
+// The always-on-desktop fleet panel. Header = mountain icon + "Cascade" + a live
+// "seconds since last update" counter; a footer holds Refresh + Settings buttons.
 
 struct DesktopFleetView: View {
     @ObservedObject var store: CascadeStore
     @ObservedObject var focus: DesktopFocusMonitor
+
+    private let widgetCornerRadius: CGFloat = 24
 
     var body: some View {
         content
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: widgetCornerRadius, style: .continuous)
-                    .fill(Color(red: 28/255, green: 28/255, blue: 30/255).opacity(0.72))
+                    .fill(Color(red: 24/255, green: 25/255, blue: 28/255).opacity(0.82))
                     .background(
                         RoundedRectangle(cornerRadius: widgetCornerRadius, style: .continuous)
                             .fill(.ultraThinMaterial)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: widgetCornerRadius, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: widgetCornerRadius, style: .continuous))
             )
             .padding(8)
             .frame(width: 360)
-            .saturation(focus.isDesktopActive ? 1.0 : 0.0)
-            .brightness(focus.isDesktopActive ? 0.0 : -0.06)
-            .opacity(focus.isDesktopActive ? 1.0 : 0.55)
+            // Keep most of the color even when the desktop isn't frontmost — the user
+            // wants a colorful readout, not a greyed-out one. Only a slight dim.
+            .saturation(focus.isDesktopActive ? 1.0 : 0.85)
+            .opacity(focus.isDesktopActive ? 1.0 : 0.82)
             .animation(.easeInOut(duration: 0.35), value: focus.isDesktopActive)
     }
-
-    private let widgetCornerRadius: CGFloat = 24
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -41,30 +43,43 @@ struct DesktopFleetView: View {
                 .overlay(Color(hex: "#2A2D38"))
                 .padding(.vertical, 6)
             accountTable
+            footer
         }
     }
 
+    // MARK: Header (icon + title + live counter)
+
     private var header: some View {
-        HStack {
+        HStack(spacing: 5) {
+            Image(systemName: "mountain.2.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(hex: "#4F9BE8"))
             Text("Cascade")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Color(hex: "#C7CBD1"))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Color(hex: "#ECEFF3"))
             Spacer()
             freshnessView
         }
     }
 
+    /// Live "time since last update", re-rendered every second via TimelineView so the
+    /// seconds visibly tick up. Dot + value go green → amber → red as data ages.
     private var freshnessView: some View {
-        Group {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
             if let lastLoaded = store.lastLoadedAt {
-                let age = Int(Date().timeIntervalSince(lastLoaded))
-                let label = age < 5 ? "just now" : age < 60 ? "\(age)s ago" : "\(age / 60)m ago"
+                let age = max(0, Int(Date().timeIntervalSince(lastLoaded)))
+                let label = age < 60
+                    ? "\(age)s"
+                    : age < 3600 ? "\(age / 60)m \(age % 60)s" : "\(age / 3600)h \((age % 3600) / 60)m"
                 let tint: Color = age < 120
-                    ? Color(hex: "#7A7F8A")
-                    : age < 240 ? Color(hex: "#F5A623") : Color(hex: "#E5484D")
-                Text(label)
-                    .font(.system(size: 9))
-                    .foregroundColor(tint)
+                    ? Color(hex: "#4ED17F")
+                    : age < 360 ? Color(hex: "#F5A623") : Color(hex: "#E5484D")
+                HStack(spacing: 4) {
+                    Circle().fill(tint).frame(width: 5, height: 5)
+                    Text(label)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(tint)
+                }
             } else {
                 Text("loading…")
                     .font(.system(size: 9))
@@ -72,6 +87,43 @@ struct DesktopFleetView: View {
             }
         }
     }
+
+    // MARK: Footer (Refresh + Settings)
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            Spacer()
+            Button(action: refresh) {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(Color(hex: "#9CA3AF"))
+            .help("Refresh now")
+
+            Button(action: openSettings) {
+                Image(systemName: "gearshape.fill")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(Color(hex: "#9CA3AF"))
+            .help("Open Cascade settings")
+        }
+        .font(.system(size: 11))
+        .padding(.top, 8)
+    }
+
+    private func refresh() {
+        store.refresh()
+    }
+
+    /// Open the Cascade accounts directory (where the registry + quota live) — the
+    /// closest thing to a settings surface for the fleet.
+    private func openSettings() {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cascade/accounts")
+        NSWorkspace.shared.open(dir)
+    }
+
+    // MARK: Table
 
     @ViewBuilder
     private var accountTable: some View {

@@ -47,7 +47,11 @@ struct UsageRow: View {
             .frame(width: 28, alignment: .leading)
             .help(rowTooltip)
 
-            if isOpaque {
+            if entry.status == "auth" {
+                authColumns
+            } else if entry.key_count != nil {
+                poolColumns
+            } else if isOpaque {
                 opaqueColumns
             } else {
                 dataColumns
@@ -90,6 +94,35 @@ struct UsageRow: View {
         ForEach(0..<6, id: \.self) { _ in
             numCell("—", color: Color(hex: "#6B7280"))
         }
+    }
+
+    /// Credential-dead account (expired Claude OAuth / invalid Gemini key): pad the
+    /// numeric columns and surface a clear amber "re-auth" hint in the wide reset slot.
+    @ViewBuilder
+    private var authColumns: some View {
+        let dim = Color(hex: "#4A4D54")
+        numCell("—", color: dim)
+        numCell("—", color: dim)
+        numCell("—", color: dim)
+        if showExtra { numCell("—", color: dim) }
+        numCell("—", color: dim)
+        Text("re-auth")
+            .foregroundColor(Color(hex: "#F5A623"))
+            .frame(minWidth: 116, alignment: .trailing)
+    }
+
+    /// GFP free-Flash key pool: show the round-robin key count as available capacity.
+    @ViewBuilder
+    private var poolColumns: some View {
+        let dim = Color(hex: "#4A4D54")
+        numCell("—", color: dim)
+        numCell("—", color: dim)
+        numCell("—", color: dim)
+        if showExtra { numCell("—", color: dim) }
+        numCell("—", color: dim)
+        Text("\(entry.key_count ?? 0) keys free")
+            .foregroundColor(Color(hex: "#4ED17F"))
+            .frame(minWidth: 116, alignment: .trailing)
     }
 
     private func numCell(_ text: String, color: Color) -> some View {
