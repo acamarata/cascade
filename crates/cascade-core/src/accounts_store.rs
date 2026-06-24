@@ -29,6 +29,7 @@ use cascade_types::accounts::{
     ModelRoute, TaskClass, ACCOUNTS_SCHEMA_VERSION,
 };
 use cascade_types::error::{CascadeError, Result};
+use serde_json::Value;
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
@@ -123,54 +124,143 @@ pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Resu
     atomic_write(path, &bytes)
 }
 
-/// Write `~/.cascade/accounts/quota.json` atomically from an `AccountsRegistry`
-/// and the current UTC timestamp.
+/// Write `~/.cascade/accounts/quota.json` atomically from an `AccountsRegistry`.
 ///
-/// The quota.json shape is the one the native widget reads:
+/// The quota.json shape matches the native widget's `AccountEntry` schema:
 /// ```json
 /// {
-///   "updated_at": "...",
 ///   "accounts": [
-///     { "id": "...", "family": "...", "display": "...", "reserved": false,
-///       "windows": { "5h": null, "weekly": null },
-///       "models": [] }
-///   ]
+///     { "account": "claude-acc1", "provider": "claude", "email": "...",
+///       "usage": { "five_hour": null, "seven_day": null, "seven_day_sonnet": null,
+///                  "seven_day_opus": null, "extra_usage": null },
+///       "last_pull_at": 1234567890.0, "quota_opaque": false, "status": "ok" }
+///   ],
+///   "queried_at": 1234567890.0
 /// }
 /// ```
 ///
-/// Unknown/absent window data is represented as `null` (never faked).
+/// Usage data is merged from `~/.claude/usage-cache.json` when present.
+/// Accounts with no live data still appear with `last_pull_at` set to now
+/// so the widget renders them (it hides only when last_pull_at is null AND
+/// all usage slots are null).
+///
+/// Provider mapping by family:
+///   Claude → "claude", Openai → "codex", Google → "gemini",
+///   Opencode → "opencode", Gfp → "gfp"
 ///
 /// Inputs:  `path` — destination file (should be `quota_json_path()`);
-///          `registry` — current accounts registry (provides id/family/role/models).
+///          `registry` — current accounts registry.
 /// Outputs: atomic write to `path`.
 pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> {
-    use serde_json::{json, Value};
+    use serde_json::json;
+
+    // Load legacy cache for merging real usage data.
+    let legacy = load_legacy_usage_cache();
+
+    let now_epoch = chrono::Utc::now().timestamp() as f64;
 
     let accounts: Vec<Value> = registry.accounts.iter().map(|acc| {
-        let family = format!("{:?}", acc.family).to_lowercase();
-        let display = acc.notes.as_deref().unwrap_or(acc.subscription.as_str()).to_string();
-        let reserved = matches!(acc.role, cascade_types::accounts::AccountRole::PrimaryT0);
-        json!({
-            "id": acc.id,
-            "family": family,
-            "display": display,
-            "reserved": reserved,
-            "windows": {
-                "5h": null,
-                "weekly": null
-            },
-            "models": acc.models
-        })
+        let provider = family_to_provider(&acc.family);
+
+        // Email: prefer subscription note, fall back to account id.
+        let email: Option<&str> = acc.notes.as_deref()
+            .or_else(|| Some(acc.subscription.as_str()));
+
+        // Try to find a matching entry in the legacy cache.
+        let legacy_entry = legacy.as_ref().and_then(|entries| {
+            find_legacy_entry(entries, &acc.id, provider)
+        });
+
+        let (usage, last_pull_at, quota_opaque, opencode_meta) = if let Some(leg) = legacy_entry {
+            // Merge: copy usage block + last_pull_at + quota_opaque + opencode_meta verbatim.
+            let usage = leg.get("usage").cloned().unwrap_or(Value::Null);
+            // Fall back to `now` when the legacy entry has no successful pull (e.g. an
+            // account whose poll errored): a configured account must still render in the
+            // widget rather than being auto-hidden. It will just show "—" until data lands.
+            let last_pull = leg.get("last_pull_at").cloned()
+                .filter(|v| !v.is_null())
+                .or_else(|| Some(json!(now_epoch)));
+            let opaque = leg.get("quota_opaque").cloned()
+                .and_then(|v| v.as_bool());
+            let oc_meta = leg.get("opencode_meta").cloned();
+            (usage, last_pull, opaque, oc_meta)
+        } else {
+            // No live data — emit null slots but set last_pull_at to now so
+            // the widget still renders the row.
+            let null_usage = json!({
+                "five_hour": null,
+                "seven_day": null,
+                "seven_day_sonnet": null,
+                "seven_day_opus": null,
+                "extra_usage": null
+            });
+            let opaque = matches!(acc.family, AccountFamily::Gfp | AccountFamily::Google);
+            (null_usage, Some(json!(now_epoch)), Some(opaque), None)
+        };
+
+        let mut entry = json!({
+            "account": acc.id,
+            "provider": provider,
+            "email": email,
+            "usage": usage,
+            "last_pull_at": last_pull_at,
+            "quota_opaque": quota_opaque.unwrap_or(false),
+            "status": "ok"
+        });
+
+        if let Some(meta) = opencode_meta {
+            entry["opencode_meta"] = meta;
+        }
+
+        entry
     }).collect();
 
     let payload = json!({
-        "updated_at": chrono::Utc::now().to_rfc3339(),
-        "accounts": accounts
+        "accounts": accounts,
+        "queried_at": now_epoch
     });
 
     let bytes = serde_json::to_vec_pretty(&payload)
         .map_err(|e| CascadeError::Other(e.to_string()))?;
     atomic_write(path, &bytes)
+}
+
+/// Map an `AccountFamily` to the provider string the widget expects.
+fn family_to_provider(family: &AccountFamily) -> &'static str {
+    match family {
+        AccountFamily::Claude   => "claude",
+        AccountFamily::Openai   => "codex",
+        AccountFamily::Google   => "gemini",
+        AccountFamily::Opencode => "opencode",
+        AccountFamily::Gfp      => "gfp",
+    }
+}
+
+/// Load `~/.claude/usage-cache.json` and return its `accounts` array, or `None`.
+fn load_legacy_usage_cache() -> Option<Vec<Value>> {
+    let home = dirs::home_dir()?;
+    let path = home.join(".claude").join("usage-cache.json");
+    let bytes = std::fs::read(&path).ok()?;
+    let v: Value = serde_json::from_slice(&bytes).ok()?;
+    v.get("accounts")?.as_array().cloned()
+}
+
+/// Find a matching entry in the legacy cache by account id or provider family.
+///
+/// Match strategy:
+///   1. Exact `account` field match (e.g. "claude-acc1")
+///   2. Provider string match — legacy "codex" entry → our "codex" provider,
+///      legacy "opencode-1" → our "opencode", legacy "gemini-1" → our "gemini".
+fn find_legacy_entry<'a>(entries: &'a [Value], acc_id: &str, provider: &str) -> Option<&'a Value> {
+    // 1. Exact account id match.
+    if let Some(e) = entries.iter().find(|e| e.get("account").and_then(|v| v.as_str()) == Some(acc_id)) {
+        return Some(e);
+    }
+    // 2. Provider-level match: the legacy entry's `provider` field matches ours.
+    //    Return the first matching entry for that provider (single-account families).
+    entries.iter().find(|e| {
+        e.get("provider").and_then(|v| v.as_str()) == Some(provider)
+    })
 }
 
 /// Write `~/.cascade/accounts/README.md` explaining the directory layout.
@@ -186,7 +276,7 @@ This directory is managed by Cascade. Do not edit files here manually.
 
 ### accounts.json
 The fleet account registry. Lists every AI subscription account Cascade knows
-about: Claude Max accounts (A1–A4), Codex (C1), Gemini AGY (G1), OpenCode (O1),
+about: Claude Max accounts (A1–A2), Codex (C1), Gemini AGY (G1), OpenCode (O1),
 and the GFP key pool.
 
 Written by: `cascade accounts detect`
@@ -194,8 +284,8 @@ Read by: `cascade accounts list/status/matrix`, daemon fleet poller.
 
 ### quota.json
 Live usage snapshot for the native Cascade widget. Refreshed on every daemon
-tick (default: 60 s). Contains per-account window usage (5h rolling, weekly)
-and model lists.
+tick (default: 60 s). Contains per-account usage windows (5h rolling, weekly,
+weekly-sonnet, weekly-opus) merged from live polling sources.
 
 Written by: daemon fleet poller (automatic)
 Read by: native FleetView widget.
@@ -274,7 +364,7 @@ pub fn write_matrix_md(path: &Path, registry: &AccountsRegistry) -> Result<()> {
     writeln!(out, "\n### Key rules\n").ok();
     writeln!(out, "- **Sensitive tasks** (PII / VA / health / custody): Claude-only. All external models hard-blocked.").ok();
     writeln!(out, "- **Adversarial CR/QA**: prefer cross-family (GPT-5.5, Gemini-3.1-Pro) for independence.").ok();
-    writeln!(out, "- **Pooled (acc2–acc4)** are drained before primary (acc1, priority 255).").ok();
+    writeln!(out, "- **Pooled (acc2)** is drained before primary (acc1, priority 255).").ok();
     writeln!(out, "- **GFP pool** (priority 1) is always drained first for grunt/classify/taxonomy work.").ok();
     writeln!(out, "- **Primary acc1** is reserved for T0 interactive use; background agents use acc2+.").ok();
 
@@ -355,8 +445,10 @@ pub fn count_gfp_keys_from_path(vault_path: &Path) -> u32 {
 
 // ── Default registry seed ─────────────────────────────────────────────────────
 
-/// Build the seeded default [`AccountsRegistry`] with 8 known fleet accounts.
+/// Build the seeded default [`AccountsRegistry`] with 6 known fleet accounts.
 ///
+/// Active roster: claude-acc1 (primary), claude-acc2 (pooled),
+/// codex-acc1, gemini-acc1, opencode-acc1, gfp-pool.
 /// Detects CLI availability from real PATH; counts GFP keys from vault files.
 pub fn default_registry() -> AccountsRegistry {
     let cc1 = detect_cli("claude");
@@ -380,12 +472,6 @@ pub fn default_registry() -> AccountsRegistry {
             opus_sonnet_haiku_fable(), cc1, 0, Some("cc-acct1"), None),
         acc("claude-acc2", AccountFamily::Claude, "anthropic-max",
             vec![AccessMethod::SmithersClaudeP], AccountRole::Pooled, 10,
-            opus_sonnet_haiku(), smt, 0, None, Some("Extra CC account — drain first via PTY")),
-        acc("claude-acc3", AccountFamily::Claude, "anthropic-max",
-            vec![AccessMethod::SmithersClaudeP], AccountRole::Pooled, 11,
-            opus_sonnet_haiku(), smt, 0, None, Some("Extra CC account — drain first via PTY")),
-        acc("claude-acc4", AccountFamily::Claude, "anthropic-max",
-            vec![AccessMethod::SmithersClaudeP], AccountRole::Pooled, 12,
             opus_sonnet_haiku(), smt, 0, None, Some("Extra CC account — drain first via PTY")),
         acc("codex-acc1", AccountFamily::Openai, "openai-pro",
             vec![AccessMethod::CodexCli], AccountRole::Pooled, 50,
@@ -431,16 +517,12 @@ fn build_model_matrix() -> Vec<ModelMatrixEntry> {
     use AccessMethod::*; use AccountFamily::*; use TaskClass::*;
     let cc_pooled = || vec![
         ModelRoute { account_id: "claude-acc2".into(), method: SmithersClaudeP },
-        ModelRoute { account_id: "claude-acc3".into(), method: SmithersClaudeP },
-        ModelRoute { account_id: "claude-acc4".into(), method: SmithersClaudeP },
         ModelRoute { account_id: "claude-acc1".into(), method: NativeCc },
     ];
     vec![
         mme("claude-opus-4-8", Claude, "T1",
             vec![ModelRoute{account_id:"claude-acc1".into(),method:NativeCc},
-                 ModelRoute{account_id:"claude-acc2".into(),method:SmithersClaudeP},
-                 ModelRoute{account_id:"claude-acc3".into(),method:SmithersClaudeP},
-                 ModelRoute{account_id:"claude-acc4".into(),method:SmithersClaudeP}],
+                 ModelRoute{account_id:"claude-acc2".into(),method:SmithersClaudeP}],
             vec![AdversarialCr, FinalGate, Sensitive],
             Some("Opus-tier — reserved for high-stakes synthesis and final gates")),
         mme("claude-sonnet-4-6", Claude, "T2", cc_pooled(),
@@ -502,7 +584,7 @@ mod tests {
         let json = serde_json::to_vec_pretty(&registry).unwrap();
         let decoded: AccountsRegistry = serde_json::from_slice(&json).unwrap();
         assert_eq!(decoded.schema_version, ACCOUNTS_SCHEMA_VERSION);
-        assert_eq!(decoded.accounts.len(), 8, "expected 8 seeded accounts");
+        assert_eq!(decoded.accounts.len(), 6, "expected 6 seeded accounts");
     }
 
     /// Write fixture vault.env with 3 GEMINI_FREE_KEY_* entries; assert count == 3.
@@ -563,7 +645,7 @@ mod tests {
         assert!(dir.join("matrix.md").exists(), "matrix.md must exist");
     }
 
-    /// quota.json shape: must contain "updated_at" and "accounts" array.
+    /// quota.json shape: must use AccountEntry schema the widget decodes.
     #[test]
     fn quota_json_shape_is_correct() {
         let tmp = TempDir::new().unwrap();
@@ -573,22 +655,68 @@ mod tests {
 
         let bytes = std::fs::read(&path).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert!(v.get("updated_at").is_some(), "quota.json must have updated_at");
-        let accts = v.get("accounts").and_then(|a| a.as_array());
-        assert!(accts.is_some(), "quota.json must have accounts array");
-        let accts = accts.unwrap();
-        assert_eq!(accts.len(), 8, "must have one entry per account");
 
-        // Each account entry must have the required widget fields.
+        // Top-level: queried_at + accounts (no legacy "updated_at").
+        assert!(v.get("queried_at").is_some(), "quota.json must have queried_at");
+        assert!(v.get("accounts").is_some(), "quota.json must have accounts");
+
+        let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
+        assert_eq!(accts.len(), 6, "must have one entry per account (6 accounts)");
+
+        // Collect providers to verify roster.
+        let providers: Vec<&str> = accts.iter()
+            .filter_map(|e| e.get("provider").and_then(|p| p.as_str()))
+            .collect();
+        assert_eq!(providers.iter().filter(|&&p| p == "claude").count(), 2,
+            "must have 2 claude accounts");
+
+        // Each entry must have AccountEntry widget fields (not old id/family/windows schema).
         for entry in accts {
-            assert!(entry.get("id").is_some());
-            assert!(entry.get("family").is_some());
-            assert!(entry.get("reserved").is_some());
-            assert!(entry.get("windows").is_some());
-            let windows = entry.get("windows").unwrap();
-            assert!(windows.get("5h").is_some());
-            assert!(windows.get("weekly").is_some());
+            assert!(entry.get("account").is_some(),
+                "must have 'account' field (not 'id')");
+            assert!(entry.get("provider").is_some(),
+                "must have 'provider' field (not 'family')");
+            assert!(entry.get("usage").is_some(),
+                "must have 'usage' field");
+            assert!(entry.get("status").is_some(),
+                "must have 'status' field");
+            // Must NOT have old schema fields.
+            assert!(entry.get("id").is_none(),
+                "must NOT have legacy 'id' field");
+            assert!(entry.get("family").is_none(),
+                "must NOT have legacy 'family' field");
+            assert!(entry.get("windows").is_none(),
+                "must NOT have legacy 'windows' field");
         }
+    }
+
+    /// quota.json provider mapping: each family maps to the correct provider string.
+    #[test]
+    fn quota_json_provider_mapping() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("quota.json");
+        let registry = default_registry();
+        write_quota_json(&path, &registry).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
+
+        // Build account→provider map from output.
+        let map: std::collections::HashMap<&str, &str> = accts.iter()
+            .filter_map(|e| {
+                let acc = e.get("account")?.as_str()?;
+                let prov = e.get("provider")?.as_str()?;
+                Some((acc, prov))
+            })
+            .collect();
+
+        assert_eq!(map.get("claude-acc1"), Some(&"claude"), "claude-acc1 → claude");
+        assert_eq!(map.get("claude-acc2"), Some(&"claude"), "claude-acc2 → claude");
+        assert_eq!(map.get("codex-acc1"),  Some(&"codex"),  "codex-acc1 → codex");
+        assert_eq!(map.get("gemini-acc1"), Some(&"gemini"), "gemini-acc1 → gemini");
+        assert_eq!(map.get("opencode-acc1"), Some(&"opencode"), "opencode-acc1 → opencode");
+        assert_eq!(map.get("gfp-pool"),    Some(&"gfp"),    "gfp-pool → gfp");
     }
 
     /// migration: old ~/.cascade/accounts.json → ~/.cascade/accounts/accounts.json.

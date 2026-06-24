@@ -137,19 +137,18 @@ func fmtCountdown(_ ts: Double?) -> String {
     return "\(h):\(String(format: "%02d", m))"
 }
 
-/// Formats a reset timestamp compactly as "5/23 10a" or "5/24  8p".
+/// Formats a reset timestamp compactly with minutes, e.g. "6/25 6:00p" or "6/26 10:30a".
 func fmtDayHour(_ ts: Double?) -> String {
     guard let ts = ts, ts > 0 else { return "—" }
     let date = Date(timeIntervalSince1970: ts)
     let cal = Calendar.current
-    let month = cal.component(.month, from: date)
-    let day   = cal.component(.day,   from: date)
-    let h24   = cal.component(.hour,  from: date)
+    let month = cal.component(.month,  from: date)
+    let day   = cal.component(.day,    from: date)
+    let h24   = cal.component(.hour,   from: date)
+    let min   = cal.component(.minute, from: date)
     let h     = h24 == 0 ? 12 : h24 > 12 ? h24 - 12 : h24
     let ap    = h24 < 12 ? "a" : "p"
-    let hourStr = "\(h)\(ap)"
-    let paddedHour = String(repeating: " ", count: max(0, 3 - hourStr.count)) + hourStr
-    return "\(month)/\(day) \(paddedHour)"
+    return "\(month)/\(day) \(h):\(String(format: "%02d", min))\(ap)"
 }
 
 /// Returns hours until a future timestamp (rounded, minimum 0).

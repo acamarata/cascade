@@ -12,13 +12,16 @@ struct UsageRow: View {
     private var u: UsageBlock? { entry.usage }
 
     private var sessUtil: Double? { u?.five_hour?.utilization }
-    private var weekUtil: Double? { u?.seven_day?.utilization }
+    /// Wk column: opus weekly; falls back to seven_day so non-Claude providers still show.
+    private var weekUtil: Double? { u?.seven_day_opus?.utilization ?? u?.seven_day?.utilization }
     private var sonnUtil: Double? { u?.seven_day_sonnet?.utilization }
     private var fiveHResetAt: Double? { u?.five_hour?.resets_at }
-    private var weekResetAt: Double? { u?.seven_day?.resets_at }
+    /// Week reset: use opus slot when available, else generic seven_day.
+    private var weekResetAt: Double? { u?.seven_day_opus?.resets_at ?? u?.seven_day?.resets_at }
 
     private var weekCapped: Bool {
-        if u?.seven_day?.status == "rate-limited" { return true }
+        let opusStatus = u?.seven_day_opus?.status ?? u?.seven_day?.status
+        if opusStatus == "rate-limited" { return true }
         return (weekUtil ?? 0) >= 100
     }
     private var fiveHCapped: Bool {
@@ -67,18 +70,18 @@ struct UsageRow: View {
         numCell(fiveHResetAt != nil ? fmtCountdown(fiveHResetAt) : "—", color: countdownColor)
             .fontWeight(fiveHCapped ? .semibold : .regular)
         let h = hoursUntil(weekResetAt)
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
+            Text(fmtDayHour(weekResetAt))
+                .foregroundColor(Color(hex: "#C7CBD1"))
+                .lineLimit(1)
             if let h = h {
                 let hrColor = weekCapped ? Color(hex: "#C7CBD1") : Color(hex: "#4A4D54")
                 Text("(\(h)h)")
                     .foregroundColor(hrColor)
                     .lineLimit(1)
             }
-            Text(fmtDayHour(weekResetAt))
-                .foregroundColor(Color(hex: "#C7CBD1"))
-                .lineLimit(1)
         }
-        .frame(minWidth: 110, alignment: .trailing)
+        .frame(minWidth: 116, alignment: .trailing)
         .fontWeight(weekCapped ? .bold : .regular)
     }
 
@@ -140,14 +143,14 @@ struct UsageTableHeader: View {
 
     var body: some View {
         let cols: [String] = showExtra
-            ? ["Ses", "Wk", "M/S", "Ex", "5H", "Wk Rst"]
-            : ["Ses", "Wk", "M/S", "5H", "Wk Rst"]
+            ? ["Ses", "Wk", "M/S", "Ex", "5H", "Wk Reset"]
+            : ["Ses", "Wk", "M/S", "5H", "Wk Reset"]
         HStack(spacing: 0) {
             Text("#")
                 .frame(width: 28, alignment: .leading)
             ForEach(cols, id: \.self) { col in
                 Text(col)
-                    .frame(minWidth: col == "Wk Rst" ? 110 : 36, alignment: .trailing)
+                    .frame(minWidth: col == "Wk Reset" ? 116 : 36, alignment: .trailing)
                     .padding(.horizontal, 2)
             }
         }
