@@ -10,7 +10,6 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: CascadeApp
-      - path: CascadeWidgetExtension/CacheModel.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.cascade.app
@@ -22,6 +21,7 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         DEVELOPMENT_TEAM: ""
         INFOPLIST_FILE: "CascadeApp/Info.plist"
+        ENABLE_APP_SANDBOX: NO
     entitlements:
       path: CascadeApp/CascadeApp.entitlements
       properties:

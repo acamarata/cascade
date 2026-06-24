@@ -9,26 +9,27 @@
 /* Begin PBXBuildFile section */
 		0571D3578E002AFE2B1DDEAF /* LargeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD237574226DE3FEAE2C5E7E /* LargeView.swift */; };
 		1590037BF2ADB8F615067824 /* Entry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7DC5A8B6020123C6E5F0D8 /* Entry.swift */; };
-		1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */; };
-		3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */; };
+		200118F6B9077B25B69906B4 /* CascadeMenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F821E1C1D02D48432491B /* CascadeMenuBarContentView.swift */; };
+		39A1DEC1C85AD12E5DBE12EE /* DesktopFleetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF87462C69C840B22807925 /* DesktopFleetView.swift */; };
+		47D8146A831BD4D3635AD301 /* UsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0208B51D2101F403DC0C843E /* UsageCache.swift */; };
 		53907DC960C89A4D6F9997B8 /* CascadeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB538BE3C026816D9226121 /* CascadeWidget.swift */; };
 		5A53E34D50A9565DBF2DEDA1 /* Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE0C9FDFD3F57319DC51032 /* Provider.swift */; };
-		661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6530C23B2A451EC3F95FC7EA /* ContentView.swift */; };
+		669AD9FD73271C19001C1D45 /* CascadeMenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DBA986C9F3A96EE826FCC3 /* CascadeMenuBarLabel.swift */; };
 		6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */; };
-		74C612818047291ECF3847EA /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
-		76079F22B0E99CCAAD412F2F /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A3670D3BACE1F823999C10 /* QuotaStore.swift */; };
 		7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
 		7CBCF0D56C1E576C1A3A67EC /* MediumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE26AC57686229523FF30FB /* MediumView.swift */; };
+		863F5D56D5FFD1D2875B039D /* CascadeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */; };
 		969BB6A87AED736ED3B4F22D /* CascadeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		B6C5EC9147DFB7937AAC1F90 /* CascadeAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40776AF9E612F01F99F5721D /* CascadeAppApp.swift */; };
+		9E30D5BBB872312418DD5B9B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F62E832D7B08BCA17B8ABD7 /* Formatting.swift */; };
 		C7C1B926FCAD3896F9092E81 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
 		C8BF7B6704FCF6B23EA198E2 /* EntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530BDF78D76259F7CED90C28 /* EntryView.swift */; };
 		CD42F16EC9B2C5D4F7FFBE28 /* SmallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA653CE94840F17719DE2E9 /* SmallView.swift */; };
+		D999CEAD47A314CC0DF058D6 /* UsageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2204BF1DA04DF8F6985663D3 /* UsageRow.swift */; };
 		E18514BA80954D8BE94849DC /* CascadeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */; };
 		E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */; };
+		F209631C0A8F1A3BAD5FDE69 /* CascadeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39A9D768A4916F498A482377 /* CascadeStore.swift */; };
 		F25DA02DB1F660596A018B8D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */; };
-		FDCF7F11A092A26308E61B40 /* DesktopPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65087F68E271F700CD62E1E /* DesktopPanelController.swift */; };
-		FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5C34E8893C25E333C79126 /* MenubarController.swift */; };
+		FB84C7275D2EAE462D2941C0 /* DesktopWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763158F9C486655DE9DD932B /* DesktopWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,32 +57,34 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0208B51D2101F403DC0C843E /* UsageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCache.swift; sourceTree = "<group>"; };
 		087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonochromeDimModifier.swift; sourceTree = "<group>"; };
 		1102B7280FF31198B0CFD627 /* CascadeWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CascadeWidgetExtension.entitlements; sourceTree = "<group>"; };
 		17CE73AD8CBC2DC8B4E74DFF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		1BF604E22550C7A037318CCF /* CascadeApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CascadeApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1F7B27FE10A9B0B7808F0E86 /* CascadeApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CascadeApp.entitlements; sourceTree = "<group>"; };
 		1FB538BE3C026816D9226121 /* CascadeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidget.swift; sourceTree = "<group>"; };
+		2204BF1DA04DF8F6985663D3 /* UsageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageRow.swift; sourceTree = "<group>"; };
 		29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidgetBundle.swift; sourceTree = "<group>"; };
+		32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeApp.swift; sourceTree = "<group>"; };
+		39A9D768A4916F498A482377 /* CascadeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeStore.swift; sourceTree = "<group>"; };
 		3CE26AC57686229523FF30FB /* MediumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediumView.swift; sourceTree = "<group>"; };
-		40776AF9E612F01F99F5721D /* CascadeAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeAppApp.swift; sourceTree = "<group>"; };
+		442F821E1C1D02D48432491B /* CascadeMenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeMenuBarContentView.swift; sourceTree = "<group>"; };
 		4743F7749BB7E4086767D953 /* CacheModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheModel.swift; sourceTree = "<group>"; };
 		48194BB83C952802AE115361 /* CascadeWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CascadeWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B7DC5A8B6020123C6E5F0D8 /* Entry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entry.swift; sourceTree = "<group>"; };
 		4EE0C9FDFD3F57319DC51032 /* Provider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Provider.swift; sourceTree = "<group>"; };
 		50FFA755E8A1CA79EAAF14EB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		530BDF78D76259F7CED90C28 /* EntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryView.swift; sourceTree = "<group>"; };
-		6530C23B2A451EC3F95FC7EA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		6B5C34E8893C25E333C79126 /* MenubarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarController.swift; sourceTree = "<group>"; };
-		7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenubarPopoverView.swift; sourceTree = "<group>"; };
-		95A3670D3BACE1F823999C10 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStore.swift; sourceTree = "<group>"; };
+		763158F9C486655DE9DD932B /* DesktopWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopWindowController.swift; sourceTree = "<group>"; };
+		8BF87462C69C840B22807925 /* DesktopFleetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopFleetView.swift; sourceTree = "<group>"; };
 		98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CascadeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CA653CE94840F17719DE2E9 /* SmallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallView.swift; sourceTree = "<group>"; };
-		B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonIPCClient.swift; sourceTree = "<group>"; };
+		9F62E832D7B08BCA17B8ABD7 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		BD237574226DE3FEAE2C5E7E /* LargeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeView.swift; sourceTree = "<group>"; };
+		C7DBA986C9F3A96EE826FCC3 /* CascadeMenuBarLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeMenuBarLabel.swift; sourceTree = "<group>"; };
 		DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheModelTests.swift; sourceTree = "<group>"; };
 		F63251BBC96DE278824E772F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		F65087F68E271F700CD62E1E /* DesktopPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopPanelController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -172,14 +175,16 @@
 			isa = PBXGroup;
 			children = (
 				1F7B27FE10A9B0B7808F0E86 /* CascadeApp.entitlements */,
-				40776AF9E612F01F99F5721D /* CascadeAppApp.swift */,
-				6530C23B2A451EC3F95FC7EA /* ContentView.swift */,
-				B2552D917BD850AF2649F108 /* DaemonIPCClient.swift */,
-				F65087F68E271F700CD62E1E /* DesktopPanelController.swift */,
+				32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */,
+				442F821E1C1D02D48432491B /* CascadeMenuBarContentView.swift */,
+				C7DBA986C9F3A96EE826FCC3 /* CascadeMenuBarLabel.swift */,
+				39A9D768A4916F498A482377 /* CascadeStore.swift */,
+				8BF87462C69C840B22807925 /* DesktopFleetView.swift */,
+				763158F9C486655DE9DD932B /* DesktopWindowController.swift */,
+				9F62E832D7B08BCA17B8ABD7 /* Formatting.swift */,
 				F63251BBC96DE278824E772F /* Info.plist */,
-				6B5C34E8893C25E333C79126 /* MenubarController.swift */,
-				7BCA258B9EAA58BDB5099A23 /* MenubarPopoverView.swift */,
-				95A3670D3BACE1F823999C10 /* QuotaStore.swift */,
+				0208B51D2101F403DC0C843E /* UsageCache.swift */,
+				2204BF1DA04DF8F6985663D3 /* UsageRow.swift */,
 			);
 			path = CascadeApp;
 			sourceTree = "<group>";
@@ -313,14 +318,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				74C612818047291ECF3847EA /* CacheModel.swift in Sources */,
-				B6C5EC9147DFB7937AAC1F90 /* CascadeAppApp.swift in Sources */,
-				661CC9E3423F0A812AC69F29 /* ContentView.swift in Sources */,
-				1BBE04448607B58F60EA4092 /* DaemonIPCClient.swift in Sources */,
-				FDCF7F11A092A26308E61B40 /* DesktopPanelController.swift in Sources */,
-				FECB3FE5428D83E3773F3FA1 /* MenubarController.swift in Sources */,
-				3F4D442645B8CA7A608D5EC0 /* MenubarPopoverView.swift in Sources */,
-				76079F22B0E99CCAAD412F2F /* QuotaStore.swift in Sources */,
+				863F5D56D5FFD1D2875B039D /* CascadeApp.swift in Sources */,
+				200118F6B9077B25B69906B4 /* CascadeMenuBarContentView.swift in Sources */,
+				669AD9FD73271C19001C1D45 /* CascadeMenuBarLabel.swift in Sources */,
+				F209631C0A8F1A3BAD5FDE69 /* CascadeStore.swift in Sources */,
+				39A1DEC1C85AD12E5DBE12EE /* DesktopFleetView.swift in Sources */,
+				FB84C7275D2EAE462D2941C0 /* DesktopWindowController.swift in Sources */,
+				9E30D5BBB872312418DD5B9B /* Formatting.swift in Sources */,
+				47D8146A831BD4D3635AD301 /* UsageCache.swift in Sources */,
+				D999CEAD47A314CC0DF058D6 /* UsageRow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +374,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				INFOPLIST_FILE = CascadeApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -391,6 +398,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				INFOPLIST_FILE = CascadeApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
