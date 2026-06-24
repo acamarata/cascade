@@ -142,7 +142,10 @@ refresh_token() {
   local svc="$1"
   local config_dir="$2"
   echo "  Refreshing token for $(basename "$config_dir")..." >&2
-  CLAUDECODE="" CLAUDE_CONFIG_DIR="$config_dir" claude -p "ok" --max-turns 1 >/dev/null 2>&1 || return 1
+  # `timeout` guards against a hung OAuth refresh: in a non-TTY context (LaunchAgent)
+  # `claude -p` on an account with an invalid refresh token can block forever, which
+  # would stall the whole fleet poll. 20s is plenty for a real refresh.
+  CLAUDECODE="" CLAUDE_CONFIG_DIR="$config_dir" timeout 20 claude -p "ok" --max-turns 1 >/dev/null 2>&1 || return 1
   get_token "$svc"
 }
 
