@@ -151,7 +151,7 @@ struct UsageRow: View {
         let reqDay = kc * 1500
         let dayStr = reqDay >= 1000 ? "~\(reqDay / 1000)k/d" : "\(reqDay)/d"
         Text("\(kc) keys · \(dayStr) · \(kc * 15) RPM")
-            .foregroundColor(Color(hex: "#4ED17F"))
+            .foregroundColor(Color(hex: "#2A7A4B"))
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
