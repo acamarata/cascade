@@ -40,6 +40,8 @@ pub mod templates;
 pub mod vault;
 // T-P3-E07-00: Application settings IPC commands (get/update)
 pub mod settings;
+// T-E01-01: Accounts page IPC commands (list/reauth/remove/refresh)
+pub mod accounts;
 // T-P3-E07-02/03: Library item IPC commands (list/get/upsert/delete)
 pub mod library;
 // T-P3-E07-08: Context session IPC commands (list/get/upsert/delete)
