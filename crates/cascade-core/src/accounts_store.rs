@@ -198,17 +198,34 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             (null_usage, Some(json!(now_epoch)), Some(opaque), None)
         };
 
-        // Did the merge resolve any real usage numbers?
+        // A dead credential from the most recent poll (expired OAuth / invalid key).
+        // Detect it from the poll's own error so a row is flagged for re-auth even when
+        // the merge still carries STALE usage numbers from a previous successful poll.
+        let auth_dead = legacy_entry
+            .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
+            .map(|e| {
+                matches!(
+                    e,
+                    "keychain_failed" | "refresh_failed" | "auth_invalid"
+                        | "api_failed" | "invalid_grant" | "parse_failed"
+                ) || e.starts_with("http_4")
+            })
+            .unwrap_or(false);
+
+        // Never show stale numbers for a credential-dead account — blank them so the
+        // widget renders the "Click here to re-auth" call-to-action instead.
+        let usage = if auth_dead { Value::Null } else { usage };
+
         let has_data = usage.get("five_hour").map(|v| !v.is_null()).unwrap_or(false)
             || usage.get("seven_day").map(|v| !v.is_null()).unwrap_or(false)
             || usage.get("seven_day_sonnet").map(|v| !v.is_null()).unwrap_or(false);
 
-        // Status drives the widget's per-row hint. Claude/Gemini accounts that
-        // resolve no data are almost always an expired-credential situation, so we
-        // surface "auth" — the row then reads "needs re-auth" instead of a silent blank.
+        // Status drives the widget's per-row hint. Claude/Gemini accounts that are
+        // credential-dead (or resolve no data) surface "auth" — the row then reads
+        // "Click here to re-auth" instead of a silent blank or stale numbers.
         let status = match acc.family {
             AccountFamily::Gfp => "pool",
-            AccountFamily::Claude | AccountFamily::Google if !has_data => "auth",
+            AccountFamily::Claude | AccountFamily::Google if auth_dead || !has_data => "auth",
             _ => "ok",
         };
 

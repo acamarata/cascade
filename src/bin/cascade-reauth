@@ -30,7 +30,22 @@ if [[ "$ACC" == gemini* ]]; then
   exit 0
 fi
 
-CONFIG_DIR="${HOME}/.${ACC}"   # claude-acc1 → ~/.claude-acc1
+# Resolve the config dir from the explicit roster (~/.config/cascade/config.json) so an
+# account label can point at any dir (e.g. claude-acc1 → ~/.claude). Fall back to the
+# ~/.<label> convention when no config entry exists.
+CONFIG_DIR="$(python3 - "$ACC" <<'PY'
+import json, os, sys
+acc = sys.argv[1]
+try:
+    c = json.load(open(os.path.expanduser("~/.config/cascade/config.json")))
+    for a in c.get("accounts", []):
+        if a.get("label") == acc:
+            print(os.path.expanduser(a.get("dir", ""))); break
+except Exception:
+    pass
+PY
+)"
+[[ -z "$CONFIG_DIR" ]] && CONFIG_DIR="${HOME}/.${ACC}"   # fallback: claude-acc1 → ~/.claude-acc1
 if [[ ! -d "$CONFIG_DIR" ]]; then
   echo "No config dir for $ACC at $CONFIG_DIR — creating it (fresh sign-in)."
   mkdir -p "$CONFIG_DIR"
