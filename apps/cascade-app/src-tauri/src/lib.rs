@@ -80,7 +80,7 @@ pub fn run() {
 
             // Spawn the background health task.  Fire-and-forget: Tauri manages
             // its own async runtime so we use tokio::spawn directly.
-            tokio::spawn(run_app_health_task(registry, health_map));
+            tauri::async_runtime::spawn(run_app_health_task(registry, health_map));
             info!("app provider health-check task spawned");
 
             Ok(())

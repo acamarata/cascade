@@ -140,12 +140,18 @@ struct DesktopFleetView: View {
         store.refresh()
     }
 
-    /// Open the Cascade accounts directory (where the registry + quota live) — the
-    /// closest thing to a settings surface for the fleet.
+    /// Open the full Cascade.app (Tauri dashboard). Falls back to accounts dir if not installed.
     private func openSettings() {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cascade/accounts")
-        NSWorkspace.shared.open(dir)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let candidates: [URL] = [
+            home.appendingPathComponent("Applications/Cascade.app"),
+            URL(fileURLWithPath: "/Applications/Cascade.app"),
+        ]
+        if let url = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.open(home.appendingPathComponent(".cascade/accounts"))
+        }
     }
 
     // MARK: Table
