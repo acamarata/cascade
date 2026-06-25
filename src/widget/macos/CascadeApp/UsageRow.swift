@@ -147,11 +147,6 @@ struct UsageRow: View {
     /// Free tier: 1,500 req/day per key, 15 RPM per key, rolling windows.
     @ViewBuilder
     private var poolColumns: some View {
-        let dim = Color(hex: "#4A4D54")
-        numCell("—", color: dim)
-        numCell("—", color: dim)
-        if showExtra { numCell("—", color: dim) }
-        numCell("—", color: dim)
         let kc = entry.key_count ?? 0
         let reqDay = kc * 1500
         let dayStr = reqDay >= 1000 ? "~\(reqDay / 1000)k/d" : "\(reqDay)/d"
@@ -163,7 +158,7 @@ struct UsageRow: View {
     private func numCell(_ text: String, color: Color) -> some View {
         Text(text)
             .foregroundColor(color)
-            .frame(minWidth: 36, alignment: .trailing)
+            .frame(minWidth: 46, alignment: .trailing)
             .padding(.horizontal, 2)
     }
 
@@ -218,7 +213,7 @@ struct UsageTableHeader: View {
                 .frame(width: 28, alignment: .leading)
             ForEach(cols, id: \.self) { col in
                 Text(col)
-                    .frame(minWidth: 36, maxWidth: col == "Reset" ? .infinity : nil, alignment: .trailing)
+                    .frame(minWidth: 46, maxWidth: col == "Reset" ? .infinity : nil, alignment: .trailing)
                     .padding(.horizontal, 2)
             }
         }
