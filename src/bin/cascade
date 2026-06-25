@@ -153,7 +153,10 @@ refresh_token() {
 import sys, json, subprocess, time, urllib.request, urllib.error
 
 CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"   # public Claude Code OAuth client
-URL = "https://claude.ai/v1/oauth/token"
+# Token endpoint moved to platform.claude.com; the old claude.ai host is fronted by
+# Cloudflare bot protection (HTTP 403 "error code: 1010") that blocks a bare urllib
+# POST, which silently broke automatic refresh. A real User-Agent gets past it.
+URL = "https://platform.claude.com/v1/oauth/token"
 svc = sys.argv[1]
 
 raw = subprocess.run(["security", "find-generic-password", "-s", svc, "-w"],
@@ -180,6 +183,7 @@ body = json.dumps({"grant_type": "refresh_token", "refresh_token": rt,
 req = urllib.request.Request(URL, data=body, method="POST")
 req.add_header("Content-Type", "application/json")
 req.add_header("Accept", "application/json")
+req.add_header("User-Agent", "claude-cli/1.0 (external; cascade-fleet)")
 try:
     with urllib.request.urlopen(req, timeout=15) as r:
         d = json.loads(r.read())

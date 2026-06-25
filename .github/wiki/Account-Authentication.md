@@ -32,7 +32,7 @@ Cascade refreshes Claude access tokens **automatically**. Before each poll it:
    (`Claude Code-credentials[-<hash>]`, one per account config dir).
 2. If the access token is expired, POSTs the stored **refresh token** to the OAuth
    token endpoint:
-   - URL: `https://claude.ai/v1/oauth/token`
+   - URL: `https://platform.claude.com/v1/oauth/token`
    - Body: `{"grant_type":"refresh_token","refresh_token":"<rt>","client_id":"9d1c250a-e61b-44d9-88ed-5944d1962f5e"}`
    - `client_id` is the public Claude Code OAuth client.
 3. Writes the rotated `access_token` / `refresh_token` / `expiresAt` back to the same
