@@ -153,6 +153,7 @@ struct UsageRow: View {
         Text("\(kc) keys · \(dayStr) · \(kc * 15) RPM")
             .foregroundColor(Color(hex: "#2A7A4B"))
             .frame(maxWidth: .infinity, alignment: .trailing)
+            .opacity(0.28)
     }
 
     private func numCell(_ text: String, color: Color) -> some View {
