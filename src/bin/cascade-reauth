@@ -21,12 +21,17 @@ if [[ -z "$ACC" ]]; then
   exit 2
 fi
 
-# Gemini: credential is an API key, not OAuth — point the user at the key page.
+# Gemini: the $20/mo Pro/Ultra subscription is read via Antigravity (Cloud Code Assist)
+# OAuth — NOT an API key. Run the agy sign-in, which opens the browser + handles the
+# localhost callback, then refresh so the row fills immediately.
 if [[ "$ACC" == gemini* ]]; then
-  echo "Gemini uses an API key (not OAuth)."
-  echo "Opening Google AI Studio so you can create/copy a fresh key, then paste it into"
-  echo "  ~/.claude/vault.env  as  GEMINI_API_KEY_OPENCLAW=..."
-  open "https://aistudio.google.com/apikey"
+  REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+  echo "Signing in to Google Antigravity (Gemini subscription)…"
+  python3 "$REPO_DIR/cascade-agy-auth"
+  echo "Pulling fresh Gemini quota…"
+  python3 "$REPO_DIR/cascade-agy" >/dev/null 2>&1 || true
+  command -v cascade >/dev/null 2>&1 && cascade accounts detect >/dev/null 2>&1 || true
+  echo "✓ Gemini re-authenticated. You can close this window."
   exit 0
 fi
 

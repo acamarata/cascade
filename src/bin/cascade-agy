@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""cascade-agy — Read live Gemini (Antigravity / Code Assist) subscription quota and
+write it into the fleet usage cache for the widget's "Ge" row.
+
+Flow (Cloud Code Assist backend, same as the Antigravity IDE):
+  refresh_token  → access_token            (oauth2.googleapis.com/token)
+  loadCodeAssist → cloudaicompanionProject (project id for the account)
+  fetchAvailableModels → models[*].quotaInfo.remainingFraction + resetTime
+
+The Gemini-3-Pro group's quota is the user's $20/mo subscription usage; Gemini-3-Flash
+is the secondary pool. We emit utilization = (1 - remainingFraction) * 100.
+
+Token comes from ~/.cascade/agy-token.json (written by `cascade-agy-auth`). Account id /
+provider default to gemini-acc1 / gemini so the daemon merges it onto the Ge row.
+"""
+import json
+import os
+import time
+import urllib.parse
+import urllib.request
+
+CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+CLIENT_SECRET = "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"
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+BASE = "https://cloudcode-pa.googleapis.com"
+USER_AGENT = "antigravity/1.18.3 macos/arm64"
+TOKEN_STORE = os.path.expanduser("~/.cascade/agy-token.json")
+CACHE = os.path.expanduser(os.environ.get("CLAW_FLEET_CACHE", "~/.claude/usage-cache.json"))
+ACCOUNT_ID = os.environ.get("AGY_ACCOUNT_ID", "gemini-acc1")
+FALLBACK_PROJECT = "bamboo-precept-lgxtn"
+
+
+def _post(url, token, body):
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                 "User-Agent": USER_AGENT},
+    )
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def refresh_access(refresh_token):
+    data = urllib.parse.urlencode({
+        "grant_type": "refresh_token", "refresh_token": refresh_token,
+        "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
+    }).encode()
+    req = urllib.request.Request(TOKEN_URL, data=data,
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())["access_token"]
+
+
+def slot(remaining_fraction, reset_time):
+    """Build a widget quota slot from a remaining fraction (0..1) + ISO reset time."""
+    util = round(max(0.0, min(1.0, 1.0 - remaining_fraction)) * 100, 1)
+    resets_at = None
+    if reset_time:
+        try:
+            from datetime import datetime
+            resets_at = datetime.fromisoformat(reset_time.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            resets_at = None
+    return {"utilization": util, "resets_at": resets_at, "resets_in": None, "status": None}
+
+
+def collect_account(refresh_token, email):
+    access = refresh_access(refresh_token)
+    # Project id for this account.
+    project = ""
+    try:
+        d = _post(f"{BASE}/v1internal:loadCodeAssist", access, {"metadata": {"ideType": "ANTIGRAVITY"}})
+        p = d.get("cloudaicompanionProject")
+        project = p if isinstance(p, str) else (p or {}).get("id", "")
+    except Exception:
+        project = ""
+    if not project:
+        project = FALLBACK_PROJECT
+
+    data = _post(f"{BASE}/v1internal:fetchAvailableModels", access, {"project": project})
+    models = data.get("models") or {}
+
+    groups = {}  # group -> (min_remaining, earliest_reset)
+    for name, info in models.items():
+        q = (info or {}).get("quotaInfo")
+        if not q:
+            continue
+        low = name.lower()
+        if "claude" in low or "gemini-3" not in low:
+            grp = None
+            if "gemini-3" in low:
+                grp = "flash" if "flash" in low else "pro"
+        else:
+            grp = "flash" if "flash" in low else "pro"
+        if grp is None:
+            continue
+        rem = q.get("remainingFraction", 0)
+        rt = q.get("resetTime")
+        cur = groups.get(grp)
+        if cur is None or rem < cur[0]:
+            groups[grp] = (rem, rt)
+
+    usage = {
+        "five_hour": slot(*groups["pro"]) if "pro" in groups else None,
+        "seven_day": slot(*groups["flash"]) if "flash" in groups else None,
+        "seven_day_sonnet": None, "seven_day_opus": None, "extra_usage": None,
+    }
+    return {
+        "account": ACCOUNT_ID, "provider": "gemini",
+        "email": (email or "") + " (Antigravity Pro)",
+        "usage": usage, "quota_opaque": False, "status": "ok",
+        "last_pull_at": int(time.time()), "queried_at": int(time.time()),
+    }
+
+
+def merge_into_cache(entry):
+    cache = {}
+    if os.path.exists(CACHE):
+        try:
+            cache = json.load(open(CACHE))
+        except Exception:
+            cache = {}
+    if not isinstance(cache, dict):
+        cache = {}
+    accts = [a for a in cache.get("accounts", [])
+             if not (isinstance(a, dict) and a.get("account") == entry["account"])]
+    accts.append(entry)
+    cache["accounts"] = accts
+    cache["queried_at"] = int(time.time())
+    tmp = CACHE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cache, f, indent=2)
+    os.replace(tmp, CACHE)
+
+
+def main():
+    if not os.path.exists(TOKEN_STORE):
+        # No token yet — emit an auth-needed marker so the row prompts re-auth.
+        merge_into_cache({"account": ACCOUNT_ID, "provider": "gemini", "email": "",
+                          "usage": None, "status": "auth", "last_error": "no_agy_token",
+                          "queried_at": int(time.time())})
+        print("agy: no token — run cascade-agy-auth")
+        return 1
+    store = json.load(open(TOKEN_STORE))
+    acc = (store.get("accounts") or [{}])[0]
+    try:
+        entry = collect_account(acc["refresh_token"], acc.get("email", ""))
+        merge_into_cache(entry)
+        pro = (entry["usage"]["five_hour"] or {}).get("utilization")
+        print(f"agy: gemini-pro {pro}% used (acct {acc.get('email')})")
+        return 0
+    except Exception as e:
+        merge_into_cache({"account": ACCOUNT_ID, "provider": "gemini", "email": acc.get("email", ""),
+                          "usage": None, "status": "auth", "last_error": f"agy_failed: {type(e).__name__}",
+                          "queried_at": int(time.time())})
+        print(f"agy: error {type(e).__name__}: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

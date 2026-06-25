@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""cascade-agy-auth — Sign in to Google Antigravity (Gemini Code Assist) and store a
+refresh token so the fleet poller can read the live subscription quota.
+
+Antigravity is Google's IDE; its Pro/Ultra ($20/mo+) subscription usage is exposed via
+the Cloud Code Assist backend (cloudcode-pa.googleapis.com) — NOT a public API key.
+This runs the same OAuth flow the IDE uses (public Antigravity OAuth client), opens the
+browser, captures the localhost callback, and writes the refresh token to
+~/.cascade/agy-token.json. Run once per Google account you want tracked.
+
+Credentials are the public Antigravity desktop-OAuth client (not secret material).
+"""
+import base64
+import hashlib
+import http.server
+import json
+import os
+import secrets
+import threading
+import urllib.parse
+import urllib.request
+import webbrowser
+
+CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+CLIENT_SECRET = "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"
+REDIRECT_URI = "http://localhost:51121/oauth-callback"
+AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+SCOPES = [
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/cclog",
+    "https://www.googleapis.com/auth/experimentsandconfigs",
+]
+TOKEN_STORE = os.path.expanduser("~/.cascade/agy-token.json")
+
+_result = {}
+
+
+class CallbackHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        parsed = urllib.parse.urlparse(self.path)
+        if not parsed.path.startswith("/oauth-callback"):
+            self.send_response(404)
+            self.end_headers()
+            return
+        qs = urllib.parse.parse_qs(parsed.query)
+        _result["code"] = qs.get("code", [None])[0]
+        _result["error"] = qs.get("error", [None])[0]
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        msg = "Antigravity sign-in complete — you can close this tab and return to the terminal."
+        if _result.get("error"):
+            msg = f"Sign-in failed: {_result['error']}"
+        self.wfile.write(f"<html><body style='font-family:sans-serif;padding:3em'><h2>{msg}</h2></body></html>".encode())
+
+    def log_message(self, *_):  # silence
+        pass
+
+
+def pkce():
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    return verifier, challenge
+
+
+def main():
+    verifier, challenge = pkce()
+    state = secrets.token_urlsafe(16)
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    url = AUTH_URL + "?" + urllib.parse.urlencode(params)
+
+    server = http.server.HTTPServer(("127.0.0.1", 51121), CallbackHandler)
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+
+    print("Opening your browser to sign in to Google Antigravity (Gemini)…")
+    print(f"If it doesn't open, visit:\n{url}\n")
+    webbrowser.open(url)
+
+    # Wait for the callback (up to 5 min).
+    import time
+    for _ in range(300):
+        if "code" in _result or _result.get("error"):
+            break
+        time.sleep(1)
+    server.shutdown()
+
+    if _result.get("error") or not _result.get("code"):
+        print(f"✗ Sign-in failed: {_result.get('error') or 'no code received'}")
+        return 1
+
+    # Exchange the code for tokens.
+    data = urllib.parse.urlencode({
+        "grant_type": "authorization_code",
+        "code": _result["code"],
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "code_verifier": verifier,
+    }).encode()
+    req = urllib.request.Request(TOKEN_URL, data=data,
+                                headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        tok = json.loads(r.read())
+
+    refresh = tok.get("refresh_token")
+    access = tok.get("access_token")
+    if not refresh:
+        print("✗ No refresh token returned (re-run; Google sometimes needs prompt=consent).")
+        return 1
+
+    email = ""
+    try:
+        ureq = urllib.request.Request(USERINFO_URL, headers={"Authorization": f"Bearer {access}"})
+        with urllib.request.urlopen(ureq, timeout=15) as r:
+            email = json.loads(r.read()).get("email", "")
+    except Exception:
+        pass
+
+    os.makedirs(os.path.dirname(TOKEN_STORE), exist_ok=True)
+    # Multi-account: keep a list; replace any entry with the same email.
+    store = {"accounts": []}
+    if os.path.exists(TOKEN_STORE):
+        try:
+            store = json.load(open(TOKEN_STORE))
+        except Exception:
+            store = {"accounts": []}
+    store.setdefault("accounts", [])
+    store["accounts"] = [a for a in store["accounts"] if a.get("email") != email]
+    store["accounts"].append({"email": email, "refresh_token": refresh})
+    tmp = TOKEN_STORE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(store, f, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, TOKEN_STORE)
+
+    print(f"✓ Signed in as {email or '(unknown)'} — Antigravity token stored.")
+    print("  The fleet poller will now show your Gemini subscription quota.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

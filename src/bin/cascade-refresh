@@ -7,8 +7,14 @@ set -euo pipefail
 CACHE="${CLAW_FLEET_CACHE:-$HOME/.claude/usage-cache.json}"
 SUMMARY="/tmp/cascade-summary.txt"
 
-# Run the main query
-"$(dirname "$0")/cascade" "$@" >/dev/null 2>&1
+# Run the Claude account poller (OAuth usage), then each provider collector so every
+# fleet row stays fresh: Codex (CLI), Gemini subscription (Antigravity/Code Assist),
+# OpenCode. Each writes/merges its own rows into the usage cache; failures are non-fatal.
+DIR="$(dirname "$0")"
+"$DIR/cascade" "$@" >/dev/null 2>&1 || true
+for collector in cascade-codex cascade-agy cascade-opencode; do
+  [ -x "$DIR/$collector" ] && timeout 60 "$DIR/$collector" >/dev/null 2>&1 || true
+done
 
 # Generate formatted summary
 python3 - "$CACHE" "$SUMMARY" <<'PYEOF'
