@@ -142,7 +142,8 @@ struct UsageRow: View {
         try? p.run()
     }
 
-    /// GFP free-Flash key pool: show the round-robin key count as available capacity.
+    /// GFP free-Flash key pool: show key count + daily/minute capacity.
+    /// Free tier: 1,500 req/day per key, 15 RPM per key, rolling windows.
     @ViewBuilder
     private var poolColumns: some View {
         let dim = Color(hex: "#4A4D54")
@@ -150,7 +151,10 @@ struct UsageRow: View {
         numCell("—", color: dim)
         if showExtra { numCell("—", color: dim) }
         numCell("—", color: dim)
-        Text("\(entry.key_count ?? 0) keys free")
+        let kc = entry.key_count ?? 0
+        let reqDay = kc * 1500
+        let dayStr = reqDay >= 1000 ? "~\(reqDay / 1000)k/d" : "\(reqDay)/d"
+        Text("\(kc) keys · \(dayStr) · \(kc * 15) RPM")
             .foregroundColor(Color(hex: "#4ED17F"))
             .frame(maxWidth: .infinity, alignment: .trailing)
     }

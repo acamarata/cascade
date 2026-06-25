@@ -119,14 +119,10 @@ class CascadeAppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    /// Left-click → toggle desktop panel. Right-click → open popover.
+    /// Any click → open popover (status + table + widget toggle + Open Cascade).
+    /// Widget toggle lives inside the popover; no separate right-click path needed.
     @objc private func statusClicked(_ sender: Any?) {
-        let isRight = NSApp.currentEvent?.type == .rightMouseUp
-        if isRight {
-            togglePopover()
-        } else {
-            desktopManager.toggle()
-        }
+        togglePopover()
     }
 
     private func togglePopover() {
