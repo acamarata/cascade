@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import {
   accountLabel,
   canReauth,
+  gfpCapacity,
+  isGfpPool,
   pct,
   statusColor,
   utilColor,
@@ -67,7 +69,7 @@ export function AccountDetailDrawer({
 
   const usage = account.usage
   const extra = usage?.extra_usage
-  const isGfp = account.provider === 'gfp'
+  const pool = isGfpPool(account)
 
   return (
     <>
@@ -113,50 +115,66 @@ export function AccountDetailDrawer({
             <p className="mb-3 break-words text-xs text-muted-foreground">{account.email}</p>
           )}
 
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Quota windows
-          </h3>
-          <WindowRow label="5-hour" win={usage?.five_hour} />
-          <WindowRow label="7-day" win={usage?.seven_day} />
-          <WindowRow label="7-day (Opus)" win={usage?.seven_day_opus} />
-          <WindowRow label="7-day (Sonnet)" win={usage?.seven_day_sonnet} />
-
-          {extra && extra.is_enabled && (
+          {pool ? (
+            /* GFP pool — no per-account quota; show static capacity info */
             <>
-              <h3 className="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Monthly credit
-              </h3>
-              <div className="flex items-center justify-between border-b border-border/50 py-2">
-                <span className="text-sm text-muted-foreground">Utilization</span>
-                <span className={`text-sm font-medium ${utilColor(extra.utilization)}`}>
-                  {pct(extra.utilization)}
-                </span>
-              </div>
-              {extra.used_credits != null && extra.monthly_limit != null && (
-                <div className="flex items-center justify-between border-b border-border/50 py-2">
-                  <span className="text-sm text-muted-foreground">Credits</span>
-                  <span className="text-sm">
-                    {extra.used_credits.toFixed(extra.decimal_places ?? 0)} /{' '}
-                    {extra.monthly_limit.toFixed(extra.decimal_places ?? 0)} {extra.currency ?? ''}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-
-          {isGfp && (
-            <>
-              <h3 className="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Pool
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Pool capacity
               </h3>
               <div className="flex items-center justify-between border-b border-border/50 py-2">
                 <span className="text-sm text-muted-foreground">Keys</span>
+                <span className="text-sm">{account.key_count ?? '—'}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-border/50 py-2">
+                <span className="text-sm text-muted-foreground">Est. req/day</span>
                 <span className="text-sm">
-                  {extra?.daily != null || extra?.weekly != null
-                    ? 'see pool config'
-                    : (account.quota_opaque ? 'opaque' : 'n/a')}
+                  {account.key_count ? `~${account.key_count * 1500}` : '—'}
                 </span>
               </div>
+              <div className="flex items-center justify-between border-b border-border/50 py-2">
+                <span className="text-sm text-muted-foreground">RPM (pool)</span>
+                <span className="text-sm">
+                  {account.key_count ? `${account.key_count * 15}` : '—'}
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground/70 italic">
+                {gfpCapacity(account.key_count)} · Gemini Flash free tier · round-robin ·
+                1,500 req/day per key · 15 RPM per key
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Quota windows
+              </h3>
+              <WindowRow label="5-hour" win={usage?.five_hour} />
+              <WindowRow label="7-day" win={usage?.seven_day} />
+              <WindowRow label="7-day (Opus)" win={usage?.seven_day_opus} />
+              <WindowRow label="7-day (Sonnet)" win={usage?.seven_day_sonnet} />
+
+              {extra && extra.is_enabled && (
+                <>
+                  <h3 className="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Monthly credit
+                  </h3>
+                  <div className="flex items-center justify-between border-b border-border/50 py-2">
+                    <span className="text-sm text-muted-foreground">Utilization</span>
+                    <span className={`text-sm font-medium ${utilColor(extra.utilization)}`}>
+                      {pct(extra.utilization)}
+                    </span>
+                  </div>
+                  {extra.used_credits != null && extra.monthly_limit != null && (
+                    <div className="flex items-center justify-between border-b border-border/50 py-2">
+                      <span className="text-sm text-muted-foreground">Credits</span>
+                      <span className="text-sm">
+                        {extra.used_credits.toFixed(extra.decimal_places ?? 0)} /{' '}
+                        {extra.monthly_limit.toFixed(extra.decimal_places ?? 0)}{' '}
+                        {extra.currency ?? ''}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

@@ -45,7 +45,29 @@ export interface AccountQuota {
   status?: string | null
   last_pull_at?: number | null
   quota_opaque?: boolean | null
+  /** GFP pool only — number of API keys in the round-robin pool. */
+  key_count?: number | null
   usage?: AccountUsage | null
+}
+
+/** True when this account is the GFP key pool (not a paid account). */
+export function isGfpPool(acc: AccountQuota): boolean {
+  return acc.provider === 'gfp'
+}
+
+/**
+ * Free-tier Gemini Flash limits per key (as of mid-2025).
+ * Used to estimate GP pool capacity from key_count.
+ */
+const GFP_RPD_PER_KEY = 1500
+const GFP_RPM_PER_KEY = 15
+
+/** Human-readable capacity summary for a GFP pool row. */
+export function gfpCapacity(keyCount: number | null | undefined): string {
+  if (!keyCount) return 'key pool'
+  const reqDay = keyCount * GFP_RPD_PER_KEY
+  const reqDayK = reqDay >= 1000 ? `~${Math.round(reqDay / 1000)}k` : String(reqDay)
+  return `${keyCount} keys · ${reqDayK} req/day · ${keyCount * GFP_RPM_PER_KEY} RPM`
 }
 
 /** Top-level quota.json shape. */

@@ -110,6 +110,9 @@ pub struct AccountQuota {
     /// True when the provider hides exact numbers (opaque quota).
     #[serde(default)]
     pub quota_opaque: Option<bool>,
+    /// Number of keys in a GFP pool account (`gfp` provider only).
+    #[serde(default)]
+    pub key_count: Option<u32>,
     /// The usage breakdown for this account.
     #[serde(default)]
     pub usage: Option<AccountUsage>,

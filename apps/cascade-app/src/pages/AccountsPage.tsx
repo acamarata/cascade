@@ -28,6 +28,8 @@ import { AccountDetailDrawer } from '@/features/accounts/AccountDetailDrawer'
 import {
   accountLabel,
   canReauth,
+  gfpCapacity,
+  isGfpPool,
   pct,
   statusColor,
   utilColor,
@@ -180,61 +182,88 @@ export function AccountsPage(): React.ReactElement {
                 const fiveH = u?.five_hour?.utilization
                 const wk = u?.seven_day?.utilization
                 const credit = u?.extra_usage?.is_enabled ? u?.extra_usage?.utilization : null
+                const pool = isGfpPool(acc)
+
                 return (
                   <tr
                     key={acc.account}
-                    className="cursor-pointer border-b border-border/50 last:border-0 hover:bg-accent/30"
-                    onClick={() => setSelected(acc)}
+                    className={`border-b border-border/50 last:border-0 hover:bg-accent/30 ${pool ? 'opacity-60' : 'cursor-pointer'}`}
+                    onClick={pool ? undefined : () => setSelected(acc)}
                   >
                     <td className="px-3 py-2">
-                      <span className="rounded bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs font-semibold ${pool ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+                      >
                         {accountLabel(acc)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{acc.provider}</td>
-                    <td className={`px-3 py-2 text-right font-medium ${utilColor(fiveH)}`}>
-                      {pct(fiveH)}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-medium ${utilColor(wk)}`}>
-                      {pct(wk)}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-medium ${utilColor(credit)}`}>
-                      {credit == null ? '—' : pct(credit)}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {u?.five_hour?.resets_in ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {u?.seven_day?.resets_in ?? '—'}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusColor(acc.status)}`}
+
+                    {pool ? (
+                      /* GP pool row — spans quota columns with capacity summary */
+                      <td
+                        colSpan={5}
+                        className="px-3 py-2 text-xs text-muted-foreground/70 italic"
+                        title="Gemini Flash free tier · 1500 req/day · 15 RPM per key · round-robin"
                       >
-                        {acc.status ?? 'unknown'}
-                      </span>
+                        {gfpCapacity(acc.key_count)}
+                      </td>
+                    ) : (
+                      <>
+                        <td className={`px-3 py-2 text-right font-medium ${utilColor(fiveH)}`}>
+                          {pct(fiveH)}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-medium ${utilColor(wk)}`}>
+                          {pct(wk)}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-medium ${utilColor(credit)}`}>
+                          {credit == null ? '—' : pct(credit)}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {u?.five_hour?.resets_in ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {u?.seven_day?.resets_in ?? '—'}
+                        </td>
+                      </>
+                    )}
+
+                    <td className="px-3 py-2">
+                      {pool ? (
+                        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-slate-500/15 text-slate-400">
+                          pool
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusColor(acc.status)}`}
+                        >
+                          {acc.status ?? 'unknown'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex gap-1.5">
-                        {canReauth(acc.provider) && (
+                      {!pool && (
+                        <div className="flex gap-1.5">
+                          {canReauth(acc.provider) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={actionBusy}
+                              onClick={() => handleReauth(acc.account)}
+                            >
+                              Re-auth
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
                             disabled={actionBusy}
-                            onClick={() => handleReauth(acc.account)}
+                            onClick={() => handleRemove(acc.account)}
                           >
-                            Re-auth
+                            Remove
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={actionBusy}
-                          onClick={() => handleRemove(acc.account)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
