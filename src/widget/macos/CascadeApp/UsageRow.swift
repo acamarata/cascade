@@ -158,7 +158,7 @@ struct UsageRow: View {
     private func numCell(_ text: String, color: Color) -> some View {
         Text(text)
             .foregroundColor(color)
-            .frame(minWidth: 46, alignment: .trailing)
+            .frame(minWidth: 42, alignment: .trailing)
             .padding(.horizontal, 2)
     }
 
@@ -213,7 +213,7 @@ struct UsageTableHeader: View {
                 .frame(width: 28, alignment: .leading)
             ForEach(cols, id: \.self) { col in
                 Text(col)
-                    .frame(minWidth: 46, maxWidth: col == "Reset" ? .infinity : nil, alignment: .trailing)
+                    .frame(minWidth: 42, maxWidth: col == "Reset" ? .infinity : nil, alignment: .trailing)
                     .padding(.horizontal, 2)
             }
         }
