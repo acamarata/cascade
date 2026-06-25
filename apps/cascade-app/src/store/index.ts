@@ -11,6 +11,7 @@
 
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import { useShallow } from 'zustand/react/shallow'
 
 import { createDaemonSlice } from './daemon.slice'
 import type { DaemonSlice } from './daemon.slice'
@@ -33,32 +34,38 @@ export const useAppStore = create<AppStore>()(
 
 /** Select daemon connection state + last status data. */
 export function useDaemonStatus() {
-  return useAppStore((s) => ({
-    status: s.status,
-    data: s.data,
-    lastPing: s.lastPing,
-    error: s.error,
-    startPolling: s.startPolling,
-    stopPolling: s.stopPolling,
-  }))
+  return useAppStore(
+    useShallow((s) => ({
+      status: s.status,
+      data: s.data,
+      lastPing: s.lastPing,
+      error: s.error,
+      startPolling: s.startPolling,
+      stopPolling: s.stopPolling,
+    }))
+  )
 }
 
 /** Select theme token + resolved theme + setTheme action. */
 export function useThemeStore() {
-  return useAppStore((s) => ({
-    token: s.token,
-    resolvedTheme: s.resolvedTheme,
-    setTheme: s.setTheme,
-  }))
+  return useAppStore(
+    useShallow((s) => ({
+      token: s.token,
+      resolvedTheme: s.resolvedTheme,
+      setTheme: s.setTheme,
+    }))
+  )
 }
 
 /** Select window state + open/close/focus actions. */
 export function useWindowState() {
-  return useAppStore((s) => ({
-    openWindows: s.openWindows,
-    activeWindow: s.activeWindow,
-    openWindow: s.openWindow,
-    closeWindow: s.closeWindow,
-    focusWindow: s.focusWindow,
-  }))
+  return useAppStore(
+    useShallow((s) => ({
+      openWindows: s.openWindows,
+      activeWindow: s.activeWindow,
+      openWindow: s.openWindow,
+      closeWindow: s.closeWindow,
+      focusWindow: s.focusWindow,
+    }))
+  )
 }
