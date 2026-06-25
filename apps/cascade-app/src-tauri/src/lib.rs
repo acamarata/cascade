@@ -78,9 +78,17 @@ pub fn run() {
                 }
             }
 
-            // Spawn the background health task.  Fire-and-forget: Tauri manages
-            // its own async runtime so we use tokio::spawn directly.
-            tauri::async_runtime::spawn(run_app_health_task(registry, health_map));
+            // Spawn the background health task in a dedicated OS thread with its
+            // own Tokio runtime.  tauri::async_runtime::spawn and tokio::spawn
+            // both panic here because the event loop hasn't started yet — the
+            // only safe approach in .setup() is a fresh thread.
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("cascade health task runtime");
+                rt.block_on(run_app_health_task(registry, health_map));
+            });
             info!("app provider health-check task spawned");
 
             Ok(())
