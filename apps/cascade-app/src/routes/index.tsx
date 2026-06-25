@@ -31,6 +31,7 @@ import { PewsPage } from '../pages/PewsPage'
 import { PersonalVaultPage } from '../pages/PersonalVaultPage'
 import { InstructionsPage } from '../pages/InstructionsPage'
 import { ChatPage } from '../features/chat/ChatPage'
+import { AccountsPage } from '../pages/AccountsPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -87,6 +88,8 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         <Route path="/settings/providers" element={<ProviderSettings />} />
         {/* T-P3-E04-30: Usage analytics page */}
         <Route path="/usage" element={<UsagePage />} />
+        {/* T1.4: Accounts management page */}
+        <Route path="/accounts" element={<AccountsPage />} />
         {/* T-P3-E05-14: Template browser */}
         <Route path="/templates" element={<TemplateBrowser />} />
         {/* T-P3-E06-02: Vault navigator */}

@@ -29,6 +29,7 @@ import {
   Search,
   Settings,
   UserCircle2,
+  Users,
 } from 'lucide-react'
 import { useArrowNav } from '../../hooks/useArrowNav'
 import { NavItem } from './NavItem'
@@ -104,6 +105,11 @@ const NAV_ITEMS = [
     to: '/usage',
     icon: <BarChart2 className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Usage',
+  },
+  {
+    to: '/accounts',
+    icon: <Users className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Accounts',
   },
   {
     to: '/settings',
