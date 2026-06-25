@@ -180,6 +180,11 @@ pub fn run() {
             commands::usage::cascade_usage_summary,
             commands::usage::cascade_usage_history,
             commands::usage::cascade_usage_ledger,
+            // T-E01-01: Accounts page IPC commands
+            commands::accounts::accounts_list,
+            commands::accounts::account_reauth,
+            commands::accounts::account_remove,
+            commands::accounts::accounts_refresh,
             // T-P3-E05-15: Template engine IPC (list / apply / diff)
             commands::templates::template_list,
             commands::templates::template_apply,
