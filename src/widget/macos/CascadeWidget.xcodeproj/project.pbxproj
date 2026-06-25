@@ -16,6 +16,7 @@
 		5A53E34D50A9565DBF2DEDA1 /* Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE0C9FDFD3F57319DC51032 /* Provider.swift */; };
 		669AD9FD73271C19001C1D45 /* CascadeMenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DBA986C9F3A96EE826FCC3 /* CascadeMenuBarLabel.swift */; };
 		6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */; };
+		6C885B361E1543A3F9828C53 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 30BEF06182F332F03679B356 /* AppIcon.icns */; };
 		7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
 		7CBCF0D56C1E576C1A3A67EC /* MediumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE26AC57686229523FF30FB /* MediumView.swift */; };
 		863F5D56D5FFD1D2875B039D /* CascadeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */; };
@@ -66,6 +67,7 @@
 		1FB538BE3C026816D9226121 /* CascadeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidget.swift; sourceTree = "<group>"; };
 		2204BF1DA04DF8F6985663D3 /* UsageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageRow.swift; sourceTree = "<group>"; };
 		29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeWidgetBundle.swift; sourceTree = "<group>"; };
+		30BEF06182F332F03679B356 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeApp.swift; sourceTree = "<group>"; };
 		39A9D768A4916F498A482377 /* CascadeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CascadeStore.swift; sourceTree = "<group>"; };
 		3CE26AC57686229523FF30FB /* MediumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediumView.swift; sourceTree = "<group>"; };
@@ -174,6 +176,7 @@
 		CA8F03DD35AF1D03DEFB571B /* CascadeApp */ = {
 			isa = PBXGroup;
 			children = (
+				30BEF06182F332F03679B356 /* AppIcon.icns */,
 				1F7B27FE10A9B0B7808F0E86 /* CascadeApp.entitlements */,
 				32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */,
 				442F821E1C1D02D48432491B /* CascadeMenuBarContentView.swift */,
@@ -231,6 +234,7 @@
 			buildConfigurationList = 336BC32140F186219F600301 /* Build configuration list for PBXNativeTarget "CascadeApp" */;
 			buildPhases = (
 				CD3DD6E99A481775BF99474D /* Sources */,
+				28A0B89538B248379F549885 /* Resources */,
 				422063299C74E40A19BB5078 /* Frameworks */,
 				6E585E0186806B3B1F9597EA /* Embed Foundation Extensions */,
 			);
@@ -286,6 +290,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		28A0B89538B248379F549885 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C885B361E1543A3F9828C53 /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1AA9D60A4C503C06DDEDFD05 /* Sources */ = {
