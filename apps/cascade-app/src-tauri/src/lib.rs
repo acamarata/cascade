@@ -237,6 +237,16 @@ pub fn run() {
             commands::wizard_state::wizard_state_write,
             commands::wizard_state::wizard_dry_run_log,
             commands::wizard_state::wizard_merge_audit_append,
+            commands::wizard_state::wizard_state_reset,
+            // additional frontend commands (wizard + providers)
+            commands::symlinks::shell_open,
+            commands::symlinks::symlink_integrity_check,
+            commands::symlinks::daemon_watch_register,
+            commands::merge::ai_merge_section,
+            commands::providers::local_llm_detect,
+            commands::providers::oauth_pkce_flow,
+            commands::providers::api_key_connect,
+            commands::providers::config_detect_connect,
             // E-P8-05: PBD PEWS tree + mutation commands
             commands::pbd::pbd_get_tree,
             commands::pbd::pbd_get_current,

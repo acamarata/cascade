@@ -54,10 +54,6 @@ pub mod tasks;
 pub mod pbd;
 // Wizard state persistence + dry-run log + merge audit (fix-6 wizard end-to-end)
 pub mod wizard_state;
-// T-P5-E01-03: commands_tmp — keeps stub implementations available for reference.
-// Commands are registered from this module (commands::), NOT from commands_tmp::,
-// to avoid duplicate-name compile errors in generate_handler!.
-pub mod commands_tmp;
 
 use serde::{Deserialize, Serialize};
 use std::env;

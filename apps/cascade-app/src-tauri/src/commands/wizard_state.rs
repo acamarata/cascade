@@ -245,6 +245,16 @@ pub async fn wizard_merge_audit_append(
     Ok(())
 }
 
+/// Clears persisted wizard state. Called by the --reset wizard flag.
+#[tauri::command]
+pub async fn wizard_state_reset() -> Result<(), String> {
+    let path = wizard_state_path();
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
 /// Escape a string value for inclusion in a JSON object literal.

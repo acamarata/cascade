@@ -744,6 +744,60 @@ pub async fn file_copy_create(source: String, target: String) -> Result<(), Stri
         .map_err(|e| format!("copy({source:?} → {target:?}): {e}"))
 }
 
+/// Opens a URL or path with the system default application.
+/// Used by the wizard on Windows to open ms-settings:developers.
+#[tauri::command]
+pub async fn shell_open(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Checks that a symlink path exists and points to a valid target.
+#[tauri::command]
+pub async fn symlink_integrity_check(path: String) -> Result<bool, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() && !p.symlink_metadata().is_ok() {
+        return Ok(false);
+    }
+    if let Ok(meta) = p.symlink_metadata() {
+        if meta.file_type().is_symlink() {
+            return Ok(std::fs::read_link(&p)
+                .ok()
+                .map(|t| t.exists())
+                .unwrap_or(false));
+        }
+    }
+    Ok(p.exists())
+}
+
+/// Registers a source→target file watch with the daemon so it re-copies
+/// on CASCADE.md changes. Currently a no-op stub; daemon IPC is E-P5-02.
+#[tauri::command]
+pub async fn daemon_watch_register(source: String, target: String) -> Result<(), String> {
+    tracing::debug!("daemon_watch_register: {} → {}", source, target);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests — cascade_unlink_tool (T-P3-E03-37)
 // ---------------------------------------------------------------------------

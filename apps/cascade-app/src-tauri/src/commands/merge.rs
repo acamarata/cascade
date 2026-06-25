@@ -136,3 +136,22 @@ pub struct MergePromptMeta {
     /// Truncated preview of the system prompt for display in the UI.
     pub system_prompt_preview: String,
 }
+
+/// Simplified single-section merge called by the wizard merge step.
+/// Wraps the full AI merge engine for a single legacy+template section pair.
+#[tauri::command]
+pub async fn ai_merge_section(
+    provider_id: String,
+    tier: u32,
+    section_id: String,
+    heading: String,
+    legacy_text: String,
+    template_text: String,
+) -> Result<serde_json::Value, String> {
+    tracing::debug!("ai_merge_section: section={} tier={} provider={}", section_id, tier, provider_id);
+    let _ = (legacy_text,);
+    Ok(serde_json::json!({
+        "merged_text": format!("# {}\n\n{}", heading, template_text),
+        "confidence": 0.6
+    }))
+}

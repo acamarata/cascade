@@ -260,7 +260,7 @@ export interface GeminiPoolStatus {
  */
 export async function detectGeminiPool(): Promise<GeminiPoolStatus> {
   try {
-    return await invoke('gemini_pool_detect')
+    return await invoke('detect_gemini_pool')
   } catch {
     return { detected: false }
   }
