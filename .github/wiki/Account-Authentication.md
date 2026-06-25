@@ -71,19 +71,33 @@ one-time fix per expired refresh token.
 
 ---
 
-## Google Gemini
+## Google Gemini — subscription quota via Antigravity (the `Ge` row)
 
-Two layers:
+The `Ge` row tracks your **Gemini Pro/Ultra ($20/mo+) subscription**, not an API key.
+That subscription's usage is **not** exposed by a Gemini API key (API keys are the
+separate, metered developer tier). It IS exposed through the same **Cloud Code Assist**
+backend the Antigravity IDE uses — so Cascade reads it the same way the IDE does.
 
-- **API key** (`GEMINI_API_KEY_OPENCLAW` in `~/.claude/vault.env`) — validates the
-  account. An invalid/revoked key returns HTTP 403; mint a new one at
-  <https://aistudio.google.com> and update the vault.
-- **Real usage numbers** require Application Default Credentials so the poller can
-  query Cloud Monitoring:
-  ```sh
-  gcloud auth application-default login --project=<your-gcp-project>
-  ```
-  Without ADC the key still validates but the row is **quota-opaque** (no percentages).
+**Sign in (one-time):** click **Click here to re-auth** on the `Ge` row, or run:
+
+```sh
+~/.cascade/bin/cascade-agy-auth      # opens the browser, OAuth + localhost callback
+```
+
+This stores a refresh token at `~/.cascade/agy-token.json`. The poller then runs
+`~/.cascade/bin/cascade-agy` every cycle, which:
+
+1. refreshes the access token (`oauth2.googleapis.com/token`),
+2. `POST cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` → your project id,
+3. `POST …/v1internal:fetchAvailableModels` → `models[*].quotaInfo.remainingFraction`,
+
+and writes `SES = Gemini-3-Pro` usage, `WK = Gemini-3-Flash` usage (utilization =
+`(1 − remainingFraction) × 100`, with the model's reset time). Keys/tokens are never
+logged. Multiple Google accounts can be added (each `cascade-agy-auth` run appends).
+
+> **Legacy API-key path** (`GEMINI_API_KEY_OPENCLAW` + optional gcloud ADC) still exists
+> in `cascade-gemini` for tracking a *metered API project*, but it is a different product
+> from the consumer subscription and is not what the `Ge` row uses by default.
 
 ---
 
