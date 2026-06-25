@@ -3,7 +3,7 @@ import AppKit
 
 // MARK: - UsageRow
 // Ported verbatim from ClawFleet Sources/Shared/UsageRow.swift.
-// Columns: Label | Ses% | Wk% | M/S% | [Ex] | 5H countdown | Wk Rst
+// Columns: Label | 5H% | Wk% | [Ex] | SR countdown | Reset
 
 struct UsageRow: View {
     let label: String
@@ -72,20 +72,23 @@ struct UsageRow: View {
         let countdownColor: Color = fiveHCapped ? .white : Color(hex: "#6B7280")
         numCell(fiveHResetAt != nil ? fmtCountdown(fiveHResetAt) : "—", color: countdownColor)
             .fontWeight(fiveHCapped ? .semibold : .regular)
+        // Reset column: single monospaced string so (Xh) suffix aligns vertically.
+        // Pad suffix to fixed 6-char width: "  (9h)" / " (15h)" / "(150h)".
+        // Color: dark grey when healthy (secondary info), light grey when exhausted
+        // (you need to see when the window resets).
         let h = hoursUntil(weekResetAt)
-        HStack(spacing: 3) {
-            Text(fmtDayHour(weekResetAt))
-                .foregroundColor(Color(hex: "#C7CBD1"))
-                .lineLimit(1)
-            if let h = h {
-                let hrColor = weekCapped ? Color(hex: "#C7CBD1") : Color(hex: "#4A4D54")
-                Text("(\(h)h)")
-                    .foregroundColor(hrColor)
-                    .lineLimit(1)
-            }
-        }
-        .frame(minWidth: 116, alignment: .trailing)
-        .fontWeight(weekCapped ? .bold : .regular)
+        let hrSuffix: String = {
+            guard let h = h else { return "" }
+            if h < 10  { return "  (\(h)h)" }
+            if h < 100 { return " (\(h)h)" }
+            return "(\(h)h)"
+        }()
+        let resetColor: Color = weekCapped ? Color(hex: "#C7CBD1") : Color(hex: "#4A4D54")
+        Text(fmtDayHour(weekResetAt) + hrSuffix)
+            .foregroundColor(resetColor)
+            .lineLimit(1)
+            .frame(minWidth: 116, alignment: .trailing)
+            .fontWeight(weekCapped ? .bold : .regular)
     }
 
     @ViewBuilder
@@ -188,7 +191,7 @@ struct UsageRow: View {
                     lines.append("Unblock: top up Zen balance + enable Use balance.")
                 }
             }
-            lines.append("(M/S column = Monthly% for OpenCode rows.)")
+            lines.append("(SR col = 5h rolling reset countdown.)")
             return lines.joined(separator: "\n")
         }
         let stRaw = entry.status ?? "live"
@@ -203,14 +206,14 @@ struct UsageTableHeader: View {
 
     var body: some View {
         let cols: [String] = showExtra
-            ? ["Ses", "Wk", "Ex", "5H", "Wk Reset"]
-            : ["Ses", "Wk", "5H", "Wk Reset"]
+            ? ["5H", "Wk", "Ex", "SR", "Reset"]
+            : ["5H", "Wk", "SR", "Reset"]
         HStack(spacing: 0) {
             Text("#")
                 .frame(width: 28, alignment: .leading)
             ForEach(cols, id: \.self) { col in
                 Text(col)
-                    .frame(minWidth: col == "Wk Reset" ? 116 : 36, alignment: .trailing)
+                    .frame(minWidth: col == "Reset" ? 116 : 36, alignment: .trailing)
                     .padding(.horizontal, 2)
             }
         }
