@@ -19,7 +19,7 @@
 use serde_json::Value;
 use tauri::State;
 
-use crate::commands::make_client;
+use crate::commands::core::make_client;
 use crate::state::AppState;
 
 // ── Internal helper ────────────────────────────────────────────────────────────
