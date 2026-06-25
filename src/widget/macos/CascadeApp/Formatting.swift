@@ -75,7 +75,7 @@ func labelledAccounts(from entries: [AccountEntry]) -> [(label: String, entry: A
 private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
     switch provider {
     case "opencode":
-        return group.map { _ in "OC" }
+        return group.map { _ in "Oc" }
     case "gfp":
         return group.map { _ in "GP" }
     case "claude":
@@ -148,7 +148,8 @@ func fmtDayHour(_ ts: Double?) -> String {
     let min   = cal.component(.minute, from: date)
     let h     = h24 == 0 ? 12 : h24 > 12 ? h24 - 12 : h24
     let ap    = h24 < 12 ? "a" : "p"
-    return "\(month)/\(day) \(h):\(String(format: "%02d", min))\(ap)"
+    // Space-pad the hour so "8:00a" and "11:59p" align in monospaced columns.
+    return "\(month)/\(day) \(String(format: "%2d", h)):\(String(format: "%02d", min))\(ap)"
 }
 
 /// Returns hours until a future timestamp (rounded, minimum 0).

@@ -15,7 +15,6 @@ struct UsageRow: View {
     private var sessUtil: Double? { u?.five_hour?.utilization }
     /// Wk column: opus weekly; falls back to seven_day so non-Claude providers still show.
     private var weekUtil: Double? { u?.seven_day_opus?.utilization ?? u?.seven_day?.utilization }
-    private var sonnUtil: Double? { u?.seven_day_sonnet?.utilization }
     private var fiveHResetAt: Double? { u?.five_hour?.resets_at }
     /// Week reset: use opus slot when available, else generic seven_day.
     private var weekResetAt: Double? { u?.seven_day_opus?.resets_at ?? u?.seven_day?.resets_at }
@@ -67,7 +66,6 @@ struct UsageRow: View {
         numCell(fmtPct(sessUtil), color: .utilColor(sessUtil))
         numCell(fmtPct(weekUtil), color: .utilColor(weekUtil))
             .fontWeight(weekCapped ? .bold : .medium)
-        numCell(fmtPct(sonnUtil), color: .utilColor(sonnUtil))
         if showExtra {
             numCell(fmtExtra(u?.extra_usage), color: Color(hex: "#C7CBD1"))
         }
@@ -92,9 +90,14 @@ struct UsageRow: View {
 
     @ViewBuilder
     private var opaqueColumns: some View {
-        ForEach(0..<6, id: \.self) { _ in
-            numCell("—", color: Color(hex: "#6B7280"))
-        }
+        let dim = Color(hex: "#6B7280")
+        numCell("—", color: dim)
+        numCell("—", color: dim)
+        if showExtra { numCell("—", color: dim) }
+        numCell("—", color: dim)
+        Text("—")
+            .foregroundColor(dim)
+            .frame(minWidth: 116, alignment: .trailing)
     }
 
     /// Credential-dead account (expired Claude OAuth / invalid Gemini key). The whole
@@ -140,7 +143,6 @@ struct UsageRow: View {
     @ViewBuilder
     private var poolColumns: some View {
         let dim = Color(hex: "#4A4D54")
-        numCell("—", color: dim)
         numCell("—", color: dim)
         numCell("—", color: dim)
         if showExtra { numCell("—", color: dim) }
@@ -201,8 +203,8 @@ struct UsageTableHeader: View {
 
     var body: some View {
         let cols: [String] = showExtra
-            ? ["Ses", "Wk", "M/S", "Ex", "5H", "Wk Reset"]
-            : ["Ses", "Wk", "M/S", "5H", "Wk Reset"]
+            ? ["Ses", "Wk", "Ex", "5H", "Wk Reset"]
+            : ["Ses", "Wk", "5H", "Wk Reset"]
         HStack(spacing: 0) {
             Text("#")
                 .frame(width: 28, alignment: .leading)

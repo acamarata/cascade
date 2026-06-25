@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+// MARK: - MovableHostingView
+// NSHostingView sets mouseDownCanMoveWindow=false by default, blocking
+// isMovableByWindowBackground from firing when SwiftUI absorbs the event.
+// This subclass restores window-drag behaviour while leaving button taps intact
+// (a simple click without drag still triggers SwiftUI hit targets normally).
+private final class MovableHostingView<V: View>: NSHostingView<V> {
+    override var mouseDownCanMoveWindow: Bool { true }
+}
+
 // MARK: - DesktopWindowController
 // Ported verbatim from ClawFleet DesktopWindowController.swift.
 // Primary-screen guard: defaultOrigin() uses the screen whose frame.origin == .zero,
@@ -69,7 +78,7 @@ final class DesktopWindowController: NSObject {
         let level = Int(CGWindowLevelForKey(.desktopIconWindow))
         p.level = NSWindow.Level(rawValue: level)
 
-        let contentView = NSHostingView(
+        let contentView = MovableHostingView(
             rootView: DesktopFleetView(store: store, focus: focus)
                 .ignoresSafeArea()
         )
