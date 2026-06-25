@@ -234,6 +234,50 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
         });
     }
 
+    // ── Gemini GP proxy + Anthropic-compat adapter ───────────────────────────
+    // Gated on the `gemini-proxy` feature (external-network surface, opt-in).
+    // GeminiProxy listens on 127.0.0.1:3761; AnthropicCompatServer listens on
+    // 127.0.0.1:3762 and forwards translated requests to the GP proxy.
+    #[cfg(feature = "gemini-proxy")]
+    {
+        use crate::proxy::{AnthropicCompatServer, GeminiProxy};
+        use std::net::SocketAddr;
+
+        let providers_path = config_dir.join("providers.json");
+
+        // GeminiProxy (port 3761).
+        let gp_bind: SocketAddr = "127.0.0.1:3761".parse().expect("valid addr");
+        let gp_shutdown = shutdown.clone();
+        let gp_bus = bus.clone();
+        let gp_proxy = GeminiProxy::new(
+            config.proxy.clone(),
+            providers_path,
+            gp_bus,
+            gp_bind,
+            gp_shutdown,
+            std::collections::HashMap::new(),
+        );
+        tokio::spawn(async move {
+            if let Err(e) = gp_proxy.run().await {
+                warn!(error = %e, "gemini_proxy exited with error");
+            }
+        });
+
+        // AnthropicCompatServer (port 3762) — forwards to GP proxy on 3761.
+        let ac_bind: SocketAddr = "127.0.0.1:3762".parse().expect("valid addr");
+        let ac_shutdown = shutdown.clone();
+        let ac_server = AnthropicCompatServer::new(
+            ac_bind,
+            "http://127.0.0.1:3761".to_string(),
+            ac_shutdown,
+        );
+        tokio::spawn(async move {
+            if let Err(e) = ac_server.run().await {
+                warn!(error = %e, "anthropic_compat exited with error");
+            }
+        });
+    }
+
     // ── Main event loop ───────────────────────────────────────────────────────
     tokio::select! {
         result = ipc.serve(shutdown.clone()) => {
