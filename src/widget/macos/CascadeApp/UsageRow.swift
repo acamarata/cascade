@@ -57,6 +57,7 @@ struct UsageRow: View {
                 dataColumns
             }
         }
+        .frame(maxWidth: .infinity)
         .font(.system(size: 11, design: .monospaced))
         .opacity(opacity)
     }
@@ -221,6 +222,7 @@ struct UsageTableHeader: View {
                     .padding(.horizontal, 2)
             }
         }
+        .frame(maxWidth: .infinity)
         .font(.system(size: 9, weight: .medium, design: .default))
         .foregroundColor(Color(hex: "#7A7F8A"))
         .textCase(.uppercase)
