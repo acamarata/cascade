@@ -87,7 +87,7 @@ struct UsageRow: View {
         Text(fmtDayHour(weekResetAt) + hrSuffix)
             .foregroundColor(resetColor)
             .lineLimit(1)
-            .frame(minWidth: 116, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .fontWeight(weekCapped ? .bold : .regular)
     }
 
@@ -100,7 +100,7 @@ struct UsageRow: View {
         numCell("—", color: dim)
         Text("—")
             .foregroundColor(dim)
-            .frame(minWidth: 116, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     /// Credential-dead account (expired Claude OAuth / invalid Gemini key). The whole
@@ -152,7 +152,7 @@ struct UsageRow: View {
         numCell("—", color: dim)
         Text("\(entry.key_count ?? 0) keys free")
             .foregroundColor(Color(hex: "#4ED17F"))
-            .frame(minWidth: 116, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func numCell(_ text: String, color: Color) -> some View {
@@ -213,7 +213,7 @@ struct UsageTableHeader: View {
                 .frame(width: 28, alignment: .leading)
             ForEach(cols, id: \.self) { col in
                 Text(col)
-                    .frame(minWidth: col == "Reset" ? 116 : 36, alignment: .trailing)
+                    .frame(minWidth: 36, maxWidth: col == "Reset" ? .infinity : nil, alignment: .trailing)
                     .padding(.horizontal, 2)
             }
         }

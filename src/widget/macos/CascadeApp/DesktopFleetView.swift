@@ -1,6 +1,25 @@
 import SwiftUI
 import AppKit
 
+// MARK: - WindowDragHandle
+// NSViewRepresentable that calls window?.performDrag(with:) on mouseDown.
+// Used as a .background() on non-interactive header views so clicking/dragging
+// the title area moves the panel without interfering with button hit targets.
+
+private struct WindowDragHandle: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragHandleView { DragHandleView() }
+    func updateNSView(_ nsView: DragHandleView, context: Context) {}
+
+    final class DragHandleView: NSView {
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .openHand)
+        }
+    }
+}
+
 // MARK: - DesktopFleetView
 // The always-on-desktop fleet panel. Header = mountain icon + "Cascade" + a live
 // "seconds since last update" counter; a footer holds Refresh + Settings buttons.
@@ -54,12 +73,18 @@ struct DesktopFleetView: View {
             Image(systemName: "mountain.2.fill")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(Color(hex: "#4F9BE8"))
+                .allowsHitTesting(false)
             Text("Cascade")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(Color(hex: "#ECEFF3"))
+                .allowsHitTesting(false)
             Spacer()
             freshnessView
+                .allowsHitTesting(false)
         }
+        // WindowDragHandle behind all header content — mouseDown here calls
+        // window?.performDrag directly, enabling click-and-drag on the title area.
+        .background(WindowDragHandle())
     }
 
     /// Live "time since last update", re-rendered every second via TimelineView so the

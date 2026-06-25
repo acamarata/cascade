@@ -2,11 +2,10 @@ import AppKit
 import SwiftUI
 
 // MARK: - MovableHostingView
-// NSHostingView sets mouseDownCanMoveWindow=false by default, blocking
-// isMovableByWindowBackground from firing when SwiftUI absorbs the event.
-// This subclass restores window-drag behaviour while leaving button taps intact
-// (a simple click without drag still triggers SwiftUI hit targets normally).
-private final class MovableHostingView<V: View>: NSHostingView<V> {
+// Generic NSHostingView subclasses don't reliably override ObjC properties at
+// runtime (Swift generic + ObjC dispatch = silent no-op). AnyView erases the
+// type so the class is non-generic and the override is dispatched correctly.
+private final class MovableHostingView: NSHostingView<AnyView> {
     override var mouseDownCanMoveWindow: Bool { true }
 }
 
@@ -79,8 +78,10 @@ final class DesktopWindowController: NSObject {
         p.level = NSWindow.Level(rawValue: level)
 
         let contentView = MovableHostingView(
-            rootView: DesktopFleetView(store: store, focus: focus)
-                .ignoresSafeArea()
+            rootView: AnyView(
+                DesktopFleetView(store: store, focus: focus)
+                    .ignoresSafeArea()
+            )
         )
         contentView.autoresizingMask = [.width, .height]
         p.contentView = contentView
