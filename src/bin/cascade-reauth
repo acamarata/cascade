@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# cascade-reauth — Re-authenticate one fleet account end-to-end, then refresh the
+# widget immediately so the row fills in seconds (not on the next 5-min poll).
+#
+# Usage: cascade-reauth <account-id|provider>
+#   claude-acc1 / claude-acc2 / ...  → `claude auth login` scoped to ~/.<account>
+#   gemini / gemini-acc1             → opens the Google AI Studio API-key page
+#
+# The OAuth browser flow + its localhost callback are handled entirely by
+# `claude auth login` — this wrapper just scopes it to the right account config dir
+# and re-runs the poller on success so there is no visible gap before data appears.
+
+set -uo pipefail
+
+ACC="${1:-}"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+export PATH="/opt/homebrew/bin:${HOME}/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+if [[ -z "$ACC" ]]; then
+  echo "usage: cascade-reauth <account-id>"
+  exit 2
+fi
+
+# Gemini: credential is an API key, not OAuth — point the user at the key page.
+if [[ "$ACC" == gemini* ]]; then
+  echo "Gemini uses an API key (not OAuth)."
+  echo "Opening Google AI Studio so you can create/copy a fresh key, then paste it into"
+  echo "  ~/.claude/vault.env  as  GEMINI_API_KEY_OPENCLAW=..."
+  open "https://aistudio.google.com/apikey"
+  exit 0
+fi
+
+CONFIG_DIR="${HOME}/.${ACC}"   # claude-acc1 → ~/.claude-acc1
+if [[ ! -d "$CONFIG_DIR" ]]; then
+  echo "No config dir for $ACC at $CONFIG_DIR — creating it (fresh sign-in)."
+  mkdir -p "$CONFIG_DIR"
+fi
+
+echo "════════════════════════════════════════════════════════════"
+echo "  Cascade — re-authenticating ${ACC}"
+echo "  Your browser will open. Sign in to the Claude account you"
+echo "  want tracked as ${ACC}, then return here."
+echo "════════════════════════════════════════════════════════════"
+echo ""
+
+# `claude auth login` opens the browser, runs its own localhost OAuth callback
+# server, exchanges the code, and writes the refreshed token to the keychain entry
+# for THIS config dir. No gaps — it does the whole handshake.
+CLAUDE_CONFIG_DIR="$CONFIG_DIR" claude auth login --claudeai
+rc=$?
+
+if [[ $rc -ne 0 ]]; then
+  echo ""
+  echo "✗ Sign-in did not complete (exit $rc). You can re-run this from the widget."
+  exit $rc
+fi
+
+echo ""
+echo "✓ Signed in. Pulling fresh usage so the widget updates now..."
+source "${HOME}/.claude/vault.env" 2>/dev/null || true
+"${REPO_DIR}/cascade" --include-primary >/dev/null 2>&1 || true
+# Nudge the daemon to regenerate quota.json immediately.
+if command -v cascade >/dev/null 2>&1; then
+  cascade accounts detect >/dev/null 2>&1 || true
+fi
+
+echo "✓ ${ACC} re-authenticated and usage refreshed. You can close this window."

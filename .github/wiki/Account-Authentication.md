@@ -47,16 +47,24 @@ When that happens the endpoint returns `invalid_grant: "Refresh token expired"`,
 row shows `re-auth`, and **only one interactive login fixes it** (no program can
 refresh an expired refresh token — that is by design).
 
-Re-authenticate each affected account:
+**One click (recommended):** click the amber **Click here to re-auth** on that row in
+the widget. Cascade opens a Terminal running `~/.cascade/bin/cascade-reauth <account>`,
+which runs `claude auth login` scoped to that account's config dir — your browser opens,
+`claude` runs its own localhost OAuth callback (the full handshake, no code-pasting),
+writes the rotated token to the keychain, and the helper immediately re-polls so the row
+fills within seconds.
+
+**Manual equivalent:**
 
 ```sh
-# Log in to the account whose config dir backs that fleet row, e.g. A1 = ~/.claude-acc1
-CLAUDE_CONFIG_DIR=~/.claude-acc1 claude    # then run: /login  and complete the browser OAuth
-CLAUDE_CONFIG_DIR=~/.claude-acc2 claude    # A2, etc.
+# A1 = ~/.claude-acc1, A2 = ~/.claude-acc2, …
+~/.cascade/bin/cascade-reauth claude-acc2
+# or directly:
+CLAUDE_CONFIG_DIR=~/.claude-acc2 claude auth login --claudeai
 ```
 
-Within ~5 minutes the poller picks up the fresh tokens and the row fills with real
-usage. From then on, automatic refresh keeps it alive.
+From then on, automatic refresh (above) keeps the row live indefinitely — re-auth is a
+one-time fix per expired refresh token.
 
 > Account → row mapping: accounts are discovered from `~/.claude-acc*` dirs (sorted)
 > plus the primary `~/.claude`. Labels are `A1, A2, …` in that order.

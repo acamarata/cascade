@@ -116,20 +116,14 @@ struct UsageRow: View {
         .help("Sign in to refresh this account's usage data")
     }
 
-    /// Launch the provider-appropriate re-auth flow.
-    /// - Claude: open Terminal running `claude auth login` scoped to this account's
-    ///   config dir (claude-acc1 → ~/.claude-acc1); the CLI opens the browser OAuth.
-    /// - Gemini: open the Google AI Studio API-key page to mint a fresh key.
+    /// Launch the full re-auth flow via the `cascade-reauth` helper in a Terminal
+    /// window. The helper runs `claude auth login` (which opens the browser and runs
+    /// its own localhost OAuth callback — the whole handshake, no gaps), scoped to this
+    /// account's config dir, then immediately re-polls so the row fills within seconds.
+    /// For Gemini the helper opens the Google AI Studio API-key page instead.
     private func reauth() {
-        let prov = entry.provider ?? "claude"
-        if prov == "gemini" {
-            if let url = URL(string: "https://aistudio.google.com/apikey") {
-                NSWorkspace.shared.open(url)
-            }
-            return
-        }
-        let dir = "\(NSHomeDirectory())/.\(entry.account)"   // claude-acc1 → ~/.claude-acc1
-        let cmd = "CLAUDE_CONFIG_DIR='\(dir)' claude auth login"
+        let helper = "\(NSHomeDirectory())/.cascade/bin/cascade-reauth"
+        let cmd = "\(helper) \(entry.account)"
         let script = """
         tell application "Terminal"
             activate
