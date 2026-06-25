@@ -143,14 +143,28 @@ export function ChatPage() {
       </div>
 
       {/* ── Error banner ───────────────────────────────────────── */}
-      {error && (
-        <div
-          role="alert"
-          className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-b border-destructive/20 shrink-0"
-        >
-          {error}
-        </div>
-      )}
+      {error && (() => {
+        const isConnectionError = /connection refused|failed to fetch|network error|econnrefused/i.test(error)
+        return isConnectionError ? (
+          <div
+            role="alert"
+            className="px-4 py-2.5 text-xs bg-amber-500/10 border-b border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0"
+          >
+            <span className="font-medium">Cascade daemon is not running.</span>{' '}
+            Start it with:{' '}
+            <code className="font-mono bg-amber-500/15 px-1 py-0.5 rounded text-amber-800 dark:text-amber-300">
+              cascade daemon start
+            </code>
+          </div>
+        ) : (
+          <div
+            role="alert"
+            className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-b border-destructive/20 shrink-0"
+          >
+            {error}
+          </div>
+        )
+      })()}
 
       {/* ── Message list ───────────────────────────────────────── */}
       <div className="flex-1 overflow-hidden">

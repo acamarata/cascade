@@ -7,6 +7,7 @@
  * SPORT: MASTER-COMPONENTS.md — TopBar
  */
 
+import { MountainSnow } from 'lucide-react'
 import { useDaemonStatus } from '../../store/index'
 import { ThemeToggle } from '../ThemeToggle'
 
@@ -17,7 +18,21 @@ const STATUS_DOT: Record<string, string> = {
   error: 'bg-red-500',
 }
 
+const STATUS_TEXT: Record<string, string> = {
+  connected: 'text-green-500',
+  connecting: 'text-amber-400',
+  disconnected: 'text-red-500',
+  error: 'text-red-500',
+}
+
 const STATUS_LABEL: Record<string, string> = {
+  connected: 'Connected',
+  connecting: 'Connecting…',
+  disconnected: 'Disconnected',
+  error: 'Disconnected',
+}
+
+const STATUS_ARIA: Record<string, string> = {
   connected: 'Daemon connected',
   connecting: 'Connecting to daemon',
   disconnected: 'Daemon disconnected',
@@ -27,7 +42,9 @@ const STATUS_LABEL: Record<string, string> = {
 export function TopBar() {
   const { status } = useDaemonStatus()
   const dotClass = STATUS_DOT[status] ?? 'bg-muted-foreground'
-  const dotLabel = STATUS_LABEL[status] ?? status
+  const textClass = STATUS_TEXT[status] ?? 'text-muted-foreground'
+  const statusLabel = STATUS_LABEL[status] ?? status
+  const ariaLabel = STATUS_ARIA[status] ?? status
 
   return (
     <header
@@ -35,7 +52,7 @@ export function TopBar() {
       className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4"
     >
       {/* App icon */}
-      <span className="h-6 w-6 shrink-0 rounded bg-primary" aria-hidden="true" />
+      <MountainSnow className="h-5 w-5 shrink-0" style={{ color: '#4F9BE8' }} aria-hidden="true" />
 
       {/* App title */}
       <span className="text-sm font-semibold tracking-tight">Cascade</span>
@@ -44,8 +61,9 @@ export function TopBar() {
       <div className="flex-1" aria-hidden="true" />
 
       {/* Connection indicator */}
-      <div className="flex items-center gap-1.5" title={dotLabel} aria-label={dotLabel}>
+      <div className="flex items-center gap-1.5" aria-label={ariaLabel}>
         <span className={['h-2 w-2 rounded-full', dotClass].join(' ')} aria-hidden="true" />
+        <span className={['text-xs', textClass].join(' ')}>{statusLabel}</span>
       </div>
 
       {/* Theme toggle */}

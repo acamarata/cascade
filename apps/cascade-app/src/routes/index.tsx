@@ -6,6 +6,7 @@
  *   Navigate redirect uses replace=true to avoid stacking history entries.
  *   RouterApp receives isLoading and launchWizard from App so the wizard redirect
  *   happens inside Router context (avoids Navigate-outside-Router invariant violation).
+ *   Hub pages consolidate related sub-pages into tabbed/sectioned layouts.
  * SPORT: MASTER-ROUTES.md — all frontend routes
  */
 
@@ -13,25 +14,13 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { InboxPage } from '../pages/InboxPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
-import { SearchPage } from '../pages/SearchPage'
-import { SettingsPage } from '../pages/SettingsPage'
-import { ProviderSettings } from '../pages/ProviderSettings'
-import { UsagePage } from '../pages/UsagePage'
-import { TemplateBrowser } from '../pages/TemplateBrowser'
 import { WizardLayout } from '../features/onboarding/WizardLayout'
-import { VaultPage } from '../pages/VaultPage'
-import { VaultGraphPage } from '../pages/VaultGraphPage'
-import { MemoryPage } from '../pages/MemoryPage'
-import { LibraryPanel } from '../features/library/LibraryPanel'
-import { ContextPanel } from '../features/context/ContextPanel'
-import { ProjectMapPage } from '../pages/ProjectMapPage'
-import { RagExplorerPage } from '../pages/RagExplorerPage'
 import { TasksPage } from '../pages/TasksPage'
-import { PewsPage } from '../pages/PewsPage'
-import { PersonalVaultPage } from '../pages/PersonalVaultPage'
-import { InstructionsPage } from '../pages/InstructionsPage'
 import { ChatPage } from '../features/chat/ChatPage'
-import { AccountsPage } from '../pages/AccountsPage'
+import VaultHub from '../pages/hubs/VaultHub'
+import ProjectsHub from '../pages/hubs/ProjectsHub'
+import AccountsHub from '../pages/hubs/AccountsHub'
+import { SettingsHub } from '../pages/hubs/SettingsHub'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -45,8 +34,9 @@ interface RouterAppProps {
  *   Authenticated pages are wrapped in AppLayout (chrome).
  *   /onboarding is standalone — no sidebar/topbar.
  *   Wizard routing guard lives here (inside Router context) so Navigate is valid.
+ *   Hub routes consolidate former multi-route sections into single tabbed pages.
  * Inputs:  isLoading, launchWizard flags from App (derived from useWizardLaunch).
- * Outputs: <Routes> element with 7 routes + loading / wizard redirect guards.
+ * Outputs: <Routes> element with consolidated hub routes + loading / wizard redirect guards.
  * Constraints: Must be rendered inside a Router provider.
  * SPORT: MASTER-ROUTES.md
  */
@@ -82,38 +72,22 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         {/* Legacy /dashboard redirect to /chat */}
         <Route path="/dashboard" element={<Navigate to="/chat" replace />} />
         <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        {/* T-P3-E04-23: Provider Settings page */}
-        <Route path="/settings/providers" element={<ProviderSettings />} />
-        {/* T-P3-E04-30: Usage analytics page */}
-        <Route path="/usage" element={<UsagePage />} />
-        {/* T1.4: Accounts management page */}
-        <Route path="/accounts" element={<AccountsPage />} />
-        {/* T-P3-E05-14: Template browser */}
-        <Route path="/templates" element={<TemplateBrowser />} />
-        {/* T-P3-E06-02: Vault navigator */}
-        <Route path="/vault" element={<VaultPage />} />
-        {/* T-P3-E06-07: Graph view */}
-        <Route path="/vault/graph" element={<VaultGraphPage />} />
-        {/* T-P3-E06-12: Memory browser */}
-        <Route path="/vault/memory" element={<MemoryPage />} />
-        {/* T-P3-E07-04: Library panel */}
-        <Route path="/library" element={<LibraryPanel />} />
-        {/* T-P3-E07-10/11: Context panel */}
-        <Route path="/context" element={<ContextPanel />} />
-        {/* T-P3-E07-13: Project map panel */}
-        <Route path="/project-map" element={<ProjectMapPage />} />
-        {/* T-P4-E01-27: RAG Explorer panel */}
-        <Route path="/rag-explorer" element={<RagExplorerPage />} />
         {/* E-P8-02: Kanban tasks board */}
         <Route path="/tasks" element={<TasksPage />} />
-        {/* E-P8-05: PEWS mutation tree */}
-        <Route path="/pews" element={<PewsPage />} />
-        {/* E-P9-01: Personal (PCI) vault */}
-        <Route path="/vault/personal" element={<PersonalVaultPage />} />
-        {/* E-P9-02: Instructions as knowledge object */}
-        <Route path="/vault/instructions" element={<InstructionsPage />} />
+
+        {/* Hub: vault, graph, memory, personal, instructions consolidated */}
+        <Route path="/vault" element={<VaultHub />} />
+
+        {/* Hub: project-map, pews, context, rag-explorer consolidated */}
+        <Route path="/projects" element={<ProjectsHub />} />
+
+        {/* Hub: accounts, provider settings, usage consolidated */}
+        <Route path="/accounts" element={<AccountsHub />} />
+        {/* Backward-compat redirect — provider settings moved into accounts hub */}
+        <Route path="/settings/providers" element={<Navigate to="/accounts?tab=providers" replace />} />
+
+        {/* Hub: settings, templates, library consolidated */}
+        <Route path="/settings" element={<SettingsHub />} />
       </Route>
 
       {/* Catch-all */}
