@@ -199,16 +199,23 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
         };
 
         // A dead credential from the most recent poll (expired OAuth / invalid key).
-        // Detect it from the poll's own error so a row is flagged for re-auth even when
-        // the merge still carries STALE usage numbers from a previous successful poll.
+        // Only true auth failures trigger re-auth: the refresh token is revoked/expired
+        // (keychain_failed, refresh_failed, invalid_grant) or Anthropic explicitly rejected
+        // the credential (auth_invalid, authentication_error, http_401, http_403).
+        //
+        // api_failed = curl network/timeout error — transient, NOT a credential failure.
+        // parse_failed = unparseable API response (503 HTML page, etc.) — also transient.
+        // rate_limit_error / http_429 = throttled, not auth-dead.
+        // Treating transient errors as auth failures caused false "Click to re-auth" prompts
+        // on every network hiccup, which is why tokens appeared to "expire" frequently.
         let auth_dead = legacy_entry
             .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
             .map(|e| {
                 matches!(
                     e,
                     "keychain_failed" | "refresh_failed" | "auth_invalid"
-                        | "api_failed" | "invalid_grant" | "parse_failed"
-                ) || e.starts_with("http_4")
+                        | "invalid_grant" | "authentication_error"
+                ) || e == "http_401" || e == "http_403"
             })
             .unwrap_or(false);
 
@@ -216,16 +223,16 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
         // widget renders the "Click here to re-auth" call-to-action instead.
         let usage = if auth_dead { Value::Null } else { usage };
 
-        let has_data = usage.get("five_hour").map(|v| !v.is_null()).unwrap_or(false)
+        let _has_data = usage.get("five_hour").map(|v| !v.is_null()).unwrap_or(false)
             || usage.get("seven_day").map(|v| !v.is_null()).unwrap_or(false)
             || usage.get("seven_day_sonnet").map(|v| !v.is_null()).unwrap_or(false);
 
-        // Status drives the widget's per-row hint. Claude/Gemini accounts that are
-        // credential-dead (or resolve no data) surface "auth" — the row then reads
-        // "Click here to re-auth" instead of a silent blank or stale numbers.
+        // Status drives the widget's per-row hint.
+        // Only show "auth" on a genuine credential failure — not on transient errors or
+        // accounts with no data yet (those show as "ok" with dashes, not a re-auth prompt).
         let status = match acc.family {
             AccountFamily::Gfp => "pool",
-            AccountFamily::Claude | AccountFamily::Google if auth_dead || !has_data => "auth",
+            AccountFamily::Claude | AccountFamily::Google if auth_dead => "auth",
             _ => "ok",
         };
 

@@ -50,6 +50,8 @@ mod regen;
 mod shutdown;
 mod state;
 mod supervisor;
+#[cfg(feature = "gemini-proxy")]
+mod proxy;
 mod telemetry;
 mod tray;
 // T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)

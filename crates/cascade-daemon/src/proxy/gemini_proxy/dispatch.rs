@@ -256,7 +256,7 @@ pub async fn handle_connection(
     }
 
     // Read body if Content-Length is set.
-    let body_start = headers_end + 4; // after \r\n\r\n
+    let body_start = headers_end; // find_header_end already returns pos after \r\n\r\n
     let already_read = offset.saturating_sub(body_start);
     let body_bytes = if content_length > 0 {
         let remaining = content_length.saturating_sub(already_read);

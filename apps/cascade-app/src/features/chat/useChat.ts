@@ -1,140 +1,72 @@
 /**
- * Purpose: SSE streaming chat client for the cascade daemon /api/chat endpoint
- *   at 127.0.0.1:9761 (the daemon's HTTP server, per E-P7-07 routing).
- *   Ported from cascade-dashboard GPChatPanel (T-P3-E02-21), adapted for the
- *   Tauri desktop context where fetch hits the daemon directly (no Vite proxy).
+ * Purpose: Chat client that routes to the GP proxy at port 3762 (Anthropic-compat,
+ *   free Gemini Flash) by default, falling back to the cascade daemon at 9761
+ *   (SSE streaming) when the proxy is unreachable.
  *
- * Provider selection order (E-P7-07):
- *   1. explicit `provider` param → selected field in request body
- *   2. ProviderRegistry default_for_task(Chat)
- *   3. First healthy cloud provider
- *   4. First registered local:<id> provider (offline fallback)
- *   5. SSE error event — nothing available
+ * Primary path (port 3762):
+ *   POST http://127.0.0.1:3762/v1/messages — Anthropic Messages API format.
+ *   Returns synchronous JSON: { content: [{type:"text", text:"..."}], ... }
+ *   Model: "claude-sonnet-4-6" (maps to gemini-2.0-flash at the proxy).
  *
- * SSE event types emitted by daemon:
- *   - served_by    → { provider: string } — which backend answered
- *   - token        → { text: string } — streamed fragment
- *   - tool_result  → tool execution payload
- *   - error        → { message: string }
- *   - data [DONE]  → final sentinel
+ * Fallback path (port 9761):
+ *   POST http://127.0.0.1:9761/api/chat — daemon SSE endpoint.
+ *   SSE event types: served_by | token | tool_result | error | data [DONE].
  *
  * Inputs: sessionId string, optional selectedProvider string override.
  * Outputs: { messages, isStreaming, error, servedBy, sendMessage, clearMessages }
- * Constraints: Uses fetch + ReadableStream (not EventSource — POST body required).
- *   SSE lines parsed manually. AbortController cleanup on unmount.
  * SPORT: E-P9-03 in-app chat — useChat
  */
 import { useState, useCallback, useRef } from 'react'
 import { useChatHistory, type ChatMessage } from './useChatHistory'
 
-// ── Daemon base URL ───────────────────────────────────────────────────────────
-// The cascade daemon HTTP server listens on 127.0.0.1:9761 (dashboard.rs).
-// In the Tauri app there is no Vite dev-proxy, so we target the daemon directly.
-// In test (jsdom) we use a relative path so mocked fetch works without a real server.
+// ── Endpoints ─────────────────────────────────────────────────────────────────
+const GP_PROXY_URL = 'http://127.0.0.1:3762'
 const DAEMON_BASE_URL =
-  typeof window !== 'undefined' &&
-  '__TAURI_INTERNALS__' in window
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
     ? 'http://127.0.0.1:9761'
     : ''
 
-// ── SSE event types ───────────────────────────────────────────────────────────
+// ── SSE event types (daemon fallback) ─────────────────────────────────────────
 
-export interface ServedByEvent {
-  type: 'served_by'
-  provider: string
-}
-
-export interface TokenEvent {
-  type: 'token'
-  text: string
-  // Also accept "content" for dashboard compat
-  content?: string
-}
-
-export interface ToolResultEvent {
-  type: 'tool_result'
-  name?: string
-  tool_name?: string
-  [key: string]: unknown
-}
-
-export interface ErrorEvent {
-  type: 'error'
-  message: string
-}
-
-export interface DoneEvent {
-  type: 'done'
-}
+export interface ServedByEvent   { type: 'served_by';   provider: string }
+export interface TokenEvent      { type: 'token';        text: string; content?: string }
+export interface ToolResultEvent { type: 'tool_result';  name?: string; tool_name?: string; [k: string]: unknown }
+export interface ErrorEvent      { type: 'error';        message: string }
+export interface DoneEvent       { type: 'done' }
 
 export type ChatStreamEvent =
-  | ServedByEvent
-  | TokenEvent
-  | ToolResultEvent
-  | ErrorEvent
-  | DoneEvent
+  | ServedByEvent | TokenEvent | ToolResultEvent | ErrorEvent | DoneEvent
 
-// ── Pure SSE line parser (exported for unit tests) ────────────────────────────
+// ── SSE parser (daemon fallback) ──────────────────────────────────────────────
 
-/**
- * Parse a single SSE line block (may be several `data:` lines joined by \n\n).
- * Handles `event:` prefixes (served_by, token, tool_result, error) as well as
- * bare `data:` lines for the [DONE] sentinel.
- * Returns null for comments, keepalives, or empty blocks.
- */
 export function parseSseLine(rawLine: string): ChatStreamEvent | null {
   const trimmed = rawLine.trim()
   if (!trimmed || trimmed.startsWith(':')) return null
 
-  // Extract event type from `event:` line (if present)
   let eventType: string | null = null
   for (const line of trimmed.split('\n')) {
-    if (line.startsWith('event:')) {
-      eventType = line.slice(6).trim()
-      break
-    }
+    if (line.startsWith('event:')) { eventType = line.slice(6).trim(); break }
   }
-
-  // Extract data from `data:` line
   for (const line of trimmed.split('\n')) {
     if (!line.startsWith('data:')) continue
     const payload = line.slice(5).trim()
     if (payload === '[DONE]') return { type: 'done' }
     try {
-      const parsed: unknown = JSON.parse(payload)
-      if (parsed !== null && typeof parsed === 'object') {
-        const obj = parsed as Record<string, unknown>
-        // Use eventType from `event:` header if present, else from `type` field
-        const resolvedType = (eventType ?? obj['type']) as string | undefined
-        if (!resolvedType) return null
-        return { ...obj, type: resolvedType } as ChatStreamEvent
-      }
-    } catch {
-      // malformed — skip
-    }
+      const parsed = JSON.parse(payload) as Record<string, unknown>
+      const resolvedType = (eventType ?? parsed['type']) as string | undefined
+      if (!resolvedType) return null
+      return { ...parsed, type: resolvedType } as ChatStreamEvent
+    } catch { /* malformed */ }
   }
   return null
 }
 
-// ── Streaming text reducer (exported for unit tests) ──────────────────────────
-
-/**
- * Pure reducer for the accumulated streaming text buffer.
- * Appends the fragment from a token event.
- */
-export function streamingReducer(
-  accumulated: string,
-  event: ChatStreamEvent,
-): string {
+export function streamingReducer(accumulated: string, event: ChatStreamEvent): string {
   if (event.type === 'token') {
-    // Support both `text` (daemon) and `content` (dashboard compat)
-    const fragment =
-      typeof event.text === 'string'
-        ? event.text
-        : typeof (event as TokenEvent).content === 'string'
-          ? (event as TokenEvent).content!
-          : ''
-    return accumulated + fragment
+    const frag = typeof event.text === 'string' ? event.text
+      : typeof (event as TokenEvent).content === 'string' ? (event as TokenEvent).content!
+      : ''
+    return accumulated + frag
   }
   return accumulated
 }
@@ -145,7 +77,6 @@ export interface UseChatResult {
   messages: ChatMessage[]
   isStreaming: boolean
   error: string | null
-  /** Provider id that served the last (or current) response. */
   servedBy: string | null
   sendMessage: (content: string, provider?: string) => Promise<void>
   clearMessages: () => void
@@ -154,18 +85,13 @@ export interface UseChatResult {
 export function useChat(sessionId: string): UseChatResult {
   const { messages, append, clear } = useChatHistory(sessionId)
 
-  // In-flight streaming assistant message (not yet persisted)
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [servedBy, setServedBy] = useState<string | null>(null)
-  // Track tool results accumulated during current stream
   const toolResultsRef = useRef<unknown[]>([])
-
-  // AbortController ref so we can cancel on unmount
   const abortRef = useRef<AbortController | null>(null)
 
-  // Combined view: persisted messages + in-flight partial
   const allMessages: ChatMessage[] = streamingContent !== null
     ? [
         ...messages,
@@ -174,7 +100,7 @@ export function useChat(sessionId: string): UseChatResult {
           content: streamingContent,
           ts: Date.now(),
           servedBy: servedBy ?? undefined,
-          isLocalFallback: servedBy?.startsWith('local:') ?? false,
+          isLocalFallback: false,
         },
       ]
     : messages
@@ -194,7 +120,6 @@ export function useChat(sessionId: string): UseChatResult {
       const controller = new AbortController()
       abortRef.current = controller
 
-      // Build history for context (last 20 turns to cap token cost)
       const contextMsgs = [...messages, userMsg].slice(-20).map((m) => ({
         role: m.role,
         content: m.content,
@@ -204,72 +129,99 @@ export function useChat(sessionId: string): UseChatResult {
       let resolvedProvider: string | null = null
 
       try {
-        const res = await fetch(`${DAEMON_BASE_URL}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: contextMsgs,
-            session_id: sessionId,
-            ...(provider ? { provider } : {}),
-          }),
-          signal: controller.signal,
-        })
+        // ── Primary: GP proxy (Anthropic-compat, free Gemini Flash) ─────────
+        let gpSuccess = false
+        try {
+          const gpRes = await fetch(`${GP_PROXY_URL}/v1/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-6',
+              max_tokens: 4096,
+              messages: contextMsgs,
+              ...(provider ? { metadata: { provider } } : {}),
+            }),
+            signal: controller.signal,
+          })
 
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status} ${res.statusText}`)
+          if (gpRes.ok) {
+            type AnthropicContent = { type: string; text?: string }
+            type AnthropicResponse = { content?: AnthropicContent[]; model?: string }
+            const body = await gpRes.json() as AnthropicResponse
+            const textBlock = body.content?.find((b) => b.type === 'text')
+            accumulated = textBlock?.text ?? ''
+            resolvedProvider = `gp:${body.model ?? 'gemini-2.0-flash'}`
+            setServedBy(resolvedProvider)
+            // Simulate token-by-token reveal so UI feels responsive
+            const words = accumulated.split(' ')
+            let revealed = ''
+            for (const word of words) {
+              revealed += (revealed ? ' ' : '') + word
+              setStreamingContent(revealed)
+              // Yield to browser between words (non-blocking, ~0ms each)
+              await new Promise<void>((r) => setTimeout(r, 0))
+            }
+            gpSuccess = true
+          }
+        } catch (gpErr: unknown) {
+          if (gpErr instanceof Error && gpErr.name === 'AbortError') throw gpErr
+          // GP proxy unreachable — fall through to daemon
         }
-        if (!res.body) {
-          throw new Error('Response body is null')
-        }
 
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+        // ── Fallback: cascade daemon SSE at port 9761 ────────────────────────
+        if (!gpSuccess) {
+          const res = await fetch(`${DAEMON_BASE_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: contextMsgs,
+              session_id: sessionId,
+              ...(provider ? { provider } : {}),
+            }),
+            signal: controller.signal,
+          })
 
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+          if (!res.body) throw new Error('Response body is null')
 
-          buffer += decoder.decode(value, { stream: true })
-          const parts = buffer.split('\n\n')
-          // Last element may be incomplete — keep in buffer
-          buffer = parts.pop() ?? ''
+          const reader = res.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
 
-          for (const part of parts) {
-            const event = parseSseLine(part)
-            if (!event) continue
-            if (event.type === 'done') {
-              reader.cancel()
-              break
-            }
-            if (event.type === 'served_by') {
-              resolvedProvider = event.provider
-              setServedBy(event.provider)
-            }
-            if (event.type === 'token') {
-              accumulated = streamingReducer(accumulated, event)
-              setStreamingContent(accumulated)
-            }
-            if (event.type === 'tool_result') {
-              toolResultsRef.current = [...toolResultsRef.current, event]
-            }
-            if (event.type === 'error') {
-              throw new Error(event.message)
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const parts = buffer.split('\n\n')
+            buffer = parts.pop() ?? ''
+            for (const part of parts) {
+              const event = parseSseLine(part)
+              if (!event) continue
+              if (event.type === 'done') { reader.cancel(); break }
+              if (event.type === 'served_by') {
+                resolvedProvider = event.provider
+                setServedBy(event.provider)
+              }
+              if (event.type === 'token') {
+                accumulated = streamingReducer(accumulated, event)
+                setStreamingContent(accumulated)
+              }
+              if (event.type === 'tool_result') {
+                toolResultsRef.current = [...toolResultsRef.current, event]
+              }
+              if (event.type === 'error') throw new Error(event.message)
             }
           }
         }
 
-        // Persist the completed assistant message
-        const assistantMsg: ChatMessage = {
+        append({
           role: 'assistant',
           content: accumulated,
           ts: Date.now(),
           toolResults: toolResultsRef.current.length > 0 ? toolResultsRef.current : undefined,
           servedBy: resolvedProvider ?? undefined,
           isLocalFallback: resolvedProvider?.startsWith('local:') ?? false,
-        }
-        append(assistantMsg)
+        })
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') return
         setError(err instanceof Error ? err.message : String(err))

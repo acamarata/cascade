@@ -29,13 +29,19 @@ pub fn build_routing_state(
             (RoutingTable::new(&[]), HashMap::new())
         }
         Ok(store) => {
-            let table = RoutingTable::new(&store.providers);
-            // Build credentials map: slot_id (derived by RoutingTable from
-            // ProviderEntry::id) → account_id (used as API key for gemini harness).
-            let creds: HashMap<String, String> = store
+            // Only API-key providers are valid for the proxy routing table.
+            // OAuth providers (auth_kind == "OAuthToken") carry a client_id in
+            // account_id, not an API key, so they must be excluded to avoid
+            // forwarding requests with an invalid key.
+            let api_key_providers: Vec<_> = store
                 .providers
                 .iter()
-                .filter(|p| p.enabled && p.harness == "gemini")
+                .filter(|p| p.enabled && p.harness == "gemini" && p.auth_kind == "ApiKey")
+                .cloned()
+                .collect();
+            let table = RoutingTable::new(&api_key_providers);
+            let creds: HashMap<String, String> = api_key_providers
+                .iter()
                 .map(|p| (p.id.clone(), p.account_id.clone()))
                 .collect();
             (table, creds)

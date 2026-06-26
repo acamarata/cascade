@@ -123,23 +123,51 @@ struct UsageRow: View {
         .help("Sign in to refresh this account's usage data")
     }
 
-    /// Launch the full re-auth flow via the `cascade-reauth` helper in a Terminal
-    /// window. The helper runs `claude auth login` (which opens the browser and runs
-    /// its own localhost OAuth callback — the whole handshake, no gaps), scoped to this
-    /// account's config dir, then immediately re-polls so the row fills within seconds.
-    /// For Gemini the helper opens the Google AI Studio API-key page instead.
+    /// Re-auth flow — two-stage, no Automation permission required:
+    ///
+    /// Stage 1: Run `cascade --include-primary` directly as a Process. The cascade
+    /// script auto-refreshes the OAuth access token using the stored refresh token
+    /// without any user interaction. This fixes the most common case: a transient
+    /// API error marked the account as dead even though the refresh token is still valid.
+    ///
+    /// Stage 2: If stage 1 exits non-zero (refresh token truly expired/revoked), open
+    /// the Cascade.app so the user can complete the interactive OAuth flow in the
+    /// full app — which has its own re-auth UI. This avoids the osascript → Terminal
+    /// path that silently fails when macOS Automation permission is not granted.
     private func reauth() {
-        let helper = "\(NSHomeDirectory())/.cascade/bin/cascade-reauth"
-        let cmd = "\(helper) \(entry.account)"
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "\(cmd)"
-        end tell
-        """
+        let home = NSHomeDirectory()
+        let cascadeBin = "\(home)/.cascade/bin/cascade"
+
+        // Stage 1: silent token refresh via cascade poller
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-e", script]
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        p.arguments = ["-lc", "\(cascadeBin) --include-primary 2>/dev/null"]
+        p.environment = [
+            "HOME": home,
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        ]
+
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+
+        p.terminationHandler = { proc in
+            if proc.terminationStatus != 0 {
+                // Stage 2: refresh token gone — open the full app for interactive re-auth
+                DispatchQueue.main.async {
+                    let candidates = [
+                        URL(fileURLWithPath: "\(home)/Applications/Cascade.app"),
+                        URL(fileURLWithPath: "/Applications/Cascade.app"),
+                    ]
+                    if let url = candidates.first(where: {
+                        FileManager.default.fileExists(atPath: $0.path)
+                    }) {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+
         try? p.run()
     }
 
