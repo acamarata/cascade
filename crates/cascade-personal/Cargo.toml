@@ -1,0 +1,27 @@
+[package]
+name = "cascade-personal"
+description = "Encrypted, isolated structured personal-data store for Cascade. AES-256-GCM at rest; key in OS keychain; mode-aware gate (medical/financial hidden in non-Personal mode)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+cascade-db       = { path = "../cascade-db", version = "1.8.0" }
+cascade-keychain = { path = "../cascade-keychain", version = "1.8.0" }
+thiserror  = { workspace = true }
+tracing    = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+rusqlite   = { workspace = true }
+# AES-256-GCM encryption (pure-Rust, no C deps)
+aes-gcm    = "0.10"
+# Cryptographically-secure RNG for nonces
+rand       = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

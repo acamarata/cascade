@@ -19,6 +19,7 @@ members = [
     "crates/cascade-pdk-macro",
     "crates/cascade-ccapi",
     "crates/cascade-fleet-widget",
+    "crates/cascade-personal",
     "apps/cascade-app/src-tauri",
     "plugins/github-issues",
     "plugins/linear",
