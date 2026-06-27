@@ -108,31 +108,55 @@ impl Chunk {
     }
 }
 
-/// Configuration for local RAG chunkers.
+/// Unified chunking configuration covering both char-based local RAG chunkers
+/// and the MIME-dispatched async pipeline.
 ///
-/// Defaults: `max_chunk_chars = 2000`, `overlap_chars = 200`, `min_chunk_chars = 50`.
+/// # Char-based fields (local RAG pipeline — `SemanticChunker`, `HierarchicalChunker`, `CodeChunker`)
+/// - `max_chunk_chars` — soft maximum characters per chunk (default 2000).
+/// - `overlap_chars`   — characters carried from the previous chunk (default 200).
+/// - `min_chunk_chars` — minimum characters; smaller chunks are merged (default 50).
 ///
-/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::ChunkerConfig
+/// # Token/size fields (async `StrategyChunker` / daemon config)
+/// - `target_size` — soft target size in characters (default 512).
+/// - `max_size`    — hard maximum before a re-split (default 2048).
+/// - `strategy`    — override strategy name; `None` = auto-select from MIME type.
+///
+/// The `overlap` field satisfies both pipelines (aliases `overlap_chars` semantics
+/// for the async pipeline).
+///
+/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::ChunkConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct ChunkerConfig {
-    /// Soft maximum character count per chunk.
+pub struct ChunkConfig {
+    /// Soft maximum character count per chunk (local RAG pipeline).
     pub max_chunk_chars: usize,
     /// Characters of overlap carried from the previous chunk into the next.
     pub overlap_chars: usize,
     /// Minimum character count; chunks smaller than this are merged forward.
     pub min_chunk_chars: usize,
+    /// Soft target chunk size in characters (async pipeline / daemon config).
+    pub target_size: usize,
+    /// Hard maximum chunk size; chunks larger than this are split again.
+    pub max_size: usize,
+    /// Override strategy name.  `None` = auto-select from MIME type.
+    pub strategy: Option<String>,
 }
 
-impl Default for ChunkerConfig {
+impl Default for ChunkConfig {
     fn default() -> Self {
         Self {
             max_chunk_chars: 2000,
             overlap_chars: 200,
             min_chunk_chars: 50,
+            target_size: 512,
+            max_size: 2048,
+            strategy: None,
         }
     }
 }
+
+/// Backward-compatible alias — existing call sites using `ChunkerConfig` continue to compile.
+pub type ChunkerConfig = ChunkConfig;
 
 /// Sync, object-safe chunker trait for the local RAG pipeline.
 ///
@@ -161,38 +185,11 @@ pub trait Chunker: Send + Sync {
 // Object-safety assertion — compile-time only.
 fn _assert_object_safe(_: &dyn Chunker) {}
 
-// ── ChunkingConfig ────────────────────────────────────────────────────────────
-
-/// Per-document-type chunking configuration.
+/// Backward-compatible alias for `ChunkConfig` matching the prior `ChunkingConfig` name.
 ///
-/// Stored in `cascade.toml`; loaded by the daemon config system.
-///
-/// SPORT: MASTER-LIBS.md → cascade-rag::chunk::ChunkingConfig
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ChunkingConfig {
-    /// Soft target chunk size in characters (not tokens).
-    pub target_size: usize,
-    /// Character overlap between consecutive chunks.
-    pub overlap: usize,
-    /// Minimum chunk size.  Chunks smaller than this are merged forward.
-    pub min_size: usize,
-    /// Maximum chunk size.  Chunks larger than this are split again.
-    pub max_size: usize,
-    /// Override strategy name.  `None` = auto-select from MIME type.
-    pub strategy: Option<String>,
-}
-
-impl Default for ChunkingConfig {
-    fn default() -> Self {
-        Self {
-            target_size: 512,
-            overlap: 64,
-            min_size: 64,
-            max_size: 2048,
-            strategy: None,
-        }
-    }
-}
+/// `ChunkingConfig` has been merged into [`ChunkConfig`]. This alias preserves any
+/// call site that referenced `ChunkingConfig` from the daemon config layer.
+pub type ChunkingConfig = ChunkConfig;
 
 // ── StrategyChunker ───────────────────────────────────────────────────────────
 
@@ -217,12 +214,12 @@ impl Default for ChunkingConfig {
 pub struct StrategyChunker {
     /// Chunking configuration (MIME-type thresholds, size limits).
     /// Used by `with_config`; not yet read in the dispatch body (future work).
-    _config: ChunkingConfig,
+    _config: ChunkConfig,
 }
 
 impl StrategyChunker {
     /// Construct with a custom chunking config.
-    pub fn with_config(config: ChunkingConfig) -> Self {
+    pub fn with_config(config: ChunkConfig) -> Self {
         Self { _config: config }
     }
 }
@@ -376,10 +373,16 @@ mod tests {
 
     #[test]
     fn chunker_config_defaults() {
-        let cfg = ChunkerConfig::default();
+        let cfg = ChunkConfig::default();
         assert_eq!(cfg.max_chunk_chars, 2000);
         assert_eq!(cfg.overlap_chars, 200);
         assert_eq!(cfg.min_chunk_chars, 50);
+        assert_eq!(cfg.target_size, 512);
+        assert_eq!(cfg.max_size, 2048);
+        assert!(cfg.strategy.is_none());
+        // Alias round-trips.
+        let _: ChunkerConfig = cfg.clone();
+        let _: ChunkingConfig = cfg;
     }
 
     #[test]

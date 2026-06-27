@@ -457,6 +457,7 @@ mod tests {
             max_chunk_chars: max,
             overlap_chars: overlap,
             min_chunk_chars: min,
+            ..ChunkerConfig::default()
         })
     }
 

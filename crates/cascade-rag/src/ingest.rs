@@ -4,7 +4,7 @@
 //!
 //! ## Responsibilities
 //!
-//! 1. SHA-256 content-hash check — unchanged files are skipped (idempotent).
+//! 1. BLAKE3 content-hash check — unchanged files are skipped (idempotent).
 //! 2. Old-chunk eviction — changed files have their prior chunks deleted before
 //!    re-indexing so the DB never holds stale vectors.
 //! 3. Chunker dispatch — selects the right [`Chunker`] based on file extension.
@@ -32,7 +32,7 @@
 //!
 //! ## Idempotency
 //!
-//! Content hash is SHA-256 of raw file bytes.  If the hash matches the stored
+//! Content hash is BLAKE3 of raw file bytes (via `cascade_db::content_hash`).  If the hash matches the stored
 //! `content_hash` in `rag_sources`, the pipeline returns
 //! `IngestResult { skipped: true, .. }` immediately without touching the DB.
 //!
@@ -334,20 +334,20 @@ mod tests {
         assert_eq!(c.strategy_name(), "code");
     }
 
-    // ── ingest::hex_sha256 ────────────────────────────────────────────────────
+    // ── ingest::hex_blake3 ────────────────────────────────────────────────────
 
     #[test]
-    fn sha256_is_deterministic() {
-        let h1 = chunker::hex_sha256(b"hello world");
-        let h2 = chunker::hex_sha256(b"hello world");
+    fn blake3_is_deterministic() {
+        let h1 = chunker::hex_blake3(b"hello world");
+        let h2 = chunker::hex_blake3(b"hello world");
         assert_eq!(h1, h2);
-        assert_eq!(h1.len(), 64, "SHA-256 hex must be 64 chars");
+        assert_eq!(h1.len(), 64, "BLAKE3 hex must be 64 chars");
     }
 
     #[test]
-    fn sha256_differs_on_change() {
-        let h1 = chunker::hex_sha256(b"version 1");
-        let h2 = chunker::hex_sha256(b"version 2");
+    fn blake3_differs_on_change() {
+        let h1 = chunker::hex_blake3(b"version 1");
+        let h2 = chunker::hex_blake3(b"version 2");
         assert_ne!(h1, h2);
     }
 

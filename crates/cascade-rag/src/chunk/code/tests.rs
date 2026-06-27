@@ -12,6 +12,7 @@ mod tests {
             max_chunk_chars: 4000,
             min_chunk_chars: 10,
             overlap_chars: 0,
+            ..ChunkerConfig::default()
         })
     }
 
@@ -268,6 +269,7 @@ function cube(x) {
             max_chunk_chars: 400, // small enough to force split
             min_chunk_chars: 10,
             overlap_chars: 0,
+            ..ChunkerConfig::default()
         };
         let chunker = CodeChunker::new(config);
         let path = PathBuf::from("src/big.rs");

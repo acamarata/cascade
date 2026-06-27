@@ -1,7 +1,7 @@
 //! [`IngestPipeline`] — the central parse → chunk → embed → store coordinator.
 //!
 //! # Responsibilities
-//! 1. SHA-256 content-hash check — unchanged files are skipped (idempotent).
+//! 1. BLAKE3 content-hash check — unchanged files are skipped (idempotent).
 //! 2. Old-chunk eviction — changed files have their prior chunks deleted before
 //!    re-indexing so the DB never holds stale vectors.
 //! 3. Chunker dispatch — selects the right [`Chunker`] based on file extension.
@@ -25,7 +25,7 @@ use crate::embed::{store, EmbedModel};
 use crate::index::state::{ChangeKind, IndexStateStore};
 use crate::parse::ParseDispatcher;
 
-use super::chunker::{chunker_for_path, file_mtime, hex_sha256};
+use super::chunker::{chunker_for_path, file_mtime, hex_blake3};
 use super::types::{IngestConfig, IngestResult, IngestStats};
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ impl IngestPipeline {
     /// Ingest a single file.
     ///
     /// # Algorithm
-    /// 1. Read file bytes; compute SHA-256.
+    /// 1. Read file bytes; compute BLAKE3 (canonical; via `cascade_db::content_hash`).
     /// 2. Check `rag_sources`; if hash matches, return `skipped = true`.
     /// 3. Begin transaction.
     /// 4. If a prior entry exists: delete it (cascades to chunks + embeddings).
@@ -113,7 +113,7 @@ impl IngestPipeline {
             source: e,
         })?;
 
-        let hash = hex_sha256(&bytes);
+        let hash = hex_blake3(&bytes);
         let mtime = file_mtime(path);
         let path_str = path.to_string_lossy().to_string();
 
@@ -139,6 +139,14 @@ impl IngestPipeline {
     ///
     /// Parse/IO failures on one file are collected and returned after processing
     /// all files — they do not abort the batch.
+    ///
+    /// # Rayon note
+    // TODO(rag-06): rayon parallelism is not safe here — `IngestPipeline` owns a single
+    // `rusqlite::Connection` which is neither `Send` nor sharable across threads
+    // (each `ingest_file` opens a write transaction on it). To parallelize, callers
+    // must create one `IngestPipeline` per thread with its own connection, then merge
+    // results. A `rayon::ThreadPool` with per-thread `IngestPipeline` construction
+    // (via `thread_local!` or `scope_fifo`) is the correct future approach.
     pub fn ingest_files<'a, I>(
         &self,
         paths: I,

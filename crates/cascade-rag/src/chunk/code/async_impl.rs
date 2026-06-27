@@ -35,6 +35,7 @@ pub(super) async fn async_chunk_impl(
         max_chunk_chars: opts.target_size,
         min_chunk_chars: ChunkerConfig::default().min_chunk_chars,
         overlap_chars: opts.overlap,
+        ..ChunkerConfig::default()
     };
     let sync_chunker = CodeChunker::new(config);
     let source_path = path.unwrap_or_else(|| std::path::PathBuf::from("mem"));

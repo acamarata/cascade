@@ -2,15 +2,13 @@
 //!
 //! # Contents
 //! - [`chunker_for_path`] — maps file extension to the right [`Chunker`] impl.
-//! - [`hex_sha256`] — SHA-256 content hash.
+//! - [`hex_blake3`] — BLAKE3 content hash (canonical; see `cascade_db::content_hash`).
 //! - [`file_mtime`] — extract mtime from a path.
 //!
 //! SPORT: MASTER-CRATES.md → cascade-rag::ingest::chunker
 
 use std::path::Path;
 use std::time::UNIX_EPOCH;
-
-use sha2::{Digest, Sha256};
 
 use crate::chunk::hierarchical::HierarchicalChunker;
 use crate::chunk::markdown::MarkdownChunker;
@@ -61,11 +59,12 @@ pub fn chunker_for_path(path: &Path, config: &ChunkerConfig) -> Box<dyn Chunker>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Compute a hex-encoded SHA-256 digest of `bytes`.
-pub(super) fn hex_sha256(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+/// Compute a hex-encoded BLAKE3 digest of `bytes`.
+///
+/// Delegates to `cascade_db::content_hash` — the canonical hash function for
+/// all dedup, delta-detection, and cache keys in Cascade (locked decision #2).
+pub(super) fn hex_blake3(bytes: &[u8]) -> String {
+    cascade_db::content_hash(bytes)
 }
 
 /// Extract the file's mtime as Unix seconds, or `None` if unavailable.
