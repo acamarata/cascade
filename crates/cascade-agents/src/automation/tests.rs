@@ -357,7 +357,7 @@ mod tests {
     #[tokio::test]
     async fn yaml_automation_library_loads() {
         let dir = std::path::Path::new(
-            "/Volumes/X9/Sites/acamarata/cascade/.cascade/library/automations",
+            "/home/user/projects/acamarata/cascade/.cascade/library/automations",
         );
         if !dir.exists() {
             // Skip if fixtures not yet written — builder will write them after

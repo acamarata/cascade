@@ -39,7 +39,7 @@ pub struct InboxListArgs {
 
 #[derive(Debug, Args)]
 pub struct InboxSendArgs {
-    /// Target cascade tier directory path (e.g. `/Volumes/X9/Sites/nself/.cascade`).
+    /// Target cascade tier directory path (e.g. `/home/user/projects/myapp/.cascade`).
     pub target: PathBuf,
     /// Message type: bug, feature, enhancement, info, question, etc.
     #[arg(long, default_value = "info")]

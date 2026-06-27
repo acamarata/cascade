@@ -4,14 +4,14 @@
 ### fts — mostly
 
 **Exists:**
-- /Volumes/X9/Sites/acamarata/cascade/crates/cascade-cli/src/cmd/init.rs — CLI-driven .cascade/ directory bootstrap with auto-detection of tier (gci/prc/pac) and dry-run support
-- /Volumes/X9/Sites/acamarata/cascade/crates/cascade-cli/src/cmd/doctor.rs — comprehensive health diagnostics: tier symlinks, daemon socket, config integrity, audit log chain, security token permissions, auto-fix flag
-- /Volumes/X9/Sites/acamarata/cascade/crates/cascade-cli/src/cmd/setup_oc.rs — idempotent OpenCode MCP wiring + per-project instructions generation with atomic writes
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/onboarding/ — 10-phase interactive wizard (Welcome, ProviderConnect, ScanLegacy, MergeContent, ToolModes, VerifyDiff, ArchiveLegacy, SymlinkSetup, DaemonInstall, Done)
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src-tauri/src/commands/mod.rs:1082-1161 — install_daemon() Tauri command for macOS (plist generation, atomic write, launchctl load)
-- /Volumes/X9/Sites/acamarata/cascade/.github/wiki/onboarding-wizard.md — comprehensive setup documentation covering all 10 phases, reversibility, CLI reference, troubleshooting
-- /Volumes/X9/Sites/acamarata/cascade/install.sh — legacy shell installer for launchd agents (gemini-proxy, dashboard, refresh)
-- /Volumes/X9/Sites/acamarata/cascade/README.md — quick start guide with installation channels (brew, cargo, winget, snap, flatpak) and basic workflow (init → edit → sync → search)
+- crates/cascade-cli/src/cmd/init.rs — CLI-driven .cascade/ directory bootstrap with auto-detection of tier (gci/prc/pac) and dry-run support
+- crates/cascade-cli/src/cmd/doctor.rs — comprehensive health diagnostics: tier symlinks, daemon socket, config integrity, audit log chain, security token permissions, auto-fix flag
+- crates/cascade-cli/src/cmd/setup_oc.rs — idempotent OpenCode MCP wiring + per-project instructions generation with atomic writes
+- apps/cascade-app/src/features/onboarding/ — 10-phase interactive wizard (Welcome, ProviderConnect, ScanLegacy, MergeContent, ToolModes, VerifyDiff, ArchiveLegacy, SymlinkSetup, DaemonInstall, Done)
+- apps/cascade-app/src-tauri/src/commands/mod.rs:1082-1161 — install_daemon() Tauri command for macOS (plist generation, atomic write, launchctl load)
+- .github/wiki/onboarding-wizard.md — comprehensive setup documentation covering all 10 phases, reversibility, CLI reference, troubleshooting
+- install.sh — legacy shell installer for launchd agents (gemini-proxy, dashboard, refresh)
+- README.md — quick start guide with installation channels (brew, cargo, winget, snap, flatpak) and basic workflow (init → edit → sync → search)
 
 **Gaps:**
 - Non-interactive scriptable setup for Local LLM/GFP agents: no --accept-defaults or headless mode flag for `cascade init` to allow unattended execution; wizard is Tauri-based (GUI-only, no CLI equivalent)
@@ -80,16 +80,16 @@
 ### local-llm — mostly
 
 **Exists:**
-- cascade-local-llm crate fully built: /Volumes/X9/Sites/acamarata/cascade/crates/cascade-local-llm/ — LocalLlmAdapter implements ProviderAdapter trait
+- cascade-local-llm crate fully built: crates/cascade-local-llm/ — LocalLlmAdapter implements ProviderAdapter trait
 - Three model runners implemented: Gemma-2-2B (default), Llama-3.2-3B, Phi-3-Mini via candle-rs CPU inference with optional Metal GPU acceleration (macOS)
-- Model weight downloader with streaming HTTP, SHA-256 verification, disk-space pre-check, resume support — /Volumes/X9/Sites/acamarata/cascade/crates/cascade-local-llm/src/downloader.rs
+- Model weight downloader with streaming HTTP, SHA-256 verification, disk-space pre-check, resume support — crates/cascade-local-llm/src/downloader.rs
 - LocalLlmRunner async inference engine with lazy model load (spawn_blocking) and token streaming via tokio mpsc channels
 - Gemma-2 chat-template prompt formatter with system/user/assistant role support
 - Configuration system (LocalLlmConfig) with serde serialization for daemon config files
 - Error types (LocalModelError) with specific variants for weights-not-found, tokenizer-load, candle failures, disk-space, checksum-mismatch
 - Comprehensive unit tests (adapter object-safety, model factories, health checks, downloader fixtures via wiremock)
 - ProviderRegistry in cascade-providers pre-wired for 'local' provider with routing table entries (LocalFallback, RagEmbed, RagRerank, Chat, CodeCompletion, CascadeMerge)
-- Ollama adapter auto-detection in daemon startup (localhost:11434 probe) — /Volumes/X9/Sites/acamarata/cascade/crates/cascade-daemon/src/main.rs lines 185-189
+- Ollama adapter auto-detection in daemon startup (localhost:11434 probe) — crates/cascade-daemon/src/main.rs lines 185-189
 - Provider health-check background task spawned on daemon startup (5-min refresh, non-blocking)
 
 **Gaps:**
@@ -318,15 +318,15 @@
 ### editor — mostly
 
 **Exists:**
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/vault/editor/MarkdownEditor.tsx — CodeMirror 6 editor with markdown syntax highlighting, auto-save, wikilink [[]] support with autocomplete, and Cmd+S manual save
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/vault/graph/GraphView.tsx + graphData.ts — D3 v7 force-directed graph visualization of vault notes, with node sizing by in-degree, directory-based coloring, pan/zoom, and click-to-open
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/vault/daily/TemplatePicker.tsx + useDailyNoteShortcut.ts — daily notes with user-defined template support and Cmd+Shift+D shortcut
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/components/vault/MemoryViewer.tsx + MemoryCard.tsx — memory browser with 5 tabs (Decisions, Lessons, Patterns, Ideas, Inbox & Threads), search + project filtering
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/pages/VaultPage.tsx + VaultGraphPage.tsx + MemoryPage.tsx — three dedicated routes for vault editor, graph, and memory views
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/project-map/ProjectMapPanel.tsx — three-tab project visualization (Project Graph, Cascade Tiers, PEWS DAG)
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/project-map/CascadeTierTree.tsx — renders six-tier cascade chain (GCI→PCI→APC→PPC→PRC→PAC) with existence status indicators
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/types/vault.ts — MemoryEntry type system covering decisions/lessons/patterns/ideas/inbox kinds, extracted from ~.claude/memory and ~.claude/ideas directories
-- /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/vault/editor/wikilinks/wikilinkExtension.ts + wikilinkParser.ts — wikilink [[note-name]] parsing, rendering, and autocomplete integration
+- apps/cascade-app/src/features/vault/editor/MarkdownEditor.tsx — CodeMirror 6 editor with markdown syntax highlighting, auto-save, wikilink [[]] support with autocomplete, and Cmd+S manual save
+- apps/cascade-app/src/features/vault/graph/GraphView.tsx + graphData.ts — D3 v7 force-directed graph visualization of vault notes, with node sizing by in-degree, directory-based coloring, pan/zoom, and click-to-open
+- apps/cascade-app/src/features/vault/daily/TemplatePicker.tsx + useDailyNoteShortcut.ts — daily notes with user-defined template support and Cmd+Shift+D shortcut
+- apps/cascade-app/src/components/vault/MemoryViewer.tsx + MemoryCard.tsx — memory browser with 5 tabs (Decisions, Lessons, Patterns, Ideas, Inbox & Threads), search + project filtering
+- apps/cascade-app/src/pages/VaultPage.tsx + VaultGraphPage.tsx + MemoryPage.tsx — three dedicated routes for vault editor, graph, and memory views
+- apps/cascade-app/src/features/project-map/ProjectMapPanel.tsx — three-tab project visualization (Project Graph, Cascade Tiers, PEWS DAG)
+- apps/cascade-app/src/features/project-map/CascadeTierTree.tsx — renders six-tier cascade chain (GCI→PCI→APC→PPC→PRC→PAC) with existence status indicators
+- apps/cascade-app/src/types/vault.ts — MemoryEntry type system covering decisions/lessons/patterns/ideas/inbox kinds, extracted from ~.claude/memory and ~.claude/ideas directories
+- apps/cascade-app/src/features/vault/editor/wikilinks/wikilinkExtension.ts + wikilinkParser.ts — wikilink [[note-name]] parsing, rendering, and autocomplete integration
 
 **Gaps:**
 - No specific instructions-as-a-distinct-object view/browser — CASCADE.md instructions from the six-tier cascade (GCI/PCI/APC/PPC/PRC/PAC) are navigable via CascadeTierTree but not indexed or aggregated like memories; no '/vault/instructions' or equivalent route that surfaces instructions alongside memories
@@ -351,9 +351,9 @@
 ### kanban — absent
 
 **Exists:**
-- Scheduled Tasks (daemon-level execution): /Volumes/X9/Sites/acamarata/cascade/crates/cascade-types/src/scheduled_task.rs, ScheduledTaskEntry type in settings, UI in /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/settings/ScheduledTasksTab.tsx — but this is for cron-based task scheduling, not project task boards
-- Project Map visualization: /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/features/project-map/ — renders project graphs, PEWS DAG, cascade tier trees, but not task boards
-- Memory/Ideas/Inbox subsystem: /Volumes/X9/Sites/acamarata/cascade/apps/cascade-app/src/pages/InboxPage.tsx and memory features exist but are placeholders or focused on knowledge vault, not task management
+- Scheduled Tasks (daemon-level execution): crates/cascade-types/src/scheduled_task.rs, ScheduledTaskEntry type in settings, UI in apps/cascade-app/src/features/settings/ScheduledTasksTab.tsx — but this is for cron-based task scheduling, not project task boards
+- Project Map visualization: apps/cascade-app/src/features/project-map/ — renders project graphs, PEWS DAG, cascade tier trees, but not task boards
+- Memory/Ideas/Inbox subsystem: apps/cascade-app/src/pages/InboxPage.tsx and memory features exist but are placeholders or focused on knowledge vault, not task management
 
 **Gaps:**
 - No task/kanban board components built for any scope (global, per-project, or per-team)

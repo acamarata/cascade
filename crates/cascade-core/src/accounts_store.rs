@@ -25,8 +25,8 @@
 use std::path::{Path, PathBuf};
 
 use cascade_types::accounts::{
-    Account, AccountFamily, AccountRole, AccountsRegistry, AccessMethod, ModelMatrixEntry,
-    ModelRoute, TaskClass, ACCOUNTS_SCHEMA_VERSION,
+    AccountFamily, AccountRole, AccountsRegistry, ModelMatrixEntry,
+    ACCOUNTS_SCHEMA_VERSION,
 };
 use cascade_types::error::{CascadeError, Result};
 use serde_json::Value;
@@ -488,128 +488,27 @@ pub fn count_gfp_keys_from_path(vault_path: &Path) -> u32 {
 
 // ── Default registry seed ─────────────────────────────────────────────────────
 
-/// Build the seeded default [`AccountsRegistry`] with 6 known fleet accounts.
+/// Returns an empty [`AccountsRegistry`] — users configure accounts at runtime.
 ///
-/// Active roster: claude-acc1 (primary), claude-acc2 (pooled),
-/// codex-acc1, gemini-acc1, opencode-acc1, gfp-pool.
-/// Detects CLI availability from real PATH; counts GFP keys from vault files.
+/// Accounts are loaded from `~/.cascade/accounts/accounts.json` (written by
+/// `cascade accounts init` or the UI wizard).  The registry returned here is
+/// a valid zero-account seed used before any user configuration exists.
 pub fn default_registry() -> AccountsRegistry {
-    let cc1 = detect_cli("claude");
-    let smt = detect_cli("smithers") || detect_cli("claude-p");
-    let cx = detect_cli("codex");
-    let agy = detect_cli("agy");
-    let oc = detect_cli("opencode");
-    let gfp = count_gfp_keys();
-
-    let opus_sonnet_haiku_fable = || vec![
-        "claude-opus-4-8".into(), "claude-sonnet-4-6".into(),
-        "claude-haiku-4-5".into(), "claude-fable-5".into(),
-    ];
-    let opus_sonnet_haiku = || vec![
-        "claude-opus-4-8".into(), "claude-sonnet-4-6".into(), "claude-haiku-4-5".into(),
-    ];
-
-    let accounts = vec![
-        acc("claude-acc1", AccountFamily::Claude, "anthropic-max",
-            vec![AccessMethod::NativeCc], AccountRole::PrimaryT0, 255,
-            opus_sonnet_haiku_fable(), cc1, 0, Some("cc-acct1"), None),
-        acc("claude-acc2", AccountFamily::Claude, "anthropic-max",
-            vec![AccessMethod::SmithersClaudeP], AccountRole::Pooled, 10,
-            opus_sonnet_haiku(), smt, 0, None, Some("Extra CC account — drain first via PTY")),
-        acc("codex-acc1", AccountFamily::Openai, "openai-pro",
-            vec![AccessMethod::CodexCli], AccountRole::Pooled, 50,
-            vec!["gpt-5.5".into()], cx, 0, None, None),
-        acc("gemini-acc1", AccountFamily::Google, "google-ai-ultra",
-            vec![AccessMethod::AgyCli], AccountRole::Pooled, 50,
-            vec!["gemini-3.1-pro".into()], agy, 0, None, None),
-        acc("opencode-acc1", AccountFamily::Opencode, "opencode-run",
-            vec![AccessMethod::OpencodeRun], AccountRole::Pooled, 60,
-            vec!["glm-5.2".into(), "qwen-2.5-coder".into(), "deepseek-v3".into(), "zen".into()],
-            oc, 0, None, None),
-        acc("gfp-pool", AccountFamily::Gfp, "gemini-free",
-            vec![AccessMethod::GfpKeypool], AccountRole::Free, 1,
-            vec!["gemini-3.5-flash".into()],
-            true, gfp, None, Some("GFP round-robin key pool — key-based, no CLI binary required")),
-    ];
-
     AccountsRegistry {
         schema_version: ACCOUNTS_SCHEMA_VERSION,
         updated_at: chrono::Utc::now().to_rfc3339(),
-        accounts,
+        accounts: vec![],
         model_matrix: build_model_matrix(),
     }
 }
 
-/// Compact account constructor helper.
-#[allow(clippy::too_many_arguments)]
-fn acc(
-    id: &str, family: AccountFamily, sub: &str, methods: Vec<AccessMethod>,
-    role: AccountRole, pri: u8, models: Vec<String>, cli: bool, keys: u32,
-    quota: Option<&str>, notes: Option<&str>,
-) -> Account {
-    Account {
-        id: id.into(), family, subscription: sub.into(), access_methods: methods,
-        role, exhaustion_priority: pri, models, cli_available: cli, key_count: keys,
-        quota_account_id: quota.map(|s| s.into()),
-        notes: notes.map(|s| s.into()),
-    }
-}
-
-/// Build the model routing matrix for all known models.
+/// Model routing matrix — empty by default; populated at runtime from configured accounts.
+///
+/// Entries are derived from the user's `~/.cascade/accounts/accounts.json` when
+/// accounts are loaded.  The empty vec returned here is the correct default before
+/// any accounts are configured.
 fn build_model_matrix() -> Vec<ModelMatrixEntry> {
-    use AccessMethod::*; use AccountFamily::*; use TaskClass::*;
-    let cc_pooled = || vec![
-        ModelRoute { account_id: "claude-acc2".into(), method: SmithersClaudeP },
-        ModelRoute { account_id: "claude-acc1".into(), method: NativeCc },
-    ];
-    vec![
-        mme("claude-opus-4-8", Claude, "T1",
-            vec![ModelRoute{account_id:"claude-acc1".into(),method:NativeCc},
-                 ModelRoute{account_id:"claude-acc2".into(),method:SmithersClaudeP}],
-            vec![AdversarialCr, FinalGate, Sensitive],
-            Some("Opus-tier — reserved for high-stakes synthesis and final gates")),
-        mme("claude-sonnet-4-6", Claude, "T2", cc_pooled(),
-            vec![BulkExecution, InteractiveChat, Background], None),
-        mme("claude-haiku-4-5", Claude, "T3-cheap", cc_pooled(),
-            vec![Grunt, Taxonomy, PostPrompt], None),
-        mme("claude-fable-5", Claude, "T2",
-            vec![ModelRoute{account_id:"claude-acc1".into(),method:NativeCc}],
-            vec![BulkExecution],
-            Some("Fable — available only on primary NativeCc account")),
-        mme("gpt-5.5", Openai, "T2",
-            vec![ModelRoute{account_id:"codex-acc1".into(),method:CodexCli}],
-            vec![BulkExecution, Background], None),
-        mme("gemini-3.1-pro", Google, "T2",
-            vec![ModelRoute{account_id:"gemini-acc1".into(),method:AgyCli}],
-            vec![BulkExecution, Grunt], None),
-        mme("glm-5.2", Opencode, "T2",
-            vec![ModelRoute{account_id:"opencode-acc1".into(),method:OpencodeRun}],
-            vec![BulkExecution, Background], None),
-        mme("qwen-2.5-coder", Opencode, "T2",
-            vec![ModelRoute{account_id:"opencode-acc1".into(),method:OpencodeRun}],
-            vec![BulkExecution, Grunt], None),
-        mme("deepseek-v3", Opencode, "T2",
-            vec![ModelRoute{account_id:"opencode-acc1".into(),method:OpencodeRun}],
-            vec![BulkExecution, Background], None),
-        mme("zen", Opencode, "T3-cheap",
-            vec![ModelRoute{account_id:"opencode-acc1".into(),method:OpencodeRun}],
-            vec![Grunt, PostPrompt], None),
-        mme("gemini-3.5-flash", Gfp, "T3-cheap",
-            vec![ModelRoute{account_id:"gfp-pool".into(),method:GfpKeypool}],
-            vec![Grunt, Taxonomy, PostPrompt, Background],
-            Some("GFP key-pool — cheapest; drain first for grunt work")),
-    ]
-}
-
-/// Compact model matrix entry constructor.
-fn mme(
-    model_id: &str, family: AccountFamily, tier: &str,
-    routes: Vec<ModelRoute>, best_for: Vec<TaskClass>, notes: Option<&str>,
-) -> ModelMatrixEntry {
-    ModelMatrixEntry {
-        model_id: model_id.into(), available_via: routes, best_for,
-        tier: tier.into(), family, notes: notes.map(|s| s.into()),
-    }
+    vec![]
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -627,7 +526,7 @@ mod tests {
         let json = serde_json::to_vec_pretty(&registry).unwrap();
         let decoded: AccountsRegistry = serde_json::from_slice(&json).unwrap();
         assert_eq!(decoded.schema_version, ACCOUNTS_SCHEMA_VERSION);
-        assert_eq!(decoded.accounts.len(), 6, "expected 6 seeded accounts");
+        assert_eq!(decoded.accounts.len(), 0, "default registry has no seeded accounts");
     }
 
     /// Write fixture vault.env with 3 GEMINI_FREE_KEY_* entries; assert count == 3.
@@ -704,16 +603,10 @@ mod tests {
         assert!(v.get("accounts").is_some(), "quota.json must have accounts");
 
         let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
-        assert_eq!(accts.len(), 6, "must have one entry per account (6 accounts)");
+        // Default registry has no accounts; verify the array exists and is empty.
+        assert_eq!(accts.len(), 0, "default registry must produce 0 account entries");
 
-        // Collect providers to verify roster.
-        let providers: Vec<&str> = accts.iter()
-            .filter_map(|e| e.get("provider").and_then(|p| p.as_str()))
-            .collect();
-        assert_eq!(providers.iter().filter(|&&p| p == "claude").count(), 2,
-            "must have 2 claude accounts");
-
-        // Each entry must have AccountEntry widget fields (not old id/family/windows schema).
+        // Schema-shape assertions run only when entries are present.
         for entry in accts {
             assert!(entry.get("account").is_some(),
                 "must have 'account' field (not 'id')");
@@ -733,7 +626,7 @@ mod tests {
         }
     }
 
-    /// quota.json provider mapping: each family maps to the correct provider string.
+    /// quota.json provider mapping: with an empty registry the accounts array is empty.
     #[test]
     fn quota_json_provider_mapping() {
         let tmp = TempDir::new().unwrap();
@@ -745,21 +638,8 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
 
-        // Build account→provider map from output.
-        let map: std::collections::HashMap<&str, &str> = accts.iter()
-            .filter_map(|e| {
-                let acc = e.get("account")?.as_str()?;
-                let prov = e.get("provider")?.as_str()?;
-                Some((acc, prov))
-            })
-            .collect();
-
-        assert_eq!(map.get("claude-acc1"), Some(&"claude"), "claude-acc1 → claude");
-        assert_eq!(map.get("claude-acc2"), Some(&"claude"), "claude-acc2 → claude");
-        assert_eq!(map.get("codex-acc1"),  Some(&"codex"),  "codex-acc1 → codex");
-        assert_eq!(map.get("gemini-acc1"), Some(&"gemini"), "gemini-acc1 → gemini");
-        assert_eq!(map.get("opencode-acc1"), Some(&"opencode"), "opencode-acc1 → opencode");
-        assert_eq!(map.get("gfp-pool"),    Some(&"gfp"),    "gfp-pool → gfp");
+        // Default registry is empty — no accounts to map.
+        assert_eq!(accts.len(), 0, "default registry must produce an empty accounts array");
     }
 
     /// migration: old ~/.cascade/accounts.json → ~/.cascade/accounts/accounts.json.
@@ -798,7 +678,6 @@ mod tests {
         assert!(content.contains("# Model Matrix"), "must have H1 heading");
         assert!(content.contains("## Routing Table"), "must have Routing Table section");
         assert!(content.contains("## Routing Strategy"), "must have Routing Strategy section");
-        assert!(content.contains("claude-opus-4-8"), "must list claude-opus-4-8");
-        assert!(content.contains("claude-acc1"), "must mention acc1");
+        // Default registry has no models — matrix table is empty but headings are present.
     }
 }

@@ -27,19 +27,19 @@ const SIMPLE_PROJECT_GRAPH: GraphData = {
       id: 'acamarata',
       label: 'acamarata',
       nodeType: 'project',
-      path: '/Users/admin/Sites/acamarata',
+      path: '/home/user/projects/acamarata',
     },
     {
       id: 'cascade',
       label: 'cascade',
       nodeType: 'repo',
-      path: '/Users/admin/Sites/acamarata/cascade',
+      path: '/home/user/projects/acamarata/cascade',
     },
     {
       id: 'cascade-app',
       label: 'cascade-app',
       nodeType: 'app',
-      path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app',
+      path: '/home/user/projects/acamarata/cascade/apps/cascade-app',
     },
   ],
   edges: [
@@ -90,37 +90,37 @@ const SIX_TIERS: TierEntry[] = [
   {
     tier: 'GCI',
     name: 'Global Cascade Instructions',
-    path: '/Users/admin/.cascade/CASCADE.md',
+    path: '/home/user/.cascade/CASCADE.md',
     exists: true,
   },
   {
     tier: 'PCI',
     name: 'Platform Cascade Instructions',
-    path: '/Users/admin/Sites/.cascade/CASCADE.md',
+    path: '/home/user/projects/.cascade/CASCADE.md',
     exists: false,
   },
   {
     tier: 'APC',
     name: 'Account Cascade Instructions',
-    path: '/Users/admin/Sites/acamarata/.cascade/CASCADE.md',
+    path: '/home/user/projects/acamarata/.cascade/CASCADE.md',
     exists: false,
   },
   {
     tier: 'PPC',
     name: 'Project-parent Cascade Instructions',
-    path: '/Users/admin/Sites/acamarata/cascade/.cascade/CASCADE.md',
+    path: '/home/user/projects/acamarata/cascade/.cascade/CASCADE.md',
     exists: true,
   },
   {
     tier: 'PRC',
     name: 'Project Cascade Instructions',
-    path: '/Users/admin/Sites/acamarata/cascade/apps/.cascade/CASCADE.md',
+    path: '/home/user/projects/acamarata/cascade/apps/.cascade/CASCADE.md',
     exists: false,
   },
   {
     tier: 'PAC',
     name: 'Per-app Cascade Instructions',
-    path: '/Users/admin/Sites/acamarata/cascade/apps/cascade-app/.cascade/CASCADE.md',
+    path: '/home/user/projects/acamarata/cascade/apps/cascade-app/.cascade/CASCADE.md',
     exists: false,
   },
 ]
@@ -174,7 +174,7 @@ describe('projectGraphToFlow', () => {
   it('preserves the path in node data', () => {
     const { nodes } = projectGraphToFlow(SIMPLE_PROJECT_GRAPH)
     const cascade = nodes.find((n) => n.id === 'cascade')
-    expect(cascade?.data.path).toBe('/Users/admin/Sites/acamarata/cascade')
+    expect(cascade?.data.path).toBe('/home/user/projects/acamarata/cascade')
   })
 
   it('assigns unique edge ids', () => {

@@ -58,7 +58,7 @@ struct PhaseStatus {
 /// A single project's aggregated state (derived from its status.yaml).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProjectState {
-    /// Absolute path to the project root (e.g., /Volumes/X9/Sites/nself).
+    /// Absolute path to the project root (e.g., /home/user/projects/myapp).
     pub root: String,
     /// Phase ID if a phase is active (e.g., P1, P2); null if mode=normal.
     pub phase_id: Option<String>,
@@ -446,7 +446,7 @@ phase_status: normal
     fn test_project_state_report() {
         let report = ProjectStateReport {
             projects: vec![ProjectState {
-                root: "/Volumes/X9/Sites/nself".to_string(),
+                root: "/home/user/projects/myapp".to_string(),
                 phase_id: Some("P1".to_string()),
                 phase_status: Some("building".to_string()),
                 pct_done: 50.0,

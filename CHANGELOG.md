@@ -63,10 +63,10 @@ Accounts subsystem + native fleet widget.
   anchored the desktop panel to the primary screen (a secondary display offset the
   position off-screen).
 
-- Privacy: removed hardcoded developer home (`/Users/admin`) and a personal
-  project list from the shipped desktop app (home dir is now resolved at
-  runtime); removed a private email address from all public artifacts (contact
-  fields, packaging metadata, release runbook).
+- Privacy: removed hardcoded developer home path and a personal project list
+  from the shipped desktop app (home dir is now resolved at runtime); removed
+  a private email address from all public artifacts (contact fields, packaging
+  metadata, release runbook).
 - Model IDs corrected throughout to the current lineup (`claude-opus-4-8`,
   `gemini-3.5-flash`) and routed through the canonical model registry to stop
   drift.

@@ -187,24 +187,24 @@ mod tests {
     #[test]
     fn test_memory_read_roundtrip() {
         roundtrip(&MemoryReadParams {
-            project: "/Volumes/X9/Sites/acamarata/cascade".to_string(),
+            project: "/home/user/projects/acamarata/cascade".to_string(),
             file: "decisions.md".to_string(),
         });
         roundtrip(&MemoryReadResult {
             content: "# Decisions\n\n- Use JSON-RPC 2.0\n".to_string(),
-            path: "/Volumes/X9/Sites/acamarata/cascade/.claude/memory/decisions.md".to_string(),
+            path: "/home/user/projects/acamarata/cascade/.claude/memory/decisions.md".to_string(),
         });
     }
 
     #[test]
     fn test_memory_write_roundtrip() {
         roundtrip(&MemoryWriteParams {
-            project: "/Volumes/X9/Sites/acamarata/cascade".to_string(),
+            project: "/home/user/projects/acamarata/cascade".to_string(),
             file: "lessons.md".to_string(),
             content: "## Lessons\n\n- Always roundtrip-test serde types\n".to_string(),
         });
         roundtrip(&MemoryWriteResult {
-            path: "/Volumes/X9/Sites/acamarata/cascade/.claude/memory/lessons.md".to_string(),
+            path: "/home/user/projects/acamarata/cascade/.claude/memory/lessons.md".to_string(),
             bytes: 48,
         });
     }

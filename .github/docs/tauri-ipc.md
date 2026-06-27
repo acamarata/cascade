@@ -147,7 +147,7 @@ Reads a file from a project's `.claude/memory/` directory.
 
 ```typescript
 // project can be an absolute path or a slug registered with the daemon
-const result = await ipc.memory.read('/Volumes/X9/Sites/nself', 'decisions.md')
+const result = await ipc.memory.read('/home/user/projects/myapp', 'decisions.md')
 console.log(result.content) // full file text
 console.log(result.path)    // absolute path to the file
 ```
@@ -162,7 +162,7 @@ Writes (overwrites) a file in a project's `.claude/memory/` directory. Creates t
 
 ```typescript
 const updated = `# Decisions\n\n## 2026-06-06\nChose BGE-M3 for embeddings.\n`
-const result = await ipc.memory.write('/Volumes/X9/Sites/nself', 'decisions.md', updated)
+const result = await ipc.memory.write('/home/user/projects/myapp', 'decisions.md', updated)
 console.log(`wrote ${result.bytes} bytes to ${result.path}`)
 ```
 

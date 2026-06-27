@@ -266,17 +266,6 @@
       "description": "Data analysis, ML, or research workflows where reproducibility and experiment tracking matter."
     },
     {
-      "id": "acamarata-packages",
-      "file": "shape/acamarata-packages.md",
-      "version": "1.0.0",
-      "tier": "any",
-      "stacks": [],
-      "project_shapes": [
-        "acamarata-packages"
-      ],
-      "description": "The specific conventions used by the acamarata org for its public npm and pub.dev packages."
-    },
-    {
       "id": "nextjs",
       "file": "stack/nextjs.md",
       "version": "1.0.0",

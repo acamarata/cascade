@@ -1,6 +1,11 @@
 node_modules/
 .DS_Store
 *.log
+
+# Secrets
+*.pem
+*.key
+*.secret
 .env*
 *.local
 .claude/

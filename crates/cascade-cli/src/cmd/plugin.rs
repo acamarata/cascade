@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn resolve_template_path_finds_vendored_template() {
         // Set CASCADE_WORKSPACE to the repo root so the resolver can find the template.
-        let workspace = "/Volumes/X9/Sites/acamarata/cascade";
+        let workspace = "/home/user/projects/acamarata/cascade";
         std::env::set_var("CASCADE_WORKSPACE", workspace);
         let result = resolve_template_path();
         // Unset before asserting so test isolation is maintained.

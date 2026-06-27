@@ -1,7 +1,7 @@
 //! Integration test: run the full importer against the reference-corpus fixture.
 //!
 //! The reference corpus lives at:
-//! `/Volumes/X9/Sites/acamarata/.claude/archive/inbox/reference-corpus-2026-06-16/`
+//! `/tmp/test-corpus/`
 //!
 //! This test is gated behind the `CASCADE_FIXTURE_DIR` environment variable (or
 //! the well-known path check) so CI stays green when the fixture is absent.
@@ -20,8 +20,7 @@ use std::path::Path;
 use cascade_core::import_engine::ImportEngine;
 
 /// Default fixture path used in local development.
-const DEFAULT_FIXTURE: &str =
-    "/Volumes/X9/Sites/acamarata/.claude/archive/inbox/reference-corpus-2026-06-16";
+const DEFAULT_FIXTURE: &str = "/tmp/test-corpus";
 
 /// Minimum acceptable coverage percentage (allows for intentionally excluded
 /// non-instruction files like scripts and binary assets).

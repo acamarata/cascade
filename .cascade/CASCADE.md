@@ -9,7 +9,7 @@ Inherits from GCI → APC → PPC. Rules here are specific to this repo.
 ## Repo Purpose
 
 Name: cascade
-Path: `/Volumes/X9/Sites/acamarata/cascade/`
+Path: `/home/user/projects/acamarata/cascade/`
 Purpose: FOSS multi-agent context-cascade tool for AI coding agents (Claude Code,
 OpenCode, Codex, Cursor, Aider, Windsurf). Resolves a tiered instruction cascade
 (GCI→PCI→APC→PPC→PRC→PAC), manages AI harnesses/accounts/subscriptions, and
