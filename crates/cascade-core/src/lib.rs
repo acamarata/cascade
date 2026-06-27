@@ -95,6 +95,7 @@ pub mod symlinks;
 pub mod task_store;
 pub mod tasks;
 pub mod templates;
+pub mod threads;
 pub mod routing;
 pub mod taxonomy;
 pub mod watcher;
