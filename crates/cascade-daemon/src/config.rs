@@ -520,6 +520,34 @@ pub struct Config {
     /// HookStore at daemon startup. Supports all hook events and action types.
     #[serde(default)]
     pub hooks: Vec<HookConfigEntry>,
+    /// `[telemetry]` section — opt-in OTLP tracing export.
+    #[serde(default)]
+    pub telemetry: TelemetryDaemonConfig,
+}
+
+// ── TelemetryDaemonConfig ─────────────────────────────────────────────────────
+
+/// Daemon-side telemetry config: gate flag + optional OTLP endpoint.
+///
+/// Mirrors `cascade_types::config::TelemetryConfig` but lives here to avoid
+/// importing the full types crate into daemon-internal config. Defaults to
+/// disabled with no endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TelemetryDaemonConfig {
+    /// When `false` (the default), no OTLP exporter is constructed.
+    pub enabled: bool,
+    /// Optional OTLP/gRPC endpoint, e.g. `http://localhost:4317`.
+    pub endpoint: Option<String>,
+}
+
+impl Default for TelemetryDaemonConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: None,
+        }
+    }
 }
 
 // WHY manual Default: Config has #[cfg(feature = "gfp")]-gated fields
@@ -545,6 +573,7 @@ impl Default for Config {
             budget: BudgetConfig::default(),
             fleet: FleetConfig::default(),
             hooks: Vec::new(),
+            telemetry: TelemetryDaemonConfig::default(),
         }
     }
 }

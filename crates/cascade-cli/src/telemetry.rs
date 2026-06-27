@@ -136,4 +136,33 @@ mod tests {
         // documented fire-and-forget behaviour for this optional feature.
         drop(result);
     }
+
+    // Verify that span attribute names in this module do not include sensitive
+    // field names that could inadvertently log user content or secrets.
+    #[test]
+    fn test_no_sensitive_span_attributes() {
+        let source = include_str!("telemetry.rs");
+        let sensitive = [
+            "\"query\"",
+            "\"content\"",
+            "\"text\"",
+            "\"path\"",
+            "\"key\"",
+            "\"secret\"",
+        ];
+        for name in &sensitive {
+            for line in source.lines() {
+                let trimmed = line.trim();
+                // Skip comment lines -- the name may appear in documentation.
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                assert!(
+                    !trimmed.contains(name),
+                    "Sensitive span attribute {name} found in telemetry.rs line: {trimmed:?}\n\
+                     Rename to avoid logging user content."
+                );
+            }
+        }
+    }
 }

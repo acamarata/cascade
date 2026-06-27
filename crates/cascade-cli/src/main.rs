@@ -39,6 +39,7 @@ use clap::Parser;
 mod cmd;
 mod daemon_install;
 mod ipc_client;
+mod telemetry;
 
 use cmd::Cli;
 
@@ -46,18 +47,36 @@ use cmd::Cli;
 async fn main() {
     let cli = Cli::parse();
 
-    // Initialise tracing subscriber. RUST_LOG env var overrides --verbose.
-    let level = match cli.verbose {
-        0 => tracing::Level::WARN,
-        1 => tracing::Level::DEBUG,
-        _ => tracing::Level::TRACE,
+    // Read the global config to determine whether OTLP telemetry export is
+    // enabled. Errors reading or parsing config are silently ignored — CLI
+    // must always start regardless of config state.
+    let global_config: Option<cascade_types::config::CascadeConfig> = (|| {
+        let home = std::env::var("HOME").ok()?;
+        let path = std::path::PathBuf::from(home)
+            .join(".cascade")
+            .join("config.toml");
+        let raw = std::fs::read_to_string(path).ok()?;
+        toml::from_str(&raw).ok()
+    })();
+
+    // Initialise optional OTLP tracer provider. Gated on telemetry.enabled;
+    // the provider must live until the end of main to flush pending spans.
+    let _otel_provider = if global_config
+        .as_ref()
+        .map(|c| c.telemetry.enabled)
+        .unwrap_or(false)
+    {
+        let endpoint = global_config
+            .as_ref()
+            .and_then(|c| c.telemetry.endpoint.as_deref());
+        telemetry::init_cli_tracing(endpoint)
+    } else {
+        None
     };
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .with_target(false)
-        .with_writer(std::io::stderr)
-        .compact()
-        .init();
+
+    // Initialise the global tracing subscriber (stderr compact + optional OTel
+    // layer). RUST_LOG overrides the default WARN level.
+    telemetry::init_cli_logging(_otel_provider.as_ref());
 
     if let Err(e) = cli.command.run().await {
         eprintln!("error: {e}");

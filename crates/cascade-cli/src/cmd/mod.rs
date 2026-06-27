@@ -71,6 +71,8 @@ pub mod update;
 pub mod widget;
 // rag-11: interactive first-run setup wizard
 pub mod wizard;
+// priv-01: telemetry opt-in gate
+pub mod telemetry;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -197,6 +199,8 @@ pub enum Commands {
     Wizard(wizard::WizardArgs),
     /// Autonomous Build engine — drive a phase to completion via EOx gates (pews-02).
     Build(build::BuildArgs),
+    /// Manage telemetry opt-in (enable / disable / status).
+    Telemetry(telemetry::TelemetryArgs),
 }
 
 impl Commands {
@@ -251,6 +255,7 @@ impl Commands {
             Commands::Widget(args)   => args.run().await,
             Commands::Wizard(args)   => args.run().await,
             Commands::Build(args)    => args.run().await,
+            Commands::Telemetry(args) => args.run().await,
         }
     }
 }

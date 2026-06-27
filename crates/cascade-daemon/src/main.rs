@@ -117,6 +117,19 @@ async fn main() {
         process::exit(1);
     }
 
+    // Gate OTLP telemetry export on the config flag. init_tracing(None) is a
+    // no-op; only call with an endpoint when both enabled=true and an endpoint
+    // is configured. The provider must live until the end of main to flush
+    // any pending spans on clean shutdown.
+    let _otel_provider = {
+        let cfg = config::Config::load(&config_dir).unwrap_or_default();
+        if cfg.telemetry.enabled {
+            telemetry::init_tracing(cfg.telemetry.endpoint.as_deref())
+        } else {
+            None
+        }
+    };
+
     // Write crash sentinel BEFORE the async event loop so it is present on disk
     // even if the process is killed with SIGKILL (which prevents all cleanup).
     // flush_state() removes it during a clean SIGTERM exit.

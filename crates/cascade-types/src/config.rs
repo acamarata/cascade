@@ -226,6 +226,12 @@ pub struct CascadeConfig {
     /// covered by the Cascade stability guarantee.
     pub experimental: ExperimentalConfig,
 
+    /// Opt-in usage telemetry.
+    ///
+    /// Disabled by default. See `PRIVACY.md` for details on what is collected
+    /// and how to enable export to a local OTLP collector.
+    pub telemetry: TelemetryConfig,
+
     /// Override for the PCI (Personal Cascade Instructions) root directory.
     ///
     /// When `None`, defaults to `~/Downloads`. Set this in `config.toml` to
@@ -301,6 +307,33 @@ pub struct ExperimentalConfig {
     ///
     /// Default: `false` (disabled).
     pub cc_api_proxy: bool,
+}
+
+// ── TelemetryConfig ───────────────────────────────────────────────────────────
+
+/// `[telemetry]` — opt-in usage telemetry.
+///
+/// **Disabled by default.** Cascade never transmits data without explicit consent.
+/// All span data written to `~/.cascade/` is local-only until `enabled = true`.
+///
+/// # TOML example
+///
+/// ```toml
+/// [telemetry]
+/// enabled  = false
+/// endpoint = "http://localhost:4317"
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct TelemetryConfig {
+    /// When `false` (the default), no OTLP exporter is constructed and no
+    /// spans leave the machine. Set to `true` only after reading PRIVACY.md.
+    pub enabled: bool,
+
+    /// Optional OTLP/gRPC endpoint. When empty, no export occurs even if
+    /// `enabled = true` (the daemon logs locally to `~/.cascade/logs/`).
+    #[serde(default)]
+    pub endpoint: Option<String>,
 }
 
 // ── ProviderConfig ────────────────────────────────────────────────────────────
@@ -617,6 +650,8 @@ pub mod keys {
     pub const DAEMON_LOG_LEVEL: &str = "daemon.log_level";
     pub const DAEMON_DEBOUNCE_MS: &str = "daemon.debounce_ms";
     pub const AI_FOLDER: &str = "ai_folder";
+    pub const TELEMETRY_ENABLED: &str = "telemetry.enabled";
+    pub const TELEMETRY_ENDPOINT: &str = "telemetry.endpoint";
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

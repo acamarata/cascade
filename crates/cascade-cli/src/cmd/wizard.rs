@@ -66,6 +66,16 @@ impl Command for WizardArgs {
             "",
         )?;
 
+        // ── telemetry consent ─────────────────────────────────────────────────
+        println!("\nCascade can optionally export tracing spans to a local OTLP collector.");
+        println!("This is local-only by default; nothing is transmitted externally without");
+        println!("additional configuration. See PRIVACY.md for details.");
+        let telemetry_raw = prompt(
+            "Enable telemetry? [y/N]: ",
+            "n",
+        )?;
+        let telemetry_enabled = matches!(telemetry_raw.to_lowercase().as_str(), "y" | "yes");
+
         // ── Write to config ───────────────────────────────────────────────────
         let config_dir = home_path.join(".cascade");
         std::fs::create_dir_all(&config_dir).ok();
@@ -89,6 +99,14 @@ impl Command for WizardArgs {
         // provider key
         if !provider_key.is_empty() {
             set_toml_key(&mut table, "provider.key_id", &provider_key);
+        }
+
+        // telemetry consent
+        {
+            if table.get("telemetry").is_none() {
+                table["telemetry"] = toml_edit::table();
+            }
+            table["telemetry"]["enabled"] = toml_edit::value(telemetry_enabled);
         }
 
         std::fs::write(&config_path, table.to_string()).map_err(|e| {
