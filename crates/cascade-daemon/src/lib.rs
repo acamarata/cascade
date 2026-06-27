@@ -79,4 +79,7 @@ pub mod budget_guard;
 // E-P6-03 v1.1: fleet poller loop — periodic quota-store.json refresh
 pub mod fleet_poller;
 
+// rag-13: project discovery + taxonomy + registry
+pub mod discovery;
+
 pub use config::Config;

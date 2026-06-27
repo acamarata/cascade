@@ -82,6 +82,7 @@ pub mod quota_store;
 pub mod rag;
 pub mod reranker;
 pub mod retriever;
+pub mod project;
 pub mod scheduled_task;
 pub mod task;
 pub mod template;
@@ -139,3 +140,4 @@ pub use task::{
 pub use template::{
     ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult,
 };
+pub use project::{IndexStatus, ProjectRecord, ProjectType};
