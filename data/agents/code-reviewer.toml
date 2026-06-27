@@ -1,0 +1,9 @@
+# Cascade built-in agent: code reviewer
+# Installed by `cascade init` into .cascade/agents/
+# Users may override this file — init never overwrites existing agents.
+
+[agent]
+name = "code-reviewer"
+description = "CR-B peer review and CR-C architecture review on completed task implementations"
+model = "sonnet"
+tools = ["Read", "Bash", "Edit", "Write", "Agent"]

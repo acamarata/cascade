@@ -56,6 +56,15 @@ use serde::Serialize;
 
 use super::Command;
 
+/// Skill suite selection for `--system`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum SkillSystem {
+    /// PEWS phased engineering workflow skills.
+    Pews,
+    /// Personal productivity skills.
+    Personal,
+}
+
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
 /// Arguments for `cascade init`.
@@ -107,6 +116,11 @@ pub struct InitArgs {
     /// Emit a machine-parseable JSON summary on stdout instead of human text.
     #[arg(long)]
     pub json: bool,
+
+    /// Skill suite to install: `pews` (phased engineering) or `personal` (general use).
+    /// Auto-detected from CWD when absent: git-repo dirs → pews, HOME → personal.
+    #[arg(long, value_name = "SUITE", value_enum)]
+    pub system: Option<SkillSystem>,
 }
 
 // ── JSON result type ──────────────────────────────────────────────────────────
@@ -250,8 +264,52 @@ impl Command for InitArgs {
             dirs_created.push(format!("{}/", folder_name));
         }
 
-        // 8. Write CASCADE.md (idempotent — skip if exists and not --force).
+        // 7b. Install skill suite (idempotent — skips files that already exist).
         let mut files_written: Vec<String> = Vec::new();
+        {
+            use cascade_harness::skills::{install_suite, SkillSuite};
+            let suite = match self.system {
+                Some(SkillSystem::Pews) => SkillSuite::Pews,
+                Some(SkillSystem::Personal) => SkillSuite::Personal,
+                None => {
+                    // Auto-detect: git repo → pews; else → personal.
+                    if ai_dir.parent().map(|p| p.join(".git").is_dir()).unwrap_or(false) {
+                        SkillSuite::Pews
+                    } else {
+                        SkillSuite::Personal
+                    }
+                }
+            };
+            let skills_dir = ai_dir.join(cascade_types::paths::subdirs::SKILLS);
+            if let Ok(installed) = install_suite(suite, &skills_dir) {
+                for f in &installed {
+                    files_written.push(format!(
+                        "{}/{}/{}",
+                        folder_name,
+                        cascade_types::paths::subdirs::SKILLS,
+                        f
+                    ));
+                }
+            }
+        }
+
+        // 7c. Install built-in agents (idempotent — skips files that already exist).
+        {
+            use cascade_harness::agents::install_agents;
+            let agents_dir = ai_dir.join(cascade_types::paths::subdirs::AGENTS);
+            if let Ok(installed) = install_agents(&agents_dir) {
+                for f in &installed {
+                    files_written.push(format!(
+                        "{}/{}/{}",
+                        folder_name,
+                        cascade_types::paths::subdirs::AGENTS,
+                        f
+                    ));
+                }
+            }
+        }
+
+        // 8. Write CASCADE.md (idempotent — skip if exists and not --force).
         let cascade_md = ai_dir.join(CASCADE_MD_NAME);
         if !cascade_md.exists() || self.force {
             let content = starter_template(tier_label, &folder_name);
@@ -607,6 +665,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
 
@@ -638,6 +697,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
 
@@ -664,6 +724,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
 
@@ -690,6 +751,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
 
@@ -715,6 +777,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         // First run.
         run_init_sync(args(), home.path()).unwrap();
@@ -820,6 +883,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
 
@@ -843,6 +907,7 @@ mod tests {
             force: false,
             dry_run: true,
             json: false,
+            system: None,
         };
         run_init_sync(args, home.path()).unwrap();
         // Nothing should have been written.
@@ -863,6 +928,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         let result = args.resolve_provider_kind();
         assert!(
@@ -883,6 +949,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         let result = args.resolve_provider_kind().unwrap();
         assert!(
@@ -903,6 +970,7 @@ mod tests {
             force: false,
             dry_run: false,
             json: false,
+            system: None,
         };
         let result = args.resolve_provider_kind();
         assert!(result.is_err());

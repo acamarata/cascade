@@ -1,0 +1,5 @@
+[agent]
+name = "drift-detector"
+description = "Compares implementation against specs to find naming drift, behavior drift, missing implementations, and undocumented additions"
+model = "sonnet"
+tools = ["Read", "Bash"]

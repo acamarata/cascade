@@ -1,0 +1,5 @@
+[agent]
+name = "doc-writer"
+description = "Updates all documentation after a task passes QA: FEATURES.md, master lists, wiki/docs, specs, changelog"
+model = "sonnet"
+tools = ["Read", "Edit", "Write", "Bash"]
