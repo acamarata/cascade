@@ -17,6 +17,7 @@ pub mod projects_handlers;
 pub mod rag_status;
 pub mod static_handler;
 pub mod usage_history;
+pub mod harvest;
 
 use std::path::PathBuf;
 

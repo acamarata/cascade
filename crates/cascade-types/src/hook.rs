@@ -44,6 +44,14 @@ pub enum HookEvent {
         session_id: String,
     },
 
+    /// A Claude Code session stopped. Carries the session id and working directory.
+    CcSessionStop {
+        /// Session identifier (harness session id, or empty string if unknown).
+        session_id: String,
+        /// Working directory of the session (project dir).
+        project_dir: String,
+    },
+
     /// User-defined event kind string — for application-specific use.
     Custom {
         /// Arbitrary event kind string provided by the user.
@@ -61,6 +69,7 @@ impl std::fmt::Display for HookEvent {
             HookEvent::DaemonStop => write!(f, "DaemonStop"),
             HookEvent::BackupComplete => write!(f, "BackupComplete"),
             HookEvent::TurnComplete { session_id } => write!(f, "TurnComplete({})", session_id),
+            HookEvent::CcSessionStop { session_id, project_dir } => write!(f, "CcSessionStop({}, {})", session_id, project_dir),
             HookEvent::Custom { kind } => write!(f, "Custom({})", kind),
         }
     }
@@ -81,6 +90,12 @@ impl HookEvent {
                 HookEvent::TurnComplete { session_id: actual },
                 HookEvent::TurnComplete { session_id: pat },
             ) => pat == "*" || actual == pat,
+            (
+                HookEvent::CcSessionStop { session_id: actual_s, project_dir: actual_p },
+                HookEvent::CcSessionStop { session_id: pat_s, project_dir: pat_p },
+            ) => {
+                (pat_s == "*" || actual_s == pat_s) && (pat_p == "*" || actual_p == pat_p)
+            }
             (HookEvent::Custom { kind: a }, HookEvent::Custom { kind: b }) => a == b,
             _ => std::mem::discriminant(self) == std::mem::discriminant(pattern),
         }
@@ -393,6 +408,31 @@ mod tests {
         let def: HookDef = entry.try_into().expect("convert");
         assert_eq!(def.name, "test-hook");
         assert!(matches!(def.event, HookEvent::DaemonStart));
+    }
+
+    #[test]
+    fn test_cc_session_stop_variant_exists_and_matches() {
+        let fired = HookEvent::CcSessionStop {
+            session_id: "sess-abc".to_string(),
+            project_dir: "/home/user/project".to_string(),
+        };
+        let wildcard = HookEvent::CcSessionStop {
+            session_id: "*".to_string(),
+            project_dir: "*".to_string(),
+        };
+        let exact = HookEvent::CcSessionStop {
+            session_id: "sess-abc".to_string(),
+            project_dir: "/home/user/project".to_string(),
+        };
+        let wrong = HookEvent::CcSessionStop {
+            session_id: "sess-xyz".to_string(),
+            project_dir: "/home/user/project".to_string(),
+        };
+
+        assert!(fired.matches(&wildcard), "wildcard should match any CcSessionStop");
+        assert!(fired.matches(&exact), "exact match should work");
+        assert!(!fired.matches(&wrong), "wrong session_id should not match");
+        assert_eq!(format!("{}", fired), "CcSessionStop(sess-abc, /home/user/project)");
     }
 
     #[test]
