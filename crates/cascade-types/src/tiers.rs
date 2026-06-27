@@ -267,6 +267,13 @@ impl TierName {
     ///
     /// Returns `None` only when `$HOME` / `$USERPROFILE` cannot be determined
     /// (unusual sandbox environments).
+    ///
+    /// Callers that have a [`CascadeConfig`] available should prefer
+    /// [`default_path_with_config`] so that `personal_dir` and `projects_dirs`
+    /// overrides from `config.toml` are honoured.
+    ///
+    /// [`CascadeConfig`]: crate::config::CascadeConfig
+    /// [`default_path_with_config`]: TierName::default_path_with_config
     pub fn default_path(&self, project_root: &Path) -> Option<PathBuf> {
         let home = home_dir()?;
         match self {
@@ -279,6 +286,52 @@ impl TierName {
                     .map(PathBuf::from)
                     .unwrap_or_else(|| home.join("Sites").join(".cascade"));
                 Some(apc)
+            }
+            Self::PPC | Self::PRC | Self::PAC => Some(project_root.join(".cascade")),
+        }
+    }
+
+    /// Config-aware variant of [`default_path`].
+    ///
+    /// Identical to [`default_path`] except that:
+    ///
+    /// - **PCI** root comes from [`CascadeConfig::effective_personal_dir`] instead
+    ///   of the hard-coded `~/Downloads`.
+    /// - **APC** root comes from the first entry of
+    ///   [`CascadeConfig::effective_projects_dirs`] instead of the hard-coded
+    ///   `~/Sites`. `CASCADE_APC_PATH` env var still takes highest priority.
+    ///
+    /// Pass a reference to the merged [`CascadeConfig`] loaded from
+    /// `~/.cascade/config.toml` (and optionally project-level overrides).
+    ///
+    /// [`default_path`]: TierName::default_path
+    /// [`CascadeConfig`]: crate::config::CascadeConfig
+    pub fn default_path_with_config(
+        &self,
+        project_root: &Path,
+        config: &crate::config::CascadeConfig,
+    ) -> Option<PathBuf> {
+        match self {
+            Self::GCI => {
+                let home = home_dir()?;
+                Some(home.join(".cascade"))
+            }
+            Self::PCI => {
+                // WHY: personal_dir overrides ~/Downloads for non-standard setups.
+                Some(config.effective_personal_dir().join(".cascade"))
+            }
+            Self::APC => {
+                // Env var wins over config (keeps existing override contract).
+                if let Ok(env_path) = std::env::var("CASCADE_APC_PATH") {
+                    return Some(PathBuf::from(env_path));
+                }
+                // First entry from config (defaults to ~/Sites when unset).
+                let root = config
+                    .effective_projects_dirs()
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| home_dir().unwrap_or_default().join("Sites"));
+                Some(root.join(".cascade"))
             }
             Self::PPC | Self::PRC | Self::PAC => Some(project_root.join(".cascade")),
         }
@@ -702,5 +755,88 @@ load_when = "deploy"
         assert!(!cfg.rules[0].on_demand());
         assert!(cfg.rules[1].on_demand());
         assert_eq!(cfg.rules[1].load_when(), Some("deploy"));
+    }
+
+    // ── default_path_with_config ──────────────────────────────────────────────
+
+    /// CASCADE_APC_PATH env var wins over config.projects_dirs in
+    /// default_path_with_config for the APC tier.
+    #[test]
+    fn test_apc_env_override_wins() {
+        // Temporarily set the env var; restore it after the test.
+        let env_key = "CASCADE_APC_PATH";
+        let custom_env = "/tmp/env-apc-override";
+        // Guard: save previous value and restore on test exit.
+        let prev = std::env::var(env_key).ok();
+        std::env::set_var(env_key, custom_env);
+
+        let mut config = crate::config::CascadeConfig::default();
+        // Even if config has a different projects_dirs, env var must win.
+        config.projects_dirs = vec![PathBuf::from("/should/not/be/used")];
+
+        let root = PathBuf::from("/tmp/fake-project");
+        let result = TierName::APC
+            .default_path_with_config(&root, &config)
+            .expect("APC must return a path");
+
+        // Restore env state before any assert (panic safety).
+        match prev {
+            Some(v) => std::env::set_var(env_key, v),
+            None => std::env::remove_var(env_key),
+        }
+
+        assert_eq!(
+            result,
+            PathBuf::from(custom_env),
+            "CASCADE_APC_PATH env var must win over config.projects_dirs"
+        );
+    }
+
+    /// When CASCADE_APC_PATH is unset and config.projects_dirs is set,
+    /// default_path_with_config uses config.projects_dirs[0].
+    #[test]
+    fn test_apc_config_projects_dirs_used_when_no_env() {
+        let env_key = "CASCADE_APC_PATH";
+        // Ensure the env var is NOT set for this test.
+        let prev = std::env::var(env_key).ok();
+        std::env::remove_var(env_key);
+
+        let mut config = crate::config::CascadeConfig::default();
+        config.projects_dirs = vec![PathBuf::from("/custom/projects")];
+
+        let root = PathBuf::from("/tmp/fake-project");
+        let result = TierName::APC
+            .default_path_with_config(&root, &config)
+            .expect("APC must return a path");
+
+        // Restore env state before any assert.
+        match prev {
+            Some(v) => std::env::set_var(env_key, v),
+            None => std::env::remove_var(env_key),
+        }
+
+        assert_eq!(
+            result,
+            PathBuf::from("/custom/projects/.cascade"),
+            "config.projects_dirs[0] must be used when CASCADE_APC_PATH is unset"
+        );
+    }
+
+    /// PCI tier uses config.effective_personal_dir() in default_path_with_config.
+    #[test]
+    fn test_pci_with_config_custom_personal_dir() {
+        let mut config = crate::config::CascadeConfig::default();
+        config.personal_dir = Some(PathBuf::from("/custom/personal"));
+
+        let root = PathBuf::from("/tmp/fake-project");
+        let result = TierName::PCI
+            .default_path_with_config(&root, &config)
+            .expect("PCI must return a path");
+
+        assert_eq!(
+            result,
+            PathBuf::from("/custom/personal/.cascade"),
+            "PCI must use config.personal_dir when set"
+        );
     }
 }

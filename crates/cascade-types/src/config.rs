@@ -26,6 +26,7 @@ use crate::error::{CascadeError, Result};
 use crate::query_strategy::StrategyKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // ── Config schema version ─────────────────────────────────────────────────────
 
@@ -224,6 +225,36 @@ pub struct CascadeConfig {
     /// third-party Terms of Service, may break without warning, and is not
     /// covered by the Cascade stability guarantee.
     pub experimental: ExperimentalConfig,
+
+    /// Override for the PCI (Personal Cascade Instructions) root directory.
+    ///
+    /// When `None`, defaults to `~/Downloads`. Set this in `config.toml` to
+    /// point Cascade at a different personal workspace (e.g. an external drive):
+    ///
+    /// ```toml
+    /// personal_dir = "/Volumes/Data/personal"
+    /// ```
+    ///
+    /// The effective value is always read via [`CascadeConfig::effective_personal_dir`].
+    #[serde(default)]
+    pub personal_dir: Option<PathBuf>,
+
+    /// Override for the APC (All-Projects Cascade) root directories.
+    ///
+    /// When empty (the default), Cascade uses `[~/Sites]`. Supply one or more
+    /// paths to index multiple project roots or to point at a non-standard
+    /// location:
+    ///
+    /// ```toml
+    /// projects_dirs = ["/Volumes/X9/Sites", "/Users/me/work"]
+    /// ```
+    ///
+    /// The `CASCADE_APC_PATH` environment variable still wins over this field
+    /// (only the first element of `projects_dirs` is compared when the env var
+    /// is absent). Use [`CascadeConfig::effective_projects_dirs`] to get the
+    /// resolved list.
+    #[serde(default)]
+    pub projects_dirs: Vec<PathBuf>,
 
     /// Arbitrary extra keys for forward compatibility. Keys starting with `_`
     /// are reserved for internal use.
@@ -542,6 +573,32 @@ impl CascadeConfig {
         }
         Ok(())
     }
+
+    /// Returns the effective personal workspace root (PCI tier).
+    ///
+    /// Precedence: `personal_dir` config field → `~/Downloads`.
+    ///
+    /// WHY: keeps the PCI default (`~/Downloads`) DRY across the codebase while
+    /// letting users override it in `config.toml` for non-standard setups.
+    pub fn effective_personal_dir(&self) -> PathBuf {
+        self.personal_dir.clone().unwrap_or_else(|| {
+            crate::tiers::home_dir().unwrap_or_default().join("Downloads")
+        })
+    }
+
+    /// Returns the effective list of all-projects roots (APC tier).
+    ///
+    /// Precedence: `projects_dirs` config field (when non-empty) → `[~/Sites]`.
+    ///
+    /// WHY: keeps the APC default (`~/Sites`) DRY while supporting users with
+    /// projects on external drives or multiple project roots.
+    pub fn effective_projects_dirs(&self) -> Vec<PathBuf> {
+        if self.projects_dirs.is_empty() {
+            vec![crate::tiers::home_dir().unwrap_or_default().join("Sites")]
+        } else {
+            self.projects_dirs.clone()
+        }
+    }
 }
 
 // ── Config key constants ──────────────────────────────────────────────────────
@@ -606,5 +663,57 @@ kind = "bge-m3"
             ),
             "unexpected error variant: {err}"
         );
+    }
+
+    // ── effective_personal_dir ────────────────────────────────────────────────
+
+    /// When personal_dir is None, effective_personal_dir() returns ~/Downloads.
+    #[test]
+    fn test_effective_personal_dir_default() {
+        let cfg = CascadeConfig::default();
+        assert!(cfg.personal_dir.is_none());
+        let result = cfg.effective_personal_dir();
+        // Must end with "Downloads" — exact home depends on environment.
+        assert!(
+            result.ends_with("Downloads"),
+            "default personal_dir must end with 'Downloads', got: {result:?}"
+        );
+    }
+
+    /// When personal_dir is Some(path), effective_personal_dir() returns that path.
+    #[test]
+    fn test_effective_personal_dir_custom() {
+        let mut cfg = CascadeConfig::default();
+        let custom = PathBuf::from("/custom/personal");
+        cfg.personal_dir = Some(custom.clone());
+        assert_eq!(cfg.effective_personal_dir(), custom);
+    }
+
+    // ── effective_projects_dirs ───────────────────────────────────────────────
+
+    /// When projects_dirs is empty, effective_projects_dirs() returns [~/Sites].
+    #[test]
+    fn test_effective_projects_dirs_default() {
+        let cfg = CascadeConfig::default();
+        assert!(cfg.projects_dirs.is_empty());
+        let result = cfg.effective_projects_dirs();
+        assert_eq!(result.len(), 1, "default must yield exactly one entry");
+        assert!(
+            result[0].ends_with("Sites"),
+            "default projects_dirs[0] must end with 'Sites', got: {:?}",
+            result[0]
+        );
+    }
+
+    /// When projects_dirs is non-empty, effective_projects_dirs() returns those paths.
+    #[test]
+    fn test_effective_projects_dirs_custom() {
+        let mut cfg = CascadeConfig::default();
+        let paths = vec![
+            PathBuf::from("/Volumes/X9/Sites"),
+            PathBuf::from("/Users/me/work"),
+        ];
+        cfg.projects_dirs = paths.clone();
+        assert_eq!(cfg.effective_projects_dirs(), paths);
     }
 }

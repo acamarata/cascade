@@ -102,8 +102,8 @@ pub use agent::{Agent, AgentMeta, AgentResponse, Context, NoopAgent, Tier};
 pub use cascade_tier::{CascadeTier, InboxTier};
 pub use chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document, NoopChunker};
 pub use config::{
-    AiFolder, CascadeConfig, DaemonConfig, GfpConfig, HarnessConfig, HarnessMcpConfig, McpConfig,
-    PluginConfig, ProviderConfig, RagConfig,
+    AiFolder, CascadeConfig, CONFIG_SCHEMA_VERSION, DaemonConfig, GfpConfig, HarnessConfig,
+    HarnessMcpConfig, McpConfig, PluginConfig, ProviderConfig, RagConfig,
 };
 pub use embedding_provider::{
     EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, NoopEmbeddingProvider, ProviderKind,
