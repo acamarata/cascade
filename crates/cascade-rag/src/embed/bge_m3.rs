@@ -329,17 +329,12 @@ impl EmbeddingProvider for BgeM3Embedder {
 
         #[cfg(feature = "fastembed")]
         {
-            let owned: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
-            let batch_size = self.batch_size;
-
             // Block-in-place: fastembed is synchronous; keep it off the executor.
-            let vecs = tokio::task::block_in_place(|| {
-                let refs: Vec<&str> = owned.iter().map(String::as_str).collect();
-                // Call the synchronous EmbedModel impl.
-                let _ = batch_size; // used via self.batch_size inside embed_dense
-                self.embed_dense(&refs)
-            })
-            .map_err(|e: EmbedError| CascadeError::from(e))?;
+            // `texts` is already `&[&str]`; pass it straight to the sync impl rather
+            // than round-tripping through an owned `Vec<String>` + a second `Vec<&str>`
+            // (rag-10 bug #9 — double allocation per embed call).
+            let vecs = tokio::task::block_in_place(|| self.embed_dense(texts))
+                .map_err(|e: EmbedError| CascadeError::from(e))?;
 
             return Ok(vecs
                 .into_iter()

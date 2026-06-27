@@ -32,9 +32,6 @@ use cascade_types::{
 
 use super::{Chunk, Chunker, ChunkerConfig};
 
-/// Default cosine similarity threshold (used by the async pipeline variant).
-const DEFAULT_THRESHOLD: f32 = 0.65;
-
 /// Semantic chunker backed by sentence-level similarity scoring (async pipeline)
 /// **and** a sync sliding-window chunker (local RAG pipeline).
 ///
@@ -44,38 +41,16 @@ const DEFAULT_THRESHOLD: f32 = 0.65;
 ///   pipeline — paragraph-boundary fallback.
 ///
 /// SPORT: MASTER-LIBS.md → cascade-rag::chunk::SemanticChunker
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SemanticChunker {
-    /// Cosine similarity threshold in `[0.0, 1.0]` (async pipeline only).
-    pub threshold: f32,
     /// Sliding-window configuration (sync pipeline).
     pub config: ChunkerConfig,
 }
 
-impl Default for SemanticChunker {
-    fn default() -> Self {
-        Self {
-            threshold: DEFAULT_THRESHOLD,
-            config: ChunkerConfig::default(),
-        }
-    }
-}
-
 impl SemanticChunker {
-    /// Construct with a custom similarity threshold (async pipeline).
-    pub fn with_threshold(threshold: f32) -> Self {
-        Self {
-            threshold,
-            config: ChunkerConfig::default(),
-        }
-    }
-
     /// Construct with a custom sliding-window config (sync pipeline).
     pub fn with_config(config: ChunkerConfig) -> Self {
-        Self {
-            threshold: DEFAULT_THRESHOLD,
-            config,
-        }
+        Self { config }
     }
 
     /// Paragraph-boundary fallback when embeddings are not available.
