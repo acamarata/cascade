@@ -12,14 +12,13 @@
 import { useRef, useState } from 'react'
 import {
   FolderGit2,
-  Inbox,
-  KanbanSquare,
   Layers,
   MessageSquare,
   MountainSnow,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  User,
   Users,
 } from 'lucide-react'
 import { useArrowNav } from '../../hooks/useArrowNav'
@@ -32,24 +31,24 @@ const NAV_ITEMS = [
     label: 'Chat',
   },
   {
-    to: '/inbox',
-    icon: <Inbox className="h-4 w-4 shrink-0" aria-hidden="true" />,
-    label: 'Inbox',
-  },
-  {
-    to: '/tasks',
-    icon: <KanbanSquare className="h-4 w-4 shrink-0" aria-hidden="true" />,
-    label: 'Tasks',
-  },
-  {
-    to: '/vault',
-    icon: <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />,
-    label: 'Vault',
+    to: '/personal',
+    icon: <User className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Personal',
   },
   {
     to: '/projects',
     icon: <FolderGit2 className="h-4 w-4 shrink-0" aria-hidden="true" />,
     label: 'Projects',
+  },
+  {
+    to: '/settings/cascade',
+    icon: <MountainSnow className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Cascade',
+  },
+  {
+    to: '/vault',
+    icon: <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />,
+    label: 'Vault',
   },
   {
     to: '/accounts',

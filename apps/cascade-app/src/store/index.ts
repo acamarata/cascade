@@ -19,14 +19,17 @@ import { createThemeSlice } from './theme.slice'
 import type { ThemeSlice } from './theme.slice'
 import { createWindowSlice } from './window.slice'
 import type { WindowSlice } from './window.slice'
+import { createChatScopeSlice } from './chatScope.slice'
+import type { ChatScopeSlice } from './chatScope.slice'
 
-export type AppStore = DaemonSlice & ThemeSlice & WindowSlice
+export type AppStore = DaemonSlice & ThemeSlice & WindowSlice & ChatScopeSlice
 
 export const useAppStore = create<AppStore>()(
   immer((...a) => ({
     ...createDaemonSlice(...a),
     ...createThemeSlice(...a),
     ...createWindowSlice(...a),
+    ...createChatScopeSlice(...a),
   }))
 )
 
@@ -66,6 +69,18 @@ export function useWindowState() {
       openWindow: s.openWindow,
       closeWindow: s.closeWindow,
       focusWindow: s.focusWindow,
+    }))
+  )
+}
+
+/** Select chat scope state + actions. */
+export function useChatScope() {
+  return useAppStore(
+    useShallow((s) => ({
+      chatScope: s.chatScope,
+      selectedProjectId: s.selectedProjectId,
+      setScope: s.setScope,
+      setSelectedProject: s.setSelectedProject,
     }))
   )
 }

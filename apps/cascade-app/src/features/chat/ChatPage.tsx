@@ -3,7 +3,10 @@
  *   Replaces the DashboardPage placeholder. Full-page chat interface:
  *   message list (user/assistant), streaming token display, markdown + code
  *   highlighting, provider/model selector, local-LLM fallback indicator,
- *   new-chat / clear, session persistence.
+ *   new-chat / clear, session persistence, and scope switcher.
+ *
+ *   Scope switcher: Personal | Projects tabs — Cascade scope accessible from
+ *   /settings/cascade. Scope drives ?scope= URL param and per-scope sessions.
  *
  *   Routing: requests are sent through the cascade daemon's routed /api/chat
  *   endpoint (127.0.0.1:9761) following the P7 E-P7-07 priority chain:
@@ -19,14 +22,17 @@
  *   a11y: main landmark, live regions, aria-labels on all interactive elements.
  * SPORT: E-P9-03 in-app chat — ChatPage, /chat route
  */
-import { useRef, useState, useId } from 'react'
+import { useRef, useState, useId, useEffect } from 'react'
 import { MessageSquare, RotateCcw } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChat } from './useChat'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ProviderSelector } from './ProviderSelector'
+import { useChatScope } from '../../store'
+import type { ChatScope } from '../../store/chatScope.slice'
 
 // ── Session id helpers ────────────────────────────────────────────────────────
 
@@ -55,21 +61,40 @@ function getOrCreateSessionId(): string {
 
 export function ChatPage() {
   const headingId = useId()
-  // Stable session id across re-renders; reset on new-chat
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { chatScope, selectedProjectId, setScope } = useChatScope()
+
+  // Init scope from URL param on first render.
+  const urlScope = searchParams.get('scope')
+  useEffect(() => {
+    if (urlScope === 'personal' || urlScope === 'projects') {
+      setScope(urlScope as ChatScope)
+    }
+    // Only run on mount (urlScope is stable from router).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Stable session id across re-renders; reset on new-chat or scope change.
   const [sessionId, setSessionId] = useState(() => getOrCreateSessionId())
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
 
-  const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } =
-    useChat(sessionId)
+  // Derive namespace from scope.
+  const namespace =
+    chatScope === 'projects'
+      ? `projects:${selectedProjectId ?? 'default'}`
+      : chatScope
 
-  // Track last served provider for header display
-  const lastServedBy = servedBy
-    ?? messages.filter((m) => m.role === 'assistant' && m.servedBy).at(-1)?.servedBy
-    ?? null
+  const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } =
+    useChat(sessionId, namespace)
+
+  // Track last served provider for header display.
+  const lastServedBy =
+    servedBy ??
+    messages.filter((m) => m.role === 'assistant' && m.servedBy).at(-1)?.servedBy ??
+    null
 
   const isLocalFallback = lastServedBy?.startsWith('local:') ?? false
 
-  // Auto-focus input after mount
   const chatInputRef = useRef<HTMLDivElement>(null)
 
   function handleNewChat() {
@@ -79,6 +104,12 @@ export function ChatPage() {
       window.sessionStorage.setItem(SESSION_STORAGE_KEY, id)
     } catch { /* ignore */ }
     setSessionId(id)
+  }
+
+  function handleScopeChange(scope: 'personal' | 'projects') {
+    setScope(scope)
+    setSearchParams({ scope }, { replace: true })
+    handleNewChat()
   }
 
   function handleSend(content: string) {
@@ -140,6 +171,25 @@ export function ChatPage() {
             <span className="hidden sm:inline">New chat</span>
           </Button>
         </div>
+      </div>
+
+      {/* ── Scope switcher ─────────────────────────────────────── */}
+      <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-background shrink-0">
+        {(['personal', 'projects'] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => handleScopeChange(s)}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              chatScope === s
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+            )}
+          >
+            {s === 'personal' ? 'Personal' : 'Projects'}
+          </button>
+        ))}
       </div>
 
       {/* ── Error banner ───────────────────────────────────────── */}

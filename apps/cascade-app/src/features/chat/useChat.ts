@@ -12,7 +12,7 @@
  *   POST http://127.0.0.1:9761/api/chat — daemon SSE endpoint.
  *   SSE event types: served_by | token | tool_result | error | data [DONE].
  *
- * Inputs: sessionId string, optional selectedProvider string override.
+ * Inputs: sessionId string, optional namespace string, optional selectedProvider string override.
  * Outputs: { messages, isStreaming, error, servedBy, sendMessage, clearMessages }
  * SPORT: E-P9-03 in-app chat — useChat
  */
@@ -82,8 +82,8 @@ export interface UseChatResult {
   clearMessages: () => void
 }
 
-export function useChat(sessionId: string): UseChatResult {
-  const { messages, append, clear } = useChatHistory(sessionId)
+export function useChat(sessionId: string, namespace?: string): UseChatResult {
+  const { messages, append, clear } = useChatHistory(sessionId, namespace)
 
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
@@ -134,7 +134,10 @@ export function useChat(sessionId: string): UseChatResult {
         try {
           const gpRes = await fetch(`${GP_PROXY_URL}/v1/messages`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(namespace ? { 'X-Cascade-Namespace': namespace } : {}),
+            },
             body: JSON.stringify({
               model: 'claude-sonnet-4-6',
               max_tokens: 4096,
@@ -176,6 +179,7 @@ export function useChat(sessionId: string): UseChatResult {
             body: JSON.stringify({
               messages: contextMsgs,
               session_id: sessionId,
+              ...(namespace ? { namespace } : {}),
               ...(provider ? { provider } : {}),
             }),
             signal: controller.signal,

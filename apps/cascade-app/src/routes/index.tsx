@@ -21,6 +21,8 @@ import VaultHub from '../pages/hubs/VaultHub'
 import ProjectsHub from '../pages/hubs/ProjectsHub'
 import AccountsHub from '../pages/hubs/AccountsHub'
 import { SettingsHub } from '../pages/hubs/SettingsHub'
+import { PersonalPage } from '../pages/PersonalPage'
+import { CascadeMetaPage } from '../pages/CascadeMetaPage'
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -86,8 +88,14 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         {/* Backward-compat redirect — provider settings moved into accounts hub */}
         <Route path="/settings/providers" element={<Navigate to="/accounts?tab=providers" replace />} />
 
-        {/* Hub: settings, templates, library consolidated */}
+        {/* Hub: settings, templates, library, cascade meta consolidated */}
         <Route path="/settings" element={<SettingsHub />} />
+
+        {/* Personal hub — threads from rag-15 personal endpoints */}
+        <Route path="/personal" element={<PersonalPage />} />
+
+        {/* Cascade meta — config/tier view (also reachable from /settings?tab=cascade) */}
+        <Route path="/settings/cascade" element={<CascadeMetaPage />} />
       </Route>
 
       {/* Catch-all */}
