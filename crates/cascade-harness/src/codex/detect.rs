@@ -265,8 +265,13 @@ mod tests {
         );
     }
 
+    /// Serializes tests that mutate the process-global XDG_CONFIG_HOME so they
+    /// don't race under the parallel test runner.
+    static XDG_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn resolve_config_dir_uses_xdg() {
+        let _env_guard = XDG_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let orig = std::env::var("XDG_CONFIG_HOME").ok();
         std::env::set_var("XDG_CONFIG_HOME", tmp.path().to_str().unwrap());
@@ -284,6 +289,7 @@ mod tests {
 
     #[test]
     fn resolve_config_dir_fallback_to_home() {
+        let _env_guard = XDG_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let orig = std::env::var("XDG_CONFIG_HOME").ok();
         std::env::remove_var("XDG_CONFIG_HOME");
 
