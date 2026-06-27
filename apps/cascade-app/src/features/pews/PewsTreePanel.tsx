@@ -44,6 +44,9 @@ import {
   ticketStatusCounts,
   TICKET_STATUS_COLORS,
 } from './pewsTree'
+import { ProjectSelector } from './ProjectSelector'
+import { BuildProgressPanel } from './BuildProgressPanel'
+import { useProjectRegistry } from './useProjectRegistry'
 
 // ── Status legend ─────────────────────────────────────────────────────────────
 
@@ -578,6 +581,16 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
       })
   }, [initialPhaseRoot])
 
+  // Project registry — drives the ProjectSelector combobox.
+  const {
+    projects: registryProjects,
+    loading: registryLoading,
+  } = useProjectRegistry()
+
+  // Derive the project id from the current path for BuildProgressPanel.
+  const activeProject = registryProjects.find((p) => p.path === phaseRoot)
+  const isBuilding = activeProject?.phaseStatus === 'building'
+
   const { tree, loading, error, updateTicketStatus, refetch } = usePewsTree(phaseRoot)
 
   const [pendingTicketId, setPendingTicketId] = useState<string | null>(null)
@@ -645,18 +658,12 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
 
         {/* Actions */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Project root input */}
-          <label htmlFor="pews-root-input" className="text-xs text-muted-foreground">
-            Root:
-          </label>
-          <input
-            id="pews-root-input"
-            type="text"
+          {/* Project selector combobox (registry-driven; manual-path fallback inside) */}
+          <ProjectSelector
             value={phaseRoot}
-            onChange={(e) => setPhaseRoot(e.target.value)}
-            placeholder="Enter project root path…"
-            className="w-64 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            aria-label="Project root path"
+            onChange={setPhaseRoot}
+            projects={registryProjects}
+            loading={registryLoading}
           />
 
           {/* Refresh */}
@@ -679,6 +686,14 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
         >
           Mutation failed: {mutationError}
         </div>
+      )}
+
+      {/* Build progress panel — shown only when the active project is building */}
+      {isBuilding && activeProject && (
+        <BuildProgressPanel
+          projectPath={phaseRoot}
+          projectId={activeProject.id}
+        />
       )}
 
       {/* Body */}
