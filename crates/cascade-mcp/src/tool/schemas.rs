@@ -544,3 +544,152 @@ pub(super) fn cascade_scan_inbox_tool() -> McpTool {
         }),
     }
 }
+
+// ── RAG-08 memory tool definitions ────────────────────────────────────────────
+
+pub(super) fn cascade_memory_remember_tool() -> McpTool {
+    McpTool {
+        name: "cascade.memory.remember".into(),
+        description: "Insert an episode or fact into the specified memory namespace. \
+                       Namespace must be 'personal' (requires opt_in=true), 'meta', \
+                       or 'dev-<project-slug>'. Personal namespace is blocked without opt_in."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["namespace", "content"],
+            "additionalProperties": false,
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": "'personal', 'meta', or 'dev-<slug>'"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Text content of the episode to remember",
+                    "minLength": 1
+                },
+                "opt_in": {
+                    "type": "boolean",
+                    "description": "Required to access 'personal' namespace. Default false.",
+                    "default": false
+                }
+            }
+        }),
+    }
+}
+
+pub(super) fn cascade_memory_recall_tool() -> McpTool {
+    McpTool {
+        name: "cascade.memory.recall".into(),
+        description: "Query memory in the specified namespace. Returns matching episodes \
+                       and facts ordered by relevance. Namespace-scoped — no cross-namespace \
+                       leakage. Personal namespace requires opt_in=true."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["namespace", "query"],
+            "additionalProperties": false,
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": "'personal', 'meta', or 'dev-<slug>'"
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Natural language query to search memory",
+                    "minLength": 1
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "Maximum results to return (1–50, default 10)",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 50
+                },
+                "opt_in": {
+                    "type": "boolean",
+                    "description": "Required to access 'personal' namespace. Default false.",
+                    "default": false
+                }
+            }
+        }),
+    }
+}
+
+pub(super) fn cascade_memory_forget_tool() -> McpTool {
+    McpTool {
+        name: "cascade.memory.forget".into(),
+        description: "Archive or delete a memory episode or fact by id within a namespace. \
+                       Personal namespace requires opt_in=true. Episodes are hard-deleted; \
+                       facts are soft-archived (archived=true)."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["namespace", "id"],
+            "additionalProperties": false,
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": "'personal', 'meta', or 'dev-<slug>'"
+                },
+                "id": {
+                    "type": "string",
+                    "description": "UUID of the episode or fact to forget"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["episode", "fact"],
+                    "default": "episode",
+                    "description": "Whether to forget an episode or a fact"
+                },
+                "opt_in": {
+                    "type": "boolean",
+                    "description": "Required to access 'personal' namespace. Default false.",
+                    "default": false
+                }
+            }
+        }),
+    }
+}
+
+pub(super) fn cascade_memory_search_tool() -> McpTool {
+    McpTool {
+        name: "cascade.memory.search".into(),
+        description: "Semantic search within a memory namespace. Returns episodes and facts \
+                       matching the query. Identical to recall but named for discoverability. \
+                       Personal namespace requires opt_in=true."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["namespace", "query"],
+            "additionalProperties": false,
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": "'personal', 'meta', or 'dev-<slug>'"
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query",
+                    "minLength": 1
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "Maximum results (1–50, default 10)",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 50
+                },
+                "opt_in": {
+                    "type": "boolean",
+                    "description": "Required to access 'personal' namespace. Default false.",
+                    "default": false
+                }
+            }
+        }),
+    }
+}

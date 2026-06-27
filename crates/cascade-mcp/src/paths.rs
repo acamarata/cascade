@@ -119,6 +119,15 @@ pub fn docs_file(project: &str, file: &str) -> PathBuf {
         .join(file)
 }
 
+// ── Memory DB path ────────────────────────────────────────────────────────────
+
+/// Resolve the path to the cascade memory SQLite database.
+///
+/// Lives at `~/.cascade/memory.db`. The daemon and MCP server share this path.
+pub fn memory_db_path() -> PathBuf {
+    home_dir().join(".cascade").join("memory.db")
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

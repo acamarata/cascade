@@ -16,6 +16,9 @@ use super::handlers_core::{
     handle_memory_read, handle_memory_write, handle_provide_harness_context, handle_read,
     handle_search, handle_search_codebase,
 };
+use super::handlers_memory::{
+    handle_memory_forget, handle_memory_recall, handle_memory_remember, handle_memory_search,
+};
 use super::handlers_pbd::{
     handle_append_event, handle_check_routes, handle_get_current, handle_get_sprint,
     handle_list_tickets, handle_read_phase_status, handle_scan_inbox,
@@ -26,9 +29,11 @@ use super::schemas::{
     cascade_append_event_tool, cascade_check_routes_tool, cascade_context_slice_tool,
     cascade_get_current_tool, cascade_get_sprint_tool, cascade_inbox_list_tool,
     cascade_inbox_send_tool, cascade_list_tickets_tool, cascade_master_lists_tool,
-    cascade_memory_read_tool, cascade_memory_write_tool, cascade_provide_harness_context_tool,
-    cascade_read_phase_status_tool, cascade_read_tool, cascade_scan_inbox_tool,
-    cascade_search_codebase_tool, cascade_search_tool, cascade_update_ticket_status_tool,
+    cascade_memory_forget_tool, cascade_memory_read_tool, cascade_memory_recall_tool,
+    cascade_memory_remember_tool, cascade_memory_search_tool, cascade_memory_write_tool,
+    cascade_provide_harness_context_tool, cascade_read_phase_status_tool, cascade_read_tool,
+    cascade_scan_inbox_tool, cascade_search_codebase_tool, cascade_search_tool,
+    cascade_update_ticket_status_tool,
 };
 use super::types::{ConnectionContext, RetrieverSlot};
 
@@ -129,6 +134,11 @@ impl ToolRegistry {
             cascade_list_tickets_tool(),
             cascade_check_routes_tool(),
             cascade_scan_inbox_tool(),
+            // RAG-08 memory tools
+            cascade_memory_remember_tool(),
+            cascade_memory_recall_tool(),
+            cascade_memory_forget_tool(),
+            cascade_memory_search_tool(),
         ];
         Ok(serde_json::json!({ "tools": tools }))
     }
@@ -212,6 +222,11 @@ impl ToolRegistry {
             "cascade.list_tickets" => tool_result(handle_list_tickets(&args).await),
             "cascade.check_routes" => tool_result(handle_check_routes(&args).await),
             "cascade.scan_inbox" => tool_result(handle_scan_inbox(&args).await),
+            // RAG-08 memory tools — enforce personal-namespace firewall at tool boundary
+            "cascade.memory.remember" => tool_result(handle_memory_remember(&args).await),
+            "cascade.memory.recall" => tool_result(handle_memory_recall(&args).await),
+            "cascade.memory.forget" => tool_result(handle_memory_forget(&args).await),
+            "cascade.memory.search" => tool_result(handle_memory_search(&args).await),
             _ => Err(JsonRpcError::not_found(format!("Unknown tool: {name}"))),
         }
     }

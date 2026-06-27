@@ -259,7 +259,9 @@ pub fn build_router(state: DashboardState) -> Router {
         .nest("/api/personal", crate::http::usage_history::router())
         .nest("/api/gci", crate::http::hooks_write::router())
         .nest("/api/gci", crate::http::harness::router())
-        .nest("/api/gci", crate::http::rag_status::router());
+        .nest("/api/gci", crate::http::rag_status::router())
+        // RAG-08: memory chat_history API — POST/GET /api/memory/chat
+        .nest("/api/memory", crate::http::chat_history_memory::router());
 
     // Mount the browser dashboard SPA (ADR-P3-002): when CASCADE_DASHBOARD_DIST
     // points at a built dist/, merge the static-file router so http://127.0.0.1:9761

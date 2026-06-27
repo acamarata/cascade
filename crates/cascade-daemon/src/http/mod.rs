@@ -7,6 +7,7 @@
 //! SPORT: MASTER-ENDPOINTS.md § dashboard HTTP; ADR-P3-002 (src/http/ module)
 
 pub mod chat_handlers;
+pub mod chat_history_memory;
 pub mod chat_tools;
 pub mod gci_handlers;
 pub mod harness;

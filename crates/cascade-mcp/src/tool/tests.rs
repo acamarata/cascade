@@ -12,7 +12,7 @@ use super::types::ConnectionContext;
 
 // ── tools/list ────────────────────────────────────────────────────────────────
 
-/// tools/list returns exactly 18 tools (10 original + 8 PBD tools E-P8-04).
+/// tools/list returns exactly 22 tools (18 original + 4 RAG-08 memory tools).
 #[tokio::test]
 async fn tools_list_returns_9_tools() {
     let reg = ToolRegistry::new();
@@ -20,8 +20,8 @@ async fn tools_list_returns_9_tools() {
     let tools = result["tools"].as_array().expect("tools must be array");
     assert_eq!(
         tools.len(),
-        18,
-        "expected exactly 18 tools, got {}",
+        22,
+        "expected exactly 22 tools, got {}",
         tools.len()
     );
 }
@@ -406,7 +406,7 @@ async fn provide_harness_context_in_tool_list() {
     );
 }
 
-/// tools/list now returns 18 tools (10 original + 8 PBD E-P8-04).
+/// tools/list now returns 22 tools (18 original + 4 RAG-08 memory tools).
 #[tokio::test]
 async fn tools_list_returns_10_tools() {
     let reg = ToolRegistry::new();
@@ -414,8 +414,8 @@ async fn tools_list_returns_10_tools() {
     let tools = result["tools"].as_array().expect("tools must be array");
     assert_eq!(
         tools.len(),
-        18,
-        "expected exactly 18 tools, got {}",
+        22,
+        "expected exactly 22 tools, got {}",
         tools.len()
     );
 }

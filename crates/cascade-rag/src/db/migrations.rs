@@ -21,15 +21,20 @@
 //! | 7           | 0007_index_state.sql          | always        |
 //! | 8           | 0008_context_fingerprints.sql | always        |
 //! | 9           | 0009_chunk_meta.sql           | always        |
+//! | 10          | 0010_memory_episodes.sql      | always        |
+//! | 11          | 0011_memory_facts.sql         | always        |
+//! | 12          | 0012_chat_history.sql         | always        |
 //!
 //! Both paths (vec and blob) advance to `user_version=5`.
 //! Migration 6 advances to `user_version=6` only when `rag-multivec` is enabled.
 //! Migration 7 advances to `user_version=7` (index_state).
 //! Migration 8 advances to `user_version=8` (context_fingerprints — T-P4-E04-21).
 //! Migration 9 advances to `user_version=9` (curated-description metadata table).
+//! Migrations 10–12 (RAG-08): memory_episodes, memory_facts, chat_history.
 //!
 //! SPORT: MASTER-TABLES.md → rag_sources, rag_chunks, rag_citations, rag_fts5,
-//!        rag_embeddings, rag_sparse_embeddings, index_state, context_fingerprints
+//!        rag_embeddings, rag_sparse_embeddings, index_state, context_fingerprints,
+//!        memory_episodes, memory_facts, chat_history
 
 use rusqlite::{Connection, Result};
 
@@ -53,6 +58,10 @@ const SQL_0007: &str = include_str!("../../migrations/0007_index_state.sql");
 const SQL_0008: &str = include_str!("../../migrations/0008_context_fingerprints.sql");
 // 0009: curated document-level metadata for the description+title+tags retrieval channel.
 const SQL_0009: &str = include_str!("../../migrations/0009_chunk_meta.sql");
+// 0010–0012: RAG-08 memory module tables.
+const SQL_0010: &str = include_str!("../../migrations/0010_memory_episodes.sql");
+const SQL_0011: &str = include_str!("../../migrations/0011_memory_facts.sql");
+const SQL_0012: &str = include_str!("../../migrations/0012_chat_history.sql");
 
 /// Apply all pending migrations to `conn`.
 ///
@@ -124,6 +133,24 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         set_user_version(conn, 9)?;
     }
 
+    // Migration 10: memory_episodes — episodic memory scoped by namespace (RAG-08).
+    if version < 10 {
+        apply(conn, SQL_0010)?;
+        set_user_version(conn, 10)?;
+    }
+
+    // Migration 11: memory_facts — consolidated factual memory with BLAKE3 dedup (RAG-08).
+    if version < 11 {
+        apply(conn, SQL_0011)?;
+        set_user_version(conn, 11)?;
+    }
+
+    // Migration 12: chat_history — per-scope, per-namespace chat message log (RAG-08).
+    if version < 12 {
+        apply(conn, SQL_0012)?;
+        set_user_version(conn, 12)?;
+    }
+
     Ok(())
 }
 
@@ -181,10 +208,10 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
 
-        // Migrations 0007 (index_state), 0008 (context_fingerprints), and 0009
-        // (chunk_meta) run unconditionally, so every configuration lands on
-        // user_version=9. (Migration 6 is rag-multivec-only; versions may skip it.)
-        assert_eq!(version, 9, "expected final user_version=9");
+        // Migrations 10 (memory_episodes), 11 (memory_facts), 12 (chat_history)
+        // run unconditionally, so every configuration lands on user_version=12.
+        // (Migration 6 is rag-multivec-only; versions may skip it.)
+        assert_eq!(version, 12, "expected final user_version=12");
     }
 
     // --- db::migrations::idempotent ------------------------------------------
@@ -197,7 +224,7 @@ mod tests {
         let version: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 9, "idempotent: final user_version=9");
+        assert_eq!(version, 12, "idempotent: final user_version=12");
     }
 
     // --- db::migrations::tables_exist ----------------------------------------

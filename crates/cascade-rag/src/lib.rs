@@ -52,6 +52,7 @@ pub mod feedback;
 pub mod index;
 pub mod index_manager;
 pub mod ingest;
+pub mod memory;
 pub mod parse;
 pub mod privacy;
 pub mod rerank;
@@ -139,6 +140,14 @@ pub use search::{
 };
 pub use privacy::{RedactionConfig, RedactionPipeline};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
+
+// ── rag-08 exports ────────────────────────────────────────────────────────────
+pub use memory::{
+    archive_fact, consolidate_namespace, count_episodes, decay_namespace, delete_episode,
+    insert_episode, recall, upsert_fact, NamespaceError, RecallHit, ValidatedNamespace,
+    CONSOLIDATION_THRESHOLD,
+};
+pub use memory::namespace::{validate as validate_namespace, validate_with_firewall};
 
 // ── rag-09 exports ────────────────────────────────────────────────────────────
 pub use agentic::{agentic_retrieve, AdequacyAssessor, AgenticConfig, AgenticResult};
