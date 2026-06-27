@@ -22,6 +22,5 @@
 //! SPORT: MASTER-LIBS.md → cascade-rag::rerank
 
 pub mod bge;
-pub mod jina;
 
 pub use cascade_types::{NoopReranker, RerankOpts, RerankResult, Reranker};

@@ -6,19 +6,9 @@
 //! cross-encoder session.  Takes (query, passage) pairs and returns a single
 //! sigmoid-normalised relevance score per pair.
 //!
-//! # Model deviation note (T-P4-E01-24 gap)
-//!
-//! fastembed 3.14.1 (the version resolved in Cargo.lock at forge time) does
-//! **not** expose `RerankerModel::BGERerankerV2M3`.  The closest available
-//! variant is `RerankerModel::BGERerankerBase` (`BAAI/bge-reranker-base`,
-//! ~350 MB, English + Chinese).
-//!
-//! Upgrade path: when fastembed ships `RerankerModel::BGERerankerV2M3`,
-//! replace `BGERerankerBase` with that variant and remove this comment block.
-//!
 //! # Memory
 //!
-//! The ONNX session for `bge-reranker-base` requires ~350 MB RAM at runtime.
+//! The ONNX session for `bge-reranker-v2-m3` requires ~580 MB RAM at runtime.
 //! Enable the `reranker` feature only on machines with ≥4 GB available.
 //! Prefer tier `Minimal` or `Semantic` in low-memory environments.
 //!
@@ -82,7 +72,7 @@ pub struct BgeRerankerOptions {
 ///
 /// # Memory footprint
 ///
-/// Enabling the `reranker` feature loads a ~350 MB ONNX session.  See the
+/// Enabling the `reranker` feature loads a ~580 MB ONNX session.  See the
 /// module-level doc for guidance on when to enable.
 ///
 /// # Usage
@@ -147,17 +137,16 @@ impl BgeReranker {
 
         info!(
             model_dir = %model_dir.display(),
-            "initialising BGE reranker (BGERerankerBase, proxying bge-reranker-v2-m3)"
+            "initialising BGE reranker (BGERerankerV2M3, rozgo/bge-reranker-v2-m3)"
         );
 
         #[cfg(feature = "reranker")]
         {
             let cache_dir = model_dir.clone();
             let inner = tokio::task::block_in_place(|| {
-                // NOTE: fastembed 4.9.1 now ships BGERerankerV2M3.
-                // BGERerankerBase (BAAI/bge-reranker-base) kept for now.
-                // TODO(rag-02): upgrade to RerankerModel::BGERerankerV2M3.
-                let opts = RerankInitOptions::new(RerankerModel::BGERerankerBase)
+                // fastembed 4.9.1 ships RerankerModel::BGERerankerV2M3
+                // (rozgo/bge-reranker-v2-m3, multilingual, ~580 MB).
+                let opts = RerankInitOptions::new(RerankerModel::BGERerankerV2M3)
                     .with_cache_dir(cache_dir)
                     .with_show_download_progress(true);
                 TextRerank::try_new(opts)
@@ -225,6 +214,8 @@ impl Reranker for BgeReranker {
 
             // fastembed returns results sorted by score descending.
             // Map back to RerankResult using original candidate order.
+            // Apply sigmoid to raw cross-encoder logits: sigmoid(x) = 1/(1+e^(-x)).
+            // This normalises the score to (0, 1) for consistent downstream comparison.
             let take = opts.top_k.unwrap_or(n).min(n);
             let results: Vec<RerankResult> = ranked
                 .into_iter()
@@ -233,9 +224,10 @@ impl Reranker for BgeReranker {
                 .map(|(rank, r)| {
                     // r.index is the original position in the input passages slice.
                     let chunk = candidates[r.index].clone();
+                    let sigmoid_score = 1.0_f32 / (1.0_f32 + (-r.score).exp());
                     RerankResult {
                         chunk,
-                        score: r.score,
+                        score: sigmoid_score,
                         rank,
                     }
                 })

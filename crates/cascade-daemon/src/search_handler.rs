@@ -61,7 +61,9 @@ use tracing::{debug, instrument};
 use cascade_rag::embed::EmbedModel;
 use cascade_rag::index_manager::IndexRegistry;
 use cascade_rag::ingest::{IngestConfig, IngestPipeline, IngestResult};
-use cascade_rag::search::{search, SearchConfig};
+use cascade_rag::rerank::bge::{BgeReranker, BgeRerankerOptions};
+use cascade_rag::rerank::Reranker;
+use cascade_rag::search::{search, RerankerModelConfig, SearchConfig};
 use cascade_rag::{RagCitation, SourceInfo};
 
 // ── Request / response shapes ─────────────────────────────────────────────────
@@ -176,13 +178,15 @@ pub struct RagIndexStatsResponse {
 ///
 /// # Purpose
 ///
-/// Holds the [`IndexRegistry`] (lazy per-project `IndexManager` pool) and the
-/// [`EmbedModel`] used for dense query embedding.  Both are `Send + Sync + 'static`
-/// and share-able across connection tasks via `Arc<RagSearchHandler>`.
+/// Holds the [`IndexRegistry`] (lazy per-project `IndexManager` pool), the
+/// [`EmbedModel`] used for dense query embedding, and an optional pre-built
+/// [`Reranker`] for cross-encoder reranking.  All fields are `Send + Sync +
+/// 'static` and share-able across connection tasks via `Arc<RagSearchHandler>`.
 ///
 /// # Inputs
 ///
 /// Constructed once at daemon startup via `RagSearchHandler::new(registry, embed)`.
+/// Call `RagSearchHandler::new_with_reranker` to supply a pre-built reranker.
 ///
 /// # Constraints
 ///
@@ -193,15 +197,54 @@ pub struct RagIndexStatsResponse {
 pub struct RagSearchHandler {
     registry: Arc<IndexRegistry>,
     embed: Arc<dyn EmbedModel>,
+    /// Pre-built cross-encoder reranker.  `None` → reranking is always skipped.
+    reranker: Option<Arc<dyn Reranker>>,
 }
 
 impl RagSearchHandler {
-    /// Create a new handler.
+    /// Create a new handler without a reranker.
     ///
     /// `embed` is injected so callers can pass `MockEmbedModel` in tests and a
-    /// real BGE-M3 model in production.
+    /// real BGE-M3 model in production.  Reranking is disabled; use
+    /// [`new_with_reranker`] to enable it.
     pub fn new(registry: Arc<IndexRegistry>, embed: Arc<dyn EmbedModel>) -> Arc<Self> {
-        Arc::new(Self { registry, embed })
+        Arc::new(Self {
+            registry,
+            embed,
+            reranker: None,
+        })
+    }
+
+    /// Create a new handler with a pre-built reranker.
+    ///
+    /// When `config.rerank_enabled = true` in a search call and this handler
+    /// has a reranker, it is passed to [`search`] for cross-encoder re-scoring.
+    pub fn new_with_reranker(
+        registry: Arc<IndexRegistry>,
+        embed: Arc<dyn EmbedModel>,
+        reranker: Arc<dyn Reranker>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            registry,
+            embed,
+            reranker: Some(reranker),
+        })
+    }
+
+    /// Build and initialise a BGE Reranker V2-M3, then wrap self with it.
+    ///
+    /// Convenience constructor for daemon startup: creates the handler without
+    /// a reranker first, then asynchronously loads the model.  On failure the
+    /// handler still works — reranking is simply skipped.
+    pub async fn init_bge_reranker(&mut self) -> Result<(), String> {
+        let opts = BgeRerankerOptions::default();
+        match BgeReranker::new(opts).await {
+            Ok(rr) => {
+                self.reranker = Some(Arc::new(rr));
+                Ok(())
+            }
+            Err(e) => Err(format!("BGE reranker init failed: {e}")),
+        }
     }
 
     // ── rag.search ────────────────────────────────────────────────────────────
@@ -247,13 +290,22 @@ impl RagSearchHandler {
             fts5_enabled: params.config.fts5_enabled,
             vec_enabled: params.config.vec_enabled,
             rerank_enabled: params.config.rerank_enabled,
+            reranker_model: RerankerModelConfig::Bge,
             ..Default::default()
+        };
+
+        // Build the reranker arg: pass Some(reranker) only when rerank is
+        // requested AND this handler was constructed with a reranker.
+        let reranker_arg: Option<Arc<dyn Reranker>> = if config.rerank_enabled {
+            self.reranker.as_ref().map(Arc::clone)
+        } else {
+            None
         };
 
         let embed = Arc::clone(&self.embed);
         let t0 = Instant::now();
 
-        let citations = search(&params.query, &config, conn_arc, embed, None, None)
+        let citations = search(&params.query, &config, conn_arc, embed, reranker_arg, None)
             .await
             .map_err(|e| format!("search: {e}"))?;
 

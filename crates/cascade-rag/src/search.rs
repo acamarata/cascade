@@ -161,11 +161,49 @@ pub struct SearchConfig {
     /// Only effective when the `reranker` feature is compiled in. Default: false.
     pub rerank_enabled: bool,
 
+    /// Which reranker model to use when `rerank_enabled = true`.
+    ///
+    /// `RerankerModelConfig::Bge` uses BGE Reranker V2-M3 via fastembed.
+    /// `RerankerModelConfig::None` is equivalent to `rerank_enabled = false`.
+    /// Default: `RerankerModelConfig::Bge`.
+    pub reranker_model: RerankerModelConfig,
+
+    /// Multiplier applied to `k` to determine the RRF candidate pool when
+    /// `rerank_enabled = true`.
+    ///
+    /// The cross-encoder needs more candidates than the final `k` to be
+    /// effective.  Default: 20 (i.e. fetch `k * 20` from RRF, then rerank
+    /// down to `k`).  Minimum 1 (clamped at runtime).
+    ///
+    /// When `rerank_enabled = false`, the fallback pool is always `k * 2`
+    /// (the original behaviour).
+    pub rerank_candidate_multiplier: usize,
+
     /// RRF smoothing constant k (Cormack et al. 2009). Default: 60.0.
     pub rrf_k: f64,
 
     /// Optional project-scoping filter (reserved; not applied in this ticket).
     pub project: Option<String>,
+}
+
+/// Which cross-encoder reranker model to use.
+///
+/// Used in [`SearchConfig::reranker_model`].  Variants map 1:1 to the
+/// implementations in [`crate::rerank`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum RerankerModelConfig {
+    /// BGE Reranker V2-M3 via fastembed-rs ONNX (default).
+    ///
+    /// Model: `rozgo/bge-reranker-v2-m3`.  Multilingual.  ~580 MB ONNX.
+    /// Requires the `reranker` feature flag and ≥4 GB RAM.
+    #[default]
+    Bge,
+
+    /// No reranker — equivalent to `rerank_enabled = false`.
+    ///
+    /// Useful when callers want to keep `rerank_enabled = true` in config but
+    /// temporarily disable the model load (e.g. in low-memory environments).
+    None,
 }
 
 impl Default for SearchConfig {
@@ -178,6 +216,8 @@ impl Default for SearchConfig {
             hyde_enabled: false,
             colbert_enabled: false,
             rerank_enabled: false,
+            reranker_model: RerankerModelConfig::Bge,
+            rerank_candidate_multiplier: 20,
             rrf_k: 60.0,
             project: None,
         }
@@ -191,7 +231,8 @@ impl Default for SearchConfig {
 /// # Steps
 ///
 /// 1. Early-out: empty query → `Ok(vec![])`.
-/// 2. If `config.fts5_enabled`: keyword search via FTS5, fetching `k*2` candidates.
+/// 2. If `config.fts5_enabled`: keyword search via FTS5, fetching `k*2` candidates
+///    (or `k * rerank_candidate_multiplier` when `rerank_enabled = true`).
 /// 3. If `config.vec_enabled`: embed query (or HyDE hypothetical doc when
 ///    `config.hyde_enabled`), brute-force cosine scan via BLOB table.
 /// 4. If `config.sparse_enabled`: TF-IDF sparse score for the query.  When the
@@ -238,7 +279,14 @@ pub async fn search(
     }
 
     let k = config.k;
-    let candidate_n = k.saturating_mul(2).max(1);
+    // When reranking is enabled, fetch a larger candidate pool so the cross-encoder
+    // has more to work with.  When disabled, use the original k*2 fallback.
+    let candidate_n = if config.rerank_enabled {
+        let mult = config.rerank_candidate_multiplier.max(1);
+        k.saturating_mul(mult).max(1)
+    } else {
+        k.saturating_mul(2).max(1)
+    };
     let rrf_k = config.rrf_k;
 
     // ── HyDE: resolve the effective query for the dense channel ──────────────

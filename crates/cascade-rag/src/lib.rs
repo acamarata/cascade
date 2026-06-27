@@ -128,5 +128,5 @@ pub use ingest::{IngestConfig, IngestPipeline, IngestResult, IngestStats};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
 pub use retrieve::exclusion::{ExclusionConfig, ExclusionSet};
 pub use retrieve::rrf::RrfRetriever;
-pub use search::{search, HydeLlm, SearchConfig};
+pub use search::{search, HydeLlm, RerankerModelConfig, SearchConfig};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
