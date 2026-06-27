@@ -22,9 +22,20 @@
 
 use crate::cascade_tier::CascadeTier;
 use crate::embedding_provider::ProviderKind;
+use crate::error::{CascadeError, Result};
 use crate::query_strategy::StrategyKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+// ── Config schema version ─────────────────────────────────────────────────────
+
+/// Monotonically-increasing schema version for runtime YAML/TOML state files
+/// read from `.cascade/*.yaml` and `config.toml`.
+///
+/// Bump this constant whenever a breaking field change is required.
+/// Files with `schema_version` absent deserialise to 0 via `#[serde(default)]`
+/// and are always considered compatible (additive-only migration model).
+pub const CONFIG_SCHEMA_VERSION: u32 = 1;
 
 // ── HarnessConfig ─────────────────────────────────────────────────────────────
 
@@ -152,9 +163,22 @@ impl AiFolder {
 ///
 /// Deserialised from `config.toml` at the applicable scope (global or project).
 /// All fields are optional with sensible defaults; an empty `config.toml` is valid.
+///
+/// # Schema versioning
+///
+/// `schema_version` defaults to `0` when absent (oldest compatible format).
+/// Call [`CascadeConfig::validate_schema_version`] after deserialisation to
+/// reject configs written by a future binary that this version cannot safely read.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "snake_case")]
 pub struct CascadeConfig {
+    /// Schema version of this config file.
+    ///
+    /// Absent in files written before versioning was introduced; `serde(default)`
+    /// maps those to `0`, which passes validation.  Bump [`CONFIG_SCHEMA_VERSION`]
+    /// when adding breaking field changes.
+    pub schema_version: u32,
+
     /// Provider (embedding model) settings.
     pub provider: ProviderConfig,
 
@@ -494,6 +518,32 @@ impl Default for GfpConfig {
     }
 }
 
+// ── CascadeConfig impl ────────────────────────────────────────────────────────
+
+impl CascadeConfig {
+    /// Reject a config file whose `schema_version` exceeds `current_max`.
+    ///
+    /// A file written by a *future* binary may use fields this binary does not
+    /// understand; loading it silently could corrupt state. Return a typed error
+    /// so callers can surface a clear "please upgrade Cascade" message.
+    ///
+    /// Files with `schema_version = 0` (absent in older files) always pass.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CascadeError::SchemaMismatch`] when
+    /// `self.schema_version > current_max`.
+    pub fn validate_schema_version(&self, current_max: u32) -> Result<()> {
+        if self.schema_version > current_max {
+            return Err(CascadeError::SchemaMismatch {
+                expected: current_max,
+                found: self.schema_version,
+            });
+        }
+        Ok(())
+    }
+}
+
 // ── Config key constants ──────────────────────────────────────────────────────
 
 /// Dot-separated config key constants for use with `cascade config get/set`.
@@ -510,4 +560,51 @@ pub mod keys {
     pub const DAEMON_LOG_LEVEL: &str = "daemon.log_level";
     pub const DAEMON_DEBOUNCE_MS: &str = "daemon.debounce_ms";
     pub const AI_FOLDER: &str = "ai_folder";
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_version_absent_passes() {
+        // A file with no schema_version key deserialises to 0 and must pass.
+        let toml = r#"
+[provider]
+kind = "bge-m3"
+"#;
+        let cfg: CascadeConfig = toml::from_str(toml).expect("parse");
+        assert_eq!(cfg.schema_version, 0);
+        cfg.validate_schema_version(CONFIG_SCHEMA_VERSION)
+            .expect("version 0 must be accepted");
+    }
+
+    #[test]
+    fn schema_version_current_passes() {
+        let mut cfg = CascadeConfig::default();
+        cfg.schema_version = CONFIG_SCHEMA_VERSION;
+        cfg.validate_schema_version(CONFIG_SCHEMA_VERSION)
+            .expect("current version must be accepted");
+    }
+
+    #[test]
+    fn schema_version_future_is_rejected() {
+        let mut cfg = CascadeConfig::default();
+        cfg.schema_version = CONFIG_SCHEMA_VERSION + 1;
+        let err = cfg
+            .validate_schema_version(CONFIG_SCHEMA_VERSION)
+            .expect_err("future version must be rejected");
+        assert!(
+            matches!(
+                err,
+                crate::error::CascadeError::SchemaMismatch {
+                    expected,
+                    found
+                } if expected == CONFIG_SCHEMA_VERSION && found == CONFIG_SCHEMA_VERSION + 1
+            ),
+            "unexpected error variant: {err}"
+        );
+    }
 }
