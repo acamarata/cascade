@@ -56,7 +56,7 @@ use cascade_types::reranker::{RerankOpts, Reranker};
 use crate::citation::{citations_from_chunk_ids, RagCitation};
 use crate::embed::EmbedModel;
 use crate::retrieve::fts::query_fts5;
-use crate::retrieve::rrf::{rrf_merge, FusedHit, RankedList};
+use crate::retrieve::rrf::{rrf_merge, FusedHit, NormStrategy, RankedList, RrfConfig};
 
 // ── HydeLlm injectable trait ──────────────────────────────────────────────────
 
@@ -184,6 +184,26 @@ pub struct SearchConfig {
 
     /// Optional project-scoping filter (reserved; not applied in this ticket).
     pub project: Option<String>,
+
+    /// Per-channel weights for the RRF fusion step.
+    ///
+    /// When `Some`, the weights from this config override the flat `1.0`
+    /// defaults for each active channel.  When `None`, existing behaviour is
+    /// preserved (flat `1.0` for every active channel).
+    ///
+    /// Channel mapping:
+    /// - `weight_fts`     → FTS5 BM25 channel
+    /// - `weight_vec`     → dense vector channel
+    /// - `weight_recency` → sparse channel (reused; no dedicated sparse field in RrfConfig)
+    ///
+    /// **Default: `None`** (flat weights, backward-compatible).
+    pub rrf_config: Option<RrfConfig>,
+
+    /// Score normalisation strategy applied per-channel before RRF rank
+    /// assignment.
+    ///
+    /// **Default: `NormStrategy::None`** (identity, preserves existing tests).
+    pub norm_strategy: NormStrategy,
 }
 
 /// Which cross-encoder reranker model to use.
@@ -220,6 +240,8 @@ impl Default for SearchConfig {
             rerank_candidate_multiplier: 20,
             rrf_k: 60.0,
             project: None,
+            rrf_config: None,
+            norm_strategy: NormStrategy::None,
         }
     }
 }
@@ -510,28 +532,62 @@ pub async fn search(
     let sparse_hits = sparse_hits_sorted;
 
     // ── RRF fusion (3 base channels + optional ColBERT 4th) ───────────────────
+    //
+    // Per-channel weights come from config.rrf_config when provided; otherwise
+    // the flat 1.0 default is used (preserving all existing behaviour).
+    // NormStrategy is applied to each channel's score vector before building the
+    // RankedList so rank assignment reflects normalised scores.
+
+    let norm = config.norm_strategy;
+
+    // Apply norm in-place on owned copies (the originals are still needed for
+    // citation annotation after fusion).
+    let mut fts_hits_normed = fts_hits.clone();
+    let mut dense_hits_normed = dense_hits.clone();
+    let mut sparse_hits_normed = sparse_hits.clone();
+    norm.apply(&mut fts_hits_normed);
+    norm.apply(&mut dense_hits_normed);
+    norm.apply(&mut sparse_hits_normed);
 
     let fused: Vec<FusedHit> = {
+        // Extract per-channel weights from optional RrfConfig; fall back to 1.0.
+        let weight_fts = config
+            .rrf_config
+            .as_ref()
+            .map(|c| c.weight_fts)
+            .unwrap_or(1.0);
+        let weight_vec = config
+            .rrf_config
+            .as_ref()
+            .map(|c| c.weight_vec)
+            .unwrap_or(1.0);
+        // Sparse reuses weight_recency from RrfConfig (closest semantic match).
+        let weight_sparse = config
+            .rrf_config
+            .as_ref()
+            .map(|c| c.weight_recency)
+            .unwrap_or(1.0);
+
         let mut lists: Vec<RankedList<'_>> = Vec::new();
-        if !fts_hits.is_empty() {
+        if !fts_hits_normed.is_empty() {
             lists.push(RankedList {
                 source: "fts5",
-                weight: 1.0,
-                hits: &fts_hits,
+                weight: weight_fts,
+                hits: &fts_hits_normed,
             });
         }
-        if !dense_hits.is_empty() {
+        if !dense_hits_normed.is_empty() {
             lists.push(RankedList {
                 source: "dense",
-                weight: 1.0,
-                hits: &dense_hits,
+                weight: weight_vec,
+                hits: &dense_hits_normed,
             });
         }
-        if !sparse_hits.is_empty() {
+        if !sparse_hits_normed.is_empty() {
             lists.push(RankedList {
                 source: "sparse",
-                weight: 1.0,
-                hits: &sparse_hits,
+                weight: weight_sparse,
+                hits: &sparse_hits_normed,
             });
         }
         if lists.is_empty() {
@@ -805,6 +861,122 @@ pub(crate) fn fetch_chunk_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<(i
     Ok(results)
 }
 
+// ── Query routing ─────────────────────────────────────────────────────────────
+
+/// Which retrieval strategy a query should use, based on a heuristic analysis
+/// of its shape.
+///
+/// # Purpose
+///
+/// Short, keyword-like queries (e.g. `"RRF fusion"`) are best served by FTS5
+/// BM25 which handles exact-term matching.  Longer, question-like queries
+/// (e.g. `"How does RRF normalise scores across channels?"`) benefit from dense
+/// semantic search (and optionally HyDE) because the relevant document may not
+/// share vocabulary with the query.
+///
+/// # Constraints
+///
+/// This is a heuristic.  Callers may override via `SearchConfig` directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueryKind {
+    /// Short query (≤ 4 tokens) or keyword-only (no question marker).
+    ///
+    /// Recommended strategy: FTS5-heavy, lower dense weight.
+    KeywordShort,
+    /// Long query (> 4 tokens) or question-form (starts with interrogative or
+    /// contains `?`).
+    ///
+    /// Recommended strategy: dense/HyDE-heavy, lower FTS weight.
+    QuestionLong,
+}
+
+/// Pre-built weight presets returned by [`weights_for_kind`].
+///
+/// Callers plug these into `SearchConfig::rrf_config` to enable routing-aware
+/// weighted RRF.
+#[derive(Debug, Clone)]
+pub struct RoutingWeights {
+    /// FTS5 channel weight.
+    pub weight_fts: f64,
+    /// Dense vector channel weight.
+    pub weight_vec: f64,
+}
+
+/// Classify a query string into [`QueryKind`] using a fast heuristic.
+///
+/// # Algorithm
+///
+/// 1. Trim and split on whitespace → token count.
+/// 2. If the query contains `?` OR starts with a question word (what, when,
+///    where, who, how, why, which, is, are, can, does, do, should, would) →
+///    `QuestionLong`.
+/// 3. If the token count > 4 → `QuestionLong`.
+/// 4. Otherwise → `KeywordShort`.
+///
+/// # Inputs
+/// - `query`: raw user query string.
+///
+/// # Outputs
+/// [`QueryKind`] variant.
+///
+/// # Constraints
+/// Pure function; no I/O.
+pub fn route_query(query: &str) -> QueryKind {
+    let q = query.trim();
+    if q.is_empty() {
+        return QueryKind::KeywordShort;
+    }
+
+    // Check for explicit question mark.
+    if q.contains('?') {
+        return QueryKind::QuestionLong;
+    }
+
+    // Check for question-word prefix (case-insensitive).
+    let lower = q.to_ascii_lowercase();
+    let question_words = [
+        "what ", "when ", "where ", "who ", "how ", "why ", "which ",
+        "is ", "are ", "can ", "does ", "do ", "should ", "would ",
+        "what's", "how's", "why's",
+    ];
+    for qw in &question_words {
+        if lower.starts_with(qw) {
+            return QueryKind::QuestionLong;
+        }
+    }
+
+    // Token length heuristic: > 4 space-separated tokens → question/long.
+    let token_count = q.split_whitespace().count();
+    if token_count > 4 {
+        return QueryKind::QuestionLong;
+    }
+
+    QueryKind::KeywordShort
+}
+
+/// Return recommended channel weights for a given [`QueryKind`].
+///
+/// The returned [`RoutingWeights`] can be applied to an [`RrfConfig`] to bias
+/// fusion toward the most effective channel for the query shape.
+///
+/// # Inputs
+/// - `kind`: [`QueryKind`] from [`route_query`].
+///
+/// # Outputs
+/// [`RoutingWeights`] with calibrated `weight_fts` and `weight_vec`.
+pub fn weights_for_kind(kind: QueryKind) -> RoutingWeights {
+    match kind {
+        QueryKind::KeywordShort => RoutingWeights {
+            weight_fts: 1.5,
+            weight_vec: 0.5,
+        },
+        QueryKind::QuestionLong => RoutingWeights {
+            weight_fts: 0.5,
+            weight_vec: 1.5,
+        },
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1012,5 +1184,74 @@ mod tests {
                 "source_path should be /test/file.md"
             );
         }
+    }
+
+    // ── route_query tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn route_short_keyword_is_keyword_short() {
+        assert_eq!(route_query("RRF fusion"), QueryKind::KeywordShort);
+    }
+
+    #[test]
+    fn route_question_mark_is_question_long() {
+        assert_eq!(
+            route_query("What does RRF stand for?"),
+            QueryKind::QuestionLong
+        );
+    }
+
+    #[test]
+    fn route_how_prefix_is_question_long() {
+        assert_eq!(
+            route_query("how does normalisation work in RRF"),
+            QueryKind::QuestionLong
+        );
+    }
+
+    #[test]
+    fn route_why_prefix_is_question_long() {
+        assert_eq!(
+            route_query("why is k=60 the default smoothing constant"),
+            QueryKind::QuestionLong
+        );
+    }
+
+    #[test]
+    fn route_five_token_keyword_is_question_long() {
+        // 5 tokens → over the threshold even without a question word.
+        assert_eq!(
+            route_query("cascade rag rrf sparse dense"),
+            QueryKind::QuestionLong
+        );
+    }
+
+    #[test]
+    fn route_four_tokens_stays_keyword_short() {
+        assert_eq!(route_query("cascade rag rrf sparse"), QueryKind::KeywordShort);
+    }
+
+    #[test]
+    fn route_empty_is_keyword_short() {
+        assert_eq!(route_query(""), QueryKind::KeywordShort);
+        assert_eq!(route_query("   "), QueryKind::KeywordShort);
+    }
+
+    #[test]
+    fn weights_keyword_short_fts_dominant() {
+        let w = weights_for_kind(QueryKind::KeywordShort);
+        assert!(
+            w.weight_fts > w.weight_vec,
+            "keyword-short: FTS weight should dominate dense"
+        );
+    }
+
+    #[test]
+    fn weights_question_long_vec_dominant() {
+        let w = weights_for_kind(QueryKind::QuestionLong);
+        assert!(
+            w.weight_vec > w.weight_fts,
+            "question-long: dense weight should dominate FTS"
+        );
     }
 }

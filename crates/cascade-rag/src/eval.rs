@@ -106,10 +106,20 @@ pub struct EvalMetrics {
     pub mrr_at_k: f32,
     /// Mean Normalised Discounted Cumulative Gain at K.
     pub ndcg_at_k: f32,
+    /// Mean Average Precision at K.
+    ///
+    /// MAP@K = mean over queries of AP@K, where
+    /// AP@K = (1/|R|) * Σ_{i=1}^{K} P@i * rel_i
+    pub map_at_k: f32,
     /// Mean Recall at K.
     pub recall_at_k: f32,
     /// Mean Precision at K.
     pub precision_at_k: f32,
+    /// Mean query latency in milliseconds, if measured.
+    ///
+    /// `None` when the eval harness does not instrument latency.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f32>,
 }
 
 impl EvalMetrics {
@@ -136,13 +146,16 @@ impl EvalMetrics {
                 k,
                 mrr_at_k: 0.0,
                 ndcg_at_k: 0.0,
+                map_at_k: 0.0,
                 recall_at_k: 0.0,
                 precision_at_k: 0.0,
+                latency_ms: None,
             };
         }
 
         let mut mrr_sum = 0.0f32;
         let mut ndcg_sum = 0.0f32;
+        let mut map_sum = 0.0f32;
         let mut recall_sum = 0.0f32;
         let mut prec_sum = 0.0f32;
 
@@ -153,6 +166,7 @@ impl EvalMetrics {
 
             mrr_sum += mrr_at_k(&top_k, &relevant, k);
             ndcg_sum += ndcg_at_k(&top_k, &relevant, k);
+            map_sum += map_at_k(&top_k, &relevant, k);
             recall_sum += recall_at_k(&top_k, &relevant);
             prec_sum += precision_at_k(&top_k, &relevant);
         }
@@ -163,8 +177,10 @@ impl EvalMetrics {
             k,
             mrr_at_k: mrr_sum / n as f32,
             ndcg_at_k: ndcg_sum / n as f32,
+            map_at_k: map_sum / n as f32,
             recall_at_k: recall_sum / n as f32,
             precision_at_k: prec_sum / n as f32,
+            latency_ms: None,
         }
     }
 
@@ -183,11 +199,44 @@ impl EvalMetrics {
         let factor = 1.0 - threshold_pct / 100.0;
         self.mrr_at_k <= baseline.mrr_at_k * factor + EPS
             || self.ndcg_at_k <= baseline.ndcg_at_k * factor + EPS
+            || self.map_at_k <= baseline.map_at_k * factor + EPS
             || self.recall_at_k <= baseline.recall_at_k * factor + EPS
     }
 }
 
 // ── Per-query metric functions ────────────────────────────────────────────────
+
+/// Average Precision at K.
+///
+/// AP@K = (1/|R|) * Σ_{i=1}^{K} P@i * rel_i
+///
+/// where `|R|` is the number of relevant documents (clamped to 1 when empty to
+/// avoid division by zero), `P@i` is precision at cut-off `i`, and `rel_i` is
+/// 1 if the i-th result is relevant, else 0.
+///
+/// # Inputs
+/// - `ranked`: slice of chunk IDs in ranked order (already trimmed to top-K).
+/// - `relevant`: set of relevant chunk IDs.
+/// - `_k`: unused (ranked is already clipped to K by callers).
+///
+/// # Outputs
+/// AP@K in [0.0, 1.0].
+fn map_at_k(ranked: &[&str], relevant: &HashSet<&str>, _k: usize) -> f32 {
+    if relevant.is_empty() {
+        // Vacuously perfect — no relevant docs means any ranking is correct.
+        return 1.0;
+    }
+    let mut hits = 0u32;
+    let mut ap_sum = 0.0f32;
+    for (i, id) in ranked.iter().enumerate() {
+        if relevant.contains(*id) {
+            hits += 1;
+            let precision_at_i = hits as f32 / (i + 1) as f32;
+            ap_sum += precision_at_i;
+        }
+    }
+    ap_sum / relevant.len() as f32
+}
 
 /// Reciprocal Rank: 1 / (rank of first relevant hit), or 0 if none in top-K.
 fn mrr_at_k(ranked: &[&str], relevant: &HashSet<&str>, _k: usize) -> f32 {
@@ -487,8 +536,10 @@ mod tests {
             k: 10,
             mrr_at_k: 0.7,
             ndcg_at_k: 0.65,
+            map_at_k: 0.6,
             recall_at_k: 0.8,
             precision_at_k: 0.5,
+            latency_ms: None,
         };
         let degraded = EvalMetrics {
             mrr_at_k: 0.63, // < 0.7 * 0.9 = 0.63 — exactly on boundary
@@ -721,6 +772,151 @@ mod tests {
         assert!(
             (score - expected).abs() < 1e-5,
             "NDCG log2 check: expected {expected}, got {score}"
+        );
+    }
+
+    // ── MAP@K tests ───────────────────────────────────────────────────────────
+
+    /// MAP@K = 1.0 when all relevant docs appear at the top in order.
+    #[test]
+    fn map_perfect_ranking() {
+        let relevant: HashSet<&str> = ["a", "b"].iter().cloned().collect();
+        // Results: a(rel), b(rel), c(irr)  → P@1=1.0, P@2=1.0, P@3 not counted
+        // AP = (1.0 + 1.0) / 2 = 1.0
+        let score = map_at_k(&["a", "b", "c"], &relevant, 3);
+        assert!((score - 1.0).abs() < 1e-6, "MAP perfect: {score}");
+    }
+
+    /// MAP@K for interleaved results.
+    ///
+    /// Ranked: [a(rel), x(irr), b(rel)]   |R| = 2
+    /// P@1 = 1/1 = 1.0  (hit at i=1)
+    /// P@3 = 2/3        (hit at i=3)
+    /// AP  = (1.0 + 2/3) / 2 = (1.0 + 0.6667) / 2 ≈ 0.8333
+    #[test]
+    fn map_interleaved_manual() {
+        let relevant: HashSet<&str> = ["a", "b"].iter().cloned().collect();
+        let score = map_at_k(&["a", "x", "b"], &relevant, 3);
+        let expected = (1.0_f32 + 2.0 / 3.0) / 2.0;
+        assert!(
+            (score - expected).abs() < 1e-5,
+            "MAP interleaved: expected {expected}, got {score}"
+        );
+    }
+
+    /// MAP@K = 0.0 when no relevant doc appears in results.
+    #[test]
+    fn map_zero_when_no_hits() {
+        let relevant: HashSet<&str> = ["z"].iter().cloned().collect();
+        let score = map_at_k(&["a", "b", "c"], &relevant, 3);
+        assert_eq!(score, 0.0, "MAP no-hit: {score}");
+    }
+
+    /// MAP@K = 1.0 when relevant set is empty (vacuously perfect).
+    #[test]
+    fn map_empty_relevant_is_one() {
+        let relevant: HashSet<&str> = HashSet::new();
+        let score = map_at_k(&["a", "b"], &relevant, 2);
+        assert_eq!(score, 1.0);
+    }
+
+    /// EvalMetrics::compute populates map_at_k correctly.
+    #[test]
+    fn eval_metrics_compute_includes_map() {
+        let gt = GroundTruth {
+            name: "map-test".into(),
+            version: "1.0.0".into(),
+            queries: vec![EvalQuery {
+                query: "q1".into(),
+                relevant_chunk_ids: vec!["a".into(), "b".into()],
+                notes: None,
+            }],
+        };
+        // Perfect ranking: a then b.
+        let results = vec![vec!["a".into(), "b".into(), "c".into()]];
+        let metrics = EvalMetrics::compute("test", &gt, &results, 3);
+        assert!(
+            (metrics.map_at_k - 1.0).abs() < 1e-5,
+            "map_at_k should be 1.0 for perfect ranking: {}",
+            metrics.map_at_k
+        );
+        assert!(metrics.latency_ms.is_none(), "latency_ms defaults to None");
+    }
+
+    // ── Golden fixture regression test ────────────────────────────────────────
+    //
+    // Synthetic corpus of 5 chunks, mock search function, ground truth of 3
+    // queries.  Tests that the harness produces numerically stable results and
+    // detects a simulated 15% MRR degradation.
+    //
+    // No network, no DB, no embedder — fully in-process.
+
+    /// Synthetic golden fixture: MRR@5 ≥ 0.65 on a 5-chunk mock corpus.
+    #[test]
+    fn golden_fixture_mrr_gte_065() {
+        // Corpus: 5 chunk IDs.
+        // Ground truth: 3 queries, each with 1 relevant chunk.
+        // Mock retriever: always returns the relevant chunk first.
+        let gt = GroundTruth {
+            name: "golden".into(),
+            version: "1.0.0".into(),
+            queries: vec![
+                EvalQuery {
+                    query: "solar declination formula".into(),
+                    relevant_chunk_ids: vec!["chunk-1".into()],
+                    notes: None,
+                },
+                EvalQuery {
+                    query: "prayer time calculation method".into(),
+                    relevant_chunk_ids: vec!["chunk-3".into()],
+                    notes: None,
+                },
+                EvalQuery {
+                    query: "qibla direction great circle".into(),
+                    relevant_chunk_ids: vec!["chunk-5".into()],
+                    notes: None,
+                },
+            ],
+        };
+
+        // Simulate a strong retriever: relevant always at rank 0.
+        let results: Vec<Vec<String>> = gt
+            .queries
+            .iter()
+            .map(|eq| {
+                let mut ranked = eq.relevant_chunk_ids.clone();
+                ranked.extend(["chunk-2".into(), "chunk-4".into()]);
+                ranked
+            })
+            .collect();
+
+        let metrics = EvalMetrics::compute("mock-strong", &gt, &results, 5);
+        assert!(
+            metrics.mrr_at_k >= 0.65,
+            "golden MRR@5 should be ≥ 0.65, got {}",
+            metrics.mrr_at_k
+        );
+        assert!(
+            metrics.map_at_k >= 0.65,
+            "golden MAP@5 should be ≥ 0.65, got {}",
+            metrics.map_at_k
+        );
+
+        // Simulated degraded retriever: relevant at rank 2 (MRR = 0.333).
+        let degraded_results: Vec<Vec<String>> = gt
+            .queries
+            .iter()
+            .map(|eq| {
+                let mut ranked = vec!["chunk-2".into(), "chunk-4".into()];
+                ranked.extend(eq.relevant_chunk_ids.clone());
+                ranked
+            })
+            .collect();
+
+        let degraded = EvalMetrics::compute("mock-degraded", &gt, &degraded_results, 5);
+        assert!(
+            degraded.has_regression(&metrics, 15.0),
+            "15% degradation should fire regression detector"
         );
     }
 }

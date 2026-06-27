@@ -1,8 +1,105 @@
 //! Pure RRF merger — no I/O, no async.
 //!
-//! Contains [`RankedList`], [`FusedHit`], and [`rrf_merge`].
+//! Contains [`RankedList`], [`FusedHit`], [`NormStrategy`], and [`rrf_merge`].
 
 use std::collections::HashMap;
+
+// ── NormStrategy ──────────────────────────────────────────────────────────────
+
+/// Score normalisation strategy applied to each channel's raw scores before
+/// computing RRF ranks.
+///
+/// Normalisation is applied per-channel (per `RankedList`) before rank
+/// assignment, so different channels with wildly different score ranges can be
+/// compared on an equal footing.
+///
+/// # Variant semantics
+///
+/// | Variant  | Formula                          | Use-case                          |
+/// |----------|----------------------------------|-----------------------------------|
+/// | `None`   | identity                         | Default; preserves existing tests |
+/// | `MinMax` | `(x - min) / (max - min)`        | Channels with bounded ranges      |
+/// | `ZScore` | `(x - μ) / σ`                    | Gaussian-ish distributions        |
+/// | `Sigmoid`| `1 / (1 + e^(-x))`              | Unbounded logit-like scores       |
+///
+/// When a list has only one element, `MinMax` and `ZScore` degenerate
+/// gracefully: the single element maps to `1.0`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NormStrategy {
+    /// No normalisation (identity). Default. Preserves all existing tests.
+    #[default]
+    None,
+    /// Min-max normalisation: maps scores to `[0.0, 1.0]`.
+    MinMax,
+    /// Z-score standardisation: `(x - mean) / std_dev`.
+    ZScore,
+    /// Sigmoid squash: `1 / (1 + exp(-x))`.
+    Sigmoid,
+}
+
+impl NormStrategy {
+    /// Apply this normalisation strategy to a mutable slice of `(id, score)` pairs.
+    ///
+    /// Scores are updated in-place.  Relative descending order is preserved for
+    /// `MinMax` and `ZScore`; for `Sigmoid` order is monotone-preserved.
+    ///
+    /// # Inputs
+    /// - `hits`: `(chunk_id, score)` pairs, already sorted descending by score.
+    ///
+    /// # Outputs
+    /// Modified in-place.  For all-equal or single-element inputs, `MinMax` and
+    /// `ZScore` map every score to `1.0`.
+    pub fn apply(&self, hits: &mut [(i64, f64)]) {
+        match self {
+            NormStrategy::None => {}
+            NormStrategy::MinMax => {
+                if hits.is_empty() {
+                    return;
+                }
+                let min = hits.iter().map(|(_, s)| *s).fold(f64::INFINITY, f64::min);
+                let max = hits.iter().map(|(_, s)| *s).fold(f64::NEG_INFINITY, f64::max);
+                let range = max - min;
+                if range < f64::EPSILON {
+                    // All scores equal — map to 1.0.
+                    for (_, s) in hits.iter_mut() {
+                        *s = 1.0;
+                    }
+                } else {
+                    for (_, s) in hits.iter_mut() {
+                        *s = (*s - min) / range;
+                    }
+                }
+            }
+            NormStrategy::ZScore => {
+                if hits.is_empty() {
+                    return;
+                }
+                let n = hits.len() as f64;
+                let mean = hits.iter().map(|(_, s)| *s).sum::<f64>() / n;
+                let variance =
+                    hits.iter().map(|(_, s)| (*s - mean).powi(2)).sum::<f64>() / n;
+                let std_dev = variance.sqrt();
+                if std_dev < f64::EPSILON {
+                    // All equal — map to 1.0 for usability.
+                    for (_, s) in hits.iter_mut() {
+                        *s = 1.0;
+                    }
+                } else {
+                    for (_, s) in hits.iter_mut() {
+                        *s = (*s - mean) / std_dev;
+                    }
+                }
+            }
+            NormStrategy::Sigmoid => {
+                for (_, s) in hits.iter_mut() {
+                    *s = 1.0 / (1.0 + (-*s).exp());
+                }
+            }
+        }
+    }
+}
+
+// ── RankedList / FusedHit ─────────────────────────────────────────────────────
 
 /// A single entry in an input ranked list for [`rrf_merge`].
 ///
@@ -31,6 +128,8 @@ pub struct FusedHit {
     /// Names of the source lists that contributed to this score (for citation).
     pub sources_hit: Vec<String>,
 }
+
+// ── rrf_merge ─────────────────────────────────────────────────────────────────
 
 /// Pure RRF merger.
 ///
@@ -119,4 +218,90 @@ pub fn rrf_merge(lists: &[RankedList<'_>], k: f64, top_n: usize) -> Vec<FusedHit
         fused.truncate(top_n);
     }
     fused
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── NormStrategy tests ────────────────────────────────────────────────────
+
+    #[test]
+    fn norm_none_is_identity() {
+        let mut hits = vec![(1i64, 0.9f64), (2, 0.5), (3, 0.1)];
+        let orig = hits.clone();
+        NormStrategy::None.apply(&mut hits);
+        assert_eq!(hits, orig);
+    }
+
+    #[test]
+    fn norm_minmax_maps_to_unit_range() {
+        let mut hits = vec![(1i64, 10.0f64), (2, 6.0), (3, 2.0)];
+        NormStrategy::MinMax.apply(&mut hits);
+        // max=10 → 1.0, min=2 → 0.0
+        assert!((hits[0].1 - 1.0).abs() < 1e-9, "max maps to 1.0: {}", hits[0].1);
+        assert!((hits[2].1 - 0.0).abs() < 1e-9, "min maps to 0.0: {}", hits[2].1);
+        // middle: (6-2)/(10-2) = 0.5
+        assert!((hits[1].1 - 0.5).abs() < 1e-9, "middle maps to 0.5: {}", hits[1].1);
+    }
+
+    #[test]
+    fn norm_minmax_all_equal_maps_to_one() {
+        let mut hits = vec![(1i64, 5.0f64), (2, 5.0), (3, 5.0)];
+        NormStrategy::MinMax.apply(&mut hits);
+        for (_, s) in &hits {
+            assert!((*s - 1.0).abs() < 1e-9, "all-equal maps to 1.0: {s}");
+        }
+    }
+
+    #[test]
+    fn norm_zscore_zero_mean_unit_std() {
+        // scores [1, 2, 3]: mean=2, std=sqrt(2/3)≈0.8165
+        let mut hits = vec![(1i64, 3.0f64), (2, 2.0), (3, 1.0)];
+        NormStrategy::ZScore.apply(&mut hits);
+        let mean: f64 = hits.iter().map(|(_, s)| *s).sum::<f64>() / 3.0;
+        assert!(mean.abs() < 1e-9, "z-scored mean should be ~0: {mean}");
+    }
+
+    #[test]
+    fn norm_zscore_all_equal_maps_to_one() {
+        let mut hits = vec![(1i64, 7.0f64), (2, 7.0)];
+        NormStrategy::ZScore.apply(&mut hits);
+        for (_, s) in &hits {
+            assert!((*s - 1.0).abs() < 1e-9, "all-equal z-score maps to 1.0: {s}");
+        }
+    }
+
+    #[test]
+    fn norm_sigmoid_maps_zero_to_half() {
+        let mut hits = vec![(1i64, 0.0f64)];
+        NormStrategy::Sigmoid.apply(&mut hits);
+        assert!((hits[0].1 - 0.5).abs() < 1e-9, "sigmoid(0) = 0.5: {}", hits[0].1);
+    }
+
+    #[test]
+    fn norm_sigmoid_large_positive_near_one() {
+        let mut hits = vec![(1i64, 100.0f64)];
+        NormStrategy::Sigmoid.apply(&mut hits);
+        assert!(hits[0].1 > 0.999, "sigmoid(100) ≈ 1.0: {}", hits[0].1);
+    }
+
+    #[test]
+    fn norm_sigmoid_large_negative_near_zero() {
+        let mut hits = vec![(1i64, -100.0f64)];
+        NormStrategy::Sigmoid.apply(&mut hits);
+        assert!(hits[0].1 < 0.001, "sigmoid(-100) ≈ 0.0: {}", hits[0].1);
+    }
+
+    #[test]
+    fn norm_empty_slice_no_panic() {
+        let mut hits: Vec<(i64, f64)> = vec![];
+        NormStrategy::MinMax.apply(&mut hits);
+        NormStrategy::ZScore.apply(&mut hits);
+        NormStrategy::Sigmoid.apply(&mut hits);
+        // No panic; nothing changes.
+        assert!(hits.is_empty());
+    }
 }

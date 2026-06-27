@@ -127,6 +127,9 @@ pub use index_manager::{resolve_db_path, IndexManager, IndexRegistry, SourceInfo
 pub use ingest::{IngestConfig, IngestPipeline, IngestResult, IngestStats};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
 pub use retrieve::exclusion::{ExclusionConfig, ExclusionSet};
-pub use retrieve::rrf::RrfRetriever;
-pub use search::{search, HydeLlm, RerankerModelConfig, SearchConfig};
+pub use retrieve::rrf::{NormStrategy, RrfRetriever};
+pub use search::{
+    route_query, search, weights_for_kind, HydeLlm, QueryKind, RerankerModelConfig,
+    RoutingWeights, SearchConfig,
+};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};

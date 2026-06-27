@@ -30,5 +30,5 @@ mod tests;
 
 // Re-export all public items at the original path so callers are unaffected.
 pub use config::RrfConfig;
-pub use merge::{rrf_merge, FusedHit, RankedList};
+pub use merge::{rrf_merge, FusedHit, NormStrategy, RankedList};
 pub use retriever::RrfRetriever;
