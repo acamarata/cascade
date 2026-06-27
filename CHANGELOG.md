@@ -6,6 +6,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-06-27
+
+Zero-config + PEWS + intelligence. Cascade now discovers and indexes your projects automatically, ships a tiered agent roster with a soul/verbosity layer, and drives autonomous phase builds.
+
+### Added — Zero-config / "it just works"
+- **Configurable roots** (`rag-12`): `personal_dir` + `projects_dirs` config with `effective_*` helpers; tier paths de-hardcoded (`$CASCADE_APC_PATH` still wins).
+- **Project discovery + registry** (`rag-13`): `ProjectType`/`ProjectRecord` taxonomy, marker-file classifier, `registry.db`, two-pass scanner with nested-root dedup (inner wins) and monorepo sub-app detection.
+- **Zero-config activation** (`rag-11`): `rag.enabled`/`mcp.enabled` default **true**; the supervisor now spawns the previously-dead `AutoRagWatcher` + `IndexingPipeline` + `VolumeIndexGuard` (plus the `auto-01` Scheduler) and runs a bootstrap project scan; `cascade wizard` first-run setup; watched formats add txt/pdf/docx/xlsx.
+- **MCP self-registration** (`frame-01`): idempotent merge of `mcpServers.cascade` into `~/.claude/settings.json` (preserves other servers); PEWS + Personal skill suites; `--system` profiles; agent-TOML install to `~/.cascade/agents/`.
+
+### Added — Intelligence & runtime
+- **Background automation** (`auto-01`): the Scheduler is finally spawned; `HookEvent::TurnComplete`; `BackgroundTaskClass` + capability gate; AutomationRunner + sample automations.
+- **Agent roster** (`agents-01`): tiered roles + 14 default agent TOMLs referencing souls + model tiers; override-merging registry; role→tier table.
+- **Soul layer** (`soul-01`): per-agent personality + verbosity 1–10 (default 3); `resolve_soul` compositor.
+- **Context assembler** (`ctx-01`): minimal-by-default per-model context assembly; E-05 retrieval stub unblocked; 5 role profiles.
+- **Codebase study** (`rag-14`): code-graph adjacency, tech-stack detection, template OVERVIEW with BLAKE3 cache (RAPTOR/arch tracked).
+
+### Added — PEWS & retrieval
+- **Phase lifecycle** (`pews-01`): Opening/Wrapup statuses + readiness gate (old values via serde aliases).
+- **Autonomous build engine** (`pews-02`): `BuildEngine` topo-walks the ticket tree, runs EOSt + EOx gates; `cascade build run`.
+- **Phase UI** (`pews-03`): all-projects board with lifecycle pills, project selector, build-progress panel.
+- **Fusion + eval** (`rag-05`): config-weighted RRF, norm strategies, query routing, MAP@K + golden-fixture regression.
+- **Chunking** (`rag-06`): unified `ChunkConfig`; ingest dedup switched to BLAKE3 (rag-10 #8).
+
+### Fixed
+- `cascade.search` returned no citations when chunk_ids were non-numeric (RrfRetriever now falls back to raw hits).
+- Hermetic router/env tests (no longer read the developer's real `~/.cascade`).
+- Scrubbed dev-machine paths from `config.rs` (FOSS CI guard green).
+
 ## [1.7.0] - 2026-06-27
 
 RAG core + FOSS gate. Real local embeddings + reranking, a provider-agnostic Fleet router with no shipped accounts, vector-index correctness fixes, and migration safety.
