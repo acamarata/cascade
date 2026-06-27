@@ -1,0 +1,8 @@
+id = "cascade.triage"
+version = "1.0.0"
+name = "Triage Agent"
+role = "triage"
+tier = "T3"
+soul_ref = "inter-agent"
+system_prompt_ref = "library/prompts/triage.md"
+capabilities = ["llm.call", "triage"]

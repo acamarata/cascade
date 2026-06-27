@@ -81,12 +81,22 @@ pub enum Capability {
 pub enum AgentRole {
     /// Top-level orchestrator; plans, reviews, spawns child agents.
     Ceo,
+    /// Chief Technology Officer — technology strategy and technical direction.
+    Cto,
+    /// Board-level debate and decision panel (CEO + CTO + Architect consensus).
+    Board,
     /// Architecture and system design decisions.
     Architect,
+    /// Product management — requirements, prioritisation, roadmap.
+    ProductManager,
+    /// Senior developer — experienced code authoring, complex problem solving.
+    SeniorDev,
     /// Bulk code writing and editing.
     Coder,
     /// Code and PR review.
     Reviewer,
+    /// QA review — test coverage, quality assurance, regression validation.
+    QaReviewer,
     /// Web and document research.
     Researcher,
     /// Documentation authoring.
@@ -125,7 +135,39 @@ impl AgentRole {
             "orchestrate" | "plan" => Some(Self::Ceo),
             "email.draft" | "email.send" => Some(Self::Emailer),
             "customer.service" => Some(Self::CustomerService),
+            "cto" | "tech.strategy" => Some(Self::Cto),
+            "board.debate" | "board.decision" => Some(Self::Board),
+            "product.manage" | "pm" => Some(Self::ProductManager),
+            "code.senior" | "senior.dev" => Some(Self::SeniorDev),
+            "qa.review" | "qa" | "test.review" => Some(Self::QaReviewer),
             _ => None,
+        }
+    }
+
+    /// Returns the default `ModelTier` for this role per the GCI routing table.
+    ///
+    /// T1 = Planner/decision-maker · T2 = Executor · T3 = Cheap/triage.
+    pub fn default_tier(self) -> cascade_types::agent::Tier {
+        use cascade_types::agent::Tier;
+        match self {
+            Self::Board => Tier::T1,
+            Self::Ceo => Tier::T1,
+            Self::Cto => Tier::T1,
+            Self::Architect => Tier::T1,
+            Self::SeniorDev => Tier::T2,
+            Self::Coder => Tier::T2,
+            Self::Reviewer => Tier::T2,
+            Self::QaReviewer => Tier::T2,
+            Self::DocWriter => Tier::T2,
+            Self::DriftDetector => Tier::T2,
+            Self::GapScanner => Tier::T2,
+            Self::ProductManager => Tier::T2,
+            Self::Researcher => Tier::T2,
+            Self::Onboarder => Tier::T2,
+            Self::Triage => Tier::T3,
+            Self::CustomerService => Tier::T3,
+            Self::Emailer => Tier::T3,
+            Self::Generic => Tier::T3,
         }
     }
 }

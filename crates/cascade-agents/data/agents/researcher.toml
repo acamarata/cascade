@@ -1,0 +1,8 @@
+id = "cascade.researcher"
+version = "1.0.0"
+name = "Research Agent"
+role = "researcher"
+tier = "T2"
+soul_ref = "verbose-teacher"
+system_prompt_ref = "library/prompts/researcher.md"
+capabilities = ["llm.call", "search", "browser", "doc.analyze"]

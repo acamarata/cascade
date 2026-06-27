@@ -1,0 +1,8 @@
+id = "cascade.product-manager"
+version = "1.0.0"
+name = "Product Manager"
+role = "productManager"
+tier = "T2"
+soul_ref = "professional-minimal"
+system_prompt_ref = "library/prompts/product-manager.md"
+capabilities = ["llm.call", "search", "issue.manage"]

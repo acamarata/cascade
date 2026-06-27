@@ -1,0 +1,8 @@
+id = "cascade.board"
+version = "1.0.0"
+name = "Board Panel"
+role = "board"
+tier = "T1"
+soul_ref = "professional-minimal"
+system_prompt_ref = "library/prompts/board.md"
+capabilities = ["llm.call"]

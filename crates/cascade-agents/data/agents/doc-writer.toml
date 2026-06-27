@@ -1,0 +1,8 @@
+id = "cascade.doc-writer"
+version = "1.0.0"
+name = "Documentation Writer"
+role = "docWriter"
+tier = "T2"
+soul_ref = "verbose-teacher"
+system_prompt_ref = "library/prompts/doc-writer.md"
+capabilities = ["llm.call", "code.read", "doc.write", "doc.analyze"]

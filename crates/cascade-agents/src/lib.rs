@@ -36,6 +36,7 @@ pub mod library;
 pub mod model_profile;
 pub mod prompt_gate;
 pub mod registry;
+pub mod roster;
 pub mod soul;
 pub mod spec;
 pub mod task;
@@ -84,6 +85,11 @@ pub use prompt_gate::{
 
 // soul module re-exports (soul-01)
 pub use soul::{render_soul_block, resolve_soul, verbosity_instruction, ResolvedSoul, SoulOverride};
+
+// roster module re-exports (agents-01)
+pub use roster::{
+    board_debate, load_roster, merge_overrides, BoardDebateResult, BoardOpinion, RosterError,
+};
 
 // chain module re-exports
 pub use chain::{

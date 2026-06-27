@@ -21,6 +21,8 @@ use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tracing::debug;
 
+use cascade_types::agent::Tier;
+
 use crate::library::{load_spec_from_file, validate_agent_library, LibraryIssue};
 use crate::spec::{AgentRole, AgentSpec, Capability};
 
@@ -240,6 +242,52 @@ impl AgentRegistry {
         }
 
         Ok(issues)
+    }
+
+    /// Load the default agent roster from `data_dir/agents/` and register all specs.
+    ///
+    /// If `project_override_dir` is `Some`, also loads TOML files from that directory
+    /// and merges them: a project spec with the same `id` replaces the default spec.
+    ///
+    /// Duplicate ids (already registered) are silently skipped (idempotent reload).
+    ///
+    /// # Errors
+    /// `RegistryError::LibraryLoad` if the TOML files cannot be parsed.
+    pub fn load_default_roster(
+        &self,
+        data_dir: &Path,
+        project_override_dir: Option<&Path>,
+    ) -> Result<(), RegistryError> {
+        use crate::roster::{load_roster, merge_overrides};
+
+        let agents_dir = data_dir.join("agents");
+        let mut specs = if agents_dir.exists() {
+            load_roster(&agents_dir).map_err(|e| RegistryError::LibraryLoad(e.to_string()))?
+        } else {
+            vec![]
+        };
+
+        if let Some(override_dir) = project_override_dir {
+            if override_dir.exists() {
+                let overrides = load_roster(override_dir)
+                    .map_err(|e| RegistryError::LibraryLoad(e.to_string()))?;
+                specs = merge_overrides(specs, overrides);
+            }
+        }
+
+        for spec in specs {
+            let _ = self.register(spec); // ignore duplicate (idempotent)
+        }
+
+        Ok(())
+    }
+
+    /// Returns the default `ModelTier` for an `AgentRole` per the GCI routing table.
+    ///
+    /// Delegates to `AgentRole::default_tier` — kept here for registry-level
+    /// ergonomics so callers do not need to import spec directly.
+    pub fn tier_for_role(role: AgentRole) -> Tier {
+        role.default_tier()
     }
 }
 
