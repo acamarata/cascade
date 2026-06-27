@@ -618,11 +618,10 @@ pub async fn search(
             c.dense_score = Some(s);
         }
         if let Some(&s) = sparse_map.get(&c.chunk_id) {
-            // Store sparse score in the extra map (RagCitation does not have a
-            // dedicated sparse_score field; annotate via fts5_score only if fts
-            // was not active, to avoid overwriting).  This is a best-effort
-            // annotation; callers can introspect via rrf_score.
-            let _ = s;
+            // rag-10 bug #3: previously the sparse (BM25/FTS5) score was computed
+            // then silently dropped (`let _ = s`). RagCitation has a dedicated
+            // sparse_score field — carry the score so sparse hits contribute it.
+            c.sparse_score = Some(s);
         }
         if let Some(&s) = reranker_score_map.get(&c.chunk_id) {
             c.reranker_score = Some(s);
