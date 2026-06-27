@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Cascade uses TOML configuration files. The global config lives at `~/.cascade/config.toml`. Each tier directory can have its own `cascade.toml` that adds or overrides settings for that scope.
+Cascade uses TOML configuration files. The global config lives at `~/.cascade/config.toml`. Each tier directory can have its own `cascade.toml` that adds or overrides settings for that scope only.
 
 Read or write any key from the CLI:
 
@@ -92,6 +92,8 @@ antigravity = false
 | `tools.codex` | boolean | `false` | Auto-generate `AGENTS.md` (Codex format) |
 | `tools.antigravity` | boolean | `false` | Auto-generate Antigravity config |
 
+Enable a tool in config, then run `cascade generate-instructions` to write its file immediately. The daemon also regenerates these files whenever a `CASCADE.md` changes on disk.
+
 ---
 
 ## MCP settings
@@ -108,6 +110,8 @@ auth = "token"
 | `mcp.enabled` | boolean | `true` | Start the MCP server on daemon launch |
 | `mcp.bind` | string | `"127.0.0.1:9762"` | Address and port for the MCP HTTP transport |
 | `mcp.auth` | string | `"token"` | Auth mode: `"token"` or `"none"` (local-only environments) |
+
+The MCP server exposes your cascade as live context to any MCP-compatible AI tool. Claude Code picks up the server automatically when `mcp.enabled = true` and the daemon is running. See [MCP Server](MCP-Server.md) for the full tool list.
 
 ---
 
@@ -175,13 +179,15 @@ policy_dir = "~/.cascade/policies"
 | `policy.enabled` | boolean | `false` | Enable policy guardrail evaluation |
 | `policy.policy_dir` | string | `"~/.cascade/policies"` | Directory where `.policy.toml` files are stored |
 
+Policy guardrails let you write rules that the harness must follow before dispatching actions. For example, you can block reads from certain paths or require a confirmation before writing files. See [Security](Security.md) for the full threat model.
+
 ---
 
 ## Per-tier `cascade.toml`
 
-You can place a `cascade.toml` in any tier directory (e.g. `~/Sites/myproject/.cascade/cascade.toml`). Keys in a lower-tier file override the global config for that scope only.
+Place a `cascade.toml` in any tier directory to override settings for that scope. Settings in a lower-tier file take precedence over the global config for work done in that directory.
 
-Example: override RAG top-k for a specific project:
+Example: raise RAG result count for a specific project:
 
 ```toml
 # ~/Sites/myproject/.cascade/cascade.toml
@@ -189,10 +195,21 @@ Example: override RAG top-k for a specific project:
 top_k = 20
 ```
 
+Example: disable tool generation at the repo level (useful in monorepos where only one app uses AI tools):
+
+```toml
+# ~/Sites/myproject/backend/.cascade/cascade.toml
+[tools]
+claude_code = false
+opencode = false
+```
+
 ---
 
 ## Settings app
 
-The Cascade desktop app provides a GUI for all settings. Changes made in the app write directly to `~/.cascade/config.toml`. The `cascade-settings.md` wiki page documents the full settings schema used by the app.
+The Cascade desktop app provides a GUI for all settings. Changes made in the app write directly to `~/.cascade/config.toml`. The [cascade-settings](cascade-settings.md) wiki page documents the full settings schema used by the app layer.
 
-See also: [cascade-settings](cascade-settings.md) for the JSON schema used by the GUI layer.
+---
+
+See also: [Home](Home.md) · [CLI Reference](CLI-Reference.md) · [Daemon Architecture](Daemon-Architecture.md) · [MCP Server](MCP-Server.md)

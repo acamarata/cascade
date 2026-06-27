@@ -108,4 +108,4 @@ Source and documentation for each: [github-issues](plugins-github-issues.md), [g
 
 ## Full guide
 
-For the complete PDK API, ABI contract, testing harness, CI setup, and publishing instructions, see [Plugin Development Guide](plugin-development-guide.md).
+For the complete PDK API, ABI contract, testing harness, CI setup, and publishing instructions, see [Plugin Development Guide](Plugin-Development-Guide.md).

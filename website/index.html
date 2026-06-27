@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cascade — Local-first AI context manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --text: #e2e4ef;
+      --muted: #8b8fa8;
+      --accent: #6c8ef8;
+      --accent-dim: #3d4f8f;
+      --green: #4ade80;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+    }
+    nav .inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 64px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 52px);
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0 auto 36px;
+    }
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* Install snippet */
+    .install-snippet {
+      margin: 48px auto 0;
+      max-width: 520px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      text-align: left;
+    }
+    .install-snippet .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .install-snippet code {
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      font-size: 14px;
+      color: var(--green);
+      word-break: break-all;
+    }
+
+    /* Section */
+    section { padding: 64px 0; }
+    section + section { border-top: 1px solid var(--border); }
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    h2 {
+      font-size: clamp(22px, 3vw, 32px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .lead {
+      font-size: 17px;
+      color: var(--muted);
+      max-width: 640px;
+      margin-bottom: 36px;
+    }
+
+    /* Features grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .feature-card .icon {
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+    .feature-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Tier table */
+    .tier-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .tier-table th {
+      text-align: left;
+      padding: 10px 14px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .tier-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tier-table tr:last-child td { border-bottom: none; }
+    .tier-table code {
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+      font-size: 12px;
+      background: var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--green);
+    }
+    .tier-abbr {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* How it works steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .step-body h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .step-body p {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    footer .inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container inner">
+    <span class="logo">Cascade</span>
+    <ul class="nav-links">
+      <li><a href="https://github.com/acamarata/cascade/wiki">Docs</a></li>
+      <li><a href="https://github.com/acamarata/cascade/releases">Releases</a></li>
+      <li><a href="https://github.com/acamarata/cascade">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <div class="container">
+
+    <section class="hero">
+      <h1>Write your rules <span>once</span>.<br>Every AI tool picks them up.</h1>
+      <p>Cascade keeps your AI coding context consistent across every tool, every repo, and every machine — with a single source of truth on disk.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/acamarata/cascade/wiki/Quickstart">Get started</a>
+        <a class="btn btn-secondary" href="https://github.com/acamarata/cascade">View on GitHub</a>
+      </div>
+      <div class="install-snippet">
+        <div class="label">Install — macOS / Linux</div>
+        <code>curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh</code>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">The problem</div>
+      <h2>AI context files multiply and drift</h2>
+      <p class="lead">Claude Code reads <code>CLAUDE.md</code>. OpenCode reads <code>AGENTS.md</code>. Cursor reads <code>.cursorrules</code>. Across ten repos these files diverge. Cascade keeps one source and writes the others automatically.</p>
+
+      <div class="features">
+        <div class="feature-card">
+          <div class="icon">&#127759;</div>
+          <h3>Six-tier hierarchy</h3>
+          <p>Rules flow from global to app-level. Lower tiers add specificity. Higher tiers set defaults. Conflicts resolve predictably.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#9881;</div>
+          <h3>Auto-generate harness files</h3>
+          <p>One <code>CASCADE.md</code> per scope. Cascade writes <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.cursorrules</code>, and more whenever your files change.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128269;</div>
+          <h3>Local RAG search</h3>
+          <p>FTS5 keyword search + BGE-M3 dense embeddings + RRF fusion. Query your entire instruction corpus in milliseconds. No cloud.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128268;</div>
+          <h3>MCP server</h3>
+          <p>Live context injection into any MCP-compatible tool. Your cascade becomes a queryable context source, not just static files.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128736;</div>
+          <h3>WASM plugins</h3>
+          <p>Ingest GitHub Issues, Jira, Linear, and more into your RAG index. Plugins run sandboxed in wasmtime with declared permissions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128274;</div>
+          <h3>Local-first</h3>
+          <p>No cloud sync. No account required. Your instructions live in plain Markdown files on disk, under your control.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">The six tiers</div>
+      <h2>One hierarchy, all your scopes</h2>
+      <p class="lead">Every working directory resolves a complete instruction set by walking up through six tiers. Each tier inherits from the one above and can override or extend it.</p>
+
+      <table class="tier-table">
+        <thead>
+          <tr>
+            <th>Tier</th>
+            <th>Name</th>
+            <th>Default location</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tier-abbr">GCI</span></td>
+            <td>Global Cascade Instructions</td>
+            <td><code>~/.cascade/CASCADE.md</code></td>
+          </tr>
+          <tr>
+            <td><span class="tier-abbr">PCI</span></td>
+            <td>Personal Cascade Instructions</td>
+            <td><code>~/Downloads/.cascade/CASCADE.md</code></td>
+          </tr>
+          <tr>
+            <td><span class="tier-abbr">APC</span></td>
+            <td>All-Projects Cascade</td>
+            <td><code>~/Sites/.cascade/CASCADE.md</code></td>
+          </tr>
+          <tr>
+            <td><span class="tier-abbr">PPC</span></td>
+            <td>Per-Project Cascade</td>
+            <td><code>~/Sites/myproject/.cascade/CASCADE.md</code></td>
+          </tr>
+          <tr>
+            <td><span class="tier-abbr">PRC</span></td>
+            <td>Per-Repo Cascade</td>
+            <td><code>~/Sites/myproject/myrepo/.cascade/CASCADE.md</code></td>
+          </tr>
+          <tr>
+            <td><span class="tier-abbr">PAC</span></td>
+            <td>Per-App Cascade</td>
+            <td><code>myrepo/apps/myapp/.cascade/CASCADE.md</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <div class="section-label">How it works</div>
+      <h2>From init to consistent context</h2>
+      <p class="lead">Three commands are all you need to get started. After that, the daemon handles everything automatically.</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>Initialize</h3>
+            <p>Run <code>cascade init</code> in your project. Cascade creates a <code>.cascade/CASCADE.md</code> skeleton and registers the project with the background daemon.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>Write your rules</h3>
+            <p>Edit <code>CASCADE.md</code> in plain Markdown. Rules at this level apply to this repo. Global rules go in <code>~/.cascade/CASCADE.md</code>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>Generate harness files</h3>
+            <p>Run <code>cascade generate-instructions</code>. Cascade merges all tiers and writes <code>CLAUDE.md</code>, <code>AGENTS.md</code>, and any other configured tool files.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h3>Stay in sync automatically</h3>
+            <p>The daemon watches your <code>CASCADE.md</code> files. Any edit triggers a re-merge and re-generation. Your tools always see current context.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">Get started</div>
+      <h2>Start in under a minute</h2>
+      <p class="lead">The installer handles everything: download, checksum verification, daemon registration, and initial setup.</p>
+      <div class="cta-row" style="justify-content: flex-start;">
+        <a class="btn btn-primary" href="https://github.com/acamarata/cascade/wiki/Quickstart">Read the Quickstart</a>
+        <a class="btn btn-secondary" href="https://github.com/acamarata/cascade/wiki/Installation">All install methods</a>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container inner">
+    <span>Cascade &mdash; MIT License &mdash; <a href="https://github.com/acamarata">Aric Camarata</a></span>
+    <span>
+      <a href="https://github.com/acamarata/cascade">GitHub</a> &nbsp;&middot;&nbsp;
+      <a href="https://github.com/acamarata/cascade/wiki">Docs</a> &nbsp;&middot;&nbsp;
+      <a href="https://github.com/acamarata/cascade/releases">Releases</a> &nbsp;&middot;&nbsp;
+      <a href="https://github.com/acamarata/cascade/issues">Issues</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

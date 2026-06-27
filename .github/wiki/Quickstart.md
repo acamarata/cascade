@@ -70,7 +70,8 @@ cascade generate-instructions
 This reads your `.cascade/CASCADE.md` and writes the files each tool expects:
 
 - `.claude/CLAUDE.md` — picked up by Claude Code on next launch
-- `.claude/AGENTS.md` — symlink for OpenCode compatibility
+- `.opencode/AGENTS.md` — picked up by OpenCode on next launch
+- `.cursorrules` — picked up by Cursor (if enabled in config)
 
 Open your project in Claude Code (or any connected tool). The rule you just wrote appears in its context.
 
@@ -84,10 +85,10 @@ cascade verify
 
 `cascade verify` checks six requirements and exits 0 only when all pass:
 
-- AI folder exists and is readable
-- Cascade resolves to non-empty output
-- Daemon is reachable
-- AI provider is configured
+- `.cascade/` directory exists and is readable
+- Cascade resolves to non-empty output for the current directory
+- Daemon is reachable on its socket
+- At least one AI provider is configured
 - `config.toml` parses cleanly
 - OS keychain is accessible
 
@@ -95,9 +96,26 @@ If any check fails, run `cascade doctor` for a detailed report with suggested fi
 
 ---
 
-## What's next
+## Step 6: Search your context
 
-- [Home](Home.md) — full wiki index
-- [Cascade Concepts](Cascade-Concepts.md) — understand the six-tier model and why it works this way
-- [CLI Reference](CLI-Reference.md) — every command and flag
-- [MCP Server](MCP-Server.md) — live context injection without static files
+The daemon indexes your cascade files in the background. Once indexed, search across all tiers:
+
+```sh
+cascade search "authentication"
+cascade search "how should I handle errors in this project"
+```
+
+Search uses FTS5 keyword matching combined with BGE-M3 dense embeddings and RRF fusion. Results are ranked by relevance. The index updates automatically when any `.cascade/CASCADE.md` file changes.
+
+---
+
+## What to do next
+
+- Add rules at other tiers. A global rule lives at `~/.cascade/CASCADE.md` and applies everywhere on your machine. A repo-specific rule lives at `.cascade/CASCADE.md` inside that repo and applies only there.
+- Connect more tools. Run `cascade link --tool cursor` to generate `.cursorrules`, or `cascade link --tool aider` for `.aider.conf.md`.
+- Install a plugin. Run `cascade plugin list` to see what is loaded, and `cascade plugin install <path>` to add your own.
+- Read the [Cascade Concepts](Cascade-Concepts.md) page to understand how tiers merge and what wins when two tiers conflict.
+
+---
+
+See also: [Home](Home.md) · [Installation](Installation.md) · [CLI Reference](CLI-Reference.md) · [Configuration](Configuration.md) · [Troubleshooting](Troubleshooting.md)

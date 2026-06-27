@@ -5,23 +5,54 @@
 [![crates.io](https://img.shields.io/crates/v/cascade-cli.svg)](https://crates.io/crates/cascade-cli)
 [![GitHub release](https://img.shields.io/github/v/release/acamarata/cascade)](https://github.com/acamarata/cascade/releases/latest)
 
-A local-first AI context manager for coding agents. Write your rules once, at the right scope, and every tool picks them up automatically.
+A local-first AI context manager. Write your rules once, at the right scope, and every AI coding tool picks them up automatically.
 
 ---
 
-## What is a cascade?
+## What is Cascade?
 
-Most AI coding agents read instruction files: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and others. As soon as you work across multiple repos and multiple tools, those files multiply and drift. You end up with the same rules in ten places, tools seeing different subsets, and no clear answer for what wins when files conflict.
+Most AI coding tools read instruction files: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and others. When you work across multiple repos and tools, those files multiply and drift. You end up with the same rules in ten places, tools seeing different subsets, and no clear answer for what wins when files conflict.
 
-A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each tier inherits from the one above. When Cascade resolves instructions for a given working directory, it walks the hierarchy from global down to the narrowest scope, merges the result, and writes the tool-specific files each agent expects. One source of truth, always consistent.
+Cascade fixes that with a six-tier hierarchy of `CASCADE.md` files organized by scope. Each tier inherits from the one above. When Cascade resolves instructions for a given working directory, it walks the hierarchy from global down to the narrowest scope, merges the result, and writes the tool-specific files each agent expects. One source of truth, always consistent.
 
-## Features
+The six tiers:
 
-- Resolves a 6-tier instruction hierarchy (GCI → PCI → APC → PPC → PRC → PAC) for any working directory
-- Generates harness-native files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and more) from a single source
-- Local RAG index over your instruction corpus: FTS5 + dense embeddings + RRF reranking, no cloud required
-- MCP server with 5 transports, exposing your cascade as context to any MCP-compatible tool
+| Tier | Abbreviation | Typical location |
+|---|---|---|
+| Global Cascade Instructions | GCI | `~/.cascade/CASCADE.md` |
+| Personal Cascade Instructions | PCI | `~/Downloads/.cascade/CASCADE.md` |
+| All-Projects Cascade | APC | `~/Sites/.cascade/CASCADE.md` |
+| Per-Project Cascade | PPC | `~/Sites/myproject/.cascade/CASCADE.md` |
+| Per-Repo Cascade | PRC | `~/Sites/myproject/myrepo/.cascade/CASCADE.md` |
+| Per-App Cascade | PAC | `~/Sites/myproject/myrepo/apps/myapp/.cascade/CASCADE.md` |
+
+---
+
+## What is shipped
+
+- Six-tier instruction hierarchy (GCI → PCI → APC → PPC → PRC → PAC) resolved for any working directory
+- Harness-native file generation: writes `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and more from a single source
+- Local RAG index over your instruction corpus: FTS5 + BGE-M3 dense embeddings + RRF reranking, no cloud required
+- MCP server with multiple transports, exposing your cascade as live context to any MCP-compatible tool
 - WASM plugin system (wasmtime, capability-gated) with a PDK and `cargo-generate` template
+- Background daemon (`cascaded`) with file watcher that re-indexes and re-generates derived files on change
+- CLI (`cascade`) for all operations: init, resolve, search, sync, link, doctor, and more
+- Tauri 2 desktop app (macOS) with onboarding wizard, knowledge vault, graph view, and settings
+
+---
+
+## What is roadmap
+
+See [Roadmap](../../wiki/Roadmap) for the full list. Short version:
+
+- Linux and Windows GUI app (P5)
+- OpenAI, Anthropic, and local model (Ollama) provider adapters
+- Plugin registry at `plugins.cascade.dev` with signed distribution
+- `cascade watch` for live context sync
+- Team tier: shared instructions from a git URL merged above PRC
+- VS Code extension
+
+---
 
 ## Install
 
@@ -31,14 +62,14 @@ A cascade is a six-tier hierarchy of `CASCADE.md` files organized by scope. Each
 curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
 ```
 
-Downloads the latest release, verifies the SHA256 checksum, installs to `~/.local/bin`, and runs the daemon + init setup. No `sudo` required.
+Downloads the latest release, verifies the SHA-256 checksum, installs to `~/.local/bin`, registers the daemon, and runs the init wizard. No `sudo` required.
 
 ```sh
-# Pin a version
-CASCADE_VERSION=v1.0.0 curl -fsSL .../install.sh | sh
+# Pin a specific version
+CASCADE_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
 
-# Skip daemon + init (CI / unattended agents)
-CASCADE_NO_DAEMON=1 CASCADE_NO_INIT=1 curl -fsSL .../install.sh | sh
+# Skip daemon registration and init (useful in CI)
+CASCADE_NO_DAEMON=1 CASCADE_NO_INIT=1 curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
 ```
 
 ### One-liner (Windows PowerShell)
@@ -47,60 +78,53 @@ CASCADE_NO_DAEMON=1 CASCADE_NO_INIT=1 curl -fsSL .../install.sh | sh
 irm https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.ps1 | iex
 ```
 
-Installs to `%LOCALAPPDATA%\Cascade\bin` and adds it to your user PATH. No Administrator prompt required.
-
-```powershell
-# Pin a version
-$env:CASCADE_VERSION = "v1.0.0"
-irm .../install.ps1 | iex
-
-# Skip daemon + init
-$env:CASCADE_NO_DAEMON = "1"; $env:CASCADE_NO_INIT = "1"
-irm .../install.ps1 | iex
-```
+Installs to `%LOCALAPPDATA%\Cascade\bin`. No Administrator prompt required.
 
 ### Package managers
 
-| Platform | Install command |
+| Platform | Command |
 |---|---|
-| macOS | `brew install acamarata/tap/cascade` |
+| macOS (Homebrew) | `brew install --cask acamarata/cascade/cascade` |
 | Linux (AUR) | `yay -S cascade-bin` |
 | Linux (Snap) | `snap install cascade` |
 | Linux (Flatpak) | `flatpak install flathub dev.camarata.Cascade` |
 | Windows (Winget) | `winget install acamarata.cascade` |
 | Windows (Chocolatey) | `choco install cascade` |
 | Windows (Scoop) | `scoop install cascade` |
-| Nix | `nix run github:acamarata/cascade` |
 | Any (cargo) | `cargo install cascade-cli` |
 
-Full documentation for all install paths: [Installation wiki](../../wiki/Installation)
+Full installation docs: [Installation wiki](../../wiki/Installation)
+
+---
 
 ## Quick start
 
 ```bash
-# 1. Install (macOS example)
-brew install acamarata/tap/cascade
-
-# 2. Run the setup wizard: detects your tools, creates your first hierarchy
+# 1. Initialize a cascade in your current directory
 cascade init
 
-# 3. Edit your global rules
+# 2. Edit your global rules
 cascade edit --tier gci
 
-# 4. Sync derived files to all connected tools
-cascade sync
+# 3. Generate harness files (CLAUDE.md, AGENTS.md, etc.)
+cascade generate-instructions
 
-# 5. Search your indexed rule base
+# 4. Search your indexed rule base
 cascade search "authentication"
+
+# 5. Check that everything is wired correctly
+cascade verify
 ```
 
-Full documentation: [the wiki](../../wiki) | [CLI reference](../../wiki/CLI-Reference) | [quickstart guide](../../wiki/Quickstart)
+Full walkthrough: [Quickstart](../../wiki/Quickstart)
+
+---
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────┐
-│              Cascade.app (Tauri 2)        │
+│           Cascade.app (Tauri 2)           │
 │  Onboarding wizard · Knowledge vault     │
 │  Template browser · Persona library      │
 │  Project maps · Settings                 │
@@ -122,26 +146,35 @@ Full documentation: [the wiki](../../wiki) | [CLI reference](../../wiki/CLI-Refe
   └────────┘ └────────┘ └───────────────┘
 ```
 
-## Distribution channels
+The daemon is the center of gravity. It resolves the cascade hierarchy, writes derived files to each tool's expected location, watches the filesystem for changes, serves the MCP server, and runs the RAG pipeline. The CLI and GUI talk to the daemon via a local socket.
 
-| Channel | Package | Notes |
-|---|---|---|
-| Homebrew Cask | `acamarata/tap/cascade` | macOS GUI + CLI |
-| AUR | `cascade-bin` | Linux, pre-built binary |
-| Winget | `acamarata.cascade` | Windows |
-| Chocolatey | `cascade` | Windows |
-| Scoop | `cascade` | Windows |
-| Snap | `cascade` | Linux |
-| Flatpak | `dev.camarata.Cascade` | Linux |
-| Nix | `github:acamarata/cascade` | NixOS + flakes |
-| crates.io | `cascade-cli` | `cargo install cascade-cli` |
+---
+
+## Documentation
+
+- [Quickstart](../../wiki/Quickstart) — first cascade in 5 minutes
+- [Installation](../../wiki/Installation) — all install methods
+- [Cascade Concepts](../../wiki/Cascade-Concepts) — why cascading instructions
+- [Six-Tier Taxonomy](../../wiki/Six-Tier-Taxonomy) — GCI / PCI / APC / PPC / PRC / PAC
+- [CLI Reference](../../wiki/CLI-Reference) — every command and flag
+- [Configuration](../../wiki/Configuration) — config file reference
+- [MCP Server](../../wiki/MCP-Server) — live context injection
+- [Plugin Development](../../wiki/Plugin-Development) — WASM plugin guide
+- [Architecture](../../wiki/Architecture) — system deep-dive
+- [Roadmap](../../wiki/Roadmap) — what is coming
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Contributing wiki page](../../wiki/Contributing).
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Building From Source](../../wiki/Building-From-Source) wiki page.
+
+Bug reports and feature requests go to [GitHub Issues](https://github.com/acamarata/cascade/issues). Security issues go to the process in [SECURITY.md](SECURITY.md) — not as public issues.
+
+---
 
 ## License
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
 MIT. See [LICENSE](LICENSE).
+
+Author: [Aric Camarata](https://github.com/acamarata)

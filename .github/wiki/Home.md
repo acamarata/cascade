@@ -13,7 +13,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 ## Quick navigation
 
 **Getting started**
-- [Install](Install.md) — macOS, Linux, Windows
+- [Installation](Installation.md) — macOS, Linux, Windows
 - [Quickstart](Quickstart.md) — your first cascade in 5 minutes
 - [Distribution Channels](Distribution-Channels.md) — all 9 install methods
 - [Onboarding Wizard](onboarding-wizard.md) — guided setup walkthrough
@@ -40,7 +40,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 
 **Plugins**
 - [Plugin Development](Plugin-Development.md) — overview
-- [Plugin Development Guide](plugin-development-guide.md) — full PDK reference
+- [Plugin Development Guide](Plugin-Development-Guide.md) — full PDK reference
 - [github-issues](plugins-github-issues.md) · [gitlab](plugins-gitlab.md) · [jira](plugins-jira.md) · [linear](plugins-linear.md)
 
 **Daemon & OS**
