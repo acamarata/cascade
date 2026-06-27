@@ -49,6 +49,7 @@ impl Retriever for VectorRetriever {
         let embed_opts = EmbedOpts {
             usage: EmbedUsage::Query,
             model_override: None,
+            truncate_dim: None,
         };
         let embeddings = self.embedder.embed(&[query], &embed_opts).await?;
         let query_vec =

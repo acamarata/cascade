@@ -8,14 +8,22 @@
 //   - `load_token_embeddings` — load token vectors for a chunk from the DB.
 //   - `maxsim` — ColBERT MaxSim late-interaction scoring function.
 //
-// # Proxy caveat (same as dense BGE-M3)
+// # ColBERT proxy caveat (rag-02 verified)
 //
-// fastembed 3.14.1 does not expose a `BGEM3` ColBERT multi-vector mode.
-// `BgeM3Embedder::embed_multi_vec` falls back to returning one vector per
-// whitespace token derived from the dense model output.  This is a structural
-// proxy that validates the end-to-end pipeline without true token-level
-// ColBERT weights.  Tracked as a known gap: upgrade path = bump fastembed to
-// a version that ships ColBERT output, remove the proxy comment.
+// fastembed 4.9.1 does not expose token-level/late-interaction ColBERT output.
+// There is no BGEM3 variant and no multi-vector output mode in the fastembed
+// 4.9.1 EmbeddingModel enum.
+//
+// TODO(rag-02): real ColBERT requires token-level embeddings not in fastembed 4.9.1.
+// The current default implementation (blanket impl of MultiVecEmbedModel for any
+// EmbedModel) falls back to one dense vector per whitespace-split token.  This
+// validates the end-to-end pipeline shape (Vec<Vec<f32>>) but produces wrong
+// ColBERT weights — each "token vector" is actually a full-sequence embedding of
+// a single word, not a contextual token hidden-state.
+//
+// Upgrade path: when fastembed exposes ColBERT/late-interaction output, replace
+// the blanket default impl with a real token-level implementation and remove
+// this comment block.
 //
 // Inputs:  &str text
 // Outputs: Vec<Vec<f32>> — one inner Vec<f32> per token
@@ -44,11 +52,15 @@ pub trait MultiVecEmbedModel: EmbedModel {
     /// `self.dim()`.  The number of token vectors equals the number of
     /// whitespace-delimited tokens in `text`.
     ///
-    /// # Default implementation
+    /// # Default implementation (proxy — NOT real ColBERT)
     ///
-    /// Splits on whitespace and embeds each token via `embed_dense`.  This is
-    /// a structural proxy; real ColBERT output decomposes the full-sequence
-    /// hidden states per token, not per-word dense calls.
+    /// Splits on whitespace and embeds each word via `embed_dense`.
+    ///
+    /// TODO(rag-02): real ColBERT requires token-level embeddings not in fastembed 4.9.1.
+    /// This is a structural proxy that produces the correct output shape
+    /// (`Vec<Vec<f32>>`) but wrong per-token weights — each inner vector is a
+    /// full-sequence dense embedding of a single whitespace-split word, not a
+    /// contextual hidden-state.  Upgrade when fastembed ships ColBERT output.
     fn embed_multi_vec(&self, text: &str) -> std::result::Result<Vec<Vec<f32>>, EmbedError> {
         let tokens: Vec<&str> = text.split_whitespace().collect();
         if tokens.is_empty() {

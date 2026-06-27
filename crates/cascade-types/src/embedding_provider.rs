@@ -144,6 +144,15 @@ pub struct EmbedOpts {
     /// Optional model override (e.g. `"text-embedding-3-large"`).
     /// When `None`, the provider uses its default model.
     pub model_override: Option<String>,
+
+    /// Matryoshka truncation: truncate the output vector to this many dimensions
+    /// and L2-renormalise after inference.  `None` = use the model's full dimension.
+    ///
+    /// Only supported by providers that produce Matryoshka-compatible embeddings
+    /// (e.g. MultilingualE5Large, OpenAI text-embedding-3-*).  Other providers
+    /// ignore this field.  Always produces a unit-norm vector.
+    #[serde(default)]
+    pub truncate_dim: Option<usize>,
 }
 
 /// Whether the text being embedded is a search query or a document passage.
@@ -161,6 +170,7 @@ impl Default for EmbedOpts {
         Self {
             usage: EmbedUsage::Document,
             model_override: None,
+            truncate_dim: None,
         }
     }
 }

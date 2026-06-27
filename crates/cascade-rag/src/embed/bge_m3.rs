@@ -13,22 +13,30 @@
 //! - **Dense**: 1024-dimensional float vectors via fastembed-rs ONNX session.
 //! - **Sparse**: TF-IDF with FNV-1a stable token hashing (see note below).
 //!
-//! ## fastembed-rs model note (T-P4-E01-04 gap)
+//! ## fastembed-rs model note (T-P4-E01-04 gap / rag-02 verification)
 //!
-//! fastembed 3.14.1 (the version resolved in Cargo.lock at forge time) does
-//! **not** expose `EmbeddingModel::BGEM3`.  The closest available 1024-dim
-//! variant is `EmbeddingModel::BGELargeENV15` (BAAI/bge-large-en-v1.5, dim
-//! = 1024).  That model is used for dense vectors.
+//! fastembed 4.9.1 does **not** expose `EmbeddingModel::BGEM3`.  The best
+//! available 1024-dim multilingual model is `EmbeddingModel::MultilingualE5Large`
+//! (intfloat/multilingual-e5-large, dim=1024).  It covers 100+ languages and
+//! is the closest available proxy to BGE-M3 dense output within fastembed 4.9.1.
+//!
+//! TODO(rag-02): BGE-M3 not in fastembed 4.9.1 — upgrade when fastembed
+//!   ships EmbeddingModel::BGEM3; replace MultilingualE5Large + this comment.
 //!
 //! # Selected: TF-IDF fallback for sparse (not native SPLADE)
 //!
-//! fastembed 3.14.1 only ships `SparseModel::SPLADEPPV1` (English-only
+//! fastembed 4.9.1 only ships `SparseModel::SPLADEPPV1` (English-only
 //! Splade-PP), not a BGE-M3 sparse model.  To avoid a ~700 MB extra model
 //! download for a non-M3 sparse model, the sparse path uses the
 //! [`sparse_tfidf_single`] helper from `embed::mod`, which produces stable,
 //! reproducible `(FNV-1a-token-id, tf-idf-weight)` pairs.  Upgrade path:
-//! when fastembed ships `EmbeddingModel::BGEM3`, replace `BGELargeENV15` +
-//! remove this comment block.
+//! when fastembed ships a BGE-M3 sparse model, remove this comment block.
+//!
+//! # ColBERT / multi-vector
+//!
+//! fastembed 4.9.1 has no token-level/late-interaction ColBERT output.  The
+//! `rag-multivec` path uses a per-word dense-call proxy; see `multivector.rs`
+//! and its module-level caveat.
 //!
 //! # Performance targets
 //!
@@ -54,12 +62,14 @@
 //! SPORT: MASTER-LIBS.md → cascade-rag::embed::bge_m3
 
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tracing::{info, instrument, warn};
 
 use cascade_types::{
     error::{CascadeError, Result},
-    EmbedOpts, Embedding, EmbeddingProvider, ProviderKind,
+    EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind,
 };
 
 use super::{sparse_tfidf_single, EmbedError, EmbedModel};
@@ -73,11 +83,25 @@ use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 /// Configurable via [`BgeM3Options::batch_size`].
 const DEFAULT_BATCH_SIZE: usize = 32;
 
-/// Dense embedding dimension for BGE-M3 (and BGELargeENV15 as proxy).
+/// Dense embedding dimension.
+///
+/// MultilingualE5Large produces 1024-dim vectors, matching the BGE-M3 target.
+/// TODO(rag-02): BGE-M3 not in fastembed 4.9.1; using MultilingualE5Large (1024-d).
 const BGE_M3_DIM: usize = 1024;
 
 /// Stable model identifier string used in logs, metrics, and error messages.
 const MODEL_ID: &str = "bge-m3";
+
+/// Query instruction prefix for multilingual-e5-large.
+///
+/// E5 models expect a task-specific prefix for query vectors.  Document
+/// vectors use `DOCUMENT_INSTRUCTION`.  Using task prefixes matches the
+/// intfloat/multilingual-e5-large recommended usage and replicates the
+/// BGE-M3 instruction pattern.
+const QUERY_INSTRUCTION: &str = "query: ";
+
+/// Document instruction prefix for multilingual-e5-large.
+const DOCUMENT_INSTRUCTION: &str = "passage: ";
 
 // ── BgeM3Embedder ─────────────────────────────────────────────────────────────
 
@@ -120,6 +144,20 @@ pub struct BgeM3Embedder {
     model_dir: PathBuf,
     /// Batch size for ONNX inference calls.
     batch_size: usize,
+    /// Content-hash embed cache: blake3 hex → dense vector.
+    ///
+    /// Avoids re-embedding identical text chunks on repeated indexing runs.
+    /// Cache hits > 90% expected on incremental re-index of unchanged documents.
+    embed_cache: Mutex<HashMap<String, Vec<f32>>>,
+}
+
+impl std::fmt::Debug for BgeM3Embedder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BgeM3Embedder")
+            .field("model_dir", &self.model_dir)
+            .field("batch_size", &self.batch_size)
+            .finish_non_exhaustive()
+    }
 }
 
 // ── Options ───────────────────────────────────────────────────────────────────
@@ -182,9 +220,15 @@ impl BgeM3Embedder {
             })?,
         };
 
-        std::fs::create_dir_all(&model_dir)
-            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
-
+        // BUG #1 FIX: offline_guard check BEFORE create_dir_all.
+        //
+        // Old code (wrong): create_dir_all ran first, then checked `!model_dir.exists()`.
+        // Since create_dir_all just created the dir, `exists()` was always true →
+        // the guard was a no-op.
+        //
+        // Fixed: check BEFORE creating the directory so an uncached model returns
+        // Err(EmbeddingFailed) instead of silently creating an empty dir and
+        // trying to load a non-existent model.
         if opts.offline_guard && !model_dir.exists() {
             return Err(CascadeError::EmbeddingFailed {
                 provider: MODEL_ID.into(),
@@ -195,14 +239,18 @@ impl BgeM3Embedder {
             });
         }
 
-        info!(model_dir = %model_dir.display(), "initialising BGE-M3 / BGELargeENV15 provider");
+        std::fs::create_dir_all(&model_dir)
+            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
+
+        info!(model_dir = %model_dir.display(), "initialising BGE-M3 / MultilingualE5Large provider");
 
         #[cfg(feature = "fastembed")]
         {
-            // NOTE: fastembed 3.14.1 has no EmbeddingModel::BGEM3.
-            // BGELargeENV15 (dim=1024) is the closest available model.
+            // TODO(rag-02): BGE-M3 not in fastembed 4.9.1.
+            // Using MultilingualE5Large (intfloat/multilingual-e5-large, 1024-dim).
+            // Best available 1024-dim multilingual model in fastembed 4.9.1.
             // Upgrade: replace with EmbeddingModel::BGEM3 when available.
-            let init_opts = InitOptions::new(EmbeddingModel::BGELargeENV15)
+            let init_opts = InitOptions::new(EmbeddingModel::MultilingualE5Large)
                 .with_cache_dir(model_dir.clone())
                 .with_show_download_progress(true);
 
@@ -213,13 +261,14 @@ impl BgeM3Embedder {
                 })?;
 
             // Warm-up: one dummy embed to pre-allocate ONNX buffers.
-            let _ = model.embed(vec!["warm-up"], Some(1));
-            info!("BGELargeENV15 warm-up complete (proxying BGE-M3)");
+            let _ = model.embed(vec!["warm-up".to_string()], Some(1));
+            info!("MultilingualE5Large warm-up complete (proxying BGE-M3, 1024-dim)");
 
             return Ok(Self {
                 model,
                 model_dir,
                 batch_size: opts.batch_size,
+                embed_cache: Mutex::new(HashMap::new()),
             });
         }
 
@@ -229,9 +278,45 @@ impl BgeM3Embedder {
             Ok(Self {
                 model_dir,
                 batch_size: opts.batch_size,
+                embed_cache: Mutex::new(HashMap::new()),
             })
         }
     }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Compute blake3 hex hash for a string (content-hash cache key).
+fn blake3_hex(s: &str) -> String {
+    blake3::hash(s.as_bytes()).to_hex().to_string()
+}
+
+/// L2-normalise a mutable vector in place.
+///
+/// If the vector is the zero vector (norm < 1e-12), it is left unchanged to
+/// avoid NaN.
+fn l2_normalize(v: &mut [f32]) {
+    let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm < 1e-12 {
+        return;
+    }
+    for x in v.iter_mut() {
+        *x /= norm;
+    }
+}
+
+/// Truncate a dense vector to `dim` dimensions and L2-renormalise.
+///
+/// Returns the truncated, renormalised vector.  If `dim >= v.len()`, the
+/// original vector is returned (still renormalised).
+pub(crate) fn truncate_and_normalize(v: Vec<f32>, dim: usize) -> Vec<f32> {
+    let mut out: Vec<f32> = if dim < v.len() {
+        v.into_iter().take(dim).collect()
+    } else {
+        v
+    };
+    l2_normalize(&mut out);
+    out
 }
 
 // ── EmbedModel impl ───────────────────────────────────────────────────────────
@@ -239,8 +324,9 @@ impl BgeM3Embedder {
 impl EmbedModel for BgeM3Embedder {
     /// Embed texts into 1024-dim dense vectors.
     ///
-    /// Internally splits `texts` into chunks of `batch_size` and calls
-    /// fastembed's synchronous ONNX session on a blocking thread.
+    /// Prepends the document instruction prefix (`"passage: "`) before calling
+    /// fastembed.  Uses a blake3 content-hash cache to skip re-embedding of
+    /// identical texts.
     ///
     /// # Errors
     ///
@@ -253,29 +339,66 @@ impl EmbedModel for BgeM3Embedder {
 
         #[cfg(feature = "fastembed")]
         {
-            // fastembed embed() is synchronous; run it here (caller must ensure
-            // not on the async executor — see async bridge below for the right
-            // pattern with block_in_place).
-            let owned: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
-            let results = self
-                .model
-                .embed(owned, Some(self.batch_size))
-                .map_err(|e| EmbedError::InferenceFailed {
+            // Prepend document instruction prefix.
+            // Query prefix is applied separately in EmbeddingProvider::embed().
+            let prefixed: Vec<String> = texts
+                .iter()
+                .map(|t| format!("{DOCUMENT_INSTRUCTION}{t}"))
+                .collect();
+
+            // Split into cache hits and misses.
+            let mut results: Vec<(usize, Vec<f32>)> = Vec::with_capacity(texts.len());
+            let mut miss_indices: Vec<usize> = Vec::new();
+            let mut miss_texts: Vec<String> = Vec::new();
+
+            {
+                let cache = self.embed_cache.lock().map_err(|_| EmbedError::InferenceFailed {
                     model_id: MODEL_ID.into(),
-                    detail: format!("{e}"),
+                    detail: "embed_cache mutex poisoned".into(),
+                })?;
+                for (i, t) in texts.iter().enumerate() {
+                    let key = blake3_hex(t);
+                    if let Some(cached) = cache.get(&key) {
+                        results.push((i, cached.clone()));
+                    } else {
+                        miss_indices.push(i);
+                        miss_texts.push(prefixed[i].clone());
+                    }
+                }
+            }
+
+            // Run inference for cache misses.
+            if !miss_texts.is_empty() {
+                let inferred = self
+                    .model
+                    .embed(miss_texts, Some(self.batch_size))
+                    .map_err(|e| EmbedError::InferenceFailed {
+                        model_id: MODEL_ID.into(),
+                        detail: format!("{e}"),
+                    })?;
+
+                let mut cache = self.embed_cache.lock().map_err(|_| EmbedError::InferenceFailed {
+                    model_id: MODEL_ID.into(),
+                    detail: "embed_cache mutex poisoned on write".into(),
                 })?;
 
-            // Validate dimension.
-            for (i, v) in results.iter().enumerate() {
-                if v.len() != BGE_M3_DIM {
-                    return Err(EmbedError::DimensionMismatch {
-                        expected: BGE_M3_DIM,
-                        actual: v.len(),
-                    });
+                for (offset, &orig_idx) in miss_indices.iter().enumerate() {
+                    let v = &inferred[offset];
+                    if v.len() != BGE_M3_DIM {
+                        return Err(EmbedError::DimensionMismatch {
+                            expected: BGE_M3_DIM,
+                            actual: v.len(),
+                        });
+                    }
+                    let key = blake3_hex(texts[orig_idx]);
+                    cache.insert(key, v.clone());
+                    results.push((orig_idx, v.clone()));
                 }
-                let _ = i;
             }
-            return Ok(results);
+
+            // Re-sort to original order.
+            results.sort_by_key(|(i, _)| *i);
+            return Ok(results.into_iter().map(|(_, v)| v).collect());
         }
 
         #[cfg(not(feature = "fastembed"))]
@@ -289,19 +412,16 @@ impl EmbedModel for BgeM3Embedder {
     ///
     /// # Selected: TF-IDF fallback
     ///
-    /// fastembed 3.14.1 ships `SparseModel::SPLADEPPV1` but not a BGE-M3
-    /// sparse model.  To avoid a second large model download, this method
-    /// uses the TF-IDF + FNV-1a fallback defined in `embed::sparse_tfidf_single`.
+    /// fastembed 4.9.1 ships `SparseModel::SPLADEPPV1` (English-only) but no
+    /// BGE-M3 sparse model.  This method uses TF-IDF + FNV-1a fallback.
     ///
-    /// Token IDs are stable across process restarts (FNV-1a, fixed constants).
+    /// TODO(rag-02): fastembed 4.9.1 has no BGE-M3 sparse model.
+    /// SparseModel::SPLADEPPV1 is English-only and not BGE-M3 compatible.
+    /// TF-IDF kept until fastembed ships a BGE-M3 sparse model.
     fn embed_sparse(
         &self,
         texts: &[&str],
     ) -> std::result::Result<Vec<Vec<(u32, f32)>>, EmbedError> {
-        // Selected: TF-IDF fallback (fastembed 3.14.1 has no BGE-M3 sparse).
-        // When fastembed ships native BGE-M3 sparse, replace with:
-        //   SparseTextEmbedding::try_new(SparseInitOptions { model_name:
-        //   SparseModel::BGEM3, cache_dir: self.model_dir.clone(), .. })
         Ok(texts.iter().map(|t| sparse_tfidf_single(t)).collect())
     }
 
@@ -320,27 +440,65 @@ impl EmbedModel for BgeM3Embedder {
 impl EmbeddingProvider for BgeM3Embedder {
     /// Async wrapper around `embed_dense`.
     ///
+    /// Applies query/document instruction prefix based on `opts.usage`:
+    /// - `EmbedUsage::Query` → prepends `"query: "` (bypasses `embed_dense`'s document prefix).
+    /// - `EmbedUsage::Document` → uses `embed_dense` (which prepends `"passage: "`).
+    ///
+    /// Applies `opts.truncate_dim` after inference if set: truncates to the
+    /// requested number of dimensions and L2-renormalises (matryoshka support).
+    ///
     /// Runs the synchronous ONNX inference inside `block_in_place` so the
     /// async executor is not blocked during model inference.
-    async fn embed(&self, texts: &[&str], _opts: &EmbedOpts) -> Result<Vec<Embedding>> {
+    async fn embed(&self, texts: &[&str], opts: &EmbedOpts) -> Result<Vec<Embedding>> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
 
+        let is_query = opts.usage == EmbedUsage::Query;
+        let truncate = opts.truncate_dim;
+
         #[cfg(feature = "fastembed")]
         {
-            // Block-in-place: fastembed is synchronous; keep it off the executor.
-            // `texts` is already `&[&str]`; pass it straight to the sync impl rather
-            // than round-tripping through an owned `Vec<String>` + a second `Vec<&str>`
-            // (rag-10 bug #9 — double allocation per embed call).
+            if is_query {
+                // Query path: prepend QUERY_INSTRUCTION directly, bypassing the
+                // document-instruction wrapper inside embed_dense.
+                let query_owned: Vec<String> = texts
+                    .iter()
+                    .map(|t| format!("{QUERY_INSTRUCTION}{t}"))
+                    .collect();
+
+                let vecs = tokio::task::block_in_place(|| {
+                    self.model
+                        .embed(query_owned, Some(self.batch_size))
+                        .map_err(|e| EmbedError::InferenceFailed {
+                            model_id: MODEL_ID.into(),
+                            detail: format!("{e}"),
+                        })
+                })
+                .map_err(|e: EmbedError| CascadeError::from(e))?;
+
+                return Ok(vecs
+                    .into_iter()
+                    .map(|mut values| {
+                        if let Some(dim) = truncate {
+                            values = truncate_and_normalize(values, dim);
+                        }
+                        Embedding { values, token_count: None }
+                    })
+                    .collect());
+            }
+
+            // Document path: use cached embed_dense (applies DOCUMENT_INSTRUCTION).
             let vecs = tokio::task::block_in_place(|| self.embed_dense(texts))
                 .map_err(|e: EmbedError| CascadeError::from(e))?;
 
             return Ok(vecs
                 .into_iter()
-                .map(|values| Embedding {
-                    values,
-                    token_count: None,
+                .map(|mut values| {
+                    if let Some(dim) = truncate {
+                        values = truncate_and_normalize(values, dim);
+                    }
+                    Embedding { values, token_count: None }
                 })
                 .collect());
         }
@@ -350,9 +508,12 @@ impl EmbeddingProvider for BgeM3Embedder {
             // Stub: zero vectors.
             Ok(texts
                 .iter()
-                .map(|_| Embedding {
-                    values: vec![0.0f32; BGE_M3_DIM],
-                    token_count: None,
+                .map(|_| {
+                    let dim = truncate.unwrap_or(BGE_M3_DIM);
+                    Embedding {
+                        values: vec![0.0f32; dim],
+                        token_count: None,
+                    }
                 })
                 .collect())
         }
@@ -400,11 +561,7 @@ mod tests {
         );
     }
 
-    /// Cosine similarity between two dissimilar texts must be less than 0.9.
-    ///
-    /// The mock model does not encode semantics, so "hello" vs "world" is
-    /// not guaranteed to be far apart; we just verify the API works and
-    /// returns plausible floats.
+    /// Dense output returns plausible finite floats for multiple texts.
     #[test]
     fn mock_dense_returns_plausible_floats() {
         let m = MockEmbedModel::new(1024);
@@ -424,8 +581,12 @@ mod tests {
         assert!(!sparse[0].is_empty(), "sparse output must not be empty");
     }
 
-    /// Missing-model error: constructing BgeM3Embedder with offline_guard
-    /// in a temp dir that has no model files must produce an EmbeddingFailed error.
+    /// BUG #1 REGRESSION: offline_guard must fire BEFORE create_dir_all.
+    ///
+    /// Old behaviour: `create_dir_all` ran first → dir always existed →
+    /// `!model_dir.exists()` was always false → guard never triggered.
+    ///
+    /// Fixed: guard check moved to BEFORE `create_dir_all`.
     #[tokio::test]
     async fn new_offline_guard_missing_model_errors() {
         let dir = tempfile::tempdir().unwrap();
@@ -437,7 +598,6 @@ mod tests {
             batch_size: 32,
             offline_guard: true,
         };
-        // With offline_guard and no model dir, new() must fail.
         let result = BgeM3Embedder::new(opts).await;
         assert!(result.is_err(), "offline_guard + missing dir must error");
         match result.unwrap_err() {
@@ -448,14 +608,85 @@ mod tests {
         }
     }
 
+    /// blake3_hex must be deterministic and differ for different inputs.
+    #[test]
+    fn blake3_hex_is_deterministic() {
+        let h1 = blake3_hex("hello world");
+        let h2 = blake3_hex("hello world");
+        assert_eq!(h1, h2, "blake3_hex must be deterministic");
+        assert_ne!(
+            blake3_hex("hello world"),
+            blake3_hex("different text"),
+            "different inputs must produce different hashes"
+        );
+        // 64 hex chars = 256-bit blake3 output.
+        assert_eq!(h1.len(), 64, "blake3 hex must be 64 chars");
+    }
+
+    /// l2_normalize must produce a unit-norm vector.
+    #[test]
+    fn l2_normalize_produces_unit_norm() {
+        let mut v = vec![3.0_f32, 4.0, 0.0];
+        l2_normalize(&mut v);
+        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-6, "must produce unit-norm, got {norm}");
+    }
+
+    /// l2_normalize of zero vector must leave it unchanged (no NaN/inf).
+    #[test]
+    fn l2_normalize_zero_vector_is_safe() {
+        let mut v = vec![0.0_f32, 0.0, 0.0];
+        l2_normalize(&mut v);
+        assert!(v.iter().all(|x| x.is_finite()), "zero vector must remain finite");
+    }
+
+    /// truncate_and_normalize must shorten the vector and produce a unit-norm result.
+    ///
+    /// Core test for task 5 (truncate_dim matryoshka truncation).
+    #[test]
+    fn truncate_dim_shortens_and_normalises() {
+        let input: Vec<f32> = (0..1024).map(|i| (i as f32).sin()).collect();
+        let out = truncate_and_normalize(input, 256);
+        assert_eq!(out.len(), 256, "truncated to 256 dims");
+        let norm: f32 = out.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-5, "truncated vector must be unit-norm, got {norm}");
+    }
+
+    /// truncate_and_normalize with dim >= len must not shrink the vector.
+    #[test]
+    fn truncate_dim_no_op_when_dim_ge_len() {
+        let input = vec![1.0_f32, 0.0, 0.0];
+        let out = truncate_and_normalize(input, 10);
+        assert_eq!(out.len(), 3, "must not grow vector beyond its original length");
+    }
+
+    /// Query instruction prefix must differ from document instruction prefix.
+    ///
+    /// E5 models use task-specific prefixes; both must be distinct so that
+    /// query embedding differs from document embedding at the model level.
+    #[test]
+    fn query_instruction_differs_from_document_instruction() {
+        assert_ne!(
+            QUERY_INSTRUCTION, DOCUMENT_INSTRUCTION,
+            "query and document instruction prefixes must differ"
+        );
+        assert!(
+            QUERY_INSTRUCTION.starts_with("query"),
+            "QUERY_INSTRUCTION must start with 'query'"
+        );
+        assert!(
+            DOCUMENT_INSTRUCTION.starts_with("passage"),
+            "DOCUMENT_INSTRUCTION must start with 'passage'"
+        );
+    }
+
     // ── Slow integration tests requiring model download (marked #[ignore]) ────
 
     /// Dense embedding of two texts returns 1024-dim vectors.
     ///
-    /// Requires the BGELargeENV15 ONNX model (~1.3 GB) to be cached.
-    /// Run with: `cargo test -- --ignored embed::bge_m3::tests::real_embed_dim`
+    /// Requires the MultilingualE5Large ONNX model (~2 GB) to be cached.
     #[tokio::test]
-    #[ignore = "requires BGELargeENV15 model download (~1.3 GB)"]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
     async fn real_embed_dim() {
         let opts = BgeM3Options::default();
         let embedder = BgeM3Embedder::new(opts).await.expect("model init");
@@ -467,11 +698,71 @@ mod tests {
         }
     }
 
+    /// Query embedding must differ from document embedding for the same text.
+    ///
+    /// Requires model download.
+    #[tokio::test]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
+    async fn real_query_prefix_differs_from_document() {
+        use cascade_types::{EmbedOpts, EmbedUsage};
+        let embedder = BgeM3Embedder::new(BgeM3Options::default())
+            .await
+            .expect("model init");
+        let text = &["cascade semantic retrieval"];
+        let doc_opts = EmbedOpts { usage: EmbedUsage::Document, ..Default::default() };
+        let query_opts = EmbedOpts { usage: EmbedUsage::Query, ..Default::default() };
+        let doc_emb = embedder.embed(text, &doc_opts).await.expect("doc embed");
+        let query_emb = embedder.embed(text, &query_opts).await.expect("query embed");
+        assert_ne!(
+            doc_emb[0].values, query_emb[0].values,
+            "query and document embeddings must differ due to instruction prefix"
+        );
+    }
+
+    /// Embed cache: identical texts must return cache hits (same vectors).
+    ///
+    /// Requires model download.
+    #[tokio::test]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
+    async fn real_embed_cache_hit() {
+        let embedder = BgeM3Embedder::new(BgeM3Options::default())
+            .await
+            .expect("model init");
+        let text = "cache hit test sentence";
+        let v1 = embedder.embed_dense(&[text]).expect("first embed");
+        let v2 = embedder.embed_dense(&[text]).expect("second embed (cache hit)");
+        assert_eq!(v1, v2, "cache hit must produce identical vectors");
+    }
+
+    /// truncate_dim = Some(256) must return 256-d renormalised vectors.
+    ///
+    /// Requires model download.
+    #[tokio::test]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
+    async fn real_truncate_dim_256() {
+        use cascade_types::{EmbedOpts, EmbedUsage};
+        let embedder = BgeM3Embedder::new(BgeM3Options::default())
+            .await
+            .expect("model init");
+        let opts = EmbedOpts {
+            usage: EmbedUsage::Document,
+            truncate_dim: Some(256),
+            model_override: None,
+        };
+        let emb = embedder
+            .embed(&["matryoshka truncation test"], &opts)
+            .await
+            .expect("truncated embed");
+        assert_eq!(emb[0].values.len(), 256, "must be 256-d after truncation");
+        let norm: f32 = emb[0].values.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-4, "truncated vector must be unit-norm, got {norm}");
+    }
+
     /// Cosine similarity between identical texts is > 0.99.
     ///
-    /// Requires model download.  Run with `--ignored`.
+    /// Requires model download.
     #[tokio::test]
-    #[ignore = "requires BGELargeENV15 model download (~1.3 GB)"]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
     async fn real_identical_cosine_similarity() {
         let embedder = BgeM3Embedder::new(BgeM3Options::default())
             .await
@@ -485,17 +776,14 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(
-            cosine > 0.99,
-            "identical text cosine must be > 0.99, got {cosine}"
-        );
+        assert!(cosine > 0.99, "identical text cosine must be > 0.99, got {cosine}");
     }
 
     /// Cosine similarity between semantically dissimilar texts is < 0.9.
     ///
-    /// Requires model download.  Run with `--ignored`.
+    /// Requires model download.
     #[tokio::test]
-    #[ignore = "requires BGELargeENV15 model download (~1.3 GB)"]
+    #[ignore = "requires MultilingualE5Large model download (~2 GB)"]
     async fn real_dissimilar_cosine_similarity() {
         let embedder = BgeM3Embedder::new(BgeM3Options::default())
             .await
@@ -512,9 +800,6 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(
-            cosine < 0.9,
-            "dissimilar texts cosine must be < 0.9, got {cosine}"
-        );
+        assert!(cosine < 0.9, "dissimilar texts cosine must be < 0.9, got {cosine}");
     }
 }
