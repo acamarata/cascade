@@ -52,7 +52,10 @@ use tracing::{debug, warn};
 // ── Extensions that trigger ingest ───────────────────────────────────────────
 
 /// File extensions that trigger ingest on create/modify events.
-const WATCHED_EXTENSIONS: &[&str] = &["md", "rs", "ts", "py", "json", "yaml", "toml", "html"];
+const WATCHED_EXTENSIONS: &[&str] = &[
+    "md", "rs", "ts", "py", "json", "yaml", "toml", "html",
+    "txt", "pdf", "docx", "xlsx",
+];
 
 /// Directory name segments that are always excluded from watching.
 const EXCLUDED_DIRS: &[&str] = &[".git", "target", "node_modules", ".cascade"];

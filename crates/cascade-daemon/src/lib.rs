@@ -57,6 +57,8 @@ pub mod indexer;
 pub mod regen;
 pub mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
+// rag-11: MCP self-registration trigger point (frame-01 stub)
+pub mod mcp_registration;
 pub mod shutdown;
 pub mod state;
 pub mod supervisor;

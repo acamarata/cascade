@@ -67,6 +67,8 @@ pub mod unlink;
 pub mod update;
 // fleet-widget LaunchAgent management (cascade widget install/uninstall/status)
 pub mod widget;
+// rag-11: interactive first-run setup wizard
+pub mod wizard;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -189,6 +191,8 @@ pub enum Commands {
     Accounts(accounts::AccountsArgs),
     /// Manage the cascade-fleet-widget menu-bar LaunchAgent (install / uninstall / status).
     Widget(widget::WidgetArgs),
+    /// Interactive first-run setup: personal_dir, projects_dir, provider key.
+    Wizard(wizard::WizardArgs),
 }
 
 impl Commands {
@@ -241,6 +245,7 @@ impl Commands {
             Commands::Configure(args) => args.run().await,
             Commands::Accounts(args) => args.run().await,
             Commands::Widget(args)   => args.run().await,
+            Commands::Wizard(args)   => args.run().await,
         }
     }
 }

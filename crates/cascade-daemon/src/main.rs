@@ -60,6 +60,14 @@ mod loader;
 mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
 mod volume_watcher;
+// T-P4-E01-26: auto-RAG file watcher (notify-based)
+mod rag_watcher;
+// T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)
+mod indexer;
+// T-P4-E01-13: project discovery (scanner + registry)
+mod discovery;
+// rag-11: MCP self-registration trigger point (frame-01 stub)
+mod mcp_registration;
 // auto-01: background automation scheduler
 mod scheduler;
 

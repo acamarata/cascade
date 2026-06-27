@@ -395,7 +395,7 @@ pub struct RagConfig {
 impl Default for RagConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             strategy: StrategyKind::HybridRrf,
             top_k: 10,
             rerank_top_k: Some(5),
@@ -433,7 +433,7 @@ pub struct McpConfig {
 impl Default for McpConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             socket_path: None,
             max_connections: 10,
             request_timeout_secs: 60,

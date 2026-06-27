@@ -335,6 +335,120 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
         info!("scheduler: spawned with default periodic tasks");
     }
 
+    // ── RAG subsystem ─────────────────────────────────────────────────────────────
+    // Gated on cascade_types::CascadeConfig::rag.enabled (default: true since rag-11).
+    // Spawns: AutoRagWatcher → IndexingPipeline, VolumeWatcher → VolumeIndexGuard.
+    // Bootstrap scan: ProjectScanner over effective_projects_dirs() on first boot,
+    //   idempotent via ProjectRegistry (SQLite upsert; already-indexed = no-op).
+    //
+    // WHY all three components are co-located here: they share the IndexManager
+    // and must be wired in dependency order (IndexManager → watcher + guard + pipeline).
+    // Separating them across multiple run() calls would complicate teardown ordering.
+    {
+        use cascade_types::config::CascadeConfig;
+        let cascade_cfg = CascadeConfig::default();
+
+        if cascade_cfg.rag.enabled {
+            use crate::discovery::{ProjectRegistry, ProjectScanner};
+            use crate::indexer::IndexingPipeline;
+            use crate::rag_watcher::{AutoRagWatcher, WatcherConfig};
+            use crate::volume_watcher::{IndexManager, VolumeIndexGuard, VolumeWatcher};
+            use cascade_rag::embed::MockEmbedModel;
+            use cascade_rag::workers::{WorkerPool, WorkerPoolConfig};
+
+            // ── Bootstrap: open (or create) the global index manager ─────────
+            let index_root = config_dir.join("index");
+            match IndexManager::open(&index_root).await {
+                Err(e) => {
+                    warn!(%e, "rag: failed to open IndexManager — RAG subsystem disabled for this session");
+                }
+                Ok(index_mgr) => {
+                    // ── Bootstrap scan: discover projects on startup ──────────
+                    // ProjectRegistry is SQLite-backed; upsert is idempotent.
+                    // Files already in the index will not be re-ingested.
+                    let project_roots = cascade_cfg.effective_projects_dirs();
+                    {
+                        let registry_path = config_dir.clone();
+                        let roots_clone = project_roots.clone();
+                        tokio::task::spawn_blocking(move || {
+                            match ProjectRegistry::open(&registry_path) {
+                                Err(e) => {
+                                    warn!(%e, "rag: bootstrap scan — failed to open ProjectRegistry");
+                                }
+                                Ok(mut registry) => {
+                                    let scanner = ProjectScanner::new(roots_clone);
+                                    let records = scanner.scan(&mut registry);
+                                    info!(
+                                        count = records.len(),
+                                        "rag: bootstrap scan complete — projects discovered"
+                                    );
+                                }
+                            }
+                        });
+                    }
+
+                    // ── Embed model (mock; replaced by real ONNX in rag-14) ───
+                    let embed: Arc<dyn cascade_rag::embed::EmbedModel> =
+                        Arc::new(MockEmbedModel::new(1024));
+
+                    // ── WorkerPool ────────────────────────────────────────────
+                    let pool = Arc::new(WorkerPool::new(WorkerPoolConfig::default(), embed.clone()));
+
+                    // ── VolumeWatcher + VolumeIndexGuard ─────────────────────
+                    let (vol_watcher, vol_rx) = VolumeWatcher::new(
+                        project_roots.clone(),
+                        VolumeWatcher::DEFAULT_POLL_INTERVAL,
+                    );
+                    let vol_guard = VolumeIndexGuard::new(project_roots.clone(), Arc::clone(&index_mgr));
+                    let vol_shutdown = shutdown.clone();
+                    vol_watcher.spawn(vol_shutdown.clone());
+                    vol_guard.spawn(vol_rx, vol_shutdown);
+                    info!("rag: VolumeWatcher + VolumeIndexGuard spawned");
+
+                    // ── AutoRagWatcher + IndexingPipeline ─────────────────────
+                    // Use config_dir as the project root for the watcher so the
+                    // global .cascade/ memory/planning dirs are always watched.
+                    let watcher_cfg = WatcherConfig::new(config_dir.clone());
+                    let rag_shutdown = shutdown.clone();
+                    match AutoRagWatcher::start(watcher_cfg, rag_shutdown.clone()) {
+                        Err(e) => {
+                            warn!(%e, "rag: AutoRagWatcher failed to start — file watching disabled");
+                        }
+                        Ok((_watcher, signal_rx)) => {
+                            let pipeline = IndexingPipeline::new(
+                                signal_rx,
+                                pool,
+                                Arc::clone(&index_mgr),
+                                embed,
+                                rag_shutdown,
+                            );
+                            tokio::spawn(pipeline.run());
+                            info!("rag: AutoRagWatcher + IndexingPipeline spawned");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── MCP self-registration ─────────────────────────────────────────────────────
+    // Gated on cascade_types::CascadeConfig::mcp.enabled (default: true since rag-11).
+    // Calls mcp_registration::register() which is a stub until frame-01 implements
+    // the settings.json write.
+    {
+        use cascade_types::config::CascadeConfig;
+        let cascade_cfg = CascadeConfig::default();
+
+        if cascade_cfg.mcp.enabled {
+            use crate::mcp_registration;
+            let reg_dir = config_dir.clone();
+            tokio::spawn(async move {
+                mcp_registration::register(&reg_dir).await;
+            });
+            info!("mcp: registration trigger spawned (frame-01 stub)");
+        }
+    }
+
     // ── AutomationRunner ─────────────────────────────────────────────────────────
     // Instantiated with nop router/invoker stubs until a real provider is
     // wired. The runner is unused at startup (no automations loaded yet) but
