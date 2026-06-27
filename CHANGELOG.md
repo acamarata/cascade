@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-27
+
+RAG core + FOSS gate. Real local embeddings + reranking, a provider-agnostic Fleet router with no shipped accounts, vector-index correctness fixes, and migration safety.
+
+### Added
+- **Local embeddings** (`rag-02`): real ONNX inference via fastembed 4.9.1. Multilingual dense embeddings (MultilingualE5Large, 1024-d, 100+ languages), `query:`/`passage:` instruction prefixes, a BLAKE3 content-hash embed cache, and Matryoshka `truncate_dim`. (fastembed 4.9.1 ships no BGE-M3/SPLADE/ColBERT; tracked as TODO for direct-`ort` tri-mode.)
+- **Cross-encoder reranking** (`rag-03`): `BGERerankerV2M3` wired into the live search path (previously the reranker was constructed but never passed — it never ran in production). Candidate pool `k × multiplier` (default 20), sigmoid-scored, sorted by reranker score.
+- **Functional dense retrieval** (`rag-01`): `VectorRetriever` now returns real KNN hits (`vec0` under the `vec` feature, squared-L2 fallback otherwise) instead of an empty stub.
+- **FOSS Fleet router** (`fleet-01`): routing derives entirely from the live account registry by capability/role/tier — no hardcoded accounts. Empty registry returns a typed "setup required" with zero panics.
+- **Migration safety** (`mig-01`): `schema_version` validation on runtime YAML (typed future-version rejection) and backup-before-migrate on the tasks DB.
+
+### Changed
+- **FOSS genericization** (`frame-02`, release gate): the default account registry ships **empty**; dev-machine absolute paths scrubbed from all tracked files; new `scripts/check-no-maintainer-ids.sh` CI guard; `AUTHORS` added; `*.pem`/`*.key`/`*.secret` git-ignored.
+- Upgraded fastembed 3 → 4.9.1, repairing the `ort-sys` build break so the ONNX path compiles.
+
+### Fixed
+- rag-10 `#1` (embedder offline guard now fires before `create_dir_all`), `#4` (ColBERT no longer emits a silently-wrong shape — clean error + TODO).
+- rag-04: `#5` sharded eviction no longer orphans vectors, `#2` sharded health count sums across shards, `#6` legacy migration rebalances `shard_0` across shards instead of dumping everything into it.
+- Deleted the dead `JinaReranker` stub.
+
 ## [1.6.0] - 2026-06-27
 
 Foundation: embedded data layer. First milestone of the local-first personal+dev OS buildout — the shared SQLite substrate every later subsystem (RAG, registry, jobs, personal store) builds on.
