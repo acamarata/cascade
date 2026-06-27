@@ -784,8 +784,15 @@ mod tests {
 
     #[test]
     fn interactive_chat_routes_to_reserved_main_claude() {
+        // Hermetic: accounts_registry_path = None means an EMPTY registry (the FOSS
+        // default), so InteractiveChat returns the "claude" sentinel. Without this
+        // the test would read the developer's real ~/.cascade/accounts/accounts.json.
         let router = cascade_core::routing::Router::with_config(
-            cascade_core::routing::RouterConfig { quota_store_path: None, ..Default::default() },
+            cascade_core::routing::RouterConfig {
+                quota_store_path: None,
+                accounts_registry_path: None,
+                ..Default::default()
+            },
         );
         let d = router.select(TaskClass::InteractiveChat, "hello");
         assert!(
@@ -797,8 +804,14 @@ mod tests {
 
     #[test]
     fn sensitive_task_class_never_routes_to_external() {
+        // Hermetic: empty registry (None) so the test doesn't read the developer's
+        // real ~/.cascade accounts. Sensitive must stay on claude/local regardless.
         let router = cascade_core::routing::Router::with_config(
-            cascade_core::routing::RouterConfig { quota_store_path: None, ..Default::default() },
+            cascade_core::routing::RouterConfig {
+                quota_store_path: None,
+                accounts_registry_path: None,
+                ..Default::default()
+            },
         );
         let d = router.select(TaskClass::Sensitive, "my ssn is 123-45-6789");
         match &d {
