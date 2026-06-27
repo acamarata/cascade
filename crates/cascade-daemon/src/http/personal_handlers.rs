@@ -10,10 +10,20 @@
 
 use std::path::{Path, PathBuf};
 
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
+use axum::{
+    extract::{Path as AxumPath, Query},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+
+use cascade_core::threads::{
+    CreateTaskParams, CreateThreadParams, MoveTaskParams, SearchParams, ThreadStore,
+};
 
 use crate::dashboard::DashboardState;
 
@@ -150,62 +160,247 @@ fn collect_idea_files(dir: &Path, project: &str, kind: &str) -> Result<Vec<IdeaE
     Ok(out)
 }
 
+// ── thread CRUD request/response types ───────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct CreateThreadBody {
+    pub title: String,
+    pub parent_id: Option<String>,
+    pub sensitivity: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTaskBody {
+    pub title: String,
+    pub stage: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MoveTaskBody {
+    pub new_stage: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddTopicBody {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+    pub topic: Option<String>,
+    pub archived: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ArchiveBody {
+    pub archived: bool,
+}
+
+// ── thread store helper ───────────────────────────────────────────────────────
+
+/// Open ThreadStore from `$HOME/.cascade/tasks.db` + `$HOME/.cascade/threads/`.
+/// Creates threads_root if absent. Returns None if HOME is unset or DB fails.
+fn open_thread_store() -> Option<ThreadStore> {
+    let home = home_dir()?;
+    let db_path = home.join(".cascade").join("tasks.db");
+    let threads_root = home.join(".cascade").join("threads");
+    std::fs::create_dir_all(&threads_root).ok()?;
+    let conn = cascade_core::tasks::open_tasks_db(&db_path).ok()?;
+    Some(ThreadStore::new(conn, threads_root))
+}
+
 // ── T-P3-E02-10: handlers ────────────────────────────────────────────────────
 
 /// `GET /api/personal/threads`
 ///
-/// Scans `~/.claude/projects/**/MEMORY.md` and `**/memory/*.md` for thread entries.
-/// Returns `[ThreadEntry]`.
+/// Lists all active threads from the personal tasks DB. Returns `[Thread]`.
 pub async fn handler_threads() -> impl IntoResponse {
-    let Some(home) = home_dir() else {
-        return (StatusCode::OK, Json(json!([]))).into_response();
-    };
-    let projects_dir = home.join(".claude").join("projects");
-    let mut entries: Vec<ThreadEntry> = Vec::new();
-
-    // Walk ~/.claude/projects/ one level deep to find per-project dirs.
-    if let Ok(rd) = std::fs::read_dir(&projects_dir) {
-        for proj_entry in rd.flatten() {
-            let proj_path = proj_entry.path();
-            if !proj_path.is_dir() {
-                continue;
+    tokio::task::spawn_blocking(|| {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::OK, Json(json!([]))).into_response();
+        };
+        match store.list_threads(false) {
+            Ok(threads) => {
+                (StatusCode::OK, Json(serde_json::to_value(threads).unwrap_or(json!([])))).into_response()
             }
-            let proj_name = proj_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-
-            // MEMORY.md at project root
-            let memory_md = proj_path.join("MEMORY.md");
-            if memory_md.is_file() {
-                if let Ok(meta) = std::fs::metadata(&memory_md) {
-                    entries.push(ThreadEntry {
-                        project: proj_name.clone(),
-                        name: "MEMORY.md".to_string(),
-                        path: memory_md.to_string_lossy().to_string(),
-                        size_bytes: meta.len(),
-                        modified_at: fmt_modified(&meta),
-                    });
-                }
-            }
-
-            // memory/*.md subdirectory
-            let memory_dir = proj_path.join("memory");
-            match collect_md_files(&memory_dir, &proj_name) {
-                Ok(mut v) => entries.append(&mut v),
-                Err(e) => {
-                    tracing::warn!("threads: failed to read memory dir {:?}: {}", memory_dir, e);
-                }
-            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
-    }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
 
-    (
-        StatusCode::OK,
-        Json(serde_json::to_value(entries).unwrap_or(json!([]))),
-    )
-        .into_response()
+/// `POST /api/personal/threads`
+pub async fn handler_create_thread(Json(body): Json<CreateThreadBody>) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+        };
+        match store.create_thread(CreateThreadParams {
+            title: body.title,
+            parent_id: body.parent_id,
+            sensitivity: body.sensitivity,
+        }) {
+            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `GET /api/personal/threads/:id`
+pub async fn handler_get_thread(AxumPath(id): AxumPath<String>) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response();
+        };
+        match store.get_thread(&id) {
+            Ok(Some(t)) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
+            Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `PATCH /api/personal/threads/:id/archive`
+pub async fn handler_archive_thread(
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<ArchiveBody>,
+) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+        };
+        match store.set_archived(&id, body.archived) {
+            Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `POST /api/personal/threads/:id/tasks`
+pub async fn handler_add_task(
+    AxumPath(thread_id): AxumPath<String>,
+    Json(body): Json<CreateTaskBody>,
+) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+        };
+        match store.add_task(CreateTaskParams {
+            thread_id,
+            title: body.title,
+            stage: body.stage,
+            notes: body.notes,
+        }) {
+            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `PATCH /api/personal/tasks/:id/stage`
+pub async fn handler_move_task(
+    AxumPath(task_id): AxumPath<String>,
+    Json(body): Json<MoveTaskBody>,
+) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+        };
+        match store.move_task(MoveTaskParams {
+            task_id,
+            new_stage: body.new_stage,
+        }) {
+            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `POST /api/personal/threads/:id/topics`
+pub async fn handler_add_topic(
+    AxumPath(thread_id): AxumPath<String>,
+    Json(body): Json<AddTopicBody>,
+) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+        };
+        match store.add_topic_to_thread(&thread_id, &body.name) {
+            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `GET /api/personal/threads/:id/topics`
+pub async fn handler_list_topics(AxumPath(thread_id): AxumPath<String>) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::OK, Json(json!([]))).into_response();
+        };
+        match store.list_topics_for_thread(&thread_id) {
+            Ok(topics) => (StatusCode::OK, Json(serde_json::to_value(topics).unwrap_or(json!([])))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
+/// `GET /api/personal/threads/search?q=...&topic=...&archived=false`
+pub async fn handler_search_threads(Query(params): Query<SearchQuery>) -> impl IntoResponse {
+    tokio::task::spawn_blocking(move || {
+        let Some(store) = open_thread_store() else {
+            return (StatusCode::OK, Json(json!({"threads": [], "tasks": []}))).into_response();
+        };
+        match store.search(SearchParams {
+            query: params.q,
+            topic: params.topic,
+            include_archived: params.archived.unwrap_or(false),
+        }) {
+            Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({})))).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
 }
 
 /// `GET /api/personal/ideas-inbox`
@@ -547,7 +742,30 @@ pub async fn handler_account_ledger() -> impl IntoResponse {
 /// Build the `/api/personal` sub-router (no auth — protected by outer middleware).
 pub fn router() -> Router<DashboardState> {
     Router::new()
-        .route("/threads", get(handler_threads))
+        // threads CRUD
+        .route(
+            "/threads",
+            get(handler_threads).post(handler_create_thread),
+        )
+        .route("/threads/search", get(handler_search_threads))
+        .route("/threads/:id", get(handler_get_thread))
+        .route(
+            "/threads/:id/archive",
+            axum::routing::patch(handler_archive_thread),
+        )
+        .route(
+            "/threads/:id/tasks",
+            axum::routing::post(handler_add_task),
+        )
+        .route(
+            "/threads/:id/topics",
+            axum::routing::post(handler_add_topic).get(handler_list_topics),
+        )
+        .route(
+            "/tasks/:id/stage",
+            axum::routing::patch(handler_move_task),
+        )
+        // existing routes
         .route("/ideas-inbox", get(handler_ideas_inbox))
         .route("/crd-chains", get(handler_crd_chains))
         .route("/scheduled-tasks", get(handler_scheduled_tasks))
@@ -587,10 +805,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_empty() {
-        with_fake_home(|_tmp| {
-            // No projects dir → should return 200 []
-        });
-        with_fake_home(|_tmp| {
+        // DB-backed: empty DB → 200 []
+        with_fake_home(|tmp| {
+            // Create the .cascade dir so open_thread_store succeeds.
+            std::fs::create_dir_all(tmp.path().join(".cascade")).unwrap();
+
             let app = test_router();
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
@@ -605,6 +824,7 @@ mod tests {
                         .unwrap();
                     let val: Value = serde_json::from_slice(&body).unwrap();
                     assert!(val.is_array());
+                    assert_eq!(val.as_array().unwrap().len(), 0);
                 })
             });
         });
@@ -613,8 +833,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_with_memory() {
+        // Legacy test: MEMORY.md files are no longer returned by /threads (now DB-backed).
+        // Verify the endpoint still returns 200 [] when no threads exist in DB.
         with_fake_home(|tmp| {
-            // Create ~/.claude/projects/my-project/MEMORY.md
             let proj_dir = tmp
                 .path()
                 .join(".claude")
@@ -622,6 +843,9 @@ mod tests {
                 .join("my-project");
             std::fs::create_dir_all(&proj_dir).unwrap();
             std::fs::write(proj_dir.join("MEMORY.md"), "# Memory").unwrap();
+
+            // Create .cascade so the DB path resolves.
+            std::fs::create_dir_all(tmp.path().join(".cascade")).unwrap();
 
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -636,10 +860,8 @@ mod tests {
                         .await
                         .unwrap();
                     let val: Value = serde_json::from_slice(&body).unwrap();
+                    // DB-backed now — MEMORY.md files not returned; empty array expected.
                     assert!(val.is_array());
-                    assert_eq!(val.as_array().unwrap().len(), 1);
-                    assert_eq!(val[0]["name"], "MEMORY.md");
-                    assert_eq!(val[0]["project"], "my-project");
                 })
             });
         });

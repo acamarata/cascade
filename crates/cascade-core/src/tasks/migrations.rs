@@ -22,7 +22,7 @@ use rusqlite::Connection;
 /// dynamically from the last step in `migration_steps()`.
 /// Bump this and add a new step to `migration_steps()` for every
 /// breaking schema change.
-pub const TASKS_DB_SCHEMA_VERSION: u32 = 1;
+pub const TASKS_DB_SCHEMA_VERSION: u32 = 2;
 
 /// Open the tasks database at `db_path`, running all pending migrations.
 ///
@@ -97,43 +97,89 @@ struct MigrationStep {
 ///
 /// Extend this slice (not `run_migrations`) when adding new schema changes.
 fn migration_steps() -> &'static [MigrationStep] {
-    &[MigrationStep {
-        version: TASKS_DB_SCHEMA_VERSION,
-        name: "create_kanban_tasks",
-        up: |tx| {
-            tx.execute_batch(
-                "
-                CREATE TABLE IF NOT EXISTS kanban_tasks (
-                    id            TEXT    NOT NULL PRIMARY KEY,   -- UUID v4
-                    title         TEXT    NOT NULL,
-                    description   TEXT,                           -- nullable
-                    status        TEXT    NOT NULL DEFAULT 'backlog',
-                    project       TEXT    NOT NULL DEFAULT '',
-                    tags_json     TEXT    NOT NULL DEFAULT '[]',  -- JSON array of strings
-                    assignee      TEXT,                           -- nullable
-                    priority      TEXT    NOT NULL DEFAULT 'med',
-                    blockers_json TEXT    NOT NULL DEFAULT '[]',  -- JSON array of UUID strings
-                    created_at    TEXT    NOT NULL,               -- RFC 3339 UTC
-                    updated_at    TEXT    NOT NULL,               -- RFC 3339 UTC
-                    due           TEXT,                           -- RFC 3339 UTC, nullable
-                    ord           INTEGER NOT NULL DEFAULT 9223372036854775807
-                );
+    &[
+        MigrationStep {
+            version: 1,
+            name: "create_kanban_tasks",
+            up: |tx| {
+                tx.execute_batch(
+                    "
+                    CREATE TABLE IF NOT EXISTS kanban_tasks (
+                        id            TEXT    NOT NULL PRIMARY KEY,   -- UUID v4
+                        title         TEXT    NOT NULL,
+                        description   TEXT,                           -- nullable
+                        status        TEXT    NOT NULL DEFAULT 'backlog',
+                        project       TEXT    NOT NULL DEFAULT '',
+                        tags_json     TEXT    NOT NULL DEFAULT '[]',  -- JSON array of strings
+                        assignee      TEXT,                           -- nullable
+                        priority      TEXT    NOT NULL DEFAULT 'med',
+                        blockers_json TEXT    NOT NULL DEFAULT '[]',  -- JSON array of UUID strings
+                        created_at    TEXT    NOT NULL,               -- RFC 3339 UTC
+                        updated_at    TEXT    NOT NULL,               -- RFC 3339 UTC
+                        due           TEXT,                           -- RFC 3339 UTC, nullable
+                        ord           INTEGER NOT NULL DEFAULT 9223372036854775807
+                    );
 
-                -- Index for project-scoped listing (most common query)
-                CREATE INDEX IF NOT EXISTS idx_kanban_tasks_project
-                    ON kanban_tasks (project, status, ord, created_at);
+                    -- Index for project-scoped listing (most common query)
+                    CREATE INDEX IF NOT EXISTS idx_kanban_tasks_project
+                        ON kanban_tasks (project, status, ord, created_at);
 
-                -- Index for status-only listing (cross-project dashboard)
-                CREATE INDEX IF NOT EXISTS idx_kanban_tasks_status
-                    ON kanban_tasks (status, ord, created_at);
+                    -- Index for status-only listing (cross-project dashboard)
+                    CREATE INDEX IF NOT EXISTS idx_kanban_tasks_status
+                        ON kanban_tasks (status, ord, created_at);
 
-                -- Index for assignee filtering
-                CREATE INDEX IF NOT EXISTS idx_kanban_tasks_assignee
-                    ON kanban_tasks (assignee, project, status);
-                ",
-            )
+                    -- Index for assignee filtering
+                    CREATE INDEX IF NOT EXISTS idx_kanban_tasks_assignee
+                        ON kanban_tasks (assignee, project, status);
+                    ",
+                )
+            },
         },
-    }]
+        MigrationStep {
+            version: 2,
+            name: "create_threads_tables",
+            up: |tx| {
+                tx.execute_batch(
+                    "
+                    CREATE TABLE IF NOT EXISTS threads (
+                        id          TEXT NOT NULL PRIMARY KEY,   -- UUID v4
+                        parent_id   TEXT,                        -- nullable, for sub-threads
+                        title       TEXT NOT NULL,
+                        sensitivity TEXT NOT NULL DEFAULT 'normal', -- 'normal' | 'locked'
+                        created_at  TEXT NOT NULL,               -- RFC 3339 UTC
+                        archived    INTEGER NOT NULL DEFAULT 0   -- 0=active, 1=archived
+                    );
+
+                    CREATE TABLE IF NOT EXISTS thread_tasks (
+                        id          TEXT NOT NULL PRIMARY KEY,   -- UUID v4
+                        thread_id   TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+                        title       TEXT NOT NULL,
+                        stage       TEXT NOT NULL DEFAULT 'todo',  -- 'todo'|'in_progress'|'done'
+                        notes       TEXT,
+                        created_at  TEXT NOT NULL,
+                        updated_at  TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS topics (
+                        id   TEXT NOT NULL PRIMARY KEY,  -- UUID v4
+                        name TEXT NOT NULL UNIQUE
+                    );
+
+                    CREATE TABLE IF NOT EXISTS thread_topics (
+                        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+                        topic_id  TEXT NOT NULL REFERENCES topics(id)  ON DELETE CASCADE,
+                        PRIMARY KEY (thread_id, topic_id)
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_thread_tasks_thread
+                        ON thread_tasks (thread_id, stage);
+                    CREATE INDEX IF NOT EXISTS idx_threads_archived
+                        ON threads (archived, created_at);
+                    ",
+                )
+            },
+        },
+    ]
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
