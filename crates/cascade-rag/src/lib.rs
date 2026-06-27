@@ -54,6 +54,7 @@ pub mod parse;
 pub mod rerank;
 pub mod retrieve;
 pub mod search;
+pub mod study;
 pub mod workers;
 
 // Feature-gated placeholder modules — logic wired in subsequent tickets
