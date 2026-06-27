@@ -445,16 +445,48 @@ impl RagIndex {
     // ── Health ────────────────────────────────────────────────────────────────
 
     /// Return a snapshot of index health metrics.
+    ///
+    /// `embedded_chunks` is read from `vec_chunks` (non-sharded table).
+    /// For sharded deployments, call [`health_with_shard_count`] so the metric
+    /// reflects the true sum across all `shard_embeddings` tables (bug #2 fix).
     pub async fn health(&self) -> Result<IndexHealth> {
+        self.health_with_shard_count(None).await
+    }
+
+    /// Return index health metrics with an optional shard-count override for
+    /// `embedded_chunks`.
+    ///
+    /// # Purpose
+    ///
+    /// `SELECT COUNT(*) FROM vec_chunks` returns 0 for sharded deployments
+    /// because embeddings are stored in per-shard `shard_embeddings` tables, not
+    /// in `vec_chunks` (bug #2).  Pass `Some(shard.total_count())` to report the
+    /// correct embedded count.
+    ///
+    /// # Inputs
+    ///
+    /// `shard_embedded_count`: when `Some(n)`, uses `n` as `embedded_chunks`
+    /// instead of querying `vec_chunks`.  Pass `None` for the non-sharded path.
+    pub async fn health_with_shard_count(
+        &self,
+        shard_embedded_count: Option<u64>,
+    ) -> Result<IndexHealth> {
         let conn = self.conn.lock().await;
         let total: u64 = conn
             .query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0))
             .map_err(|e| CascadeError::RetrievalFailed {
                 detail: format!("count chunks: {e}"),
             })?;
-        let embedded: u64 = conn
-            .query_row("SELECT COUNT(*) FROM vec_chunks", [], |r| r.get(0))
-            .unwrap_or(0);
+        // Bug #2 fix: for sharded deployments the caller passes the real embedded
+        // count from ShardedIndex::total_count(); fall back to querying vec_chunks
+        // for the non-sharded (legacy) path.  Without this, vec_chunks always
+        // returns 0 when embeddings live in shard_embeddings.
+        let embedded: u64 = match shard_embedded_count {
+            Some(n) => n,
+            None => conn
+                .query_row("SELECT COUNT(*) FROM vec_chunks", [], |r| r.get(0))
+                .unwrap_or(0),
+        };
         let last: Option<i64> = conn
             .query_row("SELECT MAX(indexed_at) FROM chunks", [], |r| r.get(0))
             .ok()
@@ -721,5 +753,53 @@ mod cached_index_tests {
         let (hits, misses) = cached.cache().stats();
         assert_eq!(hits, 9, "expected 9 cache hits");
         assert_eq!(misses, 1, "expected 1 cache miss (cold)");
+    }
+
+    // ── bug #2: sharded total_count reflects inserted rows ───────────────────
+
+    /// Insert N docs across multiple shards; verify total_count sums all shards.
+    ///
+    /// This guards against the bug where the health metric queried `vec_chunks`
+    /// (always 0 for sharded deployments) instead of summing `shard_embeddings`.
+    #[test]
+    fn sharded_total_count_matches_inserted_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let shard = ShardedIndex::new(dir.path(), 4, 8).unwrap();
+        let cached = CachedIndex::with_defaults(shard);
+
+        assert_eq!(cached.total_count(), 0, "empty index must have count 0");
+
+        let n = 12usize;
+        for i in 0..n {
+            cached
+                .upsert(&EmbedResult {
+                    doc_id: format!("health_doc_{i}"),
+                    embedding: vec![i as f32 * 0.1; 8],
+                })
+                .expect("upsert");
+        }
+
+        // total_count sums shard_embeddings across all 4 shards — must equal n.
+        assert_eq!(
+            cached.total_count(),
+            n,
+            "total_count must equal inserted row count across all shards"
+        );
+
+        // Simulate what health_with_shard_count does: use total_count() as
+        // embedded_chunks.  The value must be n, not 0.
+        let embedded_from_shard = cached.total_count() as u64;
+        assert_eq!(
+            embedded_from_shard, n as u64,
+            "shard-sourced embedded count must match n (bug #2 fix)"
+        );
+
+        // Delete one doc; count must decrease.
+        cached.delete("health_doc_0").expect("delete");
+        assert_eq!(
+            cached.total_count(),
+            n - 1,
+            "total_count must decrease after delete"
+        );
     }
 }

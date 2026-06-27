@@ -324,7 +324,14 @@ pub fn query_dense_knn(
 
     #[cfg(not(feature = "vec"))]
     {
-        // Full-scan fallback: load all blobs, compute L2, sort, return top-k.
+        // Full-scan fallback: load all blobs, compute squared-L2, sort, return top-k.
+        // Distance-metric note (task 4): both the `vec` path above and the non-`vec`
+        // path here use ascending-distance ranking.  The `vec` path returns sqlite-vec
+        // L2 distance; the non-`vec` path uses squared-L2.  Both are monotone for
+        // ranking — the ordering is identical, only the scale differs.  These two
+        // paths are never mixed in a single ranking list (they feed separate retrieval
+        // tables: `rag_embeddings` vs `shard_embeddings`), so the difference does NOT
+        // affect result correctness.
         let mut stmt = conn
             .prepare_cached("SELECT rowid, embedding FROM rag_embeddings")
             .map_err(|e| EmbedError::InferenceFailed {

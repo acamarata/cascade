@@ -250,14 +250,18 @@ impl ShardedIndex {
 
         // Migration path: copy legacy single-file index to shard 0.
         let legacy = root.join("cascade_vec.db");
-        let shard_0 = root.join("cascade_vec_shard_0.db");
-        if legacy.exists() && !shard_0.exists() {
-            std::fs::copy(&legacy, &shard_0)?;
+        let shard_0_path = root.join("cascade_vec_shard_0.db");
+        let did_legacy_copy = if legacy.exists() && !shard_0_path.exists() {
+            std::fs::copy(&legacy, &shard_0_path)?;
             warn!(
                 legacy = %legacy.display(),
-                "Legacy single-shard index found; re-index recommended for even distribution"
+                "Legacy single-shard index found; redistributing rows across {} shards",
+                shard_count
             );
-        }
+            true
+        } else {
+            false
+        };
 
         let mut shards = Vec::with_capacity(shard_count);
         for i in 0..shard_count {
@@ -278,11 +282,130 @@ impl ShardedIndex {
             shards.push(Arc::new(Mutex::new(conn)));
         }
 
-        Ok(Self {
+        let idx = Self {
             shards,
             shard_count,
             embed_dim,
-        })
+        };
+
+        // Bug #6 fix: after a legacy copy, shard_0 holds ALL rows regardless
+        // of their correct shard assignment.  Redistribute rows that belong in
+        // shards 1..N-1 so KNN fan-out returns balanced results.
+        //
+        // This only runs once (guarded by `did_legacy_copy`).  For each row in
+        // shard_0 whose shard_for(doc_id, N) != 0, we INSERT it into the target
+        // shard and DELETE it from shard_0.  Each target shard is processed in a
+        // single transaction.
+        //
+        // TODO(rag-04): for very large indexes consider chunked batching; for now
+        // the single-pass approach is correct and safe for typical sizes.
+        if did_legacy_copy && shard_count > 1 {
+            idx.rebalance_shard_0().map_err(|e| {
+                warn!(error = %e, "Legacy shard rebalance failed; re-index recommended");
+                e
+            })?;
+        }
+
+        Ok(idx)
+    }
+
+    /// Redistribute rows from shard_0 that belong to shards 1..N-1.
+    ///
+    /// # Purpose
+    ///
+    /// After a legacy `cascade_vec.db` is copied to `shard_0`, all rows land in
+    /// shard_0 regardless of the FNV-1a routing.  This method moves misrouted rows
+    /// into their correct shards (bug #6 fix).
+    ///
+    /// # Algorithm
+    ///
+    /// For each target shard i in 1..N:
+    /// 1. Read all (doc_id, embedding) rows from shard_0 where shard_for(doc_id, N) == i.
+    /// 2. Open a write transaction on shard_i.
+    /// 3. INSERT OR REPLACE each row into shard_i's `shard_embeddings`.
+    /// 4. DELETE those doc_ids from shard_0.
+    /// 5. Commit.
+    ///
+    /// Only runs when the legacy copy actually happened (shard_0 had all the data).
+    fn rebalance_shard_0(&self) -> Result<()> {
+        if self.shard_count <= 1 {
+            return Ok(());
+        }
+
+        // Read all rows from shard_0.
+        let rows: Vec<(String, Vec<u8>)> = {
+            let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
+            let mut stmt = conn_0
+                .prepare("SELECT doc_id, embedding FROM shard_embeddings")
+                .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+            let result: std::result::Result<Vec<_>, _> = stmt
+                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)))
+                .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+                .collect();
+            result.map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+        };
+
+        // Group rows by their correct shard (only non-zero shards).
+        let mut by_shard: Vec<Vec<(String, Vec<u8>)>> = vec![vec![]; self.shard_count];
+        for (doc_id, embedding) in rows {
+            let target = shard_for(&doc_id, self.shard_count);
+            if target != 0 {
+                by_shard[target].push((doc_id, embedding));
+            }
+        }
+
+        // Move misrouted rows: INSERT into target, DELETE from shard_0.
+        for (target_shard, rows_for_shard) in by_shard.iter().enumerate().skip(1) {
+            if rows_for_shard.is_empty() {
+                continue;
+            }
+
+            // Insert into target shard.
+            {
+                let conn_t = self.shards[target_shard].lock().expect("target shard mutex poisoned");
+                conn_t
+                    .execute_batch("BEGIN")
+                    .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+                for (doc_id, embedding) in rows_for_shard {
+                    conn_t
+                        .execute(
+                            "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
+                            rusqlite::params![doc_id, embedding],
+                        )
+                        .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+                }
+                conn_t
+                    .execute_batch("COMMIT")
+                    .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+            }
+
+            // Delete moved rows from shard_0.
+            {
+                let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
+                conn_0
+                    .execute_batch("BEGIN")
+                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                for (doc_id, _) in rows_for_shard {
+                    conn_0
+                        .execute(
+                            "DELETE FROM shard_embeddings WHERE doc_id = ?1",
+                            rusqlite::params![doc_id],
+                        )
+                        .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                }
+                conn_0
+                    .execute_batch("COMMIT")
+                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+            }
+
+            debug!(
+                target_shard,
+                moved = rows_for_shard.len(),
+                "legacy rebalance: moved rows from shard_0"
+            );
+        }
+
+        Ok(())
     }
 
     /// Write (insert or replace) a dense embedding for `doc`.
@@ -525,6 +648,11 @@ fn shard_knn_query(
     #[cfg(not(feature = "vec"))]
     {
         // Full-scan fallback — squared L2 in Rust.
+        // Distance-metric note (task 4): the `vec` path above returns sqlite-vec
+        // L2 distance; this path uses squared-L2.  Both are monotone for ranking
+        // so ordering is identical, only the scale differs.  These paths are
+        // never mixed in a single ranking list (shard fan-out uses one path or
+        // the other uniformly at compile time), so there is no ranking skew.
         let query_vec: Vec<f32> = query_blob
             .chunks_exact(4)
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
@@ -957,6 +1085,87 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(n, 0, "doc must NOT be in shard {other_shard}");
+        }
+    }
+
+    // ── bug #6: legacy migration rebalance ────────────────────────────────────
+
+    /// Seed shard_0 with N docs that all hash to different shards, then open a
+    /// 4-shard ShardedIndex which triggers rebalance_shard_0.  After opening,
+    /// rows must be distributed per shard_for — not all in shard_0.
+    #[test]
+    fn legacy_rebalance_distributes_rows_across_shards() {
+        #[cfg(feature = "vec")]
+        load_vec_extension();
+
+        let dim = 8;
+        let dir = TempDir::new().expect("tmpdir");
+        let shard_count = 4usize;
+
+        // Build doc_ids that cover multiple shards.
+        // We use a large sample and verify no single shard holds all rows.
+        let n = 40usize;
+        let doc_ids: Vec<String> = (0..n).map(|i| format!("legacy_doc_{i}")).collect();
+
+        // Pre-seed cascade_vec.db (the legacy single-file path) with all N docs.
+        // Use the shard schema so ShardedIndex can read the rows on migration.
+        {
+            let legacy_path = dir.path().join("cascade_vec.db");
+            let conn = Connection::open(&legacy_path).expect("open legacy");
+            apply_shard_schema(&conn, dim).expect("apply schema");
+            conn.execute_batch("BEGIN").unwrap();
+            for id in &doc_ids {
+                let blob: Vec<u8> = vec![0u8; dim * 4]; // zero vector
+                conn.execute(
+                    "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
+                    params![id, blob],
+                )
+                .expect("insert legacy row");
+            }
+            conn.execute_batch("COMMIT").unwrap();
+        }
+
+        // Opening ShardedIndex triggers the legacy copy + rebalance.
+        let idx = ShardedIndex::new(dir.path(), shard_count, dim)
+            .expect("ShardedIndex::new with legacy rebalance");
+
+        // Count rows per shard after rebalance.
+        let mut per_shard = vec![0usize; shard_count];
+        for (i, arc_conn) in idx.shards.iter().enumerate() {
+            let conn = arc_conn.lock().unwrap();
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM shard_embeddings", [], |r| r.get(0))
+                .unwrap();
+            per_shard[i] = count as usize;
+        }
+
+        // Total must equal N (no rows lost, no duplicates).
+        let total: usize = per_shard.iter().sum();
+        assert_eq!(total, n, "total rows after rebalance must equal N");
+
+        // Not all rows must be in shard_0 — rebalance must have moved some.
+        assert!(
+            per_shard[0] < n,
+            "shard_0 must not hold all rows after rebalance (got {}/{})",
+            per_shard[0],
+            n
+        );
+
+        // Verify each doc_id is in its correct shard per shard_for.
+        for id in &doc_ids {
+            let expected_shard = shard_for(id, shard_count);
+            let conn = idx.shards[expected_shard].lock().unwrap();
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM shard_embeddings WHERE doc_id = ?1",
+                    params![id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                count, 1,
+                "doc {id} must be in shard {expected_shard} after rebalance"
+            );
         }
     }
 }

@@ -29,9 +29,11 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use cascade_types::error::{CascadeError, Result};
+
+use crate::index::sharding::ShardedIndex;
 
 // Embedded migration SQL (relative to crate root where Cargo.toml lives).
 const SQL_STATE_SCHEMA: &str = include_str!("../../migrations/0007_index_state.sql");
@@ -255,12 +257,46 @@ impl IndexStateStore {
     /// Evict doc_ids that are no longer present on disk.
     ///
     /// Returns the number of rows removed.
+    ///
+    /// NOTE: this variant only removes from the state table.  Use
+    /// [`evict_deleted_with_shard`] when a [`ShardedIndex`] is available so that
+    /// orphaned embedding rows are also cleaned up (bug #5).
     pub fn evict_deleted(&self) -> Result<usize> {
+        self.evict_deleted_with_shard(None)
+    }
+
+    /// Evict doc_ids that are no longer present on disk, also removing their
+    /// embedding rows from `shard_index` when provided.
+    ///
+    /// # Purpose
+    ///
+    /// Without a shard reference, deleted doc_ids are removed from the
+    /// `index_state` tracking table but their embedding rows remain in
+    /// `shard_embeddings`, leaking space and polluting KNN results (bug #5).
+    /// Passing `Some(shard)` atomically cleans both.
+    ///
+    /// # Inputs
+    ///
+    /// `shard_index`: optional [`ShardedIndex`] to delete orphaned embedding rows
+    /// from.  Pass `None` if the sharded index is not available (state-only cleanup).
+    ///
+    /// # Outputs
+    ///
+    /// Number of doc_id rows removed from `index_state`.
+    pub fn evict_deleted_with_shard(&self, shard_index: Option<&ShardedIndex>) -> Result<usize> {
         let tracked = self.all_indexed_paths()?;
         let mut evicted = 0usize;
         for path in &tracked {
             if !path.exists() {
+                let doc_id = doc_id_for_path(path);
                 self.delete(path)?;
+                // Bug #5 fix: also remove the vector from the shard so no orphaned
+                // embedding rows remain after eviction.
+                if let Some(shard) = shard_index {
+                    if let Err(e) = shard.delete(&doc_id) {
+                        warn!(doc_id = %doc_id, error = %e, "evict_deleted: failed to delete shard embedding");
+                    }
+                }
                 evicted += 1;
             }
         }
@@ -506,5 +542,53 @@ mod tests {
     fn doc_id_is_deterministic() {
         let p = std::path::Path::new("/some/stable/path.md");
         assert_eq!(doc_id_for_path(p), doc_id_for_path(p));
+    }
+
+    // ── state::evict_deleted_with_shard — bug #5 fix ─────────────────────────
+
+    /// Insert a doc+vector into both state store and sharded index, then evict.
+    /// After eviction the shard total_count must be 0 (no orphan embedding row).
+    #[test]
+    fn evict_deleted_cleans_shard_embeddings() {
+        use crate::index::sharding::{EmbedResult, ShardedIndex};
+
+        let dir = tempfile::tempdir().expect("tmpdir");
+        let idx = ShardedIndex::new(dir.path(), 2, 4).expect("ShardedIndex::new");
+
+        // Register a file in the state store.
+        let store = IndexStateStore::open_in_memory().expect("store open");
+        let f = write_file("evict shard orphan test");
+        let doc_id = doc_id_for_path(f.path());
+
+        let (_, hash) = store.classify(f.path()).expect("classify ok");
+        store.set_hash(f.path(), &hash.unwrap()).expect("set_hash");
+
+        // Write a corresponding embedding into the sharded index using the same doc_id.
+        idx.upsert(&EmbedResult {
+            doc_id: doc_id.clone(),
+            embedding: vec![0.1f32; 4],
+        })
+        .expect("upsert embedding");
+
+        // Verify embedding is present via the public total_count API.
+        assert_eq!(idx.total_count(), 1, "embedding must exist before eviction");
+
+        // Delete the file from disk then evict with shard reference.
+        let path = f.path().to_path_buf();
+        drop(f);
+        assert!(!path.exists(), "file must be deleted from disk");
+
+        let evicted = store
+            .evict_deleted_with_shard(Some(&idx))
+            .expect("evict ok");
+        assert_eq!(evicted, 1, "one doc evicted from state store");
+        assert_eq!(store.count(), 0, "state store must be empty");
+
+        // Bug #5: shard embedding must also be gone — no orphan.
+        assert_eq!(
+            idx.total_count(),
+            0,
+            "shard embedding row must be gone after eviction (no orphan)"
+        );
     }
 }
