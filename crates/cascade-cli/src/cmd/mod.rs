@@ -14,6 +14,8 @@ pub mod ccapi;
 pub mod health;
 // E-P8-03: native PBD phase-tracking engine
 pub mod pbd;
+// pews-02: autonomous Build engine
+pub mod build;
 // E-P6-04: T0 CEO / Founder orchestrator
 pub mod ceo;
 pub mod check;
@@ -193,6 +195,8 @@ pub enum Commands {
     Widget(widget::WidgetArgs),
     /// Interactive first-run setup: personal_dir, projects_dir, provider key.
     Wizard(wizard::WizardArgs),
+    /// Autonomous Build engine — drive a phase to completion via EOx gates (pews-02).
+    Build(build::BuildArgs),
 }
 
 impl Commands {
@@ -246,6 +250,7 @@ impl Commands {
             Commands::Accounts(args) => args.run().await,
             Commands::Widget(args)   => args.run().await,
             Commands::Wizard(args)   => args.run().await,
+            Commands::Build(args)    => args.run().await,
         }
     }
 }

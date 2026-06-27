@@ -40,7 +40,8 @@ pub use masters::{
 };
 pub use external_checks::{BuildCheck, CheckResult, HealthCheck, RealExternalChecks};
 pub use protocol::{
-    run_eoe, run_eop, run_eos, run_eot, run_eow, ExternalChecks, NoExternalChecks, ProtocolResult,
+    run_eoe, run_eop, run_eos, run_eost, run_eot, run_eow, ExternalChecks, NoExternalChecks,
+    ProtocolResult,
 };
 pub use schema::{
     CurrentPointers, Epic, EpicStatus, EventLevel, IndexEntry, PbdEvent, PbdIndex, Phase,

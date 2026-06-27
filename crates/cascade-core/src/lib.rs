@@ -81,6 +81,7 @@ pub mod library;
 pub mod loader;
 pub mod maps;
 pub mod memory;
+pub mod build;
 pub mod pbd;
 pub mod providers_store;
 pub mod quota_aggregator;

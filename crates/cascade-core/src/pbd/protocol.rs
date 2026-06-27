@@ -147,6 +147,58 @@ pub fn run_eot(
     })
 }
 
+// ── eost — end of step ───────────────────────────────────────────────────────
+
+/// Run the EOSt (end-of-step) gate.
+///
+/// Lightweight per-step gate called by the [`BuildEngine`] between steps
+/// within a ticket (CR-A + fast checks). Verifies the step is `passed` or
+/// `skipped` before the engine proceeds to the next step.
+///
+/// [`BuildEngine`]: crate::build::engine::BuildEngine
+pub fn run_eost(
+    store: &PbdStore,
+    phase_id: &str,
+    epic_id: &str,
+    wave_id: &str,
+    sprint_id: &str,
+    ticket_id: &str,
+    step_id: &str,
+) -> Result<ProtocolResult> {
+    let ticket = store.load_ticket(phase_id, epic_id, wave_id, sprint_id, ticket_id)?;
+    let step = ticket
+        .steps
+        .iter()
+        .find(|s| s.id == step_id)
+        .ok_or_else(|| {
+            CascadeError::Other(format!(
+                "EOSt: step '{step_id}' not found in ticket '{ticket_id}'"
+            ))
+        })?;
+
+    let mut errors: Vec<String> = Vec::new();
+    match step.status {
+        StepStatus::Passed | StepStatus::Skipped => {}
+        StepStatus::Failed => {
+            errors.push(format!("Step '{step_id}' failed"));
+        }
+        StepStatus::Running => {
+            errors.push(format!("Step '{step_id}' is still running"));
+        }
+        StepStatus::Pending => {
+            errors.push(format!("Step '{step_id}' is still pending"));
+        }
+    }
+
+    Ok(ProtocolResult {
+        level: "step",
+        id: step_id.to_string(),
+        success: errors.is_empty(),
+        errors,
+        sidecar_path: None,
+    })
+}
+
 // ── eos — end of sprint ───────────────────────────────────────────────────────
 
 /// Run the EOS (end-of-sprint) checklist.
