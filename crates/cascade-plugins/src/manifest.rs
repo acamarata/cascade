@@ -259,7 +259,7 @@ pub struct PluginJsonManifest {
 }
 
 /// Capability tokens that plugins are permitted to declare.
-const ALLOWED_CAPABILITIES: &[&str] = &["fs_read", "fs_write", "net_outbound", "env_read"];
+const ALLOWED_CAPABILITIES: &[&str] = &["fs_read", "fs_write", "net_outbound", "env_read", "personal_data", "mcp_invoke"];
 
 /// Regex for reverse-domain plugin IDs.
 ///

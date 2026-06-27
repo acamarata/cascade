@@ -25,8 +25,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 
 use async_trait::async_trait;
+use cascade_plugins::capability::Capability;
+use cascade_plugins::grants::GrantStore;
 use cascade_plugins::loader::{PluginLoadError, PluginLoader};
 use cascade_plugins::manifest::PluginKind;
+use cascade_plugins::signing::TrustedPublishers;
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
 
@@ -63,6 +66,12 @@ pub enum PluginCommands {
     New(NewArgs),
     /// Build and test a plugin project; outputs PASS/FAIL per test.
     Test(TestArgs),
+    /// Revoke a granted capability from a plugin.
+    Revoke(RevokeArgs),
+    /// Trust a plugin publisher by adding their Ed25519 public key.
+    Trust(TrustArgs),
+    /// Grant a capability to a plugin (records user consent).
+    Grant(GrantArgs),
 }
 
 /// Arguments for `cascade plugin list`.
@@ -142,6 +151,33 @@ pub struct TestArgs {
     pub skip_build: bool,
 }
 
+/// Arguments for `cascade plugin revoke`.
+#[derive(Debug, Args)]
+pub struct RevokeArgs {
+    /// Plugin ID (e.g. `com.example.my-plugin`).
+    pub id: String,
+    /// Capability to revoke (e.g. `personal_data`, `net_outbound`).
+    pub cap: String,
+}
+
+/// Arguments for `cascade plugin trust`.
+#[derive(Debug, Args)]
+pub struct TrustArgs {
+    /// Publisher name (display label).
+    pub name: String,
+    /// Base64-encoded Ed25519 public key.
+    pub public_key: String,
+}
+
+/// Arguments for `cascade plugin grant`.
+#[derive(Debug, Args)]
+pub struct GrantArgs {
+    /// Plugin ID.
+    pub id: String,
+    /// Capability to grant.
+    pub cap: String,
+}
+
 // ── Command impl ──────────────────────────────────────────────────────────────
 
 #[async_trait]
@@ -156,8 +192,56 @@ impl Command for PluginArgs {
             PluginCommands::Info(args) => run_info(&plugins_dir, &args.id),
             PluginCommands::New(args) => run_new(args),
             PluginCommands::Test(args) => run_test(args),
+            PluginCommands::Revoke(args) => run_revoke(&args.id, &args.cap),
+            PluginCommands::Trust(args) => run_trust(&args.name, &args.public_key),
+            PluginCommands::Grant(args) => run_grant(&args.id, &args.cap),
         }
     }
+}
+
+// ── grant / revoke / trust ────────────────────────────────────────────────────
+
+fn str_to_cap(s: &str) -> Result<Capability> {
+    match s {
+        "fs_read"       => Ok(Capability::FsRead),
+        "fs_write"      => Ok(Capability::FsWrite),
+        "fs_exec"       => Ok(Capability::FsExec),
+        "net_outbound"  => Ok(Capability::NetOutbound),
+        "net_listen"    => Ok(Capability::NetListen),
+        "personal_data" => Ok(Capability::PersonalData),
+        _ => Err(CascadeError::Other(format!(
+            "unknown capability '{s}'. Valid: fs_read, fs_write, fs_exec, net_outbound, net_listen, personal_data"
+        ))),
+    }
+}
+
+fn run_revoke(id: &str, cap_str: &str) -> Result<()> {
+    let cap = str_to_cap(cap_str)?;
+    let mut store = GrantStore::load()
+        .map_err(|e| CascadeError::Other(format!("failed to load grants: {e}")))?;
+    store.revoke(id, &cap)
+        .map_err(|e| CascadeError::Other(format!("failed to revoke: {e}")))?;
+    println!("Revoked '{cap_str}' from plugin '{id}'.");
+    Ok(())
+}
+
+fn run_grant(id: &str, cap_str: &str) -> Result<()> {
+    let cap = str_to_cap(cap_str)?;
+    let mut store = GrantStore::load()
+        .map_err(|e| CascadeError::Other(format!("failed to load grants: {e}")))?;
+    store.grant(id, &cap)
+        .map_err(|e| CascadeError::Other(format!("failed to grant: {e}")))?;
+    println!("Granted '{cap_str}' to plugin '{id}'.");
+    Ok(())
+}
+
+fn run_trust(name: &str, public_key: &str) -> Result<()> {
+    let mut publishers = TrustedPublishers::load()
+        .map_err(|e| CascadeError::Other(format!("failed to load publishers: {e}")))?;
+    publishers.trust(name.to_owned(), public_key.to_owned())
+        .map_err(|e| CascadeError::Other(format!("failed to add publisher: {e}")))?;
+    println!("Added trusted publisher '{name}'.");
+    Ok(())
 }
 
 // ── list ──────────────────────────────────────────────────────────────────────

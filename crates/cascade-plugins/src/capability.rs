@@ -30,6 +30,10 @@ pub enum Capability {
     NetListen,
     /// Call Cascade-internal IPC APIs (reserved — not yet implemented in v0.1.0).
     IpcCascade,
+    /// Access personal data directories (requires user consent). Enforced by consent gate.
+    PersonalData,
+    /// Invoke MCP tool endpoints registered in Cascade (reserved — not yet enforced in v0.1.0).
+    McpInvoke,
 }
 
 /// A path-scoped capability grants access to a specific directory tree.
@@ -123,6 +127,8 @@ pub struct DeclaredCapabilities {
     pub net_outbound: Option<bool>,
     pub net_listen: Option<bool>,
     pub ipc_cascade: Option<bool>,
+    pub personal_data: Option<bool>,
+    pub mcp_invoke: Option<bool>,
 }
 
 impl DeclaredCapabilities {
@@ -139,6 +145,18 @@ impl DeclaredCapabilities {
             return Err(CapabilityError::Reserved {
                 cap: Capability::IpcCascade,
             });
+        }
+
+        // mcp_invoke is reserved in v0.1.0 — same pattern as ipc_cascade.
+        if self.mcp_invoke.unwrap_or(false) {
+            return Err(CapabilityError::Reserved {
+                cap: Capability::McpInvoke,
+            });
+        }
+
+        // personal_data — consent gate handles runtime enforcement; record in granted set.
+        if self.personal_data.unwrap_or(false) {
+            set.granted.insert(Capability::PersonalData);
         }
 
         // net_outbound

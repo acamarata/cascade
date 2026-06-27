@@ -25,6 +25,9 @@ semver        = "1"
 toml          = "0.8"
 dirs          = "5"
 anyhow        = "1"
+chrono        = { workspace = true }
+ed25519-dalek = "2"
+base64        = "0.22"
 wasmtime-wasi = { workspace = true }
 dashmap       = "6"
 notify        = { workspace = true }
@@ -37,3 +40,4 @@ path = "src/bin/gen_schema.rs"
 tempfile      = "3"
 wat           = "1"
 walkdir       = "2"
+rand          = "0.8"

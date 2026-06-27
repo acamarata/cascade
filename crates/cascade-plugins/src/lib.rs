@@ -31,8 +31,12 @@
 //! - Capability-based permission set (declared in `cascade-plugin.toml`)
 //! - Input validation gate wired at the IPC entry point
 
+pub mod audit;
 pub mod capability;
+pub mod consent;
 pub mod discovery;
+pub mod grants;
+pub mod signing;
 pub mod hot_reload;
 pub mod ipc;
 pub mod lifecycle;
@@ -45,7 +49,11 @@ pub mod traits;
 pub mod types;
 pub mod wit_bindings;
 
+pub use audit::{log_capability_event, AuditEntry, AuditOutcome};
 pub use capability::{CapabilityError, CapabilitySet, DeclaredCapabilities};
+pub use consent::{check_capability_granted, check_fs_read_allowed, is_personal_path, ConsentError};
+pub use grants::{GrantError, GrantStore};
+pub use signing::{verify_plugin, SigningError, TrustedPublisher, TrustedPublishers, VerifyResult};
 pub use discovery::{discover_all, DiscoveredPlugin, DiscoveryError, PluginOrigin};
 pub use hot_reload::{drain_arc, drain_arc_default, PluginWatcher, ReloadEvent};
 pub use ipc::{
