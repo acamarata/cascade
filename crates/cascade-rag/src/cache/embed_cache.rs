@@ -530,6 +530,172 @@ impl EmbedModel for CachedEmbedModel {
     }
 }
 
+// ── InMemoryEmbedCache ────────────────────────────────────────────────────────
+
+use lru::LruCache;
+
+/// In-memory LRU embedding cache with TTL and tenant namespacing.
+///
+/// # Purpose
+///
+/// Complements the persistent [`EmbedCache`] (disk-backed SQLite) with a
+/// hot-path in-memory tier:
+///
+/// - **LRU eviction by byte size**: entries are evicted when the accumulated
+///   `vec.len() * 4` byte footprint exceeds `max_size_bytes`.
+/// - **TTL expiry**: entries are treated as misses after `ttl` elapses.
+/// - **Tenant isolation**: the cache key is `(tenant_id, content_hash)` so
+///   tenant A cannot read tenant B's cached embeddings.  Single-tenant
+///   callers pass `None` for `tenant_id`.
+///
+/// # Usage
+///
+/// Sit this cache in front of [`CachedEmbedModel`] for sub-millisecond
+/// repeated access to hot embeddings without SQLite I/O.
+///
+/// # Constraints
+///
+/// - Thread-safe via `Mutex<LruCache<…>>`.
+/// - `last_accessed` is updated on every hit (standard LRU promotion).
+///
+/// SPORT: MASTER-COMPONENTS.md → cascade-rag::cache::InMemoryEmbedCache (T-RAG-07)
+pub struct InMemoryEmbedCache {
+    inner: Mutex<LruCache<(Option<String>, String), InMemEntry>>,
+    max_size_bytes: usize,
+    ttl: std::time::Duration,
+    /// Approximate byte footprint of all entries currently in the cache.
+    current_bytes: std::sync::atomic::AtomicUsize,
+}
+
+struct InMemEntry {
+    vec: Vec<f32>,
+    inserted: std::time::Instant,
+}
+
+impl InMemEntry {
+    fn byte_size(&self) -> usize {
+        self.vec.len() * 4 // f32 = 4 bytes
+    }
+}
+
+impl InMemoryEmbedCache {
+    /// Construct a new in-memory embed cache.
+    ///
+    /// # Inputs
+    ///
+    /// - `max_size_bytes` — upper bound on total stored bytes (sum of all vec
+    ///   lengths × 4). When a new entry would exceed the cap, the LRU entry is
+    ///   evicted first.  Clamped to `capacity_entries` LRU slots.
+    /// - `ttl` — maximum age of a cached entry before it is treated as a miss.
+    /// - `capacity_entries` — maximum number of entries in the LRU (bounds the
+    ///   memory footprint independently of `max_size_bytes`).
+    pub fn new(
+        max_size_bytes: usize,
+        ttl: std::time::Duration,
+        capacity_entries: usize,
+    ) -> Self {
+        let cap =
+            std::num::NonZeroUsize::new(capacity_entries.max(1)).expect("capacity >= 1");
+        Self {
+            inner: Mutex::new(LruCache::new(cap)),
+            max_size_bytes,
+            ttl,
+            current_bytes: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// Retrieve a cached embedding.
+    ///
+    /// Returns `None` on cache miss or TTL expiry (expired entry is evicted).
+    pub fn get(&self, tenant_id: Option<&str>, content_hash: &str) -> Option<Vec<f32>> {
+        let key = (tenant_id.map(str::to_owned), content_hash.to_owned());
+        let mut guard = self.inner.lock().expect("InMemoryEmbedCache poisoned");
+
+        // TTL check before promotion (peek avoids LRU promotion of expired entries).
+        let expired = guard
+            .peek(&key)
+            .map(|e| e.inserted.elapsed() > self.ttl)
+            .unwrap_or(false);
+
+        if expired {
+            if let Some(evicted) = guard.pop(&key) {
+                self.current_bytes.fetch_sub(
+                    evicted.byte_size(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+            }
+            return None;
+        }
+
+        guard.get(&key).map(|e| e.vec.clone())
+    }
+
+    /// Store an embedding in the in-memory cache.
+    ///
+    /// Evicts entries to stay within `max_size_bytes` before inserting.
+    pub fn set(&self, tenant_id: Option<&str>, content_hash: &str, vec: Vec<f32>) {
+        let entry_bytes = vec.len() * 4;
+        let key = (tenant_id.map(str::to_owned), content_hash.to_owned());
+        let entry = InMemEntry {
+            vec,
+            inserted: std::time::Instant::now(),
+        };
+
+        let mut guard = self.inner.lock().expect("InMemoryEmbedCache poisoned");
+
+        // Evict LRU entries until we have headroom for the new entry.
+        while self.current_bytes.load(std::sync::atomic::Ordering::Relaxed) + entry_bytes
+            > self.max_size_bytes
+            && !guard.is_empty()
+        {
+            if let Some((_, evicted)) = guard.pop_lru() {
+                self.current_bytes.fetch_sub(
+                    evicted.byte_size(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+            } else {
+                break;
+            }
+        }
+
+        // If existing key is being replaced, subtract old bytes first.
+        if let Some(old) = guard.peek(&key) {
+            self.current_bytes.fetch_sub(
+                old.byte_size(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+
+        guard.put(key, entry);
+        self.current_bytes
+            .fetch_add(entry_bytes, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Return the approximate number of bytes currently stored.
+    pub fn current_bytes(&self) -> usize {
+        self.current_bytes.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Return the number of entries currently held.
+    pub fn len(&self) -> usize {
+        self.inner.lock().map(|g| g.len()).unwrap_or(0)
+    }
+
+    /// Return `true` if the cache holds no entries.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl std::fmt::Debug for InMemoryEmbedCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryEmbedCache")
+            .field("max_size_bytes", &self.max_size_bytes)
+            .field("current_bytes", &self.current_bytes())
+            .finish_non_exhaustive()
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -869,5 +1035,80 @@ mod tests {
             0,
             "version bump must prune all old entries"
         );
+    }
+
+    // ── T-RAG-07: InMemoryEmbedCache ─────────────────────────────────────────
+
+    fn make_inmem(max_bytes: usize) -> InMemoryEmbedCache {
+        InMemoryEmbedCache::new(max_bytes, std::time::Duration::from_secs(60), 1000)
+    }
+
+    #[test]
+    fn inmem_basic_get_set() {
+        let c = make_inmem(1024 * 1024);
+        c.set(None, "hash-a", vec![1.0, 2.0, 3.0]);
+        let hit = c.get(None, "hash-a").expect("expected cache hit");
+        assert_eq!(hit, vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn inmem_miss_returns_none() {
+        let c = make_inmem(1024 * 1024);
+        assert!(c.get(None, "not-there").is_none());
+    }
+
+    #[test]
+    fn inmem_tenant_isolation() {
+        let c = make_inmem(1024 * 1024);
+        c.set(Some("tenant-a"), "hash-x", vec![1.0]);
+        // Tenant B must not see tenant A's entry.
+        assert!(
+            c.get(Some("tenant-b"), "hash-x").is_none(),
+            "tenant B must not see tenant A's entry"
+        );
+        // Tenant A must still hit.
+        assert!(c.get(Some("tenant-a"), "hash-x").is_some());
+    }
+
+    #[test]
+    fn inmem_ttl_expiry() {
+        let c = InMemoryEmbedCache::new(
+            1024 * 1024,
+            std::time::Duration::from_nanos(1), // instant expiry
+            1000,
+        );
+        c.set(None, "hash-ttl", vec![0.5, 0.5]);
+
+        // Spin until TTL has expired.
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_millis(10) {
+            std::hint::spin_loop();
+        }
+
+        assert!(
+            c.get(None, "hash-ttl").is_none(),
+            "entry must be evicted after TTL"
+        );
+    }
+
+    #[test]
+    fn inmem_lru_eviction_within_byte_cap() {
+        // Each vec is [0.0; 4] = 16 bytes. Cap = 32 bytes → fits exactly 2.
+        let c = InMemoryEmbedCache::new(32, std::time::Duration::from_secs(60), 1000);
+
+        c.set(None, "h1", vec![0.0; 4]); // 16 bytes
+        c.set(None, "h2", vec![0.0; 4]); // 16 bytes — now at cap
+        // Adding h3 (16 bytes) must evict the LRU entry (h1, then h2 was accessed).
+        c.set(None, "h3", vec![0.0; 4]);
+
+        // Cache should not exceed the byte cap.
+        assert!(
+            c.current_bytes() <= 32,
+            "current_bytes must not exceed cap (got {})",
+            c.current_bytes()
+        );
+
+        // h3 must be present (most recently inserted).
+        assert!(c.get(None, "h3").is_some(), "h3 must be in cache");
     }
 }

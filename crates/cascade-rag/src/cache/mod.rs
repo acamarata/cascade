@@ -25,7 +25,7 @@
 pub mod embed_cache;
 pub mod query_cache;
 
-pub use embed_cache::{CachedEmbedModel, EmbedCache, EmbedCacheError};
+pub use embed_cache::{CachedEmbedModel, EmbedCache, EmbedCacheError, InMemoryEmbedCache};
 pub use query_cache::QueryCache;
 
 use std::collections::HashMap;

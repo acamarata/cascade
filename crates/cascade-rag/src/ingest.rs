@@ -497,4 +497,87 @@ mod tests {
         // Even an empty loop takes > 0 ns; this is always true in practice.
         assert!(stats.duration_ms() < 60_000, "duration sanity: < 60s");
     }
+
+    // ── T-RAG-07: exclusion gate ──────────────────────────────────────────────
+
+    /// An excluded path must be silently skipped (skipped=true) and must NOT
+    /// appear in rag_sources or rag_chunks after the attempted ingest.
+    #[test]
+    fn excluded_path_is_not_indexed_and_absent_from_db() {
+        use crate::retrieve::exclusion::{ExclusionConfig, ExclusionSet};
+
+        let conn = migrated_conn();
+        let embed = Arc::new(MockEmbedModel::default());
+
+        // The file will be written to a temp dir — we'll exclude based on the dir prefix.
+        let f = write_file("# Secret document\n\nTop secret content.\n", ".md");
+        let path = f.path();
+        let parent = path.parent().expect("parent dir").to_string_lossy().to_string();
+        let exclusion_pattern = format!("{parent}/");
+
+        let exclusion = ExclusionSet::compile(&ExclusionConfig::from_patterns([&exclusion_pattern]));
+
+        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default())
+            .with_exclusion(exclusion);
+
+        // Attempting to ingest an excluded path must return skipped=true.
+        let result = pipeline.ingest_file(path).expect("ingest must not error");
+        assert!(
+            result.skipped,
+            "excluded path must be returned as skipped"
+        );
+        assert_eq!(result.chunks_created, 0, "no chunks must be created");
+
+        // The path must NOT appear in rag_sources.
+        let source_count: i64 = pipeline
+            .conn
+            .query_row("SELECT COUNT(*) FROM rag_sources", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            source_count, 0,
+            "excluded file must not appear in rag_sources"
+        );
+
+        // The path must NOT appear in rag_chunks.
+        let chunk_count: i64 = pipeline
+            .conn
+            .query_row("SELECT COUNT(*) FROM rag_chunks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            chunk_count, 0,
+            "excluded file must not produce rag_chunks rows"
+        );
+    }
+
+    /// Non-excluded files must be indexed normally even when an exclusion set
+    /// is attached (the exclusion set must not over-block).
+    #[test]
+    fn non_excluded_file_is_indexed_with_exclusion_set_attached() {
+        use crate::retrieve::exclusion::{ExclusionConfig, ExclusionSet};
+
+        let conn = migrated_conn();
+        let embed = Arc::new(MockEmbedModel::default());
+
+        // Only exclude /private/ — our temp file is elsewhere.
+        let exclusion =
+            ExclusionSet::compile(&ExclusionConfig::from_patterns(["/private/secret/"]));
+
+        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default())
+            .with_exclusion(exclusion);
+
+        let f = write_file("# Normal document\n\nPublic content here.\n", ".md");
+        let result = pipeline.ingest_file(f.path()).expect("ingest ok");
+
+        assert!(!result.skipped, "non-excluded file must be indexed");
+        assert!(
+            result.chunks_created > 0,
+            "non-excluded file must produce chunks"
+        );
+
+        let source_count: i64 = pipeline
+            .conn
+            .query_row("SELECT COUNT(*) FROM rag_sources", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(source_count, 1, "non-excluded file must appear in rag_sources");
+    }
 }

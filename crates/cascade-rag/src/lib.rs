@@ -51,6 +51,7 @@ pub mod index;
 pub mod index_manager;
 pub mod ingest;
 pub mod parse;
+pub mod privacy;
 pub mod rerank;
 pub mod retrieve;
 pub mod search;
@@ -111,7 +112,8 @@ impl TierLevel {
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use cache::{
-    CachedEmbedModel, ChunkCache, EmbedCache, EmbedCacheError, LegacyQueryCache, QueryCache,
+    CachedEmbedModel, ChunkCache, EmbedCache, EmbedCacheError, InMemoryEmbedCache,
+    LegacyQueryCache, QueryCache,
 };
 pub use citation::{citations_from_chunk_ids, Citation, CitationSet, RagCitation};
 pub use context::{ContextOptimizer, ContextResult};
@@ -133,4 +135,5 @@ pub use search::{
     route_query, search, weights_for_kind, HydeLlm, QueryKind, RerankerModelConfig,
     RoutingWeights, SearchConfig,
 };
+pub use privacy::{RedactionConfig, RedactionPipeline};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};

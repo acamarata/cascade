@@ -3,11 +3,17 @@
 //! # Purpose
 //!
 //! Wraps repeated calls to [`crate::index::sharding::ShardedIndex::search`] with
-//! an in-memory LRU cache keyed by `(query_text, top_k)`.  Cache entries are
-//! invalidated after a configurable TTL, and the entire cache is cleared atomically
-//! when the underlying index is mutated (upsert or delete) — full invalidation is
-//! O(1) and safe because the key space is unbounded and the default capacity (512)
-//! repopulates quickly after writes.
+//! an in-memory LRU cache keyed by `(query_text, top_k, tenant_id, project_id)`.
+//! Cache entries are invalidated after a configurable TTL.  The entire cache can
+//! be cleared atomically on index mutation, or selectively invalidated by project
+//! or tenant to support multi-tenant deployments.
+//!
+//! # Multi-tenant isolation
+//!
+//! `CacheKey` includes `tenant_id` and `project_id` (both `Option<String>`).
+//! Single-tenant deployments pass `None` for both and behaviour is identical to
+//! the previous single-tenant implementation.  Multi-tenant deployments should
+//! always supply `tenant_id` to prevent cross-tenant cache contamination.
 //!
 //! # Inputs
 //!
@@ -17,7 +23,7 @@
 //! # Outputs
 //!
 //! - `get` returns `Some(Vec<SearchHit>)` on a valid (non-expired) cache hit.
-//! - `stats` returns `(hits, misses, evictions)` cumulative counters.
+//! - `stats` returns `(hits, misses)` cumulative counters.
 //!
 //! # Constraints
 //!
@@ -25,9 +31,9 @@
 //! - `lru` crate O(1) get/insert/evict.
 //! - TTL expiry uses `std::time::Instant`; no system-clock syscall on every get.
 //!
-//! # Ticket
+//! # Tickets
 //!
-//! T-P4-E04-07
+//! T-P4-E04-07 (original), T-RAG-07 (multi-tenant + project scoping)
 //!
 //! SPORT: MASTER-COMPONENTS.md → cascade-rag::cache::QueryCache
 
@@ -49,19 +55,44 @@ struct CacheEntry {
 
 // ── CacheKey ──────────────────────────────────────────────────────────────────
 
-/// Composite cache key: query text + top-k value.
+/// Composite cache key: query text + top-k value + optional tenant/project scope.
 ///
-/// The opts fingerprint is intentionally minimal for this ticket (T-P4-E04-07
-/// scopes key to query + top_k per spec; project/strategy filters are future scope).
+/// `tenant_id` and `project_id` are `Option<String>` so that single-tenant
+/// deployments (where both are `None`) continue to work without change.
+/// Multi-tenant deployments must supply at least `tenant_id` to ensure that
+/// tenant A cannot read tenant B's cached results.
+///
+/// # Example
+///
+/// ```rust
+/// use cascade_rag::cache::query_cache::CacheKey;
+///
+/// // Single-tenant (default): no tenant/project scope.
+/// let key = CacheKey { query: "hello".into(), top_k: 10, tenant_id: None, project_id: None };
+///
+/// // Multi-tenant: scoped to tenant "acme", project "alpha".
+/// let scoped = CacheKey {
+///     query: "hello".into(),
+///     top_k: 10,
+///     tenant_id: Some("acme".into()),
+///     project_id: Some("alpha".into()),
+/// };
+/// ```
+///
+/// SPORT: MASTER-COMPONENTS.md → cascade-rag::cache::CacheKey (T-RAG-07)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CacheKey {
     pub query: String,
     pub top_k: usize,
+    /// Optional tenant scope. `None` = default (single-tenant) tenant.
+    pub tenant_id: Option<String>,
+    /// Optional project scope within a tenant. `None` = cross-project.
+    pub project_id: Option<String>,
 }
 
 // ── QueryCache ────────────────────────────────────────────────────────────────
 
-/// LRU cache for ShardedIndex::search results with TTL expiry.
+/// LRU cache for ShardedIndex::search results with TTL expiry and multi-tenant isolation.
 ///
 /// # Example
 ///
@@ -104,17 +135,44 @@ impl QueryCache {
         }
     }
 
-    /// Look up a cached result for `(query, top_k)`.
+    // ── Single-tenant (backward-compat) API ──────────────────────────────────
+
+    /// Look up a cached result for `(query, top_k)` with no tenant/project scope.
+    ///
+    /// Backward-compatible single-tenant variant. Equivalent to calling
+    /// [`get_scoped`] with `tenant_id = None` and `project_id = None`.
     ///
     /// Returns `None` and increments the miss counter if:
     /// - the key is not present, or
     /// - the entry's age exceeds the configured TTL (entry is evicted on expiry).
-    ///
-    /// Returns `Some(Vec<SearchHit>)` and increments the hit counter on a valid hit.
     pub fn get(&self, query: &str, top_k: usize) -> Option<Vec<SearchHit>> {
+        self.get_scoped(query, top_k, None, None)
+    }
+
+    /// Store a result under `(query, top_k)` with no tenant/project scope.
+    ///
+    /// Backward-compatible single-tenant variant.
+    pub fn set(&self, query: String, top_k: usize, hits: Vec<SearchHit>) {
+        self.set_scoped(query, top_k, None, None, hits);
+    }
+
+    // ── Multi-tenant (scoped) API ─────────────────────────────────────────────
+
+    /// Look up a cached result for `(query, top_k, tenant_id, project_id)`.
+    ///
+    /// Returns `None` on cache miss or TTL expiry; increments counters accordingly.
+    pub fn get_scoped(
+        &self,
+        query: &str,
+        top_k: usize,
+        tenant_id: Option<&str>,
+        project_id: Option<&str>,
+    ) -> Option<Vec<SearchHit>> {
         let key = CacheKey {
             query: query.to_owned(),
             top_k,
+            tenant_id: tenant_id.map(str::to_owned),
+            project_id: project_id.map(str::to_owned),
         };
         let mut guard = self.inner.lock().expect("QueryCache mutex poisoned");
 
@@ -143,12 +201,24 @@ impl QueryCache {
         }
     }
 
-    /// Store a result under `(query, top_k)`.
+    /// Store a result under `(query, top_k, tenant_id, project_id)`.
     ///
     /// If the LRU is at capacity the least-recently-used entry is evicted by the
     /// `lru` crate; the eviction counter is incremented to track this.
-    pub fn set(&self, query: String, top_k: usize, hits: Vec<SearchHit>) {
-        let key = CacheKey { query, top_k };
+    pub fn set_scoped(
+        &self,
+        query: String,
+        top_k: usize,
+        tenant_id: Option<&str>,
+        project_id: Option<&str>,
+        hits: Vec<SearchHit>,
+    ) {
+        let key = CacheKey {
+            query,
+            top_k,
+            tenant_id: tenant_id.map(str::to_owned),
+            project_id: project_id.map(str::to_owned),
+        };
         let entry = CacheEntry {
             hits,
             inserted: Instant::now(),
@@ -161,18 +231,64 @@ impl QueryCache {
         }
     }
 
-    /// Clear all entries — called by [`crate::index::CachedIndex`] on any mutation.
+    // ── Invalidation ─────────────────────────────────────────────────────────
+
+    /// Clear ALL entries across all tenants and projects.
     ///
-    /// WHY full clear (not selective invalidation): the query key space is unbounded
-    /// (arbitrary query strings × arbitrary top_k values). Computing which cache
-    /// entries are affected by a upsert/delete would require scanning all keys and
-    /// doing a reverse lookup into the index — O(n) and fragile. Full clear is O(1),
-    /// safe, and the small default capacity repopulates within seconds of typical
-    /// query traffic.
+    /// Called by [`crate::index::CachedIndex`] on any index mutation.
+    ///
+    /// WHY full clear (not selective invalidation) for the global case: the query
+    /// key space is unbounded (arbitrary query strings × arbitrary top_k values).
+    /// Computing which cache entries are affected by a upsert/delete would require
+    /// scanning all keys and doing a reverse lookup into the index — O(n) and
+    /// fragile. Full clear is O(1), safe, and the small default capacity
+    /// repopulates within seconds of typical query traffic.
     pub fn clear(&self) {
         let mut guard = self.inner.lock().expect("QueryCache mutex poisoned");
         guard.clear();
     }
+
+    /// Evict all entries belonging to a specific project (across all tenants).
+    ///
+    /// O(n) scan of the LRU. Use when a project's index is mutated in a
+    /// multi-project deployment and you want to avoid a full global clear.
+    ///
+    /// Entries with `project_id = None` (cross-project) are NOT evicted — they
+    /// are shared across projects and remain valid.
+    pub fn invalidate_project(&self, project_id: &str) {
+        let mut guard = self.inner.lock().expect("QueryCache mutex poisoned");
+        // `lru::LruCache` does not expose `retain`; collect keys to evict then pop.
+        let to_remove: Vec<CacheKey> = guard
+            .iter()
+            .filter(|(k, _)| k.project_id.as_deref() == Some(project_id))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in to_remove {
+            guard.pop(&k);
+            self.evictions.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Evict all entries belonging to a specific tenant (all projects under it).
+    ///
+    /// O(n) scan of the LRU. Use when a tenant's index is mutated and you want
+    /// to avoid evicting the entire cross-tenant cache.
+    ///
+    /// Entries with `tenant_id = None` (default tenant) are NOT evicted.
+    pub fn invalidate_tenant(&self, tenant_id: &str) {
+        let mut guard = self.inner.lock().expect("QueryCache mutex poisoned");
+        let to_remove: Vec<CacheKey> = guard
+            .iter()
+            .filter(|(k, _)| k.tenant_id.as_deref() == Some(tenant_id))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in to_remove {
+            guard.pop(&k);
+            self.evictions.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    // ── Stats / size ─────────────────────────────────────────────────────────
 
     /// Return cumulative `(hits, misses)` counters.
     ///
@@ -355,5 +471,124 @@ mod tests {
         for h in handles {
             h.join().expect("thread panicked");
         }
+    }
+
+    // ── T-RAG-07: Multi-tenant isolation ─────────────────────────────────────
+
+    #[test]
+    fn scoped_keys_are_isolated_by_tenant() {
+        let cache = QueryCache::new(512, Duration::from_secs(60));
+
+        // Tenant A populates the cache.
+        cache.set_scoped("query".into(), 5, Some("tenant-a"), None, vec![make_hit("doc-a")]);
+
+        // Tenant B must NOT see tenant A's result.
+        let b_result = cache.get_scoped("query", 5, Some("tenant-b"), None);
+        assert!(
+            b_result.is_none(),
+            "tenant B must not see tenant A's cached result"
+        );
+
+        // Tenant A's own key is still a hit.
+        let a_result = cache.get_scoped("query", 5, Some("tenant-a"), None);
+        assert!(a_result.is_some(), "tenant A must hit its own cached result");
+    }
+
+    // ── T-RAG-07: invalidate_project leaves other project intact ─────────────
+
+    #[test]
+    fn invalidate_project_leaves_other_project_intact() {
+        let cache = QueryCache::new(512, Duration::from_secs(60));
+
+        // Populate two projects under the same tenant.
+        cache.set_scoped(
+            "q".into(),
+            10,
+            Some("tenant-x"),
+            Some("project-alpha"),
+            vec![make_hit("alpha-doc")],
+        );
+        cache.set_scoped(
+            "q".into(),
+            10,
+            Some("tenant-x"),
+            Some("project-beta"),
+            vec![make_hit("beta-doc")],
+        );
+
+        // Invalidate project-alpha only.
+        cache.invalidate_project("project-alpha");
+
+        // project-alpha must be gone.
+        assert!(
+            cache
+                .get_scoped("q", 10, Some("tenant-x"), Some("project-alpha"))
+                .is_none(),
+            "project-alpha cache must be evicted"
+        );
+
+        // project-beta must remain.
+        assert!(
+            cache
+                .get_scoped("q", 10, Some("tenant-x"), Some("project-beta"))
+                .is_some(),
+            "project-beta cache must remain intact after invalidating project-alpha"
+        );
+    }
+
+    // ── T-RAG-07: invalidate_tenant clears all that tenant's projects ─────────
+
+    #[test]
+    fn invalidate_tenant_clears_all_tenant_projects() {
+        let cache = QueryCache::new(512, Duration::from_secs(60));
+
+        // Tenant A, two projects.
+        cache.set_scoped(
+            "q".into(),
+            5,
+            Some("tenant-a"),
+            Some("proj-1"),
+            vec![make_hit("a1")],
+        );
+        cache.set_scoped(
+            "q".into(),
+            5,
+            Some("tenant-a"),
+            Some("proj-2"),
+            vec![make_hit("a2")],
+        );
+        // Tenant B.
+        cache.set_scoped(
+            "q".into(),
+            5,
+            Some("tenant-b"),
+            Some("proj-1"),
+            vec![make_hit("b1")],
+        );
+
+        // Invalidate all of tenant-a.
+        cache.invalidate_tenant("tenant-a");
+
+        // Both tenant-a projects must be gone.
+        assert!(
+            cache
+                .get_scoped("q", 5, Some("tenant-a"), Some("proj-1"))
+                .is_none(),
+            "tenant-a proj-1 must be evicted"
+        );
+        assert!(
+            cache
+                .get_scoped("q", 5, Some("tenant-a"), Some("proj-2"))
+                .is_none(),
+            "tenant-a proj-2 must be evicted"
+        );
+
+        // Tenant B must be untouched.
+        assert!(
+            cache
+                .get_scoped("q", 5, Some("tenant-b"), Some("proj-1"))
+                .is_some(),
+            "tenant-b cache must remain intact after invalidating tenant-a"
+        );
     }
 }

@@ -24,6 +24,7 @@ use crate::chunk::Chunk;
 use crate::embed::{store, EmbedModel};
 use crate::index::state::{ChangeKind, IndexStateStore};
 use crate::parse::ParseDispatcher;
+use crate::retrieve::exclusion::ExclusionSet;
 
 use super::chunker::{chunker_for_path, file_mtime, hex_blake3};
 use super::types::{IngestConfig, IngestResult, IngestStats};
@@ -61,10 +62,13 @@ pub struct IngestPipeline {
     parser: ParseDispatcher,
     /// Optional progress callback: called once per chunk with (source_path, chunk_index, total_chunks).
     progress: Option<ProgressCb>,
+    /// Compiled exclusion set — paths matching any pattern are refused at the
+    /// ingest gate (layer 0 privacy: never stored at all).
+    exclusion: ExclusionSet,
 }
 
 impl IngestPipeline {
-    /// Create a new pipeline.
+    /// Create a new pipeline with no path exclusions.
     ///
     /// # Parameters
     /// - `conn` — rusqlite connection; migrations must already have been applied.
@@ -77,7 +81,22 @@ impl IngestPipeline {
             config,
             parser: ParseDispatcher::default(),
             progress: None,
+            exclusion: ExclusionSet::default(),
         }
+    }
+
+    /// Attach a compiled [`ExclusionSet`] to gate ingest at the file level.
+    ///
+    /// Any path matched by the exclusion set will be silently skipped at the
+    /// very first step of [`ingest_file`] — the file is never read, parsed,
+    /// chunked, or stored.  This is the layer-0 (ingest gate) privacy check.
+    ///
+    /// The exclusion set is also available for search-path filtering via
+    /// [`ExclusionSet`] held in the retriever; wiring the same config to both
+    /// ensures excluded paths are absent from both the index and search results.
+    pub fn with_exclusion(mut self, exclusion: ExclusionSet) -> Self {
+        self.exclusion = exclusion;
+        self
     }
 
     /// Attach a progress callback.  Called once per chunk after it is indexed.
@@ -106,6 +125,19 @@ impl IngestPipeline {
     /// on parse errors, or `CascadeError::Other` wrapping DB/embed errors.
     #[instrument(skip(self), fields(path = %path.display()))]
     pub fn ingest_file(&self, path: &Path) -> Result<IngestResult> {
+        // ── 0. Privacy exclusion gate ─────────────────────────────────────────
+        // Check the path against the exclusion set BEFORE reading or processing
+        // the file.  Excluded paths must never enter the index at all (layer 0).
+        let path_str_pre = path.to_string_lossy();
+        if self.exclusion.is_excluded(&path_str_pre) {
+            debug!(path = %path.display(), "exclusion gate: path is excluded — skipping ingest");
+            return Ok(IngestResult {
+                source_id: 0,
+                chunks_created: 0,
+                skipped: true,
+            });
+        }
+
         // ── 1. Read + hash ────────────────────────────────────────────────────
         let bytes = std::fs::read(path).map_err(|e| CascadeError::Io {
             path: path.to_path_buf(),
