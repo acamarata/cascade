@@ -193,9 +193,9 @@ mod tests {
         let store = mk_store(&tmp);
         build_hierarchy(&store);
 
-        // Phase: planning → qa is invalid (must go via ready_to_build → building → qa)
-        let result = store.transition_phase("p1", PhaseStatus::Qa);
-        assert!(result.is_err(), "planning → qa should be rejected");
+        // Phase: planning → wrapup is invalid (must go via ready_to_build → building → wrapup)
+        let result = store.transition_phase("p1", PhaseStatus::Wrapup);
+        assert!(result.is_err(), "planning → wrapup should be rejected");
 
         // Ticket: planned → done is invalid
         let result =
@@ -414,7 +414,7 @@ mod tests {
 
         // Verify final phase status
         let phase = store.load_phase("p1").unwrap();
-        assert_eq!(phase.status, PhaseStatus::Shipped);
+        assert_eq!(phase.status, PhaseStatus::Wrapup);
     }
 
     #[test]
@@ -604,6 +604,119 @@ mod tests {
             "error should propagate: {:?}",
             result.errors
         );
+    }
+
+    // ── pews-01: phase lifecycle / ready-gate tests ───────────────────────────
+
+    #[test]
+    #[serial(global_env)]
+    fn test_illegal_transition_rejected() {
+        // Opening is the new initial lifecycle step; Planning → Wrapup is illegal.
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+
+        let phase = Phase {
+            id: "p1".to_string(),
+            title: "Phase 1".to_string(),
+            status: PhaseStatus::Opening,
+            epics: vec![],
+            started_at: None,
+            closed_at: None,
+            note: None,
+        };
+        store.create_phase(&phase).expect("create phase");
+
+        // Opening → Building is illegal (must go Opening → Planning → ReadyToBuild → Building).
+        let result = store.transition_phase("p1", PhaseStatus::Building);
+        assert!(result.is_err(), "Opening → Building should be rejected");
+
+        // Opening → Planning is legal.
+        store
+            .transition_phase("p1", PhaseStatus::Planning)
+            .expect("Opening → Planning should be allowed");
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_ready_gate_blocks_empty_tree() {
+        // Planning → ReadyToBuild should be blocked when the phase has no epics.
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+
+        // Phase with no epics.
+        let phase = mk_phase("p1");
+        store.create_phase(&phase).expect("create phase");
+
+        let result = store.transition_phase("p1", PhaseStatus::ReadyToBuild);
+        assert!(
+            result.is_err(),
+            "Planning → ReadyToBuild should be blocked when no epics exist"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("gate") || msg.contains("epic"),
+            "error should mention gate/epic: {msg}"
+        );
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_ready_gate_blocks_when_no_tickets() {
+        // Planning → ReadyToBuild should be blocked when epics exist but have no tickets.
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+
+        let phase = mk_phase("p1");
+        store.create_phase(&phase).expect("create phase");
+        let epic = mk_epic("e01", "p1");
+        store.create_epic(&epic).expect("create epic");
+        // No waves/sprints/tickets created.
+
+        let result = store.transition_phase("p1", PhaseStatus::ReadyToBuild);
+        assert!(
+            result.is_err(),
+            "Planning → ReadyToBuild should be blocked when no tickets exist"
+        );
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_ready_gate_allows_populated_tree() {
+        // Planning → ReadyToBuild should succeed when at least one ticket exists.
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store); // creates phase+epic+wave+sprint+ticket
+
+        store
+            .transition_phase("p1", PhaseStatus::ReadyToBuild)
+            .expect("Ready gate should pass with a populated epic/ticket tree");
+        let p = store.load_phase("p1").unwrap();
+        assert_eq!(p.status, PhaseStatus::ReadyToBuild);
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_old_serialized_statuses_still_deserialize() {
+        // Old on-disk values (ready_to_build, building, qa, shipped) must still parse
+        // via serde aliases.
+        let cases = [
+            ("ready_to_build", PhaseStatus::ReadyToBuild),
+            ("ready", PhaseStatus::ReadyToBuild),
+            ("building", PhaseStatus::Building),
+            ("build", PhaseStatus::Building),
+            ("qa", PhaseStatus::Wrapup),
+            ("shipped", PhaseStatus::Wrapup),
+            ("wrapup", PhaseStatus::Wrapup),
+            ("opening", PhaseStatus::Opening),
+            ("planning", PhaseStatus::Planning),
+            ("archived", PhaseStatus::Archived),
+        ];
+        for (raw, expected) in &cases {
+            let yaml = format!("{raw}");
+            let parsed: PhaseStatus =
+                serde_yaml::from_str(&yaml).unwrap_or_else(|e| panic!("Failed to parse '{raw}': {e}"));
+            assert_eq!(parsed, *expected, "Mismatch for raw value '{raw}'");
+        }
     }
 
     #[test]

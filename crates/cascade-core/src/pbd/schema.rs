@@ -21,11 +21,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PhaseStatus {
+    /// Phase is being set up; prerequisites not yet confirmed.
+    Opening,
+    /// Active planning; epics/tickets being defined.
     Planning,
+    /// Fully planned and gated — all epics+tickets populated.
+    #[serde(alias = "ready")]
     ReadyToBuild,
+    /// Active execution (Build phase).
+    #[serde(alias = "build")]
     Building,
-    Qa,
-    Shipped,
+    /// QA / wrap-up after execution (folds legacy Qa + Shipped).
+    #[serde(alias = "qa", alias = "shipped")]
+    Wrapup,
+    /// Terminal: phase archived.
     Archived,
 }
 
@@ -237,14 +246,17 @@ pub struct PbdIndex {
 
 impl PhaseStatus {
     /// Returns allowed next statuses from the current state.
+    ///
+    /// Canonical lifecycle: Opening → Planning → ReadyToBuild → Building → Wrapup → Archived.
+    /// Back-steps allowed where they make sense (e.g. ReadyToBuild → Planning for re-planning).
     pub fn allowed_transitions(&self) -> &'static [PhaseStatus] {
         use PhaseStatus::*;
         match self {
-            Planning => &[ReadyToBuild, Archived],
+            Opening => &[Planning, Archived],
+            Planning => &[ReadyToBuild, Opening, Archived],
             ReadyToBuild => &[Building, Planning, Archived],
-            Building => &[Qa, Shipped, ReadyToBuild, Archived],
-            Qa => &[Shipped, Building, Archived],
-            Shipped => &[Archived],
+            Building => &[Wrapup, ReadyToBuild, Archived],
+            Wrapup => &[Archived],
             Archived => &[],
         }
     }
@@ -253,15 +265,21 @@ impl PhaseStatus {
         self.allowed_transitions().contains(next)
     }
 
+    /// Canonical string representation serialized to YAML/JSON.
     pub fn as_str(&self) -> &'static str {
         match self {
+            PhaseStatus::Opening => "opening",
             PhaseStatus::Planning => "planning",
             PhaseStatus::ReadyToBuild => "ready_to_build",
             PhaseStatus::Building => "building",
-            PhaseStatus::Qa => "qa",
-            PhaseStatus::Shipped => "shipped",
+            PhaseStatus::Wrapup => "wrapup",
             PhaseStatus::Archived => "archived",
         }
+    }
+
+    /// Returns true when the phase is actively being executed (counts toward active_phase in current.yaml).
+    pub fn is_active(&self) -> bool {
+        matches!(self, PhaseStatus::Building | PhaseStatus::Wrapup)
     }
 }
 

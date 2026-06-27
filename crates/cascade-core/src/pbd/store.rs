@@ -336,7 +336,7 @@ impl PbdStore {
         let mut ptr = CurrentPointers::default();
         let phases = self.list_phases()?;
         for phase in &phases {
-            if phase.status == PhaseStatus::Building || phase.status == PhaseStatus::Qa {
+            if phase.status.is_active() {
                 ptr.active_phase = Some(phase.id.clone());
                 for epic_id in &phase.epics {
                     let epic_path = self.epic_path(&phase.id, epic_id);
@@ -443,9 +443,13 @@ impl PbdStore {
                 new_status.as_str()
             )));
         }
+        // Ready gate: Planning -> ReadyToBuild requires >=1 epic with >=1 ticket.
+        if new_status == PhaseStatus::ReadyToBuild {
+            self.validate_ready_gate(phase_id)?;
+        }
         let from = phase.status.as_str().to_string();
         let to = new_status.as_str().to_string();
-        if new_status == PhaseStatus::Shipped || new_status == PhaseStatus::Archived {
+        if new_status == PhaseStatus::Wrapup || new_status == PhaseStatus::Archived {
             phase.closed_at = Some(Utc::now());
         }
         phase.status = new_status;
@@ -453,6 +457,47 @@ impl PbdStore {
         self.emit_event(EventLevel::Phase, phase_id, &from, &to, None)?;
         self.regen_index()?;
         self.regen_current()
+    }
+
+    /// Validate that a phase has >=1 epic with >=1 ticket before allowing the
+    /// Planning -> ReadyToBuild transition.
+    ///
+    /// Returns `Ok(())` if the tree is populated, `Err` with a descriptive message otherwise.
+    pub fn validate_ready_gate(&self, phase_id: &str) -> Result<()> {
+        let phase = self.load_phase(phase_id)?;
+        if phase.epics.is_empty() {
+            return Err(CascadeError::Other(format!(
+                "Ready gate: phase {phase_id} has no epics — add at least one epic with one ticket before advancing to ready_to_build"
+            )));
+        }
+        for epic_id in &phase.epics {
+            let epic_path = self.epic_path(phase_id, epic_id);
+            if !epic_path.exists() {
+                continue;
+            }
+            let epic: Epic = self.read_yaml(&epic_path)?;
+            for wave_id in &epic.waves {
+                let wave_path = self.wave_path(phase_id, epic_id, wave_id);
+                if !wave_path.exists() {
+                    continue;
+                }
+                let wave: super::schema::Wave = self.read_yaml(&wave_path)?;
+                for sprint_id in &wave.sprints {
+                    let sprint_path = self.sprint_path(phase_id, epic_id, wave_id, sprint_id);
+                    if !sprint_path.exists() {
+                        continue;
+                    }
+                    let sprint: super::schema::Sprint = self.read_yaml(&sprint_path)?;
+                    if !sprint.tickets.is_empty() {
+                        // At least one ticket found — gate passes.
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Err(CascadeError::Other(format!(
+            "Ready gate: phase {phase_id} has epics but no tickets — add at least one ticket before advancing to ready_to_build"
+        )))
     }
 
     // ── Epic CRUD ─────────────────────────────────────────────────────────────

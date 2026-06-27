@@ -205,8 +205,8 @@ impl PhaseArgs {
                 println!("Phase {} → ready_to_build", a.id);
             }
             PhaseSubcmd::Close(a) => {
-                store.transition_phase(&a.id, PhaseStatus::Shipped)?;
-                println!("Phase {} → shipped", a.id);
+                store.transition_phase(&a.id, PhaseStatus::Wrapup)?;
+                println!("Phase {} → wrapup", a.id);
             }
             PhaseSubcmd::Archive(a) => {
                 store.transition_phase(&a.id, PhaseStatus::Archived)?;

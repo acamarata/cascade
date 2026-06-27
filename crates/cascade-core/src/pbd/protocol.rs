@@ -354,9 +354,9 @@ pub fn run_eop(
         });
     }
 
-    store.transition_phase(phase_id, PhaseStatus::Shipped)?;
+    store.transition_phase(phase_id, PhaseStatus::Wrapup)?;
 
-    let sidecar = write_sidecar(store, phase_id, "phase", phase_id, "shipped")?;
+    let sidecar = write_sidecar(store, phase_id, "phase", phase_id, "wrapup")?;
 
     Ok(ProtocolResult {
         level: "phase",
