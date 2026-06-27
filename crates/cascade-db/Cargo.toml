@@ -1,0 +1,40 @@
+[package]
+name = "cascade-db"
+description = "Cascade embedded data layer: shared SQLite configuration, migration runner, embedded cache + job queue, and optional ANN vector store. Redis is never required."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+rusqlite   = { workspace = true }
+thiserror  = { workspace = true }
+tracing    = { workspace = true }
+blake3     = "1"
+chrono     = { workspace = true }
+
+# Optional: ANN vector search (default-on per locked decision).
+sqlite-vec = { workspace = true, optional = true }
+
+# Optional: in-process bounded cache backend.
+moka = { version = "0.12", features = ["sync"], optional = true }
+
+# Optional: connection pool for write-heavy databases.
+r2d2         = { version = "0.8", optional = true }
+r2d2_sqlite  = { version = "0.24", optional = true }
+
+# Optional: Redis cache/queue backend. NEVER required for the default build.
+redis = { version = "0.25", features = ["tokio-comp"], optional = true }
+
+[features]
+# Vector search ships on by default — sqlite-vec is the production ANN path.
+default = ["vec", "mem-cache"]
+vec = ["dep:sqlite-vec"]
+mem-cache = ["dep:moka"]
+pool = ["dep:r2d2", "dep:r2d2_sqlite"]
+redis-backend = ["dep:redis"]
+
+[dev-dependencies]
+tempfile = "3"

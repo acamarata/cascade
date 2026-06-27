@@ -2,6 +2,7 @@
 members = [
     "crates/cascade-agents",
     "crates/cascade-types",
+    "crates/cascade-db",
     "crates/cascade-core",
     "crates/cascade-cli",
     "crates/cascade-daemon",
