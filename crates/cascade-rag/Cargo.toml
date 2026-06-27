@@ -12,6 +12,7 @@ repository.workspace = true
 
 [dependencies]
 cascade-types = { workspace = true }
+cascade-db    = { workspace = true }
 async-trait   = { workspace = true }
 serde         = { workspace = true }
 serde_json    = { workspace = true }

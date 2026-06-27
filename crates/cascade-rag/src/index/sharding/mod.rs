@@ -45,7 +45,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection};
 use tracing::{debug, instrument, warn};
 
 // ── Error type ────────────────────────────────────────────────────────────────
@@ -262,13 +262,14 @@ impl ShardedIndex {
         let mut shards = Vec::with_capacity(shard_count);
         for i in 0..shard_count {
             let path = root.join(format!("cascade_vec_shard_{i}.db"));
-            let conn = Connection::open_with_flags(
-                &path,
-                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-            )
-            .map_err(|e| ShardError::Sqlite {
-                shard: i,
-                source: e,
+            let conn = cascade_db::open_configured(&path).map_err(|e| {
+                ShardError::Sqlite {
+                    shard: i,
+                    source: rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
+                        Some(e.to_string()),
+                    ),
+                }
             })?;
             apply_shard_schema(&conn, embed_dim).map_err(|e| ShardError::Sqlite {
                 shard: i,

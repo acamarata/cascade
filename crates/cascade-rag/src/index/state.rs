@@ -88,10 +88,7 @@ impl IndexStateStore {
         })?;
 
         let db_path = index_root.join("cascade_state.db");
-        let conn = Connection::open(&db_path).map_err(|e| CascadeError::Other(e.to_string()))?;
-
-        // Enable WAL for reduced write contention.
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        let conn = cascade_db::open_configured(&db_path)
             .map_err(|e| CascadeError::Other(e.to_string()))?;
 
         // Apply schema.

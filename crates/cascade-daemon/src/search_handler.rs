@@ -234,10 +234,8 @@ impl RagSearchHandler {
 
         // Open a fresh read connection — WAL allows concurrent readers.
         let conn = tokio::task::spawn_blocking(move || {
-            let c = Connection::open(&db_path).map_err(|e| format!("open read conn: {e}"))?;
-            // Ensure WAL reader mode.
-            c.execute_batch("PRAGMA journal_mode=WAL;")
-                .map_err(|e| format!("wal pragma: {e}"))?;
+            let c = cascade_db::open_configured(&db_path)
+                .map_err(|e| format!("open read conn: {e}"))?;
             Ok::<Connection, String>(c)
         })
         .await
@@ -294,11 +292,9 @@ impl RagSearchHandler {
         let embed = Arc::clone(&self.embed);
 
         let result = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path).map_err(|e| {
+            let conn = cascade_db::open_configured(&db_path).map_err(|e| {
                 cascade_types::error::CascadeError::Other(format!("open write conn: {e}"))
             })?;
-            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-                .map_err(|e| cascade_types::error::CascadeError::Other(format!("pragmas: {e}")))?;
             let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default());
             pipeline.ingest_file(&file_path)
         })
@@ -353,7 +349,8 @@ impl RagSearchHandler {
         let db_path = mgr.db_path().to_path_buf();
 
         let stats = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path).map_err(|e| format!("open stats conn: {e}"))?;
+            let conn = cascade_db::open_configured(&db_path)
+                .map_err(|e| format!("open stats conn: {e}"))?;
 
             let file_count: u64 = conn
                 .query_row("SELECT COUNT(*) FROM rag_sources", [], |r| r.get(0))

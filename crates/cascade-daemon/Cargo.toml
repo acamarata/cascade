@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 cascade-core      = { workspace = true }
+cascade-db        = { workspace = true }
 cascade-rag       = { path = "../cascade-rag", version = "1.5.0" }
 cascade-types     = { workspace = true }
 cascade-agents    = { workspace = true }

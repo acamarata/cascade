@@ -111,22 +111,11 @@ impl IndexManager {
         let project_root = project_root.as_ref().to_path_buf();
         let db_path = resolve_db_path(&project_root);
 
-        // Ensure parent directory exists.
-        if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| CascadeError::io(parent, "create-index-dir", e))?;
-        }
-
         info!(db = %db_path.display(), "IndexManager: opening project index");
 
-        let conn = Connection::open(&db_path).map_err(|e| CascadeError::RetrievalFailed {
-            detail: format!("open index db: {e}"),
-        })?;
-
-        // WAL mode — single writer, unlimited concurrent readers.
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        let conn = cascade_db::open_configured(&db_path)
             .map_err(|e| CascadeError::RetrievalFailed {
-                detail: format!("wal pragma: {e}"),
+                detail: format!("open index db: {e}"),
             })?;
 
         // Run forward-only schema migrations.

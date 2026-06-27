@@ -79,18 +79,8 @@ impl UsageAccumulator {
     pub fn new(db_path: impl AsRef<Path>) -> Result<Self, String> {
         let db_path = db_path.as_ref().to_path_buf();
 
-        // Ensure parent directory exists.
-        if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("create_dir_all {}: {e}", parent.display()))?;
-        }
-
-        let conn = Connection::open(&db_path)
+        let conn = cascade_db::open_configured(&db_path)
             .map_err(|e| format!("open usage db {}: {e}", db_path.display()))?;
-
-        // WAL mode: allows concurrent reads from widgets / IPC.
-        conn.execute_batch("PRAGMA journal_mode=WAL;")
-            .map_err(|e| format!("enable WAL: {e}"))?;
 
         // Migration (idempotent).
         conn.execute_batch(

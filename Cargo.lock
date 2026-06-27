@@ -1126,6 +1126,7 @@ dependencies = [
  "cascade-audit",
  "cascade-ccapi",
  "cascade-core",
+ "cascade-db",
  "cascade-harness",
  "cascade-keychain",
  "cascade-local-llm",
@@ -1159,6 +1160,7 @@ name = "cascade-core"
 version = "1.5.1"
 dependencies = [
  "async-trait",
+ "cascade-db",
  "cascade-types",
  "chrono",
  "dirs 5.0.1",
@@ -1196,6 +1198,7 @@ dependencies = [
  "cascade-agents",
  "cascade-audit",
  "cascade-core",
+ "cascade-db",
  "cascade-keychain",
  "cascade-local-llm",
  "cascade-providers",
@@ -1455,6 +1458,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "calamine",
+ "cascade-db",
  "cascade-types",
  "criterion",
  "dirs 5.0.1",

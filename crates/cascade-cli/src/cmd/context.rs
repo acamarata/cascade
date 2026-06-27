@@ -135,14 +135,7 @@ fn resolve_db_path(explicit: Option<&std::path::Path>) -> PathBuf {
 
 /// Open (or create) the SQLite database at `path`.
 fn open_conn(path: &PathBuf) -> Result<rusqlite::Connection> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| CascadeError::Io {
-            path: parent.to_path_buf(),
-            operation: "create_dir_all",
-            source: e,
-        })?;
-    }
-    rusqlite::Connection::open(path)
+    cascade_db::open_configured(path)
         .map_err(|e| CascadeError::Other(format!("Failed to open DB at {}: {e}", path.display())))
 }
 

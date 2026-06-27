@@ -20,18 +20,8 @@ use rusqlite::Connection;
 /// Creates the file (and parent directories) if absent.
 /// Safe to call on an existing database — migrations are idempotent.
 pub fn open_tasks_db(db_path: &Path) -> Result<Arc<Mutex<Connection>>> {
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            CascadeError::Other(format!("failed to create tasks db directory: {e}"))
-        })?;
-    }
-
-    let conn = Connection::open(db_path)
+    let conn = cascade_db::open_configured(db_path)
         .map_err(|e| CascadeError::Other(format!("failed to open tasks db: {e}")))?;
-
-    // Enable WAL mode for concurrent read access without blocking writes.
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-        .map_err(|e| CascadeError::Other(format!("failed to set PRAGMA: {e}")))?;
 
     run_migrations(&conn)?;
 

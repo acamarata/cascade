@@ -46,7 +46,7 @@ pub mod sharding;
 pub mod state;
 
 use cascade_types::error::{CascadeError, Result};
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, instrument};
@@ -121,18 +121,10 @@ impl RagIndex {
     #[instrument(skip_all, fields(db_path = %db_path.as_ref().display()))]
     pub async fn open(db_path: impl AsRef<Path>) -> Result<Self> {
         let db_path = db_path.as_ref().to_path_buf();
-        // Ensure parent directory exists.
-        if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| CascadeError::io(parent, "create-dir", e))?;
-        }
-        let conn = Connection::open_with_flags(
-            &db_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-        )
-        .map_err(|e| CascadeError::RetrievalFailed {
-            detail: format!("open db: {e}"),
-        })?;
+        let conn = cascade_db::open_configured(&db_path)
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("open db: {e}"),
+            })?;
         let idx = Self {
             db_path,
             conn: tokio::sync::Mutex::new(conn),

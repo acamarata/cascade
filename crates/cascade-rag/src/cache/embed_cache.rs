@@ -146,13 +146,12 @@ impl EmbedCache {
     ) -> Result<Self, EmbedCacheError> {
         let db_path = index_root.join("cascade_embed_cache.db");
 
-        let conn = Connection::open(&db_path).map_err(|e| EmbedCacheError::Open {
-            path: db_path.clone(),
-            source: e,
+        let conn = cascade_db::open_configured(&db_path).map_err(|e| {
+            EmbedCacheError::Db(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
+                Some(format!("open_configured {}: {e}", db_path.display())),
+            ))
         })?;
-
-        // WAL mode for concurrent readers.
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
 
         // Create metadata table.
         conn.execute_batch(

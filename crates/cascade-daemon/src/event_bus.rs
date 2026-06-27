@@ -49,10 +49,7 @@ impl EventBus {
     /// Open (or create) the events database.
     pub async fn new(config_dir: PathBuf) -> Result<Arc<Self>, DaemonError> {
         let db_path = config_dir.join(DB_NAME);
-        let conn = Connection::open(&db_path).map_err(|e| DaemonError::EventBus(e.to_string()))?;
-
-        // WAL mode for concurrent read access from widgets.
-        conn.execute_batch("PRAGMA journal_mode=WAL;")
+        let conn = cascade_db::open_configured(&db_path)
             .map_err(|e| DaemonError::EventBus(e.to_string()))?;
 
         // Create tables if they don't exist — idempotent DDL.

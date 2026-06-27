@@ -21,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 cascade-core    = { workspace = true }
+cascade-db      = { workspace = true }
 cascade-types   = { workspace = true }
 cascade-harness = { workspace = true }
 cascade-ccapi   = { path = "../cascade-ccapi", version = "1.5.0" }

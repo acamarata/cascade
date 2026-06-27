@@ -183,15 +183,9 @@ impl SqliteAuditLog {
     async fn open(db_path: &Path) -> cascade_types::error::Result<Self> {
         let path = db_path.to_owned();
         tokio::task::spawn_blocking(move || {
-            let conn = rusqlite::Connection::open(&path).map_err(|e| {
+            let conn = cascade_db::open_configured(&path).map_err(|e| {
                 cascade_types::error::CascadeError::Other(format!("audit db open: {e}"))
             })?;
-
-            // WAL mode for concurrent readers without blocking writers.
-            conn.execute_batch("PRAGMA journal_mode=WAL;")
-                .map_err(|e| {
-                    cascade_types::error::CascadeError::Other(format!("audit db WAL: {e}"))
-                })?;
 
             // Schema: append-only, no UPDATE/DELETE granted.
             conn.execute_batch(
