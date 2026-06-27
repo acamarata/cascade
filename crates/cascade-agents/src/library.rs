@@ -63,6 +63,9 @@ struct RawAgentEntry {
     tool_grants_ref: Option<String>,
     /// Execution runtime.
     runtime: Runtime,
+    /// Optional soul reference (e.g. `"professional-minimal"`).
+    #[serde(default)]
+    soul_ref: Option<String>,
 }
 
 impl From<RawAgentEntry> for AgentSpec {
@@ -78,6 +81,7 @@ impl From<RawAgentEntry> for AgentSpec {
             system_prompt_ref: raw.system_prompt_ref,
             tool_grants_ref: raw.tool_grants_ref,
             runtime: raw.runtime,
+            soul_ref: raw.soul_ref,
         }
     }
 }

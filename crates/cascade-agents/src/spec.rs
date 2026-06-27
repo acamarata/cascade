@@ -173,6 +173,7 @@ pub enum Runtime {
 ///     system_prompt_ref: None,
 ///     tool_grants_ref: None,
 ///     runtime: Runtime::Native,
+///     soul_ref: None,
 /// };
 /// assert_eq!(spec.role, AgentRole::Ceo);
 /// ```
@@ -215,6 +216,11 @@ pub struct AgentSpec {
 
     /// Execution runtime for this agent.
     pub runtime: Runtime,
+
+    /// Optional reference to a soul definition (e.g. `"professional-minimal"`).
+    /// If `None`, [`crate::soul::resolve_soul`] falls back to `"professional-minimal"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub soul_ref: Option<String>,
 }
 
 // ── First-party fixtures ──────────────────────────────────────────────────────
@@ -236,6 +242,7 @@ pub fn builtin_ceo() -> AgentSpec {
         system_prompt_ref: Some("library/prompts/ceo.md".into()),
         tool_grants_ref: Some("library/grants/ceo.yaml".into()),
         runtime: Runtime::Native,
+        soul_ref: None,
     }
 }
 
@@ -257,6 +264,7 @@ pub fn builtin_coder() -> AgentSpec {
         system_prompt_ref: Some("library/prompts/coder.md".into()),
         tool_grants_ref: Some("library/grants/coder.yaml".into()),
         runtime: Runtime::Native,
+        soul_ref: None,
     }
 }
 

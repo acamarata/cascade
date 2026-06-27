@@ -36,6 +36,7 @@ pub mod library;
 pub mod model_profile;
 pub mod prompt_gate;
 pub mod registry;
+pub mod soul;
 pub mod spec;
 pub mod task;
 pub mod tool_registry;
@@ -80,6 +81,9 @@ pub use prompt_gate::{
     check_prompt_size, estimate_tokens, GateOutcome, PromptSizeConfig, PromptSizeReport,
     PromptTooLarge,
 };
+
+// soul module re-exports (soul-01)
+pub use soul::{render_soul_block, resolve_soul, verbosity_instruction, ResolvedSoul, SoulOverride};
 
 // chain module re-exports
 pub use chain::{

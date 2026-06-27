@@ -429,6 +429,7 @@ async fn wasm_runtime_dispatched_via_router() {
         runtime: Runtime::Wasm {
             plugin_id: "my-wasm-plugin".into(),
         },
+        soul_ref: None,
     };
 
     let saw = Arc::new(Mutex::new(false));

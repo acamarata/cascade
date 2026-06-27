@@ -163,6 +163,7 @@ pub(crate) fn minimal_spec() -> AgentSpec {
         system_prompt_ref: None,
         tool_grants_ref: None,
         runtime: Runtime::Native,
+        soul_ref: None,
     }
 }
 
@@ -179,5 +180,6 @@ pub(crate) fn minimal_spec_for_role(role: AgentRole) -> AgentSpec {
         system_prompt_ref: None,
         tool_grants_ref: None,
         runtime: Runtime::Native,
+        soul_ref: None,
     }
 }

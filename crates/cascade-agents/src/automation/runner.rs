@@ -461,5 +461,6 @@ pub(super) fn agent_spec_for_role(role: AgentRole) -> crate::spec::AgentSpec {
         system_prompt_ref: None,
         tool_grants_ref: None,
         runtime: Runtime::Native,
+        soul_ref: None,
     }
 }
