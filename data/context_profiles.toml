@@ -1,0 +1,42 @@
+# Context Profiles — cascade context_slice role-based budgets
+#
+# Purpose: define per-role token budgets, k_chunks, and tier labels for the
+#          ContextAssembler.  Loaded at construction time by
+#          `ContextAssembler::load_profiles`.  Edit freely; cascade-mcp
+#          hot-reloads via profile lookup on every context_slice call.
+#
+# Fields:
+#   role         — identifier passed by callers via cascade.context_slice
+#   token_budget — max estimated tokens for the context window
+#   k_chunks     — maximum number of retrieval hits to pass to the optimizer
+#   tier         — human label used in metadata ("minimal" | "standard" | "expanded" | "full")
+
+[[profiles]]
+role = "chat"
+token_budget = 500
+k_chunks = 3
+tier = "minimal"
+
+[[profiles]]
+role = "build"
+token_budget = 4000
+k_chunks = 10
+tier = "expanded"
+
+[[profiles]]
+role = "review"
+token_budget = 6000
+k_chunks = 15
+tier = "full"
+
+[[profiles]]
+role = "research"
+token_budget = 8000
+k_chunks = 20
+tier = "full"
+
+[[profiles]]
+role = "default"
+token_budget = 4096
+k_chunks = 10
+tier = "standard"

@@ -10,12 +10,14 @@
 //! | [`handlers_core`] | 10 core tool handlers (read, search, inbox, memory, …) |
 //! | [`handlers_pbd`] | 8 PBD tool handlers (get_current, update_ticket_status, …) |
 //! | [`registry`] | `ToolRegistry` — dispatch hub |
+//! | [`context_assembler`] | Role-aware context assembly layer (ctx-01) |
 
 mod types;
 mod helpers;
 mod schemas;
 mod handlers_core;
 mod handlers_pbd;
+pub mod context_assembler;
 pub mod registry;
 
 #[cfg(test)]

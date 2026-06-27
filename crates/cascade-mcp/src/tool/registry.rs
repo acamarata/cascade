@@ -195,7 +195,9 @@ impl ToolRegistry {
                 }
                 tool_result(handle_memory_write(&args).await)
             }
-            "cascade.context_slice" => tool_result(handle_context_slice(&args).await),
+            "cascade.context_slice" => {
+                tool_result(handle_context_slice(&args, retriever_snapshot).await)
+            }
             "cascade.provide_harness_context" => {
                 tool_result(handle_provide_harness_context(&args).await)
             }

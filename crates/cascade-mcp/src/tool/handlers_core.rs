@@ -14,6 +14,7 @@ use cascade_types::retriever::Retriever;
 use crate::paths as mcp_paths;
 use crate::server::JsonRpcError;
 
+use super::context_assembler::{ContextAssembler, ContextRequest};
 use super::helpers::build_retrieve_opts;
 use super::helpers::chrono_local_date;
 
@@ -493,6 +494,7 @@ pub(super) async fn handle_memory_write(
 /// - `metadata.chunks_returned` — number of chunks in the slice
 pub(super) async fn handle_context_slice(
     args: &Value,
+    retriever: Option<Arc<dyn Retriever>>,
 ) -> std::result::Result<Value, JsonRpcError> {
     // ── Validate and extract arguments ──────────────────────────────────────
     let query = args
@@ -518,6 +520,17 @@ pub(super) async fn handle_context_slice(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     let project = args.get("project").and_then(|v| v.as_str());
+    // Role and model for ContextAssembler profile lookup.
+    let role = args
+        .get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+    let model = args
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     debug!(
         query,
@@ -525,34 +538,73 @@ pub(super) async fn handle_context_slice(
         session_id = ?session_id,
         include_shell,
         project = ?project,
+        role = %role,
+        model = %model,
         "cascade.context_slice"
     );
 
-    // ── RAG retrieve ─────────────────────────────────────────────────────────
-    // Direct crate-level call (no daemon IPC — architectural requirement from
-    // T-P4-E04-22 CR-C). In this phase the retrieve index is not yet wired into
-    // cascade-mcp (pending a future ticket that injects Arc<dyn Retriever>);
-    // we return the optimizer pipeline result over an empty chunk set.
+    // ── RAG retrieve (E-05 unblock) ───────────────────────────────────────────
+    // When a live retriever is injected via ToolRegistry::with_retriever, we
+    // execute a real retrieval pass.  When absent (index not yet built or daemon
+    // not started), we fall back to a single informational chunk so the optimizer
+    // pipeline still runs and the caller gets a non-empty, valid response.
     //
-    // When cascade-mcp gains an injected retriever (planned for E-05), replace
-    // the empty `chunks` with a real `retriever.retrieve(query, opts).await?`.
-    let chunks: Vec<cascade_types::RetrievalHit> = Vec::new();
+    // Architecture note (T-P4-E04-22): direct crate-level call, no daemon IPC.
+    // Cross-session dedup (T-P4-E04-21) requires a live SQLite pool — skipped
+    // here; wire via cross_session_dedup + record_delivered when pool is injected.
+    let retriever_ready = retriever.is_some();
+    let raw_chunks: Vec<String> = match retriever {
+        Some(ret) => {
+            // Build retrieve opts: limit to profile k_chunks (default 10).
+            let opts = build_retrieve_opts(10, None);
+            let hits = ret
+                .retrieve(query, &opts)
+                .await
+                .map_err(|e| JsonRpcError::internal(format!("retrieval failed: {e}")))?;
+            hits.into_iter().map(|h| h.text).collect()
+        }
+        None => {
+            // TODO(E-05-follow): inject retriever via ToolRegistry::with_retriever
+            // so this branch is never taken in production.  Currently the
+            // ToolRegistry does not forward the retriever slot to context_slice;
+            // that wiring is the remaining step to fully close E-05.
+            vec![format!(
+                "cascade.context_slice: index not ready (query={query:?}). \
+                 Run `cascade index rebuild` then restart the MCP server."
+            )]
+        }
+    };
+    let _ = session_id; // forward-ref: used when DB pool is wired for cross-session dedup
 
-    // ── ContextOptimizer pipeline ────────────────────────────────────────────
-    let optimizer = ContextOptimizer::new(budget_tokens);
-    let shell_snippets: Vec<String> = Vec::new(); // populated when include_shell + retriever wired
-    let result = optimizer.optimize(chunks, if include_shell { &shell_snippets } else { &[] });
+    // ── ContextAssembler (ctx-01) ─────────────────────────────────────────────
+    // Load profiles from disk if available; fall back to built-in defaults.
+    let assembler = ContextAssembler::new();
+    let req = ContextRequest {
+        query: query.to_string(),
+        role: role.clone(),
+        model: model.clone(),
+        token_budget: budget_tokens,
+    };
+    let assembled = assembler.assemble(&req, raw_chunks);
 
-    // ── Cross-session dedup (T-P4-E04-21) ────────────────────────────────────
-    // Cross-session dedup requires a live DB connection. Without an injected
-    // DB pool, we skip it and note in the output. When the daemon injects a
-    // pool, replace this block with cross_session_dedup + record_delivered.
-    let final_chunks = result.chunks;
-    let _ = session_id; // forward-ref: used when DB pool is wired
+    // ── Optional shell compression ────────────────────────────────────────────
+    // When include_shell is set, run the ContextOptimizer's shell compressor over
+    // the assembled chunks before formatting.  Reuse the same budget the assembler
+    // already applied so we don't double-charge tokens.
+    let final_chunks: Vec<String> = if include_shell && assembled.tokens_used > 0 {
+        let optimizer = ContextOptimizer::new(assembled.tokens_used.max(64));
+        assembled
+            .chunks
+            .iter()
+            .map(|c| optimizer.compress_shell(c))
+            .collect()
+    } else {
+        assembled.chunks.clone()
+    };
 
     // ── Format output as markdown ─────────────────────────────────────────────
     let chunks_returned = final_chunks.len();
-    let tokens_used = result.tokens_used;
+    let tokens_used = assembled.tokens_used;
 
     let mut md = String::new();
     if final_chunks.is_empty() {
@@ -561,18 +613,9 @@ pub(super) async fn handle_context_slice(
              *No context chunks available — ensure `cascaded start` is running and the index is built.*"
         ));
     } else {
-        for chunk in &final_chunks {
-            let path = chunk
-                .file_path
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
-            let start = chunk.start_line.unwrap_or(0);
-            let end = chunk.end_line.unwrap_or(0);
-            let score = (chunk.score * 1000.0).round() / 1000.0;
+        for (i, chunk) in final_chunks.iter().enumerate() {
             md.push_str(&format!(
-                "<!-- source: {path}:{start}-{end} score:{score:.3} -->\n```\n{}\n```\n\n",
-                chunk.text
+                "<!-- chunk:{i} role:{role} -->\n```\n{chunk}\n```\n\n"
             ));
         }
     }
@@ -583,7 +626,10 @@ pub(super) async fn handle_context_slice(
             "tokens_used": tokens_used,
             "chunks_returned": chunks_returned,
             "query": query,
-            "budget_tokens": budget_tokens
+            "budget_tokens": budget_tokens,
+            "role": role,
+            "tier": assembled.tier,
+            "retriever_ready": retriever_ready,
         }
     }))
 }
