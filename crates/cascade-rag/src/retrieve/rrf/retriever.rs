@@ -305,8 +305,28 @@ impl Retriever for RrfRetriever {
         }
 
         // ── Single-channel fast path ────────────────────────────────────────
+        //
+        // `lists` only contains channels whose hits survived `hits_to_pairs`
+        // (i.e. whose chunk_ids parse as i64).  When chunk_ids are non-numeric
+        // strings (e.g. "c1" from `RagIndex::upsert_chunk`), all pairs are
+        // dropped and `lists` ends up empty even though the raw hit slices are
+        // non-empty.  In that case we must still return the raw hits rather than
+        // silently returning an empty vec.
         if lists.is_empty() {
-            return Ok(vec![]);
+            // Fall back to whichever raw channel fired (non-numeric IDs bypass
+            // RRF fusion and are returned in channel score order).
+            let sole = if !fts_hits.is_empty() {
+                fts_hits
+            } else if !vec_hits.is_empty() {
+                vec_hits
+            } else if !curated_hits.is_empty() {
+                curated_hits
+            } else if !recency_hits.is_empty() {
+                recency_hits
+            } else {
+                return Ok(vec![]);
+            };
+            return Ok(sole.into_iter().take(opts.k).collect());
         }
         if lists.len() == 1 {
             // Avoid allocating a fusion map when only one channel fired.
