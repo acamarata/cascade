@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn slug_from_project_dir_extracts_last_component() {
-        assert_eq!(slug_from_project_dir("/Users/admin/Sites/cascade"), "cascade");
+        assert_eq!(slug_from_project_dir("/home/me/projects/cascade"), "cascade");
         assert_eq!(slug_from_project_dir("/home/user/my-project"), "my-project");
         assert_eq!(slug_from_project_dir(""), "unknown");
     }

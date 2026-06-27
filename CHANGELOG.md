@@ -6,6 +6,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-27
+
+Personal OS, three-mode chat, and release-readiness. Cascade is now a complete local-first personal + dev operating system: an encrypted personal data store, threads/topics, a namespace-isolated memory engine with three-mode chat, external-session harvesting, and the security/privacy/docs gates for a public release.
+
+### Added — Personal OS & memory
+- **Encrypted personal data store** (`rag-16`): new `cascade-personal` crate — AES-256-GCM at rest (key in the OS keychain), seeded + custom collections, a mode-aware gate (finance/health/credentials hidden outside Personal mode), and a consent/exposure log.
+- **Threads / topics / archive** (`rag-15`): markdown↔DB synced personal threads with stage tasks, topics, cross-thread search, and non-destructive archiving.
+- **Memory engine + three-mode isolation** (`rag-08`): `memory_episodes`/`memory_facts`/`chat_history` with BLAKE3 dedup, consolidation + decay, and strict namespace isolation (`personal` / `dev-<project>` / `meta`). The personal namespace is firewalled at both the recall layer and the MCP tool boundary. New `remember`/`recall`/`forget`/`search_memory` MCP tools.
+- **CC session harvest** (`mem-01`): a `POST /api/harvest/cc-session` endpoint + an idempotent Claude Code `Stop` hook extract decisions/file-changes/tool-patterns into the project's `dev-<slug>` memory (personal namespaces never harvested without opt-in).
+
+### Added — App & retrieval
+- **Three-mode chat + navigator** (`app-01`): Personal / Projects / Cascade scope switcher (`?scope=` URL state), DB-backed chat history, top-level Personal + Projects routes, and a remapped sidebar.
+- **Fleet widget UI** (`fleet-02`): the fleet widget mounts in the status bar with a unified usage panel and editable quota estimates.
+- **Caching, privacy & multi-tenant** (`rag-07`): exclusion-set enforcement in search + ingest, tenant/project-scoped cache invalidation, embed-cache LRU+TTL, and a secret/PII redaction pipeline.
+- **Roadmap retrieval** (`rag-09`): multi-query + step-back expansion, code-graph structural queries, a bounded agentic retrieve loop, and a feedback-signal ingest point.
+
+### Added — Release gates & ops
+- **MCP transport auth** (`sec-01`): runtime loopback enforcement in all build profiles, Origin/Host (DNS-rebind) middleware, capability-scoped HMAC tokens gating personal-data tools, and an access audit log.
+- **Telemetry opt-in** (`priv-01`): off by default (config-gated), first-run consent (defaults No), `cascade telemetry` CLI, and `PRIVACY.md`.
+- **Plugin security** (`plug-01`): PersonalData/McpInvoke capabilities, a grants store, Ed25519 signing with a trusted-publisher registry, and an audit log.
+- **Backup / export** (`data-01`): `cascade export`/`import` portable archives with BLAKE3-verified manifests and secret exclusion.
+- **Scale benchmarks** (`perf-01`): 100k/1M sharded-search + fleet-router benches with absolute thresholds and a nightly gate.
+- **FOSS docs** (`doc-01`): rewritten README/CONTRIBUTING/Quickstart/Configuration, consolidated wiki, and a static landing page.
+
+### Fixed
+- Deterministic chat-history ordering (`created_at, id`) on same-timestamp inserts.
+- Scrubbed remaining dev-machine paths from tests/docs (FOSS CI guard green).
+
 ## [1.8.0] - 2026-06-27
 
 Zero-config + PEWS + intelligence. Cascade now discovers and indexes your projects automatically, ships a tiered agent roster with a soul/verbosity layer, and drives autonomous phase builds.
