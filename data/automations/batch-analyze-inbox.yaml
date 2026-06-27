@@ -1,0 +1,18 @@
+id: batch-analyze-inbox
+name: "Batch Analyze Inbox"
+description: >
+  Read-only scan of the agent inbox. Classifies pending items by priority
+  and produces a summary. Never sends outbound messages or modifies files.
+  Safe to run permissionlessly (BackgroundTaskClass::Analyze).
+enabled: true
+trigger:
+  kind: scheduled
+  cron: "0 * * * *"
+target:
+  kind: agent
+  role: Triage
+  goal: >
+    Scan the agent inbox at {{inbox_path}}. For each item, classify its
+    priority (high/medium/low) and extract the subject. Produce a JSON
+    summary with keys: total, high, medium, low, items[]. Do NOT reply to
+    any item or create any files. Read-only analysis only.

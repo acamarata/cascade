@@ -60,6 +60,8 @@ mod loader;
 mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
 mod volume_watcher;
+// auto-01: background automation scheduler
+mod scheduler;
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::ProviderRegistry;

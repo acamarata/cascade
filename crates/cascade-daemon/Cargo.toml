@@ -68,6 +68,8 @@ base64        = "0.22"
 blake3        = "1"
 # T-P4-E04-14: download delta bundles to a temp file before apply
 tempfile      = "3"
+# auto-01: cron schedule parsing for scheduler.rs (mirrors cascade-types dep)
+cron          = "0.12"
 
 [features]
 tcp-ipc = []

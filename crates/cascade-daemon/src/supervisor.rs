@@ -278,6 +278,129 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
         });
     }
 
+    // ── Scheduler ────────────────────────────────────────────────────────────────
+    if config.scheduler.enabled {
+        use crate::scheduler::Scheduler;
+        use cascade_core::task_store::TaskStore;
+        use cascade_types::scheduled_task::{ScheduleSpec, ScheduledTask};
+        use rusqlite::Connection;
+        use std::sync::Mutex;
+
+        let sched_conn = Connection::open(":memory:")
+            .expect("scheduler: in-memory SQLite unavailable");
+        sched_conn
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    schedule_json TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    args_json TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    last_run TEXT,
+                    next_run TEXT,
+                    status_json TEXT NOT NULL
+                );",
+            )
+            .expect("scheduler: failed to create scheduled_tasks table");
+
+        let sched_conn_arc = Arc::new(Mutex::new(sched_conn));
+        let task_store = Arc::new(TaskStore::new(sched_conn_arc));
+
+        let hourly_rescan = ScheduledTask::new(
+            "daemon.index-rescan",
+            ScheduleSpec::Interval { secs: 3600 },
+            "true",
+            vec![],
+        );
+        let daily_memory = ScheduledTask::new(
+            "daemon.memory-consolidate",
+            ScheduleSpec::Interval { secs: 86400 },
+            "true",
+            vec![],
+        );
+
+        if let Err(e) = task_store.insert(&hourly_rescan) {
+            warn!(%e, "scheduler: failed to seed hourly-rescan task");
+        }
+        if let Err(e) = task_store.insert(&daily_memory) {
+            warn!(%e, "scheduler: failed to seed daily-memory task");
+        }
+
+        let sched_config = config.scheduler.clone();
+        let sched_shutdown = shutdown.clone();
+        let scheduler = Scheduler::new(sched_config, task_store, sched_shutdown);
+        tokio::spawn(scheduler.run());
+        info!("scheduler: spawned with default periodic tasks");
+    }
+
+    // ── AutomationRunner ─────────────────────────────────────────────────────────
+    // Instantiated with nop router/invoker stubs until a real provider is
+    // wired. The runner is unused at startup (no automations loaded yet) but
+    // its construction validates the builder wiring compiles end-to-end.
+    // TODO(auto-02): replace NopRouter/NopInvoker with the real ProviderRegistry
+    // adapter once cascade-providers exposes a ProviderRouter impl.
+    {
+        use async_trait::async_trait;
+        use cascade_agents::automation::{AutomationRunner, NoopSink};
+        use cascade_agents::chain::ChainExecutor;
+        use cascade_agents::context::{AgentRunContext, StepOutcome, TokenUsage};
+        use cascade_agents::executor::{
+            AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker,
+        };
+        use cascade_agents::spec::AgentSpec;
+        use cascade_agents::context::ToolCall;
+
+        struct NopRouter;
+        #[async_trait]
+        impl ProviderRouter for NopRouter {
+            async fn step(
+                &self,
+                _spec: &AgentSpec,
+                _ctx: &AgentRunContext,
+            ) -> Result<StepOutcome, ExecutorError> {
+                Ok(StepOutcome {
+                    assistant_text: "nop".into(),
+                    tool_calls: vec![],
+                    done: true,
+                    usage: TokenUsage { prompt_tokens: 0, completion_tokens: 0 },
+                })
+            }
+        }
+
+        struct NopInvoker;
+        #[async_trait]
+        impl ToolInvoker for NopInvoker {
+            async fn invoke(&self, call: &ToolCall) -> Result<String, ExecutorError> {
+                Ok(format!("nop:{}", call.tool_id))
+            }
+        }
+
+        let agent_exec = Arc::new(
+            AgentExecutor::builder()
+                .provider_router(Arc::new(NopRouter))
+                .tool_invoker(Arc::new(NopInvoker))
+                .build(),
+        );
+        let chain_exec = Arc::new(
+            ChainExecutor::builder()
+                .provider_router(Arc::new(NopRouter))
+                .tool_invoker(Arc::new(NopInvoker))
+                .agent_executor(Arc::clone(&agent_exec))
+                .build(),
+        );
+
+        let _automation_runner = Arc::new(
+            AutomationRunner::builder()
+                .chain_executor(chain_exec)
+                .agent_executor(agent_exec)
+                .sink(Arc::new(NoopSink))
+                .build(),
+        );
+        info!("automation_runner: instantiated (nop stubs — real provider wired in auto-02)");
+    }
+
     // ── Main event loop ───────────────────────────────────────────────────────
     tokio::select! {
         result = ipc.serve(shutdown.clone()) => {

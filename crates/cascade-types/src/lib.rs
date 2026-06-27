@@ -58,6 +58,7 @@
 
 pub mod accounts;
 pub mod agent;
+pub mod background_task;
 pub mod auto_auth;
 pub mod cascade_tier;
 pub mod chunker;

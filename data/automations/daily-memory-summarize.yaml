@@ -1,0 +1,18 @@
+id: daily-memory-summarize
+name: "Daily Memory Summarize"
+description: >
+  Read-only scan of project memory files. Produces a brief summary of
+  recent decisions, lessons, and patterns. Safe to run permissionlessly
+  (BackgroundTaskClass::Summarize). Does NOT write any files.
+enabled: true
+trigger:
+  kind: scheduled
+  cron: "0 2 * * *"
+target:
+  kind: agent
+  role: Summarizer
+  goal: >
+    Read the memory files at {{memory_path}} (decisions.md, lessons.md,
+    patterns.md). Produce a JSON summary with keys: decision_count,
+    lesson_count, pattern_count, recent_items[{file, title, date}].
+    Read-only — do NOT modify any files or send any messages.

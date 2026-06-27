@@ -816,6 +816,29 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 }
                 _ => {}
             }
+            // ── turn.complete (auto-01) ───────────────────────────────────
+            if typed_req.method == "turn.complete" {
+                let session_id = typed_req
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("session_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if let Err(e) = server
+                    .bus
+                    .publish(
+                        "turn.complete",
+                        serde_json::json!({ "session_id": session_id }),
+                    )
+                    .await
+                {
+                    warn!(%e, "turn.complete: failed to publish event");
+                }
+                info!(session_id = %session_id, "turn.complete: event published");
+                return Response::ok(serde_json::json!({ "ok": true }));
+            }
+
             debug!(method = %typed_req.method, "typed dispatch: METHOD_NOT_FOUND (scaffold)");
             Response::err(-32601, format!("method not found: {}", typed_req.method))
         }

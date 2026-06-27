@@ -27,7 +27,7 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use cascade_core::TaskStore;
+use cascade_core::task_store::TaskStore;
 use cascade_types::scheduled_task::{ScheduleSpec, ScheduledTask, TaskStatus};
 
 use crate::config::SchedulerConfig;
@@ -348,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_once_task_runs_and_sets_success() {
-        use cascade_core::TaskStore;
+        use cascade_core::task_store::TaskStore;
         use cascade_types::scheduled_task::ScheduledTask;
         use rusqlite::Connection;
         use std::sync::{Arc, Mutex};
