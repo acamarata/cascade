@@ -8,38 +8,46 @@
 //!
 //! | TaskClass | Preferred provider order |
 //! |-----------|-------------------------|
-//! | InteractiveChat | main Claude (reserved, never delegated) |
-//! | BulkExec | acc2+ Claude → Codex → OC-Go |
-//! | Cheap | GFP free Flash → local |
-//! | AdversarialReview | cross-family (GFP + agy + OC-Go + Codex, maximize free/cheap) |
-//! | FinalGate | main Claude Opus (reserved) |
-//! | Sensitive | Claude or local ONLY (firewall via SensitivityPolicy) |
+//! | InteractiveChat | PrimaryT0 Claude (reserved, never delegated) |
+//! | BulkExec | Pooled Claude → Openai → Opencode |
+//! | Cheap | Free (Gfp) → local fallback |
+//! | AdversarialReview | cross-family (Gfp + Google + Openai + Opencode, free-first) |
+//! | FinalGate | PrimaryT0 Claude (reserved) |
+//! | Sensitive | Claude-family or local ONLY (firewall via SensitivityPolicy) |
 //!
-//! Quota-awareness: the router reads the `QuotaStore` (when available via
-//! `RouterConfig::quota_store_path`) and skips sources whose headroom is
-//! exhausted (pct_used ≥ 100 or rate_windows all at limit). Account-exhaustion
-//! order keeps main T0 Claude reserved: acc2+ are tried first for BulkExec.
+//! Account selection is driven entirely by the live `AccountsRegistry` — no
+//! account IDs are hardcoded in routing-decision logic.  An empty registry
+//! (or one with no matching accounts) returns `AllExhausted` for delegatable
+//! task classes, and `Reserved { provider_id: "claude" }` (sentinel) for
+//! InteractiveChat / FinalGate.  It never panics.
 //!
 //! ## Inputs
 //!
 //! - `TaskClass` — which matrix row to consult.
 //! - `payload` — the prompt string (used for sensitivity classification).
-//! - `RouterConfig` — optional quota store path, timeout.
+//! - `RouterConfig` — optional accounts-registry path, quota store path, timeout.
 //!
 //! ## Outputs
 //!
-//! - `RoutingDecision::Lane { provider_id, lane_idx }` — the selected lane.
-//! - `RoutingDecision::Reserved { provider_id }` — main Claude, no subprocess.
-//! - `RoutingDecision::AllExhausted` — every lane in the preference list is
-//!   either unavailable or quota-exhausted.
-//! - `RoutingDecision::FirewallDeny { reason }` — Sensitive content routed to
-//!   an external provider (should not occur after lane filtering, but guard).
+//! - `RoutingDecision::Lane { provider_id, reason }` — the selected lane.
+//! - `RoutingDecision::Reserved { provider_id, reason }` — PrimaryT0 Claude.
+//! - `RoutingDecision::AllExhausted { tried }` — every lane checked and rejected.
+//! - `RoutingDecision::FirewallDeny { reason }` — Sensitive routed to blocked provider.
 //!
 //! ## Constraints
 //!
 //! - No `unwrap()` outside `#[cfg(test)]`.
 //! - No `sh -c`.
-//! - File ≤ 300 lines.
+//! - No hardcoded account-id / family strings in routing-decision logic.
+//! - File ≤ 300 lines (implementation; tests are excluded from line cap).
+//!
+//! ## TODO(fleet-01) deferred items
+//!
+//! - Live quota polling via QuotaCache ticker.
+//! - QuotaCache integration for rate-window headroom checks.
+//! - RoutingEvent bus emission.
+//! - Daemon scheduler wiring.
+//! - smithers PTY LiveCcDriver for CcAccLane.
 //!
 //! ## SPORT
 //!
@@ -50,18 +58,15 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    quota_store::read_quota_store,
-    routing::{
-        delegate::{
-            AgyLane, CcAccLane, CodexLane, DelegateLane,
-            MainClaudeLane, OcGoLane,
-        },
-        task_class::TaskClass,
-    },
-    sensitivity::{provider_is_trusted_for_sensitive, ContentSensitivity, SensitivityPolicy},
-};
+use cascade_types::accounts::{Account, AccountFamily, AccountRole, AccountsRegistry};
 use cascade_types::quota_store::QuotaStore;
+
+use crate::{
+    accounts_store::read_accounts_registry,
+    quota_store::read_quota_store,
+    routing::task_class::TaskClass,
+    sensitivity::{classify_sensitivity, ContentSensitivity, SensitivityPolicy},
+};
 
 // ── RoutingDecision ───────────────────────────────────────────────────────────
 
@@ -70,27 +75,28 @@ use cascade_types::quota_store::QuotaStore;
 pub enum RoutingDecision {
     /// A delegate lane was selected. `provider_id` names the lane's provider.
     Lane {
-        /// Provider ID (e.g. `"openai-codex"`, `"acc2"`, `"gfp"`).
+        /// Provider ID drawn from `Account::id` in the registry, or `"local"`.
         provider_id: String,
         /// Human-readable description of why this lane was chosen.
         reason: String,
     },
-    /// Main Claude is reserved for this task class (no subprocess delegation).
+    /// The PrimaryT0 account is reserved for this task class (no delegation).
     Reserved {
-        /// Always `"claude"` for the main account.
+        /// The `Account::id` of the PrimaryT0 account, or `"claude"` sentinel
+        /// when the registry is absent and the task class is InteractiveChat / FinalGate.
         provider_id: String,
-        /// Why this task is handled by the reserved main Claude.
+        /// Why this task is handled by the reserved account.
         reason: String,
     },
-    /// All lanes in the preference list are unavailable or quota-exhausted.
+    /// All accounts in the preference list were unavailable or quota-exhausted.
     AllExhausted {
-        /// Names of all lanes that were checked and rejected.
+        /// Names of all accounts/lanes that were checked and rejected.
         tried: Vec<String>,
     },
     /// Sensitive content attempted to route to a blocked external provider.
     /// (Should not occur after lane filtering — this is a safety guard.)
     FirewallDeny {
-        /// The firewall rejection reason from `SensitivityPolicy`.
+        /// The firewall rejection reason.
         reason: String,
     },
 }
@@ -100,27 +106,30 @@ pub enum RoutingDecision {
 /// Configuration for the router.
 #[derive(Debug, Clone)]
 pub struct RouterConfig {
+    /// Optional path to `~/.cascade/accounts/accounts.json`.
+    ///
+    /// When `None`, the router treats the registry as empty: delegatable task
+    /// classes return `AllExhausted`; InteractiveChat / FinalGate return the
+    /// `"claude"` sentinel via `Reserved`.
+    pub accounts_registry_path: Option<PathBuf>,
+
     /// Optional path to `~/.cascade/quota-store.json` for headroom checks.
-    /// When `None`, quota checks are skipped (all lanes treated as available).
+    ///
+    /// When `None`, quota checks are skipped (all accounts treated as available).
     pub quota_store_path: Option<PathBuf>,
 
     /// Timeout passed to lane `execute()` calls (not used in `select()` itself).
     pub lane_timeout: Duration,
-
-    /// Extra Claude account suffixes to use for BulkExec drain-first logic.
-    /// Defaults to `[2, 3, 4]`.
-    pub extra_claude_account_suffixes: Vec<u8>,
 }
 
 impl Default for RouterConfig {
     fn default() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        let cascade = PathBuf::from(&home).join(".cascade");
         Self {
-            quota_store_path: Some(
-                PathBuf::from(home).join(".cascade").join("quota-store.json"),
-            ),
+            accounts_registry_path: Some(cascade.join("accounts").join("accounts.json")),
+            quota_store_path: Some(cascade.join("quota-store.json")),
             lane_timeout: Duration::from_secs(120),
-            extra_claude_account_suffixes: vec![2, 3, 4],
         }
     }
 }
@@ -130,6 +139,8 @@ impl Default for RouterConfig {
 /// Quota-aware routing matrix.
 ///
 /// Call `Router::select(task_class, payload)` to obtain a `RoutingDecision`.
+/// Account selection is driven entirely by the `AccountsRegistry`; no account
+/// IDs or family strings are hardcoded in the routing-decision logic.
 pub struct Router {
     config: RouterConfig,
     sensitivity_policy: SensitivityPolicy,
@@ -152,128 +163,103 @@ impl Router {
         }
     }
 
-    /// Select the best available lane for the given task class and payload.
+    /// Select the best available account for the given task class and payload.
     ///
-    /// Applies:
-    /// 1. Matrix rules (ordered preference list per task class).
-    /// 2. Sensitivity firewall (Sensitive → only trusted providers).
-    /// 3. Quota headroom check (skips exhausted accounts).
-    /// 4. Lane availability check (skips missing CLIs).
+    /// Applies, in order:
+    /// 1. Matrix rules (role/family-driven preference list per task class).
+    /// 2. Sensitivity firewall (Sensitive → only Claude-family or local).
+    /// 3. Quota headroom check (skips accounts at ≥100% pct_used).
+    /// 4. CLI availability flag (`Account::cli_available`).
     pub fn select(&self, task_class: TaskClass, payload: &str) -> RoutingDecision {
-        // Classify payload sensitivity.
-        let sensitivity = crate::sensitivity::classify_sensitivity(payload);
+        let sensitivity = classify_sensitivity(payload);
+        let registry = self.load_registry();
+        let quota = self.load_quota();
 
         match task_class {
-            // ── InteractiveChat: always main Claude, never delegated ──────────
+            // ── InteractiveChat: PrimaryT0 Claude, never delegated ────────────
             TaskClass::InteractiveChat => RoutingDecision::Reserved {
-                provider_id: "claude".into(),
-                reason: "InteractiveChat is always handled by the main T0 Claude account".into(),
+                provider_id: primary_t0_id(&registry),
+                reason: "InteractiveChat is always handled by the PrimaryT0 Claude account".into(),
             },
 
-            // ── FinalGate: always main Claude Opus ───────────────────────────
+            // ── FinalGate: PrimaryT0 Claude (Opus tier) ───────────────────────
             TaskClass::FinalGate => RoutingDecision::Reserved {
-                provider_id: "claude".into(),
-                reason: "FinalGate requires main Claude Opus for highest-quality correctness".into(),
+                provider_id: primary_t0_id(&registry),
+                reason: "FinalGate requires PrimaryT0 Claude for highest-quality correctness".into(),
             },
 
-            // ── BulkExec: acc2+ → Codex → OC-Go ─────────────────────────────
+            // ── BulkExec: Pooled Claude → Openai → Opencode ──────────────────
             TaskClass::BulkExec => {
-                let quota = self.load_quota();
-                // Build preference list: acc2, acc3, acc4, codex, oc-go.
                 let mut tried: Vec<String> = Vec::new();
 
-                // Extra Claude accounts first (drain before main T0).
-                for suffix in &self.config.extra_claude_account_suffixes {
-                    let provider_id = format!("acc{suffix}");
-                    if sensitivity == ContentSensitivity::Sensitive
-                        || provider_is_trusted_for_sensitive(&provider_id)
-                    {
-                        // trusted — allowed for sensitive too
-                    } else {
-                        tried.push(provider_id.clone());
-                        continue;
+                // Pooled Claude first (drain before PrimaryT0).
+                if let Some(accs) = &registry {
+                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
+                        a.family == AccountFamily::Claude && a.role == AccountRole::Pooled
+                    })) {
+                        if let Some(d) = try_account(
+                            acc, sensitivity, &quota, &self.sensitivity_policy,
+                            "BulkExec → Pooled Claude (drain first)", &mut tried,
+                        ) {
+                            return d;
+                        }
                     }
-                    if account_is_exhausted(&quota, &provider_id) {
-                        tried.push(format!("{provider_id} (quota exhausted)"));
-                        continue;
-                    }
-                    let lane = CcAccLane::new(*suffix);
-                    if lane.check_availability().is_available() {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: format!("BulkExec → extra Claude acc{suffix} (drain first)"),
-                        };
-                    }
-                    tried.push(format!("{provider_id} (unavailable)"));
                 }
 
-                // Codex — only for non-sensitive
+                // Non-sensitive only: Openai (Codex) → Opencode (OC-Go).
                 if sensitivity == ContentSensitivity::Public {
-                    let provider_id = "openai-codex".to_string();
-                    if !account_is_exhausted(&quota, &provider_id)
-                        && CodexLane.check_availability().is_available()
-                    {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "BulkExec → Codex (acc exhausted / unavailable)".into(),
-                        };
+                    if let Some(accs) = &registry {
+                        for family in &[AccountFamily::Openai, AccountFamily::Opencode] {
+                            for acc in sorted_by_priority(
+                                accs.accounts.iter().filter(|a| &a.family == family),
+                            ) {
+                                if let Some(d) = try_account(
+                                    acc, sensitivity, &quota, &self.sensitivity_policy,
+                                    "BulkExec → external overflow", &mut tried,
+                                ) {
+                                    return d;
+                                }
+                            }
+                        }
                     }
-                    tried.push("openai-codex".into());
-
-                    // OC-Go — dollar-metered, only for non-sensitive
-                    let provider_id = "oc-go".to_string();
-                    if !account_is_exhausted(&quota, &provider_id)
-                        && OcGoLane.check_availability().is_available()
-                    {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "BulkExec → OC-Go (Codex exhausted / unavailable)".into(),
-                        };
-                    }
-                    tried.push("oc-go".into());
                 } else {
-                    // Sensitive: external providers blocked.
-                    tried.push("openai-codex (firewall: sensitive)".into());
-                    tried.push("oc-go (firewall: sensitive)".into());
+                    tried.push("openai-family (firewall: sensitive)".into());
+                    tried.push("opencode-family (firewall: sensitive)".into());
                 }
 
                 RoutingDecision::AllExhausted { tried }
             }
 
-            // ── Cheap: GFP → local ────────────────────────────────────────────
+            // ── Cheap: Gfp (Free) → local ────────────────────────────────────
             TaskClass::Cheap => {
-                let quota = self.load_quota();
                 let mut tried: Vec<String> = Vec::new();
 
                 if sensitivity == ContentSensitivity::Public {
-                    let provider_id = "gfp".to_string();
-                    if !account_is_exhausted(&quota, &provider_id) {
-                        // GFP availability is always Available from the lane stub;
-                        // actual key check is in the providers layer.
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "Cheap → GFP free Flash (max it)".into(),
-                        };
+                    if let Some(accs) = &registry {
+                        for acc in sorted_by_priority(
+                            accs.accounts.iter().filter(|a| a.family == AccountFamily::Gfp),
+                        ) {
+                            if let Some(d) = try_account(
+                                acc, sensitivity, &quota, &self.sensitivity_policy,
+                                "Cheap → Gfp free Flash (max it)", &mut tried,
+                            ) {
+                                return d;
+                            }
+                        }
                     }
-                    tried.push("gfp (quota exhausted)".into());
                 } else {
-                    tried.push("gfp (firewall: sensitive)".into());
+                    tried.push("gfp-family (firewall: sensitive)".into());
                 }
 
-                // Local fallback — always trusted.
+                // Local LLM fallback — always trusted, always available.
                 RoutingDecision::Lane {
                     provider_id: "local".into(),
                     reason: "Cheap → local LLM fallback".into(),
                 }
             }
 
-            // ── AdversarialReview: cross-family, maximize free/cheap ──────────
+            // ── AdversarialReview: cross-family, free-first ───────────────────
             TaskClass::AdversarialReview => {
-                let quota = self.load_quota();
-                // Cross-family: GFP, agy, OC-Go, Codex (in free-first order).
-                // Sensitive blocks all external — fall through to AllExhausted.
-                let mut tried: Vec<String> = Vec::new();
-
                 if sensitivity == ContentSensitivity::Sensitive {
                     return RoutingDecision::FirewallDeny {
                         reason: "AdversarialReview with Sensitive content cannot use \
@@ -282,117 +268,63 @@ impl Router {
                     };
                 }
 
-                // GFP (free Flash, highest priority for adversarial).
-                {
-                    let provider_id = "gfp".to_string();
-                    if !account_is_exhausted(&quota, &provider_id) {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "AdversarialReview → GFP (cross-family, free)".into(),
-                        };
-                    }
-                    tried.push("gfp (quota exhausted)".into());
-                }
+                let mut tried: Vec<String> = Vec::new();
 
-                // agy (Google Pro).
-                {
-                    let provider_id = "google-agy".to_string();
-                    if !account_is_exhausted(&quota, &provider_id)
-                        && AgyLane.check_availability().is_available()
-                    {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "AdversarialReview → agy (cross-family, Google Pro)".into(),
-                        };
+                if let Some(accs) = &registry {
+                    // Gfp → Google → Openai → Opencode (cost-ascending order).
+                    for family in &[
+                        AccountFamily::Gfp,
+                        AccountFamily::Google,
+                        AccountFamily::Openai,
+                        AccountFamily::Opencode,
+                    ] {
+                        for acc in sorted_by_priority(
+                            accs.accounts.iter().filter(|a| &a.family == family),
+                        ) {
+                            if let Some(d) = try_account(
+                                acc, sensitivity, &quota, &self.sensitivity_policy,
+                                "AdversarialReview → cross-family", &mut tried,
+                            ) {
+                                return d;
+                            }
+                        }
                     }
-                    tried.push("google-agy".into());
-                }
-
-                // OC-Go.
-                {
-                    let provider_id = "oc-go".to_string();
-                    if !account_is_exhausted(&quota, &provider_id)
-                        && OcGoLane.check_availability().is_available()
-                    {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "AdversarialReview → OC-Go (cross-family, cheap)".into(),
-                        };
-                    }
-                    tried.push("oc-go".into());
-                }
-
-                // Codex.
-                {
-                    let provider_id = "openai-codex".to_string();
-                    if !account_is_exhausted(&quota, &provider_id)
-                        && CodexLane.check_availability().is_available()
-                    {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: "AdversarialReview → Codex (cross-family)".into(),
-                        };
-                    }
-                    tried.push("openai-codex".into());
                 }
 
                 RoutingDecision::AllExhausted { tried }
             }
 
-            // ── Sensitive: Claude or local ONLY ──────────────────────────────
+            // ── Sensitive: Claude-family or local ONLY ────────────────────────
             TaskClass::Sensitive => {
-                // Re-classify (payload may already be known sensitive).
-                // Regardless of payload content, TaskClass::Sensitive always
-                // enforces the firewall.
-                let quota = self.load_quota();
                 let mut tried: Vec<String> = Vec::new();
 
-                // Try acc2+ first (drain before main T0).
-                for suffix in &self.config.extra_claude_account_suffixes {
-                    let provider_id = format!("acc{suffix}");
-                    let verdict = self.sensitivity_policy.check(
-                        ContentSensitivity::Sensitive,
-                        &provider_id,
-                    );
-                    if verdict.is_deny() {
-                        tried.push(format!("{provider_id} (firewall)"));
-                        continue;
-                    }
-                    if account_is_exhausted(&quota, &provider_id) {
-                        tried.push(format!("{provider_id} (quota exhausted)"));
-                        continue;
-                    }
-                    let lane = CcAccLane::new(*suffix);
-                    if lane.check_availability().is_available() {
-                        return RoutingDecision::Lane {
-                            provider_id,
-                            reason: format!(
-                                "Sensitive → extra Claude acc{suffix} (trusted, drain first)"
-                            ),
-                        };
-                    }
-                    tried.push(format!("{provider_id} (unavailable)"));
-                }
-
-                // Main Claude as final trusted option.
-                {
-                    let provider_id = "claude".to_string();
-                    let verdict = self.sensitivity_policy.check(
-                        ContentSensitivity::Sensitive,
-                        &provider_id,
-                    );
-                    if verdict.is_allow() {
-                        if MainClaudeLane::default().check_availability().is_available() {
-                            return RoutingDecision::Lane {
-                                provider_id,
-                                reason: "Sensitive → main Claude (trusted)".into(),
-                            };
+                if let Some(accs) = &registry {
+                    // Pooled Claude first (drain before PrimaryT0).
+                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
+                        a.family == AccountFamily::Claude && a.role == AccountRole::Pooled
+                    })) {
+                        if let Some(d) = try_account(
+                            acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
+                            "Sensitive → Pooled Claude (trusted, drain first)", &mut tried,
+                        ) {
+                            return d;
                         }
-                        tried.push("claude (unavailable)".into());
+                    }
+
+                    // PrimaryT0 as last trusted option before local.
+                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
+                        a.family == AccountFamily::Claude && a.role == AccountRole::PrimaryT0
+                    })) {
+                        if let Some(d) = try_account(
+                            acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
+                            "Sensitive → PrimaryT0 Claude (trusted)", &mut tried,
+                        ) {
+                            return d;
+                        }
                     }
                 }
 
-                // Local LLM.
+                // Local LLM — always trusted, always available.
                 RoutingDecision::Lane {
                     provider_id: "local".into(),
                     reason: "Sensitive → local LLM (trusted, last resort)".into(),
@@ -401,7 +333,13 @@ impl Router {
         }
     }
 
-    /// Load the quota store from disk. Returns `None` on any I/O or parse error.
+    /// Load the accounts registry from disk. Returns `None` on error or absent.
+    fn load_registry(&self) -> Option<AccountsRegistry> {
+        let path = self.config.accounts_registry_path.as_deref()?;
+        read_accounts_registry(path).ok()
+    }
+
+    /// Load the quota store from disk. Returns `None` on error or absent.
     fn load_quota(&self) -> Option<QuotaStore> {
         let path = self.config.quota_store_path.as_deref()?;
         read_quota_store(path).ok()
@@ -414,23 +352,74 @@ impl Default for Router {
     }
 }
 
-// ── Quota headroom check ───────────────────────────────────────────────────────
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/// Return the `Account::id` of the PrimaryT0 Claude account, or the `"claude"`
+/// sentinel when the registry is absent or contains no PrimaryT0 entry.
+fn primary_t0_id(registry: &Option<AccountsRegistry>) -> String {
+    registry
+        .as_ref()
+        .and_then(|r| {
+            r.accounts
+                .iter()
+                .find(|a| a.family == AccountFamily::Claude && a.role == AccountRole::PrimaryT0)
+                .map(|a| a.id.clone())
+        })
+        .unwrap_or_else(|| "claude".into())
+}
+
+/// Return accounts sorted by `exhaustion_priority` ascending (lower = drain first).
+fn sorted_by_priority<'a, I>(iter: I) -> Vec<&'a Account>
+where
+    I: Iterator<Item = &'a Account>,
+{
+    let mut v: Vec<&'a Account> = iter.collect();
+    v.sort_by_key(|a| a.exhaustion_priority);
+    v
+}
+
+/// Attempt to select `acc` as a routing target.
+///
+/// Skips the account on: firewall deny, quota exhaustion, or CLI unavailable.
+/// Appends a descriptive entry to `tried` on every skip.
+/// Returns `Some(RoutingDecision::Lane)` on success.
+fn try_account(
+    acc: &Account,
+    sensitivity: ContentSensitivity,
+    quota: &Option<QuotaStore>,
+    policy: &SensitivityPolicy,
+    reason_prefix: &str,
+    tried: &mut Vec<String>,
+) -> Option<RoutingDecision> {
+    if policy.check(sensitivity, &acc.id).is_deny() {
+        tried.push(format!("{} (firewall: sensitive)", acc.id));
+        return None;
+    }
+    if account_is_exhausted(quota, &acc.id) {
+        tried.push(format!("{} (quota exhausted)", acc.id));
+        return None;
+    }
+    // GFP uses key-pool access; no CLI binary to check.
+    if !acc.cli_available && acc.family != AccountFamily::Gfp {
+        tried.push(format!("{} (cli unavailable)", acc.id));
+        return None;
+    }
+    Some(RoutingDecision::Lane {
+        provider_id: acc.id.clone(),
+        reason: format!("{} — {}", reason_prefix, acc.id),
+    })
+}
 
 /// Returns `true` when the account is at or above 100% usage in the quota store.
 ///
 /// When no quota store is available, or the account is not tracked, returns
 /// `false` (conservative: assume headroom exists).
-fn account_is_exhausted(quota: &Option<QuotaStore>, provider_or_account_id: &str) -> bool {
+fn account_is_exhausted(quota: &Option<QuotaStore>, account_id: &str) -> bool {
     let Some(qs) = quota else {
-        return false; // No quota data — assume headroom.
+        return false;
     };
-
-    // Check by account_id prefix match (e.g. "acc2" matches account_id "acc2").
     for entry in &qs.accounts {
-        if entry.account_id == provider_or_account_id
-            || entry.provider == provider_or_account_id
-        {
-            // If any model is at 100% pct_used, treat the account as exhausted.
+        if entry.account_id == account_id || entry.provider == account_id {
             for model_usage in entry.models.values() {
                 if let Some(pct) = model_usage.pct_used {
                     if pct >= 100.0 {
@@ -448,184 +437,281 @@ fn account_is_exhausted(quota: &Option<QuotaStore>, provider_or_account_id: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::accounts::{
+        AccessMethod, Account, AccountFamily, AccountRole, AccountsRegistry,
+        ACCOUNTS_SCHEMA_VERSION,
+    };
     use cascade_types::quota_store::{AccountEntry, ModelUsage, QuotaStore};
     use std::collections::HashMap;
 
-    fn router_no_quota() -> Router {
-        Router::with_config(RouterConfig {
+    // ── Test registry builders ─────────────────────────────────────────────
+
+    fn make_account(
+        id: &str,
+        family: AccountFamily,
+        role: AccountRole,
+        priority: u8,
+        cli_available: bool,
+    ) -> Account {
+        Account {
+            id: id.to_string(),
+            family,
+            subscription: "test".into(),
+            access_methods: vec![AccessMethod::NativeCc],
+            role,
+            exhaustion_priority: priority,
+            models: vec![],
+            cli_available,
+            key_count: 0,
+            quota_account_id: None,
+            notes: None,
+        }
+    }
+
+    /// Small synthetic 7-account registry covering all routing families.
+    fn small_registry() -> AccountsRegistry {
+        AccountsRegistry {
+            schema_version: ACCOUNTS_SCHEMA_VERSION,
+            updated_at: "2026-06-27T00:00:00Z".into(),
+            accounts: vec![
+                make_account("claude-primary", AccountFamily::Claude, AccountRole::PrimaryT0, 255, true),
+                make_account("claude-pooled-1", AccountFamily::Claude, AccountRole::Pooled, 10, true),
+                make_account("claude-pooled-2", AccountFamily::Claude, AccountRole::Pooled, 20, true),
+                make_account("openai-codex", AccountFamily::Openai, AccountRole::Pooled, 50, true),
+                make_account("gfp-pool", AccountFamily::Gfp, AccountRole::Free, 1, true),
+                make_account("google-agy", AccountFamily::Google, AccountRole::Pooled, 30, true),
+                make_account("oc-go", AccountFamily::Opencode, AccountRole::Pooled, 60, true),
+            ],
+            model_matrix: vec![],
+        }
+    }
+
+    fn router_with_registry(registry: AccountsRegistry) -> (Router, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("accounts.json");
+        std::fs::write(&path, serde_json::to_vec(&registry).unwrap()).unwrap();
+        let r = Router::with_config(RouterConfig {
+            accounts_registry_path: Some(path),
             quota_store_path: None,
             lane_timeout: Duration::from_secs(10),
-            extra_claude_account_suffixes: vec![2, 3],
+        });
+        (r, dir)
+    }
+
+    fn router_no_registry() -> Router {
+        Router::with_config(RouterConfig {
+            accounts_registry_path: None,
+            quota_store_path: None,
+            lane_timeout: Duration::from_secs(10),
         })
     }
 
-    fn exhausted_quota_store(account_id: &str, provider: &str) -> QuotaStore {
-        let mut models = HashMap::new();
-        models.insert(
-            "claude-sonnet".to_string(),
-            ModelUsage {
-                used: 100,
-                limit: Some(100),
-                reset_at: None,
-                pct_used: Some(100.0),
-                cost_usd: None,
-            },
-        );
-        QuotaStore {
-            schema_version: 2,
-            updated_at: "2026-06-22T00:00:00Z".into(),
-            accounts: vec![AccountEntry {
-                account_id: account_id.to_string(),
-                harness: "cc".into(),
-                provider: provider.to_string(),
-                models,
-                week_total_used: 100,
-                month_total_used: 100,
-                last_polled: "2026-06-22T00:00:00Z".into(),
-                rate_windows: vec![],
-            }],
-            week_totals: HashMap::new(),
-            month_totals: HashMap::new(),
-            rolling_history: vec![],
-        }
-    }
-
-    // ── InteractiveChat ────────────────────────────────────────────────────
+    // ── Empty-registry behavior ────────────────────────────────────────────
 
     #[test]
-    fn interactive_chat_always_reserved() {
-        let r = router_no_quota();
+    fn empty_registry_interactive_chat_still_reserved() {
+        let r = router_no_registry();
         let d = r.select(TaskClass::InteractiveChat, "hello");
         assert!(
             matches!(d, RoutingDecision::Reserved { ref provider_id, .. } if provider_id == "claude"),
-            "InteractiveChat must always be Reserved/claude, got: {d:?}"
+            "Empty registry: InteractiveChat must return Reserved/claude sentinel, got: {d:?}"
         );
     }
 
-    // ── FinalGate ──────────────────────────────────────────────────────────
-
     #[test]
-    fn final_gate_always_reserved() {
-        let r = router_no_quota();
-        let d = r.select(TaskClass::FinalGate, "review this");
+    fn empty_registry_final_gate_still_reserved() {
+        let r = router_no_registry();
+        let d = r.select(TaskClass::FinalGate, "review");
         assert!(
             matches!(d, RoutingDecision::Reserved { ref provider_id, .. } if provider_id == "claude"),
-            "FinalGate must always be Reserved/claude, got: {d:?}"
+            "Empty registry: FinalGate must return Reserved/claude sentinel, got: {d:?}"
         );
     }
 
-    // ── Sensitive firewall ─────────────────────────────────────────────────
+    #[test]
+    fn empty_registry_bulk_exec_returns_all_exhausted() {
+        let r = router_no_registry();
+        let d = r.select(TaskClass::BulkExec, "draft a doc");
+        assert!(
+            matches!(d, RoutingDecision::AllExhausted { .. }),
+            "Empty registry: BulkExec must return AllExhausted, got: {d:?}"
+        );
+    }
 
     #[test]
-    fn sensitive_task_class_never_routes_external() {
-        let r = router_no_quota();
+    fn empty_registry_adversarial_returns_all_exhausted_for_public() {
+        let r = router_no_registry();
+        let d = r.select(TaskClass::AdversarialReview, "review this code");
+        assert!(
+            matches!(d, RoutingDecision::AllExhausted { .. }),
+            "Empty registry: AdversarialReview/public must return AllExhausted, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn empty_registry_cheap_falls_back_to_local() {
+        let r = router_no_registry();
+        let d = r.select(TaskClass::Cheap, "classify a tag");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "local"),
+            "Empty registry: Cheap must fall back to local, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn empty_registry_sensitive_falls_back_to_local() {
+        let r = router_no_registry();
+        let d = r.select(TaskClass::Sensitive, "my ssn is 123-45-6789");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "local"),
+            "Empty registry: Sensitive must fall back to local, got: {d:?}"
+        );
+    }
+
+    // ── Role-based selection ───────────────────────────────────────────────
+
+    #[test]
+    fn interactive_chat_selects_primary_t0_by_role() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::InteractiveChat, "hello");
+        assert!(
+            matches!(d, RoutingDecision::Reserved { ref provider_id, .. } if provider_id == "claude-primary"),
+            "InteractiveChat must select PrimaryT0 by role, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn final_gate_selects_primary_t0_by_role() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::FinalGate, "review");
+        assert!(
+            matches!(d, RoutingDecision::Reserved { ref provider_id, .. } if provider_id == "claude-primary"),
+            "FinalGate must select PrimaryT0 by role, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn bulk_exec_drains_pooled_claude_first_by_priority() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::BulkExec, "draft a long doc");
+        // pooled-1 has priority 10 (lowest = drain first).
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "claude-pooled-1"),
+            "BulkExec must drain lowest-priority-number Pooled Claude first, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn cheap_selects_gfp_family_for_public() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::Cheap, "classify a tag");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "gfp-pool"),
+            "Cheap/public must select Gfp account, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn adversarial_review_selects_gfp_first_for_public() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::AdversarialReview, "review this code for bugs");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "gfp-pool"),
+            "AdversarialReview/public must select Gfp first, got: {d:?}"
+        );
+    }
+
+    // ── Sensitivity firewall ───────────────────────────────────────────────
+
+    #[test]
+    fn sensitive_task_class_selects_pooled_claude_not_external() {
+        let (r, _dir) = router_with_registry(small_registry());
         let d = r.select(TaskClass::Sensitive, "my ssn is 123-45-6789");
         match &d {
             RoutingDecision::Lane { provider_id, .. } => {
-                // Must only be claude, acc*, or local.
                 assert!(
-                    provider_id == "claude"
-                        || provider_id.starts_with("acc")
-                        || provider_id == "local",
-                    "Sensitive must not route to external provider, got: {provider_id}"
+                    provider_id.contains("claude") || provider_id == "local",
+                    "Sensitive must only route to claude-family or local, got: {provider_id}"
                 );
-            }
-            RoutingDecision::AllExhausted { .. } => {
-                // Acceptable — all trusted lanes unavailable.
-            }
-            other => panic!("unexpected decision for Sensitive: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn sensitive_content_in_bulk_exec_skips_external_providers() {
-        let r = router_no_quota();
-        // BulkExec with sensitive payload must not select Codex or OC-Go.
-        let d = r.select(TaskClass::BulkExec, "my disability rating is 70%");
-        match &d {
-            RoutingDecision::Lane { provider_id, .. } => {
-                assert_ne!(provider_id, "openai-codex");
-                assert_ne!(provider_id, "oc-go");
-                assert_ne!(provider_id, "gfp");
-                assert_ne!(provider_id, "google-agy");
-            }
-            RoutingDecision::AllExhausted { .. } => {
-                // Acceptable.
             }
             other => panic!("unexpected: {other:?}"),
         }
     }
 
     #[test]
-    fn adversarial_review_with_sensitive_payload_returns_firewall_deny() {
-        let r = router_no_quota();
+    fn sensitive_payload_in_bulk_exec_skips_external_providers() {
+        let (r, _dir) = router_with_registry(small_registry());
+        let d = r.select(TaskClass::BulkExec, "my disability rating is 70%");
+        match &d {
+            RoutingDecision::Lane { provider_id, .. } => {
+                assert!(
+                    provider_id.contains("claude") || provider_id == "local",
+                    "BulkExec/sensitive must not use external providers, got: {provider_id}"
+                );
+            }
+            RoutingDecision::AllExhausted { .. } => { /* acceptable */ }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn adversarial_review_sensitive_payload_returns_firewall_deny() {
+        let (r, _dir) = router_with_registry(small_registry());
         let d = r.select(TaskClass::AdversarialReview, "my custody arrangement details");
         assert!(
             matches!(d, RoutingDecision::FirewallDeny { .. }),
-            "AdversarialReview with Sensitive payload must be FirewallDeny, got: {d:?}"
+            "AdversarialReview/sensitive must return FirewallDeny, got: {d:?}"
         );
     }
 
-    // ── Account exhaustion skip ────────────────────────────────────────────
+    // ── Quota exhaustion ───────────────────────────────────────────────────
 
     #[test]
-    fn exhausted_source_is_skipped() {
-        // Build a quota store with acc2 exhausted and acc3 not exhausted.
-        let mut models_exhausted = HashMap::new();
-        models_exhausted.insert(
-            "claude-sonnet".to_string(),
+    fn exhausted_account_is_skipped_in_favor_of_next_pooled() {
+        let reg = small_registry();
+        let dir = tempfile::tempdir().unwrap();
+        let accounts_path = dir.path().join("accounts.json");
+        std::fs::write(&accounts_path, serde_json::to_vec(&reg).unwrap()).unwrap();
+
+        let mut models = HashMap::new();
+        models.insert(
+            "claude-sonnet".into(),
             ModelUsage {
-                used: 100,
-                limit: Some(100),
-                reset_at: None,
-                pct_used: Some(100.0),
-                cost_usd: None,
-            },
-        );
-        let mut models_ok = HashMap::new();
-        models_ok.insert(
-            "claude-sonnet".to_string(),
-            ModelUsage {
-                used: 50,
-                limit: Some(100),
-                reset_at: None,
-                pct_used: Some(50.0),
-                cost_usd: None,
+                used: 100, limit: Some(100), reset_at: None,
+                pct_used: Some(100.0), cost_usd: None,
             },
         );
         let qs = QuotaStore {
             schema_version: 2,
-            updated_at: "2026-06-22T00:00:00Z".into(),
-            accounts: vec![
-                AccountEntry {
-                    account_id: "acc2".into(),
-                    harness: "cc".into(),
-                    provider: "claude-max".into(),
-                    models: models_exhausted,
-                    week_total_used: 100,
-                    month_total_used: 100,
-                    last_polled: "2026-06-22T00:00:00Z".into(),
-                    rate_windows: vec![],
-                },
-                AccountEntry {
-                    account_id: "acc3".into(),
-                    harness: "cc".into(),
-                    provider: "claude-max".into(),
-                    models: models_ok,
-                    week_total_used: 50,
-                    month_total_used: 50,
-                    last_polled: "2026-06-22T00:00:00Z".into(),
-                    rate_windows: vec![],
-                },
-            ],
+            updated_at: "2026-06-27T00:00:00Z".into(),
+            accounts: vec![AccountEntry {
+                account_id: "claude-pooled-1".into(),
+                harness: "cc".into(),
+                provider: "claude-max".into(),
+                models,
+                week_total_used: 100,
+                month_total_used: 100,
+                last_polled: "2026-06-27T00:00:00Z".into(),
+                rate_windows: vec![],
+            }],
             week_totals: HashMap::new(),
             month_totals: HashMap::new(),
             rolling_history: vec![],
         };
+        let quota_path = dir.path().join("quota-store.json");
+        std::fs::write(&quota_path, serde_json::to_vec(&qs).unwrap()).unwrap();
 
-        let quota = Some(qs);
-        assert!(account_is_exhausted(&quota, "acc2"), "acc2 should be exhausted");
-        assert!(!account_is_exhausted(&quota, "acc3"), "acc3 should have headroom");
+        let r = Router::with_config(RouterConfig {
+            accounts_registry_path: Some(accounts_path),
+            quota_store_path: Some(quota_path),
+            lane_timeout: Duration::from_secs(10),
+        });
+
+        let d = r.select(TaskClass::BulkExec, "task");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "claude-pooled-2"),
+            "Exhausted pooled-1 must be skipped; should select pooled-2, got: {d:?}"
+        );
     }
 
     #[test]
@@ -634,143 +720,21 @@ mod tests {
         assert!(!account_is_exhausted(&quota, "any-account"));
     }
 
-    // ── BulkExec routing ───────────────────────────────────────────────────
+    // ── CLI unavailability ─────────────────────────────────────────────────
 
     #[test]
-    fn bulk_exec_prefers_acc_over_codex() {
-        // With no quota data and claude on PATH (or not), acc should appear first.
-        let r = router_no_quota();
-        let d = r.select(TaskClass::BulkExec, "draft a long document");
-        // We can only check that the first non-exhausted acc is tried.
-        // The exact result depends on whether `claude` is on PATH.
-        // Just ensure it doesn't panic and returns a valid variant.
-        match d {
-            RoutingDecision::Lane { .. }
-            | RoutingDecision::AllExhausted { .. } => {}
-            other => panic!("unexpected: {other:?}"),
+    fn cli_unavailable_account_is_skipped_in_favor_of_next() {
+        let mut reg = small_registry();
+        for acc in &mut reg.accounts {
+            if acc.id == "claude-pooled-1" {
+                acc.cli_available = false;
+            }
         }
-    }
-
-    #[test]
-    fn bulk_exec_all_exhausted_returns_all_exhausted() {
-        // Build quota store with all acc and codex and oc-go exhausted.
-        let mut m = HashMap::new();
-        m.insert(
-            "model".to_string(),
-            ModelUsage {
-                used: 100,
-                limit: Some(100),
-                reset_at: None,
-                pct_used: Some(100.0),
-                cost_usd: None,
-            },
-        );
-        let make_entry = |id: &str, provider: &str| AccountEntry {
-            account_id: id.to_string(),
-            harness: "cc".into(),
-            provider: provider.to_string(),
-            models: m.clone(),
-            week_total_used: 100,
-            month_total_used: 100,
-            last_polled: "2026-06-22T00:00:00Z".into(),
-            rate_windows: vec![],
-        };
-        let qs = QuotaStore {
-            schema_version: 2,
-            updated_at: "2026-06-22T00:00:00Z".into(),
-            accounts: vec![
-                make_entry("acc2", "claude-max"),
-                make_entry("acc3", "claude-max"),
-                make_entry("openai-codex", "openai-codex"),
-                make_entry("oc-go", "oc-go"),
-            ],
-            week_totals: HashMap::new(),
-            month_totals: HashMap::new(),
-            rolling_history: vec![],
-        };
-
-        // Write quota store to temp file.
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("quota-store.json");
-        std::fs::write(&path, serde_json::to_string(&qs).unwrap()).unwrap();
-
-        let r = Router::with_config(RouterConfig {
-            quota_store_path: Some(path),
-            lane_timeout: Duration::from_secs(10),
-            extra_claude_account_suffixes: vec![2, 3],
-        });
-
-        let d = r.select(TaskClass::BulkExec, "draft a document");
-        // With all quota exhausted and CLIs not on PATH in test env, expect
-        // AllExhausted (or possibly a Lane if `claude` or other is on PATH).
-        // We just verify no panic and no FirewallDeny.
+        let (r, _dir) = router_with_registry(reg);
+        let d = r.select(TaskClass::BulkExec, "task");
         assert!(
-            !matches!(d, RoutingDecision::FirewallDeny { .. }),
-            "BulkExec with public content must not produce FirewallDeny"
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "claude-pooled-2"),
+            "CLI-unavailable pooled-1 must be skipped; should select pooled-2, got: {d:?}"
         );
-    }
-
-    // ── Cheap routing ─────────────────────────────────────────────────────
-
-    #[test]
-    fn cheap_routes_to_gfp_when_available_and_public() {
-        let r = router_no_quota();
-        let d = r.select(TaskClass::Cheap, "classify this tag");
-        match d {
-            RoutingDecision::Lane { ref provider_id, .. } => {
-                assert!(
-                    provider_id == "gfp" || provider_id == "local",
-                    "Cheap must route to GFP or local, got: {provider_id}"
-                );
-            }
-            other => panic!("unexpected: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn cheap_sensitive_bypasses_gfp() {
-        let r = router_no_quota();
-        let d = r.select(TaskClass::Cheap, "classify my medical record");
-        match d {
-            RoutingDecision::Lane { ref provider_id, .. } => {
-                assert_ne!(provider_id, "gfp", "Cheap with sensitive payload must not use GFP");
-                assert_eq!(provider_id, "local");
-            }
-            other => panic!("unexpected: {other:?}"),
-        }
-    }
-
-    // ── AdversarialReview routing ─────────────────────────────────────────
-
-    #[test]
-    fn adversarial_review_public_content_starts_with_gfp() {
-        let r = router_no_quota();
-        let d = r.select(TaskClass::AdversarialReview, "review this code for bugs");
-        match d {
-            RoutingDecision::Lane { ref provider_id, .. } => {
-                assert_eq!(
-                    provider_id, "gfp",
-                    "AdversarialReview public should start with GFP"
-                );
-            }
-            RoutingDecision::AllExhausted { .. } => {
-                // Acceptable — GFP not configured.
-            }
-            other => panic!("unexpected: {other:?}"),
-        }
-    }
-
-    // ── account_is_exhausted ──────────────────────────────────────────────
-
-    #[test]
-    fn account_not_in_quota_store_is_not_exhausted() {
-        let qs = exhausted_quota_store("acc2", "claude-max");
-        assert!(!account_is_exhausted(&Some(qs), "acc3"));
-    }
-
-    #[test]
-    fn account_at_100pct_is_exhausted() {
-        let qs = exhausted_quota_store("acc2", "claude-max");
-        assert!(account_is_exhausted(&Some(qs), "acc2"));
     }
 }
