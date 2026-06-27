@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-27
+
+Foundation: embedded data layer. First milestone of the local-first personal+dev OS buildout — the shared SQLite substrate every later subsystem (RAG, registry, jobs, personal store) builds on.
+
+### Added
+- New `cascade-db` crate — the single foundation for all SQLite access:
+  - `configure_connection` / `open_configured`: canonical PRAGMA set (WAL, `busy_timeout=5000`, `synchronous=NORMAL`, `foreign_keys=ON`, 64 MiB cache, `temp_store=MEMORY`).
+  - Versioned migration runner (`MigrationRegistry`) with backup-before-migrate and typed future-schema rejection — the home of the migration framework.
+  - Embedded cache (`CacheBackend` + `SqliteCache`, optional in-process `moka` cache).
+  - Durable SQLite job queue (`JobQueue` + `SqliteJobQueue`) with claim-lease semantics.
+  - ANN vector store (`VectorStore` + `SqliteVecStore`, sqlite-vec/cosine), default-on.
+  - Canonical BLAKE3 content hashing (`content_hash`).
+  - Redis is never required — available only behind the `redis-backend` feature.
+
+### Changed
+- All 16 SQLite connection sites across `cascade-core`, `cascade-daemon`, `cascade-rag`, and `cascade-cli` now open through `cascade_db::open_configured`. Critically, `busy_timeout` — previously unset on every database, a latent `SQLITE_BUSY` race — is now applied everywhere, along with consistent foreign-key and cache settings.
+
+### Fixed
+- rag: sparse (BM25/FTS5) scores are now carried into citations instead of being silently dropped (`rag-10` #3).
+- rag: removed an unnecessary double allocation per embedding call (`rag-10` #9).
+- rag: removed a dead similarity-threshold field from `SemanticChunker` (`rag-10` #7).
+
 ## [1.5.0] - 2026-06-23
 
 Accounts subsystem + native fleet widget.
