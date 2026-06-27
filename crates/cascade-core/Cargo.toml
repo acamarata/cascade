@@ -59,3 +59,9 @@ secret-service = { version = "3", optional = true }
 serial_test = "3"
 tempfile = "3"
 tokio    = { workspace = true }
+criterion   = { version = "0.5", features = ["html_reports"] }
+serde_json  = { workspace = true }
+
+[[bench]]
+name    = "fleet_router"
+harness = false

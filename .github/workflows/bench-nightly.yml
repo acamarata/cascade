@@ -1,0 +1,110 @@
+# bench-nightly.yml — scale acceptance benchmarks (skeleton — not yet wired to CI gates)
+#
+# Purpose:
+#   Run sharded-search-scale and fleet-router benchmarks nightly.
+#   On completion, check Criterion JSON output against bench/scale-thresholds.json.
+#   Gate: fail the workflow if any threshold is breached.
+#
+# Status: SKELETON — compile-verified but threshold checks are informational only
+#   until the nightly runner is configured on a dedicated bare-metal host.
+#   Do NOT set `required: true` on this check until the runner is stable.
+#
+# Tickets: perf-01
+
+name: Bench Nightly (skeleton — not yet wired to CI gates)
+
+on:
+  schedule:
+    # 02:00 UTC nightly
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      heavy:
+        description: 'Run heavy scale benchmarks (1M + 10M corpus)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Prevent CC hijack on macOS runners (see lesson_cc_hijack_release_builds.md)
+  CC: /usr/bin/clang
+  CXX: /usr/bin/clang++
+
+jobs:
+  bench:
+    name: Scale benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-
+
+      # ── Compile only (fast gate — always run) ────────────────────────────
+      - name: Compile benchmarks (no-run)
+        run: cargo bench --no-run -p cascade-rag -p cascade-core 2>&1
+
+      # ── Run benchmarks: 100k corpus (always-on) ──────────────────────────
+      - name: Run sharded_search_scale (100k)
+        run: |
+          cargo bench -p cascade-rag --bench sharded_search_scale \
+            -- --output-format bencher 2>&1 | tee bench-rag-100k.log
+
+      - name: Run fleet_router (N=10, N=100)
+        run: |
+          cargo bench -p cascade-core --bench fleet_router \
+            -- --output-format bencher 2>&1 | tee bench-core-router.log
+
+      # ── Run benchmarks: 1M + 10M corpus (heavy, gated) ──────────────────
+      - name: Run sharded_search_scale (1M + 10M, heavy)
+        if: ${{ github.event.inputs.heavy == 'true' }}
+        run: |
+          cargo bench -p cascade-rag --bench sharded_search_scale \
+            --features bench-scale-heavy \
+            -- --output-format bencher 2>&1 | tee bench-rag-heavy.log
+
+      # ── Threshold check ──────────────────────────────────────────────────
+      - name: Check 100k threshold
+        run: |
+          python3 scripts/check_scale_thresholds.py \
+            --results target/criterion/sharded_search_scale/top_k20/100k/estimates.json \
+            --threshold sharded_search_p95_100k_ms
+        continue-on-error: true  # informational until runner is stable
+
+      - name: Check fleet_routing N=10 threshold
+        run: |
+          python3 scripts/check_scale_thresholds.py \
+            --results target/criterion/fleet_routing/n10/BulkExec/estimates.json \
+            --threshold fleet_routing_p99_n10_ms
+        continue-on-error: true  # informational until runner is stable
+
+      # ── Dry-run threshold validation (always) ────────────────────────────
+      - name: Validate thresholds file
+        run: python3 scripts/check_scale_thresholds.py --dry-run
+
+      # ── Upload Criterion HTML reports ─────────────────────────────────────
+      - name: Upload bench artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: criterion-reports-${{ github.run_id }}
+          path: target/criterion/
+          retention-days: 30

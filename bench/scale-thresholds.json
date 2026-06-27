@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "thresholds": {
+    "sharded_search_p95_100k_ms": 20,
+    "sharded_search_p95_1m_ms": 50,
+    "sharded_search_p95_10m_ms": 200,
+    "fleet_routing_p99_n10_ms": 1
+  },
+  "notes": "Absolute latency thresholds. Checked by scripts/check_scale_thresholds.py against Criterion JSON output."
+}
