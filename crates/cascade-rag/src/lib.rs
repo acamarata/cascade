@@ -40,6 +40,7 @@
 
 // ── Module declarations ───────────────────────────────────────────────────────
 
+pub mod agentic;
 pub mod cache;
 pub mod chunk;
 pub mod citation;
@@ -47,6 +48,7 @@ pub mod context;
 pub mod db;
 pub mod embed;
 pub mod eval;
+pub mod feedback;
 pub mod index;
 pub mod index_manager;
 pub mod ingest;
@@ -137,3 +139,13 @@ pub use search::{
 };
 pub use privacy::{RedactionConfig, RedactionPipeline};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
+
+// ── rag-09 exports ────────────────────────────────────────────────────────────
+pub use agentic::{agentic_retrieve, AdequacyAssessor, AgenticConfig, AgenticResult};
+pub use feedback::{
+    ensure_feedback_schema, ingest_feedback, signals_for_query, FeedbackSignal, SignalKind,
+};
+pub use retrieve::multi_query::{MultiQueryStrategy, QueryExpansionLlm, StepBackStrategy};
+pub use study::{
+    classify_structural, code_graph_query, GraphQueryResult, GraphRaw, StructuralIntent,
+};

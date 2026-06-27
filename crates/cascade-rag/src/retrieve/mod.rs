@@ -25,6 +25,7 @@ pub mod curated;
 pub mod exclusion;
 pub mod fts;
 pub mod hyde;
+pub mod multi_query;
 pub mod recency;
 pub mod rrf;
 pub mod vector;

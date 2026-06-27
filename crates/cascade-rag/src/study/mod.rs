@@ -32,6 +32,7 @@
 //! SPORT: MASTER-CRATES.md → cascade-rag::study
 
 pub mod arch;
+pub mod code_graph_query;
 pub mod graph;
 pub mod overview;
 pub mod raptor;
@@ -47,6 +48,9 @@ use crate::search::HydeLlm;
 use cascade_types::error::Result;
 
 pub use arch::ArchDiagram;
+pub use code_graph_query::{
+    classify_structural, code_graph_query, GraphQueryResult, GraphRaw, StructuralIntent,
+};
 pub use graph::{build_graph, callers_of, symbols_in};
 pub use overview::{generate as generate_overview, OverviewResult};
 pub use raptor::RaptorTree;
