@@ -246,7 +246,7 @@ pub struct CascadeConfig {
     /// location:
     ///
     /// ```toml
-    /// projects_dirs = ["/Volumes/X9/Sites", "/Users/me/work"]
+    /// projects_dirs = ["/home/me/projects", "/home/me/work"]
     /// ```
     ///
     /// The `CASCADE_APC_PATH` environment variable still wins over this field
@@ -710,8 +710,8 @@ kind = "bge-m3"
     fn test_effective_projects_dirs_custom() {
         let mut cfg = CascadeConfig::default();
         let paths = vec![
-            PathBuf::from("/Volumes/X9/Sites"),
-            PathBuf::from("/Users/me/work"),
+            PathBuf::from("/home/me/projects"),
+            PathBuf::from("/home/me/work"),
         ];
         cfg.projects_dirs = paths.clone();
         assert_eq!(cfg.effective_projects_dirs(), paths);
