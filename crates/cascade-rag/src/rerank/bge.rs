@@ -154,16 +154,12 @@ impl BgeReranker {
         {
             let cache_dir = model_dir.clone();
             let inner = tokio::task::block_in_place(|| {
-                // NOTE: fastembed 3.14.1 has no BGERerankerV2M3.
-                // BGERerankerBase (BAAI/bge-reranker-base) is used as the
-                // closest available variant.  Upgrade path: replace with
-                // RerankerModel::BGERerankerV2M3 when fastembed ships it.
-                let opts = RerankInitOptions {
-                    model_name: RerankerModel::BGERerankerBase,
-                    cache_dir,
-                    show_download_progress: true,
-                    ..Default::default()
-                };
+                // NOTE: fastembed 4.9.1 now ships BGERerankerV2M3.
+                // BGERerankerBase (BAAI/bge-reranker-base) kept for now.
+                // TODO(rag-02): upgrade to RerankerModel::BGERerankerV2M3.
+                let opts = RerankInitOptions::new(RerankerModel::BGERerankerBase)
+                    .with_cache_dir(cache_dir)
+                    .with_show_download_progress(true);
                 TextRerank::try_new(opts)
             })
             .map_err(|e| {
