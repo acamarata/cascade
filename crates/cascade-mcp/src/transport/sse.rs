@@ -185,10 +185,17 @@ impl SseServer {
 impl McpTransport for SseServer {
     async fn listen(&self) -> Result<()> {
         let addr = self.bind_addr();
-        debug_assert!(
-            addr.ip().is_loopback(),
-            "SSE transport must bind loopback only"
-        );
+        // Runtime loopback guard — fires in all build profiles including release.
+        if !addr.ip().is_loopback() {
+            return Err(CascadeError::Io {
+                path: format!("{}", addr).into(),
+                operation: "loopback_check",
+                source: std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "MCP SSE transport must bind to loopback only",
+                ),
+            });
+        }
 
         let state = SseAppState {
             auth: Arc::clone(&self.auth),
@@ -253,6 +260,12 @@ async fn handle_sse_events(
     State(state): State<SseAppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    // ── Origin guard (CSRF) ───────────────────────────────────────────────────
+    if let Err(status) = crate::security::validate_local_origin(&headers) {
+        warn!("GET /mcp/events: foreign Origin/Host rejected");
+        return (status, "forbidden_origin").into_response();
+    }
+
     // Auth check.
     let token = match extract_bearer_sse(&headers) {
         Some(t) => t,
@@ -303,7 +316,57 @@ async fn handle_mcp_post_sse(
     use crate::server::McpServer;
     use crate::transport::connection::ChannelTransportPub;
 
-    // Auth.
+    // ── Origin guard (CSRF) ───────────────────────────────────────────────────
+    if let Err(status) = crate::security::validate_local_origin(&headers) {
+        warn!("POST /mcp (SSE): foreign Origin/Host rejected");
+        return (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            r#"{"error":"forbidden_origin"}"#,
+        )
+            .into_response();
+    }
+
+    // ── Read body (needed for cap gate; body consumed once) ──────────────────
+    let bytes =
+        match axum::body::to_bytes(request.into_body(), crate::transport::http::BODY_LIMIT).await {
+            Ok(b) => b,
+            Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
+        };
+    let body_str = match std::str::from_utf8(&bytes) {
+        Ok(s) => s.to_owned(),
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid utf8").into_response(),
+    };
+
+    // ── Capability gate (fires before auth; cap is a deny rule, not grant) ────
+    let client_cap = crate::transport::http::parse_cap_header_pub(&headers);
+    if let Some(tool_name) =
+        crate::transport::http::extract_tools_call_name_pub(&body_str)
+    {
+        if crate::security::tool_requires_personal_data(&tool_name)
+            && !client_cap.contains(crate::security::CapabilitySet::PERSONAL_DATA)
+        {
+            warn!(tool = tool_name, "POST /mcp (SSE): PersonalData capability required");
+            let err_json = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": {
+                    "code": -32001,
+                    "message": "capability PersonalData required",
+                    "data": { "tool": tool_name }
+                }
+            })
+            .to_string();
+            return (
+                StatusCode::FORBIDDEN,
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                err_json,
+            )
+                .into_response();
+        }
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
     let token = match extract_bearer_sse(&headers) {
         Some(t) => t,
         None => {
@@ -321,17 +384,6 @@ async fn handle_mcp_post_sse(
         )
             .into_response();
     }
-
-    // Read body bytes.
-    let bytes =
-        match axum::body::to_bytes(request.into_body(), crate::transport::http::BODY_LIMIT).await {
-            Ok(b) => b,
-            Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
-        };
-    let body_str = match std::str::from_utf8(&bytes) {
-        Ok(s) => s.to_owned(),
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid utf8").into_response(),
-    };
 
     // Dispatch via channel-backed McpServer on a dedicated single-thread runtime.
     // McpServer is not Sync (holds Box<dyn Transport>), so its future is not Send.
@@ -370,12 +422,25 @@ async fn handle_mcp_post_sse(
     }
 }
 
-/// GET /mcp/health — unauthenticated.
-async fn handle_health_sse(State(state): State<SseAppState>) -> impl IntoResponse {
+/// GET /mcp/health — unauthenticated (still subject to Origin guard).
+async fn handle_health_sse(
+    State(state): State<SseAppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(status) = crate::security::validate_local_origin(&headers) {
+        warn!("GET /mcp/health (SSE): foreign Origin/Host rejected");
+        return (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            r#"{"error":"forbidden_origin"}"#,
+        )
+            .into_response();
+    }
     axum::Json(serde_json::json!({
         "status": "ok",
         "version": state.server_version,
     }))
+    .into_response()
 }
 
 fn extract_bearer_sse(headers: &HeaderMap) -> Option<String> {

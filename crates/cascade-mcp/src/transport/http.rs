@@ -190,11 +190,17 @@ impl McpTransport for HttpServer {
     async fn listen(&self) -> Result<()> {
         let addr = self.bind_addr();
 
-        // SAFETY: addr is always 127.0.0.1 — never 0.0.0.0.
-        debug_assert!(
-            addr.ip().is_loopback(),
-            "HTTP transport must bind loopback only"
-        );
+        // Runtime loopback guard — fires in all build profiles including release.
+        if !addr.ip().is_loopback() {
+            return Err(CascadeError::Io {
+                path: format!("{}", addr).into(),
+                operation: "loopback_check",
+                source: std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "MCP HTTP transport must bind to loopback only",
+                ),
+            });
+        }
 
         let state = AppState {
             auth: Arc::clone(&self.auth),
@@ -253,21 +259,18 @@ async fn handle_mcp_post(
     headers: HeaderMap,
     request: axum::extract::Request,
 ) -> impl IntoResponse {
-    // ── 1. Auth ───────────────────────────────────────────────────────────────
-    let token = match extract_bearer(&headers) {
-        Some(t) => t,
-        None => {
-            warn!("POST /mcp: missing Authorization header");
-            return auth_error_response();
-        }
-    };
-
-    if let Err(e) = state.auth.validate_token(&token) {
-        warn!(error = %e, "POST /mcp: token rejected");
-        return auth_error_response();
+    // ── 0. Origin / Host guard (CSRF) ─────────────────────────────────────────
+    if let Err(status) = crate::security::validate_local_origin(&headers) {
+        warn!("POST /mcp: foreign Origin/Host rejected");
+        return (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            r#"{"error":"forbidden_origin"}"#,
+        )
+            .into_response();
     }
 
-    // ── 2. Read body ──────────────────────────────────────────────────────────
+    // ── 1. Read body (needed for cap gate; body consumed once) ───────────────
     let bytes = match axum::body::to_bytes(request.into_body(), BODY_LIMIT).await {
         Ok(b) => b,
         Err(_) => {
@@ -293,6 +296,46 @@ async fn handle_mcp_post(
         }
     };
 
+    // ── 1b. Capability gate (fires before auth; cap is a deny rule, not grant) ─
+    let client_cap = parse_cap_header(&headers);
+    if let Some(tool_name) = extract_tools_call_name(body) {
+        if crate::security::tool_requires_personal_data(&tool_name)
+            && !client_cap.contains(crate::security::CapabilitySet::PERSONAL_DATA)
+        {
+            warn!(tool = tool_name, "POST /mcp: PersonalData capability required");
+            let err_json = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": {
+                    "code": -32001,
+                    "message": "capability PersonalData required",
+                    "data": { "tool": tool_name }
+                }
+            })
+            .to_string();
+            return (
+                StatusCode::FORBIDDEN,
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                err_json,
+            )
+                .into_response();
+        }
+    }
+
+    // ── 2. Auth ───────────────────────────────────────────────────────────────
+    let token = match extract_bearer(&headers) {
+        Some(t) => t,
+        None => {
+            warn!("POST /mcp: missing Authorization header");
+            return auth_error_response();
+        }
+    };
+
+    if let Err(e) = state.auth.validate_token(&token) {
+        warn!(error = %e, "POST /mcp: token rejected");
+        return auth_error_response();
+    }
+
     // ── 3. Dispatch through a fresh McpServer ─────────────────────────────────
     let response = dispatch_single_request(body, &state.config).await;
     match response {
@@ -309,12 +352,25 @@ async fn handle_mcp_post(
     }
 }
 
-/// GET /mcp/health — unauthenticated health check.
-async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
+/// GET /mcp/health — unauthenticated health check (still subject to Origin guard).
+async fn handle_health(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(status) = crate::security::validate_local_origin(&headers) {
+        warn!("GET /mcp/health: foreign Origin/Host rejected");
+        return (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            r#"{"error":"forbidden_origin"}"#,
+        )
+            .into_response();
+    }
     Json(serde_json::json!({
         "status": "ok",
         "version": state.server_version,
     }))
+    .into_response()
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -364,6 +420,59 @@ async fn dispatch_single_request(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Parse the optional `X-Cascade-Cap` header into a `CapabilitySet`.
+///
+/// If the header is absent or malformed, returns `CapabilitySet::Standard`.
+pub(super) fn parse_cap_header_pub(headers: &HeaderMap) -> crate::security::CapabilitySet {
+    parse_cap_header(headers)
+}
+
+fn parse_cap_header(headers: &HeaderMap) -> crate::security::CapabilitySet {
+    headers
+        .get("x-cascade-cap")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u32>().ok())
+        .map(crate::security::CapabilitySet::from_bits)
+        .unwrap_or_default()
+}
+
+/// If the JSON-RPC body is a `tools/call` request, return the tool name.
+///
+/// Returns `None` for any other method or malformed JSON.
+pub(super) fn extract_tools_call_name_pub(body: &str) -> Option<String> {
+    extract_tools_call_name(body)
+}
+
+fn extract_tools_call_name(body: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let method = v.get("method")?.as_str()?;
+    if method != "tools/call" {
+        return None;
+    }
+    v.get("params")?.get("name")?.as_str().map(|s| s.to_owned())
+}
+
+/// Build the axum `Router` used by `HttpServer::listen`.
+///
+/// Exposed for integration tests (`tests/transport_security.rs`) so they can
+/// call `tower::ServiceExt::oneshot` without starting a real TCP listener.
+#[cfg(any(test, feature = "test-utils"))]
+pub fn build_http_app_for_test(
+    auth: std::sync::Arc<McpAuth>,
+    config: McpServerConfig,
+) -> Router {
+    let state = AppState {
+        server_version: config.server_version.clone(),
+        auth,
+        config,
+    };
+    Router::new()
+        .route("/mcp", post(handle_mcp_post))
+        .route("/mcp/health", get(handle_health))
+        .layer(RequestBodyLimitLayer::new(BODY_LIMIT))
+        .with_state(state)
 }
 
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {

@@ -71,6 +71,7 @@ pub mod progress;
 pub mod prompt;
 pub mod resource;
 pub mod sampling;
+pub mod security;
 pub mod server;
 pub mod tool;
 pub mod tracing_layer;

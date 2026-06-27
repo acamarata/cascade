@@ -10,6 +10,10 @@ license.workspace    = true
 authors.workspace    = true
 repository.workspace = true
 
+[features]
+# Expose test helpers (build_http_app_for_test, etc.) for integration tests.
+test-utils = []
+
 [dependencies]
 cascade-types      = { workspace = true }
 cascade-core       = { workspace = true }
@@ -53,5 +57,10 @@ futures-core = "0.3"
 async-trait  = { workspace = true }
 axum         = { version = "0.7", features = ["macros"] }
 tower        = { version = "0.4", features = ["util"] }
+tower-http   = { version = "0.5", features = ["limit"] }
 reqwest      = { version = "0.12", features = ["json"] }
 serial_test  = "3"
+
+[[test]]
+name = "transport_security"
+required-features = ["test-utils"]
