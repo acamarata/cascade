@@ -29,6 +29,7 @@ import { PluginsTab } from './PluginsTab'
 import { WidgetsTab } from './WidgetsTab'
 import { VaultTab } from './VaultTab'
 import { McpServersTab } from './McpServersTab'
+import { FleetTab } from './FleetTab'
 import type { CascadeSettings } from '@/types/settings'
 
 // ── Tab definition ────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ const TABS = [
   { id: 'widgets', label: 'Widgets' },
   { id: 'vault', label: 'Vault' },
   { id: 'mcp-servers', label: 'MCP Servers' },
+  { id: 'fleet', label: 'Fleet' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -227,6 +229,10 @@ export function SettingsPanel() {
                 onSave={() => handleSave('mcpServers')}
                 onDiscard={handleDiscard}
               />
+            </TabsContent>
+
+            <TabsContent value="fleet" className="mt-0 focus-visible:outline-none">
+              <FleetTab />
             </TabsContent>
           </main>
         </Tabs>

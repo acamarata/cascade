@@ -18,9 +18,11 @@ import { BarChart2, RefreshCw } from 'lucide-react'
 import { QuotaGaugeRow } from './QuotaGaugeRow'
 import { AccountCostRow } from './AccountCostRow'
 import { useUsageData } from '../../hooks/useUsageData'
+import { useFleetQuotaConfig } from '../../hooks/useFleetQuotaConfig'
 
 export function FleetWidget(): React.ReactElement {
   const { summary, loading, error, refetch } = useUsageData({ kind: 'week', offset: 0 })
+  const { estimates } = useFleetQuotaConfig()
 
   return (
     <div className="space-y-4 text-sm">
@@ -72,6 +74,7 @@ export function FleetWidget(): React.ReactElement {
               model={row.model}
               tokensUsed={row.tokens}
               costUsd={row.costUsd}
+              estimates={estimates}
             />
           ))}
       </section>

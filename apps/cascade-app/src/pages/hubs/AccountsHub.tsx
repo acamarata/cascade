@@ -10,9 +10,9 @@
 import { useSearchParams } from 'react-router-dom';
 import { Users, Plug, BarChart2 } from 'lucide-react';
 import { TabsLayout } from '../../components/layout/TabsLayout';
-import { AccountsPage } from '../AccountsPage';
 import { ProviderSettings } from '../ProviderSettings';
 import { UsagePage } from '../UsagePage';
+import { FleetTabContent } from './FleetTabContent';
 
 type TabId = 'fleet' | 'providers' | 'usage';
 
@@ -44,7 +44,7 @@ export default function AccountsHub() {
         activeTab={activeTab}
         onTabChange={handleTabChange}
       >
-        {activeTab === 'fleet' && <AccountsPage />}
+        {activeTab === 'fleet' && <FleetTabContent />}
         {activeTab === 'providers' && <ProviderSettings />}
         {activeTab === 'usage' && <UsagePage />}
       </TabsLayout>

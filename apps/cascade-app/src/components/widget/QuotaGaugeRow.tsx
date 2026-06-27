@@ -64,6 +64,12 @@ export interface QuotaGaugeRowProps {
   tokensUsed: number
   /** Cost in USD this period */
   costUsd: number
+  /**
+   * Optional per-model quota estimates override. When provided, supersedes the
+   * static MODEL_QUOTA_ESTIMATE map. Pass from useFleetQuotaConfig to support
+   * user-configurable estimates (fleet-02 Task 5).
+   */
+  estimates?: Record<string, number>
 }
 
 /**
@@ -76,8 +82,10 @@ export function QuotaGaugeRow({
   model,
   tokensUsed,
   costUsd,
+  estimates,
 }: QuotaGaugeRowProps): React.ReactElement {
-  const estimate = MODEL_QUOTA_ESTIMATE[model]
+  const estimateMap = estimates ?? MODEL_QUOTA_ESTIMATE
+  const estimate = estimateMap[model]
   const { pct, colorClass } = getGaugeState(tokensUsed, estimate)
 
   const pctLabel = pct === null ? (estimate === 0 ? 'local' : '?') : `${Math.round(pct)}%`
