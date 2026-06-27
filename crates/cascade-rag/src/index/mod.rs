@@ -52,7 +52,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, instrument};
 
 /// Current schema version.  Increment on every breaking DDL change.
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 
 /// Stored dimensions for BGE-M3.  Must match the embedding model dimension.
 const DEFAULT_EMBED_DIM: usize = 1024;
@@ -211,6 +211,21 @@ impl RagIndex {
             let _ = conn.execute_batch(&ddl);
             info!("Applied migration v1→v2 (sqlite-vec)");
         }
+        if current_ver < 3 {
+            // v2 → v3: add dense_fallback table for non-vec builds.
+            // Always created (harmless in vec builds) so existing DBs upgrading
+            // from v2 get the table without requiring a vec extension.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS dense_fallback (\
+                    chunk_id  TEXT PRIMARY KEY,\
+                    embedding BLOB NOT NULL\
+                );",
+            )
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("migration v3: {e}"),
+            })?;
+            info!("Applied migration v2→v3 (dense_fallback)");
+        }
         conn.pragma_update(None, "user_version", SCHEMA_VERSION)
             .map_err(|e| CascadeError::RetrievalFailed {
                 detail: format!("set user_version: {e}"),
@@ -264,10 +279,10 @@ impl RagIndex {
         Ok(())
     }
 
-    /// Store a dense embedding vector for a chunk (sqlite-vec).
+    /// Store a dense embedding vector for a chunk.
     ///
-    /// Does nothing (silently) if the `vec_chunks` table does not exist, which
-    /// happens when the sqlite-vec extension is not loaded.
+    /// With the `vec` feature, writes to `vec_chunks` (sqlite-vec virtual table).
+    /// Without the `vec` feature, writes the same LE-f32 blob to `dense_fallback`.
     pub async fn upsert_embedding(&self, chunk_id: &str, embedding: &[f32]) -> Result<()> {
         if embedding.len() != self.embed_dim {
             return Err(CascadeError::EmbeddingDimensionMismatch {
@@ -276,14 +291,131 @@ impl RagIndex {
             });
         }
         let conn = self.conn.lock().await;
-        // Serialize as little-endian f32 blob — sqlite-vec wire format.
+        // Serialize as little-endian f32 blob — sqlite-vec / dense_fallback wire format.
         let blob: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
-        // Ignore error if vec_chunks does not exist.
-        let _ = conn.execute(
-            "INSERT OR REPLACE INTO vec_chunks(chunk_id, embedding) VALUES (?1, ?2)",
-            params![chunk_id, blob],
-        );
+        #[cfg(feature = "vec")]
+        {
+            // Best-effort: ignore if vec_chunks does not exist (extension not loaded).
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO vec_chunks(chunk_id, embedding) VALUES (?1, ?2)",
+                params![chunk_id, blob],
+            );
+        }
+        #[cfg(not(feature = "vec"))]
+        {
+            conn.execute(
+                "INSERT OR REPLACE INTO dense_fallback(chunk_id, embedding) VALUES (?1, ?2)",
+                params![chunk_id, blob],
+            )
+            .map_err(|e| CascadeError::RetrievalFailed {
+                detail: format!("upsert dense_fallback: {e}"),
+            })?;
+        }
         Ok(())
+    }
+
+    /// K-nearest-neighbour search over the dense store.
+    ///
+    /// # Feature: `vec`
+    ///
+    /// Queries `vec_chunks` using the sqlite-vec MATCH syntax:
+    /// ```sql
+    /// SELECT chunk_id, distance FROM vec_chunks
+    /// WHERE embedding MATCH ? ORDER BY distance LIMIT ?
+    /// ```
+    ///
+    /// # Without `vec` (default)
+    ///
+    /// Performs a brute-force squared-L2 scan over `dense_fallback` blobs.
+    /// Correct for dev/test environments; O(n) — not suitable for large prod indexes.
+    ///
+    /// # Returns
+    ///
+    /// `(chunk_id, distance)` pairs sorted by ascending distance, length ≤ `k`.
+    /// Returns an empty `Vec` if the underlying table is absent or empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CascadeError::RetrievalFailed`] on SQL errors.
+    pub async fn dense_query(
+        &self,
+        query_vec: &[f32],
+        k: usize,
+    ) -> Result<Vec<(String, f32)>> {
+        let conn = self.conn.lock().await;
+
+        #[cfg(feature = "vec")]
+        {
+            let blob: Vec<u8> = query_vec.iter().flat_map(|f| f.to_le_bytes()).collect();
+            let mut stmt = match conn.prepare(
+                "SELECT chunk_id, distance \
+                 FROM vec_chunks \
+                 WHERE embedding MATCH ? \
+                 ORDER BY distance \
+                 LIMIT ?",
+            ) {
+                Ok(s) => s,
+                Err(_) => return Ok(vec![]),
+            };
+            let k_i64 = k as i64;
+            let results: Vec<(String, f32)> = stmt
+                .query_map(params![blob, k_i64], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)? as f32))
+                })
+                .map_err(|e| CascadeError::RetrievalFailed {
+                    detail: format!("dense_query/vec: {e}"),
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+            return Ok(results);
+        }
+
+        #[cfg(not(feature = "vec"))]
+        {
+            // Brute-force scan over dense_fallback blobs.
+            let mut stmt = match conn.prepare(
+                "SELECT chunk_id, embedding FROM dense_fallback",
+            ) {
+                Ok(s) => s,
+                Err(_) => return Ok(vec![]),
+            };
+
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+                })
+                .map_err(|e| CascadeError::RetrievalFailed {
+                    detail: format!("dense_query/scan: {e}"),
+                })?;
+
+            let mut scored: Vec<(String, f32)> = Vec::new();
+            for r in rows {
+                let (chunk_id, raw) = r.map_err(|e| CascadeError::RetrievalFailed {
+                    detail: format!("dense_query/row: {e}"),
+                })?;
+                if raw.len() % 4 != 0 {
+                    continue; // corrupt row — skip
+                }
+                let stored: Vec<f32> = raw
+                    .chunks_exact(4)
+                    .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
+                if stored.len() != query_vec.len() {
+                    continue; // dimension mismatch — skip
+                }
+                // Squared-L2 distance — monotone for ranking, no sqrt needed.
+                let dist: f32 = query_vec
+                    .iter()
+                    .zip(stored.iter())
+                    .map(|(a, b)| (a - b) * (a - b))
+                    .sum();
+                scored.push((chunk_id, dist));
+            }
+
+            scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            scored.truncate(k);
+            return Ok(scored);
+        }
     }
 
     /// Delete a chunk and its associated FTS5 + vector entries.
@@ -302,6 +434,11 @@ impl RagIndex {
         })?;
         let _ = conn.execute(
             "DELETE FROM vec_chunks WHERE chunk_id = ?1",
+            params![chunk_id],
+        );
+        // Also clean dense_fallback (non-vec path; no-op if table absent).
+        let _ = conn.execute(
+            "DELETE FROM dense_fallback WHERE chunk_id = ?1",
             params![chunk_id],
         );
         Ok(())
