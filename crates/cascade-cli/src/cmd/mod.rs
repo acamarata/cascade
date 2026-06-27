@@ -6,6 +6,8 @@
 
 pub mod accounts;
 pub mod backup;
+// data-01: portable archive export/import
+pub mod export;
 // P13: harness settings writer (cascade configure)
 pub mod configure;
 // E-P9-06: CC API proxy experimental bridge (default-off)
@@ -201,6 +203,8 @@ pub enum Commands {
     Build(build::BuildArgs),
     /// Manage telemetry opt-in (enable / disable / status).
     Telemetry(telemetry::TelemetryArgs),
+    /// Export ~/.cascade/ to a portable `.cascade-archive.tar.gz` (data-01).
+    Export(export::ExportArgs),
 }
 
 impl Commands {
@@ -256,6 +260,7 @@ impl Commands {
             Commands::Wizard(args)   => args.run().await,
             Commands::Build(args)    => args.run().await,
             Commands::Telemetry(args) => args.run().await,
+            Commands::Export(args)    => args.run().await,
         }
     }
 }

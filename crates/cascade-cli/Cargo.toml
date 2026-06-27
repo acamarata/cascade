@@ -50,6 +50,8 @@ opentelemetry-semantic-conventions = "0.15"
 notify        = { workspace = true }
 chrono        = { workspace = true }
 dirs          = "5"
+flate2        = "1"
+tar           = "0.4"
 
 [features]
 local-llm = ["dep:cascade-local-llm"]

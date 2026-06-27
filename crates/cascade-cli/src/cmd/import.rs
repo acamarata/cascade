@@ -30,6 +30,7 @@ use cascade_core::import_engine::ImportEngine;
 use cascade_types::error::{CascadeError, Result};
 use clap::Args;
 
+use super::export::{ImportFromExportArgs, run_import_from_export};
 use super::Command;
 
 // ── Args ──────────────────────────────────────────────────────────────────────
@@ -68,6 +69,17 @@ pub struct ImportArgs {
     /// Useful for CI pipelines that need structured output.
     #[arg(long)]
     pub report_json: bool,
+
+    /// Restore from a `.cascade-archive.tar.gz` produced by `cascade export` (data-01).
+    ///
+    /// When set, all other import flags except `--dest` and `--force` are ignored.
+    /// The archive is verified by BLAKE3 hash before extraction.
+    #[arg(long, value_name = "ARCHIVE", conflicts_with = "from")]
+    pub from_export: Option<PathBuf>,
+
+    /// Overwrite existing files when using `--from-export`.
+    #[arg(long)]
+    pub force: bool,
 }
 
 // ── Command impl ──────────────────────────────────────────────────────────────
@@ -75,6 +87,16 @@ pub struct ImportArgs {
 #[async_trait]
 impl Command for ImportArgs {
     async fn run(&self) -> Result<()> {
+        // data-01: if --from-export is set, delegate to the archive restore path.
+        if let Some(archive) = &self.from_export {
+            let archive_args = ImportFromExportArgs {
+                from_export: archive.clone(),
+                dest: self.dest.clone(),
+                force: self.force,
+            };
+            return run_import_from_export(&archive_args).await;
+        }
+
         let home = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()));
         let cwd = std::env::current_dir().map_err(|e| CascadeError::Io {
             path: PathBuf::from("."),
