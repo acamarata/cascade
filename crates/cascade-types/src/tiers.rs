@@ -759,10 +759,15 @@ load_when = "deploy"
 
     // ── default_path_with_config ──────────────────────────────────────────────
 
+    /// Serializes tests that mutate/depend on the process-global CASCADE_APC_PATH
+    /// env var, so they don't race under the parallel test runner.
+    static APC_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// CASCADE_APC_PATH env var wins over config.projects_dirs in
     /// default_path_with_config for the APC tier.
     #[test]
     fn test_apc_env_override_wins() {
+        let _env_guard = APC_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Temporarily set the env var; restore it after the test.
         let env_key = "CASCADE_APC_PATH";
         let custom_env = "/tmp/env-apc-override";
@@ -796,6 +801,7 @@ load_when = "deploy"
     /// default_path_with_config uses config.projects_dirs[0].
     #[test]
     fn test_apc_config_projects_dirs_used_when_no_env() {
+        let _env_guard = APC_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let env_key = "CASCADE_APC_PATH";
         // Ensure the env var is NOT set for this test.
         let prev = std::env::var(env_key).ok();
