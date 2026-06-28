@@ -62,19 +62,29 @@ impl Retriever for VectorRetriever {
         // Execute KNN via the index's dense store.
         let knn = self.index.dense_query(&query_vec.values, opts.k).await?;
 
-        // Map (chunk_id, distance) → RetrievalHit.
+        // Batch-fetch text + location fields from the chunks table in one query.
+        let ids: Vec<String> = knn.iter().map(|(id, _)| id.clone()).collect();
+        let body_map = self.index.fetch_chunks_by_ids(&ids).await;
+
+        // Map (chunk_id, distance) → RetrievalHit with populated body fields.
         let hits = knn
             .into_iter()
             .enumerate()
-            .map(|(rank, (chunk_id, dist))| RetrievalHit {
-                chunk_id,
-                text: String::new(),      // populated by higher-level caller if needed
-                file_path: None,
-                start_line: None,
-                end_line: None,
-                score: 1.0 / (1.0 + dist),
-                rank,
-                tier: None,
+            .map(|(rank, (chunk_id, dist))| {
+                let (text, file_path, start_line, end_line) = body_map
+                    .get(&chunk_id)
+                    .cloned()
+                    .unwrap_or_else(|| (String::new(), None, None, None));
+                RetrievalHit {
+                    chunk_id,
+                    text,
+                    file_path: file_path.map(std::path::PathBuf::from),
+                    start_line: start_line.map(|v| v as usize),
+                    end_line: end_line.map(|v| v as usize),
+                    score: 1.0 / (1.0 + dist),
+                    rank,
+                    tier: None,
+                }
             })
             .collect();
 

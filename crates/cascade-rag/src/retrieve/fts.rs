@@ -213,18 +213,29 @@ impl Retriever for FtsRetriever {
     #[instrument(skip(self), fields(k = opts.k))]
     async fn retrieve(&self, query: &str, opts: &RetrieveOpts) -> Result<Vec<RetrievalHit>> {
         let raw = self.index.fts_query(query, opts.k).await?;
+
+        // Batch-fetch text + location fields from the chunks table in one query.
+        let ids: Vec<String> = raw.iter().map(|(id, _)| id.clone()).collect();
+        let body_map = self.index.fetch_chunks_by_ids(&ids).await;
+
         let hits = raw
             .into_iter()
             .enumerate()
-            .map(|(rank, (chunk_id, raw_score))| RetrievalHit {
-                chunk_id: chunk_id.clone(),
-                text: String::new(), // TODO: join to chunks table for text
-                file_path: None,
-                start_line: None,
-                end_line: None,
-                score: normalise_bm25(raw_score),
-                rank,
-                tier: None,
+            .map(|(rank, (chunk_id, raw_score))| {
+                let (text, file_path, start_line, end_line) = body_map
+                    .get(&chunk_id)
+                    .cloned()
+                    .unwrap_or_else(|| (String::new(), None, None, None));
+                RetrievalHit {
+                    chunk_id,
+                    text,
+                    file_path: file_path.map(std::path::PathBuf::from),
+                    start_line: start_line.map(|v| v as usize),
+                    end_line: end_line.map(|v| v as usize),
+                    score: normalise_bm25(raw_score),
+                    rank,
+                    tier: None,
+                }
             })
             .collect();
         Ok(hits)
@@ -440,6 +451,71 @@ mod tests {
             results.len(),
             1,
             "must return exactly one result, not duplicates"
+        );
+    }
+
+    // ── retrieve::fts::fts_retriever_text_populated ──────────────────────────
+
+    /// FtsRetriever::retrieve must return hits with non-empty text equal to the
+    /// indexed chunk body, not the empty stub that existed before the chunks-join.
+    ///
+    /// Steps:
+    ///  1. Open a real RagIndex (tempfile).
+    ///  2. Upsert a chunk with known text.
+    ///  3. Query via FtsRetriever::retrieve.
+    ///  4. Assert the top hit's text matches the original body.
+    #[tokio::test]
+    async fn fts_retriever_text_populated() {
+        use crate::index::RagIndex;
+        use cascade_types::retriever::RetrieveOpts;
+        use std::sync::Arc;
+        use tempfile::NamedTempFile;
+
+        let tmp = NamedTempFile::new().expect("tempfile");
+        let idx = Arc::new(
+            RagIndex::open(tmp.path())
+                .await
+                .expect("RagIndex::open"),
+        );
+
+        let expected_text = "the quick brown fox jumps over the lazy dog";
+        idx.upsert_chunk(
+            "chunk-fox",
+            None,
+            Some(10),
+            Some(20),
+            expected_text,
+            None,
+        )
+        .await
+        .expect("upsert_chunk");
+
+        let retriever = FtsRetriever::new(Arc::clone(&idx));
+        let opts = RetrieveOpts { k: 5, ..Default::default() };
+        let hits = retriever
+            .retrieve("quick brown fox", &opts)
+            .await
+            .expect("retrieve");
+
+        assert!(!hits.is_empty(), "FTS query must return at least one hit");
+        let top = &hits[0];
+        assert_eq!(
+            top.chunk_id, "chunk-fox",
+            "top hit must be the indexed chunk"
+        );
+        assert_eq!(
+            top.text, expected_text,
+            "RetrievalHit.text must equal the indexed chunk body, not empty string"
+        );
+        assert_eq!(
+            top.start_line,
+            Some(10),
+            "start_line must be populated from chunks table"
+        );
+        assert_eq!(
+            top.end_line,
+            Some(20),
+            "end_line must be populated from chunks table"
         );
     }
 }

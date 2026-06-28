@@ -557,6 +557,80 @@ impl RagIndex {
         Ok(results)
     }
 
+    // ── Chunk text lookup ────────────────────────────────────────────────────
+
+    /// Batch-fetch chunk body fields for a set of `chunk_id`s.
+    ///
+    /// # Purpose
+    ///
+    /// Retrievers (FTS, vector) receive only `(chunk_id, score)` pairs from
+    /// their index tables.  This method resolves those IDs back to their text,
+    /// file_path, start_line, and end_line in a **single SQL query** using an
+    /// `IN (…)` clause, so callers can populate [`RetrievalHit`] fields without
+    /// N individual round-trips.
+    ///
+    /// # Inputs
+    ///
+    /// - `ids` — slice of chunk-ID strings to look up.  Order and duplicates do
+    ///   not matter; the caller is responsible for re-ordering hits by score.
+    ///
+    /// # Outputs
+    ///
+    /// A `HashMap<chunk_id, (text, file_path, start_line, end_line)>`.  Missing
+    /// IDs (shouldn't happen in a consistent DB) are simply absent from the map;
+    /// callers fall back to empty text / `None` gracefully.
+    ///
+    /// Returns an empty map (never errors) on SQL failures so callers degrade
+    /// gracefully rather than crashing.
+    pub async fn fetch_chunks_by_ids(
+        &self,
+        ids: &[String],
+    ) -> std::collections::HashMap<String, (String, Option<String>, Option<i64>, Option<i64>)> {
+        if ids.is_empty() {
+            return std::collections::HashMap::new();
+        }
+
+        let conn = self.conn.lock().await;
+
+        // Build a single parameterised IN clause: `WHERE chunk_id IN (?1,?2,…)`.
+        let placeholders: String = (1..=ids.len())
+            .map(|i| format!("?{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT chunk_id, text, file_path, start_line, end_line \
+             FROM chunks WHERE chunk_id IN ({placeholders})"
+        );
+
+        let mut stmt = match conn.prepare(&sql) {
+            Ok(s) => s,
+            Err(_) => return std::collections::HashMap::new(),
+        };
+
+        // rusqlite requires values as `dyn ToSql` refs.
+        let params: Vec<&dyn rusqlite::types::ToSql> =
+            ids.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+
+        let rows = match stmt.query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+            ))
+        }) {
+            Ok(r) => r,
+            Err(_) => return std::collections::HashMap::new(),
+        };
+
+        let mut map = std::collections::HashMap::with_capacity(ids.len());
+        for row in rows.flatten() {
+            map.insert(row.0, (row.1, row.2, row.3, row.4));
+        }
+        map
+    }
+
     // ── FTS5 optimize + vacuum ────────────────────────────────────────────────
 
     /// Merge all FTS5 segments into one for faster queries.
