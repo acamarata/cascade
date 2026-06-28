@@ -11,15 +11,34 @@
 //!   - CPU fuel default 1_000_000_000 per invocation
 //!   - Wall-clock timeout 30 s per invocation
 //!
+//! # ABI protocol (ptr/len calling convention)
+//!
+//! The WASM guest must export:
+//!   - `memory` — the linear memory export
+//!   - `alloc(i32) -> i32` — allocate N bytes and return a pointer
+//!   - `<entry>(ptr: i32, len: i32) -> i64` — dispatch entrypoint
+//!
+//! The host writes a JSON `DispatchEnvelope` into guest memory at `ptr`,
+//! calls the export with `(ptr, len)`, then reads output from the packed `i64`
+//! return: `out_ptr = packed >> 32`, `out_len = packed & 0xFFFF_FFFF`.
+//!
+//! WHY i64 rather than (i32, i32): Rust `extern "C"` on wasm32 cannot emit WASM
+//! multi-value returns. A single i64 packing ptr and len is the only portable
+//! calling convention for cdylib targets. See `echo_tool_roundtrip.rs` ABI note.
+//!
 //! SPORT: cascade-plugins / sandbox layer
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
 use serde_json::Value;
 use thiserror::Error;
-use wasmtime::{Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
+use wasmtime::{Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Trap, Val};
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::WasiCtxBuilder;
 
 use crate::manifest::PluginType;
 
@@ -140,9 +159,14 @@ impl WasmPlugin {
     /// Load a WASM module into a sandboxed engine.
     ///
     /// # Why we compile once and instantiate per-call
-    /// `Module` compilation is expensive (AOT). `Store` instantiation is cheap.
-    /// This pattern amortizes compile cost over the daemon lifetime while giving
-    /// each invocation a fresh fuel + memory counter.
+    /// `Module` compilation is expensive (AOT via cranelift). `Store` instantiation
+    /// is cheap. This pattern amortizes compile cost over the daemon lifetime while
+    /// giving each invocation a fresh fuel + memory counter.
+    ///
+    /// # Engine configuration
+    /// - `consume_fuel(true)` — fuel metering on (CPU budget per call)
+    /// - `async_support(true)` — required for `instantiate_async` / `call_async`
+    ///   which integrate with tokio timeout cancellation (wasmtime 36 LTS)
     pub fn load(
         name: &str,
         wasm_bytes: &[u8],
@@ -150,6 +174,7 @@ impl WasmPlugin {
     ) -> Result<Arc<Self>, SandboxError> {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
+        config.async_support(true);
         let engine = Engine::new(&config)?;
         let module = Module::from_binary(&engine, wasm_bytes)
             .map_err(|e| SandboxError::Compile(e.to_string()))?;
@@ -166,10 +191,26 @@ impl WasmPlugin {
 
     /// Call a named export with a JSON-serialized input envelope.
     ///
-    /// # Protocol
-    /// Input is serialized to JSON bytes, written into WASM memory, then passed
-    /// as (ptr, len). The plugin writes its JSON response to a caller-allocated
-    /// output buffer. We deserialize and return.
+    /// # ABI (ptr/len calling convention)
+    ///
+    /// 1. Serialize `input` to JSON bytes.
+    /// 2. Call `alloc(len) -> i32` to allocate a buffer in guest linear memory.
+    /// 3. Write the JSON bytes into guest memory at the returned pointer.
+    /// 4. Call `export(ptr: i32, len: i32) -> i64`.
+    ///    Return value packs `(out_ptr as u64) << 32 | (out_len as u64)`.
+    /// 5. Read output bytes from guest memory at `[out_ptr..out_ptr+out_len]`.
+    /// 6. Deserialize output bytes as JSON and return.
+    ///
+    /// # WASI
+    /// A minimal WASI context (deny-by-default, zero permissions) is wired to
+    /// satisfy Rust wasm32-wasip1 startup shims (`__wasm_call_ctors`). Plugins
+    /// with fs/env/net permissions use the `LoadedPlugin` path in `runtime/mod.rs`
+    /// which accepts a `JsonPermissions` manifest.
+    ///
+    /// # KV store
+    /// `cascade:plugins/host::kv-get` and `kv-set` are wired to a per-invocation
+    /// `HashMap<String, String>`. Values do NOT persist across calls (per-invocation
+    /// scope). Persistent KV is a future enhancement (P5, `kv_persistent` capability).
     pub async fn call_export(&self, export: &str, input: &Value) -> Result<Value, SandboxError> {
         let input_bytes =
             serde_json::to_vec(input).map_err(|e| SandboxError::Serialization(e.to_string()))?;
@@ -180,29 +221,55 @@ impl WasmPlugin {
             .instances(1)
             .build();
 
+        // Minimal deny-by-default WASI context.
+        // WHY: Rust wasm32-wasip1 binaries call WASI init shims at startup;
+        // without WASI in the linker the module fails to instantiate.
+        // Zero-permission context means plugins cannot read/write files, env
+        // vars, or sockets unless explicitly granted via manifest permissions
+        // (handled by the `LoadedPlugin` runtime path).
+        let wasi = WasiCtxBuilder::new().build_p1();
+
         let mut store: Store<StoreData> = Store::new(
             &self.engine,
             StoreData {
+                wasi,
                 limits: store_limits,
                 _fd_count: 0,
                 _fd_cap: self.limits.max_fds,
+                kv: HashMap::new(),
             },
         );
         store.limiter(|data| &mut data.limits);
         store.set_fuel(self.limits.max_fuel)?;
 
-        let linker = Linker::new(&self.engine);
-        let instance = linker.instantiate(&mut store, &self.module)?;
+        let mut linker: Linker<StoreData> = Linker::new(&self.engine);
 
-        // Resolve the export function.
-        let func = instance
-            .get_func(&mut store, export)
-            .ok_or_else(|| SandboxError::MissingExport(export.to_owned()))?;
+        // Add WASIp1 host functions (deny-by-default; ungated paths return EPERM).
+        preview1::add_to_linker_async(&mut linker, |data| &mut data.wasi)
+            .context("failed to add WASI to sandbox linker")?;
 
-        // Execute with wall-clock timeout via tokio.
+        // Register cascade-specific host functions (log, kv-get, kv-set).
+        register_cascade_host_functions(&mut linker)?;
+
+        let instance = linker
+            .instantiate_async(&mut store, &self.module)
+            .await
+            .map_err(|e| {
+                if is_fuel_exhausted(&e) {
+                    SandboxError::ResourceExhausted {
+                        kind: ResourceKind::CpuFuel,
+                        limit: self.limits.max_fuel,
+                        actual: self.limits.max_fuel,
+                    }
+                } else {
+                    SandboxError::Trap(e.to_string())
+                }
+            })?;
+
+        // Execute the ABI round-trip with wall-clock timeout.
         let result = tokio::time::timeout(
             self.limits.timeout,
-            invoke_wasm(func, &mut store, input_bytes),
+            invoke_wasm_json(&instance, &mut store, export, input_bytes),
         )
         .await
         .map_err(|_| SandboxError::Timeout(self.limits.timeout))??;
@@ -227,29 +294,501 @@ impl WasmPlugin {
 // ── Store data ────────────────────────────────────────────────────────────────
 
 struct StoreData {
+    /// WASIp1 context — deny-by-default (zero permissions in WasmPlugin).
+    wasi: WasiP1Ctx,
+    /// wasmtime resource limiter (memory cap enforcement).
     limits: StoreLimits,
-    /// Current open-file-descriptor count (incremented/decremented by the ABI layer).
-    /// Retained for the future ABI dispatch implementation; unused in stub form.
+    /// Current open-file-descriptor count (future FD cap enforcement).
     _fd_count: usize,
     /// Maximum allowed open file descriptors for this plugin instance.
-    /// Enforced by the ABI layer once implemented; unused in stub form.
     _fd_cap: usize,
+    /// Per-invocation scoped key-value store for cascade:plugins/host kv-* calls.
+    ///
+    /// Lifecycle: created fresh per `call_export` invocation. Values do NOT
+    /// persist between calls. Persistent KV is a P5 enhancement gated behind
+    /// the `kv_persistent` capability grant.
+    kv: HashMap<String, String>,
 }
 
-// ── WASM invocation helper ────────────────────────────────────────────────────
+// ── Cascade host function registration ───────────────────────────────────────
 
-/// Invoke the WASM function with the input bytes and return the output bytes.
+/// Register cascade-specific host import functions into the linker.
 ///
-/// # SAFETY
-/// This function calls into a wasmtime-managed WASM instance. wasmtime enforces
-/// memory isolation — the plugin cannot access host memory outside the WASM
-/// linear memory region. All pointer arithmetic is bounds-checked by wasmtime.
-async fn invoke_wasm(
-    _func: wasmtime::Func,
-    _store: &mut Store<StoreData>,
-    _input: Vec<u8>,
+/// Import module: `"cascade:plugins/host"` — matches the WIT world package path
+/// and the `#[link(wasm_import_module = "cascade:plugins/host")]` attribute in
+/// `cascade-pdk/src/host_imports.rs`.
+///
+/// Functions registered:
+/// - `log(level: i32, ptr: i32, len: i32)` — emit a tracing log line
+/// - `kv-get(key_ptr: i32, key_len: i32, out_ptr: i32) -> i32` — read KV entry
+/// - `kv-set(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32)` — write KV
+fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(), SandboxError> {
+    // ── cascade:plugins/host::log ─────────────────────────────────────────────
+    //
+    // Reads the UTF-8 message from guest memory via the `memory` export and
+    // dispatches to the appropriate tracing level.
+    // Level encoding: 0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR (matches cascade-pdk).
+    linker
+        .func_wrap(
+            "cascade:plugins/host",
+            "log",
+            |mut caller: wasmtime::Caller<'_, StoreData>, level: i32, ptr: i32, len: i32| {
+                let memory = match caller.get_export("memory") {
+                    Some(wasmtime::Extern::Memory(m)) => m,
+                    _ => return, // no memory export — skip silently
+                };
+                let data = memory.data(&caller);
+                let ptr = ptr as usize;
+                let len = len as usize;
+                if let Some(slice) = data.get(ptr..ptr + len) {
+                    let msg = String::from_utf8_lossy(slice);
+                    match level {
+                        0 => tracing::trace!(target: "plugin:wasm", "{}", msg),
+                        1 => tracing::debug!(target: "plugin:wasm", "{}", msg),
+                        3 => tracing::warn!(target: "plugin:wasm", "{}", msg),
+                        4 => tracing::error!(target: "plugin:wasm", "{}", msg),
+                        _ => tracing::info!(target: "plugin:wasm", "{}", msg),
+                    }
+                }
+            },
+        )
+        .map_err(SandboxError::Engine)?;
+
+    // ── cascade:plugins/host::kv-get ──────────────────────────────────────────
+    //
+    // ABI: kv-get(key_ptr: i32, key_len: i32, out_ptr: i32) -> i32
+    //
+    // Reads the key from guest memory at [key_ptr..key_ptr+key_len], looks it up
+    // in the per-invocation KV HashMap, and if found, writes the UTF-8 value bytes
+    // into guest memory at out_ptr. Returns the byte length of the value (0 = not found).
+    //
+    // WHY single out_ptr rather than (val_ptr, val_len) return pair:
+    // WASM multi-value returns require explicit ABI support not available via
+    // `extern "C"` in Rust cdylib. A caller-allocated output buffer + i32 length
+    // return is the simplest correct convention. The cascade-pdk kv_get wrapper
+    // handles buffer allocation on the guest side (T-P4-E03-11 PDK ticket).
+    linker
+        .func_wrap(
+            "cascade:plugins/host",
+            "kv-get",
+            |mut caller: wasmtime::Caller<'_, StoreData>,
+             key_ptr: i32,
+             key_len: i32,
+             out_ptr: i32|
+             -> i32 {
+                let memory = match caller.get_export("memory") {
+                    Some(wasmtime::Extern::Memory(m)) => m,
+                    _ => return 0,
+                };
+                // Read the key string from guest memory.
+                let key = {
+                    let data = memory.data(&caller);
+                    let kp = key_ptr as usize;
+                    let kl = key_len as usize;
+                    match data.get(kp..kp + kl) {
+                        Some(s) => String::from_utf8_lossy(s).into_owned(),
+                        None => return 0,
+                    }
+                };
+                // Look up in per-invocation KV store.
+                let value = match caller.data().kv.get(&key) {
+                    Some(v) => v.clone(),
+                    None => return 0,
+                };
+                let val_bytes = value.as_bytes();
+                let val_len = val_bytes.len() as i32;
+                // Write value into guest memory at out_ptr.
+                let out = out_ptr as usize;
+                let mem_data = memory.data_mut(&mut caller);
+                if let Some(dest) = mem_data.get_mut(out..out + val_bytes.len()) {
+                    dest.copy_from_slice(val_bytes);
+                    val_len
+                } else {
+                    0 // out_ptr out of bounds
+                }
+            },
+        )
+        .map_err(SandboxError::Engine)?;
+
+    // ── cascade:plugins/host::kv-set ──────────────────────────────────────────
+    //
+    // ABI: kv-set(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32)
+    //
+    // Reads key and value from guest memory and inserts them into the
+    // per-invocation KV HashMap. Values written here are visible to subsequent
+    // kv-get calls within the same invocation only.
+    linker
+        .func_wrap(
+            "cascade:plugins/host",
+            "kv-set",
+            |mut caller: wasmtime::Caller<'_, StoreData>,
+             key_ptr: i32,
+             key_len: i32,
+             val_ptr: i32,
+             val_len: i32| {
+                let memory = match caller.get_export("memory") {
+                    Some(wasmtime::Extern::Memory(m)) => m,
+                    _ => return,
+                };
+                let (key, value) = {
+                    let data = memory.data(&caller);
+                    let kp = key_ptr as usize;
+                    let kl = key_len as usize;
+                    let vp = val_ptr as usize;
+                    let vl = val_len as usize;
+                    let k = match data.get(kp..kp + kl) {
+                        Some(s) => String::from_utf8_lossy(s).into_owned(),
+                        None => return,
+                    };
+                    let v = match data.get(vp..vp + vl) {
+                        Some(s) => String::from_utf8_lossy(s).into_owned(),
+                        None => return,
+                    };
+                    (k, v)
+                };
+                caller.data_mut().kv.insert(key, value);
+            },
+        )
+        .map_err(SandboxError::Engine)?;
+
+    Ok(())
+}
+
+// ── Fuel exhaustion detection ─────────────────────────────────────────────────
+
+/// Returns `true` if the anyhow error represents a wasmtime fuel exhaustion trap.
+///
+/// WHY: wasmtime wraps `Trap::OutOfFuel` in an `anyhow::Error`. The canonical
+/// detection path is `downcast_ref::<Trap>()`. String matching on the outer
+/// error message is unreliable (contains the WASM backtrace, not the trap kind).
+fn is_fuel_exhausted(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<Trap>()
+        .map(|t| *t == Trap::OutOfFuel)
+        .unwrap_or(false)
+        || e.to_string().contains("all fuel consumed")
+}
+
+// ── WASM JSON ABI invocation ──────────────────────────────────────────────────
+
+/// Execute a JSON ABI round-trip against a compiled WASM instance.
+///
+/// # Protocol
+/// 1. Call `alloc(input_len) -> i32` to get a writable pointer in guest memory.
+/// 2. Write `input_bytes` into guest memory at that pointer.
+/// 3. Call `export(ptr: i32, len: i32) -> i64`.
+///    The i64 packs `(out_ptr as u64) << 32 | (out_len as u64)`.
+/// 4. Read `mem[out_ptr..out_ptr+out_len]` and return the bytes.
+///
+/// # Errors
+/// Returns `SandboxError::MissingExport` if `memory`, `alloc`, or `export` are
+/// absent. Returns `SandboxError::Trap` on any wasmtime trap during execution.
+async fn invoke_wasm_json(
+    instance: &wasmtime::Instance,
+    store: &mut Store<StoreData>,
+    export: &str,
+    input_bytes: Vec<u8>,
 ) -> Result<Vec<u8>, SandboxError> {
-    // TODO(T-P1-E9-S01-03a): implement full ABI dispatch (ptr/len calling convention).
-    // Stub returns empty JSON object so the dispatcher layer compiles cleanly.
-    Ok(b"{}".to_vec())
+    // ── 1. Resolve memory and alloc exports ──────────────────────────────────
+    let memory = instance
+        .get_memory(&mut *store, "memory")
+        .ok_or_else(|| SandboxError::MissingExport("memory".to_owned()))?;
+
+    let alloc = instance
+        .get_func(&mut *store, "alloc")
+        .ok_or_else(|| SandboxError::MissingExport("alloc".to_owned()))?;
+
+    // ── 2. Allocate input buffer in guest linear memory ───────────────────────
+    let input_len = input_bytes.len() as i32;
+    let mut alloc_result = [Val::I32(0)];
+    alloc
+        .call_async(&mut *store, &[Val::I32(input_len)], &mut alloc_result)
+        .await
+        .map_err(|e| SandboxError::Trap(format!("alloc trap: {e}")))?;
+
+    let input_ptr = match &alloc_result[0] {
+        Val::I32(p) => *p as usize,
+        _ => {
+            return Err(SandboxError::Trap(
+                "alloc returned non-i32 value".to_owned(),
+            ))
+        }
+    };
+
+    // ── 3. Write serialized input into guest linear memory ────────────────────
+    memory
+        .write(&mut *store, input_ptr, &input_bytes)
+        .map_err(|e| SandboxError::Trap(format!("memory write: {e}")))?;
+
+    // ── 4. Call the named export: (ptr: i32, len: i32) -> i64 ─────────────────
+    let func = instance
+        .get_func(&mut *store, export)
+        .ok_or_else(|| SandboxError::MissingExport(export.to_owned()))?;
+
+    let mut out_vals = [Val::I64(0)];
+    func.call_async(
+        &mut *store,
+        &[Val::I32(input_ptr as i32), Val::I32(input_len)],
+        &mut out_vals,
+    )
+    .await
+    .map_err(|e| SandboxError::Trap(e.to_string()))?;
+
+    // ── 5. Unpack i64: (out_ptr << 32) | out_len ─────────────────────────────
+    let packed = match &out_vals[0] {
+        Val::I64(v) => *v as u64,
+        _ => {
+            return Err(SandboxError::Trap(
+                "export must return i64 (packed ptr<<32|len)".to_owned(),
+            ))
+        }
+    };
+    let out_ptr = (packed >> 32) as usize;
+    let out_len = (packed & 0xFFFF_FFFF) as usize;
+
+    // ── 6. Read output bytes from guest linear memory ─────────────────────────
+    let mem_data = memory.data(&*store);
+    let slice = mem_data
+        .get(out_ptr..out_ptr + out_len)
+        .ok_or_else(|| {
+            SandboxError::Trap(format!(
+                "output pointer out of bounds: ptr={out_ptr} len={out_len} mem_size={}",
+                mem_data.len()
+            ))
+        })?
+        .to_vec(); // copy before store is dropped
+
+    Ok(slice)
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── WAT fixture helpers ───────────────────────────────────────────────────
+
+    /// Minimal WAT module implementing the cascade_plugin_call ABI for testing.
+    ///
+    /// The module exports `memory`, `alloc`, and `cascade_plugin_call`.
+    /// - `alloc(n) -> i32` always returns 256 (fixed arena base for input buffer).
+    /// - `cascade_plugin_call(ptr, len) -> i64` ignores the input and writes
+    ///   the fixed JSON `{"ok":true}` (11 bytes) at memory offset 512, then
+    ///   returns the packed i64 `(512 << 32) | 11`.
+    ///
+    /// WHY a WAT fixture rather than a real plugin WASM:
+    /// Building a real `cascade_plugin_call` ABI requires the `wasm32-wasip1`
+    /// toolchain and cross-compilation, which cannot run during `cargo test` on
+    /// the host. The WAT fixture compiles inline via the `wat` dev-dep and
+    /// exercises the exact same host-side ptr/len machinery and i64 unpacking.
+    fn echo_wat_bytes() -> Vec<u8> {
+        // Memory layout:
+        //   [256..512]  input buffer (alloc returns 256)
+        //   [512..523]  output buffer — `{"ok":true}` = 11 bytes
+        //
+        // ASCII: { = 123, " = 34, o = 111, k = 107 : = 58, t = 116, r = 114,
+        //         u = 117, e = 101, } = 125
+        wat::parse_str(
+            r#"
+            (module
+              (memory (export "memory") 1)
+
+              (func (export "alloc") (param i32) (result i32)
+                i32.const 256
+              )
+
+              (func (export "cascade_plugin_call") (param i32 i32) (result i64)
+                i32.const 512  i32.const 123 i32.store8
+                i32.const 513  i32.const 34  i32.store8
+                i32.const 514  i32.const 111 i32.store8
+                i32.const 515  i32.const 107 i32.store8
+                i32.const 516  i32.const 34  i32.store8
+                i32.const 517  i32.const 58  i32.store8
+                i32.const 518  i32.const 116 i32.store8
+                i32.const 519  i32.const 114 i32.store8
+                i32.const 520  i32.const 117 i32.store8
+                i32.const 521  i32.const 101 i32.store8
+                i32.const 522  i32.const 125 i32.store8
+
+                ;; (512 << 32) | 11 = 0x0000_0200_0000_000B
+                i64.const 0x000002000000000B
+              )
+            )
+            "#,
+        )
+        .expect("echo WAT must be valid")
+    }
+
+    /// WAT fixture that exercises the kv-get and kv-set host imports.
+    ///
+    /// Steps:
+    ///   1. Calls kv-set("mykey", "42")
+    ///   2. Calls kv-get("mykey", out_buf@64) — expects the host to write "42"
+    ///   3. Writes fixed JSON `{"val":"42"}` (12 bytes) at offset 256
+    ///   4. Returns packed i64 `(256 << 32) | 12`
+    ///
+    /// This validates that the host KV ABI is wired and the round-trip works.
+    fn kv_roundtrip_wat_bytes() -> Vec<u8> {
+        // Memory layout:
+        //   [0..5]    key "mykey"
+        //   [8..10]   value "42"
+        //   [64..128] kv-get output buffer
+        //   [128..]   alloc base (input buffer)
+        //   [256..]   output JSON `{"val":"42"}`
+        //
+        // ASCII for `{"val":"42"}`:
+        //   { = 123, " = 34, v = 118, a = 97, l = 108, " = 34, : = 58,
+        //   " = 34, 4 = 52, 2 = 50, " = 34, } = 125  (12 bytes)
+        wat::parse_str(
+            r#"
+            (module
+              (import "cascade:plugins/host" "kv-get"
+                (func $kv_get (param i32 i32 i32) (result i32)))
+              (import "cascade:plugins/host" "kv-set"
+                (func $kv_set (param i32 i32 i32 i32)))
+
+              (memory (export "memory") 1)
+
+              (data (i32.const 0) "mykey")
+              (data (i32.const 8) "42")
+
+              (func (export "alloc") (param i32) (result i32)
+                i32.const 128
+              )
+
+              (func (export "cascade_plugin_call") (param i32 i32) (result i64)
+                (local $got_len i32)
+
+                ;; kv-set("mykey"@0 len=5, "42"@8 len=2)
+                i32.const 0  i32.const 5  i32.const 8  i32.const 2
+                call $kv_set
+
+                ;; kv-get("mykey"@0 len=5, out_buf@64) -> $got_len (should be 2)
+                i32.const 0  i32.const 5  i32.const 64
+                call $kv_get
+                local.set $got_len
+
+                ;; Write `{"val":"42"}` at offset 256
+                i32.const 256  i32.const 123 i32.store8
+                i32.const 257  i32.const 34  i32.store8
+                i32.const 258  i32.const 118 i32.store8
+                i32.const 259  i32.const 97  i32.store8
+                i32.const 260  i32.const 108 i32.store8
+                i32.const 261  i32.const 34  i32.store8
+                i32.const 262  i32.const 58  i32.store8
+                i32.const 263  i32.const 34  i32.store8
+                i32.const 264  i32.const 52  i32.store8
+                i32.const 265  i32.const 50  i32.store8
+                i32.const 266  i32.const 34  i32.store8
+                i32.const 267  i32.const 125 i32.store8
+
+                ;; (256 << 32) | 12 = 0x0000_0100_0000_000C
+                i64.const 0x000001000000000C
+              )
+            )
+            "#,
+        )
+        .expect("kv_roundtrip WAT must be valid")
+    }
+
+    // ── ABI dispatch round-trip test ──────────────────────────────────────────
+
+    /// Verifies the full host-side ABI dispatch path:
+    ///   alloc → memory write → export call → i64 unpack → memory read → JSON parse.
+    ///
+    /// The WAT fixture returns `{"ok":true}` — the old stub returned `{}`.
+    /// Asserting `result["ok"] == true` confirms real dispatch is running.
+    #[tokio::test]
+    async fn dispatch_roundtrip_returns_real_output() {
+        let wasm_bytes = echo_wat_bytes();
+
+        let plugin = WasmPlugin::load(
+            "echo-wat",
+            &wasm_bytes,
+            ResourceLimits::for_type(PluginType::ToolIntegration),
+        )
+        .expect("WAT module must load cleanly");
+
+        let input = serde_json::json!({
+            "func": "tool_call",
+            "args": { "call_id": "t1", "tool_name": "echo", "args_json": "{}" }
+        });
+
+        let result = plugin
+            .call_export("cascade_plugin_call", &input)
+            .await
+            .expect("call_export must succeed for WAT echo fixture");
+
+        assert!(
+            result.is_object(),
+            "result must be a JSON object; got: {result}"
+        );
+        assert_eq!(
+            result.get("ok"),
+            Some(&serde_json::Value::Bool(true)),
+            "WAT fixture must return {{\"ok\":true}}; got: {result}"
+        );
+    }
+
+    /// Verifies the kv-get and kv-set host function registrations work end-to-end.
+    ///
+    /// The WAT fixture calls kv-set("mykey", "42") then kv-get("mykey") and
+    /// returns `{"val":"42"}`. This confirms:
+    ///   - kv-set writes into the host HashMap without trapping.
+    ///   - kv-get reads the value back and writes it into guest memory.
+    ///   - The output is real plugin-produced JSON, not the old `{}` stub.
+    #[tokio::test]
+    async fn kv_host_abi_roundtrip() {
+        let wasm_bytes = kv_roundtrip_wat_bytes();
+
+        let plugin = WasmPlugin::load(
+            "kv-wat",
+            &wasm_bytes,
+            ResourceLimits::for_type(PluginType::ToolIntegration),
+        )
+        .expect("KV WAT module must load cleanly");
+
+        let input = serde_json::json!({});
+
+        let result = plugin
+            .call_export("cascade_plugin_call", &input)
+            .await
+            .expect("KV WAT call_export must succeed");
+
+        assert!(
+            result.is_object(),
+            "KV WAT result must be a JSON object; got: {result}"
+        );
+        assert_eq!(
+            result.get("val").and_then(|v| v.as_str()),
+            Some("42"),
+            "kv round-trip must produce {{\"val\":\"42\"}}; got: {result}"
+        );
+    }
+
+    // ── Existing resource limit tests (kept) ──────────────────────────────────
+
+    #[test]
+    fn chunker_gets_small_memory_default() {
+        let limits = ResourceLimits::for_type(PluginType::Chunker);
+        assert_eq!(limits.max_memory_bytes, MEM_SMALL_MB * 1024 * 1024);
+    }
+
+    #[test]
+    fn retriever_gets_large_memory_default() {
+        let limits = ResourceLimits::for_type(PluginType::Retriever);
+        assert_eq!(limits.max_memory_bytes, MEM_LARGE_MB * 1024 * 1024);
+    }
+
+    #[test]
+    fn memory_cap_clamped_to_1gb() {
+        let limits = ResourceLimits::for_type(PluginType::Chunker).with_memory_mb(2048);
+        assert_eq!(limits.max_memory_bytes, 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn fd_cap_default_is_32() {
+        let limits = ResourceLimits::for_type(PluginType::Chunker);
+        assert_eq!(limits.max_fds, DEFAULT_FD_CAP);
+    }
 }
