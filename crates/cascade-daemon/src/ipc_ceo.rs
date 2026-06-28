@@ -24,46 +24,50 @@ use async_trait::async_trait;
 #[cfg(test)]
 use cascade_agents::ceo::MockPlanner;
 use cascade_agents::ceo::{CeoOrchestrator, FounderDirective, Plan, Planner, SubGoal};
-use cascade_agents::context::{AgentRunContext, StepOutcome, TokenUsage, ToolCall};
+use cascade_agents::context::{AgentRunContext, StepOutcome, ToolCall};
 use cascade_agents::executor::{AgentExecutorBuilder, ExecutorError, ProviderRouter, ToolInvoker};
 use cascade_agents::registry::AgentRegistry;
 use cascade_agents::spec::{builtin_ceo, builtin_coder, AgentRole, AgentSpec};
+use cascade_providers::ProviderRegistry;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::info;
 use uuid::Uuid;
 
-// ── NopRouter / NopInvoker (daemon default until real provider wired) ─────────
+// ── FallbackRouter / FallbackInvoker (honest errors when no registry wired) ───
 
-/// No-op provider: always returns Done.
-struct NopRouter;
+/// Fallback provider: no provider configured for this runtime.
+///
+/// Returns `ProviderFailed` so the task transitions to `Failed` and the caller
+/// sees an explicit "no provider configured" error instead of a misleading
+/// success with synthetic text.
+struct FallbackRouter;
 
 #[async_trait]
-impl ProviderRouter for NopRouter {
+impl ProviderRouter for FallbackRouter {
     async fn step(
         &self,
         _spec: &AgentSpec,
         _ctx: &AgentRunContext,
     ) -> Result<StepOutcome, ExecutorError> {
-        Ok(StepOutcome {
-            assistant_text: "task complete (nop router)".into(),
-            tool_calls: vec![],
-            done: true,
-            usage: TokenUsage {
-                prompt_tokens: 1,
-                completion_tokens: 1,
-            },
-        })
+        Err(ExecutorError::ProviderFailed(
+            "no provider configured: use CeoRuntime::with_registry to wire a ProviderRegistry"
+                .to_string(),
+        ))
     }
 }
 
-/// No-op tool invoker.
-struct NopInvoker;
+/// Fallback tool invoker: no tool dispatch wired.
+struct FallbackInvoker;
 
 #[async_trait]
-impl ToolInvoker for NopInvoker {
+impl ToolInvoker for FallbackInvoker {
     async fn invoke(&self, call: &ToolCall) -> Result<String, ExecutorError> {
-        Ok(format!("nop:{}", call.tool_id))
+        Ok(format!(
+            "[cascade] tool '{}' is not yet implemented in this build. \
+             The tool call has been noted but no action was taken.",
+            call.tool_id
+        ))
     }
 }
 
@@ -102,10 +106,16 @@ pub struct CeoRuntime {
     registry: Arc<AgentRegistry>,
     planner: Arc<dyn Planner>,
     session_base_dir: Option<std::path::PathBuf>,
+    /// Real provider registry for `RegistryRouter`; `None` → `FallbackRouter`.
+    provider_registry: Option<Arc<ProviderRegistry>>,
 }
 
 impl CeoRuntime {
-    /// Create a `CeoRuntime` backed by a no-op executor and the default daemon planner.
+    /// Create a `CeoRuntime` backed by a fallback executor and the default daemon planner.
+    ///
+    /// The fallback router returns an honest "no provider configured" error
+    /// rather than a misleading synthetic success. Use `with_registry` to wire
+    /// a real `ProviderRegistry`.
     pub fn new(session_base_dir: Option<std::path::PathBuf>) -> Self {
         let registry = Arc::new(AgentRegistry::new());
         registry.register(builtin_ceo()).expect("ceo spec");
@@ -116,6 +126,30 @@ impl CeoRuntime {
             registry,
             planner,
             session_base_dir,
+            provider_registry: None,
+        }
+    }
+
+    /// Create a `CeoRuntime` wired to a real `ProviderRegistry`.
+    ///
+    /// Uses `RegistryRouter` (from `automation_router`) for provider steps and
+    /// `SafeToolInvoker` for tool dispatch — the same pair that `AutomationRunner`
+    /// uses. When the registry has no healthy provider, the executor sees a clear
+    /// `ProviderFailed` error instead of a silent synthetic success.
+    pub fn with_registry(
+        session_base_dir: Option<std::path::PathBuf>,
+        provider_registry: Arc<ProviderRegistry>,
+    ) -> Self {
+        let registry = Arc::new(AgentRegistry::new());
+        registry.register(builtin_ceo()).expect("ceo spec");
+        registry.register(builtin_coder()).expect("coder spec");
+        let planner: Arc<dyn Planner> = Arc::new(DefaultDaemonPlanner);
+        Self {
+            orchestrator: Mutex::new(None),
+            registry,
+            planner,
+            session_base_dir,
+            provider_registry: Some(provider_registry),
         }
     }
 
@@ -127,15 +161,27 @@ impl CeoRuntime {
     }
 
     /// Build a fresh executor for a new session.
+    ///
+    /// When `provider_registry` is set, uses `RegistryRouter` + `SafeToolInvoker`
+    /// (real provider-backed execution). Otherwise uses `FallbackRouter` +
+    /// `FallbackInvoker` (honest errors, no misleading synthetic output).
     fn build_executor(&self) -> Arc<cascade_agents::executor::AgentExecutor> {
-        Arc::new(
-            AgentExecutorBuilder::default()
-                .provider_router(Arc::new(NopRouter))
-                .tool_invoker(Arc::new(NopInvoker))
+        use crate::automation_router::{RegistryRouter, SafeToolInvoker};
+
+        Arc::new(match &self.provider_registry {
+            Some(pr) => AgentExecutorBuilder::default()
+                .provider_router(Arc::new(RegistryRouter::new(Arc::clone(pr))))
+                .tool_invoker(Arc::new(SafeToolInvoker))
                 .max_steps(10)
                 .token_budget(50_000)
                 .build(),
-        )
+            None => AgentExecutorBuilder::default()
+                .provider_router(Arc::new(FallbackRouter))
+                .tool_invoker(Arc::new(FallbackInvoker))
+                .max_steps(10)
+                .token_budget(50_000)
+                .build(),
+        })
     }
 }
 

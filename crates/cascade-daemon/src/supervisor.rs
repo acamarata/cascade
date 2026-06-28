@@ -53,7 +53,7 @@ pub async fn run(
 
     let health = HealthState::new(start_time);
     let bus = EventBus::new(config_dir.clone()).await?;
-    let ipc = IpcServer::new(config_dir.clone(), health.clone(), bus.clone()).await?;
+    let ipc = IpcServer::new(config_dir.clone(), health.clone(), bus.clone(), Arc::clone(&provider_registry)).await?;
 
     // ── HookStore + HookRunner: seed hooks from config.toml [[hooks]] ────────
     // Create an in-memory SQLite HookStore, seed it from the config's [[hooks]]

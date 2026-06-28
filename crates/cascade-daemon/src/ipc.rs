@@ -134,6 +134,7 @@ impl IpcServer {
         config_dir: PathBuf,
         health: Arc<HealthState>,
         bus: Arc<EventBus>,
+        provider_registry: Arc<cascade_providers::ProviderRegistry>,
     ) -> Result<Self, DaemonError> {
         let socket_path = config_dir.join(SOCKET_NAME);
 
@@ -181,8 +182,13 @@ impl IpcServer {
                 .unwrap_or_else(|_| cascade_rag::cache::EmbedCache::disabled()),
         );
         // CEO runtime: session files under ~/.cascade/agents/sessions/ (E-P6-04).
+        // Wired to the real ProviderRegistry so directives use live LLM completions
+        // via RegistryRouter + SafeToolInvoker (same pair as AutomationRunner).
         let ceo_session_dir = config_dir.join("agents").join("sessions");
-        let ceo_runtime = Arc::new(crate::ipc_ceo::CeoRuntime::new(Some(ceo_session_dir)));
+        let ceo_runtime = Arc::new(crate::ipc_ceo::CeoRuntime::with_registry(
+            Some(ceo_session_dir),
+            provider_registry,
+        ));
 
         // Kanban task store (E-P8-01): tasks.db in the config dir.
         let tasks_db_path = config_dir.join("tasks.db");
