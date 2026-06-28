@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-06-28
+
+Remediation patch (P1 part 2 + P3 hardening).
+
+### Fixed
+- **Real RAG status.** `rag_status` reported all zeros; it now reads the real index — document count + `serving` from the index DB, `last_indexed` from `MAX(indexed_at)`, and `index_size_bytes` from disk. Zeros only when no index exists yet.
+- **Personal threads reach RAG.** `push_to_rag` was a no-op; it now indexes each non-`locked` thread's title/README/open-task summaries into the `personal` memory namespace via a `RagSink` (the daemon injects a `cascade-rag`-backed sink; `locked` threads are skipped). New `POST /api/personal/threads/push-to-rag`.
+- **Poison-tolerant locks.** Six `Mutex/RwLock.unwrap()` calls on concurrent request paths (IPC routing/provision, MCP cancellation) now recover from a poisoned lock instead of cascading a panic across the daemon.
+
 ## [1.9.2] - 2026-06-28
 
 Remediation patch (P1, part 1): the LLM provider path + GUI RAG.
