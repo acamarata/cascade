@@ -35,10 +35,15 @@ tokio-stream      = { version = "0.1", features = ["sync"] }
 tokio             = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower             = { version = "0.4", features = ["util"] }
 
+# PTY driver — optional, only pulled in by the live_cc feature.
+[dependencies.portable-pty]
+version = "0.8"
+optional = true
+
 [features]
 # Gate the real PTY-driving implementation behind a feature flag so that
 # normal builds (tests, CI) never attempt to spawn an actual `claude` process.
 # The MockDriver is always available and is the tested default.
-live_cc = []
+live_cc = ["dep:portable-pty"]
 
 default = []

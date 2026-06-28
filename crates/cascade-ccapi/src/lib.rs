@@ -61,7 +61,7 @@ pub use error::CcApiError;
 pub fn make_live_driver() -> Option<std::sync::Arc<dyn driver::ProcessDriver>> {
     #[cfg(feature = "live_cc")]
     {
-        Some(std::sync::Arc::new(driver::LiveCcDriver))
+        Some(std::sync::Arc::new(driver::LiveCcDriver::new()))
     }
     #[cfg(not(feature = "live_cc"))]
     {
