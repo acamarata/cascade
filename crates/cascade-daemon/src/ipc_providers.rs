@@ -40,6 +40,14 @@ use tracing::{debug, info, warn};
 
 use cascade_keychain::platform_keychain;
 use cascade_providers::{
+    adapters::{
+        anthropic::AnthropicAdapter,
+        gemini::{GeminiAdapter, GeminiConfig},
+        groq::GroqAdapter,
+        openai::OpenAIAdapter,
+        openrouter::OpenRouterAdapter,
+        together::TogetherAdapter,
+    },
     oauth::{AuthorizeResult, OAuthClient, OAuthProviderConfig},
     NoopProvider, ProviderRegistry,
 };
@@ -236,10 +244,23 @@ impl ProviderIpcHandler {
 
     // ── cascade_providers_add_apikey ──────────────────────────────────────────
 
-    /// Store an API key in the keychain and register a [`NoopProvider`]
-    /// placeholder for the provider.
+    /// Store an API key in the keychain and register the real provider adapter.
     ///
-    /// The key string is zeroed from memory after the keychain write completes
+    /// Constructs the appropriate concrete `ProviderAdapter` based on the
+    /// provider family encoded in `id`.  Supported families and their adapter
+    /// mapping:
+    ///
+    /// | id prefix / exact id | Adapter          |
+    /// |----------------------|------------------|
+    /// | `"anthropic"`        | `AnthropicAdapter` |
+    /// | `"gemini"`           | `GeminiAdapter`  |
+    /// | `"openai"`           | `OpenAIAdapter`  |
+    /// | `"groq"`             | `GroqAdapter`    |
+    /// | `"openrouter"`       | `OpenRouterAdapter` |
+    /// | `"together"`         | `TogetherAdapter` |
+    /// | anything else        | `NoopProvider` (with a WARN so nothing silently noops a supported family) |
+    ///
+    /// The key string is zeroed from memory after adapter construction
     /// (security invariant: CR-A).
     ///
     /// # Errors
@@ -254,32 +275,28 @@ impl ProviderIpcHandler {
         kc.set_key(KEYCHAIN_SERVICE, &id, &key)
             .map_err(|e| format!("keychain set_key: {e}"))?;
 
-        // Zeroize the key from the local binding immediately after storage.
-        // This prevents the plaintext from lingering on the stack or heap until
-        // the next GC/drop.  CR-A requirement.
-        {
-            // SAFETY: ASCII bytes — overwrite with zeroes.
-            // We do this manually since `zeroize` crate is not a dep here.
-            // Safety: key is a valid UTF-8 String; overwriting bytes with 0 is
-            // safe since we never use `key` again after this point.
-            //
-            // WHY unsafe: `String::as_bytes_mut` is unsafe; we accept that risk
-            // here for the explicit security benefit of clearing the secret.
-            unsafe {
-                let b = key.as_bytes_mut();
-                for byte in b.iter_mut() {
-                    *byte = 0;
-                }
+        // Build the real adapter before zeroing the key so we can pass it to
+        // the constructor.  We clone here and zeroize the original immediately
+        // after (CR-A: plaintext must not linger once stored).
+        let adapter: Arc<dyn cascade_providers::ProviderAdapter> =
+            build_adapter_for_id(&id, &key);
+
+        // Zeroize the key from the local binding immediately after adapter
+        // construction.  SAFETY: key is a valid UTF-8 String; overwriting bytes
+        // with 0 is safe since we never use `key` again after this point.
+        unsafe {
+            let b = key.as_bytes_mut();
+            for byte in b.iter_mut() {
+                *byte = 0;
             }
         }
         drop(key); // ensure the zeroed allocation is dropped
 
-        // Register a NoopProvider placeholder.  Concrete adapters land in P4.
         self.registry
-            .register(id.clone(), Arc::new(NoopProvider))
+            .register(id.clone(), adapter)
             .map_err(|e| format!("registry register: {e}"))?;
 
-        info!(provider_id = %id, "provider API key stored and registered");
+        info!(provider_id = %id, "provider API key stored and real adapter registered");
         Ok(())
     }
 
@@ -381,10 +398,20 @@ impl ProviderIpcHandler {
                 }
 
                 // Register provider on success.
+                // OAuth adapters do not carry a static API key — we register a
+                // NoopProvider here as a placeholder and expect the caller to
+                // supply an access token through a dedicated OAuth token-injection
+                // path once the PKCE exchange completes.  A warn is emitted to
+                // make the gap visible in logs until that path is implemented.
                 {
                     let map = pending_map.lock().await;
                     if let Some(p) = map.get(&pid) {
                         if p.connected {
+                            warn!(
+                                provider_id = %pid,
+                                "OAuth provider registered as NoopProvider placeholder — \
+                                 wire token injection to replace with real adapter"
+                            );
                             let _ = registry.register(pid.clone(), Arc::new(NoopProvider));
                             info!(provider_id = %pid, "OAuth provider registered after callback");
                         }
@@ -519,6 +546,66 @@ impl ProviderIpcHandler {
     }
 }
 
+// ── build_adapter_for_id ──────────────────────────────────────────────────────
+
+/// Construct the real [`cascade_providers::ProviderAdapter`] for a given
+/// provider `id` and plaintext `api_key`.
+///
+/// # Provider family mapping
+///
+/// The `id` is compared against well-known provider slugs to select the
+/// correct concrete adapter.  The key is consumed by the adapter constructor
+/// (stored in-memory, never re-logged).
+///
+/// Unsupported families fall back to [`NoopProvider`] with an explicit WARN
+/// so the gap is visible in logs and metrics.
+///
+/// # Security
+///
+/// `api_key` is passed by reference and cloned inside the adapter.  The
+/// caller is responsible for zeroizing the original after this call returns.
+fn build_adapter_for_id(id: &str, api_key: &str) -> Arc<dyn cascade_providers::ProviderAdapter> {
+    // Normalize: compare against canonical slugs (case-insensitive prefix match
+    // handles ids like "anthropic-acct1" in addition to bare "anthropic").
+    let id_lower = id.to_lowercase();
+
+    if id_lower == "anthropic" || id_lower.starts_with("anthropic-") {
+        return Arc::new(AnthropicAdapter::new(api_key));
+    }
+
+    if id_lower == "gemini" || id_lower.starts_with("gemini-") {
+        return Arc::new(GeminiAdapter::new(GeminiConfig::direct(api_key)));
+    }
+
+    if id_lower == "openai" || id_lower.starts_with("openai-") {
+        return Arc::new(OpenAIAdapter::new(api_key, None::<String>));
+    }
+
+    if id_lower == "groq" || id_lower.starts_with("groq-") {
+        return Arc::new(GroqAdapter::new(api_key));
+    }
+
+    if id_lower == "openrouter" || id_lower.starts_with("openrouter-") {
+        return Arc::new(OpenRouterAdapter::new(api_key));
+    }
+
+    if id_lower == "together" || id_lower.starts_with("together-") {
+        return Arc::new(TogetherAdapter::new(api_key));
+    }
+
+    // Families that self-load from keychain (Mistral, Cohere, DeepSeek) use
+    // their own keychain service namespaces.  The ipc_providers path stores
+    // keys under "dev.cascade"; those adapters look under "cascade.<family>".
+    // A dedicated migration/bridge path is required before we can wrap them
+    // here.  Until then fall back to NoopProvider and warn clearly.
+    warn!(
+        provider_id = %id,
+        "build_adapter_for_id: no real adapter for this provider family — \
+         registered as NoopProvider; add a concrete adapter or key-bridge to fix"
+    );
+    Arc::new(NoopProvider)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -628,5 +715,85 @@ mod tests {
         assert!(result.is_ok(), "add_generic should succeed: {result:?}");
         let list = handler.providers_list().await;
         assert_eq!(list.len(), 1, "registry should have one provider");
+    }
+
+    // ── build_adapter_for_id unit tests ───────────────────────────────────────
+
+    /// Storing an Anthropic key must register a REAL adapter (AnthropicAdapter),
+    /// not NoopProvider.  We verify by calling `provider_info()` and checking
+    /// that the reported id is "anthropic" (the value AnthropicAdapter returns),
+    /// not "noop" (what NoopProvider returns).
+    #[test]
+    fn build_adapter_anthropic_is_not_noop() {
+        let adapter = build_adapter_for_id("anthropic", "sk-ant-test");
+        let info = adapter.provider_info();
+        assert_ne!(
+            info.id, "noop",
+            "Anthropic key must NOT register NoopProvider; got id={:?}",
+            info.id
+        );
+        assert_eq!(info.id, "anthropic", "AnthropicAdapter must report id=anthropic");
+    }
+
+    /// Gemini key → GeminiAdapter (not Noop).
+    #[test]
+    fn build_adapter_gemini_is_not_noop() {
+        let adapter = build_adapter_for_id("gemini", "AIza-test-key");
+        let info = adapter.provider_info();
+        assert_ne!(info.id, "noop", "Gemini key must NOT register NoopProvider");
+    }
+
+    /// OpenAI key → OpenAIAdapter (not Noop).
+    #[test]
+    fn build_adapter_openai_is_not_noop() {
+        let adapter = build_adapter_for_id("openai", "sk-openai-test");
+        let info = adapter.provider_info();
+        assert_ne!(info.id, "noop", "OpenAI key must NOT register NoopProvider");
+    }
+
+    /// Groq key → GroqAdapter (not Noop).
+    #[test]
+    fn build_adapter_groq_is_not_noop() {
+        let adapter = build_adapter_for_id("groq", "gsk_test");
+        let info = adapter.provider_info();
+        assert_ne!(info.id, "noop", "Groq key must NOT register NoopProvider");
+    }
+
+    /// OpenRouter key → OpenRouterAdapter (not Noop).
+    #[test]
+    fn build_adapter_openrouter_is_not_noop() {
+        let adapter = build_adapter_for_id("openrouter", "sk-or-test");
+        let info = adapter.provider_info();
+        assert_ne!(info.id, "noop", "OpenRouter key must NOT register NoopProvider");
+    }
+
+    /// Together key → TogetherAdapter (not Noop).
+    #[test]
+    fn build_adapter_together_is_not_noop() {
+        let adapter = build_adapter_for_id("together", "together-test-key");
+        let info = adapter.provider_info();
+        assert_ne!(info.id, "noop", "Together key must NOT register NoopProvider");
+    }
+
+    /// Prefix variants (e.g. "anthropic-acct1") should still map to the real adapter.
+    #[test]
+    fn build_adapter_anthropic_prefix_variant_is_not_noop() {
+        let adapter = build_adapter_for_id("anthropic-acct1", "sk-ant-test");
+        let info = adapter.provider_info();
+        assert_ne!(
+            info.id, "noop",
+            "Anthropic prefix variant must NOT register NoopProvider"
+        );
+    }
+
+    /// Unknown provider must fall back to NoopProvider (not panic).
+    #[test]
+    fn build_adapter_unknown_family_falls_back_to_noop() {
+        let adapter = build_adapter_for_id("some-unknown-provider", "key");
+        let info = adapter.provider_info();
+        assert_eq!(
+            info.id, "noop",
+            "Unknown provider must fall back to NoopProvider"
+        );
     }
 }
