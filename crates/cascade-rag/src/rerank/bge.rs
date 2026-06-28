@@ -125,15 +125,20 @@ impl BgeReranker {
             })?,
         };
 
-        std::fs::create_dir_all(&model_dir)
-            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
-
+        // Offline guard MUST run before create_dir_all — otherwise creating the
+        // dir makes model_dir.exists() always true and the guard never fires
+        // (same class as the embedder offline-guard bug). When the model dir is
+        // absent and offline_guard is set, fail fast without touching the disk
+        // or attempting a download.
         if opts.offline_guard && !model_dir.exists() {
             return Err(CascadeError::Other(format!(
                 "reranker[{MODEL_ID}] model not found on disk and offline_guard is set (dir: {})",
                 model_dir.display()
             )));
         }
+
+        std::fs::create_dir_all(&model_dir)
+            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
 
         info!(
             model_dir = %model_dir.display(),
@@ -300,14 +305,19 @@ mod tests {
     #[tokio::test]
     async fn new_with_temp_dir_no_crash() {
         let tmp = TempDir::new().expect("tempdir");
-        let _opts = BgeRerankerOptions {
-            model_dir: Some(tmp.path().to_path_buf()),
-            offline_guard: false,
+        let opts = BgeRerankerOptions {
+            // Point at a non-existent model dir + offline_guard so construction
+            // returns a typed Err early (no model download, no block_in_place —
+            // which would require a multi-thread runtime). Verifies graceful
+            // handling with no panic. The real model load runs on the daemon's
+            // multi-thread runtime via spawn_load_reranker.
+            model_dir: Some(tmp.path().join("no-model-here")),
+            offline_guard: true,
         };
-        // Only validates construction is attempted; on CI (no model) this
-        // will error at model download — that's acceptable, we just verify
-        // it doesn't panic and the type is correct.
-        let _ = BgeReranker::new(_opts).await;
+        let result = BgeReranker::new(opts).await;
+        // With the `reranker` feature this is Err (no model + offline_guard);
+        // without it, construction succeeds with stub scores. Either way: no panic.
+        let _ = result;
     }
 
     /// Trait object safety: BgeReranker can be stored as Arc<dyn Reranker>.
