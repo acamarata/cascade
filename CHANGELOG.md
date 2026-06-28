@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-06-28
+
+Remediation patch (P1 part 3): the provider-dependent features are now wired to the real provider path.
+
+### Fixed
+- **HyDE is real.** Query expansion returned the query unchanged; it now asks the registered provider for a hypothetical passage and embeds that for the dense channel. No-provider/error falls back to the raw query (no regression).
+- **Automation router is real.** The `AutomationRunner` used `NopRouter`/`NopInvoker` ("nop" output); it now routes each step through the provider registry (real completion). Tool execution returns an explicit "not yet implemented" the model can read instead of a fake success; an empty/unhealthy registry fails with a typed "no provider available" rather than fake success.
+- **`cascade harness status`/`detect` are real.** Were hardcoded `false`/`[]`; now run real harness detection (installed state + binary path / JSON).
+
+### Known remaining
+Board-debate (agent orchestration), MCP `sampling` transport, real SPLADE/ColBERT and RAPTOR/arch summarisation, `live_cc` PTY, plugin WASM ABI, and the LoRA feedback adapter remain — tracked in-code and addressed in following patches.
+
 ## [1.9.3] - 2026-06-28
 
 Remediation patch (P1 part 2 + P3 hardening).
