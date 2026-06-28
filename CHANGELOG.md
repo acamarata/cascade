@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.6] - 2026-06-28
+
+Remediation patch: the last two execution stubs.
+
+### Fixed
+- **MCP `sampling/createMessage` is real.** It returned a hardcoded `"[sampling not yet wired]"` string; it now delegates to the provider-backed sampling handler (the daemon injects the live provider registry). No provider → typed "no AI provider configured" error, never a fake success.
+- **Plugin WASM ABI executes.** Plugin tool calls returned an empty `{}` instead of running the module; the real `cascade_plugin_call(ptr,len)->i64` dispatch is implemented (input written to guest memory, output read back), with `log`/`kv-get`/`kv-set` host functions and a per-invocation KV store. The PDK's host-import signatures were corrected to match. WAT round-trip tests prove real output.
+
+### Genuine future work (not misleading stubs — documented)
+- **SPLADE / ColBERT** dense-sparse-multivector via direct `ort` multi-output: fastembed lacks BGE-M3's sparse/colbert heads. The shipped sparse retrieval path uses BM25/TF-IDF and works today; SPLADE/ColBERT are a quality upgrade requiring a custom ONNX session + model files.
+- **LoRA feedback adapter**: retrieval feedback signals are collected and stored; training a ranking adapter from them is future research. Marked `TODO(rag-09)`.
+
 ## [1.9.5] - 2026-06-28
 
 Remediation patch (P2): the last LLM-orchestration + study stubs.
