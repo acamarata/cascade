@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-06-28
+
+Security layer — the Cascade way. App-shipping security checks (secret leaks, dependency CVEs, client-side key exposure, error-message leakage) integrated into Cascade's existing systems rather than a bolted-on always-on scanner: a tiny always-loaded behavioral rule, a triggered hook, deferred MCP tools, user-pulled skills, and a spawnable agent. Zero overhead on a normal session; full coverage only when triggered.
+
+### Added
+- **`cascade-security` crate** — the shared scanning core: regex secret detection (private keys, AWS/Google/GitHub/Slack/Stripe tokens, generic key assignments) with redacted previews and placeholder filtering; client-side-leak classification (a secret in `public/`/`static/`/frontend bundles is high-severity); multi-ecosystem dependency audit (`cargo`/`npm`/`pnpm`/`pip audit`, graceful when the tool is absent); error-message-leak heuristics; `prelaunch_scan`.
+- **`cascade security` CLI** — `scan-file`, `secret-scan`, `audit`, `prelaunch`, `scan-hook` (`--json`). `scan-file` exits non-zero on a client-side secret so a hook can block.
+- **Always-loaded behavioral rule** (4 lines) — generated into every harness's `CLAUDE.md`/`AGENTS.md` and enforced by `cascade doctor`: no client-side secrets, validate server-side, generic user errors, rate-limit paid-API endpoints.
+- **Triggered PostToolUse hook** — Cascade self-registers a `Write|Edit` hook running `cascade security scan-hook` on the written file; fires only on writes, exits 0 silently if the binary/file is absent (never breaks a session).
+- **Deferred MCP tools** — `cascade.security.secret_scan` and `cascade.security.audit` (schema-only until invoked).
+- **Skills** — `/security-audit`, `/prelaunch`, `/rls-check` (Supabase RLS via the user's MCP if connected), `/deps-audit`, shipped as a universal Security suite installed alongside the chosen system suite.
+- **`security-reviewer` agent** — spawnable for OWASP / deep review.
+- **Opt-in EOx check** — `SecurityChecks` + a `WithSecurity<C>` wrapper that fails a phase gate only on high-severity findings (client-side secret or critical CVE); not forced into the default end-of-ticket flow.
+
 ## [1.9.7] - 2026-06-28
 
 Remediation closeout: hygiene + the last stubs the verification re-audit surfaced.
