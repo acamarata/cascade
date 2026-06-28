@@ -183,10 +183,18 @@ fn test_ping_live() {
         "daemon socket not present after ping; stdout={stdout:?} stderr={stderr:?}"
     );
 
-    // Current build: IPC mismatch causes exit 1 with a serialisation error.
-    // When the envelope is aligned this assertion must change to `success()`.
-    // TODO(ipc-fix): assert!(out.status.success(), "ping should exit 0");
-    let _ = &out; // test that the binary executes without panic
+    // IPC progress: byte-order, typed-method routing, and the auth-token handshake
+    // are now fixed, so the request reaches the daemon's ping handler and gets a
+    // response (no more "IPC token not found"). One layer remains: the daemon's
+    // legacy `Response` shape vs the CLI's JSON-RPC 2.0 response envelope.
+    // TODO(ipc-response-envelope): unify the typed-dispatch response to JSON-RPC
+    // 2.0 ({jsonrpc,id,result,error}) so `cascade ping` deserialises cleanly.
+    assert!(
+        !stderr.contains("IPC token not found"),
+        "auth-token handshake regressed; stderr={stderr:?}"
+    );
+    let code = out.status.code().unwrap_or(0);
+    assert!(code < 10, "ping crashed with code {code}; stderr={stderr:?}");
 
     let _ = daemon.kill();
     let _ = daemon.wait();
@@ -208,8 +216,14 @@ fn test_status_live() {
         "daemon socket not present; stderr={stderr:?}"
     );
 
-    // TODO(ipc-fix): assert!(out.status.success());
-    // TODO(ipc-fix): assert!(String::from_utf8_lossy(&out.stdout).contains("running"));
+    // `cascade status` exits non-zero if ANY tier has broken sibling symlinks
+    // (independent of the daemon), so assert the daemon-detection portion rather
+    // than the overall exit code: with the socket present it must report DAEMON OK.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("DAEMON") && !stdout.contains("NOT RUNNING"),
+        "status must detect the running daemon; stdout={stdout:?} stderr={stderr:?}"
+    );
 
     let _ = daemon.kill();
     let _ = daemon.wait();
@@ -226,16 +240,14 @@ fn test_status_json_live() {
     let out = run_cascade(&["status", "--json"], temp.path());
     let stdout = String::from_utf8_lossy(&out.stdout);
 
-    // TODO(ipc-fix): When the IPC envelope is fixed, the following should pass:
-    //   assert!(out.status.success(), "status --json should exit 0; stderr={:?}", ...);
-    //   let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
-    //   assert!(parsed["pid"].as_u64().unwrap_or(0) > 0, "pid must be > 0");
-
-    // For now: verify the binary runs without a crash (exit 0 or 1, not 101+).
-    let code = out.status.code().unwrap_or(0);
-    assert!(
-        code < 10,
-        "status --json exited with unexpected code {code}; stdout={stdout:?}"
+    // Exit code depends on tier symlink health; assert the JSON shape + that the
+    // running daemon is detected (socket present → daemon:true).
+    let parsed: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("status --json must emit valid JSON");
+    assert_eq!(
+        parsed["daemon"],
+        serde_json::Value::Bool(true),
+        "status --json must report the running daemon; got {parsed}"
     );
 
     let _ = daemon.kill();
@@ -249,12 +261,10 @@ fn test_status_quiet_live() {
 
     let out = run_cascade(&["status", "--quiet"], temp.path());
 
-    // TODO(ipc-fix): assert!(out.status.success(), "status --quiet must exit 0 when daemon running");
+    // Exit code depends on tier symlink health (not just the daemon); verify it
+    // runs without crashing.
     let code = out.status.code().unwrap_or(0);
-    assert!(
-        code < 10,
-        "status --quiet exited with unexpected code {code}"
-    );
+    assert!(code < 10, "status --quiet crashed with code {code}");
 
     let _ = daemon.kill();
     let _ = daemon.wait();

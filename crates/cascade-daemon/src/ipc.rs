@@ -137,6 +137,28 @@ impl IpcServer {
         bus: Arc<EventBus>,
     ) -> Result<Self, DaemonError> {
         let socket_path = config_dir.join(SOCKET_NAME);
+
+        // Provision the IPC auth token the CLI reads from ~/.cascade/ipc_token to
+        // sign requests. Previously this file was never written, so every IPC
+        // client failed with "IPC token not found — is the daemon running?".
+        let _ = std::fs::create_dir_all(&config_dir);
+        let token_path = config_dir.join("ipc_token");
+        let token = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        if std::fs::write(&token_path, &token).is_ok() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(
+                    &token_path,
+                    std::fs::Permissions::from_mode(0o600),
+                );
+            }
+        }
+
         // RAG handler: lazy IndexRegistry + MockEmbedModel (real BGE-M3 injected later).
         let rag_handler =
             RagSearchHandler::new(IndexRegistry::new(), Arc::new(MockEmbedModel::new(1024)));
@@ -278,7 +300,10 @@ where
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(DaemonError::Io(e)),
         }
-        let len = u32::from_le_bytes(len_buf) as usize;
+        // Big-endian length prefix to match the canonical cascade-types FrameCodec
+        // (and the CLI IpcClient). A prior little-endian mismatch here made every
+        // CLI<->daemon frame unreadable (cascade ping/status/harness failed).
+        let len = u32::from_be_bytes(len_buf) as usize;
         if len > MAX_FRAME_LEN {
             let resp = Response::err(-32600, "frame too large");
             write_response(&mut writer, &resp).await?;
@@ -296,9 +321,18 @@ where
         // 2. Typed scaffold — on legacy-parse failure, validate the JSON-RPC
         //    envelope via cascade_types and return METHOD_NOT_FOUND (or a
         //    structured IpcError) until E-07+ handlers are wired.
-        let response = match serde_json::from_slice::<Request>(&body) {
+        // The CLI IpcClient wraps requests as {"auth": <token>, "rpc": <jsonrpc>}.
+        // Unwrap to the inner rpc for dispatch; fall back to the raw body for
+        // direct/legacy callers that send the request unwrapped.
+        let dispatch_body: Vec<u8> = match serde_json::from_slice::<serde_json::Value>(&body) {
+            Ok(v) if v.get("rpc").is_some() => {
+                serde_json::to_vec(&v["rpc"]).unwrap_or(body)
+            }
+            _ => body,
+        };
+        let response = match serde_json::from_slice::<Request>(&dispatch_body) {
             Ok(req) => dispatch(&server, req).await,
-            Err(_legacy_err) => try_typed_dispatch(&server, &body).await,
+            Err(_legacy_err) => try_typed_dispatch(&server, &dispatch_body).await,
         };
         write_response(&mut writer, &response).await?;
     }
@@ -310,7 +344,7 @@ async fn write_response<W: AsyncWriteExt + Unpin>(
     resp: &Response,
 ) -> Result<(), DaemonError> {
     let bytes = serde_json::to_vec(resp).unwrap_or_default();
-    let len = (bytes.len() as u32).to_le_bytes();
+    let len = (bytes.len() as u32).to_be_bytes(); // big-endian: match FrameCodec / CLI
     writer.write_all(&len).await.map_err(DaemonError::Io)?;
     writer.write_all(&bytes).await.map_err(DaemonError::Io)?;
     Ok(())
@@ -421,6 +455,28 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
             //
             // SPORT: MASTER-ENDPOINTS.md — audit=hook annotation for these five methods.
             // Resolves P2 residue E07-17 (hook wired; full instrumentation in E-07+).
+            // ── Core liveness methods ────────────────────────────────────
+            // The CLI IpcClient sends these via the typed JSON-RPC envelope, so
+            // they must be handled here (the legacy `dispatch` only sees the old
+            // enum form). Bridge them to the same health/ping logic. Without this,
+            // `cascade ping` got METHOD_NOT_FOUND from a running daemon.
+            match typed_req.method.as_str() {
+                "ping" => {
+                    let echo = typed_req
+                        .params
+                        .as_ref()
+                        .and_then(|p| p.get("echo"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    return Response::ok(serde_json::json!({ "pong": echo }));
+                }
+                "status" | "health" => {
+                    return Response::ok(server.health.snapshot());
+                }
+                _ => {}
+            }
+
             // ── Usage analytics methods (T-P3-E04-29) ────────────────────
             // These are fully implemented handlers; wire them before the
             // audit-hook scaffold so they return real data, not NOT_FOUND.
