@@ -254,6 +254,22 @@ impl IndexStateStore {
             .unwrap_or(0) as usize
     }
 
+    /// Unix-second timestamp of the most recent index write, or `None` if empty.
+    ///
+    /// # Purpose
+    /// Feeds the `last_indexed` field in GET /api/gci/rag-status so the UI
+    /// can display "last indexed N minutes ago" instead of a zero stub.
+    pub fn last_indexed_at(&self) -> Option<i64> {
+        self.conn
+            .query_row(
+                "SELECT MAX(indexed_at) FROM index_state",
+                [],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .ok()
+            .flatten()
+    }
+
     /// Evict doc_ids that are no longer present on disk.
     ///
     /// Returns the number of rows removed.
