@@ -197,21 +197,26 @@ pub struct RagIndexStatsResponse {
 pub struct RagSearchHandler {
     registry: Arc<IndexRegistry>,
     embed: Arc<dyn EmbedModel>,
-    /// Pre-built cross-encoder reranker.  `None` → reranking is always skipped.
-    reranker: Option<Arc<dyn Reranker>>,
+    /// Cross-encoder reranker, swappable at runtime.  `None` → reranking is
+    /// skipped.  Wrapped in `RwLock` so a background task can load the ~580 MB
+    /// BGE reranker model off the startup critical path and swap it in once
+    /// ready (see [`spawn_load_reranker`](Self::spawn_load_reranker)).
+    reranker: std::sync::RwLock<Option<Arc<dyn Reranker>>>,
 }
 
 impl RagSearchHandler {
     /// Create a new handler without a reranker.
     ///
     /// `embed` is injected so callers can pass `MockEmbedModel` in tests and a
-    /// real BGE-M3 model in production.  Reranking is disabled; use
-    /// [`new_with_reranker`] to enable it.
+    /// real BGE-M3 model in production.  Reranking is disabled; call
+    /// [`spawn_load_reranker`](Self::spawn_load_reranker) to load it in the
+    /// background, or use [`new_with_reranker`](Self::new_with_reranker) to
+    /// supply a pre-built one.
     pub fn new(registry: Arc<IndexRegistry>, embed: Arc<dyn EmbedModel>) -> Arc<Self> {
         Arc::new(Self {
             registry,
             embed,
-            reranker: None,
+            reranker: std::sync::RwLock::new(None),
         })
     }
 
@@ -227,24 +232,38 @@ impl RagSearchHandler {
         Arc::new(Self {
             registry,
             embed,
-            reranker: Some(reranker),
+            reranker: std::sync::RwLock::new(Some(reranker)),
         })
     }
 
-    /// Build and initialise a BGE Reranker V2-M3, then wrap self with it.
+    /// Spawn a background task that builds the BGE Reranker V2-M3 and swaps it in.
     ///
-    /// Convenience constructor for daemon startup: creates the handler without
-    /// a reranker first, then asynchronously loads the model.  On failure the
-    /// handler still works — reranking is simply skipped.
-    pub async fn init_bge_reranker(&mut self) -> Result<(), String> {
-        let opts = BgeRerankerOptions::default();
-        match BgeReranker::new(opts).await {
-            Ok(rr) => {
-                self.reranker = Some(Arc::new(rr));
-                Ok(())
+    /// Returns immediately so daemon startup is never blocked by the ~580 MB
+    /// reranker model load.  Until the load completes, search calls run without
+    /// reranking.  On load failure the handler keeps `None` — reranking stays
+    /// disabled, no panic.
+    ///
+    /// # Requires
+    ///
+    /// A tokio runtime must be active (uses `tokio::spawn`).
+    pub fn spawn_load_reranker(self: &Arc<Self>) {
+        let this = Arc::clone(self);
+        tokio::spawn(async move {
+            let opts = BgeRerankerOptions::default();
+            match BgeReranker::new(opts).await {
+                Ok(rr) => {
+                    if let Ok(mut guard) = this.reranker.write() {
+                        *guard = Some(Arc::new(rr));
+                        tracing::info!("RAG: BGE reranker loaded and installed");
+                    } else {
+                        tracing::warn!("RAG: reranker lock poisoned; reranking stays disabled");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("RAG: BGE reranker init failed (reranking disabled): {e}");
+                }
             }
-            Err(e) => Err(format!("BGE reranker init failed: {e}")),
-        }
+        });
     }
 
     // ── rag.search ────────────────────────────────────────────────────────────
@@ -295,9 +314,12 @@ impl RagSearchHandler {
         };
 
         // Build the reranker arg: pass Some(reranker) only when rerank is
-        // requested AND this handler was constructed with a reranker.
+        // requested AND a reranker has been installed (loaded in the background).
         let reranker_arg: Option<Arc<dyn Reranker>> = if config.rerank_enabled {
-            self.reranker.as_ref().map(Arc::clone)
+            self.reranker
+                .read()
+                .ok()
+                .and_then(|g| g.as_ref().map(Arc::clone))
         } else {
             None
         };

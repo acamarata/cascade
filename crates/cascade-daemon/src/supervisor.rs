@@ -353,7 +353,6 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
             use crate::indexer::IndexingPipeline;
             use crate::rag_watcher::{AutoRagWatcher, WatcherConfig};
             use crate::volume_watcher::{IndexManager, VolumeIndexGuard, VolumeWatcher};
-            use cascade_rag::embed::MockEmbedModel;
             use cascade_rag::workers::{WorkerPool, WorkerPoolConfig};
 
             // ── Bootstrap: open (or create) the global index manager ─────────
@@ -387,9 +386,12 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
                         });
                     }
 
-                    // ── Embed model (mock; replaced by real ONNX in rag-14) ───
-                    let embed: Arc<dyn cascade_rag::embed::EmbedModel> =
-                        Arc::new(MockEmbedModel::new(1024));
+                    // ── Embed model: lazy holder — instant mock now, real ONNX
+                    //    swapped in by a background task so startup is never
+                    //    blocked by the model download/load. ───────────────────
+                    let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
+                    lazy_embed.spawn_load();
+                    let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
 
                     // ── WorkerPool ────────────────────────────────────────────
                     let pool = Arc::new(WorkerPool::new(WorkerPoolConfig::default(), embed.clone()));

@@ -29,7 +29,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use cascade_rag::embed::MockEmbedModel;
 use cascade_rag::index_manager::IndexRegistry;
 use cascade_types::ipc::{self as typed_ipc, RequestId, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
@@ -159,21 +158,26 @@ impl IpcServer {
             }
         }
 
-        // RAG handler: lazy IndexRegistry + MockEmbedModel (real BGE-M3 injected later).
-        let rag_handler =
-            RagSearchHandler::new(IndexRegistry::new(), Arc::new(MockEmbedModel::new(1024)));
+        // RAG handler: built INSTANTLY so daemon startup is never blocked.
+        // The embedder is a LazyEmbedModel (mock now, real ONNX swapped in by a
+        // background task); the BGE reranker is loaded by a separate background
+        // task. Both loads are offline-graceful (Err -> mock / skip, no panic).
+        let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
+        lazy_embed.spawn_load();
+        let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
+        let rag_handler = RagSearchHandler::new(IndexRegistry::new(), embed);
+        rag_handler.spawn_load_reranker();
         // Caches (T-P4-E04-10/11): chunk cache with default capacity; RAG caches
         // with default capacities. These are shared via Arc so future tickets can
         // pass them into the RAG pipeline without cloning.
         let file_chunk_cache = Arc::new(ChunkCache::new(256));
         let query_cache = Arc::new(cascade_rag::cache::QueryCache::default());
-        // EmbedCache: open with disabled=true until a real BGE-M3 model is
-        // injected (T-P4-E04-09). A disabled cache returns count()=0 and is
-        // surfaced in stats as "embedding (disabled)".
+        // EmbedCache: enabled now that a real BGE-M3 model is wired in.
+        // Falls back to disabled() if the SQLite open fails.
         let embed_cache_dir = config_dir.join("embed-cache");
         let _ = std::fs::create_dir_all(&embed_cache_dir);
         let embed_cache = Arc::new(
-            cascade_rag::cache::EmbedCache::open(&embed_cache_dir, "bge-m3", "1.0", false)
+            cascade_rag::cache::EmbedCache::open(&embed_cache_dir, "bge-m3", "1.0", true)
                 .unwrap_or_else(|_| cascade_rag::cache::EmbedCache::disabled()),
         );
         // CEO runtime: session files under ~/.cascade/agents/sessions/ (E-P6-04).

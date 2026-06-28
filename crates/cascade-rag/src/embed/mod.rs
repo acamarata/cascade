@@ -295,6 +295,188 @@ pub(crate) fn fnv1a_32(s: &str) -> u32 {
         .fold(FNV_BASIS, |h, b| (h ^ (b as u32)).wrapping_mul(FNV_PRIME))
 }
 
+// ── Default embed model factory ───────────────────────────────────────────────
+
+/// Return the best available [`EmbedModel`] for production use.
+///
+/// # Purpose
+///
+/// Single call site for the daemon and any other consumer that needs an
+/// `Arc<dyn EmbedModel>` without caring which concrete type backs it.
+///
+/// # Selection logic
+///
+/// 1. When the `fastembed` feature is enabled: attempt to initialise
+///    [`bge_m3::BgeM3Embedder`] with default options (model downloaded on
+///    first run; subsequent starts are fully offline).  On any error — model
+///    absent, ORT link failure, or network unavailable — a `tracing::warn!` is
+///    emitted and the function falls through to the mock.
+///
+/// 2. When the `fastembed` feature is **disabled**, or when initialisation
+///    fails: return [`MockEmbedModel`] (dim=1024).  The daemon starts and
+///    all IPC methods continue to work; search results are semantically
+///    meaningless but the system is not broken.
+///
+/// # Panics
+///
+/// Never panics.  The mock fallback is infallible.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # async fn example() {
+/// use cascade_rag::embed::default_embed_model;
+/// let model = default_embed_model().await;
+/// assert!(model.dim() == 1024);
+/// # }
+/// ```
+pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
+    #[cfg(feature = "fastembed")]
+    {
+        use bge_m3::{BgeM3Embedder, BgeM3Options};
+        match BgeM3Embedder::new(BgeM3Options::default()).await {
+            Ok(embedder) => {
+                tracing::info!(
+                    "RAG: real BgeM3Embedder initialised (MultilingualE5Large, 1024-d)"
+                );
+                return std::sync::Arc::new(embedder);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "RAG: BgeM3Embedder init failed — falling back to MockEmbedModel \
+                     (search results will be semantically meaningless until the model is cached)"
+                );
+            }
+        }
+    }
+
+    tracing::warn!("RAG: using MockEmbedModel (fastembed feature off or init failed)");
+    std::sync::Arc::new(MockEmbedModel::new(1024))
+}
+
+// ── LazyEmbedModel: swappable holder for background model load ─────────────────
+
+/// An [`EmbedModel`] that starts as a [`MockEmbedModel`] and swaps in the real
+/// ONNX embedder once it has been loaded off the startup critical path.
+///
+/// # Purpose
+///
+/// Loading the real BGE-M3 embedder (`BgeM3Embedder::new`) downloads and
+/// initialises a multi-hundred-MB ONNX model — too slow to await on the daemon
+/// startup path (it blocks the IPC socket from appearing).  `LazyEmbedModel`
+/// lets the daemon construct *instantly* with a working mock backend, then
+/// upgrade itself to the real embedder in a background task.
+///
+/// # How it works
+///
+/// - Construction ([`LazyEmbedModel::new_mock`]) is instant — no I/O.
+/// - All [`EmbedModel`] calls delegate to whatever inner model is currently
+///   installed (mock at first, real after the swap).  Reads take a cheap
+///   `RwLock` read lock.
+/// - [`LazyEmbedModel::spawn_load`] spawns a background tokio task that runs
+///   [`default_embed_model`] (which is offline-graceful: `Err` → mock, never
+///   panics/hangs) and swaps the result in.  Until the swap completes, the mock
+///   is used.  If load yields another mock (offline + uncached), the swap is a
+///   harmless no-op.
+///
+/// # Dimension
+///
+/// `dim()` always returns 1024 — both the mock and the real model are 1024-d,
+/// so the dimension is stable across the swap and stored vectors never become
+/// incompatible mid-flight.
+pub struct LazyEmbedModel {
+    inner: std::sync::RwLock<std::sync::Arc<dyn EmbedModel>>,
+}
+
+impl std::fmt::Debug for LazyEmbedModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let id = self
+            .inner
+            .read()
+            .map(|m| m.model_id().to_string())
+            .unwrap_or_else(|_| "<poisoned>".into());
+        f.debug_struct("LazyEmbedModel")
+            .field("current_model", &id)
+            .finish()
+    }
+}
+
+impl LazyEmbedModel {
+    /// Create a lazy holder initialised with a [`MockEmbedModel`] (dim=1024).
+    ///
+    /// Instant — performs no I/O.  Call [`spawn_load`](Self::spawn_load) to
+    /// begin loading the real model in the background.
+    pub fn new_mock() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
+            inner: std::sync::RwLock::new(std::sync::Arc::new(MockEmbedModel::new(1024))),
+        })
+    }
+
+    /// Spawn a background tokio task that loads the real embedder and swaps it in.
+    ///
+    /// Returns immediately; the swap happens later on the tokio runtime.  The
+    /// load is offline-graceful (see [`default_embed_model`]): if the real model
+    /// cannot be initialised, the holder keeps using the mock.
+    ///
+    /// # Requires
+    ///
+    /// A tokio runtime must be active when this is called (it uses
+    /// `tokio::spawn`).
+    pub fn spawn_load(self: &std::sync::Arc<Self>) {
+        let this = std::sync::Arc::clone(self);
+        tokio::spawn(async move {
+            let real = default_embed_model().await;
+            // Only swap if we actually got a real model (not another mock).
+            if real.model_id() != "mock-embed-model" {
+                match this.inner.write() {
+                    Ok(mut guard) => {
+                        *guard = real;
+                        tracing::info!("RAG: LazyEmbedModel swapped in real embedder");
+                    }
+                    Err(_) => {
+                        tracing::warn!("RAG: LazyEmbedModel lock poisoned; keeping mock");
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    "RAG: real embedder unavailable; LazyEmbedModel continues with mock"
+                );
+            }
+        });
+    }
+
+    /// Snapshot the currently-installed inner model (cheap read-lock clone).
+    fn current(&self) -> std::sync::Arc<dyn EmbedModel> {
+        self.inner
+            .read()
+            .map(|g| std::sync::Arc::clone(&*g))
+            .unwrap_or_else(|poisoned| std::sync::Arc::clone(&*poisoned.into_inner()))
+    }
+}
+
+impl EmbedModel for LazyEmbedModel {
+    fn embed_dense(&self, texts: &[&str]) -> std::result::Result<Vec<Vec<f32>>, EmbedError> {
+        self.current().embed_dense(texts)
+    }
+
+    fn embed_sparse(
+        &self,
+        texts: &[&str],
+    ) -> std::result::Result<Vec<Vec<(u32, f32)>>, EmbedError> {
+        self.current().embed_sparse(texts)
+    }
+
+    fn dim(&self) -> usize {
+        // Stable across the swap; both backends are 1024-d.
+        1024
+    }
+
+    fn model_id(&self) -> &str {
+        "lazy-embed-model"
+    }
+}
+
 // ── Sub-module declarations ───────────────────────────────────────────────────
 
 #[cfg(feature = "fastembed")]
@@ -523,5 +705,52 @@ mod tests {
         let mut sorted = ids.clone();
         sorted.sort();
         assert_eq!(ids, sorted, "sparse pairs must be sorted by token_id");
+    }
+
+    // ── default_embed_model factory ───────────────────────────────────────────
+
+    /// `default_embed_model()` must return a usable `Arc<dyn EmbedModel>`.
+    ///
+    /// In offline/test mode (fastembed feature off or model not cached) this
+    /// exercises the graceful MockEmbedModel fallback path.  The returned model
+    /// must embed without panicking and return 1024-dim vectors.
+    #[tokio::test]
+    async fn default_embed_model_returns_usable_model() {
+        let model = super::default_embed_model().await;
+        assert_eq!(model.dim(), 1024, "default model must be 1024-dim");
+        // Must embed without panicking.
+        let result = model.embed_dense(&["hello cascade"]);
+        assert!(result.is_ok(), "embed_dense must not error: {:?}", result.err());
+        let vecs = result.unwrap();
+        assert_eq!(vecs.len(), 1);
+        assert_eq!(vecs[0].len(), 1024);
+    }
+
+    // ── LazyEmbedModel ────────────────────────────────────────────────────────
+
+    /// A freshly constructed `LazyEmbedModel` must be usable immediately (mock
+    /// backend) — embeds without panicking, reports dim=1024.
+    #[test]
+    fn lazy_embed_model_mock_is_usable_before_load() {
+        let lazy = super::LazyEmbedModel::new_mock();
+        assert_eq!(lazy.dim(), 1024);
+        assert_eq!(lazy.model_id(), "lazy-embed-model");
+        let dense = lazy.embed_dense(&["hello cascade"]).unwrap();
+        assert_eq!(dense.len(), 1);
+        assert_eq!(dense[0].len(), 1024);
+        let sparse = lazy.embed_sparse(&["hello world"]).unwrap();
+        assert!(!sparse[0].is_empty());
+    }
+
+    /// `spawn_load` + use must not panic. In the offline/test path the swap is a
+    /// no-op (real model unavailable) and the mock keeps working.
+    #[tokio::test]
+    async fn lazy_embed_model_spawn_load_does_not_break() {
+        let lazy = super::LazyEmbedModel::new_mock();
+        lazy.spawn_load();
+        // Give the background task a chance to run (it may no-op offline).
+        tokio::task::yield_now().await;
+        let dense = lazy.embed_dense(&["after spawn_load"]).unwrap();
+        assert_eq!(dense[0].len(), 1024, "must remain usable after spawn_load");
     }
 }
