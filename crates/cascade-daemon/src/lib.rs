@@ -87,6 +87,9 @@ pub mod scheduler;
 // auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
 pub mod automation_router;
 
+// agents-02: ProviderBoardLlm — BoardLlm impl backed by ProviderRegistry
+pub mod board_llm_impl;
+
 // rag-13: project discovery + taxonomy + registry
 pub mod discovery;
 

@@ -26,6 +26,7 @@
 //! - All serde uses `camelCase` rename and STRUCT enum variants only (repo rule).
 
 pub mod automation;
+pub mod board_llm;
 pub mod ceo;
 pub mod chain;
 pub mod context;
@@ -85,6 +86,9 @@ pub use prompt_gate::{
 
 // soul module re-exports (soul-01)
 pub use soul::{render_soul_block, resolve_soul, verbosity_instruction, ResolvedSoul, SoulOverride};
+
+// board_llm re-exports (agents-02)
+pub use board_llm::{BoardLlm, NoopBoardLlm};
 
 // roster module re-exports (agents-01)
 pub use roster::{

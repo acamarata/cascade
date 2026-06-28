@@ -7,15 +7,17 @@
 //! Inputs:
 //!   - `data/agents/` directory path (default roster).
 //!   - Optional project-level TOML override path.
+//!   - A `&dyn BoardLlm` for `board_debate` calls.
 //!
 //! Outputs:
 //!   - `Vec<AgentSpec>` for registration.
-//!   - `board_debate()` stub for CEO/CTO/Architect opinion collection.
+//!   - `board_debate()` — real LLM-backed opinion collection.
 //!
 //! Constraints:
 //!   - TOML format (not YAML — library.rs owns YAML).
 //!   - Project TOML wins over default on `id` collision.
-//!   - No async; pure functions only.
+//!   - `board_debate` is async (LLM calls); stance classification uses a simple
+//!     keyword heuristic so consensus does not require an extra LLM round-trip.
 //!
 //! SPORT: cascade-agents / roster — agents-01
 
@@ -24,6 +26,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::board_llm::BoardLlm;
 use crate::registry::AgentRegistry;
 use crate::spec::{AgentRole, AgentSpec, Capability, Runtime};
 use cascade_types::agent::Tier;
@@ -171,14 +174,14 @@ pub fn merge_overrides(base: Vec<AgentSpec>, overrides: Vec<AgentSpec>) -> Vec<A
     result
 }
 
-// ── Board debate stub ─────────────────────────────────────────────────────────
+// ── Board debate ──────────────────────────────────────────────────────────────
 
 /// A single opinion from a board-level agent.
 #[derive(Debug, Clone)]
 pub struct BoardOpinion {
     pub agent_id: String,
     pub role: AgentRole,
-    /// Stance string, e.g. "approve", "reject", "abstain", "pending".
+    /// Stance string: "approve", "reject", "abstain", or "error".
     pub stance: String,
     pub rationale: String,
 }
@@ -188,43 +191,115 @@ pub struct BoardOpinion {
 pub struct BoardDebateResult {
     pub topic: String,
     pub opinions: Vec<BoardOpinion>,
-    /// Consensus string, populated once fleet-01 routing is implemented.
+    /// Majority-vote consensus: "approve", "reject", "abstain", or "split".
     pub consensus: Option<String>,
 }
 
-/// Board debate orchestrator stub.
+/// Classify raw LLM prose into a stance string.
 ///
-/// Collects opinions from CEO, CTO, and Architect roles. Heavy routing logic
-/// is deferred to fleet-01; this stub returns placeholder stances so the type
-/// layer compiles and tests pass.
+/// Simple keyword heuristic — no extra LLM round-trip needed for classification.
+fn classify_stance(text: &str) -> &'static str {
+    let lower = text.to_lowercase();
+    let approve_hits = lower.contains("approve")
+        || lower.contains("support")
+        || lower.contains("agree")
+        || lower.contains("yes");
+    let reject_hits = lower.contains("reject")
+        || lower.contains("against")
+        || lower.contains("oppose")
+        || lower.contains("no ");
+    match (approve_hits, reject_hits) {
+        (true, false) => "approve",
+        (false, true) => "reject",
+        _ => "abstain",
+    }
+}
+
+/// Derive consensus from a slice of stance strings via majority vote.
+fn consensus_from_stances(stances: &[&str]) -> String {
+    let mut approve = 0usize;
+    let mut reject = 0usize;
+    let mut abstain = 0usize;
+
+    for &s in stances {
+        match s {
+            "approve" => approve += 1,
+            "reject" => reject += 1,
+            _ => abstain += 1, // "abstain" or "error"
+        }
+    }
+
+    if approve > reject && approve > abstain {
+        "approve".to_owned()
+    } else if reject > approve && reject > abstain {
+        "reject".to_owned()
+    } else if abstain > approve && abstain > reject {
+        "abstain".to_owned()
+    } else {
+        "split".to_owned()
+    }
+}
+
+/// Board debate orchestrator — collects real LLM opinions from CEO, CTO, and
+/// Architect roles and derives a majority-vote consensus.
 ///
-/// # TODO(fleet-01)
-/// Route each board role to a live LLM via fleet routing and aggregate
-/// responses into a real consensus.
-pub fn board_debate(topic: &str, _registry: &AgentRegistry) -> BoardDebateResult {
+/// Each role receives a brief system prompt establishing its persona. On LLM
+/// failure, the opinion records `stance: "error"` with the error as rationale.
+/// Failures count as "abstain" for consensus purposes.
+pub async fn board_debate(
+    topic: &str,
+    _registry: &AgentRegistry,
+    llm: &dyn BoardLlm,
+) -> BoardDebateResult {
+    const BOARD: &[(&str, AgentRole, &str)] = &[
+        (
+            "cascade.ceo",
+            AgentRole::Ceo,
+            "You are the CEO of Cascade. Evaluate the following topic from a strategic, \
+             business, and stakeholder-impact perspective. State clearly whether you approve, \
+             reject, or abstain, and give your reasoning concisely.",
+        ),
+        (
+            "cascade.cto",
+            AgentRole::Cto,
+            "You are the CTO of Cascade. Evaluate the following topic from a technical \
+             feasibility, architecture, and engineering-risk perspective. State clearly whether \
+             you approve, reject, or abstain, and give your reasoning concisely.",
+        ),
+        (
+            "cascade.architect",
+            AgentRole::Architect,
+            "You are the Lead Architect of Cascade. Evaluate the following topic from a \
+             system-design, scalability, and maintainability perspective. State clearly whether \
+             you approve, reject, or abstain, and give your reasoning concisely.",
+        ),
+    ];
+
+    let mut opinions = Vec::with_capacity(BOARD.len());
+
+    for &(agent_id, role, system) in BOARD {
+        let (stance, rationale) = match llm.opine(&role, topic, system).await {
+            Ok(text) => {
+                let stance = classify_stance(&text).to_owned();
+                (stance, text)
+            }
+            Err(e) => ("error".to_owned(), e),
+        };
+        opinions.push(BoardOpinion {
+            agent_id: agent_id.to_owned(),
+            role,
+            stance,
+            rationale,
+        });
+    }
+
+    let stance_refs: Vec<&str> = opinions.iter().map(|o| o.stance.as_str()).collect();
+    let consensus = Some(consensus_from_stances(&stance_refs));
+
     BoardDebateResult {
         topic: topic.to_owned(),
-        opinions: vec![
-            BoardOpinion {
-                agent_id: "cascade.ceo".into(),
-                role: AgentRole::Ceo,
-                stance: "pending".into(),
-                rationale: "Awaiting fleet-01 routing.".into(),
-            },
-            BoardOpinion {
-                agent_id: "cascade.cto".into(),
-                role: AgentRole::Cto,
-                stance: "pending".into(),
-                rationale: "Awaiting fleet-01 routing.".into(),
-            },
-            BoardOpinion {
-                agent_id: "cascade.architect".into(),
-                role: AgentRole::Architect,
-                stance: "pending".into(),
-                rationale: "Awaiting fleet-01 routing.".into(),
-            },
-        ],
-        consensus: None,
+        opinions,
+        consensus,
     }
 }
 
@@ -233,6 +308,169 @@ pub fn board_debate(topic: &str, _registry: &AgentRegistry) -> BoardDebateResult
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+
+    // ── MockBoardLlm ──────────────────────────────────────────────────────────
+
+    /// Scripted mock: returns a fixed response string per role.
+    struct MockBoardLlm {
+        ceo_response: String,
+        cto_response: String,
+        architect_response: String,
+    }
+
+    impl MockBoardLlm {
+        fn new(ceo: &str, cto: &str, architect: &str) -> Self {
+            Self {
+                ceo_response: ceo.to_owned(),
+                cto_response: cto.to_owned(),
+                architect_response: architect.to_owned(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl BoardLlm for MockBoardLlm {
+        async fn opine(
+            &self,
+            role: &AgentRole,
+            _topic: &str,
+            _system: &str,
+        ) -> Result<String, String> {
+            match role {
+                AgentRole::Ceo => Ok(self.ceo_response.clone()),
+                AgentRole::Cto => Ok(self.cto_response.clone()),
+                AgentRole::Architect => Ok(self.architect_response.clone()),
+                _ => Ok("abstain — not a board role".to_owned()),
+            }
+        }
+    }
+
+    // ── Stance classifier ─────────────────────────────────────────────────────
+
+    #[test]
+    fn classify_approve_keywords() {
+        assert_eq!(classify_stance("I approve this proposal fully."), "approve");
+        assert_eq!(classify_stance("I support the initiative."), "approve");
+        assert_eq!(classify_stance("Yes, let's proceed."), "approve");
+        assert_eq!(classify_stance("I agree with the direction."), "approve");
+    }
+
+    #[test]
+    fn classify_reject_keywords() {
+        assert_eq!(classify_stance("I reject this outright."), "reject");
+        assert_eq!(classify_stance("I am against this change."), "reject");
+        assert_eq!(classify_stance("I oppose the proposal."), "reject");
+    }
+
+    #[test]
+    fn classify_abstain_when_ambiguous() {
+        assert_eq!(classify_stance("This is a complex situation."), "abstain");
+        assert_eq!(
+            classify_stance("I approve some parts but reject others."),
+            "abstain"
+        );
+    }
+
+    // ── Consensus calculation ─────────────────────────────────────────────────
+
+    #[test]
+    fn consensus_majority_approve() {
+        let stances = ["approve", "approve", "reject"];
+        assert_eq!(consensus_from_stances(&stances), "approve");
+    }
+
+    #[test]
+    fn consensus_majority_reject() {
+        let stances = ["reject", "reject", "approve"];
+        assert_eq!(consensus_from_stances(&stances), "reject");
+    }
+
+    #[test]
+    fn consensus_split_on_tie() {
+        let stances = ["approve", "reject", "abstain"];
+        assert_eq!(consensus_from_stances(&stances), "split");
+    }
+
+    // ── board_debate with MockBoardLlm ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn board_debate_uses_real_stances_not_pending() {
+        let llm = MockBoardLlm::new(
+            "I approve this initiative — it aligns with our strategic goals.",
+            "I approve from a technical standpoint; the architecture is sound.",
+            "I reject this; the design introduces too much coupling.",
+        );
+        let reg = AgentRegistry::new();
+        let result = board_debate("adopt microservices", &reg, &llm).await;
+
+        assert_eq!(result.opinions.len(), 3);
+        assert_eq!(result.topic, "adopt microservices");
+
+        // No opinion may be "pending"
+        for op in &result.opinions {
+            assert_ne!(op.stance, "pending", "stance must not be 'pending'");
+            assert_ne!(
+                op.rationale, "Awaiting fleet-01 routing.",
+                "rationale must not be the old stub text"
+            );
+        }
+
+        let ceo_op = result.opinions.iter().find(|o| o.role == AgentRole::Ceo).unwrap();
+        assert_eq!(ceo_op.stance, "approve");
+
+        let arch_op = result
+            .opinions
+            .iter()
+            .find(|o| o.role == AgentRole::Architect)
+            .unwrap();
+        assert_eq!(arch_op.stance, "reject");
+
+        // Consensus must be present
+        assert!(result.consensus.is_some(), "consensus must be Some");
+        // 2 approve, 1 reject → consensus = approve
+        assert_eq!(result.consensus.as_deref(), Some("approve"));
+    }
+
+    #[tokio::test]
+    async fn board_debate_unanimous_approve_consensus() {
+        let llm = MockBoardLlm::new(
+            "I approve.",
+            "I approve and support this fully.",
+            "I agree and approve.",
+        );
+        let reg = AgentRegistry::new();
+        let result = board_debate("ship v2", &reg, &llm).await;
+        assert_eq!(result.consensus.as_deref(), Some("approve"));
+    }
+
+    // ── NoopBoardLlm ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn noop_board_llm_yields_error_stances() {
+        use crate::board_llm::NoopBoardLlm;
+
+        let reg = AgentRegistry::new();
+        let result = board_debate("any topic", &reg, &NoopBoardLlm).await;
+
+        assert_eq!(result.opinions.len(), 3);
+        for op in &result.opinions {
+            assert_eq!(
+                op.stance, "error",
+                "NoopBoardLlm must produce error stances, got: {}",
+                op.stance
+            );
+            assert!(
+                op.rationale.contains("no LLM provider configured"),
+                "rationale must explain the error, got: {}",
+                op.rationale
+            );
+        }
+        // consensus is still Some (errors counted as abstain → majority abstain)
+        assert!(result.consensus.is_some());
+    }
+
+    // ── Original tests preserved ──────────────────────────────────────────────
 
     fn agents_data_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -287,15 +525,6 @@ mod tests {
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].name, "Custom CEO");
         assert_eq!(merged[0].soul_ref.as_deref(), Some("verbose-teacher"));
-    }
-
-    #[test]
-    fn board_debate_returns_three_opinions() {
-        let reg = AgentRegistry::new();
-        let result = board_debate("test topic", &reg);
-        assert_eq!(result.opinions.len(), 3);
-        assert_eq!(result.topic, "test topic");
-        assert!(result.consensus.is_none());
     }
 
     #[test]
