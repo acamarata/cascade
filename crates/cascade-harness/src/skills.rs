@@ -25,6 +25,9 @@ pub enum SkillSuite {
     Pews,
     /// Personal productivity skills (threads, topics, recall, archive).
     Personal,
+    /// Security skills (security-audit, prelaunch, rls-check, deps-audit).
+    /// Universal — installed alongside whichever system suite is chosen.
+    Security,
 }
 
 impl SkillSuite {
@@ -33,6 +36,7 @@ impl SkillSuite {
         match self {
             SkillSuite::Pews => PEWS_FILES,
             SkillSuite::Personal => PERSONAL_FILES,
+            SkillSuite::Security => SECURITY_FILES,
         }
     }
 }
@@ -53,6 +57,13 @@ static PERSONAL_FILES: &[(&str, &str)] = &[
     ("topics.md",  include_str!("../../../data/skills/personal/topics.md")),
     ("recall.md",  include_str!("../../../data/skills/personal/recall.md")),
     ("archive.md", include_str!("../../../data/skills/personal/archive.md")),
+];
+
+static SECURITY_FILES: &[(&str, &str)] = &[
+    ("security-audit.md", include_str!("../../../data/skills/security/security-audit.md")),
+    ("prelaunch.md",      include_str!("../../../data/skills/security/prelaunch.md")),
+    ("rls-check.md",      include_str!("../../../data/skills/security/rls-check.md")),
+    ("deps-audit.md",     include_str!("../../../data/skills/security/deps-audit.md")),
 ];
 
 /// Install skill files from the suite into `skills_dir`.
@@ -111,6 +122,16 @@ mod tests {
         // Second call — nothing new installed (files already exist).
         let installed2 = install_suite(SkillSuite::Pews, dir.path()).unwrap();
         assert!(installed2.is_empty(), "second install must skip existing files");
+    }
+
+    #[test]
+    fn test_install_security_copies_expected_files() {
+        let dir = TempDir::new().unwrap();
+        let installed = install_suite(SkillSuite::Security, dir.path()).unwrap();
+        assert_eq!(installed.len(), 4, "security suite has 4 files");
+        for name in &["security-audit.md", "prelaunch.md", "rls-check.md", "deps-audit.md"] {
+            assert!(dir.path().join(name).exists(), "{name} must be installed");
+        }
     }
 
     #[test]

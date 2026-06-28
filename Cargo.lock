@@ -1298,6 +1298,7 @@ version = "1.9.7"
 dependencies = [
  "async-trait",
  "cascade-db",
+ "cascade-security",
  "cascade-types",
  "chrono",
  "criterion",
@@ -1490,6 +1491,7 @@ dependencies = [
  "cascade-core",
  "cascade-providers",
  "cascade-rag",
+ "cascade-security",
  "cascade-types",
  "chrono",
  "futures-core",

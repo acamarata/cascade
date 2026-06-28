@@ -59,6 +59,7 @@ const BEHAVIORAL_CORE_HEADINGS: &[&str] = &[
     "# Authorization and Autonomy",
     "# Vision and Mission Discipline",
     "# Delegation and Model Discipline",
+    "# Security",
 ];
 
 /// File names that `compat_gen` may generate inside a tier directory.
@@ -160,7 +161,7 @@ mod tests {
         format!("{GENERATED_MARKER}\n{extra}")
     }
 
-    /// Build a string containing all six behavioral-core headings.
+    /// Build a string containing all behavioral-core headings.
     fn all_headings() -> String {
         BEHAVIORAL_CORE_HEADINGS
             .iter()
@@ -170,7 +171,7 @@ mod tests {
 
     // ── Test 1: generated file with all headings → no finding ────────────────
 
-    /// A generated file that contains all six headings produces no finding.
+    /// A generated file that contains all headings produces no finding.
     ///
     /// WHY: happy path; correctly generated v1.4+ files must not be flagged.
     #[test]
@@ -232,7 +233,7 @@ mod tests {
     // ── Test 4: generated file missing all headings → one finding with all ───
 
     /// A generated file with only the marker and no headings produces one
-    /// finding that lists all six missing headings.
+    /// finding that lists all missing headings.
     ///
     /// WHY: verifies the full-miss case and that all headings are tracked.
     #[test]
@@ -256,6 +257,28 @@ mod tests {
                 "missing heading not reported: {heading}"
             );
         }
+    }
+
+    // ── Test 5b: # Security heading is required ───────────────────────────────
+
+    /// A generated file missing only "# Security" reports exactly that heading.
+    ///
+    /// WHY: verifies the new always-loaded behavioral-core rule is tracked.
+    #[test]
+    fn generated_file_missing_security_heading_reports_it() {
+        let tmp = TempDir::new().unwrap();
+        let headings: String = BEHAVIORAL_CORE_HEADINGS
+            .iter()
+            .filter(|&&h| h != "# Security")
+            .map(|h| format!("{h}\n\nSome rule content.\n\n"))
+            .collect();
+        let content = generated_content(&headings);
+        let path = tmp.path().join("CLAUDE.md");
+        fs::write(&path, content).unwrap();
+
+        let findings = lint_behavioral_core(&[tmp.path().to_path_buf()]);
+        assert_eq!(findings.len(), 1, "expected exactly one finding");
+        assert_eq!(findings[0].missing_headings, vec!["# Security"]);
     }
 
     // ── Test 5: empty scan_dirs → empty result ────────────────────────────────

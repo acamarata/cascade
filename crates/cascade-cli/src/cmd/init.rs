@@ -291,6 +291,17 @@ impl Command for InitArgs {
                     ));
                 }
             }
+            // Security suite is universal — install alongside whichever system suite was chosen.
+            if let Ok(installed) = install_suite(SkillSuite::Security, &skills_dir) {
+                for f in &installed {
+                    files_written.push(format!(
+                        "{}/{}/{}",
+                        folder_name,
+                        cascade_types::paths::subdirs::SKILLS,
+                        f
+                    ));
+                }
+            }
         }
 
         // 7c. Install built-in agents (idempotent — skips files that already exist).

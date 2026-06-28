@@ -19,9 +19,10 @@ use cascade_types::error::{CascadeError, Result};
 
 /// Built-in agent definitions embedded at compile time.
 static AGENT_FILES: &[(&str, &str)] = &[
-    ("code-reviewer.toml", include_str!("../../../data/agents/code-reviewer.toml")),
-    ("doc-writer.toml",    include_str!("../../../data/agents/doc-writer.toml")),
-    ("drift-detector.toml", include_str!("../../../data/agents/drift-detector.toml")),
+    ("code-reviewer.toml",    include_str!("../../../data/agents/code-reviewer.toml")),
+    ("doc-writer.toml",       include_str!("../../../data/agents/doc-writer.toml")),
+    ("drift-detector.toml",   include_str!("../../../data/agents/drift-detector.toml")),
+    ("security-reviewer.toml", include_str!("../../../data/agents/security-reviewer.toml")),
 ];
 
 /// Install built-in agent TOML files into `agents_dir`.
@@ -60,8 +61,13 @@ mod tests {
     fn test_install_agents_copies_all_builtins() {
         let dir = TempDir::new().unwrap();
         let installed = install_agents(dir.path()).unwrap();
-        assert_eq!(installed.len(), 3);
-        for name in &["code-reviewer.toml", "doc-writer.toml", "drift-detector.toml"] {
+        assert_eq!(installed.len(), 4);
+        for name in &[
+            "code-reviewer.toml",
+            "doc-writer.toml",
+            "drift-detector.toml",
+            "security-reviewer.toml",
+        ] {
             assert!(dir.path().join(name).exists(), "{name} must be installed");
         }
     }

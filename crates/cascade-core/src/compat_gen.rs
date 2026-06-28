@@ -229,13 +229,24 @@ fn build_claude_md_content(
         format!("{}…", &instructions[..safe_end])
     };
 
+    // Behavioral-core rule: Security (always-loaded, 4 terse constraints).
+    // Keep this section minimal — it shapes code writes with near-zero token overhead.
+    let security_section = "\
+# Security\n\
+\n\
+- No API key, secret, or token in any client-side path (public/, static/, frontend bundles). Server-side or proxy only.\n\
+- Client-side validation is UX only — always re-validate on the server.\n\
+- User-facing errors are generic; log full errors server-side only.\n\
+- Every endpoint calling a paid/external API has rate limiting.\n";
+
     format!(
-        "{marker}\n\n# Cascade Instructions — {tier_display}\n\nThis file points to the Cascade instruction source for this tier.\n\nSource: {tier_dir}/config.toml\n\nInstructions summary:\n{summary}\n\nFor full context, run: cascade resolve --tier {tier_short}\n",
+        "{marker}\n\n# Cascade Instructions — {tier_display}\n\nThis file points to the Cascade instruction source for this tier.\n\nSource: {tier_dir}/config.toml\n\nInstructions summary:\n{summary}\n\nFor full context, run: cascade resolve --tier {tier_short}\n\n{security}",
         marker = GENERATED_MARKER,
         tier_display = tier_display,
         tier_dir = tier_dir.display(),
         summary = summary,
         tier_short = tier_short,
+        security = security_section,
     )
 }
 

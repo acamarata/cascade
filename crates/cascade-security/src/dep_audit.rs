@@ -254,8 +254,10 @@ mod tests {
 
     #[test]
     fn detects_cargo_ecosystem() {
-        let cascade_root = Path::new("/Volumes/X9/Sites/acamarata/cascade");
-        assert_eq!(detect_ecosystem(cascade_root), Ecosystem::Cargo);
+        // This crate's own directory always has a Cargo.toml — portable, no
+        // hardcoded developer path.
+        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        assert_eq!(detect_ecosystem(crate_dir), Ecosystem::Cargo);
     }
 
     #[test]

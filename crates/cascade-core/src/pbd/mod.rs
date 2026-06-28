@@ -24,6 +24,7 @@ pub mod external_checks;
 pub mod masters;
 pub mod protocol;
 pub mod schema;
+pub mod security_checks;
 pub mod store;
 #[cfg(test)]
 mod tests;
@@ -39,6 +40,7 @@ pub use masters::{
     MasterTicketEntry, MasterTickets,
 };
 pub use external_checks::{BuildCheck, CheckResult, HealthCheck, RealExternalChecks};
+pub use security_checks::{SecurityChecks, WithSecurity};
 pub use protocol::{
     run_eoe, run_eop, run_eos, run_eost, run_eot, run_eow, ExternalChecks, NoExternalChecks,
     ProtocolResult,

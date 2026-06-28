@@ -2,16 +2,21 @@
 //!
 //! # Purpose
 //! CLI surface for cascade-security scanning. Subcommands:
-//! - scan-file  — scan a single file; exit nonzero if client-side secret found
+//! - scan-file   — scan a single file; exit nonzero if client-side secret found
 //! - secret-scan — scan all git-tracked files for secrets
 //! - audit       — run dep audit for detected ecosystem
 //! - prelaunch   — full prelaunch checklist: secrets + deps + error leaks + privacy
+//! - scan-hook   — CC PostToolUse hook adapter: reads hook JSON from stdin,
+//!                 extracts tool_input.file_path, and runs scan-file logic.
+//!                 Always exits 0 so CC session is never interrupted; warns on
+//!                 findings to stderr (CC surfaces hook stderr to the user).
 //!
 //! # Outputs
 //! Human-readable table output by default; `--json` for machine-readable JSON.
 //!
 //! # Constraints
 //! - scan-file and prelaunch exit nonzero on high-severity findings (for hook use)
+//! - scan-hook always exits 0 to never break CC session; warns to stderr on findings
 //! - audit exits 0 when tool is unavailable (graceful)
 
 use async_trait::async_trait;
@@ -27,6 +32,23 @@ use cascade_security::{
 };
 
 use super::Command;
+
+// ── scan-hook: CC PostToolUse stdin parser ────────────────────────────────────
+
+/// Extract `tool_input.file_path` from the CC PostToolUse hook JSON payload.
+///
+/// CC passes a JSON object on stdin with shape:
+/// ```json
+/// { "tool_name": "Write", "tool_input": { "file_path": "/abs/path" }, ... }
+/// ```
+/// Returns None if the field is absent, not a string, or the JSON is invalid.
+pub fn extract_file_path_from_hook_json(json_str: &str) -> Option<PathBuf> {
+    let val: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    val.get("tool_input")
+        .and_then(|ti| ti.get("file_path"))
+        .and_then(|fp| fp.as_str())
+        .map(PathBuf::from)
+}
 
 /// Security scanning and advisory commands.
 #[derive(Debug, Args)]
@@ -45,7 +67,23 @@ pub enum SecuritySubcommand {
     Audit(AuditArgs),
     /// Full prelaunch security checklist: secrets + deps + error leaks + privacy policy.
     Prelaunch(PrelaunchArgs),
+    /// CC PostToolUse hook adapter: reads hook JSON from stdin, scans the written file.
+    /// Always exits 0 — never breaks the CC session. Warns to stderr on findings.
+    ScanHook(ScanHookArgs),
 }
+
+/// `cascade security scan-hook` — CC PostToolUse adapter.
+///
+/// Reads a CC PostToolUse hook JSON payload from stdin, extracts
+/// `tool_input.file_path`, and runs the same scan logic as `scan-file`.
+///
+/// # Safety contract
+/// - Always exits 0, regardless of findings or errors.
+/// - Warnings go to stderr (CC surfaces hook stderr to the user).
+/// - If `cascade` is not on PATH, the hook command itself won't run; this
+///   subcommand simply handles the case where the file is missing gracefully.
+#[derive(Debug, Args)]
+pub struct ScanHookArgs {}
 
 #[derive(Debug, Args)]
 pub struct ScanFileArgs {
@@ -94,6 +132,7 @@ impl Command for SecurityArgs {
             SecuritySubcommand::SecretScan(args) => args.run().await,
             SecuritySubcommand::Audit(args) => args.run().await,
             SecuritySubcommand::Prelaunch(args) => args.run().await,
+            SecuritySubcommand::ScanHook(args) => args.run().await,
         }
     }
 }
@@ -141,6 +180,64 @@ impl Command for ScanFileArgs {
         if !client_findings.is_empty() {
             std::process::exit(1);
         }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Command for ScanHookArgs {
+    async fn run(&self) -> Result<()> {
+        use std::io::Read;
+
+        // Read the full stdin payload. On error, exit 0 silently.
+        let mut buf = String::new();
+        if std::io::stdin().read_to_string(&mut buf).is_err() {
+            return Ok(());
+        }
+
+        let path = match extract_file_path_from_hook_json(&buf) {
+            Some(p) => p,
+            None => {
+                // No file_path in payload — nothing to scan.
+                return Ok(());
+            }
+        };
+
+        // File must exist (Write hook fires before rename in some editors; tolerate absence).
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => return Ok(()),
+        };
+
+        let findings = scan_text(&text, &path.display().to_string());
+        let client_findings = scan_client_leak(&path, &text);
+
+        // Warn to stderr — CC surfaces hook stderr to the user.
+        // Never hard-block (always return Ok / exit 0).
+        if !findings.is_empty() || !client_findings.is_empty() {
+            eprintln!(
+                "[cascade security] WARNING: potential secret(s) detected in {}",
+                path.display()
+            );
+            for f in &findings {
+                eprintln!(
+                    "  [{}] line {} — {} ({})",
+                    f.severity_str(), f.line, f.kind, f.redacted_preview
+                );
+            }
+            for f in &client_findings {
+                eprintln!(
+                    "  [CLIENT-SIDE LEAK] line {} — {} — review before committing",
+                    f.line, f.kind
+                );
+            }
+        }
+
+        // Always exit 0 — never interrupt CC.
         Ok(())
     }
 }
@@ -330,5 +427,46 @@ mod tests {
     fn parse_security_prelaunch() {
         let cli = Cli::try_parse_from(["cascade", "security", "prelaunch"]).unwrap();
         assert!(matches!(cli.command, Commands::Security(_)));
+    }
+
+    #[test]
+    fn parse_security_scan_hook() {
+        let cli = Cli::try_parse_from(["cascade", "security", "scan-hook"]).unwrap();
+        assert!(matches!(cli.command, Commands::Security(_)));
+    }
+
+    // ── extract_file_path_from_hook_json unit tests ───────────────────────────
+
+    #[test]
+    fn hook_json_extracts_file_path() {
+        let json = r#"{"tool_name":"Write","tool_input":{"file_path":"/tmp/foo.rs","content":"x"}}"#;
+        let result = extract_file_path_from_hook_json(json);
+        assert_eq!(result, Some(PathBuf::from("/tmp/foo.rs")));
+    }
+
+    #[test]
+    fn hook_json_extracts_edit_path() {
+        let json = r#"{"tool_name":"Edit","tool_input":{"file_path":"/home/user/project/src/lib.rs","old_string":"a","new_string":"b"}}"#;
+        let result = extract_file_path_from_hook_json(json);
+        assert_eq!(result, Some(PathBuf::from("/home/user/project/src/lib.rs")));
+    }
+
+    #[test]
+    fn hook_json_returns_none_for_missing_tool_input() {
+        let json = r#"{"tool_name":"Bash","tool_input":{"command":"echo hi"}}"#;
+        let result = extract_file_path_from_hook_json(json);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn hook_json_returns_none_for_invalid_json() {
+        let result = extract_file_path_from_hook_json("not-json");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn hook_json_returns_none_for_empty_string() {
+        let result = extract_file_path_from_hook_json("");
+        assert_eq!(result, None);
     }
 }

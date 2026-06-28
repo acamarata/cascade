@@ -12,7 +12,7 @@ use super::types::ConnectionContext;
 
 // ── tools/list ────────────────────────────────────────────────────────────────
 
-/// tools/list returns exactly 22 tools (18 original + 4 RAG-08 memory tools).
+/// tools/list returns exactly 24 tools (22 original + 2 security tools).
 #[tokio::test]
 async fn tools_list_returns_9_tools() {
     let reg = ToolRegistry::new();
@@ -20,8 +20,8 @@ async fn tools_list_returns_9_tools() {
     let tools = result["tools"].as_array().expect("tools must be array");
     assert_eq!(
         tools.len(),
-        22,
-        "expected exactly 22 tools, got {}",
+        24,
+        "expected exactly 24 tools, got {}",
         tools.len()
     );
 }
@@ -406,7 +406,7 @@ async fn provide_harness_context_in_tool_list() {
     );
 }
 
-/// tools/list now returns 22 tools (18 original + 4 RAG-08 memory tools).
+/// tools/list now returns 24 tools (22 original + 2 security tools).
 #[tokio::test]
 async fn tools_list_returns_10_tools() {
     let reg = ToolRegistry::new();
@@ -414,8 +414,8 @@ async fn tools_list_returns_10_tools() {
     let tools = result["tools"].as_array().expect("tools must be array");
     assert_eq!(
         tools.len(),
-        22,
-        "expected exactly 22 tools, got {}",
+        24,
+        "expected exactly 24 tools, got {}",
         tools.len()
     );
 }
@@ -1569,5 +1569,134 @@ async fn search_no_retriever_returns_not_ready() {
     assert!(
         text.contains("index not ready"),
         "response text must mention 'index not ready'; got: {text:?}"
+    );
+}
+
+// ── Security tool tests ───────────────────────────────────────────────────────
+
+/// Both security tools appear in tools/list.
+#[tokio::test]
+async fn security_tools_in_list() {
+    let reg = ToolRegistry::new();
+    let result = reg.list().await.unwrap();
+    let tools = result["tools"].as_array().unwrap();
+    let names: Vec<&str> = tools
+        .iter()
+        .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"cascade.security.secret_scan"),
+        "cascade.security.secret_scan must be in tool list; found: {names:?}"
+    );
+    assert!(
+        names.contains(&"cascade.security.audit"),
+        "cascade.security.audit must be in tool list; found: {names:?}"
+    );
+}
+
+/// secret_scan over a fixture file with a fake AWS key returns a finding.
+#[tokio::test]
+async fn secret_scan_finds_fake_aws_key() {
+    use std::io::Write;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let fixture = tmp.path().join("secrets.env");
+    {
+        let mut f = std::fs::File::create(&fixture).unwrap();
+        writeln!(f, "AWS_KEY=AKIAZ3ABCDEFGHIJKLMN").unwrap();
+    }
+
+    let reg = ToolRegistry::new();
+    let params = serde_json::json!({
+        "name": "cascade.security.secret_scan",
+        "arguments": { "path": fixture.to_str().unwrap() }
+    });
+    let result = reg.call(&params).await.expect("no protocol error");
+    assert!(
+        result.get("isError").is_none() || result["isError"] == Value::Bool(false),
+        "secret_scan must not be is_error: {result}"
+    );
+    let findings = result["findings"].as_array().expect("findings must be array");
+    assert!(
+        !findings.is_empty(),
+        "must detect fake AWS key; got 0 findings"
+    );
+    assert_eq!(
+        findings[0]["kind"].as_str(),
+        Some("aws_access_key"),
+        "finding kind must be aws_access_key"
+    );
+    assert!(
+        result["high_or_critical"].as_u64().unwrap_or(0) >= 1,
+        "must have at least 1 high/critical finding"
+    );
+}
+
+/// secret_scan over a clean file returns zero findings.
+#[tokio::test]
+async fn secret_scan_clean_file_returns_empty() {
+    use std::io::Write;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let fixture = tmp.path().join("clean.txt");
+    {
+        let mut f = std::fs::File::create(&fixture).unwrap();
+        writeln!(f, "Hello, world! No secrets here.").unwrap();
+    }
+
+    let reg = ToolRegistry::new();
+    let params = serde_json::json!({
+        "name": "cascade.security.secret_scan",
+        "arguments": { "path": fixture.to_str().unwrap() }
+    });
+    let result = reg.call(&params).await.expect("no protocol error");
+    let findings = result["findings"].as_array().expect("findings array");
+    assert!(
+        findings.is_empty(),
+        "clean file must return 0 findings; got {findings:?}"
+    );
+    assert_eq!(result["total"].as_u64(), Some(0));
+}
+
+/// security.audit returns a well-formed result (tool_available true or false).
+///
+/// We run against the cascade workspace root (Cargo.toml present). cargo-audit
+/// may or may not be installed in CI; either way the response shape must be valid.
+#[tokio::test]
+async fn security_audit_returns_well_formed_result() {
+    let reg = ToolRegistry::new();
+    // Point at a known Cargo project dir so ecosystem = cargo.
+    let cascade_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let params = serde_json::json!({
+        "name": "cascade.security.audit",
+        "arguments": { "path": cascade_root.to_str().unwrap() }
+    });
+    let result = reg.call(&params).await.expect("no protocol error");
+    // Must not be a tool-level error.
+    assert!(
+        result.get("isError").is_none() || result["isError"] == Value::Bool(false),
+        "security.audit must not be is_error: {result}"
+    );
+    // tool_available must be a bool.
+    assert!(
+        result.get("tool_available").and_then(|v| v.as_bool()).is_some(),
+        "tool_available must be a bool: {result}"
+    );
+    // ecosystem must be present.
+    assert!(
+        result.get("ecosystem").and_then(|v| v.as_str()).is_some(),
+        "ecosystem must be a string: {result}"
+    );
+    // advisories must be an array.
+    assert!(
+        result.get("advisories").and_then(|v| v.as_array()).is_some(),
+        "advisories must be an array: {result}"
+    );
+    // high_or_critical_count must be a number.
+    assert!(
+        result.get("high_or_critical_count").and_then(|v| v.as_u64()).is_some(),
+        "high_or_critical_count must be a number: {result}"
     );
 }

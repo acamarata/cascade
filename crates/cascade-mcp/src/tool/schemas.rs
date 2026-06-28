@@ -545,6 +545,58 @@ pub(super) fn cascade_scan_inbox_tool() -> McpTool {
     }
 }
 
+// ── Security tool definitions ─────────────────────────────────────────────────
+
+pub(super) fn cascade_security_secret_scan_tool() -> McpTool {
+    McpTool {
+        name: "cascade.security.secret_scan".into(),
+        description: "Scan git-tracked files (or a single file) for leaked secrets and \
+                       credentials. Returns structured findings with kind, file, line, \
+                       redacted preview, and severity. Client-side paths (browser-visible \
+                       code) are flagged at high severity even when the pattern baseline \
+                       is lower."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to a file or directory to scan. \
+                                    Defaults to the current working directory. \
+                                    For directories, only git-tracked files are scanned."
+                }
+            }
+        }),
+    }
+}
+
+pub(super) fn cascade_security_audit_tool() -> McpTool {
+    McpTool {
+        name: "cascade.security.audit".into(),
+        description: "Run a dependency audit against the project at `path`. \
+                       Auto-detects the ecosystem (Cargo → cargo audit, \
+                       npm/pnpm → pnpm audit, Python → pip-audit). Returns \
+                       advisories with id, package, severity, and title. \
+                       Returns tool_available:false when the audit tool is not \
+                       installed — never errors the MCP call."
+            .into(),
+        input_schema: serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to the project directory. \
+                                    Defaults to the current working directory."
+                }
+            }
+        }),
+    }
+}
+
 // ── RAG-08 memory tool definitions ────────────────────────────────────────────
 
 pub(super) fn cascade_memory_remember_tool() -> McpTool {

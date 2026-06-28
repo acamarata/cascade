@@ -24,6 +24,7 @@ use super::handlers_pbd::{
     handle_list_tickets, handle_read_phase_status, handle_scan_inbox,
     handle_update_ticket_status,
 };
+use super::handlers_security::{handle_secret_scan, handle_security_audit};
 use super::helpers::{call_tool_error, tool_result};
 use super::schemas::{
     cascade_append_event_tool, cascade_check_routes_tool, cascade_context_slice_tool,
@@ -33,6 +34,7 @@ use super::schemas::{
     cascade_memory_remember_tool, cascade_memory_search_tool, cascade_memory_write_tool,
     cascade_provide_harness_context_tool, cascade_read_phase_status_tool, cascade_read_tool,
     cascade_scan_inbox_tool, cascade_search_codebase_tool, cascade_search_tool,
+    cascade_security_audit_tool, cascade_security_secret_scan_tool,
     cascade_update_ticket_status_tool,
 };
 use super::types::{ConnectionContext, RetrieverSlot};
@@ -139,6 +141,9 @@ impl ToolRegistry {
             cascade_memory_recall_tool(),
             cascade_memory_forget_tool(),
             cascade_memory_search_tool(),
+            // Security tools
+            cascade_security_secret_scan_tool(),
+            cascade_security_audit_tool(),
         ];
         Ok(serde_json::json!({ "tools": tools }))
     }
@@ -227,6 +232,9 @@ impl ToolRegistry {
             "cascade.memory.recall" => tool_result(handle_memory_recall(&args).await),
             "cascade.memory.forget" => tool_result(handle_memory_forget(&args).await),
             "cascade.memory.search" => tool_result(handle_memory_search(&args).await),
+            // Security tools
+            "cascade.security.secret_scan" => tool_result(handle_secret_scan(&args).await),
+            "cascade.security.audit" => tool_result(handle_security_audit(&args).await),
             _ => Err(JsonRpcError::not_found(format!("Unknown tool: {name}"))),
         }
     }

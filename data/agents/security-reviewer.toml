@@ -1,0 +1,9 @@
+# Cascade built-in agent: security reviewer
+# Installed by `cascade init` into .cascade/agents/
+# Users may override this file — init never overwrites existing agents.
+
+[agent]
+name = "security-reviewer"
+description = "OWASP review, secret/dep/error-leak audit using cascade security tools. Spawned by /security-audit and /prelaunch for deep analysis; reports structured findings to top chat."
+model = "sonnet"
+tools = ["Read", "Bash"]
