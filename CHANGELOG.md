@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.7] - 2026-06-28
+
+Remediation closeout: hygiene + the last stubs the verification re-audit surfaced.
+
+### Fixed
+- **CEO runtime uses the real provider.** The CEO orchestrator still ran on `NopRouter`/`NopInvoker` ("nop:" output); `CeoRuntime::with_registry` now wires the real `RegistryRouter` + `SafeToolInvoker` (provider registry threaded `main → IpcServer`). The no-registry fallback uses honest "no provider configured" / "not yet implemented" messages, never "nop:".
+- **Reranker offline-guard works.** `create_dir_all` ran before the guard check, so it never fired; with the `reranker` feature enabled (via workspace feature-unification) this also panicked a test on `block_in_place`. The guard now runs first — absent model + offline_guard fails fast with no disk write or download.
+
+### Changed
+- **dead_code hygiene.** Removed the blanket crate-wide `#![allow(dead_code)]` from `cascade-daemon` and `cascade-pdk`; replaced with item-scoped `#[allow(dead_code)]` (each justified) so the compiler gives real dead-code signal.
+
+### Verification
+Full workspace: `cargo test --workspace --lib` — **3,114 passed, 0 failed**, deterministic. `cargo build --workspace` green; FOSS maintainer-id guard green; CLI↔daemon integration 11/11.
+
+### Genuine future work (documented, not misleading stubs)
+- SPLADE/ColBERT via direct-`ort` multi-output (sparse retrieval works today via BM25/TF-IDF).
+- LoRA feedback adapter (signals are collected; training is future research).
+
 ## [1.9.6] - 2026-06-28
 
 Remediation patch: the last two execution stubs.
