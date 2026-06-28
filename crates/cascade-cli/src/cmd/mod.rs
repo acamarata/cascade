@@ -75,6 +75,8 @@ pub mod widget;
 pub mod wizard;
 // priv-01: telemetry opt-in gate
 pub mod telemetry;
+// sec-01: security scanning core
+pub mod security;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -205,6 +207,8 @@ pub enum Commands {
     Telemetry(telemetry::TelemetryArgs),
     /// Export ~/.cascade/ to a portable `.cascade-archive.tar.gz` (data-01).
     Export(export::ExportArgs),
+    /// Security scan subcommands (secrets, client leaks, dep audit, prelaunch checklist).
+    Security(security::SecurityArgs),
 }
 
 impl Commands {
@@ -261,6 +265,7 @@ impl Commands {
             Commands::Build(args)    => args.run().await,
             Commands::Telemetry(args) => args.run().await,
             Commands::Export(args)    => args.run().await,
+            Commands::Security(args)  => args.run().await,
         }
     }
 }

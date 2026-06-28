@@ -1263,6 +1263,7 @@ dependencies = [
  "cascade-plugins",
  "cascade-providers",
  "cascade-rag",
+ "cascade-security",
  "cascade-types",
  "chrono",
  "clap",
@@ -1650,6 +1651,20 @@ dependencies = [
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
+]
+
+[[package]]
+name = "cascade-security"
+version = "1.9.7"
+dependencies = [
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
