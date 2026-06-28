@@ -243,7 +243,9 @@ pub async fn handle_read_quota_store() -> Result<QuotaStore, IpcHandlerError> {
 pub fn handle_read_proxy_metrics(
     table: &std::sync::Arc<std::sync::Mutex<RoutingTable>>,
 ) -> Result<Vec<ProviderMetricsSnapshot>, IpcHandlerError> {
-    let guard = table.lock().unwrap();
+    // Recover the guard from a poisoned lock rather than propagating a panic to
+    // every concurrent request; stale metrics are preferable to a permanent hang.
+    let guard = table.lock().unwrap_or_else(|e| e.into_inner());
 
     let snapshots: Vec<ProviderMetricsSnapshot> = guard
         .slots()
@@ -360,8 +362,10 @@ pub async fn handle_update_quota_state(
         })?;
 
     // Push into the typed buffer and collect a clone for aggregation.
+    // Recover from a poisoned lock so a panicked task doesn't permanently
+    // block all subsequent quota-update requests.
     let snapshots = {
-        let mut guard = daemon_state.lock().unwrap();
+        let mut guard = daemon_state.lock().unwrap_or_else(|e| e.into_inner());
         guard.push_typed_snapshot(snap, max_snapshots);
         guard.quota_snapshot_buffer.clone()
     };

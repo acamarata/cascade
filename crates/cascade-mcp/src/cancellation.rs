@@ -104,7 +104,9 @@ impl CancellationRegistry {
     pub fn register(&self, request_id: impl Into<String>) -> CancelToken {
         let id = request_id.into();
         let token = CancelToken::new(id.clone());
-        let mut map = self.tokens.write().unwrap();
+        // Recover from a poisoned lock; inserting a new token into partially-
+        // corrupted state is safe and preferable to panicking on every request.
+        let mut map = self.tokens.write().unwrap_or_else(|e| e.into_inner());
         map.insert(id, token.clone());
         token
     }
@@ -114,7 +116,9 @@ impl CancellationRegistry {
     /// If no matching token exists, this is a no-op (the request may have
     /// already completed).
     pub fn cancel(&self, request_id: &str) {
-        let map = self.tokens.read().unwrap();
+        // Recover from a poisoned lock; a missed cancel is acceptable, but a
+        // panic that kills the notification handler is not.
+        let map = self.tokens.read().unwrap_or_else(|e| e.into_inner());
         if let Some(token) = map.get(request_id) {
             token.mark_cancelled();
         }
@@ -125,13 +129,16 @@ impl CancellationRegistry {
     /// Call this from the server loop after a tool handler returns to avoid
     /// unbounded growth of the registry.
     pub fn unregister(&self, request_id: &str) {
-        let mut map = self.tokens.write().unwrap();
+        // Recover from a poisoned lock; leaking a completed token is preferable
+        // to cascading a panic into the server loop.
+        let mut map = self.tokens.write().unwrap_or_else(|e| e.into_inner());
         map.remove(request_id);
     }
 
     /// Number of currently registered (in-flight) tokens.
     pub fn in_flight(&self) -> usize {
-        self.tokens.read().unwrap().len()
+        // Recover from a poisoned lock; returning a stale count is acceptable.
+        self.tokens.read().unwrap_or_else(|e| e.into_inner()).len()
     }
 }
 
