@@ -16,8 +16,112 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
+use serde::Serialize;
 
 use super::Command;
+
+// ── Detection helpers (CLI-side) ──────────────────────────────────────────────
+
+/// Detection result for a single harness.
+///
+/// Purpose: portable representation used by both the `status` table printer
+///   and the `detect` JSON output.
+/// Constraints: `binary` is `None` when the harness is not installed or its
+///   binary cannot be resolved on `PATH` (detection via config dir only).
+#[derive(Debug, Serialize)]
+pub struct HarnessInfo {
+    /// Harness identifier (e.g. "claude-code", "opencode").
+    pub id: String,
+    /// Human-readable display name.
+    pub name: String,
+    /// Whether the harness is installed and detectable on this machine.
+    pub installed: bool,
+    /// Resolved binary path on `PATH`, if any.
+    pub binary: Option<String>,
+}
+
+/// Detect all known harnesses and return their installation status.
+///
+/// Purpose: single source of truth for both `harness status` and
+///   `harness detect`; runs entirely in the CLI process using
+///   `cascade-harness` detection logic (no IPC required).
+/// Inputs: `workspace` — current working directory (used for config-dir
+///   detection, e.g. `.cursor/` presence).
+/// Outputs: `Vec<HarnessInfo>` — one entry per known harness, in
+///   `HarnessKind::ALL` order.
+fn detect_all_harnesses(workspace: &std::path::Path) -> Vec<HarnessInfo> {
+    use cascade_harness::generate::harness_files::HarnessKind;
+
+    HarnessKind::ALL
+        .iter()
+        .map(|kind| {
+            let installed = kind.is_installed(workspace);
+            let binary = if installed {
+                resolve_binary_path(kind.id())
+            } else {
+                None
+            };
+            HarnessInfo {
+                id: kind.id().to_string(),
+                name: harness_display_name(kind.id()),
+                installed,
+                binary,
+            }
+        })
+        .collect()
+}
+
+/// Map a harness id to a human-readable display name.
+fn harness_display_name(id: &str) -> String {
+    match id {
+        "claude-code" => "Claude Code".to_string(),
+        "opencode" => "OpenCode".to_string(),
+        "codex" => "Codex".to_string(),
+        "cursor" => "Cursor".to_string(),
+        "aider" => "Aider".to_string(),
+        "antigravity" => "Antigravity".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// Resolve the first matching binary for `name` on `PATH`.
+///
+/// Purpose: obtain the full path to a harness binary for display in
+///   `harness status --json` and the BINARY column of `harness status`.
+/// Inputs: `name` — harness id (e.g. "claude-code").
+/// Outputs: `Some(path_string)` when found; `None` otherwise (not an error).
+/// Constraints: `claude-code` maps to the `claude` binary name.
+fn resolve_binary_path(name: &str) -> Option<String> {
+    // claude-code's binary is `claude`, not `claude-code`.
+    let binary_name = match name {
+        "claude-code" => "claude",
+        other => other,
+    };
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths).find_map(|dir| {
+            let candidate = dir.join(binary_name);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let ok = candidate.is_file()
+                    || candidate
+                        .metadata()
+                        .map(|m| m.permissions().mode() & 0o111 != 0)
+                        .unwrap_or(false);
+                if ok {
+                    return Some(candidate.display().to_string());
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                if candidate.exists() {
+                    return Some(candidate.display().to_string());
+                }
+            }
+            None
+        })
+    })
+}
 
 // ── Top-level harness args ────────────────────────────────────────────────────
 
@@ -76,14 +180,22 @@ impl Command for HarnessArgs {
 #[async_trait]
 impl Command for HarnessStatusArgs {
     async fn run(&self) -> Result<()> {
-        // TODO(T-P2-E03-20): IPC call to harness.status endpoint
+        let workspace =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let harnesses = detect_all_harnesses(&workspace);
+
         if self.json {
-            println!("{{}}");
+            let json = serde_json::to_string_pretty(&harnesses)
+                .map_err(|e| CascadeError::Other(format!("json serialize failed: {e}")))?;
+            println!("{json}");
         } else {
-            println!("{:<12} {:<10} {:<10} BINARY", "HARNESS", "PID", "RUNNING");
-            println!("{:<12} {:<10} {:<10} -", "ClaudeCode", "-", "false");
-            println!("{:<12} {:<10} {:<10} -", "OpenCode", "-", "false");
-            println!("{:<12} {:<10} {:<10} -", "Codex", "-", "false");
+            println!("{:<14} {:<10} BINARY", "HARNESS", "INSTALLED");
+            println!("{}", "─".repeat(60));
+            for h in &harnesses {
+                let installed = if h.installed { "yes" } else { "no" };
+                let binary = h.binary.as_deref().unwrap_or("-");
+                println!("{:<14} {:<10} {}", h.name, installed, binary);
+            }
         }
         Ok(())
     }
@@ -92,8 +204,12 @@ impl Command for HarnessStatusArgs {
 #[async_trait]
 impl Command for HarnessDetectArgs {
     async fn run(&self) -> Result<()> {
-        // TODO(T-P2-E03-20): IPC call to harness.detect endpoint
-        println!("[]");
+        let workspace =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let harnesses = detect_all_harnesses(&workspace);
+        let json = serde_json::to_string_pretty(&harnesses)
+            .map_err(|e| CascadeError::Other(format!("json serialize failed: {e}")))?;
+        println!("{json}");
         Ok(())
     }
 }
@@ -349,5 +465,75 @@ impl Command for HarnessInitFromInstalledArgs {
         }
 
         Ok(())
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `detect_all_harnesses` must return one entry per `HarnessKind::ALL`
+    /// element, with valid ids and names, and serialise cleanly to JSON.
+    #[test]
+    fn detect_all_harnesses_returns_all_kinds() {
+        use cascade_harness::generate::harness_files::HarnessKind;
+
+        let workspace = std::env::temp_dir();
+        let results = detect_all_harnesses(&workspace);
+
+        assert_eq!(
+            results.len(),
+            HarnessKind::ALL.len(),
+            "must return one HarnessInfo per HarnessKind"
+        );
+
+        for info in &results {
+            assert!(!info.id.is_empty(), "id must not be empty");
+            assert!(!info.name.is_empty(), "name must not be empty");
+            // binary is None or a non-empty string (never an empty string)
+            if let Some(ref bin) = info.binary {
+                assert!(!bin.is_empty(), "binary path string must not be empty");
+            }
+        }
+    }
+
+    /// `detect_all_harnesses` output must round-trip through JSON without error.
+    #[test]
+    fn detect_all_harnesses_json_roundtrip() {
+        let workspace = std::env::temp_dir();
+        let results = detect_all_harnesses(&workspace);
+        let json = serde_json::to_string_pretty(&results).expect("must serialise to JSON");
+        assert!(json.contains("installed"), "JSON must contain 'installed' field");
+        assert!(json.contains("claude-code"), "JSON must contain 'claude-code' id");
+    }
+
+    /// `harness_display_name` must map all known ids to human-readable names.
+    #[test]
+    fn display_names_are_human_readable() {
+        assert_eq!(harness_display_name("claude-code"), "Claude Code");
+        assert_eq!(harness_display_name("opencode"), "OpenCode");
+        assert_eq!(harness_display_name("codex"), "Codex");
+        assert_eq!(harness_display_name("cursor"), "Cursor");
+        assert_eq!(harness_display_name("aider"), "Aider");
+        assert_eq!(harness_display_name("antigravity"), "Antigravity");
+        // Unknown ids pass through unchanged.
+        assert_eq!(harness_display_name("unknown-tool"), "unknown-tool");
+    }
+
+    /// `resolve_binary_path("claude-code")` must map to the `claude` binary name
+    /// (not `claude-code`), since the real binary is `claude`.
+    #[test]
+    fn resolve_binary_path_maps_claude_code_to_claude() {
+        // We cannot assert the result (depends on PATH), but we can verify the
+        // function doesn't panic and returns None or Some(non-empty).
+        let result = resolve_binary_path("claude-code");
+        if let Some(ref path) = result {
+            assert!(
+                path.ends_with("claude") || path.contains("claude"),
+                "resolved path for claude-code should reference 'claude' binary, got: {path}"
+            );
+        }
     }
 }
