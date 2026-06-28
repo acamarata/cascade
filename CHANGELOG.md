@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-06-28
+
+Remediation patch (P2): the last LLM-orchestration + study stubs.
+
+### Fixed
+- **Board debate is real.** `board_debate` returned hardcoded "pending" stances; it now asks each board role (CEO/CTO/Architect, with its persona) for a real opinion via the provider, classifies stance, and computes consensus. No provider → explicit error stances, never fake.
+- **RAPTOR + architecture extraction are real.** `build_raptor_tree` was a no-op (empty tree); it now does dir-locality clustering + per-cluster summaries (LLM when available, real extractive template otherwise), BLAKE3-cached. `extract_arch` emits a real Mermaid diagram from the code-graph adjacency (was an empty string).
+- **`live_cc` PTY driver is real.** `LiveCcDriver::send_prompt` was a deferred stub that always errored; it now spawns the CLI in a PTY (`portable-pty`), captures output with a timeout, and maps binary-not-found/timeout to typed errors.
+
+### Known remaining
+MCP `sampling` transport and the plugin WASM ABI dispatch remain stubbed; true SPLADE/ColBERT (direct-`ort` multi-output) and the LoRA feedback adapter are genuine future work (the shipped sparse path is BM25/TF-IDF and works). Addressed/Documented in v1.9.6.
+
 ## [1.9.4] - 2026-06-28
 
 Remediation patch (P1 part 3): the provider-dependent features are now wired to the real provider path.

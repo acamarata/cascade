@@ -35,7 +35,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "1.9.4"
+version = "1.9.5"
 rust-version = "1.85"
 license = "MIT"
 authors = ["Aric Camarata"]
@@ -43,14 +43,14 @@ repository = "https://github.com/acamarata/cascade"
 
 [workspace.dependencies]
 # Shared deps — crates pin to workspace version to avoid drift
-cascade-agents    = { path = "crates/cascade-agents", version = "1.9.4" }
-cascade-types     = { path = "crates/cascade-types", version = "1.9.4" }
-cascade-db        = { path = "crates/cascade-db", version = "1.9.4" }
-cascade-core      = { path = "crates/cascade-core", version = "1.9.4" }
-cascade-harness   = { path = "crates/cascade-harness", version = "1.9.4" }
-cascade-tray      = { path = "crates/cascade-tray", version = "1.9.4" }
-cascade-providers = { path = "crates/cascade-providers", version = "1.9.4" }
-cascade-local-llm = { path = "crates/cascade-local-llm", version = "1.9.4" }
+cascade-agents    = { path = "crates/cascade-agents", version = "1.9.5" }
+cascade-types     = { path = "crates/cascade-types", version = "1.9.5" }
+cascade-db        = { path = "crates/cascade-db", version = "1.9.5" }
+cascade-core      = { path = "crates/cascade-core", version = "1.9.5" }
+cascade-harness   = { path = "crates/cascade-harness", version = "1.9.5" }
+cascade-tray      = { path = "crates/cascade-tray", version = "1.9.5" }
+cascade-providers = { path = "crates/cascade-providers", version = "1.9.5" }
+cascade-local-llm = { path = "crates/cascade-local-llm", version = "1.9.5" }
 
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
