@@ -30,6 +30,8 @@ use tracing::{debug, error, info, warn};
 use cascade_types::error::{CascadeError, Result};
 use cascade_types::mcp::MCP_PROTOCOL_VERSION;
 
+use cascade_providers::ProviderRegistry;
+
 use crate::cancellation::CancellationRegistry;
 use crate::error::McpServerError;
 use crate::handler::HandlerRegistry;
@@ -376,6 +378,26 @@ impl McpServer {
     /// ```
     pub fn with_tools(mut self, tools: ToolRegistry) -> Self {
         self.tools = Arc::new(tools);
+        self
+    }
+
+    /// Attach a live [`ProviderRegistry`] to the sampling handler.
+    ///
+    /// Without this call, `sampling/createMessage` requests return an error
+    /// ("no AI provider configured"). Call this in the daemon startup path
+    /// after the provider registry has been populated.
+    ///
+    /// ```rust,no_run
+    /// # use std::sync::Arc;
+    /// # use cascade_mcp::{McpServer, McpServerConfig};
+    /// # use cascade_mcp::transport::stdio::StdioTransport;
+    /// # use cascade_providers::ProviderRegistry;
+    /// let registry = Arc::new(ProviderRegistry::new());
+    /// let server = McpServer::new(McpServerConfig::default(), Box::new(StdioTransport::new()))
+    ///     .with_provider_registry(registry);
+    /// ```
+    pub fn with_provider_registry(mut self, registry: Arc<ProviderRegistry>) -> Self {
+        self.sampling = Arc::new(SamplingClient::with_registry(registry));
         self
     }
 

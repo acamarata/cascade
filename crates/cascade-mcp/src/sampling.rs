@@ -156,66 +156,74 @@ pub struct SamplingResponse {
 
 /// Manages server-initiated sampling requests.
 ///
-/// The client instance is held by `McpServer`. When the server needs a model
-/// completion (e.g. for contextual chunking), it calls `create_message`
-/// which sends a `sampling/createMessage` request to the connected MCP
-/// client and waits for the response notification.
+/// Receives `sampling/createMessage` from a connected MCP client and forwards
+/// it to the daemon's [`SamplingHandler`], which selects a provider from the
+/// [`ProviderRegistry`] and calls the real LLM.
+///
+/// When constructed without a registry (`SamplingClient::new`) every call
+/// returns [`McpServerError::Internal`] — wire the registry via
+/// `SamplingClient::with_registry` before accepting traffic.
 ///
 /// # Concurrency
 ///
-/// Multiple sampling requests may be in flight simultaneously. Each gets
-/// a unique correlation ID used to match the response notification to the
-/// waiting future.
+/// `Arc<ProviderRegistry>` is `Send + Sync`; multiple requests may execute
+/// in parallel without any additional locking in this layer.
 pub struct SamplingClient {
-    /// Timeout in seconds for `sampling/createMessage` requests.
-    /// Used by the real transport implementation (not yet wired in this stub).
-    _timeout_secs: u64,
-    // In the real impl this holds a map of pending request IDs to
-    // `oneshot::Sender<SamplingResponse>` channels. The notification
-    // handler resolves them when the client's response arrives.
+    /// Delegated handler that owns provider-selection and retry logic.
+    handler: SamplingHandler,
 }
 
 impl SamplingClient {
+    /// Create a client with **no provider registry**.
+    ///
+    /// Every `create_message` call will return
+    /// `CascadeError::ConfigParse` wrapping
+    /// `McpServerError::Internal { "no AI provider configured …" }`.
+    /// Use [`SamplingClient::with_registry`] to attach a live registry.
     pub fn new() -> Self {
-        Self { _timeout_secs: 30 }
-    }
-
-    pub fn with_timeout(secs: u64) -> Self {
+        // An authenticated handler backed by an empty registry returns
+        // McpServerError::Internal("no AI provider configured") on every call,
+        // which is the correct typed error for the "not yet wired" state.
         Self {
-            _timeout_secs: secs,
+            handler: SamplingHandler::new(Arc::new(ProviderRegistry::new())),
         }
     }
 
-    /// Request a model completion from the MCP client.
+    /// Create a client backed by a live [`ProviderRegistry`].
     ///
-    /// Sends `sampling/createMessage` and waits up to `timeout_secs` for the
-    /// client to respond. Returns the assistant message text on success.
+    /// All `create_message` calls are forwarded to [`SamplingHandler::handle`],
+    /// which performs provider selection, message mapping, and LLM retry.
+    pub fn with_registry(registry: Arc<ProviderRegistry>) -> Self {
+        Self {
+            handler: SamplingHandler::new(registry),
+        }
+    }
+
+    /// Handle a `sampling/createMessage` request from the MCP client.
+    ///
+    /// Delegates to [`SamplingHandler::handle`], which selects a provider,
+    /// calls the real LLM, and returns a `CreateMessageResult`-shaped JSON:
+    /// `{ role, content: { type, text }, model, stopReason }`.
     ///
     /// # Errors
     ///
-    /// - `CascadeError::Timeout` if the client does not respond in time.
-    /// - `CascadeError::ConfigParse` if the response is malformed.
+    /// - [`CascadeError::ConfigParse`] when `params` cannot be parsed.
+    /// - [`CascadeError::ConfigParse`] wrapping `McpServerError::Internal`
+    ///   when no provider is configured or the provider call fails after retries.
     pub async fn create_message(&self, params: &Value) -> cascade_types::error::Result<Value> {
-        let req: SamplingRequest = serde_json::from_value(params.clone()).map_err(|e| {
-            cascade_types::error::CascadeError::ConfigParse {
-                path: "<sampling-params>".into(),
+        let params_opt = if params.is_null() {
+            None
+        } else {
+            Some(params.clone())
+        };
+
+        self.handler
+            .handle(params_opt)
+            .await
+            .map_err(|e| cascade_types::error::CascadeError::ConfigParse {
+                path: "<sampling/createMessage>".into(),
                 detail: e.to_string(),
-            }
-        })?;
-
-        debug!(max_tokens = req.max_tokens, "sampling/createMessage");
-
-        // Stub: in the real impl, serialize `req` and write it to the
-        // transport as a server-initiated request, then wait on a oneshot
-        // channel keyed by request ID.
-        //
-        // For now return a placeholder response so the type system is happy.
-        Ok(serde_json::json!({
-            "role": "assistant",
-            "content": { "type": "text", "text": "[sampling not yet wired to transport]" },
-            "model": "unknown",
-            "stopReason": "end_turn"
-        }))
+            })
     }
 }
 
@@ -821,20 +829,52 @@ mod tests {
         assert_eq!(req.max_tokens, 512);
     }
 
-    /// `SamplingClient::create_message` stub returns placeholder JSON.
+    /// `SamplingClient::new()` (no registry) → typed Err, not a fake success.
     #[tokio::test]
-    async fn sampling_client_stub_returns_placeholder() {
+    async fn sampling_client_no_registry_returns_err() {
         let client = SamplingClient::new();
         let params = serde_json::json!({
             "messages": [{"role": "user", "content": {"type": "text", "text": "hi"}}],
             "modelPreferences": {"hints": []},
             "maxTokens": 64
         });
+        // Must be an error — not a fake success string.
+        let result = client.create_message(&params).await;
+        assert!(
+            result.is_err(),
+            "SamplingClient with no registry must return Err, got Ok({:?})",
+            result.ok()
+        );
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("no AI provider"),
+            "error must mention 'no AI provider', got: {err_str}"
+        );
+    }
+
+    /// `SamplingClient::with_registry` routes to the real provider and returns text.
+    #[tokio::test]
+    async fn sampling_client_with_registry_returns_real_text() {
+        let registry = registry_with("anthropic", "real text from mock anthropic");
+        let client = SamplingClient::with_registry(registry);
+        let params = serde_json::json!({
+            "messages": [{"role": "user", "content": {"type": "text", "text": "hi"}}],
+            "modelPreferences": {"hints": [{"name": "claude"}]},
+            "maxTokens": 64
+        });
         let result = client.create_message(&params).await.unwrap();
         assert_eq!(result["role"], "assistant");
-        assert!(result["content"]["text"]
-            .as_str()
-            .unwrap()
-            .contains("not yet wired"));
+        assert_eq!(
+            result["content"]["text"],
+            "real text from mock anthropic",
+            "content must be real provider text, not a stub string"
+        );
+        assert!(
+            !result["content"]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("not yet wired"),
+            "stub string must be gone"
+        );
     }
 }
