@@ -60,6 +60,8 @@ pub trait FleetSource: Send + Sync {
     /// Stable identifier for this source (matches a `PROVIDER_*` constant).
     ///
     /// Used in log messages and as the `provider` field of emitted snapshots.
+    // Trait method — implemented by all FleetSource structs; called by the poller loop.
+    #[allow(dead_code)]
     fn provider_id(&self) -> &str;
 
     /// Poll for a current quota snapshot.

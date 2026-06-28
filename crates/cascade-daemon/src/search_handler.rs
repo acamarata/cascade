@@ -96,6 +96,8 @@ use cascade_types::error::{CascadeError, Result as CascadeResult};
 /// - `max_tokens: Some(256)` — HyDE passages need only be 1–3 sentences; cap
 ///   prevents runaway costs on pay-per-token providers.
 /// - `stream: false` — the full response must arrive before embedding begins.
+// HyDE LLM bridge — injected into RagSearchHandler at startup when a provider is available.
+#[allow(dead_code)]
 pub struct ProviderHydeLlm {
     adapter: Arc<dyn ProviderAdapter>,
     model: String,
@@ -108,6 +110,8 @@ impl ProviderHydeLlm {
     ///   uses the Chat-class provider resolved by the routing table.
     /// - `model` — model identifier passed through to the provider (e.g.
     ///   `"claude-3-haiku-20240307"`).
+    // Constructor — called at daemon startup to wire in HyDE query expansion.
+    #[allow(dead_code)]
     pub fn new(adapter: Arc<dyn ProviderAdapter>, model: impl Into<String>) -> Self {
         Self {
             adapter,
@@ -303,6 +307,8 @@ impl RagSearchHandler {
     ///
     /// When `config.rerank_enabled = true` in a search call and this handler
     /// has a reranker, it is passed to [`search`] for cross-encoder re-scoring.
+    // Used in integration tests and when a preloaded BGE reranker is available at startup.
+    #[allow(dead_code)]
     pub fn new_with_reranker(
         registry: Arc<IndexRegistry>,
         embed: Arc<dyn EmbedModel>,
@@ -324,6 +330,8 @@ impl RagSearchHandler {
     ///
     /// HyDE is **off by default** — call this method at startup only when a
     /// provider adapter is confirmed available.
+    // Wired at startup (T-P4-E01-29) when a Chat-class provider is resolved.
+    #[allow(dead_code)]
     pub fn with_hyde_llm(self: Arc<Self>, llm: Arc<dyn HydeLlm>) -> Arc<Self> {
         // SAFETY: we are the sole Arc owner at construction time (called right
         // after `new()`), so get_mut is guaranteed to succeed.

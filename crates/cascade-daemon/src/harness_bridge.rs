@@ -31,6 +31,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
 /// Identifies a known AI coding harness.
+// IPC-serializable type — used in harness.detect and harness.status endpoints.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum HarnessType {
@@ -44,6 +46,8 @@ pub enum HarnessType {
 
 impl HarnessType {
     /// Return the binary name used to locate and invoke this harness.
+    // Used by detect() and invoke() to resolve the binary on PATH.
+    #[allow(dead_code)]
     pub fn binary_name(&self) -> &str {
         match self {
             HarnessType::ClaudeCode => "claude",
@@ -56,6 +60,8 @@ impl HarnessType {
 /// Runtime status of a single harness.
 ///
 /// Serializable for IPC — adding new fields must be backward-compatible
+// IPC response type for harness.detect — constructed by detect() and detect_all().
+#[allow(dead_code)]
 /// (use `#[serde(default)]` on new optional fields so existing IPC clients
 /// do not break when reading a response that lacks the field).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +77,8 @@ pub struct HarnessStatus {
 }
 
 /// Result of a single harness invocation.
+// IPC response type for harness.invoke — constructed by invoke().
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvocationResult {
     /// Captured stdout from the harness process.
@@ -85,6 +93,8 @@ pub struct InvocationResult {
 }
 
 /// Error type for harness bridge operations.
+// IPC error type — returned by invoke() and propagated through handle_harness_status.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum HarnessBridgeError {
     /// Binary not found on PATH.
@@ -113,6 +123,8 @@ impl std::error::Error for HarnessBridgeError {}
 // ── Binary lookup ─────────────────────────────────────────────────────────
 
 /// Locate `binary_name` on PATH by invoking `which` (Unix) or `where` (Windows).
+// Called by detect() and invoke() to resolve harness binary path.
+#[allow(dead_code)]
 ///
 /// Returns the full path if found, `None` if not found or the lookup fails.
 ///
@@ -140,6 +152,8 @@ async fn find_binary(binary_name: &str) -> Option<PathBuf> {
 // ── Process detection ─────────────────────────────────────────────────────
 
 /// Detect whether a harness is running and where its binary lives.
+// IPC endpoint backing — called by detect_all() and handle_harness_status.
+#[allow(dead_code)]
 ///
 /// Uses `pgrep -f <binary_name>` on Unix to find matching processes.
 /// On Windows, falls back to `tasklist` with a name filter.
@@ -178,6 +192,8 @@ pub async fn detect(harness: &HarnessType) -> HarnessStatus {
 }
 
 /// Internal: use pgrep (Unix) or tasklist (Windows) to check for running processes.
+// Called by detect() to determine if a harness process is currently running.
+#[allow(dead_code)]
 ///
 /// Returns `(running: bool, first_pid: Option<u32>)`.
 /// On any failure (pgrep not found, permission denied, etc.) returns `(false, None)`.
@@ -246,6 +262,8 @@ async fn detect_running(binary_name: &str) -> (bool, Option<u32>) {
 }
 
 /// Return status for all known harnesses (ClaudeCode and OpenCode).
+// IPC harness.detect endpoint — dispatched by ipc_handlers::handle_harness_status.
+#[allow(dead_code)]
 ///
 /// Dispatches detection concurrently via `tokio::join!`.
 /// Used by the `harness.detect` IPC endpoint.
@@ -260,6 +278,8 @@ pub async fn detect_all() -> Vec<HarnessStatus> {
 // ── Invocation ────────────────────────────────────────────────────────────
 
 /// Invoke a harness with a single prompt, enforcing a wall-clock timeout.
+// IPC harness.invoke endpoint — single-shot harness dispatch.
+#[allow(dead_code)]
 ///
 /// Inputs:
 ///   - `harness`: which harness to invoke
@@ -336,6 +356,8 @@ pub async fn invoke(
 // ── Harness Monitoring ────────────────────────────────────────────────────
 
 /// Persistent harness state file format (written to ~/.cascade/harness-state.json).
+// Written by HarnessMonitor background task; read by external tools.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HarnessStateFile {
     /// ISO8601 timestamp when the state was detected.
@@ -345,14 +367,20 @@ pub struct HarnessStateFile {
 }
 
 /// In-memory harness cache type: Arc<RwLock<Vec<HarnessStatus>>>.
+// Shared cache type — passed to handle_harness_status IPC handler.
+#[allow(dead_code)]
 pub type HarnessCache = Arc<RwLock<Vec<HarnessStatus>>>;
 
 /// Harness monitor: spawns a background Tokio task that polls HarnessDetector
 /// every 30 seconds and maintains an in-memory cache + persistent file.
+// Background monitor — started at daemon init to keep harness-state.json fresh.
+#[allow(dead_code)]
 pub struct HarnessMonitor;
 
 impl HarnessMonitor {
     /// Start a background harness monitoring task.
+    // Spawns monitor loop; returns HarnessCache for IPC handler access.
+    #[allow(dead_code)]
     ///
     /// Spawns a Tokio task that:
     ///   1. Calls detect_all() every 30 seconds

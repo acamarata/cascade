@@ -65,6 +65,8 @@ pub struct CacheCounters {
 struct CacheKey(PathBuf, SystemTime);
 
 struct Inner {
+    // LRU eviction capacity — compared against entries.len() on every insert.
+    #[allow(dead_code)]
     max: usize,
     /// `(lru_counter, chunks)` — the counter is bumped on every access so we
     /// can evict the least-recently-used entry when `max` is exceeded.
@@ -85,6 +87,8 @@ impl Inner {
         }
     }
 
+    // Cache lookup — called from ChunkCache::get via the public API.
+    #[allow(dead_code)]
     fn get(&mut self, key: &CacheKey) -> Option<Vec<Chunk>> {
         if let Some((ts, chunks)) = self.entries.get_mut(key) {
             self.counter += 1;
@@ -97,6 +101,8 @@ impl Inner {
         }
     }
 
+    // Cache store — called from ChunkCache::insert via the public API.
+    #[allow(dead_code)]
     fn insert(&mut self, key: CacheKey, chunks: Vec<Chunk>) {
         self.counter += 1;
         self.entries.insert(key, (self.counter, chunks));
@@ -142,6 +148,8 @@ impl ChunkCache {
     }
 
     /// Look up cached chunks for `path` at `mtime`.
+    // Public cache API — called from loader::load_cascade_file.
+    #[allow(dead_code)]
     ///
     /// Returns `None` on a miss (path not cached, or cached with a different
     /// mtime). The Mutex is released before returning.
@@ -156,6 +164,8 @@ impl ChunkCache {
     }
 
     /// Cache the chunks produced by parsing `path` at the given `mtime`.
+    // Public cache API — called from loader::load_cascade_file.
+    #[allow(dead_code)]
     ///
     /// If an entry for `(path, mtime)` already exists it is overwritten.
     /// The Mutex is NOT held during file I/O — the caller reads the file

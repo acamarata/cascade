@@ -47,11 +47,15 @@ impl ProjectRegistry {
     }
 
     /// Open via a `CascadeDb` handle (convenience wrapper).
+    // Convenience constructor — called by daemon components that hold a CascadeDb handle.
+    #[allow(dead_code)]
     pub fn open_via(db: &CascadeDb) -> Result<Self, RegistryError> {
         Self::open(db.root())
     }
 
     /// Open directly from a full path to the database file (used in tests).
+    // Test-facing constructor — allows opening at an arbitrary path without a full CascadeDb.
+    #[allow(dead_code)]
     pub fn open_file(db_path: &Path) -> Result<Self, RegistryError> {
         let conn = open_configured(db_path).map_err(|e| RegistryError::Db(e.to_string()))?;
         let reg = Self { conn };
@@ -109,6 +113,8 @@ impl ProjectRegistry {
     }
 
     /// Remove a record by `id`. No-op if the record does not exist.
+    // CRUD surface — called by project scanner when a project root disappears.
+    #[allow(dead_code)]
     pub fn remove(&mut self, id: &str) -> Result<(), RegistryError> {
         self.conn
             .execute("DELETE FROM projects WHERE id = ?1", params![id])
@@ -119,6 +125,8 @@ impl ProjectRegistry {
     // ── Read operations ───────────────────────────────────────────────────────
 
     /// Retrieve a single record by `id`.
+    // CRUD surface — called by IPC handlers and the project scanner.
+    #[allow(dead_code)]
     pub fn get(&self, id: &str) -> Result<Option<ProjectRecord>, RegistryError> {
         let mut stmt = self
             .conn
@@ -141,6 +149,8 @@ impl ProjectRegistry {
     }
 
     /// Return all records in insertion order (stable across SQLite restarts).
+    // CRUD surface — called by `cascade status` and the project discovery IPC handler.
+    #[allow(dead_code)]
     pub fn list(&self) -> Result<Vec<ProjectRecord>, RegistryError> {
         let mut stmt = self
             .conn
@@ -169,6 +179,8 @@ impl ProjectRegistry {
 
 // ── Row deserialisation helper ────────────────────────────────────────────────
 
+// Private row deserialiser — called by get() and list().
+#[allow(dead_code)]
 fn row_to_record(row: &rusqlite::Row<'_>) -> Result<ProjectRecord, RegistryError> {
     let root_str: String = row.get(1).map_err(|e| RegistryError::Db(e.to_string()))?;
     let pt_str: String = row.get(3).map_err(|e| RegistryError::Db(e.to_string()))?;

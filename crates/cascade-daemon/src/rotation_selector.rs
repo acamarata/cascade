@@ -38,11 +38,15 @@ use crate::event_bus::SharedBus;
 /// without the caller managing bus access.
 pub struct RotationSelector {
     /// Event bus handle for `quota.exhausted` signals.
+    // Used by signal_exhausted() to publish quota.exhausted events.
+    #[allow(dead_code)]
     pub bus: SharedBus,
 }
 
 impl RotationSelector {
     /// Construct a new selector backed by `bus`.
+    // Constructor for wiring into the IPC dispatch chain (E-P6-02).
+    #[allow(dead_code)]
     pub fn new(bus: SharedBus) -> Self {
         Self { bus }
     }
@@ -97,6 +101,8 @@ impl RotationSelector {
     }
 
     /// Publish a `quota.exhausted` event for `provider` on the event bus.
+    // Called when all accounts for a provider hit the 5hr window limit.
+    #[allow(dead_code)]
     ///
     /// Purpose: let subscribers (fleet widget, rotation logic) react to
     /// provider exhaustion without polling the quota store repeatedly.

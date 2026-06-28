@@ -231,6 +231,8 @@ impl IndexingPipeline {
 ///
 /// Exposed as a standalone function so the status handler can read it without
 /// holding a reference to the full pipeline.
+// Status handler surface — read by `cascade status` JSON output for rag.worker_queue_depth.
+#[allow(dead_code)]
 pub fn worker_queue_depth(pool: &WorkerPool) -> usize {
     pool.queue_depth()
 }

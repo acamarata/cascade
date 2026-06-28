@@ -26,6 +26,8 @@ use cascade_types::quota_store::QuotaState;
 ///
 /// The snapshot type is a JSON value to remain agnostic to how quota polling
 /// results are structured.
+// Runtime state shared across async tasks — constructed by supervisor at startup.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct DaemonState {
     /// Rolling buffer of the last N quota snapshots (oldest → newest).
@@ -58,6 +60,8 @@ pub struct DaemonState {
 
 impl DaemonState {
     /// Create a new DaemonState with an empty snapshot ring and no worker pool.
+    // Constructor — called by supervisor at daemon startup.
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             snapshot_ring: VecDeque::new(),
@@ -67,6 +71,8 @@ impl DaemonState {
     }
 
     /// Append a typed [`QuotaState`] snapshot to the buffer (E-P6-02 T-06).
+    // Called by handle_update_quota_state IPC handler (E-P6-02).
+    #[allow(dead_code)]
     ///
     /// Inputs:  `snap` — the new snapshot from any provider poller.
     /// Outputs: snapshot appended; oldest entries pruned if buffer exceeds
@@ -81,6 +87,8 @@ impl DaemonState {
     }
 
     /// Returns the current RAG worker queue depth, or 0 if no pool is active.
+    // Read by `cascade status` JSON output for rag.worker_queue_depth field.
+    #[allow(dead_code)]
     ///
     /// Used by the `cascade status` JSON output (`rag.worker_queue_depth`).
     pub fn worker_queue_depth(&self) -> usize {
@@ -91,6 +99,8 @@ impl DaemonState {
     }
 
     /// Gracefully drain and shut down the worker pool.
+    // Called on SIGTERM/SIGINT before dropping DaemonState to flush embedding batches.
+    #[allow(dead_code)]
     ///
     /// Must be called on SIGTERM/SIGINT before dropping `DaemonState` to ensure
     /// all in-flight embedding batches complete before the process exits.
@@ -101,6 +111,8 @@ impl DaemonState {
     }
 
     /// Add a snapshot to the ring and enforce the max-size bound.
+    // Called by the quota poller after each successful poll cycle.
+    #[allow(dead_code)]
     ///
     /// Inputs:  `snapshot` — the new quota snapshot (JSON value)
     ///          `max_snapshots` — bound size

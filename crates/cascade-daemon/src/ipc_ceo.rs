@@ -120,6 +120,8 @@ impl CeoRuntime {
     }
 
     /// Inject a custom planner (for testing).
+    // Test/DI seam — allows injecting a mock planner without touching production wiring.
+    #[allow(dead_code)]
     pub fn with_planner(self, planner: Arc<dyn Planner>) -> Self {
         Self { planner, ..self }
     }
@@ -150,6 +152,8 @@ pub struct CeoDirectiveParams {
     pub constraints: Vec<String>,
     /// If set, resumes an existing session (not yet supported; reserved).
     #[serde(default)]
+    // IPC param field — reserved for session resume; will be read in E-P6-04.
+    #[allow(dead_code)]
     pub session_id: Option<String>,
 }
 

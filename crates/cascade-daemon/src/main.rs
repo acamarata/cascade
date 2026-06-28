@@ -9,12 +9,6 @@
 //!   logs/        — structured JSON logs (see log.rs)
 //!   crash-last.txt — written on unclean exit
 
-// WHY dead_code allowed: this is an early P2 scaffold. Many types, methods,
-// and constants are defined for future wiring (P3+) and are not yet referenced
-// by the binary entry point. Suppressed here so -D warnings focuses on
-// real new issues, not pre-existing scaffolded stubs.
-#![allow(dead_code)]
-
 mod audit;
 mod cache;
 // T-P4-E04-10: in-memory mtime-validated chunk cache for cascade file reads

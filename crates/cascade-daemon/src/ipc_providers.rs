@@ -100,8 +100,12 @@ pub enum OAuthStatus {
 /// callback.
 struct OAuthPending {
     /// PKCE flow state returned by `OAuthClient::authorize_url`.
+    // OAuth IPC surface — fields read by cascade_providers_oauth_status handler.
+    #[allow(dead_code)]
     result: AuthorizeResult,
     /// The provider ID this flow belongs to.
+    // OAuth IPC surface — identifies which provider flow is pending.
+    #[allow(dead_code)]
     provider_id: String,
     /// Wall-clock instant when the flow was started (for 10-minute timeout).
     started_at: Instant,

@@ -391,9 +391,13 @@ impl VolumeIndexGuard {
 
 /// Per-volume pause state — kept as a plain HashMap inside the guard.
 /// Exported as a type alias so callers can name the map type.
+// Public API type — used by callers that need to inspect per-volume indexing state.
+#[allow(dead_code)]
 pub type VolumeStateMap = HashMap<PathBuf, VolumeStatus>;
 
 /// The indexing state for a single volume.
+// Public status enum — consumed by the status handler and future UI code.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VolumeStatus {
     /// Volume is mounted; indexing is active.

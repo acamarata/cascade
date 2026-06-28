@@ -19,11 +19,17 @@ use serde::Serialize;
 use tokio::sync::RwLock;
 
 /// Shared health state. Cloned via Arc into each IPC connection.
+// IPC health surface — cloned into each IPC connection handler.
+#[allow(dead_code)]
 pub type SharedHealth = Arc<HealthState>;
 
 #[derive(Debug)]
 pub struct HealthState {
+    // Daemon start time — used to compute uptime_secs for status output.
+    #[allow(dead_code)]
     start: Instant,
+    // Resource metrics updated by the background sampler task.
+    #[allow(dead_code)]
     inner: RwLock<HealthInner>,
 }
 
@@ -62,6 +68,8 @@ impl HealthState {
     }
 
     /// Update resource metrics. Called by the background sampler task.
+    // Called by background sampler — not yet wired through to IPC status output.
+    #[allow(dead_code)]
     pub async fn update(&self, queue_depth: u64, ram_kb: u64, cpu_pct: f32) {
         let mut inner = self.inner.write().await;
         inner.queue_depth = queue_depth;
@@ -72,6 +80,8 @@ impl HealthState {
 
 /// Background task that samples process memory and (on supported platforms)
 /// CPU every `interval_secs` and writes results into the shared health state.
+// Planned background task — wired in P3 when detailed health metrics are exposed.
+#[allow(dead_code)]
 ///
 /// Intentionally simple: reads `/proc/self/status` on Linux, `ps` on macOS,
 /// skips gracefully on Windows. CPU % is a rough 1-sample estimate.
@@ -89,6 +99,8 @@ pub async fn sampler(health: Arc<HealthState>, interval_secs: u64) {
     }
 }
 
+// Called by the sampler task to read RAM and CPU from the OS.
+#[allow(dead_code)]
 async fn sample_resources() -> (u64, f32) {
     #[cfg(target_os = "linux")]
     {
@@ -119,7 +131,9 @@ async fn sample_linux() -> (u64, f32) {
     (ram_kb, 0.0) // CPU % via /proc/self/stat requires two samples; skip for now
 }
 
+// macOS-specific resource sampler — called by sample_resources() on macOS.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 async fn sample_macos() -> (u64, f32) {
     let pid = std::process::id().to_string();
     let output = tokio::process::Command::new("ps")

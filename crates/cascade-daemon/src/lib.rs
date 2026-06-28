@@ -4,12 +4,6 @@
 //! the public module surface so integration tests and the cascade-cli crate
 //! can reference types without pulling in the binary entry point.
 
-// WHY dead_code allowed: this crate is an early P2 scaffold. Many types,
-// methods, and constants are defined for future wiring (P3+) and are not
-// yet referenced by the binary entry point. Suppressed at the crate level
-// so -D warnings (clippy gate) focuses on new issues, not scaffolded stubs.
-#![allow(dead_code)]
-
 pub mod audit;
 // E-P6-04: CEO orchestrator IPC methods (ceo_directive / ceo_status / ceo_approve)
 pub mod ipc_ceo;

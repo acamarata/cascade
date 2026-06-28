@@ -104,6 +104,8 @@ pub struct LedgerEntry {
 
 /// Collect `*.md` files from `dir` into `ThreadEntry` items tagged with `project`.
 /// Returns `Ok(vec![])` if the directory does not exist.
+// HTTP handler helper — used by GET /api/personal/threads endpoint.
+#[allow(dead_code)]
 fn collect_md_files(dir: &Path, project: &str) -> Result<Vec<ThreadEntry>, String> {
     if !dir.exists() {
         return Ok(Vec::new());

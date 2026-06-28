@@ -37,6 +37,8 @@ use crate::chunk_cache::ChunkCache;
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 /// Errors returned by [`load_cascade_file`].
+// Error type for the cascade file loader — used by load_cascade_file callers.
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum LoadError {
     /// Could not read the file or its metadata.
@@ -68,6 +70,8 @@ pub enum LoadError {
 ///
 /// Returns [`LoadError::Io`] if the file cannot be read or its mtime cannot
 /// be determined.
+// RAG pipeline entry point — called by the search handler to load instruction files.
+#[allow(dead_code)]
 pub fn load_cascade_file(path: &Path, cache: &Arc<ChunkCache>) -> Result<Vec<Chunk>, LoadError> {
     // Step 1: read mtime — before locking the cache or reading the file.
     let mtime = file_mtime(path)?;
@@ -92,6 +96,8 @@ pub fn load_cascade_file(path: &Path, cache: &Arc<ChunkCache>) -> Result<Vec<Chu
 }
 
 /// Read the last-modified time of `path`.
+// Private helper called by load_cascade_file — part of the loader pipeline.
+#[allow(dead_code)]
 fn file_mtime(path: &Path) -> Result<SystemTime, LoadError> {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
@@ -102,6 +108,8 @@ fn file_mtime(path: &Path) -> Result<SystemTime, LoadError> {
 }
 
 /// Split the content of a cascade instruction file into paragraph-level chunks.
+// Private helper called by load_cascade_file — provides paragraph-level chunking for RAG.
+#[allow(dead_code)]
 ///
 /// WHY paragraph split: cascade files are Markdown; paragraphs (separated by
 /// blank lines) are natural semantic units for retrieval. A full Markdown-aware

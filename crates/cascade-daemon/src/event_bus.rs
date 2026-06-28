@@ -27,6 +27,8 @@ use tracing::debug;
 use crate::supervisor::DaemonError;
 
 const DB_NAME: &str = "events.db";
+// Used by the healthcheck sampler to write queue_depth into HealthState.
+#[allow(dead_code)]
 const SAMPLE_INTERVAL_SECS: u64 = 30;
 
 /// Cloneable handle to the event bus.
@@ -37,6 +39,8 @@ pub struct EventBus {
     config_dir: PathBuf,
 }
 
+// IPC event payload — constructed by publish() and returned from consume()/peek().
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub id: i64,
@@ -105,6 +109,8 @@ impl EventBus {
     }
 
     /// Fetch unconsumed events of a given kind and mark them consumed atomically.
+    // IPC event-bus consumer API — wired in inbox/hotword handlers.
+    #[allow(dead_code)]
     ///
     /// Inputs:  `kind`  — event type string.
     ///          `limit` — maximum number of events to consume.
@@ -152,6 +158,8 @@ impl EventBus {
     }
 
     /// Fetch unconsumed events of a given kind. Does NOT mark them consumed.
+    // IPC non-destructive read — used by inbox preview handlers.
+    #[allow(dead_code)]
     pub async fn peek(&self, kind: &str, limit: usize) -> Result<Vec<Event>, DaemonError> {
         let conn = self.db.lock().await;
         let mut stmt = conn
@@ -179,6 +187,8 @@ impl EventBus {
     }
 
     /// Return current queue depth (unconsumed event count).
+    // Used by healthcheck sampler to surface queue depth in HealthState.
+    #[allow(dead_code)]
     pub async fn queue_depth(&self) -> u64 {
         let conn = self.db.lock().await;
         conn.query_row(
@@ -243,6 +253,8 @@ impl EventBus {
     }
 
     /// Record a quota snapshot in the persistent store (no-op stub — full
+    // Quota IPC surface — called by the quota poller after each successful poll.
+    #[allow(dead_code)]
     /// implementation lives in P3 EventBus quota_snapshots table).
     ///
     /// The quota poller calls this after each successful poll so that quota

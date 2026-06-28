@@ -36,6 +36,8 @@ use std::path::Path;
 // methods, not std items.  Clippy incorrectly attributes them to a std API
 // that is stable since 1.89; the actual calls are on the fs2 trait and compile
 // against the declared MSRV.
+// IPC key-management surface — called by cascade migrate-keys and IPC key-index commands.
+#[allow(dead_code)]
 #[allow(clippy::incompatible_msrv)]
 pub fn read_key_index(key_index_path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
     // Bug 1 fix: open ONE handle and read through it. Use lock_shared so
@@ -76,6 +78,8 @@ pub fn read_key_index(key_index_path: &Path) -> Result<Value, Box<dyn std::error
 ///
 /// # Errors
 /// File open/lock failures or JSON serialization errors.
+// IPC key-management surface — called by cascade migrate-keys to persist updated key index.
+#[allow(dead_code)]
 // clippy::incompatible_msrv: same as read_key_index — fs2 trait methods.
 #[allow(clippy::incompatible_msrv)]
 pub fn write_key_index(

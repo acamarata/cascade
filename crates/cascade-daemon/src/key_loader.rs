@@ -33,6 +33,8 @@ pub fn load_from_keychain(kc: &dyn cascade_keychain::Keychain) -> Vec<SecretStri
 /// Purpose: Production entry point — uses platform_keychain(), falls back to vault.env.
 /// Outputs: Vec of SecretString keys; logs count and source at INFO level.
 /// Constraints: Never logs key values. Source label indicates "OS keychain" or "vault.env fallback".
+// Called in main.rs under #[cfg(feature = "gemini-proxy")] — warning is a feature-gate FP.
+#[allow(dead_code)]
 pub fn load_api_keys() -> Vec<SecretString> {
     let kc = platform_keychain();
     let mut keys = load_from_keychain(kc.as_ref());

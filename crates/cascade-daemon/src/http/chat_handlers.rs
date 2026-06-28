@@ -69,6 +69,8 @@ pub struct ChatRequest {
 /// Dispatch a tool call by name with its arguments.
 /// Delegates to the chat_tools catalog (T-P3-E02-19).  Returns a JSON Value
 /// so the SSE handler can embed the result verbatim in a `tool_result` event.
+// Tool dispatch seam — wired into chat_handler in T-P3-E02-19.
+#[allow(dead_code)]
 async fn dispatch_tool(name: &str, args: &Value) -> Value {
     let result = super::chat_tools::dispatch(name, args).await;
     serde_json::to_value(&result)

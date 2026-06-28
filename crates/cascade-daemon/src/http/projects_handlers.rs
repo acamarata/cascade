@@ -37,6 +37,8 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 /// Return ISO 8601 mtime for a path, or "unknown" on failure.
+// Used by GET /api/projects to surface last-modified times.
+#[allow(dead_code)]
 fn mtime_str(p: &std::path::Path) -> String {
     std::fs::metadata(p)
         .ok()

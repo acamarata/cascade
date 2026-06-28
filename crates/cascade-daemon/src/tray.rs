@@ -180,6 +180,8 @@ pub fn spawn_tray_thread(
 /// Constraints: never panics; logs `warn` on read failure.
 ///
 /// SPORT: `.claude/docs/MASTER-DAEMON.md` — fleet_summary_from_store (E-P6-03 v1.1)
+// Tray menu helper — reads quota-store.json to populate the fleet summary tooltip.
+#[allow(dead_code)]
 pub fn fleet_summary_from_store(store_path: &std::path::Path) -> Vec<String> {
     use cascade_core::quota_store::read_quota_store;
     match read_quota_store(store_path) {
@@ -222,6 +224,8 @@ pub fn fleet_summary_from_store(store_path: &std::path::Path) -> Vec<String> {
 ///   cache-to-tray mapping is completed when E-03 lands (T-P2-E03-*).
 ///
 /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-daemon
+// Stub converter — returns a default TrayState until E-03 StatusCache wiring lands.
+#[allow(dead_code)]
 pub fn cache_to_tray_state_stub() -> TrayState {
     TrayState {
         daemon_status: DaemonStatus::Running,

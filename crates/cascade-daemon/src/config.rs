@@ -20,6 +20,8 @@ use std::path::Path;
 pub enum ConfigError {
     /// Home directory cannot be determined from the environment.
     #[error("cannot determine home directory")]
+    // Error variant for missing $HOME — constructed on non-macOS where dirs::home_dir can fail.
+    #[allow(dead_code)]
     MissingHome,
     /// Failed to read the config.toml file.
     #[error("failed to read config.toml: {0}")]

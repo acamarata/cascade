@@ -181,10 +181,14 @@ pub(crate) fn has_watched_extension(path: &Path) -> bool {
 /// `VolumeIndexGuard` calls `pause()` on unmount and `resume()` on remount.
 /// While paused, debounce tasks complete their sleep but the outbound signal is
 /// suppressed — the ingest pipeline sees no events until resumed.
+// File-watcher for RAG ingest pipeline — constructed by supervisor at project open.
+#[allow(dead_code)]
 pub struct AutoRagWatcher {
     // Keeps the notify watcher alive for the struct's lifetime.
     _watcher: RecommendedWatcher,
     /// `true` while the watched volume is absent.  Shared with debounce tasks.
+    // Shared pause flag — read by debounce tasks to suppress signals while volume is absent.
+    #[allow(dead_code)]
     paused: Arc<AtomicBool>,
 }
 
@@ -356,6 +360,8 @@ impl AutoRagWatcher {
     ///
     /// Idempotent.  Debounce timers keep running but their output is suppressed.
     /// Called by `VolumeIndexGuard` on `VolumeEvent::Unmounted`.
+    // Called by VolumeIndexGuard on VolumeEvent::Unmounted — wired in T-P4-E01-32.
+    #[allow(dead_code)]
     pub fn pause(&self) {
         self.paused.store(true, Ordering::Relaxed);
     }
@@ -364,12 +370,16 @@ impl AutoRagWatcher {
     ///
     /// Idempotent.  Subsequent debounce completions will forward signals normally.
     /// Called by `VolumeIndexGuard` on `VolumeEvent::Mounted`.
+    // Called by VolumeIndexGuard on VolumeEvent::Mounted — wired in T-P4-E01-32.
+    #[allow(dead_code)]
     pub fn resume(&self) {
         self.paused.store(false, Ordering::Relaxed);
     }
 
     /// Returns `true` when the watcher is suppressing signals due to a volume
     /// being absent.
+    // Status query — used by daemon status handler and tests.
+    #[allow(dead_code)]
     pub fn is_paused(&self) -> bool {
         self.paused.load(Ordering::Relaxed)
     }

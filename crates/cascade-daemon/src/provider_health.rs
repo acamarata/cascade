@@ -40,15 +40,21 @@ use cascade_providers::ProviderRegistry;
 #[derive(Debug, Clone)]
 pub struct ProviderHealth {
     /// Whether the provider passed its last health check.
+    // Read by healthy_provider_ids() and IPC health command handler.
+    #[allow(dead_code)]
     pub ok: bool,
 
     /// Wall-clock instant of the last completed check.
     ///
     /// WHY `Instant` (not `SystemTime`): used only for internal age tracking;
     /// never serialized directly.  Convert to elapsed seconds for display.
+    // Read by status output to compute age-of-last-check.
+    #[allow(dead_code)]
     pub checked_at: Instant,
 
     /// Human-readable error description when `ok = false`; `None` when healthy.
+    // Surfaced in IPC health response and WARN log lines.
+    #[allow(dead_code)]
     pub error_msg: Option<String>,
 }
 
@@ -60,6 +66,8 @@ pub type HealthState = Arc<RwLock<HashMap<String, ProviderHealth>>>;
 // ── Public helpers ────────────────────────────────────────────────────────────
 
 /// Return a snapshot of the IDs of all currently-healthy providers.
+// IPC health surface — used by daemon health command and Tauri command.
+#[allow(dead_code)]
 ///
 /// Reads the shared [`HealthState`] under a read lock.  Used by the daemon
 /// IPC handler and Tauri `cascade_providers_health` command.

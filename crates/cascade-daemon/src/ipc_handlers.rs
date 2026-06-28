@@ -24,8 +24,12 @@ pub enum IpcHandlerError {
     /// I/O error reading/writing the store.
     StoreIo(std::io::Error),
     /// Git subprocess failed with a non-zero exit code.
+    // IPC error variant — returned by handle_add/remove_worktree on git failure.
+    #[allow(dead_code)]
     GitError(String),
     /// Worktree entry not found.
+    // IPC error variant — returned by handle_remove_worktree when ID is missing.
+    #[allow(dead_code)]
     NotFound(String),
 }
 
@@ -43,6 +47,8 @@ impl std::fmt::Display for IpcHandlerError {
 ///
 /// If `create_worktree` is true, spawns `git -C {repo_root} worktree add {worktree_path} {branch}`.
 /// Returns the new entry ID.
+// IPC handler — dispatched from ipc.rs try_typed_dispatch on AddWorktree command.
+#[allow(dead_code)]
 pub async fn handle_add_worktree(
     repo_root: String,
     branch: String,
@@ -99,6 +105,8 @@ pub async fn handle_add_worktree(
 ///
 /// If `remove_from_disk` is true, spawns `git worktree remove --force {worktree_path}`.
 /// Returns the removed entry's ID if found, or NotFound error if the ID doesn't exist.
+// IPC handler — dispatched from ipc.rs try_typed_dispatch on RemoveWorktree command.
+#[allow(dead_code)]
 pub async fn handle_remove_worktree(
     id: String,
     remove_from_disk: bool,
@@ -143,6 +151,8 @@ pub async fn handle_remove_worktree(
 /// List all registered worktrees.
 ///
 /// Calls scan_stale first to mark any stale entries, then returns the list.
+// IPC handler — dispatched from ipc.rs try_typed_dispatch on ListWorktrees command.
+#[allow(dead_code)]
 pub async fn handle_list_worktrees() -> Result<Vec<WorktreeEntry>, IpcHandlerError> {
     // Load store, scan for stale entries, and write back if any were marked.
     let mut store = read_worktree_store().map_err(IpcHandlerError::StoreIo)?;
@@ -159,6 +169,8 @@ pub async fn handle_list_worktrees() -> Result<Vec<WorktreeEntry>, IpcHandlerErr
 }
 
 /// Re-scan for auto-detected harness accounts and update providers.json.
+// IPC handler — dispatched on RescanProviders command from CLI/widget.
+#[allow(dead_code)]
 ///
 /// This handler is called by the onboarding wizard, CLI, or widgets to trigger
 /// a fresh scan for newly-installed harnesses or updated credentials without
@@ -235,6 +247,8 @@ pub async fn handle_read_quota_store() -> Result<QuotaStore, IpcHandlerError> {
 }
 
 /// Read proxy metrics for all provider slots.
+// IPC handler — dispatched on ReadProxyMetrics command for CLI/dashboard.
+#[allow(dead_code)]
 ///
 /// Locks the routing table, iterates over all slots, computes p50/p95 latencies,
 /// and returns a Vec<ProviderMetricsSnapshot> for the CLI and dashboard.
@@ -338,6 +352,8 @@ pub fn handle_budget_check(
 
 /// Append a typed [`QuotaState`] snapshot to the daemon's buffer and
 /// reaggregate the quota store to disk atomically.
+// IPC handler — dispatched on UpdateQuotaState from provider pollers (E-P6-02).
+#[allow(dead_code)]
 ///
 /// Inputs:
 ///   - `state_json`  — JSON-encoded `QuotaState`.
@@ -403,6 +419,8 @@ pub fn handle_get_rotation_advice(
 }
 
 /// Read harness status snapshots from the in-memory cache (IPC endpoint).
+// IPC handler — dispatched on HarnessStatus command; reads from HarnessMonitor cache.
+#[allow(dead_code)]
 ///
 /// Returns a Vec<HarnessStatus> without spawning pgrep processes (reads from
 /// cache written by HarnessMonitor background task).

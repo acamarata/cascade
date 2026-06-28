@@ -518,6 +518,8 @@ pub async fn run(
 /// Inputs: `daemon_bin` — absolute path to the `cascaded` binary.
 /// Outputs: unit of state change (plist loaded / unit enabled / service registered).
 /// Constraints: never prompts for admin password.
+// CLI surface — called by `cascade install` subcommand.
+#[allow(dead_code)]
 pub async fn install(daemon_bin: &Path) -> Result<InstallResult, DaemonError> {
     #[cfg(target_os = "macos")]
     return install_macos(daemon_bin).await;
@@ -530,6 +532,8 @@ pub async fn install(daemon_bin: &Path) -> Result<InstallResult, DaemonError> {
 }
 
 /// Uninstall the OS service. Idempotent.
+// CLI surface — called by `cascade uninstall` subcommand.
+#[allow(dead_code)]
 pub async fn uninstall() -> Result<(), DaemonError> {
     #[cfg(target_os = "macos")]
     return uninstall_macos().await;
@@ -543,7 +547,9 @@ pub async fn uninstall() -> Result<(), DaemonError> {
 
 // ── macOS LaunchAgent ─────────────────────────────────────────────────────
 
+// macOS LaunchAgent install — called by install() on macOS.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 async fn install_macos(daemon_bin: &Path) -> Result<InstallResult, DaemonError> {
     let plist_path = macos_plist_path()?;
 
@@ -586,7 +592,9 @@ async fn install_macos(daemon_bin: &Path) -> Result<InstallResult, DaemonError> 
     Ok(InstallResult::Installed)
 }
 
+// macOS LaunchAgent uninstall — called by uninstall() on macOS.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 async fn uninstall_macos() -> Result<(), DaemonError> {
     let plist_path = macos_plist_path()?;
     if plist_path.exists() {
@@ -604,7 +612,9 @@ async fn uninstall_macos() -> Result<(), DaemonError> {
     Ok(())
 }
 
+// Returns the LaunchAgent plist path for this daemon on macOS.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn macos_plist_path() -> Result<PathBuf, DaemonError> {
     let home = dirs::home_dir().ok_or(DaemonError::NoHomeDir)?;
     Ok(home
@@ -613,7 +623,9 @@ fn macos_plist_path() -> Result<PathBuf, DaemonError> {
         .join("dev.cascade.daemon.plist"))
 }
 
+// Generates the plist XML content for the macOS LaunchAgent.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn macos_plist_template(daemon_bin: &Path) -> String {
     let bin = daemon_bin.display();
     let home = dirs::home_dir()
@@ -785,6 +797,8 @@ async fn uninstall_windows() -> Result<(), DaemonError> {
 
 // ── Shared types ─────────────────────────────────────────────────────────
 
+// Result type returned by install() — used to report installed vs already-installed state.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum InstallResult {
     Installed,
@@ -796,13 +810,19 @@ pub enum DaemonError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("install failed: {0}")]
+    // Error variant — returned by install_macos/linux/windows on failure.
+    #[allow(dead_code)]
     InstallFailed(String),
     #[error("no home directory")]
+    // Error variant — returned when dirs::home_dir() returns None during install.
+    #[allow(dead_code)]
     NoHomeDir,
     #[error("unsupported platform")]
     UnsupportedPlatform,
     #[error("event bus error: {0}")]
     EventBus(String),
     #[error("IPC error: {0}")]
+    // Error variant — returned when an IPC operation fails during supervisor init.
+    #[allow(dead_code)]
     Ipc(String),
 }

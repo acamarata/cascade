@@ -97,6 +97,8 @@ pub fn init_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
 /// Panics if `log_dir` cannot be created or if the rolling appender fails to
 /// initialise. Panics (via `tracing-subscriber`) if a global subscriber has
 /// already been installed.
+// Called by main() when OTEL telemetry is enabled via config.telemetry.enabled.
+#[allow(dead_code)]
 pub fn init_logging(log_dir: &Path, otel_provider: Option<&TracerProvider>) -> WorkerGuard {
     std::fs::create_dir_all(log_dir).expect("cannot create log dir");
 

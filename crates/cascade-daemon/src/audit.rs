@@ -49,6 +49,8 @@ pub fn init(path: &Path) -> Result<(), cascade_audit::AuditError> {
 
 /// Return the path of the initialised audit log, or `None` if not yet initialised.
 /// Used by integration tests to locate the active log regardless of init order.
+// Public test/IPC utility — locates the audit log path without re-init.
+#[allow(dead_code)]
 pub fn active_log_path() -> Option<&'static std::path::Path> {
     AUDIT_PATH.get().map(|p| p.as_path())
 }
