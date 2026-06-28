@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-06-28
+
+Remediation patch (P1, part 1): the LLM provider path + GUI RAG.
+
+### Fixed
+- **Real LLM providers are registered.** Storing an API key previously registered a `NoopProvider` (every completion errored). The daemon now builds the real adapter for the key's provider (Anthropic, Gemini, OpenAI, Groq, OpenRouter, Together); unknown families fall back to a NoopProvider with a logged warning rather than silently. This unblocks the provider-dependent features being wired in subsequent patches. (Mistral/Cohere/DeepSeek need a keychain-namespace bridge — flagged in logs.)
+- **GUI RAG commands work.** The Tauri `rag_search`/`rag_list_sources`/`rag_index_stats`/`rag_ingest_file` commands were no-op stubs; they now call the daemon's `rag.*` IPC methods over the (now-working) IPC channel, with a typed `daemon_not_running` error instead of fake empty results.
+
+### Known remaining (next patches)
+HyDE, MCP sampling, the automation router, and board-debate still need the provider injected into their crates; RAPTOR/arch, real SPLADE/ColBERT, `live_cc` PTY, and plugin WASM ABI remain. Tracked via in-code `TODO`.
+
 ## [1.9.1] - 2026-06-28
 
 Remediation patch (P0): make the flagship RAG retrieval and the CLI↔daemon IPC actually work in the shipped binary. A deep self-audit found several features were stubbed/fake despite being described as done; this release fixes the highest-impact ones.
