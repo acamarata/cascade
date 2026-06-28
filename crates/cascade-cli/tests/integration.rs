@@ -164,11 +164,6 @@ fn run_cascade(args: &[&str], home: &std::path::Path) -> std::process::Output {
 // ── Tests that require a live daemon ─────────────────────────────────────────
 
 /// `cascade ping` against a live daemon: exits 0 and output contains "pong".
-///
-/// NOTE: Currently exits 1 due to IPC envelope mismatch (daemon sends a plain
-/// JSON object; client expects a JSON-RPC 2.0 `Response` with a `jsonrpc`
-/// field).  This test documents the *current* observed behaviour.  When the
-/// mismatch is resolved the assertion should flip to `success()`.
 #[test]
 fn test_ping_live() {
     let (mut daemon, temp) = daemon_fixture();
@@ -183,18 +178,15 @@ fn test_ping_live() {
         "daemon socket not present after ping; stdout={stdout:?} stderr={stderr:?}"
     );
 
-    // IPC progress: byte-order, typed-method routing, and the auth-token handshake
-    // are now fixed, so the request reaches the daemon's ping handler and gets a
-    // response (no more "IPC token not found"). One layer remains: the daemon's
-    // legacy `Response` shape vs the CLI's JSON-RPC 2.0 response envelope.
-    // TODO(ipc-response-envelope): unify the typed-dispatch response to JSON-RPC
-    // 2.0 ({jsonrpc,id,result,error}) so `cascade ping` deserialises cleanly.
+    // Daemon wraps responses in JSON-RPC 2.0 envelope; CLI deserialises cleanly.
     assert!(
-        !stderr.contains("IPC token not found"),
-        "auth-token handshake regressed; stderr={stderr:?}"
+        out.status.success(),
+        "cascade ping should exit 0; stdout={stdout:?} stderr={stderr:?}"
     );
-    let code = out.status.code().unwrap_or(0);
-    assert!(code < 10, "ping crashed with code {code}; stderr={stderr:?}");
+    assert!(
+        stdout.contains("pong"),
+        "cascade ping stdout should contain 'pong'; stdout={stdout:?} stderr={stderr:?}"
+    );
 
     let _ = daemon.kill();
     let _ = daemon.wait();

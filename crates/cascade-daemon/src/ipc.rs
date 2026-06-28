@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use cascade_rag::embed::MockEmbedModel;
 use cascade_rag::index_manager::IndexRegistry;
-use cascade_types::ipc::{self as typed_ipc, PROTOCOL_VERSION};
+use cascade_types::ipc::{self as typed_ipc, RequestId, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
@@ -306,7 +306,7 @@ where
         let len = u32::from_be_bytes(len_buf) as usize;
         if len > MAX_FRAME_LEN {
             let resp = Response::err(-32600, "frame too large");
-            write_response(&mut writer, &resp).await?;
+            write_response(&mut writer, &resp, RequestId::Number(1)).await?;
             break;
         }
 
@@ -324,17 +324,28 @@ where
         // The CLI IpcClient wraps requests as {"auth": <token>, "rpc": <jsonrpc>}.
         // Unwrap to the inner rpc for dispatch; fall back to the raw body for
         // direct/legacy callers that send the request unwrapped.
-        let dispatch_body: Vec<u8> = match serde_json::from_slice::<serde_json::Value>(&body) {
-            Ok(v) if v.get("rpc").is_some() => {
-                serde_json::to_vec(&v["rpc"]).unwrap_or(body)
-            }
-            _ => body,
+        //
+        // Extract the JSON-RPC `id` from the envelope so we can echo it back in
+        // the response (JSON-RPC 2.0 requires the response `id` to match the
+        // request `id`). Default to Number(1) for legacy callers that omit it.
+        let parsed_envelope: serde_json::Value =
+            serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+        let request_id: RequestId = parsed_envelope
+            .get("rpc")
+            .and_then(|rpc| rpc.get("id"))
+            .and_then(|id| serde_json::from_value(id.clone()).ok())
+            .unwrap_or(RequestId::Number(1));
+
+        let dispatch_body: Vec<u8> = if parsed_envelope.get("rpc").is_some() {
+            serde_json::to_vec(&parsed_envelope["rpc"]).unwrap_or(body)
+        } else {
+            body
         };
         let response = match serde_json::from_slice::<Request>(&dispatch_body) {
             Ok(req) => dispatch(&server, req).await,
             Err(_legacy_err) => try_typed_dispatch(&server, &dispatch_body).await,
         };
-        write_response(&mut writer, &response).await?;
+        write_response(&mut writer, &response, request_id).await?;
     }
     Ok(())
 }
@@ -342,8 +353,24 @@ where
 async fn write_response<W: AsyncWriteExt + Unpin>(
     writer: &mut W,
     resp: &Response,
+    id: RequestId,
 ) -> Result<(), DaemonError> {
-    let bytes = serde_json::to_vec(resp).unwrap_or_default();
+    // Wrap the daemon's internal Response in a JSON-RPC 2.0 envelope so the
+    // CLI's IpcClient (which deserialises cascade_types::ipc::Response<Value>
+    // with fields jsonrpc/id/result/error) can parse it.
+    let envelope = match resp {
+        Response::Ok(value) => serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": value,
+        }),
+        Response::Error { code, message } => serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": { "code": code, "message": message },
+        }),
+    };
+    let bytes = serde_json::to_vec(&envelope).unwrap_or_default();
     let len = (bytes.len() as u32).to_be_bytes(); // big-endian: match FrameCodec / CLI
     writer.write_all(&len).await.map_err(DaemonError::Io)?;
     writer.write_all(&bytes).await.map_err(DaemonError::Io)?;
