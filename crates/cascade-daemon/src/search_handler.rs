@@ -58,13 +58,87 @@ use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::{debug, instrument};
 
+use async_trait::async_trait;
+use cascade_providers::{CompletionRequest, ProviderAdapter};
 use cascade_rag::embed::EmbedModel;
 use cascade_rag::index_manager::IndexRegistry;
 use cascade_rag::ingest::{IngestConfig, IngestPipeline, IngestResult};
 use cascade_rag::rerank::bge::{BgeReranker, BgeRerankerOptions};
 use cascade_rag::rerank::Reranker;
-use cascade_rag::search::{search, RerankerModelConfig, SearchConfig};
+use cascade_rag::search::{search, HydeLlm, RerankerModelConfig, SearchConfig};
 use cascade_rag::{RagCitation, SourceInfo};
+use cascade_types::error::{CascadeError, Result as CascadeResult};
+
+// ── ProviderHydeLlm ───────────────────────────────────────────────────────────
+
+/// [`HydeLlm`] implementation that delegates to the daemon's [`ProviderAdapter`].
+///
+/// # Purpose
+///
+/// Bridges the `cascade-rag` `HydeLlm` trait to the `cascade-providers`
+/// `ProviderAdapter` trait so the daemon can inject a real LLM into the HyDE
+/// query-expansion channel without introducing a `cascade-providers` dependency
+/// inside `cascade-rag`.
+///
+/// # Prompt
+///
+/// Sends a one-shot user message asking the model to write a short hypothetical
+/// passage that would answer the query.  The response text is used as the dense
+/// query vector instead of the raw query, bridging vocabulary gaps.
+///
+/// # Fallback
+///
+/// On any provider error, `generate_hypothetical` returns `Err`.  The caller
+/// (`cascade_rag::search`) handles the fallback to the raw query transparently.
+///
+/// # Constraints
+///
+/// - `max_tokens: Some(256)` — HyDE passages need only be 1–3 sentences; cap
+///   prevents runaway costs on pay-per-token providers.
+/// - `stream: false` — the full response must arrive before embedding begins.
+pub struct ProviderHydeLlm {
+    adapter: Arc<dyn ProviderAdapter>,
+    model: String,
+}
+
+impl ProviderHydeLlm {
+    /// Create a new `ProviderHydeLlm`.
+    ///
+    /// - `adapter` — any registered [`ProviderAdapter`]; production typically
+    ///   uses the Chat-class provider resolved by the routing table.
+    /// - `model` — model identifier passed through to the provider (e.g.
+    ///   `"claude-3-haiku-20240307"`).
+    pub fn new(adapter: Arc<dyn ProviderAdapter>, model: impl Into<String>) -> Self {
+        Self {
+            adapter,
+            model: model.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl HydeLlm for ProviderHydeLlm {
+    async fn generate_hypothetical(&self, query: &str) -> CascadeResult<String> {
+        let prompt = format!(
+            "Write a short hypothetical passage (1–3 sentences) that would directly answer \
+             the following question. Return only the passage, no preamble:\n\n{query}"
+        );
+        let req = CompletionRequest {
+            model: self.model.clone(),
+            messages: vec![cascade_providers::Message::user(prompt)],
+            max_tokens: Some(256),
+            temperature: Some(0.3),
+            stream: false,
+            system: None,
+        };
+        let resp = self
+            .adapter
+            .complete(req)
+            .await
+            .map_err(|e| CascadeError::Other(format!("HyDE provider error: {e}")))?;
+        Ok(resp.content)
+    }
+}
 
 // ── Request / response shapes ─────────────────────────────────────────────────
 
@@ -202,6 +276,10 @@ pub struct RagSearchHandler {
     /// BGE reranker model off the startup critical path and swap it in once
     /// ready (see [`spawn_load_reranker`](Self::spawn_load_reranker)).
     reranker: std::sync::RwLock<Option<Arc<dyn Reranker>>>,
+    /// Optional HyDE LLM for query expansion.  `None` → HyDE is disabled even
+    /// when `SearchConfig::hyde_enabled` is set.  Set by
+    /// [`RagSearchHandler::with_hyde_llm`] after construction.
+    hyde_llm: Option<Arc<dyn HydeLlm>>,
 }
 
 impl RagSearchHandler {
@@ -217,6 +295,7 @@ impl RagSearchHandler {
             registry,
             embed,
             reranker: std::sync::RwLock::new(None),
+            hyde_llm: None,
         })
     }
 
@@ -233,7 +312,38 @@ impl RagSearchHandler {
             registry,
             embed,
             reranker: std::sync::RwLock::new(Some(reranker)),
+            hyde_llm: None,
         })
+    }
+
+    /// Attach a [`HydeLlm`] to this handler.
+    ///
+    /// When a `ProviderHydeLlm` (or any other implementation) is attached,
+    /// `handle_search` will pass it into `search()` as the HyDE channel
+    /// whenever `SearchConfig::hyde_enabled` is also `true`.
+    ///
+    /// HyDE is **off by default** — call this method at startup only when a
+    /// provider adapter is confirmed available.
+    pub fn with_hyde_llm(self: Arc<Self>, llm: Arc<dyn HydeLlm>) -> Arc<Self> {
+        // SAFETY: we are the sole Arc owner at construction time (called right
+        // after `new()`), so get_mut is guaranteed to succeed.
+        // If multiple Arcs already exist (tests), fall back to a re-wrap.
+        match Arc::try_unwrap(self) {
+            Ok(mut inner) => {
+                inner.hyde_llm = Some(llm);
+                Arc::new(inner)
+            }
+            Err(existing) => {
+                // Already shared — return as-is (HyDE silently stays off).
+                // In production this path is never taken because with_hyde_llm
+                // is called during the single-threaded startup sequence.
+                tracing::warn!(
+                    "RagSearchHandler::with_hyde_llm called after Arc was shared; \
+                     HyDE LLM not installed"
+                );
+                existing
+            }
+        }
     }
 
     /// Spawn a background task that builds the BGE Reranker V2-M3 and swaps it in.
@@ -325,9 +435,18 @@ impl RagSearchHandler {
         };
 
         let embed = Arc::clone(&self.embed);
+
+        // Pass the HyDE LLM when one is installed AND vec search is enabled.
+        // HyDE only helps the dense channel; without vec_enabled it is a no-op.
+        let hyde_arg: Option<Arc<dyn HydeLlm>> = if config.vec_enabled {
+            self.hyde_llm.as_ref().map(Arc::clone)
+        } else {
+            None
+        };
+
         let t0 = Instant::now();
 
-        let citations = search(&params.query, &config, conn_arc, embed, reranker_arg, None)
+        let citations = search(&params.query, &config, conn_arc, embed, reranker_arg, hyde_arg)
             .await
             .map_err(|e| format!("search: {e}"))?;
 

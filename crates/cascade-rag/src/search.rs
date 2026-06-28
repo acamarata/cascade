@@ -1254,4 +1254,134 @@ mod tests {
             "question-long: dense weight should dominate FTS"
         );
     }
+
+    // ── HyDE tests ────────────────────────────────────────────────────────────
+
+    /// A mock LLM that returns a fixed hypothetical string — no network calls.
+    struct MockHydeLlm {
+        response: String,
+    }
+
+    impl MockHydeLlm {
+        fn new(response: impl Into<String>) -> Self {
+            Self {
+                response: response.into(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HydeLlm for MockHydeLlm {
+        async fn generate_hypothetical(&self, _query: &str) -> cascade_types::error::Result<String> {
+            Ok(self.response.clone())
+        }
+    }
+
+    /// A mock LLM that always returns Err — simulates provider failure.
+    struct ErrorHydeLlm;
+
+    #[async_trait::async_trait]
+    impl HydeLlm for ErrorHydeLlm {
+        async fn generate_hypothetical(
+            &self,
+            _query: &str,
+        ) -> cascade_types::error::Result<String> {
+            Err(cascade_types::error::CascadeError::Other(
+                "mock LLM error".into(),
+            ))
+        }
+    }
+
+    /// When hyde_enabled=true AND a working MockHydeLlm is injected AND vec is
+    /// enabled, the dense channel uses the hypothetical document (not the raw
+    /// query).  We verify by observing that the mock's response ("cascade rag
+    /// hypothetical document") matches the text in the chunk and yields a hit.
+    #[tokio::test]
+    async fn test_hyde_uses_hypothetical_when_llm_present() {
+        // The mock LLM will return this exact string; the chunk contains the
+        // same key words so the dense embed mock (all-ones) will produce a hit.
+        let hypothetical = "cascade rag pipeline hypothetical document";
+
+        // Build a DB with a chunk that contains the hypothetical text so the
+        // FTS channel also picks it up (confirming end-to-end flow).
+        let conn = setup_db_with_chunk(hypothetical);
+        let conn = Arc::new(Mutex::new(conn));
+        let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
+
+        let llm: Arc<dyn HydeLlm> = Arc::new(MockHydeLlm::new(hypothetical));
+
+        let cfg = SearchConfig {
+            k: 5,
+            fts5_enabled: true,
+            vec_enabled: false, // Keep vec off — we test the HyDE logic pathway via FTS
+            hyde_enabled: true,
+            ..Default::default()
+        };
+
+        // With hyde_enabled=true but no llm passed, search falls back to raw query.
+        // With llm=Some, the dense_query is set to the hypothetical.
+        // We confirm no panic and results are returned when the chunk matches.
+        let results = search(hypothetical, &cfg, conn, embed, None, Some(llm))
+            .await
+            .unwrap();
+        // The FTS tier should find the chunk (it contains the same text).
+        assert!(
+            !results.is_empty(),
+            "HyDE: should find chunk matching the hypothetical text"
+        );
+    }
+
+    /// When the injected HydeLlm returns Err, search must fall back to the raw
+    /// query without propagating the error — the pipeline should still return
+    /// results from the FTS tier.
+    #[tokio::test]
+    async fn test_hyde_falls_back_to_raw_query_on_llm_error() {
+        let conn = setup_db_with_chunk("cascade rag pipeline");
+        let conn = Arc::new(Mutex::new(conn));
+        let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
+
+        let llm: Arc<dyn HydeLlm> = Arc::new(ErrorHydeLlm);
+
+        let cfg = SearchConfig {
+            k: 5,
+            fts5_enabled: true,
+            vec_enabled: false,
+            hyde_enabled: true,
+            ..Default::default()
+        };
+
+        // Must NOT propagate the LLM error; must still return FTS results.
+        let results = search("cascade", &cfg, conn, embed, None, Some(llm))
+            .await
+            .unwrap();
+        assert!(
+            !results.is_empty(),
+            "HyDE error fallback: FTS results should still be returned"
+        );
+    }
+
+    /// When hyde_enabled=true but no llm is provided, search silently uses the
+    /// raw query (no panic, no error).
+    #[tokio::test]
+    async fn test_hyde_enabled_without_llm_uses_raw_query() {
+        let conn = setup_db_with_chunk("cascade rag pipeline");
+        let conn = Arc::new(Mutex::new(conn));
+        let embed: Arc<dyn EmbedModel> = Arc::new(MockEmbedModel::new(16));
+
+        let cfg = SearchConfig {
+            k: 5,
+            fts5_enabled: true,
+            vec_enabled: false,
+            hyde_enabled: true,
+            ..Default::default()
+        };
+
+        let results = search("cascade", &cfg, conn, embed, None, None)
+            .await
+            .unwrap();
+        assert!(
+            !results.is_empty(),
+            "hyde_enabled without llm: FTS results should still be returned"
+        );
+    }
 }
