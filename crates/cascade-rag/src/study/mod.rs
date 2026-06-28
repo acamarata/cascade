@@ -7,10 +7,8 @@
 //! 2. Builds a code-graph adjacency table from a set of [`Chunk`]s.
 //! 3. Collects all symbols in the project.
 //! 4. Produces a ≤2 KB markdown overview (template-based, cached by content hash).
-//!
-//! RAPTOR clustering and architecture extraction are documented stubs in
-//! `raptor.rs` / `arch.rs` — they require a cheap LLM + clustering library
-//! not included in the rag-14 core pass.
+//! 5. Builds a RAPTOR summarisation tree (directory-clustered, LLM-optional).
+//! 6. Extracts a Mermaid architecture diagram from the code graph.
 //!
 //! # Inputs
 //!
@@ -47,13 +45,13 @@ use crate::chunk::Chunk;
 use crate::search::HydeLlm;
 use cascade_types::error::Result;
 
-pub use arch::ArchDiagram;
+pub use arch::{extract_arch, ArchDiagram};
 pub use code_graph_query::{
     classify_structural, code_graph_query, GraphQueryResult, GraphRaw, StructuralIntent,
 };
 pub use graph::{build_graph, callers_of, symbols_in};
 pub use overview::{generate as generate_overview, OverviewResult};
-pub use raptor::RaptorTree;
+pub use raptor::{build_raptor_tree, RaptorTree};
 pub use stack::{detect as detect_stack, TechStack};
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -71,9 +69,9 @@ pub struct ProjectStudy {
     pub symbols: Vec<(String, String)>,
     /// Detected tech stack.
     pub stack: TechStack,
-    /// RAPTOR tree stub — always empty until rag-14 full implementation.
+    /// RAPTOR summarisation tree — clustered by directory, template or LLM summaries.
     pub raptor: RaptorTree,
-    /// Architecture diagram stub — always empty until rag-14 full implementation.
+    /// Mermaid architecture diagram extracted from the code graph.
     pub arch: ArchDiagram,
 }
 
@@ -87,7 +85,9 @@ pub struct ProjectStudy {
 /// 2. Build the `code_graph` table from `chunks` into `conn`.
 /// 3. Collect all symbols from `conn`.
 /// 4. Generate (or retrieve) a markdown overview.
-/// 5. Return [`ProjectStudy`].
+/// 5. Build RAPTOR tree (directory clusters + summaries).
+/// 6. Extract Mermaid architecture diagram from the code graph.
+/// 7. Return [`ProjectStudy`].
 ///
 /// # Inputs
 ///
@@ -117,15 +117,27 @@ pub async fn study_project(
     let symbols = collect_all_symbols(conn)?;
 
     // 4. Overview (async, cached).
-    let overview_result = generate_overview(conn, &stack, &symbols, project_name, llm).await?;
+    let overview_result =
+        generate_overview(conn, &stack, &symbols, project_name, llm.clone()).await?;
+
+    // 5. RAPTOR tree — directory-clustered, template or LLM summaries, cached.
+    let symbol_chunks: Vec<(&str, &str)> = symbols
+        .iter()
+        .map(|(sym, _kind)| (sym.as_str(), ""))
+        .collect();
+    let llm_ref: Option<&dyn HydeLlm> = llm.as_ref().map(|a| a.as_ref());
+    let raptor = build_raptor_tree(&symbol_chunks, llm_ref, conn).await?;
+
+    // 6. Architecture diagram from code graph.
+    let arch = extract_arch(conn, llm_ref)?;
 
     Ok(ProjectStudy {
         overview_md: overview_result.markdown,
         overview_from_cache: overview_result.from_cache,
         symbols,
         stack,
-        raptor: RaptorTree::default(),
-        arch: ArchDiagram::default(),
+        raptor,
+        arch,
     })
 }
 
@@ -210,8 +222,9 @@ mod tests {
         assert!(study.symbols.iter().any(|(s, _)| s == "foo"));
         assert!(study.symbols.iter().any(|(s, _)| s == "bar"));
         assert!(!study.overview_from_cache);
-        assert!(study.raptor.is_empty()); // stub
-        assert!(study.arch.is_empty()); // stub
+        // RAPTOR and arch are now real implementations — both non-empty for non-empty chunks.
+        assert!(!study.raptor.is_empty(), "raptor tree must be populated");
+        assert!(!study.arch.is_empty(), "arch diagram must be populated");
     }
 
     #[tokio::test]
