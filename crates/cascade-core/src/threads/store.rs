@@ -20,6 +20,31 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// ── RagSink trait ────────────────────────────────────────────────────────────
+
+/// Abstracts writing an episodic memory entry to the personal RAG namespace.
+///
+/// Purpose: breaks the dep-cycle between cascade-core (no cascade-rag dep) and
+///   the actual rag-08 memory engine in cascade-rag. cascade-daemon, which
+///   depends on both, injects a real implementation at call sites.
+/// Inputs:  episode content string
+/// Outputs: Ok(()) or CascadeError::Other
+/// Constraints: must not be called for sensitivity='locked' threads (enforced
+///   by push_to_rag before calling this).
+pub trait RagSink: Send + Sync {
+    /// Append one episode to the personal RAG namespace.
+    fn push_episode(&self, content: &str) -> Result<()>;
+}
+
+/// No-op implementation — used when no real sink has been injected.
+pub struct NoopRagSink;
+
+impl RagSink for NoopRagSink {
+    fn push_episode(&self, _content: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
 // ── Domain types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -513,12 +538,90 @@ impl ThreadStore {
 
     // ── RAG push ─────────────────────────────────────────────────────────────
 
-    /// Push thread READMEs and open tasks to the personal RAG namespace.
-    /// Skips threads with sensitivity = 'locked'.
-    /// TODO(rag-08): wire to personal RAG namespace once rag-08 is integrated.
-    pub fn push_to_rag(&self) -> Result<()> {
-        tracing::debug!("push_to_rag: TODO(rag-08) — personal namespace not yet wired");
+    /// Push thread content (title + README + open/review task summaries) to the
+    /// personal RAG namespace via `sink`.
+    ///
+    /// Skips threads with sensitivity = 'locked' — those are never surfaced to RAG.
+    /// One episode per non-locked thread is written; empty threads (no tasks, empty
+    /// README) are still pushed so the thread title is discoverable.
+    ///
+    /// The caller supplies a [`RagSink`] implementation. Use [`NoopRagSink`] in
+    /// tests or contexts without a memory DB; the daemon injects the real rag-08
+    /// sink backed by cascade-rag's `insert_episode`.
+    pub fn push_to_rag(&self, sink: &dyn RagSink) -> Result<()> {
+        // Gather all threads (active + archived), skip locked.
+        let threads = {
+            let conn = self.conn.lock()
+                .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, parent_id, title, sensitivity, created_at, archived
+                     FROM threads
+                     WHERE sensitivity != 'locked'
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| CascadeError::Other(format!("push_to_rag prepare: {e}")))?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(Thread {
+                        id: row.get(0)?,
+                        parent_id: row.get(1)?,
+                        title: row.get(2)?,
+                        sensitivity: row.get(3)?,
+                        created_at: row.get(4)?,
+                        archived: row.get::<_, i64>(5)? != 0,
+                    })
+                })
+                .map_err(|e| CascadeError::Other(format!("push_to_rag query: {e}")))?;
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
+        };
+
+        for thread in &threads {
+            // Build episode content: title + README body + open/in-review tasks.
+            let readme_body = self.read_readme_content(&thread.id);
+            let open_tasks = self.list_tasks(&thread.id, Some("todo"))?;
+            let review_tasks = self.list_tasks(&thread.id, Some("in_progress"))?;
+
+            let mut content = format!("Thread: {}\n", thread.title);
+            if !readme_body.is_empty() {
+                content.push_str(&format!("Overview: {readme_body}\n"));
+            }
+            if !open_tasks.is_empty() {
+                content.push_str("Open tasks:");
+                for t in &open_tasks {
+                    content.push_str(&format!(" [{title}]", title = t.title));
+                }
+                content.push('\n');
+            }
+            if !review_tasks.is_empty() {
+                content.push_str("In-progress tasks:");
+                for t in &review_tasks {
+                    content.push_str(&format!(" [{title}]", title = t.title));
+                }
+                content.push('\n');
+            }
+
+            sink.push_episode(content.trim_end())?;
+            tracing::debug!("push_to_rag: pushed thread '{}'", thread.title);
+        }
+
+        tracing::debug!("push_to_rag: pushed {} thread(s) to personal namespace", threads.len());
         Ok(())
+    }
+
+    /// Read the README.md for a thread; returns empty string if absent/unreadable.
+    fn read_readme_content(&self, thread_id: &str) -> String {
+        let dir = self.thread_dir(thread_id);
+        let path = dir.join("README.md");
+        std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            // Strip markdown heading line (e.g. "# Thread title\n") and comments.
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim_start().starts_with("<!--"))
+            .collect::<Vec<_>>()
+            .join(" ")
+            .trim()
+            .to_string()
     }
 
     // ── disk helpers ─────────────────────────────────────────────────────────
@@ -735,5 +838,78 @@ mod tests {
             tmp.path().join("threads").join(&t.id).join("todo.md")
         ).unwrap();
         assert!(md.contains("standalone task"), "markdown must be readable without DB");
+    }
+
+    // ── push_to_rag tests ────────────────────────────────────────────────────
+
+    /// Collecting sink: records every episode pushed.
+    struct CollectingSink(std::sync::Mutex<Vec<String>>);
+
+    impl CollectingSink {
+        fn new() -> Self { Self(std::sync::Mutex::new(vec![])) }
+        fn episodes(&self) -> Vec<String> { self.0.lock().unwrap().clone() }
+    }
+
+    impl RagSink for CollectingSink {
+        fn push_episode(&self, content: &str) -> Result<()> {
+            self.0.lock().unwrap().push(content.to_string());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn push_to_rag_sends_normal_thread_content() {
+        let (store, _tmp) = make_store();
+        store.create_thread(CreateThreadParams {
+            title: "Normal Thread".to_string(),
+            parent_id: None,
+            sensitivity: Some("normal".to_string()),
+        }).unwrap();
+        store.create_thread(CreateThreadParams {
+            title: "Default Sensitivity Thread".to_string(),
+            parent_id: None,
+            sensitivity: None,  // defaults to "normal"
+        }).unwrap();
+
+        let sink = CollectingSink::new();
+        store.push_to_rag(&sink).unwrap();
+
+        let episodes = sink.episodes();
+        assert_eq!(episodes.len(), 2, "both normal-sensitivity threads must be pushed");
+        assert!(episodes.iter().any(|e| e.contains("Normal Thread")), "episode must include thread title");
+        assert!(episodes.iter().any(|e| e.contains("Default Sensitivity Thread")));
+    }
+
+    #[test]
+    fn push_to_rag_skips_locked_threads() {
+        let (store, _tmp) = make_store();
+        store.create_thread(CreateThreadParams {
+            title: "Public Thread".to_string(),
+            parent_id: None,
+            sensitivity: Some("normal".to_string()),
+        }).unwrap();
+        store.create_thread(CreateThreadParams {
+            title: "Secret Thread".to_string(),
+            parent_id: None,
+            sensitivity: Some("locked".to_string()),
+        }).unwrap();
+
+        let sink = CollectingSink::new();
+        store.push_to_rag(&sink).unwrap();
+
+        let episodes = sink.episodes();
+        assert_eq!(episodes.len(), 1, "locked thread must be excluded");
+        assert!(episodes[0].contains("Public Thread"), "only public thread must be pushed");
+        assert!(!episodes.iter().any(|e| e.contains("Secret Thread")), "locked thread must never appear");
+    }
+
+    #[test]
+    fn push_to_rag_noop_sink_returns_ok() {
+        let (store, _tmp) = make_store();
+        store.create_thread(CreateThreadParams {
+            title: "Any Thread".to_string(), parent_id: None, sensitivity: None,
+        }).unwrap();
+        let sink = NoopRagSink;
+        assert!(store.push_to_rag(&sink).is_ok(), "NoopRagSink must never error");
     }
 }

@@ -737,6 +737,79 @@ pub async fn handler_account_ledger() -> impl IntoResponse {
     }
 }
 
+// ── RagSink (real impl) ──────────────────────────────────────────────────────
+
+/// cascade-rag-backed RagSink injected by the daemon.
+///
+/// Purpose: bridges cascade-core's RagSink trait to the actual rag-08 memory
+///   engine without creating a dep-cycle. Opens memory.db, runs migrations, and
+///   calls insert_episode into the "personal" namespace (no firewall — internal
+///   trusted caller, uses namespace::validate not validate_with_firewall).
+/// Inputs:  episode content string
+/// Outputs: Ok(()) or CascadeError::Other on DB error
+/// Constraints: each push_episode opens a fresh Connection (no long-lived conn
+///   needed here; push is infrequent). Locked threads are already filtered by
+///   ThreadStore::push_to_rag before this is called.
+pub struct PersonalRagSink;
+
+impl cascade_core::threads::RagSink for PersonalRagSink {
+    fn push_episode(&self, content: &str) -> cascade_types::Result<()> {
+        use cascade_rag::db::run_migrations;
+        use cascade_rag::memory::{episode::insert_episode, namespace::validate};
+        use cascade_types::CascadeError;
+
+        let path = {
+            use cascade_types::paths::home_dir;
+            home_dir().join(".cascade").join("memory.db")
+        };
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| CascadeError::Other(format!("PersonalRagSink mkdir: {e}")))?;
+        }
+        let conn = rusqlite::Connection::open(&path)
+            .map_err(|e| CascadeError::Other(format!("PersonalRagSink open: {e}")))?;
+        // Run migrations so memory_episodes table exists even on first call.
+        run_migrations(&conn)
+            .map_err(|e| CascadeError::Other(format!("PersonalRagSink migrations: {e}")))?;
+        let ns = validate("personal")
+            .map_err(|e| CascadeError::Other(format!("PersonalRagSink namespace: {e}")))?;
+        insert_episode(&conn, &ns, content)
+            .map_err(|e| CascadeError::Other(format!("PersonalRagSink insert: {e}")))?;
+        Ok(())
+    }
+}
+
+// ── POST /api/personal/threads/push-to-rag ───────────────────────────────────
+
+/// Push all non-locked threads to the personal RAG namespace.
+///
+/// Called by the CLI or scheduled task after thread mutations.
+/// Returns `{"pushed": true}` on success.
+pub async fn handler_push_to_rag() -> impl IntoResponse {
+    tokio::task::spawn_blocking(|| {
+        let Some(store) = open_thread_store() else {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir or DB"})),
+            )
+                .into_response();
+        };
+        let sink = PersonalRagSink;
+        match store.push_to_rag(&sink) {
+            Ok(()) => (StatusCode::OK, Json(json!({"pushed": true}))).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })
+}
+
 // ── router ───────────────────────────────────────────────────────────────────
 
 /// Build the `/api/personal` sub-router (no auth — protected by outer middleware).
@@ -765,6 +838,8 @@ pub fn router() -> Router<DashboardState> {
             "/tasks/:id/stage",
             axum::routing::patch(handler_move_task),
         )
+        // rag-08 push
+        .route("/threads/push-to-rag", axum::routing::post(handler_push_to_rag))
         // existing routes
         .route("/ideas-inbox", get(handler_ideas_inbox))
         .route("/crd-chains", get(handler_crd_chains))
