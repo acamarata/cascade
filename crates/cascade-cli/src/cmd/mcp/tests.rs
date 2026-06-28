@@ -25,6 +25,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn token_missing_key_file_returns_error() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -40,6 +41,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn token_existing_key_file_returns_valid_token() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -61,6 +63,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_code_creates_settings_with_cascade_entry() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -86,6 +89,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_code_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -105,6 +109,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_code_remove_clears_entry_preserves_others() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -143,6 +148,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_code_dry_run_does_not_write() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -156,6 +162,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_code_preserves_existing_settings() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -197,6 +204,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_desktop_path_resolves_correctly_on_macos() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -216,6 +224,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_desktop_missing_config_exits_gracefully() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -227,6 +236,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_claude_desktop_creates_entry_with_url_and_auth() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -270,6 +280,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_vscode_creates_mcp_json_with_stdio_entry() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -300,6 +311,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_vscode_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -325,6 +337,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_vscode_remove_preserves_other_servers() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -359,6 +372,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_vscode_dry_run_does_not_write() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -376,6 +390,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_opencode_global_not_installed_exits_gracefully() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
         // Isolate PATH to avoid finding a real opencode binary
@@ -388,6 +403,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_opencode_local_creates_opencode_json() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -412,6 +428,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_opencode_http_flag_writes_http_entry() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -441,6 +458,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_opencode_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -468,6 +486,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_all_detects_at_least_claude_code_when_settings_present() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -486,6 +505,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_all_no_clients_returns_error() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
         std::env::set_var("PATH", tmp.path().to_str().unwrap());

@@ -101,6 +101,9 @@ pub mod taxonomy;
 pub mod watcher;
 pub mod worktree_store;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 // Re-export the most commonly used top-level items.
 pub use accounts_store::{
     accounts_dir, accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry,

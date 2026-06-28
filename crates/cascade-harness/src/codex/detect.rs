@@ -198,6 +198,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn detect_codex_returns_some_when_on_path() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         make_fake_codex(&tmp, "codex 0.1.0");
 
@@ -218,6 +219,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn detect_codex_returns_none_when_missing() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Set PATH to an empty temp dir with no codex binary.
         let empty_dir = TempDir::new().unwrap();
         let original_path = std::env::var("PATH").unwrap_or_default();
@@ -245,6 +247,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn detect_codex_none_when_version_exits_nonzero() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let bin = tmp.path().join("codex");
         // Script that exits 1
@@ -265,13 +268,9 @@ mod tests {
         );
     }
 
-    /// Serializes tests that mutate the process-global XDG_CONFIG_HOME so they
-    /// don't race under the parallel test runner.
-    static XDG_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn resolve_config_dir_uses_xdg() {
-        let _env_guard = XDG_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let orig = std::env::var("XDG_CONFIG_HOME").ok();
         std::env::set_var("XDG_CONFIG_HOME", tmp.path().to_str().unwrap());
@@ -289,7 +288,7 @@ mod tests {
 
     #[test]
     fn resolve_config_dir_fallback_to_home() {
-        let _env_guard = XDG_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let orig = std::env::var("XDG_CONFIG_HOME").ok();
         std::env::remove_var("XDG_CONFIG_HOME");
 

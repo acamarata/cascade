@@ -654,6 +654,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_gci_creates_default_cascade_folder() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let args = InitArgs {
             path: Some(home.path().to_path_buf()),
@@ -681,6 +682,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_prc_inside_git_repo() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         // Simulate a git repo inside home.
         let repo = home.path().join("myrepo");
@@ -711,6 +713,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_explicit_claude_folder() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let target = home.path().to_path_buf();
 
@@ -737,6 +740,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_auto_adopts_existing_claude_folder() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         // Pre-existing .claude
         fs::create_dir_all(home.path().join(".claude")).unwrap();
@@ -766,6 +770,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_idempotent_rerun() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let args = || InitArgs {
             path: Some(home.path().to_path_buf()),
@@ -824,6 +829,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn headless_init_provider_add_mock() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         std::env::set_var("HOME", home.path().as_os_str());
 
@@ -868,6 +874,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_pci_tier_detected() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let sites = home.path().join("Sites");
         fs::create_dir_all(&sites).unwrap();
@@ -896,6 +903,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn headless_init_dry_run_leaves_fs_clean() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let args = InitArgs {
             path: Some(home.path().to_path_buf()),

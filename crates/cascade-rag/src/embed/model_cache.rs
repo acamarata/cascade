@@ -118,6 +118,7 @@ mod tests {
     /// `model_cache_dir()` respects `CASCADE_MODEL_DIR` env override.
     #[test]
     fn model_cache_dir_respects_env_override() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let expected = dir.path().to_path_buf();
 
@@ -136,6 +137,7 @@ mod tests {
     /// `model_cache_dir()` defaults to `~/.cascade/models/` when env is unset.
     #[test]
     fn model_cache_dir_defaults_to_home_cascade_models() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Remove the override if it happens to be set.
         unsafe {
             env::remove_var(CASCADE_MODEL_DIR_ENV);
@@ -156,6 +158,7 @@ mod tests {
     /// `is_model_cached` returns `false` for a non-existent model directory.
     #[test]
     fn is_model_cached_returns_false_for_missing_dir() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         // Point cache at a temp dir that has NO model subdirs.
         unsafe {
@@ -174,6 +177,7 @@ mod tests {
     /// `is_model_cached` returns `true` when the model directory exists.
     #[test]
     fn is_model_cached_returns_true_when_dir_exists() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let model_dir = dir.path().join("BAAI/bge-m3");
         std::fs::create_dir_all(&model_dir).unwrap();
@@ -217,6 +221,7 @@ mod tests {
     /// An empty `CASCADE_MODEL_DIR` falls through to the HOME default.
     #[test]
     fn empty_env_var_falls_through_to_home() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             env::set_var(CASCADE_MODEL_DIR_ENV, "");
         }

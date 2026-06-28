@@ -672,6 +672,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_settings_snapshot_missing_file_returns_empty() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
             // No settings.json created — expect empty response.
@@ -703,6 +704,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_settings_snapshot_redacts_token() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let claude_dir = tmp.path().join(".claude");
             std::fs::create_dir_all(&claude_dir).unwrap();
@@ -743,6 +745,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_cascade_diagram_includes_gci_and_asi() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             // Minimal: create ~/.claude/ and ~/Sites/.claude/
             let claude_dir = tmp.path().join(".claude");
@@ -787,6 +790,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_gci_hooks_parses_settings() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let claude_dir = tmp.path().join(".claude");
             std::fs::create_dir_all(&claude_dir).unwrap();

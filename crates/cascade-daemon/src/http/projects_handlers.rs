@@ -673,6 +673,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_projects_empty_sites() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             // ~/Sites/ does not exist → should return 200 with empty array.
         });
@@ -697,6 +698,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_projects_with_project() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             // Create ~/Sites/myproject/.claude/CLAUDE.md
             let proj = tmp.path().join("Sites").join("myproject").join(".claude");
@@ -726,6 +728,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_repos_missing_project() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -752,6 +755,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_phase_missing_yaml() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -778,6 +782,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_phase_parses_status_yaml() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             // Create ~/Sites/cascade/.claude/phases/status.yaml
             let phases_dir = tmp
@@ -819,6 +824,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_scaffold_no_phase_dir() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -843,6 +849,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_scaffold_with_fixture_tree() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             // Build a minimal PEWS tree:
             //   ~/Sites/myproj/.claude/phases/current/p1/epics/E-01/waves/W-01/sprints/S-01/tickets/T-01.yaml

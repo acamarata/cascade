@@ -810,6 +810,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn expand_tilde_expands_home() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Set HOME for test isolation.
         let fake_home = "/tmp/fake-home-for-test";
         std::env::set_var("HOME", fake_home);

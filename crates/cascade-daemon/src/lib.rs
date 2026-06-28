@@ -88,3 +88,6 @@ pub mod scheduler;
 pub mod discovery;
 
 pub use config::Config;
+
+#[cfg(test)]
+pub(crate) mod test_support;

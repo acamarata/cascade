@@ -353,6 +353,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn list_runs_without_panic() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _home = with_fake_home();
         // ListArgs::run() prints to stdout; we just ensure it returns Ok.
         let args = ListArgs { json: false };

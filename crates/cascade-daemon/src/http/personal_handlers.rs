@@ -805,6 +805,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_empty() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // DB-backed: empty DB → 200 []
         with_fake_home(|tmp| {
             // Create the .cascade dir so open_thread_store succeeds.
@@ -833,6 +834,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_with_memory() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Legacy test: MEMORY.md files are no longer returned by /threads (now DB-backed).
         // Verify the endpoint still returns 200 [] when no threads exist in DB.
         with_fake_home(|tmp| {
@@ -870,6 +872,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_ideas_inbox_empty() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -893,6 +896,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_ideas_inbox_with_idea() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let ideas_dir = tmp.path().join(".claude").join("ideas");
             std::fs::create_dir_all(&ideas_dir).unwrap();
@@ -923,6 +927,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_crd_chains_no_dir() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -947,6 +952,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_crd_chains_with_chain() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let chains_dir = tmp.path().join(".claude-relay").join("chains");
             std::fs::create_dir_all(&chains_dir).unwrap();
@@ -987,6 +993,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_scheduled_tasks_absent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -1010,6 +1017,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_scheduled_tasks_present() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
             std::fs::create_dir_all(&temp_dir).unwrap();
@@ -1044,6 +1052,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_fleet_quota_missing() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -1068,6 +1077,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_fleet_quota_present() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
             std::fs::create_dir_all(&temp_dir).unwrap();
@@ -1113,6 +1123,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_account_ledger_missing() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {

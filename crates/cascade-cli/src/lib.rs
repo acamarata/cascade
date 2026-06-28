@@ -4,3 +4,6 @@ pub mod cmd;
 pub mod daemon_install;
 pub mod ipc_client;
 pub mod proxy_client;
+
+#[cfg(test)]
+pub(crate) mod test_support;

@@ -192,6 +192,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn init_from_installed_detects_via_path() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let workspace = TempDir::new().unwrap();
 

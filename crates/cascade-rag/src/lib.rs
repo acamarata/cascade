@@ -68,6 +68,9 @@ mod vec_index;
 #[cfg(feature = "code-chunker")]
 mod code_chunk;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 // ── Tier configuration ───────────────────────────────────────────────────────
 
 use serde::{Deserialize, Serialize};

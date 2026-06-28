@@ -188,6 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn strips_disallowed_var() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Inject a rogue variable.
         std::env::set_var("_CASCADE_TEST_ROGUE_VAR_12345", "evil");
         assert!(std::env::var("_CASCADE_TEST_ROGUE_VAR_12345").is_ok());

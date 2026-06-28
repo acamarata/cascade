@@ -270,6 +270,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_register_writes_mcp_entry() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -287,6 +288,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_register_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -304,6 +306,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_register_non_clobbering() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -334,6 +337,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_register_cc_stop_hook_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());

@@ -471,16 +471,7 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use std::fs;
-    use std::sync::{Mutex, MutexGuard, OnceLock};
     use tempfile::TempDir;
-
-    /// Serialises tests that mutate `HOME` via `std::env::set_var`.
-    fn home_lock() -> MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-    }
 
     // ── fixture helpers ───────────────────────────────────────────────────────
 
@@ -507,7 +498,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn all_tiers_found() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
 
@@ -572,7 +563,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn partial_tiers_only_gci() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -611,7 +602,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn no_tiers_graceful_empty() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -640,7 +631,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn mcp_server_url_lowest_tier_wins() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -676,7 +667,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn json_serialization_valid() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -708,7 +699,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn pac_absent_not_an_error() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -736,7 +727,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn var_tokens_substituted_in_merged_instructions() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -774,7 +765,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn escape_produces_literal_token_in_merged() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
@@ -811,7 +802,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn resolved_cascade_carries_vars_map() {
-        let _guard = home_lock();
+        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp_home = TempDir::new().unwrap();
         let tmp_project = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());

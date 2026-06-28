@@ -431,6 +431,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_resolve_default_path() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let root = Path::new("/tmp/my-project");
         let db = resolve_db_path(root);
@@ -441,6 +442,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_resolve_env_override() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("CASCADE_INDEX_ROOT", "/tmp/rag-root");
         let root = Path::new("/tmp/my-project");
         let db = resolve_db_path(root);
@@ -457,6 +459,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_path_hash_deterministic() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("CASCADE_INDEX_ROOT", "/tmp/x");
         let p1 = resolve_db_path(Path::new("/home/user/proj"));
         let p2 = resolve_db_path(Path::new("/home/user/proj"));
@@ -468,6 +471,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_path_hash_collision_resistance() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("CASCADE_INDEX_ROOT", "/tmp/x");
         let pa = resolve_db_path(Path::new("/home/user/proj-a"));
         let pb = resolve_db_path(Path::new("/home/user/proj-b"));
@@ -481,6 +485,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_open_creates_db() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let dir = TempDir::new().unwrap();
         let mgr = IndexManager::open(dir.path()).await.unwrap();
@@ -498,6 +503,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_multi_project_isolation() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let dir_a = TempDir::new().unwrap();
         let dir_b = TempDir::new().unwrap();
@@ -569,6 +575,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_register_paused_skips() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let dir = TempDir::new().unwrap();
         let mgr = IndexManager::open(dir.path()).await.unwrap();
@@ -596,6 +603,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_tier_tagging() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let dir = TempDir::new().unwrap();
         let mgr = IndexManager::open(dir.path()).await.unwrap();
@@ -639,6 +647,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_registry_caches_manager() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let registry = IndexRegistry::new();
         let dir = TempDir::new().unwrap();
@@ -656,6 +665,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_registry_evict() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
         let registry = IndexRegistry::new();
         let dir = TempDir::new().unwrap();

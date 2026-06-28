@@ -411,6 +411,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_harness_status_returns_cc_and_oc_entries() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();
         // Minimal setup: create ~/.claude so CC is detectable.
         std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
@@ -446,6 +447,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_harness_status_both_entries_present() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _tmp = set_fake_home();
 
         let app = test_app();
@@ -474,6 +476,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_harness_regenerate_invalid_harness_returns_400() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _tmp = set_fake_home();
 
         let app = test_app();
@@ -500,6 +503,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_harness_regenerate_cc_creates_symlinks_count_gt_zero() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();
         // Set up ~/.claude/ so there is a slot to write into.
         std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
@@ -537,6 +541,7 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn test_harness_regenerate_idempotent() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();
         std::fs::create_dir_all(tmp.path().join(".claude")).unwrap();
 

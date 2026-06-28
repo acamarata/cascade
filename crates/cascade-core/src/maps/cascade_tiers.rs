@@ -224,6 +224,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn tier_tree_returns_six_entries() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         build_six_tier_fixture(tmp.path());
@@ -242,6 +243,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn tier_tree_gci_ppc_exist() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         build_six_tier_fixture(tmp.path());
@@ -268,6 +270,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn tier_tree_missing_tiers_show_exists_false() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
         // Only create PPC tier — everything else missing.

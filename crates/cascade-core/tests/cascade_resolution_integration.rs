@@ -15,6 +15,8 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
+static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Helper: creates a tier fixture at the given path with config.toml and optional CASCADE.md.
 fn create_tier_fixture(dir: &Path, tier_name: &str, instructions: &str, rules: &[&str]) {
     let cascade_dir = dir.join(".cascade");
@@ -46,6 +48,7 @@ fn create_tier_fixture(dir: &Path, tier_name: &str, instructions: &str, rules: &
 #[test]
 #[serial(global_env)]
 fn test_six_tier_priority() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let root_path = root.path();
 
@@ -105,6 +108,7 @@ fn test_six_tier_priority() {
 #[test]
 #[serial(global_env)]
 fn test_rules_accumulation() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let root_path = root.path();
 
@@ -157,6 +161,7 @@ fn test_rules_accumulation() {
 #[test]
 #[serial(global_env)]
 fn test_missing_tiers_skipped() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let root_path = root.path();
 
@@ -187,6 +192,7 @@ fn test_missing_tiers_skipped() {
 #[test]
 #[serial(global_env)]
 fn test_compat_files_written() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let root_path = root.path();
 
@@ -228,6 +234,7 @@ fn test_compat_files_written() {
 #[test]
 #[serial(global_env)]
 fn test_compat_idempotent() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let root_path = root.path();
 

@@ -403,6 +403,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_pack_small_fixture() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -445,6 +446,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_binary_file_excluded() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -474,6 +476,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_built_in_excludes() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -506,6 +509,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_size_cap_returns_error_with_contributors() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -544,6 +548,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_extra_excludes_respected() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -572,6 +577,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn test_traversal_rejected_outside_home() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let outside = tmp.path();
 

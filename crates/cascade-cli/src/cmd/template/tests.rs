@@ -192,6 +192,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn list_against_fixture_registry() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_template_file(&tmp, "gci.md", "gci-default", "gci", "## Overview\nBody.\n");
         write_template_file(
@@ -224,6 +225,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn list_upgradeable_returns_only_templates_with_newer_registry_version() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("gci.md");
         fs::write(&path, "---\nid = \"gci-default\"\nversion = \"1.1.0\"\ntier = \"gci\"\nstacks = []\nproject_shapes = []\ndescription = \"GCI default\"\n---\n## Overview\nNew body.\n").unwrap();
@@ -261,6 +263,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn list_upgradeable_returns_empty_when_already_up_to_date() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("gci.md");
         fs::write(&path, "---\nid = \"gci-default\"\nversion = \"1.0.0\"\ntier = \"gci\"\nstacks = []\nproject_shapes = []\ndescription = \"GCI default\"\n---\n## Overview\nBody.\n").unwrap();
@@ -300,6 +303,7 @@ mod tests {
     fn upgrade_wires_to_upgrade_by_id_stamp_updated() {
         use cascade_core::templates::apply::TemplateEngine;
 
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
 
@@ -346,6 +350,7 @@ mod tests {
     fn upgrade_force_overwrites_all_conflicting_sections() {
         use cascade_core::templates::apply::{ApplyOptions, TemplateEngine};
 
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
 
@@ -415,6 +420,7 @@ some content
     fn apply_dry_run_does_not_write() {
         use cascade_core::templates::apply::{ApplyOptions, TemplateEngine};
 
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
 

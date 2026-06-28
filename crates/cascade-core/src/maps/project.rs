@@ -242,6 +242,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn project_graph_finds_nodes_and_edges() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         build_fixture(tmp.path());
         // Override HOME so HOME-confinement check passes.
@@ -296,6 +297,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn project_graph_empty_when_no_sites_root() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 
@@ -310,6 +312,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn project_graph_respects_home_confinement() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home_tmp = TempDir::new().unwrap();
         let outside_tmp = TempDir::new().unwrap();
 
@@ -334,6 +337,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn project_graph_max_depth_guard() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         std::env::set_var("HOME", tmp.path());
 

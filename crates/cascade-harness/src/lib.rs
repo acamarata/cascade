@@ -22,3 +22,6 @@ pub mod policy;
 pub mod settings;
 pub mod skills;
 pub mod agents;
+
+#[cfg(test)]
+pub(crate) mod test_support;

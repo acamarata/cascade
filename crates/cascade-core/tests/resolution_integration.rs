@@ -13,6 +13,8 @@ use serial_test::serial;
 use std::fs;
 use tempfile::TempDir;
 
+static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Helper: plant a `.cascade/CASCADE.md` at `dir` with `content`.
 fn plant_cascade(dir: &std::path::Path, content: &str) {
     let cascade = dir.join(".cascade");
@@ -24,6 +26,7 @@ fn plant_cascade(dir: &std::path::Path, content: &str) {
 #[tokio::test]
 #[serial(global_env)]
 async fn test_resolver_single_tier() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     plant_cascade(root.path(), "# Single tier\n");
 
@@ -49,6 +52,7 @@ async fn test_resolver_single_tier() {
 #[tokio::test]
 #[serial(global_env)]
 async fn test_resolver_multi_tier_sources() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let project = root.path().join("Sites").join("myproject");
     let repo = project.join("myrepo");
@@ -74,6 +78,7 @@ async fn test_resolver_multi_tier_sources() {
 #[tokio::test]
 #[serial(global_env)]
 async fn test_resolver_merged_text_contains_all_tiers() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let repo = root.path().join("Sites").join("proj").join("repo");
     fs::create_dir_all(&repo).unwrap();
@@ -100,6 +105,7 @@ async fn test_resolver_merged_text_contains_all_tiers() {
 #[tokio::test]
 #[serial(global_env)]
 async fn test_resolver_dedup_removes_duplicate_lines() {
+    let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
     let repo = root.path().join("Sites").join("proj").join("repo");
     fs::create_dir_all(&repo).unwrap();

@@ -229,6 +229,7 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn write_quota_sessions_creates_store_file() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let store_dir = tmp.path().join(".cascade");
 

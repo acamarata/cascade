@@ -67,7 +67,7 @@ pub fn list_chat(
         "SELECT id, scope, namespace, role, content, created_at
          FROM chat_history
          WHERE scope = ?1 AND namespace = ?2
-         ORDER BY created_at ASC, id ASC
+         ORDER BY created_at ASC, rowid ASC
          LIMIT ?3",
     )?;
     let msgs = stmt
