@@ -70,6 +70,8 @@ mod discovery;
 mod mcp_registration;
 // auto-01: background automation scheduler
 mod scheduler;
+// auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
+mod automation_router;
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::ProviderRegistry;
@@ -330,7 +332,7 @@ async fn main() {
     });
 
     tokio::select! {
-        result = supervisor::run(config_dir.clone(), shutdown_token.clone()) => {
+        result = supervisor::run(config_dir.clone(), shutdown_token.clone(), provider_registry.clone()) => {
             if let Err(e) = result {
                 error!(%e, "supervisor exited with error");
                 // Signal the tray thread to exit before terminating the process.

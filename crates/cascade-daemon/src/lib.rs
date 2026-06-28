@@ -84,6 +84,9 @@ pub mod fleet_poller;
 // auto-01: background automation scheduler
 pub mod scheduler;
 
+// auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
+pub mod automation_router;
+
 // rag-13: project discovery + taxonomy + registry
 pub mod discovery;
 

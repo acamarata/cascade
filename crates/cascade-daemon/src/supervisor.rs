@@ -38,7 +38,11 @@ use crate::{
 /// allows integration tests that spawn the real binary to observe all startup
 /// artifacts (providers.json, quota-state.json, events.db cascade.changed events,
 /// DaemonStart hook log lines) without needing test-only binary flags.
-pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(), DaemonError> {
+pub async fn run(
+    config_dir: PathBuf,
+    shutdown: CancellationToken,
+    provider_registry: Arc<cascade_providers::ProviderRegistry>,
+) -> Result<(), DaemonError> {
     let start_time = std::time::Instant::now();
     info!(config_dir = %config_dir.display(), "supervisor starting");
 
@@ -452,57 +456,32 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
     }
 
     // ── AutomationRunner ─────────────────────────────────────────────────────────
-    // Instantiated with nop router/invoker stubs until a real provider is
-    // wired. The runner is unused at startup (no automations loaded yet) but
-    // its construction validates the builder wiring compiles end-to-end.
-    // TODO(auto-02): replace NopRouter/NopInvoker with the real ProviderRegistry
-    // adapter once cascade-providers exposes a ProviderRouter impl.
+    // Wired to the real ProviderRegistry via RegistryRouter (auto-02).
+    // The runner is kept on the stack and will be used by the scheduler and
+    // IPC automation dispatch once those surfaces wire into it (auto-03+).
+    //
+    // Lazy: no I/O happens here. The first actual automation step triggers
+    // RegistryRouter::step(), which calls pick_for_chat() on the live registry.
+    // If no provider is registered the step returns ProviderFailed (graceful).
     {
-        use async_trait::async_trait;
+        use crate::automation_router::{RegistryRouter, SafeToolInvoker};
         use cascade_agents::automation::{AutomationRunner, NoopSink};
         use cascade_agents::chain::ChainExecutor;
-        use cascade_agents::context::{AgentRunContext, StepOutcome, TokenUsage};
-        use cascade_agents::executor::{
-            AgentExecutor, ExecutorError, ProviderRouter, ToolInvoker,
-        };
-        use cascade_agents::spec::AgentSpec;
-        use cascade_agents::context::ToolCall;
+        use cascade_agents::executor::AgentExecutor;
 
-        struct NopRouter;
-        #[async_trait]
-        impl ProviderRouter for NopRouter {
-            async fn step(
-                &self,
-                _spec: &AgentSpec,
-                _ctx: &AgentRunContext,
-            ) -> Result<StepOutcome, ExecutorError> {
-                Ok(StepOutcome {
-                    assistant_text: "nop".into(),
-                    tool_calls: vec![],
-                    done: true,
-                    usage: TokenUsage { prompt_tokens: 0, completion_tokens: 0 },
-                })
-            }
-        }
-
-        struct NopInvoker;
-        #[async_trait]
-        impl ToolInvoker for NopInvoker {
-            async fn invoke(&self, call: &ToolCall) -> Result<String, ExecutorError> {
-                Ok(format!("nop:{}", call.tool_id))
-            }
-        }
+        let real_router = Arc::new(RegistryRouter::new(Arc::clone(&provider_registry)));
+        let safe_invoker = Arc::new(SafeToolInvoker);
 
         let agent_exec = Arc::new(
             AgentExecutor::builder()
-                .provider_router(Arc::new(NopRouter))
-                .tool_invoker(Arc::new(NopInvoker))
+                .provider_router(Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>)
+                .tool_invoker(Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>)
                 .build(),
         );
         let chain_exec = Arc::new(
             ChainExecutor::builder()
-                .provider_router(Arc::new(NopRouter))
-                .tool_invoker(Arc::new(NopInvoker))
+                .provider_router(Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>)
+                .tool_invoker(Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>)
                 .agent_executor(Arc::clone(&agent_exec))
                 .build(),
         );
@@ -514,7 +493,9 @@ pub async fn run(config_dir: PathBuf, shutdown: CancellationToken) -> Result<(),
                 .sink(Arc::new(NoopSink))
                 .build(),
         );
-        info!("automation_runner: instantiated (nop stubs — real provider wired in auto-02)");
+        info!(
+            "automation_runner: instantiated with RegistryRouter (real provider path — auto-02)"
+        );
     }
 
     // ── Main event loop ───────────────────────────────────────────────────────
