@@ -107,20 +107,18 @@ fn infer_tier(path: &str) -> &'static str {
         // ASI sits under ~/Sites/.claude/
         return "asi";
     }
-    if path.starts_with("/Users/") && path.contains("/.claude/CLAUDE.md") {
-        return "gci";
-    }
-    // Check depth relative to a project root heuristic: pai < pri < ppi
+    // Depth-based, cross-platform heuristic (macOS /Users/, Linux /home/, etc.).
+    // GCI: <home>/.claude/CLAUDE.md      → .claude at index 3 (/, home, user, .claude)
+    // PPI: project/.claude/CLAUDE.md     → index 4
+    // PRI: project/repo/.claude/...      → index 5
+    // PAI: project/repo/app/.claude/...  → index 6+
     let segments: Vec<&str> = path.split('/').collect();
-    // Count how many directory levels appear after ".claude/CLAUDE.md"
-    // ASI/PPI: project/.claude/CLAUDE.md
-    // PRI: project/repo/.claude/CLAUDE.md
-    // PAI: project/repo/app/.claude/CLAUDE.md
     if let Some(idx) = segments.iter().position(|s| *s == ".claude") {
         match idx {
             i if i >= 6 => "pai",
-            i if i >= 5 => "pri",
-            i if i >= 4 => "ppi",
+            5 => "pri",
+            4 => "ppi",
+            i if i <= 3 => "gci",
             _ => "unknown",
         }
     } else {
@@ -436,7 +434,7 @@ mod tests {
     #[test]
     fn tier_gci() {
         assert_eq!(
-            infer_tier("/Users/admin/.claude/CLAUDE.md"),
+            infer_tier("/home/user/.claude/CLAUDE.md"),
             "gci"
         );
     }
@@ -444,7 +442,7 @@ mod tests {
     #[test]
     fn tier_asi() {
         assert_eq!(
-            infer_tier("/Users/admin/Sites/.claude/CLAUDE.md"),
+            infer_tier("/home/user/Sites/.claude/CLAUDE.md"),
             "asi"
         );
     }

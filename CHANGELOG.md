@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-06-28
+
+Remediation patch (P0): make the flagship RAG retrieval and the CLI↔daemon IPC actually work in the shipped binary. A deep self-audit found several features were stubbed/fake despite being described as done; this release fixes the highest-impact ones.
+
+### Fixed
+- **Real embeddings in the daemon.** The daemon shipped `MockEmbedModel` (zero vectors), so RAG indexing/search was non-functional in the real binary. It now enables the `fastembed`/`reranker` features and uses a `LazyEmbedModel` that starts as a mock (instant daemon startup) and swaps in the real BGE/ONNX embedder via a background task; offline/uncached load falls back to mock gracefully. The cross-encoder reranker loads the same way. (Eager loading was rejected — it blocked startup past the readiness timeout.)
+- **CLI↔daemon IPC works end-to-end.** Four unreconciled protocol layers fixed: frame length prefix aligned to big-endian (was LE on the daemon side); the `{auth,rpc}` envelope is now unwrapped; the daemon provisions the `~/.cascade/ipc_token` it never wrote; `ping`/`status`/`health` are routed through typed dispatch; and replies are wrapped in a JSON-RPC 2.0 envelope (`{jsonrpc,id,result|error}`) the CLI can parse. `cascade ping` now returns a real pong. The integration suite's previously-commented IPC assertions are restored.
+- **FTS/dense retrieval return text.** `RetrievalHit` carried an empty `text`; results now join back to the chunks table for `text` + `file_path` + line numbers.
+- **GUI cascade-doc commands.** `load`/`save`/`validate_cascade_doc` were stubs (blank/error/always-true); now read, atomically write, and actually validate.
+- `infer_tier` is cross-platform (was macOS `/Users/`-only).
+
+### Known remaining (tracked for follow-up patches)
+LLM-provider-dependent features (HyDE, board debate, automation router, MCP sampling, `live_cc` PTY) still need the provider path wired; RAPTOR/arch summarisation, real SPLADE/ColBERT, and plugin WASM ABI remain. See in-code `TODO(<area>)` markers.
+
 ## [1.9.0] - 2026-06-27
 
 Personal OS, three-mode chat, and release-readiness. Cascade is now a complete local-first personal + dev operating system: an encrypted personal data store, threads/topics, a namespace-isolated memory engine with three-mode chat, external-session harvesting, and the security/privacy/docs gates for a public release.
