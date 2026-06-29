@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.10] - 2026-06-29
+
+External-account credential bridge — fixes the repeated re-auth prompts in the Cascade app and widget.
+
+### Fixed
+- The app/widget no longer nags for re-auth on Anthropic (or Codex) accounts that are already authenticated in the desktop Claude apps. Cascade was holding its own credential copy that never refreshed; it now reads each external agent CLI's **live, app-maintained** token directly.
+
+### Added
+- `cascade-core/external_accounts.rs` — discovers and reads external agent accounts:
+  - **Claude**: `~/.claude` (primary), `~/.claude2…N`, and legacy `~/.claude-accN`. macOS reads the login-keychain entry the desktop app keeps fresh (`Claude Code-credentials-<sha256(dir)[:8]>`, via the `security` CLI; token never logged); other platforms read `<dir>/.credentials.json`. A token counts as authenticated when the access token is present and either unexpired or backed by a refresh token.
+  - **Codex**: `~/.codex` / `~/.codex2…N` via `<dir>/auth.json`.
+  - **Roles**: `~/.claude` is **Primary** — the surface Cascade enhances (skills/MCP/rules/proxy) and the orchestrator that launches delegated work; every other account is **Pool** (delegation workers).
+- Account auth status (`quota.json` → widget) is now derived from the live bridge: a valid live token shows "ok" even if the legacy poller reported a refresh failure; each account entry records its `config_dir`, and the widget's re-auth action is scoped to that account's `CLAUDE_CONFIG_DIR`.
+
+`~/.cascade` remains Cascade's own state directory; the bridge only reads external dirs.
+
 ## [1.9.9] - 2026-06-29
 
 Remediation patch — the last completable deferred items.
