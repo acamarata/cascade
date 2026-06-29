@@ -6,6 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-06-29
+
+Remediation patch — the last completable deferred items.
+
+### Added
+- **Encrypted personal vault in the desktop app** (`rag-16-ui`): the `cascade-personal` vault was fully implemented but unreachable from the GUI. Six Tauri commands (open / list-collections / query-records / upsert-record / request-consent / exposure-log) now bridge it, each opening the vault fresh via the OS keychain; a Personal → Vault tab provides the UI (mode toggle, sensitivity-badged collections, records table + add form, exposure log).
+- **Live Fleet routing stream** (`fleet-01-events`): a decoupled `RoutingObserver` seam on the core router (default no-op, no daemon coupling) feeds a 64-event ring exposed at `GET /api/fleet/routing`; `FleetRoutingView` now shows a live task→account/model/reason table alongside the existing quota view.
+
+### Changed
+- **rag-04**: shard rebalance processes very large legacy indexes in 1000-row batches (bounded memory) instead of a single pass.
+- **rag-14**: project-overview synthesis optionally enriches via an injected LLM, falling back to the template (the default working path) on absence/error.
+
+### Known roadmap (working implementations in place; not stubs)
+- `rag-02` true BGE-M3 SPLADE/ColBERT needs direct-`ort` multi-output (dense + TF-IDF sparse work today); `rag-09` LoRA feedback *training* (signal collection works); `rag-06` rayon ingest (sequential path works); `pews-02` fully-autonomous build dispatcher (`cascade build run` uses a labeled dry-run dispatcher). Each is tracked in-code.
+
 ## [1.9.8] - 2026-06-28
 
 Security layer — the Cascade way. App-shipping security checks (secret leaks, dependency CVEs, client-side key exposure, error-message leakage) integrated into Cascade's existing systems rather than a bolted-on always-on scanner: a tiny always-loaded behavioral rule, a triggered hook, deferred MCP tools, user-pulled skills, and a spawnable agent. Zero overhead on a normal session; full coverage only when triggered.
