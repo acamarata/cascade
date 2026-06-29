@@ -39,6 +39,8 @@ pub mod setup;
 // Sub-modules added by W-02 (T-P3-E03-09 scaffold):
 pub mod scanner;
 pub mod symlinks;
+/// Encrypted personal vault commands (rag-16-ui).
+pub mod personal_vault;
 // Sub-module added by W-03 (T-P3-E03-15 scaffold):
 pub mod archive;
 // Sub-module added by W-04 (T-P3-E03-23 scaffold):

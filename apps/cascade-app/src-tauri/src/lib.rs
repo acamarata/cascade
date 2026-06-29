@@ -112,6 +112,13 @@ pub fn run() {
             commands::daemon::save_cascade_doc,
             commands::daemon::validate_cascade_doc,
             commands::rag::rag_query,
+            // rag-16-ui: encrypted personal vault
+            commands::personal_vault::open_vault_cmd,
+            commands::personal_vault::list_collections_cmd,
+            commands::personal_vault::query_records_cmd,
+            commands::personal_vault::upsert_record_cmd,
+            commands::personal_vault::request_consent_cmd,
+            commands::personal_vault::exposure_log_cmd,
             // T-P3-E01-17: multi-window commands
             commands::daemon::cascade_open_window,
             commands::daemon::cascade_close_window,

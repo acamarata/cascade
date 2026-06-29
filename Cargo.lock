@@ -1185,6 +1185,7 @@ dependencies = [
  "cascade-cli",
  "cascade-core",
  "cascade-keychain",
+ "cascade-personal",
  "cascade-providers",
  "cascade-types",
  "chrono",

@@ -24,7 +24,6 @@
 //! - In non-Personal mode, medical/financial collections return 0 rows.
 //!
 //! ## Tauri wiring
-//! `// TODO(rag-16-ui)` markers indicate where Tauri command wrappers belong.
 //!
 //! SPORT: cascade-personal / lib
 

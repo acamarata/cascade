@@ -17,7 +17,6 @@
 //! - `request_consent` inserts into `exposure_log` unconditionally (it is the
 //!   audit record that consent was requested, not that it was granted).
 //!
-//! Tauri commands: `// TODO(rag-16-ui)` at every public fn that needs a wrapper.
 //!
 //! SPORT: cascade-personal / vault
 
@@ -216,7 +215,6 @@ fn hex_encode(bytes: &[u8]) -> String {
 /// DEK bytes never logged.
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — wire as `#[tauri::command] async fn open_vault_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / open_vault
@@ -249,7 +247,6 @@ pub fn open_vault(
 /// Returns `(name, label, sensitivity)` tuples for all seeded + custom collections.
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — `#[tauri::command] async fn list_collections_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / list_collections
@@ -278,7 +275,6 @@ pub fn list_collections(vault: &PersonalVault) -> Result<Vec<(String, String, St
 /// `Vec<VaultRecord>` — empty if gated by mode.
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — `#[tauri::command] async fn query_records_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / query_records
@@ -345,7 +341,6 @@ pub fn query_records(
 /// The record UUID (generated or provided).
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — `#[tauri::command] async fn upsert_record_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / upsert_record
@@ -406,7 +401,6 @@ pub fn upsert_record(
 /// `true` if exposure is permitted (and has been logged); `false` if gated.
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — `#[tauri::command] async fn request_consent_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / request_consent
@@ -436,7 +430,6 @@ pub fn request_consent(
 /// Audit trail: who/what/when accessed or attempted to access items.
 ///
 /// # Tauri TODO
-/// `// TODO(rag-16-ui)` — `#[tauri::command] async fn exposure_log_cmd`
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / exposure_log

@@ -36,6 +36,8 @@ cascade-providers = { path = "../../../crates/cascade-providers", version = "1.5
 # E-P5-08: OS keychain access for provider_connect (platform_keychain)
 cascade-keychain  = { path = "../../../crates/cascade-keychain", version = "1.5.1" }
 cascade-core  = { path = "../../../crates/cascade-core", version = "1.5.1" }    # T-P3-E04-15: read_providers_store
+# rag-16-ui: encrypted personal vault commands
+cascade-personal  = { path = "../../../crates/cascade-personal", version = "1.5.1" }
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)
 tokio = { version = "1", features = ["net", "io-util", "rt", "time", "sync"] }
