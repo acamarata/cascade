@@ -45,9 +45,12 @@
 //!
 //! - Live quota polling via QuotaCache ticker.
 //! - QuotaCache integration for rate-window headroom checks.
-//! - RoutingEvent bus emission.
 //! - Daemon scheduler wiring.
 //! - smithers PTY LiveCcDriver for CcAccLane.
+//!
+//! RoutingEvent bus emission — DONE (fleet-01): `RoutingEvent` struct defined;
+//! `Router` holds an `Option<Arc<dyn Fn(RoutingEvent) + Send + Sync>>` observer
+//! installed by the daemon's ring buffer. CLI and tests unaffected (default None).
 //!
 //! ## SPORT
 //!
@@ -55,6 +58,7 @@
 
 use std::{
     path::PathBuf,
+    sync::Arc,
     time::Duration,
 };
 
@@ -67,6 +71,40 @@ use crate::{
     routing::task_class::TaskClass,
     sensitivity::{classify_sensitivity, ContentSensitivity, SensitivityPolicy},
 };
+
+// ── RoutingEvent + observer seam ──────────────────────────────────────────────
+
+/// A single routing decision emitted to the observer on every `Router::select` call.
+///
+/// ## Purpose
+/// Allows the daemon (or any observer) to record / display the live stream of
+/// routing decisions without creating a dependency from cascade-core on cascade-daemon.
+/// cascade-core remains daemon-agnostic; the daemon installs a closure that pushes
+/// events into its own ring buffer.
+///
+/// ## Fields
+/// - `task_class`  — the `TaskClass` passed to `Router::select`.
+/// - `account_id`  — the chosen `provider_id` (or `"AllExhausted"` / `"FirewallDeny"`).
+/// - `model`       — reserved for future model-level granularity; currently empty.
+/// - `reason`      — human-readable routing reason string.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RoutingEvent {
+    /// Task class that triggered this decision (e.g. `"BulkExec"`).
+    pub task_class: String,
+    /// Account / provider selected, or `"AllExhausted"` / `"FirewallDeny"`.
+    pub account_id: String,
+    /// Model hint — currently empty; reserved for future model-level routing.
+    pub model: String,
+    /// Human-readable explanation of why this account was chosen.
+    pub reason: String,
+}
+
+/// An observer closure installed on the `Router`.
+///
+/// When `Some`, called with a [`RoutingEvent`] on every `Router::select` call.
+/// The daemon installs a closure that pushes into its in-memory ring buffer.
+/// CLI paths and tests leave this `None` — zero overhead, no coupling.
+pub type RoutingObserver = Arc<dyn Fn(RoutingEvent) + Send + Sync>;
 
 // ── RoutingDecision ───────────────────────────────────────────────────────────
 
@@ -141,26 +179,44 @@ impl Default for RouterConfig {
 /// Call `Router::select(task_class, payload)` to obtain a `RoutingDecision`.
 /// Account selection is driven entirely by the `AccountsRegistry`; no account
 /// IDs or family strings are hardcoded in the routing-decision logic.
+///
+/// An optional [`RoutingObserver`] closure receives every decision as a
+/// [`RoutingEvent`]. Install one via [`Router::with_observer`]. The default
+/// is `None` — zero overhead for CLI and test paths.
 pub struct Router {
     config: RouterConfig,
     sensitivity_policy: SensitivityPolicy,
+    /// Optional observer — called synchronously after each `select()`.
+    observer: Option<RoutingObserver>,
 }
 
 impl Router {
-    /// Create a router with default config.
+    /// Create a router with default config and no observer.
     pub fn new() -> Self {
         Self {
             config: RouterConfig::default(),
             sensitivity_policy: SensitivityPolicy::new(),
+            observer: None,
         }
     }
 
-    /// Create a router with custom config.
+    /// Create a router with custom config and no observer.
     pub fn with_config(config: RouterConfig) -> Self {
         Self {
             config,
             sensitivity_policy: SensitivityPolicy::new(),
+            observer: None,
         }
+    }
+
+    /// Install a routing observer closure.
+    ///
+    /// The closure is called synchronously after every `select()` with the
+    /// resulting [`RoutingEvent`]. Used by the daemon to push events into its
+    /// ring buffer. CLI paths never call this — observer stays `None`.
+    pub fn with_observer(mut self, observer: RoutingObserver) -> Self {
+        self.observer = Some(observer);
+        self
     }
 
     /// Select the best available account for the given task class and payload.
@@ -170,12 +226,15 @@ impl Router {
     /// 2. Sensitivity firewall (Sensitive → only Claude-family or local).
     /// 3. Quota headroom check (skips accounts at ≥100% pct_used).
     /// 4. CLI availability flag (`Account::cli_available`).
+    ///
+    /// After determining the decision, emits a [`RoutingEvent`] to the installed
+    /// observer (if any). The observer call is synchronous and non-blocking.
     pub fn select(&self, task_class: TaskClass, payload: &str) -> RoutingDecision {
         let sensitivity = classify_sensitivity(payload);
         let registry = self.load_registry();
         let quota = self.load_quota();
 
-        match task_class {
+        let decision = match task_class {
             // ── InteractiveChat: PrimaryT0 Claude, never delegated ────────────
             TaskClass::InteractiveChat => RoutingDecision::Reserved {
                 provider_id: primary_t0_id(&registry),
@@ -201,6 +260,7 @@ impl Router {
                             acc, sensitivity, &quota, &self.sensitivity_policy,
                             "BulkExec → Pooled Claude (drain first)", &mut tried,
                         ) {
+                            self.emit_event(task_class, &d);
                             return d;
                         }
                     }
@@ -217,6 +277,7 @@ impl Router {
                                     acc, sensitivity, &quota, &self.sensitivity_policy,
                                     "BulkExec → external overflow", &mut tried,
                                 ) {
+                                    self.emit_event(task_class, &d);
                                     return d;
                                 }
                             }
@@ -243,6 +304,7 @@ impl Router {
                                 acc, sensitivity, &quota, &self.sensitivity_policy,
                                 "Cheap → Gfp free Flash (max it)", &mut tried,
                             ) {
+                                self.emit_event(task_class, &d);
                                 return d;
                             }
                         }
@@ -261,11 +323,13 @@ impl Router {
             // ── AdversarialReview: cross-family, free-first ───────────────────
             TaskClass::AdversarialReview => {
                 if sensitivity == ContentSensitivity::Sensitive {
-                    return RoutingDecision::FirewallDeny {
+                    let d = RoutingDecision::FirewallDeny {
                         reason: "AdversarialReview with Sensitive content cannot use \
                                  cross-family external providers. Route to Claude or local."
                             .into(),
                     };
+                    self.emit_event(task_class, &d);
+                    return d;
                 }
 
                 let mut tried: Vec<String> = Vec::new();
@@ -285,6 +349,7 @@ impl Router {
                                 acc, sensitivity, &quota, &self.sensitivity_policy,
                                 "AdversarialReview → cross-family", &mut tried,
                             ) {
+                                self.emit_event(task_class, &d);
                                 return d;
                             }
                         }
@@ -307,6 +372,7 @@ impl Router {
                             acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
                             "Sensitive → Pooled Claude (trusted, drain first)", &mut tried,
                         ) {
+                            self.emit_event(task_class, &d);
                             return d;
                         }
                     }
@@ -319,6 +385,7 @@ impl Router {
                             acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
                             "Sensitive → PrimaryT0 Claude (trusted)", &mut tried,
                         ) {
+                            self.emit_event(task_class, &d);
                             return d;
                         }
                     }
@@ -330,7 +397,36 @@ impl Router {
                     reason: "Sensitive → local LLM (trusted, last resort)".into(),
                 }
             }
-        }
+        };
+
+        self.emit_event(task_class, &decision);
+        decision
+    }
+
+    /// Emit a [`RoutingEvent`] to the installed observer (if any).
+    ///
+    /// Purpose: decoupled seam so cascade-core never imports cascade-daemon.
+    /// The observer closure (set by the daemon via `with_observer`) captures
+    /// an `Arc<RwLock<VecDeque<RoutingEvent>>>` and pushes events there.
+    /// When `observer` is `None` (CLI, tests), this is a no-op.
+    fn emit_event(&self, task_class: TaskClass, decision: &RoutingDecision) {
+        let Some(obs) = &self.observer else { return };
+        let (account_id, reason) = match decision {
+            RoutingDecision::Lane { provider_id, reason } => (provider_id.clone(), reason.clone()),
+            RoutingDecision::Reserved { provider_id, reason } => {
+                (provider_id.clone(), reason.clone())
+            }
+            RoutingDecision::AllExhausted { tried } => {
+                ("AllExhausted".into(), format!("tried: {}", tried.join(", ")))
+            }
+            RoutingDecision::FirewallDeny { reason } => ("FirewallDeny".into(), reason.clone()),
+        };
+        obs(RoutingEvent {
+            task_class: task_class.to_string(),
+            account_id,
+            model: String::new(),
+            reason,
+        });
     }
 
     /// Load the accounts registry from disk. Returns `None` on error or absent.
@@ -736,5 +832,84 @@ mod tests {
             matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "claude-pooled-2"),
             "CLI-unavailable pooled-1 must be skipped; should select pooled-2, got: {d:?}"
         );
+    }
+
+    // ── RoutingObserver seam ───────────────────────────────────────────────
+
+    #[test]
+    fn none_observer_path_is_unaffected() {
+        // Router with no observer must behave identically to the pre-fleet-01 path.
+        let r = router_no_registry();
+        let d = r.select(TaskClass::Cheap, "classify this");
+        assert!(
+            matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "local"),
+            "No-observer Cheap must still fall back to local, got: {d:?}"
+        );
+    }
+
+    #[test]
+    fn observer_receives_event_on_select() {
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Vec<RoutingEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let captured_clone = Arc::clone(&captured);
+
+        let observer: RoutingObserver = Arc::new(move |ev: RoutingEvent| {
+            captured_clone.lock().unwrap().push(ev);
+        });
+
+        let (r, _dir) = router_with_registry(small_registry());
+        let r = r.with_observer(observer);
+
+        let _ = r.select(TaskClass::BulkExec, "draft a doc");
+
+        let events = captured.lock().unwrap();
+        assert_eq!(events.len(), 1, "observer must receive exactly one event per select()");
+        assert_eq!(events[0].task_class, "BulkExec");
+        assert!(!events[0].account_id.is_empty(), "account_id must be populated");
+    }
+
+    #[test]
+    fn observer_receives_event_for_reserved_class() {
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Vec<RoutingEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let captured_clone = Arc::clone(&captured);
+
+        let observer: RoutingObserver = Arc::new(move |ev: RoutingEvent| {
+            captured_clone.lock().unwrap().push(ev);
+        });
+
+        let (r, _dir) = router_with_registry(small_registry());
+        let r = r.with_observer(observer);
+
+        let _ = r.select(TaskClass::InteractiveChat, "hello");
+
+        let events = captured.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].task_class, "InteractiveChat");
+        assert_eq!(events[0].account_id, "claude-primary");
+    }
+
+    #[test]
+    fn observer_receives_firewall_deny_event() {
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Vec<RoutingEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let captured_clone = Arc::clone(&captured);
+
+        let observer: RoutingObserver = Arc::new(move |ev: RoutingEvent| {
+            captured_clone.lock().unwrap().push(ev);
+        });
+
+        let (r, _dir) = router_with_registry(small_registry());
+        let r = r.with_observer(observer);
+
+        // Sensitive payload + AdversarialReview → FirewallDeny.
+        let _ = r.select(TaskClass::AdversarialReview, "my custody arrangement details");
+
+        let events = captured.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].account_id, "FirewallDeny");
     }
 }

@@ -9,6 +9,7 @@
 pub mod chat_handlers;
 pub mod chat_history_memory;
 pub mod chat_tools;
+pub mod fleet_routing;
 pub mod gci_handlers;
 pub mod harness;
 pub mod hooks_write;

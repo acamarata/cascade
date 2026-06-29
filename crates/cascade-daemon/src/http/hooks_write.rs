@@ -416,6 +416,7 @@ mod tests {
         let state = DashboardState {
             token: Arc::new("test-token".to_string()),
             provider_registry: None,
+            routing_ring: None,
         };
         router().with_state(state)
     }

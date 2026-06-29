@@ -77,6 +77,14 @@ pub struct DashboardState {
     /// When `None`, the chat handler falls back to a typed "no provider"
     /// error event rather than panicking.
     pub provider_registry: Option<Arc<ProviderRegistry>>,
+
+    /// In-memory ring buffer of the last N cascade-core routing decisions.
+    ///
+    /// Populated by the `RoutingObserver` closure installed on any
+    /// `cascade_core::Router` instance that uses `Router::with_observer()`.
+    /// `None` in minimal test setups that do not call `Router::select()`.
+    /// The Fleet UI polls `GET /api/fleet/routing` to read from this ring.
+    pub routing_ring: Option<crate::http::fleet_routing::RoutingRing>,
 }
 
 // ── Token generation + persistence ───────────────────────────────────────────
@@ -263,7 +271,9 @@ pub fn build_router(state: DashboardState) -> Router {
         // RAG-08: memory chat_history API — POST/GET /api/memory/chat
         .nest("/api/memory", crate::http::chat_history_memory::router())
         // mem-01: CC session harvest — POST /api/harvest/cc-session
-        .nest("/api/harvest", crate::http::harvest::router());
+        .nest("/api/harvest", crate::http::harvest::router())
+        // fleet-01: routing event stream — GET /api/fleet/routing
+        .nest("/api/fleet", crate::http::fleet_routing::router());
 
     // Mount the browser dashboard SPA (ADR-P3-002): when CASCADE_DASHBOARD_DIST
     // points at a built dist/, merge the static-file router so http://127.0.0.1:9761
@@ -310,9 +320,11 @@ impl Dashboard {
         }
 
         let token = generate_dashboard_token(config_dir).map_err(DashboardError::Listener)?;
+        let routing_ring = Some(crate::http::fleet_routing::new_routing_ring());
         let state = DashboardState {
             token: Arc::new(token),
             provider_registry: None,
+            routing_ring,
         };
 
         Ok(Self {
@@ -375,6 +387,7 @@ mod tests {
         DashboardState {
             token: Arc::new(token.to_string()),
             provider_registry: None,
+            routing_ring: None,
         }
     }
 

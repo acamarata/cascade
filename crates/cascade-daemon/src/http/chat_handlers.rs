@@ -345,6 +345,7 @@ mod tests {
         DashboardState {
             token: Arc::new("test-token".into()),
             provider_registry: None,
+            routing_ring: None,
         }
     }
 
@@ -352,6 +353,7 @@ mod tests {
         DashboardState {
             token: Arc::new("test-token".into()),
             provider_registry: Some(registry),
+            routing_ring: None,
         }
     }
 
