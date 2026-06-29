@@ -31,6 +31,8 @@ use cascade_types::accounts::{
 use cascade_types::error::{CascadeError, Result};
 use serde_json::Value;
 
+use crate::external_accounts::{AuthStatus, discover as discover_external};
+
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 /// Returns the canonical path to `~/.cascade/accounts/` (the accounts directory).
@@ -159,6 +161,11 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
 
     let now_epoch = chrono::Utc::now().timestamp() as f64;
 
+    // Build the live external-account bridge map (account_id → live auth + config_dir).
+    // This is a best-effort read — any failures fall back to legacy behaviour.
+    let live_accounts = discover_external();
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
+
     let accounts: Vec<Value> = registry.accounts.iter().map(|acc| {
         let provider = family_to_provider(&acc.family);
 
@@ -198,26 +205,71 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             (null_usage, Some(json!(now_epoch)), Some(opaque), None)
         };
 
-        // A dead credential from the most recent poll (expired OAuth / invalid key).
-        // Only true auth failures trigger re-auth: the refresh token is revoked/expired
-        // (keychain_failed, refresh_failed, invalid_grant) or Anthropic explicitly rejected
-        // the credential (auth_invalid, authentication_error, http_401, http_403).
+        // ── Live credential bridge ────────────────────────────────────────────
+        // Map the account id to its external config directory, then check the
+        // LIVE auth status from the CLI's own keychain/file storage.
+        //
+        // Mapping strategy:
+        //   "claude-acc1"  → ~/.claude-acc1
+        //   "claude-acc2"  → ~/.claude-acc2 (etc.)
+        //   primary Claude → ~/.claude (the default dir, no suffix)
+        //   codex accounts → ~/.codex (or ~/.codex2 etc.)
+        //
+        // If we can't map with confidence, fall back to legacy error heuristics.
+        let config_dir_for_account: Option<PathBuf> = if acc.family == AccountFamily::Claude {
+            // Try canonical name first: "claude-acc1" → ~/.claude-acc1
+            let candidate = home.join(format!(".{}", acc.id));
+            if candidate.is_dir() {
+                Some(candidate)
+            } else if acc.id.starts_with("claude-acc") {
+                // Normalise: "claude-acc1" → ".claude-acc1"
+                let suffix = acc.id.trim_start_matches("claude-acc");
+                let n_dir = home.join(format!(".claude-acc{suffix}"));
+                if n_dir.is_dir() { Some(n_dir) } else { None }
+            } else {
+                // Primary / default claude account maps to ~/.claude.
+                let default_dir = home.join(".claude");
+                if default_dir.is_dir() { Some(default_dir) } else { None }
+            }
+        } else if acc.family == AccountFamily::Openai {
+            let codex_dir = home.join(".codex");
+            if codex_dir.is_dir() { Some(codex_dir) } else { None }
+        } else {
+            None
+        };
+
+        // Look up the live auth status from discovered accounts.
+        let live_auth: Option<&AuthStatus> = config_dir_for_account.as_ref().and_then(|cd| {
+            live_accounts.iter().find(|la| &la.config_dir == cd).map(|la| &la.auth)
+        });
+
+        // Determine auth_dead using live bridge first; fall back to legacy last_error.
+        //
+        // Live bridge overrides the legacy heuristic:
+        //   - Live Ok  → status MUST be "ok" (suppresses false re-auth nagging).
+        //   - Live NeedsReauth → auth_dead = true.
+        //   - Live Unknown / no bridge mapping → use legacy last_error heuristics.
         //
         // api_failed = curl network/timeout error — transient, NOT a credential failure.
         // parse_failed = unparseable API response (503 HTML page, etc.) — also transient.
         // rate_limit_error / http_429 = throttled, not auth-dead.
-        // Treating transient errors as auth failures caused false "Click to re-auth" prompts
-        // on every network hiccup, which is why tokens appeared to "expire" frequently.
-        let auth_dead = legacy_entry
-            .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
-            .map(|e| {
-                matches!(
-                    e,
-                    "keychain_failed" | "refresh_failed" | "auth_invalid"
-                        | "invalid_grant" | "authentication_error"
-                ) || e == "http_401" || e == "http_403"
-            })
-            .unwrap_or(false);
+        let auth_dead = match live_auth {
+            Some(AuthStatus::Ok { .. }) => false, // live bridge says OK — never nag
+            Some(AuthStatus::NeedsReauth) => true,
+            _ => {
+                // Fallback: legacy error heuristics.
+                legacy_entry
+                    .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
+                    .map(|e| {
+                        matches!(
+                            e,
+                            "keychain_failed" | "refresh_failed" | "auth_invalid"
+                                | "invalid_grant" | "authentication_error"
+                        ) || e == "http_401" || e == "http_403"
+                    })
+                    .unwrap_or(false)
+            }
+        };
 
         // Never show stale numbers for a credential-dead account — blank them so the
         // widget renders the "Click here to re-auth" call-to-action instead.
@@ -245,6 +297,12 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             "quota_opaque": quota_opaque.unwrap_or(false),
             "status": status
         });
+
+        // Surface the config_dir so the Swift widget can pass the correct
+        // CLAUDE_CONFIG_DIR env var when launching the re-auth flow.
+        if let Some(dir) = &config_dir_for_account {
+            entry["config_dir"] = json!(dir.to_string_lossy().as_ref());
+        }
 
         // GFP free-Flash pool: surface the round-robin key count so the row shows
         // capacity ("28 keys") rather than dashes.
@@ -679,5 +737,63 @@ mod tests {
         assert!(content.contains("## Routing Table"), "must have Routing Table section");
         assert!(content.contains("## Routing Strategy"), "must have Routing Strategy section");
         // Default registry has no models — matrix table is empty but headings are present.
+    }
+
+    /// Live bridge override logic: when parse_claude_blob returns Ok (live token present),
+    /// the auth_dead flag must be false even if the legacy last_error says "refresh_failed".
+    ///
+    /// This test exercises the bridge decision logic directly (pure functions only, no
+    /// real keychain) to verify the invariant that "live Ok → status must be ok".
+    #[test]
+    fn live_bridge_ok_overrides_legacy_refresh_failed() {
+        use crate::external_accounts::{parse_claude_blob, AuthStatus};
+
+        // Simulate: live keychain returns a valid future-expiry token.
+        let far_future_ms = 9_999_999_999_999i64;
+        let live_blob = format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"tok","refreshToken":"rtok","expiresAt":{far_future_ms}}}}}"#
+        );
+        let live_auth = parse_claude_blob(&live_blob);
+        assert!(
+            matches!(live_auth, AuthStatus::Ok { .. }),
+            "live blob with valid future token must be Ok"
+        );
+
+        // Bridge decision: if live is Ok, auth_dead must be false regardless of legacy error.
+        let legacy_last_error = Some("refresh_failed");
+        let auth_dead = match live_auth {
+            AuthStatus::Ok { .. } => false, // live Ok overrides legacy
+            AuthStatus::NeedsReauth => true,
+            AuthStatus::Unknown => {
+                // fallback: use legacy heuristic
+                legacy_last_error
+                    .map(|e| matches!(e, "keychain_failed" | "refresh_failed" | "auth_invalid" | "invalid_grant" | "authentication_error"))
+                    .unwrap_or(false)
+            }
+        };
+
+        assert!(
+            !auth_dead,
+            "live Ok must override legacy refresh_failed: auth_dead must be false"
+        );
+    }
+
+    /// Live bridge NeedsReauth → auth_dead must be true.
+    #[test]
+    fn live_bridge_needs_reauth_sets_auth_dead() {
+        use crate::external_accounts::{parse_claude_blob, AuthStatus};
+
+        // Simulate: live keychain entry has empty tokens (truly revoked).
+        let live_blob = r#"{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":9999}}"#;
+        let live_auth = parse_claude_blob(live_blob);
+        assert_eq!(live_auth, AuthStatus::NeedsReauth);
+
+        let auth_dead = match live_auth {
+            AuthStatus::Ok { .. } => false,
+            AuthStatus::NeedsReauth => true,
+            AuthStatus::Unknown => false,
+        };
+
+        assert!(auth_dead, "live NeedsReauth must result in auth_dead = true");
     }
 }

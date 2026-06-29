@@ -130,6 +130,11 @@ struct UsageRow: View {
     /// without any user interaction. This fixes the most common case: a transient
     /// API error marked the account as dead even though the refresh token is still valid.
     ///
+    /// When a `config_dir` is present on the entry (written by the Rust credential bridge),
+    /// it is passed as `CLAUDE_CONFIG_DIR` so the refresh targets the correct account
+    /// instead of the default `~/.claude`. This ensures numbered accounts (acc2, acc3…)
+    /// re-auth against their own config directory.
+    ///
     /// Stage 2: If stage 1 exits non-zero (refresh token truly expired/revoked), open
     /// the Cascade.app so the user can complete the interactive OAuth flow in the
     /// full app — which has its own re-auth UI. This avoids the osascript → Terminal
@@ -138,14 +143,19 @@ struct UsageRow: View {
         let home = NSHomeDirectory()
         let cascadeBin = "\(home)/.cascade/bin/cascade"
 
-        // Stage 1: silent token refresh via cascade poller
+        // Stage 1: silent token refresh via cascade poller.
+        // If config_dir is set, scope the refresh to that account.
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
         p.arguments = ["-lc", "\(cascadeBin) --include-primary 2>/dev/null"]
-        p.environment = [
+        var env: [String: String] = [
             "HOME": home,
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
         ]
+        if let configDir = entry.config_dir, !configDir.isEmpty {
+            env["CLAUDE_CONFIG_DIR"] = configDir
+        }
+        p.environment = env
 
         let pipe = Pipe()
         p.standardOutput = pipe

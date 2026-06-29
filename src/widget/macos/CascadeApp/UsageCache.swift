@@ -38,6 +38,10 @@ struct AccountEntry: Codable, Identifiable {
     var status: String?
     var key_count: Int?
     var opencode_meta: OpencodeMeta?
+    /// Absolute path to the agent's config directory (e.g. ~/.claude-acc1).
+    /// Written by the Rust credential bridge; used by reauth to pass CLAUDE_CONFIG_DIR
+    /// so the refresh targets the correct account instead of the default ~/.claude.
+    var config_dir: String?
 }
 
 struct OpencodeMeta: Codable {
