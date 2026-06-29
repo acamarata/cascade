@@ -143,6 +143,10 @@ pub fn shard_for(doc_id: &str, n: usize) -> usize {
     (fnv1a(doc_id.as_bytes()) as usize) % n
 }
 
+/// Maximum number of rows read from shard_0 per transaction during legacy
+/// rebalance.  Bounds peak memory usage for very large legacy indexes.
+const REBALANCE_BATCH_SIZE: usize = 1000;
+
 // ── Schema helpers ────────────────────────────────────────────────────────────
 
 /// Apply WAL mode, synchronous=NORMAL, and create the embedding table on a shard
@@ -294,11 +298,9 @@ impl ShardedIndex {
         //
         // This only runs once (guarded by `did_legacy_copy`).  For each row in
         // shard_0 whose shard_for(doc_id, N) != 0, we INSERT it into the target
-        // shard and DELETE it from shard_0.  Each target shard is processed in a
-        // single transaction.
-        //
-        // TODO(rag-04): for very large indexes consider chunked batching; for now
-        // the single-pass approach is correct and safe for typical sizes.
+        // shard and DELETE it from shard_0.  Rows are processed in bounded
+        // batches (REBALANCE_BATCH_SIZE rows per transaction) so a very large
+        // legacy index does not OOM by loading all rows at once.
         if did_legacy_copy && shard_count > 1 {
             idx.rebalance_shard_0().map_err(|e| {
                 warn!(error = %e, "Legacy shard rebalance failed; re-index recommended");
@@ -319,12 +321,12 @@ impl ShardedIndex {
     ///
     /// # Algorithm
     ///
-    /// For each target shard i in 1..N:
-    /// 1. Read all (doc_id, embedding) rows from shard_0 where shard_for(doc_id, N) == i.
-    /// 2. Open a write transaction on shard_i.
-    /// 3. INSERT OR REPLACE each row into shard_i's `shard_embeddings`.
-    /// 4. DELETE those doc_ids from shard_0.
-    /// 5. Commit.
+    /// Iterates shard_0 in batches of [`REBALANCE_BATCH_SIZE`] rows:
+    /// 1. Read a page of (doc_id, embedding) rows from shard_0.
+    /// 2. Group misrouted rows by their correct target shard.
+    /// 3. For each target shard: INSERT OR REPLACE in a single transaction.
+    /// 4. DELETE the moved doc_ids from shard_0 in a single transaction.
+    /// 5. Repeat until the page is empty (no more misrouted rows remain).
     ///
     /// Only runs when the legacy copy actually happened (shard_0 had all the data).
     fn rebalance_shard_0(&self) -> Result<()> {
@@ -332,77 +334,107 @@ impl ShardedIndex {
             return Ok(());
         }
 
-        // Read all rows from shard_0.
-        let rows: Vec<(String, Vec<u8>)> = {
-            let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
-            let mut stmt = conn_0
-                .prepare("SELECT doc_id, embedding FROM shard_embeddings")
-                .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
-            let result: std::result::Result<Vec<_>, _> = stmt
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)))
-                .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
-                .collect();
-            result.map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
-        };
+        let mut offset: i64 = 0;
+        loop {
+            // Read one batch of rows from shard_0.
+            let batch: Vec<(String, Vec<u8>)> = {
+                let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
+                let mut stmt = conn_0
+                    .prepare(
+                        "SELECT doc_id, embedding FROM shard_embeddings                          ORDER BY doc_id LIMIT ?1 OFFSET ?2",
+                    )
+                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                let result: std::result::Result<Vec<_>, _> = stmt
+                    .query_map(
+                        rusqlite::params![REBALANCE_BATCH_SIZE as i64, offset],
+                        |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)),
+                    )
+                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+                    .collect();
+                result.map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+            };
 
-        // Group rows by their correct shard (only non-zero shards).
-        let mut by_shard: Vec<Vec<(String, Vec<u8>)>> = vec![vec![]; self.shard_count];
-        for (doc_id, embedding) in rows {
-            let target = shard_for(&doc_id, self.shard_count);
-            if target != 0 {
-                by_shard[target].push((doc_id, embedding));
-            }
-        }
-
-        // Move misrouted rows: INSERT into target, DELETE from shard_0.
-        for (target_shard, rows_for_shard) in by_shard.iter().enumerate().skip(1) {
-            if rows_for_shard.is_empty() {
-                continue;
+            if batch.is_empty() {
+                break;
             }
 
-            // Insert into target shard.
-            {
-                let conn_t = self.shards[target_shard].lock().expect("target shard mutex poisoned");
-                conn_t
-                    .execute_batch("BEGIN")
-                    .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
-                for (doc_id, embedding) in rows_for_shard {
+            // Group misrouted rows by their correct shard (only non-zero shards).
+            let mut by_shard: Vec<Vec<(String, Vec<u8>)>> = vec![vec![]; self.shard_count];
+            let mut stayed_in_0 = 0usize;
+            for (doc_id, embedding) in batch {
+                let target = shard_for(&doc_id, self.shard_count);
+                if target != 0 {
+                    by_shard[target].push((doc_id, embedding));
+                } else {
+                    stayed_in_0 += 1;
+                }
+            }
+
+            // Move misrouted rows: INSERT into target, DELETE from shard_0.
+            let mut moved_this_batch = 0usize;
+            for (target_shard, rows_for_shard) in by_shard.iter().enumerate().skip(1) {
+                if rows_for_shard.is_empty() {
+                    continue;
+                }
+
+                // Insert into target shard.
+                {
+                    let conn_t =
+                        self.shards[target_shard].lock().expect("target shard mutex poisoned");
                     conn_t
-                        .execute(
-                            "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
-                            rusqlite::params![doc_id, embedding],
-                        )
+                        .execute_batch("BEGIN")
+                        .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+                    for (doc_id, embedding) in rows_for_shard {
+                        conn_t
+                            .execute(
+                                "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding)                                  VALUES(?1, ?2)",
+                                rusqlite::params![doc_id, embedding],
+                            )
+                            .map_err(|e| ShardError::Sqlite {
+                                shard: target_shard,
+                                source: e,
+                            })?;
+                    }
+                    conn_t
+                        .execute_batch("COMMIT")
                         .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
                 }
-                conn_t
-                    .execute_batch("COMMIT")
-                    .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
-            }
 
-            // Delete moved rows from shard_0.
-            {
-                let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
-                conn_0
-                    .execute_batch("BEGIN")
-                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
-                for (doc_id, _) in rows_for_shard {
+                // Delete moved rows from shard_0.
+                {
+                    let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
                     conn_0
-                        .execute(
-                            "DELETE FROM shard_embeddings WHERE doc_id = ?1",
-                            rusqlite::params![doc_id],
-                        )
+                        .execute_batch("BEGIN")
+                        .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                    for (doc_id, _) in rows_for_shard {
+                        conn_0
+                            .execute(
+                                "DELETE FROM shard_embeddings WHERE doc_id = ?1",
+                                rusqlite::params![doc_id],
+                            )
+                            .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                    }
+                    conn_0
+                        .execute_batch("COMMIT")
                         .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
                 }
-                conn_0
-                    .execute_batch("COMMIT")
-                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+
+                moved_this_batch += rows_for_shard.len();
+                debug!(
+                    target_shard,
+                    moved = rows_for_shard.len(),
+                    "legacy rebalance: moved rows from shard_0"
+                );
             }
 
-            debug!(
-                target_shard,
-                moved = rows_for_shard.len(),
-                "legacy rebalance: moved rows from shard_0"
-            );
+            // Advance offset by rows that stayed in shard_0 (moved rows were
+            // deleted, so they no longer shift subsequent pages).
+            offset += stayed_in_0 as i64;
+
+            // If nothing moved this batch, all remaining rows belong in shard_0.
+            if moved_this_batch == 0 {
+                break;
+            }
         }
 
         Ok(())
@@ -1166,6 +1198,65 @@ mod tests {
                 count, 1,
                 "doc {id} must be in shard {expected_shard} after rebalance"
             );
+        }
+    }
+
+    // ── rag-04: chunked batching rebalance ───────────────────────────────────
+
+    /// Seed shard_0 with N > REBALANCE_BATCH_SIZE rows, trigger legacy rebalance,
+    /// and verify all rows end up in their correct shards with no losses.
+    ///
+    /// N = 2500, REBALANCE_BATCH_SIZE = 1000: requires at least 3 batch iterations
+    /// to drain all misrouted rows, exercising the chunked loop.
+    #[test]
+    fn batched_rebalance_distributes_large_legacy_index() {
+        #[cfg(feature = "vec")]
+        load_vec_extension();
+
+        let dim = 4;
+        let shard_count = 4usize;
+        let n = 2500usize; // intentionally > REBALANCE_BATCH_SIZE * 2
+        let dir = TempDir::new().expect("tmpdir");
+
+        // Pre-seed cascade_vec.db with 2500 rows.
+        {
+            let legacy_path = dir.path().join("cascade_vec.db");
+            let conn = Connection::open(&legacy_path).expect("open legacy");
+            apply_shard_schema(&conn, dim).expect("apply schema");
+            conn.execute_batch("BEGIN").unwrap();
+            for i in 0..n {
+                let id = format!("batch_doc_{i}");
+                let blob: Vec<u8> = vec![0u8; dim * 4];
+                conn.execute(
+                    "INSERT OR REPLACE INTO shard_embeddings(doc_id, embedding) VALUES(?1, ?2)",
+                    params![id, blob],
+                )
+                .expect("insert row");
+            }
+            conn.execute_batch("COMMIT").unwrap();
+        }
+
+        // Opening ShardedIndex triggers copy + chunked rebalance.
+        let idx = ShardedIndex::new(dir.path(), shard_count, dim)
+            .expect("ShardedIndex::new with large legacy");
+
+        // All N rows must survive (no losses, no duplicates).
+        let total = idx.total_count();
+        assert_eq!(total, n, "total rows after batched rebalance must equal N={n}");
+
+        // Each doc must be in its correct shard per shard_for.
+        for i in 0..n {
+            let id = format!("batch_doc_{i}");
+            let expected = shard_for(&id, shard_count);
+            let conn = idx.shards[expected].lock().unwrap();
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM shard_embeddings WHERE doc_id = ?1",
+                    params![id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "batch_doc_{i} must be in shard {expected}");
         }
     }
 }

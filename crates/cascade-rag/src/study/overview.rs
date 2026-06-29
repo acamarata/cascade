@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS study_overview_cache (
 /// - `stack`: detected technology stack.
 /// - `symbols`: list of `(symbol_name, kind)` pairs to include in the overview.
 /// - `project_name`: human-readable project name (used as the heading).
-/// - `llm`: optional LLM for future enrichment (currently ignored).
+/// - `llm`: optional [`HydeLlm`] summarizer; when `Some`, enriches the overview
+///   with a prose summary.  Falls back to the template on `None` or LLM error.
 ///
 /// # Outputs
 ///
@@ -87,7 +88,7 @@ pub async fn generate(
     stack: &TechStack,
     symbols: &[(String, String)],
     project_name: &str,
-    _llm: Option<Arc<dyn HydeLlm>>,
+    llm: Option<Arc<dyn HydeLlm>>,
 ) -> Result<OverviewResult> {
     // Ensure cache table exists.
     conn.execute_batch(CREATE_CACHE_TABLE)
@@ -105,11 +106,15 @@ pub async fn generate(
         });
     }
 
-    // Generate template-based overview.
-    // TODO(rag-14): when HydeLlm is injected, optionally call
-    //   `llm.generate_hypothetical(&template_prompt)` to enrich the output.
-    //   For now: pure template, no LLM call.
-    let markdown = build_template(project_name, stack, symbols);
+    // Build the template-based overview; use it as both the prompt for the LLM
+    // and the fallback when no LLM is present or the LLM call fails.
+    let template = build_template(project_name, stack, symbols);
+
+    // Optionally enrich with an injected summarizer LLM.
+    // `generate_hypothetical` is repurposed here as a general prose generator:
+    // we pass the template as the prompt so the LLM returns a richer version.
+    // On any error the template is used unchanged.
+    let markdown = enrich_with_llm(template, llm.as_deref()).await;
 
     // Store in cache.
     conn.execute(
@@ -123,6 +128,38 @@ pub async fn generate(
         markdown,
         from_cache: false,
     })
+}
+
+/// Call the LLM to enrich the template prose; fall back to the template on
+/// `None` or any error.
+///
+/// # Inputs
+///
+/// `template`: the template-built overview string (used as both the LLM prompt
+/// and the fallback).
+/// `llm`: optional reference to a [`HydeLlm`] summarizer.
+///
+/// # Outputs
+///
+/// Either the LLM-generated enriched overview (truncated to
+/// [`MAX_OVERVIEW_BYTES`]) or the original `template`.
+async fn enrich_with_llm(template: String, llm: Option<&dyn HydeLlm>) -> String {
+    if let Some(llm) = llm {
+        if let Ok(enriched) = llm.generate_hypothetical(&template).await {
+            if !enriched.trim().is_empty() {
+                // Truncate at MAX_OVERVIEW_BYTES on a UTF-8 boundary.
+                if enriched.len() <= MAX_OVERVIEW_BYTES {
+                    return enriched;
+                }
+                let mut end = MAX_OVERVIEW_BYTES;
+                while !enriched.is_char_boundary(end) {
+                    end -= 1;
+                }
+                return enriched[..end].to_string();
+            }
+        }
+    }
+    template
 }
 
 // ── Template builder ──────────────────────────────────────────────────────────
@@ -318,5 +355,68 @@ mod tests {
             .unwrap();
         assert!(result.markdown.contains("# unknownproj"));
         assert!(result.markdown.contains("Stack unknown"));
+    }
+
+    // ── rag-14: LLM enrichment ───────────────────────────────────────────────
+
+    /// Minimal mock LLM that returns a fixed prose string.
+    struct MockOverviewLlm {
+        response: String,
+    }
+
+    #[async_trait::async_trait]
+    impl HydeLlm for MockOverviewLlm {
+        async fn generate_hypothetical(
+            &self,
+            _query: &str,
+        ) -> cascade_types::error::Result<String> {
+            Ok(self.response.clone())
+        }
+    }
+
+    /// When an LLM is injected, generate must return the LLM's prose, not the
+    /// bare template.
+    #[tokio::test]
+    async fn uses_injected_summarizer_when_present() {
+        let conn = test_conn();
+        let llm: Arc<dyn HydeLlm> = Arc::new(MockOverviewLlm {
+            response: "LLM-enriched prose for the project.".to_string(),
+        });
+        let result = generate(
+            &conn,
+            &rust_stack(),
+            &sample_symbols(),
+            "enriched_proj",
+            Some(llm),
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            result.markdown.contains("LLM-enriched prose"),
+            "expected LLM output in markdown, got: {}",
+            result.markdown
+        );
+        assert!(!result.from_cache);
+    }
+
+    /// When no LLM is injected (`None`), generate must return the template-based
+    /// overview (regression guard for the fallback path).
+    #[tokio::test]
+    async fn falls_back_to_template_when_no_llm() {
+        let conn = test_conn();
+        let result = generate(&conn, &rust_stack(), &sample_symbols(), "fallback_proj", None)
+            .await
+            .unwrap();
+
+        assert!(
+            result.markdown.contains("# fallback_proj"),
+            "template heading must be present"
+        );
+        assert!(
+            result.markdown.contains("## Tech Stack"),
+            "template section must be present"
+        );
+        assert!(!result.from_cache);
     }
 }
