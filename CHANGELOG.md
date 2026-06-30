@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.11] - 2026-06-30
+
+Fixes the widget's persistent "click here to re-auth" on accounts that are authenticated fine in the desktop apps.
+
+### Fixed
+- The fleet poller (`src/bin/cascade`) refreshed expired Claude Max tokens with a direct OAuth `POST` to `platform.claude.com`, which Cloudflare bot-protection rejects (HTTP 403 "1010"). Automatic refresh silently failed, so the widget flagged "re-auth" for accounts that were perfectly usable. `refresh_token()` now refreshes **through Claude Code itself** (`CLAUDE_CONFIG_DIR=<dir> claude -p`), which works headlessly, bounded by a 45s timeout so a non-TTY (LaunchAgent) hang can't stall the poller. Only a genuinely revoked refresh token now reports `refresh_failed` (that account needs one interactive login).
+- Together with the v1.9.10 daemon bridge (which derives the widget's auth status from the live keychain token, marking an account "ok" when it has a valid/refreshable token), an account that works in Claude.app/Claude2.app now shows "ok" in the Cascade widget.
+
 ## [1.9.10] - 2026-06-29
 
 External-account credential bridge — fixes the repeated re-auth prompts in the Cascade app and widget.
