@@ -148,72 +148,29 @@ PYEOF
 refresh_token() {
   local svc="$1"
   local config_dir="$2"
-  echo "  Refreshing token for $(basename "$config_dir") (OAuth)..." >&2
-  timeout 20 python3 - "$svc" <<'PYEOF'
-import sys, json, subprocess, time, urllib.request, urllib.error
-
-CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"   # public Claude Code OAuth client
-# Token endpoint moved to platform.claude.com; the old claude.ai host is fronted by
-# Cloudflare bot protection (HTTP 403 "error code: 1010") that blocks a bare urllib
-# POST, which silently broke automatic refresh. A real User-Agent gets past it.
-URL = "https://platform.claude.com/v1/oauth/token"
-svc = sys.argv[1]
-
-raw = subprocess.run(["security", "find-generic-password", "-s", svc, "-w"],
-                     capture_output=True, text=True)
-if raw.returncode != 0:
-    sys.exit(1)
-cred = json.loads(raw.stdout.strip())
-oauth = cred.get("claudeAiOauth", cred)
-rt = oauth.get("refreshToken")
-if not rt:
-    sys.exit(1)
-
-# Recover the keychain account name (-a) so we can update the SAME entry in place.
-meta = subprocess.run(["security", "find-generic-password", "-s", svc, "-g"],
-                      capture_output=True, text=True).stderr
-acct = ""
-for line in meta.splitlines():
-    if '"acct"' in line and '="' in line:
-        acct = line.split('="', 1)[1].rstrip('"')
-        break
-
-body = json.dumps({"grant_type": "refresh_token", "refresh_token": rt,
-                   "client_id": CLIENT_ID}).encode()
-req = urllib.request.Request(URL, data=body, method="POST")
-req.add_header("Content-Type", "application/json")
-req.add_header("Accept", "application/json")
-req.add_header("User-Agent", "claude-cli/1.0 (external; cascade-fleet)")
-try:
-    with urllib.request.urlopen(req, timeout=15) as r:
-        d = json.loads(r.read())
-except urllib.error.HTTPError as e:
-    try:
-        why = json.loads(e.read().decode()).get("error", str(e.code))
-    except Exception:
-        why = str(e.code)
-    sys.stderr.write(f"  OAuth refresh rejected: {why}\n")
-    sys.exit(1)
-except Exception as e:
-    sys.stderr.write(f"  OAuth refresh error: {type(e).__name__}\n")
-    sys.exit(1)
-
-new_access = d.get("access_token")
-if not new_access:
-    sys.exit(1)
-
-# Rotate tokens back into the keychain so subsequent polls stay authenticated.
-oauth["accessToken"] = new_access
-if d.get("refresh_token"):
-    oauth["refreshToken"] = d["refresh_token"]
-if d.get("expires_in"):
-    oauth["expiresAt"] = int((time.time() + int(d["expires_in"])) * 1000)
-cred["claudeAiOauth"] = oauth
-if acct:
-    subprocess.run(["security", "add-generic-password", "-U", "-s", svc,
-                    "-a", acct, "-w", json.dumps(cred)], capture_output=True)
-print(new_access)
-PYEOF
+  echo "  Refreshing token for $(basename "$config_dir") via claude -p..." >&2
+  # Refresh through Claude Code itself: a tiny headless prompt makes `claude`
+  # rotate + persist the OAuth token into this config dir's keychain entry. This
+  # works where a bare OAuth POST does NOT — platform.claude.com is fronted by
+  # Cloudflare bot protection that rejects a urllib POST (HTTP 403 "1010"), which
+  # silently broke automatic refresh and made the widget show "re-auth" even for
+  # accounts that work fine in the apps. A hard `timeout` bounds the call so a
+  # non-TTY (LaunchAgent) hang can never stall the poller — on timeout we skip
+  # this cycle and retry next time.
+  local claude_bin
+  claude_bin=$(command -v claude || echo /opt/homebrew/bin/claude)
+  CLAUDE_CONFIG_DIR="$config_dir" timeout 45 "$claude_bin" -p "ok" --model haiku \
+    >/dev/null 2>&1 || true
+  # Re-read the (now hopefully refreshed) access token from the keychain.
+  local t
+  t=$(get_token "$svc")
+  if [ -n "$t" ] && [ "$t" != "EXPIRED" ]; then
+    printf '%s\n' "$t"
+    return 0
+  fi
+  # Genuinely unrefreshable (e.g. a revoked refresh token) — caller records
+  # refresh_failed; the only fix is one interactive `claude` login for this dir.
+  return 1
 }
 
 # ── Per-account query ─────────────────────────────────────────────────────────
