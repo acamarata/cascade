@@ -181,7 +181,6 @@ impl Command for SentryStatusArgs {
         roots.dedup();
 
         let id = dev_id();
-        let msize = manifest_size(&id);
         let enabled: Vec<_> = roots.iter().filter(|r| nsentry::is_enabled(r)).collect();
 
         if enabled.is_empty() {
@@ -191,17 +190,18 @@ impl Command for SentryStatusArgs {
         }
 
         println!("dev_id:  {id}");
-        println!("consumed: {msize} file(s) in manifest");
         println!();
 
         for root in &enabled {
             if let Ok(Some(cfg)) = load_config(root) {
-                let loaded = launchd_loaded(&project_slug(root));
+                let slug = project_slug(root);
+                let loaded = launchd_loaded(&slug);
                 println!("  project:    {}", root.display());
                 println!("  server:     {}", cfg.sentry_server);
                 println!("  remote_dir: {}", cfg.remote_dir);
                 println!("  inbox:      {}", cfg.resolved_inbox(root).display());
                 println!("  interval:   {}s", cfg.interval_secs);
+                println!("  consumed:   {} file(s) in manifest", manifest_size(&id, &slug));
                 println!("  launchd:    {}", if loaded { "loaded" } else { "not loaded" });
                 println!();
             }
@@ -276,16 +276,10 @@ fn resolve_project(path: Option<&std::path::Path>) -> Result<std::path::PathBuf>
     }
 }
 
-/// Sanitize a project root basename into a launchd label slug.
+/// Launch-agent label slug for a project — delegates to the engine so the
+/// launchd label and the per-project state directory always use the same slug.
 fn project_slug(project_root: &std::path::Path) -> String {
-    let name = project_root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("project");
-    name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
-        .collect::<String>()
-        .to_lowercase()
+    nsentry::project_slug(project_root)
 }
 
 /// launchd label for a given project slug.

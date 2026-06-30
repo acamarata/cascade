@@ -1,4 +1,4 @@
-# Forgejo CI mirror — git.ariccamarata.com
+# Forgejo CI mirror — your self-hosted Forgejo instance
 # Mirrors .github/workflows/ci.yml for the self-hosted Forgejo Actions runner.
 # Keep in sync with the GitHub workflow; only addition is the nSentry failure step.
 name: CI
@@ -105,9 +105,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── integration-tests ────────────────────────────────────────────────────
@@ -137,9 +138,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── clippy ────────────────────────────────────────────────────────────────
@@ -197,9 +199,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── fmt ───────────────────────────────────────────────────────────────────
@@ -222,9 +225,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── deny ──────────────────────────────────────────────────────────────────
@@ -256,9 +260,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── coverage ──────────────────────────────────────────────────────────────
@@ -310,9 +315,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── widget-macos ──────────────────────────────────────────────────────────
@@ -362,9 +368,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── widget-windows ────────────────────────────────────────────────────────
@@ -405,9 +412,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── tray-windows ──────────────────────────────────────────────────────────
@@ -434,9 +442,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── bench-check ───────────────────────────────────────────────────────────
@@ -551,9 +560,10 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2
 
   # ── ci-gate ───────────────────────────────────────────────────────────────
@@ -615,7 +625,8 @@ jobs:
       - name: Report failure to nSentry
         if: failure()
         run: |
-          # nself sentry ci enable <repo> must be run on the CamClaw server first.
+          # nself sentry ci enable <repo> must be run on your ops server first.
+          # Set NSENTRY_SERVER in your Forgejo repo variables (e.g. user@your-ops-host).
           # Once registered, the runner's nself-sentry-sync hook delivers this report
-          # to ~/Sites/acamarata/.claude/inbox via root@sentry-errors.ariccamarata.com.
+          # to the repo's .claude/inbox via the server named in NSENTRY_SERVER.
           echo "CI_FAILURE repo=${{ github.repository }} job=${{ github.job }} run=${{ github.run_id }}" >&2

@@ -181,22 +181,41 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 // ── State dir ────────────────────────────────────────────────────────────────
 
-/// Returns `~/.cascade/nsentry/<dev_id>/` state directory.
-pub fn state_dir(id: &str) -> PathBuf {
+/// Sanitize a project root basename into a filesystem-safe slug. Used both for
+/// the per-project state directory and the launchd agent label, so the two stay
+/// in lockstep.
+pub fn project_slug(project_root: &Path) -> String {
+    let name = project_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("project");
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// Returns `~/.cascade/nsentry/<dev_id>/<project_slug>/` state directory.
+///
+/// State is keyed by **both** the developer ID and the project so that two
+/// projects synced on the same machine keep independent caches and manifests —
+/// a report from one project's server can never leak into another's inbox.
+pub fn state_dir(id: &str, project_slug: &str) -> PathBuf {
     cascade_types::paths::home_dir()
         .join(".cascade")
         .join("nsentry")
         .join(id)
+        .join(project_slug)
 }
 
-/// Path to the consumed-files manifest inside the state dir.
-pub fn consumed_list_path(id: &str) -> PathBuf {
-    state_dir(id).join("consumed.list")
+/// Path to the consumed-files manifest inside the per-project state dir.
+pub fn consumed_list_path(id: &str, project_slug: &str) -> PathBuf {
+    state_dir(id, project_slug).join("consumed.list")
 }
 
-/// Path to the rsync local cache directory inside the state dir.
-pub fn cache_dir(id: &str) -> PathBuf {
-    state_dir(id).join("cache")
+/// Path to the rsync local cache directory inside the per-project state dir.
+pub fn cache_dir(id: &str, project_slug: &str) -> PathBuf {
+    state_dir(id, project_slug).join("cache")
 }
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
@@ -229,8 +248,9 @@ pub struct SyncReport {
 /// — never panics.
 pub fn sync(project_root: &Path, cfg: &NsentryConfig, dry_run: bool) -> Result<SyncReport> {
     let id = dev_id();
-    let cache = cache_dir(&id);
-    let consumed_path = consumed_list_path(&id);
+    let slug = project_slug(project_root);
+    let cache = cache_dir(&id, &slug);
+    let consumed_path = consumed_list_path(&id, &slug);
     let inbox = cfg.resolved_inbox(project_root);
 
     // Ensure required directories exist.
@@ -378,9 +398,9 @@ fn collect_md_files(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
-/// Return the number of entries in the consumed.list for a given dev_id.
-pub fn manifest_size(id: &str) -> usize {
-    let path = consumed_list_path(id);
+/// Return the number of entries in the consumed.list for a given dev_id + project.
+pub fn manifest_size(id: &str, project_slug: &str) -> usize {
+    let path = consumed_list_path(id, project_slug);
     if !path.is_file() {
         return 0;
     }
@@ -528,6 +548,30 @@ mod tests {
             for n in &new_names { writeln!(f, "{n}").unwrap(); }
         }
         new_names
+    }
+
+    #[test]
+    fn state_dirs_isolated_per_project() {
+        // Same dev_id, two different projects -> independent cache + manifest
+        // paths, so reports from one project can never reach the other's inbox.
+        let id = "abc123def456";
+        let slug_a = project_slug(Path::new("/home/user/Sites/nself"));
+        let slug_b = project_slug(Path::new("/home/user/Sites/unyeco"));
+        assert_ne!(slug_a, slug_b);
+        assert_ne!(cache_dir(id, &slug_a), cache_dir(id, &slug_b));
+        assert_ne!(
+            consumed_list_path(id, &slug_a),
+            consumed_list_path(id, &slug_b)
+        );
+        // Both live under the same dev_id root (per-dev semantics preserved).
+        assert!(state_dir(id, &slug_a).starts_with(state_dir(id, "").parent().unwrap()));
+    }
+
+    #[test]
+    fn project_slug_sanitizes() {
+        assert_eq!(project_slug(Path::new("/x/nself")), "nself");
+        assert_eq!(project_slug(Path::new("/x/My Repo")), "my-repo");
+        assert_eq!(project_slug(Path::new("/x/UPPER")), "upper");
     }
 
     #[test]

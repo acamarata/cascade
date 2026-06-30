@@ -20,15 +20,19 @@ that runs `cascade sentry sync` on the configured interval.
 
 ## How it works
 
-1. rsync copies `*.md` files from `<server>:<remote_dir>/` into a local cache
-   at `~/.cascade/nsentry/<dev_id>/cache/`.
-2. Each file not yet listed in `~/.cascade/nsentry/<dev_id>/consumed.list` is
-   copied into the project inbox.
-3. Newly delivered filenames are appended to `consumed.list`.
+1. rsync copies `*.md` files from `<server>:<remote_dir>/` into a per-project
+   local cache at `~/.cascade/nsentry/<dev_id>/<project>/cache/`.
+2. Each file not yet listed in that project's
+   `~/.cascade/nsentry/<dev_id>/<project>/consumed.list` is copied into the
+   project inbox.
+3. Newly delivered filenames are appended to that project's `consumed.list`.
 
 This is idempotent. Re-running sync after files are already delivered produces
 zero new inbox entries. Multiple developers sharing the same server each have an
-independent consumed list, so each receives every report once.
+independent consumed list, so each receives every report once. State is keyed by
+**both** developer and project, so two projects synced on one machine keep
+separate caches and manifests — a report from one project's server can never
+land in another project's inbox.
 
 **dev_id** — a stable 12-character hex identifier derived from your hostname
 and username. It is computed locally; nothing is sent to any external service.
@@ -109,8 +113,9 @@ Remove the launchd agent and delete `.cascade/nsentry.toml`.
 cascade sentry disable [--project DIR]
 ```
 
-The `consumed.list` manifest in `~/.cascade/nsentry/<dev_id>/` is not removed,
-so re-enabling after disable will not re-deliver already-consumed reports.
+The project's `consumed.list` manifest in `~/.cascade/nsentry/<dev_id>/<project>/`
+is not removed, so re-enabling after disable will not re-deliver already-consumed
+reports.
 
 ### `cascade sentry update`
 
@@ -129,8 +134,9 @@ cascade sentry update [--project DIR]
 ```
 ~/.cascade/nsentry/
   <dev_id>/
-    cache/           # rsync mirror of the remote directory
-    consumed.list    # one filename per line, never shrinks
+    <project>/
+      cache/           # rsync mirror of this project's remote directory
+      consumed.list    # one filename per line, never shrinks
 ```
 
 The cache and manifest are never written into the project — they stay in your
