@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.13] - 2026-06-30
+
+nSentry per-project state isolation, plus FOSS cleanup of the Forgejo CI mirror.
+
+### Fixed
+- **nSentry state is now keyed by both developer and project**, not developer alone. The sync cache and `consumed.list` manifest moved from `~/.cascade/nsentry/<dev_id>/` to `~/.cascade/nsentry/<dev_id>/<project>/`. Without this, two projects synced on one machine shared a single cache (rsync runs without `--delete`) and a single manifest, so reports from one project's server could be copied into another project's inbox and dedup decisions collided across projects. Each project now keeps a fully independent cache and manifest — verified with four projects syncing into separate inboxes with zero cross-contamination. The launchd label slug and the state-directory slug are derived from one shared `project_slug` so they stay in lockstep.
+- **Forgejo CI mirror genericized for FOSS.** `.forgejo/workflows/ci.yml` no longer hardcodes any maintainer host or path — the failure-reporting hook now reads `NSENTRY_SERVER` from the operator's Forgejo variables and writes to the repo's own `.claude/inbox`. `scripts/check-no-maintainer-ids.sh` was hardened to scan `.forgejo/` and reject maintainer domains, so this can't regress.
+
 ## [1.9.12] - 2026-06-30
 
 nSentry report sync — pull bug/CI/error reports from a project's ops server into its Claude Code inbox, deduplicated per developer.
