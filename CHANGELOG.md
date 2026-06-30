@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.12] - 2026-06-30
+
+nSentry report sync — pull bug/CI/error reports from a project's ops server into its Claude Code inbox, deduplicated per developer.
+
+### Added
+- **`cascade sentry` — nSentry bug/CI/error-report sync.** A project's monitoring server writes timestamped Markdown reports to a remote directory (default `/opt/nself-ops/errors`); Cascade pulls them into that project's `.claude/inbox` so the local AI can act on them like any other inbox item.
+  - **Sync engine** (`cascade-core/nsentry.rs`): `rsync -az` over SSH from `<server>:<remote_dir>/*.md` into a local cache, then copies each report **not yet in a per-developer `consumed.list` manifest** into the inbox and records it. Idempotent and multi-dev-safe — every developer sharing one server receives each report exactly once; re-runs copy nothing. rsync against an unreachable host returns a typed error, never panics.
+  - **Per-developer identity**: a stable 12-char `dev_id` derived locally from hostname + username (nothing leaves the machine); state lives in `~/.cascade/nsentry/<dev_id>/`, out of the project tree.
+  - **Per-project config** `<project>/.cascade/nsentry.toml` (`sentry_server`, `remote_dir`, optional `inbox`, `interval_secs`). No server address is hardcoded in Cascade — all values are user-supplied.
+  - **Commands**: `enable` (writes config + installs a macOS launchd agent that syncs on an interval and at login), `sync` (`--dry-run` supported), `status`, `disable`, `update` (regenerate the agent after a binary or interval change). On Linux the config is written and the sync command can be wired to a systemd timer or cron.
+  - Docs: `.github/wiki/nSentry.md`. Tests cover dev_id stability, config round-trip, and the rsync→copy→dedup→isolation flow.
+
 ## [1.9.11] - 2026-06-30
 
 Fixes the widget's persistent "click here to re-auth" on accounts that are authenticated fine in the desktop apps.
