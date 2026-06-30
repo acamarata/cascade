@@ -77,6 +77,8 @@ pub mod wizard;
 pub mod telemetry;
 // sec-01: security scanning core
 pub mod security;
+// nsentry: nSentry bug/CI/error-report sync
+pub mod sentry;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -209,6 +211,8 @@ pub enum Commands {
     Export(export::ExportArgs),
     /// Security scan subcommands (secrets, client leaks, dep audit, prelaunch checklist).
     Security(security::SecurityArgs),
+    /// Pull nSentry bug/CI/error reports from a remote ops server into the project inbox.
+    Sentry(sentry::SentryArgs),
 }
 
 impl Commands {
@@ -266,6 +270,7 @@ impl Commands {
             Commands::Telemetry(args) => args.run().await,
             Commands::Export(args)    => args.run().await,
             Commands::Security(args)  => args.run().await,
+            Commands::Sentry(args)    => args.run().await,
         }
     }
 }
