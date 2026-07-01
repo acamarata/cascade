@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.17] - 2026-07-01
+
+### Fixed
+- **`cascade conductor selftest` bounds each provider probe** (30s) so a hanging or slow backend (e.g. opencode waiting on a rate-limited upstream) can no longer block the whole run — every provider is now reported (ok / FAILED / skipped / unavailable) instead of the run timing out partway.
+
 ## [1.9.16] - 2026-07-01
 
 Cascade Conductor — quota-aware multi-account/multi-provider routing — plus the Sonnet 5 model bump.

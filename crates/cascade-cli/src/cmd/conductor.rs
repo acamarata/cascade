@@ -386,12 +386,13 @@ const AUGMENTED_PATH: &str =
 
 /// Probe search dirs for a CLI binary name. Returns the first absolute path found.
 fn find_binary(name: &str) -> Option<PathBuf> {
+    // Common absolute install dirs; `~/bin` is covered by the home-relative
+    // fallback below (no hardcoded user paths).
     let extra_dirs = [
         "/opt/homebrew/bin",
         "/usr/local/bin",
         "/usr/bin",
         "/bin",
-        "/Users/admin/bin", // excluded at runtime via maintainer-ids check — general pattern
     ];
     // Try PATH-based lookup via `which`-style probe.
     for dir in &extra_dirs {
@@ -724,6 +725,47 @@ fn run_selftest(json_output: bool) -> Result<()> {
     Ok(())
 }
 
+/// Run a configured command bounded by `timeout_secs`; kill + return `None` on
+/// timeout so one hanging provider can never block the whole selftest. Captures
+/// stdout (probes emit tiny output, so the pipe never fills).
+fn output_bounded(mut cmd: StdCommand, timeout_secs: u64) -> Option<std::process::Output> {
+    use std::io::Read;
+    let mut child = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut buf = Vec::new();
+                if let Some(mut so) = child.stdout.take() {
+                    let _ = so.read_to_end(&mut buf);
+                }
+                return Some(std::process::Output {
+                    status,
+                    stdout: buf,
+                    stderr: Vec::new(),
+                });
+            }
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None; // timed out
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+/// Per-provider probe timeout (seconds). A worker that hangs past this is
+/// reported as FAILED rather than blocking the rest of the selftest.
+const PROBE_TIMEOUT_SECS: u64 = 30;
+
 /// Probe Claude with a 1-token "reply ok" prompt via claude -p.
 fn ping_claude_config(config_dir: Option<PathBuf>) -> Option<(bool, u64)> {
     let binary = find_binary("claude")?;
@@ -731,10 +773,8 @@ fn ping_claude_config(config_dir: Option<PathBuf>) -> Option<(bool, u64)> {
     if !config_dir.is_dir() {
         return None;
     }
-
-    let start = Instant::now();
-    let out = StdCommand::new(&binary)
-        .env("CLAUDE_CONFIG_DIR", &config_dir)
+    let mut cmd = StdCommand::new(&binary);
+    cmd.env("CLAUDE_CONFIG_DIR", &config_dir)
         .env("PATH", AUGMENTED_PATH)
         .args([
             "-p",
@@ -746,56 +786,44 @@ fn ping_claude_config(config_dir: Option<PathBuf>) -> Option<(bool, u64)> {
             r#"{"mcpServers":{}}"#,
             "--setting-sources",
             "",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    let ms = start.elapsed().as_millis() as u64;
-    Some((out.status.success(), ms))
+        ]);
+    let start = Instant::now();
+    let out = output_bounded(cmd, PROBE_TIMEOUT_SECS)?;
+    Some((out.status.success(), start.elapsed().as_millis() as u64))
 }
 
 /// Probe Codex with a minimal exec.
 fn ping_codex() -> Option<(bool, u64)> {
     let binary = find_binary("codex")?;
+    let mut cmd = StdCommand::new(&binary);
+    cmd.env("PATH", AUGMENTED_PATH).args(["exec", "reply ok"]);
     let start = Instant::now();
-    let out = StdCommand::new(&binary)
-        .env("PATH", AUGMENTED_PATH)
-        .args(["exec", "reply ok"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    let ms = start.elapsed().as_millis() as u64;
-    Some((out.status.success(), ms))
+    let out = output_bounded(cmd, PROBE_TIMEOUT_SECS)?;
+    Some((out.status.success(), start.elapsed().as_millis() as u64))
 }
 
 /// Probe OpenCode with `opencode run`.
 fn ping_opencode() -> Option<(bool, u64)> {
     let binary = find_binary("opencode")?;
+    let mut cmd = StdCommand::new(&binary);
+    cmd.env("PATH", AUGMENTED_PATH).args(["run", "reply ok"]);
     let start = Instant::now();
-    let out = StdCommand::new(&binary)
-        .env("PATH", AUGMENTED_PATH)
-        .args(["run", "reply ok"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    let ms = start.elapsed().as_millis() as u64;
-    Some((out.status.success(), ms))
+    let out = output_bounded(cmd, PROBE_TIMEOUT_SECS)?;
+    Some((out.status.success(), start.elapsed().as_millis() as u64))
 }
 
 /// Probe GFP proxy via curl health check.
 fn ping_gfp() -> Option<(bool, u64)> {
     let curl = find_binary("curl")?;
+    let mut cmd = StdCommand::new(&curl);
+    cmd.env("PATH", AUGMENTED_PATH).args([
+        "-s",
+        "-f",
+        "--max-time",
+        "3",
+        "http://localhost:3762/v1/health",
+    ]);
     let start = Instant::now();
-    let out = StdCommand::new(&curl)
-        .env("PATH", AUGMENTED_PATH)
-        .args(["-s", "-f", "--max-time", "3", "http://localhost:3762/v1/health"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    let ms = start.elapsed().as_millis() as u64;
-    Some((out.status.success(), ms))
+    let out = output_bounded(cmd, PROBE_TIMEOUT_SECS)?;
+    Some((out.status.success(), start.elapsed().as_millis() as u64))
 }
