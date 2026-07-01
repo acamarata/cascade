@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.18] - 2026-07-01
+
+Chat modes made real, honest GP pool count, and a broad app fix pass.
+
+### Fixed
+- **Cascade chat scope existed in the store but not the UI** — the mode switcher only offered Personal/Projects. All three modes now render and map to real memory namespaces (`personal` / `meta` / `dev-<project>`).
+- **Chat history persistence had never worked** — the app sent `namespace` without the required `scope` (400) and hit the personal-namespace firewall without `opt_in` (403), silently falling back to localStorage. Correct scope, opt-in, and namespace mapping now match the daemon's validator, so chats persist server-side.
+- **Personal page called the wrong endpoints** (`/api/memory/personal/threads` vs the real `/api/personal/threads`, wrong response shape) — it always failed; the thread detail panel was a stub. Both now use the real endpoints.
+- **Collapsed sidebar caused full page reloads** (bare `<a>` instead of router links), dropping all app state; dead routes and stale labels (`/vault/graph`, "Dashboard") cleaned up; the Projects board "Plan" button actually seeds the chat now.
+- **Explicit provider choice is respected in chat** — picking a provider no longer routes through the Gemini-pool fast path first.
+- **Widget quota gauges knew nothing about current model ids** (showed "?" for all live usage) — model map updated for the current fleet including `claude-sonnet-5`.
+- **GP pool key count is honest** — the pool size shown in the widget counted vault lines (duplicates across two vault files, placeholders included). It now counts unique valid keys only.
+
+### Added
+- **Private chat inside Personal mode** — a per-session private toggle whose messages never reach the daemon (local-only, cleared on reload).
+- **`context.personalRoot` setting** — Personal mode's file scope is configurable (defaults to the user's downloads workspace).
+
 ## [1.9.17] - 2026-07-01
 
 ### Fixed
