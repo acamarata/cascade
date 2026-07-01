@@ -36,12 +36,12 @@ minimal PATH).
 ```yaml
 version: 1
 projects:
-  - name: nself                                   # unique key
-    path: /Users/you/Sites/nself
-    org: nself-org                                # GitHub org for the ci/dependabot bridges
-    sentry_server: root@sentry-errors.nself.org   # rsync source (user@host)
+  - name: myproject                               # unique key
+    path: /Users/you/Sites/myproject
+    org: your-github-org                          # GitHub org for the ci/dependabot bridges
+    sentry_server: root@sentry.example.com        # rsync source (user@host)
     remote_dir: /opt/nself-ops/errors             # optional, this default
-    inbox: /Users/you/Sites/nself/.claude/inbox
+    inbox: /Users/you/Sites/myproject/.claude/inbox
     enabled: true                                 # project master switch
     per_run_cap: 50                               # max reports one stream run delivers (flood guard)
     streams:

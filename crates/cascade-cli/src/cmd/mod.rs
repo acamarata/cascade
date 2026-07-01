@@ -81,6 +81,8 @@ pub mod security;
 pub mod sentry;
 // nsentry2: daemon-owned multi-stream nSentry sync (config-driven YAML)
 pub mod nsentry;
+// conductor: Cascade Conductor — quota-aware multi-account routing engine
+pub mod conductor;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -217,6 +219,8 @@ pub enum Commands {
     Sentry(sentry::SentryArgs),
     /// Daemon-owned multi-stream nSentry sync (status / run / pause / resume / list).
     Nsentry(nsentry::NsentryArgs),
+    /// Route a prompt to the best available worker account (quota-aware delegation).
+    Conductor(conductor::ConductorArgs),
 }
 
 impl Commands {
@@ -276,6 +280,7 @@ impl Commands {
             Commands::Security(args)  => args.run().await,
             Commands::Sentry(args)    => args.run().await,
             Commands::Nsentry(args)   => args.run().await,
+            Commands::Conductor(args)  => args.run().await,
         }
     }
 }

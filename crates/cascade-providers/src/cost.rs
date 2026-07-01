@@ -93,6 +93,10 @@ fn build_table() -> CostTable {
         ModelPricing::new(15.0, 75.0),
     );
     t.insert(
+        ("anthropic", "claude-sonnet-5"),
+        ModelPricing::new(3.0, 15.0),
+    );
+    t.insert(
         ("anthropic", "claude-sonnet-4-6"),
         ModelPricing::new(3.0, 15.0),
     );

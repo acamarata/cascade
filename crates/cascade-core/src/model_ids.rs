@@ -27,7 +27,7 @@
 pub const MODEL_CLAUDE_OPUS: &str = "claude-opus-4-8";
 
 /// T2 bulk-execution model — default for agent harness generation.
-pub const MODEL_CLAUDE_SONNET: &str = "claude-sonnet-4-6";
+pub const MODEL_CLAUDE_SONNET: &str = "claude-sonnet-5";
 
 /// T3 cheap triage model — grunt work, taxonomy, post-prompt hooks.
 pub const MODEL_CLAUDE_HAIKU: &str = "claude-haiku-4-5";
