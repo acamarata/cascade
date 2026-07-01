@@ -6,7 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [1.9.14] - 2026-06-30
+## [1.9.15] - 2026-07-01
+
+Daemon-owned nSentry local sync — Cascade fully owns the developer-machine side of the observability pipeline.
+
+### Added
+- **`cascade nsentry` — declarative, daemon-run report sync for every project.** One config (`~/.cascade/nsentry-sync.yaml`) lists each project (path, GitHub org, sentry box, inbox) and its three streams; the daemon schedules them, no launchd or hand-made scripts:
+  - **rsync** (~5 min): box `/opt/nself-ops/errors/*.md` → inbox, per-dev `consumed.list` dedup (reuses the `cascade sentry` engine).
+  - **ci** (~15 min): the org's GitHub Actions failures → Markdown → inbox, deduped via `.gh-seen`.
+  - **dependabot** (~6 h): org Dependabot alerts + version-update PRs → Markdown → inbox, deduped via `.dependabot-seen`.
+  - Bundled bridge scripts (`crates/cascade-daemon/assets/nsentry/`) are materialized to `~/.cascade/nsentry/scripts/` at start and invoked per project; `gh`/`rsync`/`bash` resolved by absolute path.
+  - **`per_run_cap`** bounds reports delivered per run so a CI "fixing storm" or large backlog can't flood an inbox.
+  - **`cascade nsentry status`** shows per-project/stream last-run, delivered (last/total), and error — a stalled sync is obvious; state persists to `~/.cascade/nsentry-sync-status.json`. Plus `list`, `run`, `pause`, `resume`.
+  - **Safety**: consumed reports never re-deliver; writes only inside the configured inbox; an unreachable box (or changed SSH host key) logs + records the error and continues without affecting other projects.
+- Docs: `docs/nsentry-local-sync.md` (how it works, schema, adding a project, reading status, safety).
+
+Verified end to end against four live sentry boxes (nself, unity, ummat, acamarata): a sentinel delivered exactly once to the correct inbox, dedup on re-run, and zero cross-inbox leakage.
 
 Live Claude usage in the daemon, and honest multi-account auth state.
 
