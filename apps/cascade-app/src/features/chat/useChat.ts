@@ -1,15 +1,23 @@
 /**
  * Purpose: Chat client that routes to the GP proxy at port 3762 (Anthropic-compat,
- *   free Gemini Flash) by default, falling back to the cascade daemon at 9761
- *   (SSE streaming) when the proxy is unreachable.
+ *   near-free Gemini pool) by default, falling back to the cascade daemon at 9761
+ *   (SSE streaming, Conductor-routed T2/T3 Claude) when the proxy is unreachable
+ *   OR reports pool exhaustion.
  *
  * Primary path (port 3762):
  *   POST http://127.0.0.1:3762/v1/messages — Anthropic Messages API format.
  *   Returns synchronous JSON: { content: [{type:"text", text:"..."}], ... }
- *   Model: "claude-sonnet-4-6" (maps to gemini-2.0-flash at the proxy).
+ *   Model: "claude-sonnet-5" (canonical Sonnet id, see cascade-core::model_ids;
+ *   the GP adapter maps this to a Gemini Flash model at the proxy).
+ *   Health-gated: any non-2xx response (network error, "all Gemini providers
+ *   exhausted", or any other upstream failure) is treated as unhealthy and
+ *   triggers the fallback path below — chat never silently fails.
  *
  * Fallback path (port 9761):
- *   POST http://127.0.0.1:9761/api/chat — daemon SSE endpoint.
+ *   POST http://127.0.0.1:9761/api/chat — daemon SSE endpoint. This is the same
+ *   provider-registry routing chain used by `cascade conductor` (explicit
+ *   provider > routing-table default > first healthy cloud > local fallback),
+ *   so a GP outage transparently lands on the next-best Claude account/tier.
  *   SSE event types: served_by | token | tool_result | error | data [DONE].
  *
  * Inputs: sessionId string, optional namespace string, optional selectedProvider string override.
@@ -21,6 +29,8 @@ import { useChatHistory, type ChatMessage } from './useChatHistory'
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 const GP_PROXY_URL = 'http://127.0.0.1:3762'
+/** Canonical Sonnet model id (cascade-core::model_ids::MODEL_CLAUDE_SONNET). */
+const DEFAULT_CHAT_MODEL = 'claude-sonnet-5'
 const DAEMON_BASE_URL =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
     ? 'http://127.0.0.1:9761'
@@ -128,50 +138,59 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
       let accumulated = ''
       let resolvedProvider: string | null = null
 
-      try {
-        // ── Primary: GP proxy (Anthropic-compat, free Gemini Flash) ─────────
-        let gpSuccess = false
-        try {
-          const gpRes = await fetch(`${GP_PROXY_URL}/v1/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(namespace ? { 'X-Cascade-Namespace': namespace } : {}),
-            },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-6',
-              max_tokens: 4096,
-              messages: contextMsgs,
-              ...(provider ? { metadata: { provider } } : {}),
-            }),
-            signal: controller.signal,
-          })
+      // The user's explicit provider selection (ProviderSelector, "Auto" = null)
+      // always wins — skip the GP fast-path entirely so the request goes
+      // straight to the daemon's routing chain with `provider` pinned.
+      const userForcedProvider = Boolean(provider)
 
-          if (gpRes.ok) {
-            type AnthropicContent = { type: string; text?: string }
-            type AnthropicResponse = { content?: AnthropicContent[]; model?: string }
-            const body = await gpRes.json() as AnthropicResponse
-            const textBlock = body.content?.find((b) => b.type === 'text')
-            accumulated = textBlock?.text ?? ''
-            resolvedProvider = `gp:${body.model ?? 'gemini-2.0-flash'}`
-            setServedBy(resolvedProvider)
-            // Simulate token-by-token reveal so UI feels responsive
-            const words = accumulated.split(' ')
-            let revealed = ''
-            for (const word of words) {
-              revealed += (revealed ? ' ' : '') + word
-              setStreamingContent(revealed)
-              // Yield to browser between words (non-blocking, ~0ms each)
-              await new Promise<void>((r) => setTimeout(r, 0))
+      try {
+        // ── Primary: GP proxy (Anthropic-compat, near-free Gemini pool) ──────
+        let gpSuccess = false
+        if (!userForcedProvider) {
+          try {
+            const gpRes = await fetch(`${GP_PROXY_URL}/v1/messages`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(namespace ? { 'X-Cascade-Namespace': namespace } : {}),
+              },
+              body: JSON.stringify({
+                model: DEFAULT_CHAT_MODEL,
+                max_tokens: 4096,
+                messages: contextMsgs,
+              }),
+              signal: controller.signal,
+            })
+
+            // Health gate: any non-2xx (unreachable, "all Gemini providers
+            // exhausted", or other upstream failure) falls through to the
+            // Conductor-routed daemon fallback below — never a silent failure.
+            if (gpRes.ok) {
+              type AnthropicContent = { type: string; text?: string }
+              type AnthropicResponse = { content?: AnthropicContent[]; model?: string }
+              const body = await gpRes.json() as AnthropicResponse
+              const textBlock = body.content?.find((b) => b.type === 'text')
+              accumulated = textBlock?.text ?? ''
+              resolvedProvider = `gp:${body.model ?? 'gemini-2.0-flash'}`
+              setServedBy(resolvedProvider)
+              // Simulate token-by-token reveal so UI feels responsive
+              const words = accumulated.split(' ')
+              let revealed = ''
+              for (const word of words) {
+                revealed += (revealed ? ' ' : '') + word
+                setStreamingContent(revealed)
+                // Yield to browser between words (non-blocking, ~0ms each)
+                await new Promise<void>((r) => setTimeout(r, 0))
+              }
+              gpSuccess = true
             }
-            gpSuccess = true
+          } catch (gpErr: unknown) {
+            if (gpErr instanceof Error && gpErr.name === 'AbortError') throw gpErr
+            // GP proxy unreachable — fall through to daemon
           }
-        } catch (gpErr: unknown) {
-          if (gpErr instanceof Error && gpErr.name === 'AbortError') throw gpErr
-          // GP proxy unreachable — fall through to daemon
         }
 
-        // ── Fallback: cascade daemon SSE at port 9761 ────────────────────────
+        // ── Fallback: cascade daemon SSE at port 9761 (Conductor-routed) ─────
         if (!gpSuccess) {
           const res = await fetch(`${DAEMON_BASE_URL}/api/chat`, {
             method: 'POST',

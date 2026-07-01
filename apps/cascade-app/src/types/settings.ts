@@ -24,6 +24,11 @@ export interface LibrarySettings {
 export interface ContextSettings {
   /** Override the default ~/Sites/ root. Absent = system default. */
   sitesRoot?: string | null
+  /**
+   * Override the default personal-workspace root used by Personal-scope chat
+   * and the personal vault. Absent = system default (~/Downloads).
+   */
+  personalRoot?: string | null
 }
 
 // ── Project Map ───────────────────────────────────────────────────────────────

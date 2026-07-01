@@ -52,6 +52,7 @@ Unknown top-level fields are preserved in `extra` (serde flatten) so a v2 binary
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `sitesRoot` | `string \| null` | `null` | Override for `~/Sites/` used in context resolution. Null = system default. |
+| `personalRoot` | `string \| null` | `null` | Override for the personal-workspace root used by Personal-scope chat and the personal vault. Null = system default (`~/Downloads`). |
 
 ---
 

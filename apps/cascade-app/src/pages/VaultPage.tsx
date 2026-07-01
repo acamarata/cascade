@@ -255,9 +255,10 @@ function VaultPageInner() {
               </span>
             )}
           </button>
-          {/* T-P3-E06-07: Graph view link */}
+          {/* T-P3-E06-07: Graph view link — /vault/graph was consolidated into
+              VaultHub's tabbed layout (/vault?tab=graph); this must match. */}
           <Link
-            to="/vault/graph"
+            to="/vault?tab=graph"
             aria-label="Open graph view"
             title="Graph view"
             className="flex flex-1 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"

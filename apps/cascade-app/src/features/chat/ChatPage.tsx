@@ -5,12 +5,25 @@
  *   highlighting, provider/model selector, local-LLM fallback indicator,
  *   new-chat / clear, session persistence, and scope switcher.
  *
- *   Scope switcher: Personal | Projects tabs — Cascade scope accessible from
- *   /settings/cascade. Scope drives ?scope= URL param and per-scope sessions.
+ *   Scope switcher: Personal | Cascade | Projects — three real, visible modes:
+ *     - Personal: personal-life assistant, scoped to the personal workspace
+ *       (context.personalRoot setting, default ~/Downloads). A Private toggle
+ *       nested inside Personal mode routes to the firewalled "personal"
+ *       namespace (opt_in required) instead of the default incognito session
+ *       (never persisted to the daemon's long-term memory at all — sessionStorage
+ *       only). There is no separate top-level "private" mode — it lives inside
+ *       Personal per the E-P9-03 scoping contract.
+ *     - Cascade: self-referential scope — questions about Cascade's own
+ *       settings/accounts/status. Namespace "meta" (cascade's own knowledge).
+ *     - Projects: scoped to a registered project directory. Namespace
+ *       "dev-<slug>" (per-project developer RAG namespace).
+ *   Scope drives the ?scope= URL param and namespace-partitioned sessions.
  *
  *   Routing: requests are sent through the cascade daemon's routed /api/chat
  *   endpoint (127.0.0.1:9761) following the P7 E-P7-07 priority chain:
- *   selected > default > healthy cloud > local fallback.
+ *   selected > default > healthy cloud > local fallback. Chat history persists
+ *   through /api/memory/chat, scoped+namespaced per cascade-rag's personal
+ *   firewall (see useChatHistory.ts).
  *
  *   The prompt box runs with cascade context available — tools exposed by the
  *   daemon (provide_harness_context, search, pbd tools) are dispatched server-side.
@@ -19,11 +32,13 @@
  * Outputs: Full-height flex chat panel inside the AppLayout main area.
  * Constraints: Session id is stable per browser session (sessionStorage key).
  *   Provider selector is optional — null means auto (daemon routing decides).
+ *   Private mode is session-only state (not persisted to localStorage) — it
+ *   always resets to off on reload, matching incognito semantics.
  *   a11y: main landmark, live regions, aria-labels on all interactive elements.
  * SPORT: E-P9-03 in-app chat — ChatPage, /chat route
  */
 import { useRef, useState, useId, useEffect } from 'react'
-import { MessageSquare, RotateCcw } from 'lucide-react'
+import { MessageSquare, RotateCcw, Lock } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -64,10 +79,11 @@ export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { chatScope, selectedProjectId, setScope } = useChatScope()
 
-  // Init scope from URL param on first render.
+  // Init scope from URL param on first render. All three scopes are real,
+  // visible modes — "cascade" is no longer settings-only.
   const urlScope = searchParams.get('scope')
   useEffect(() => {
-    if (urlScope === 'personal' || urlScope === 'projects') {
+    if (urlScope === 'personal' || urlScope === 'projects' || urlScope === 'cascade') {
       setScope(urlScope as ChatScope)
     }
     // Only run on mount (urlScope is stable from router).
@@ -78,14 +94,44 @@ export function ChatPage() {
   const [sessionId, setSessionId] = useState(() => getOrCreateSessionId())
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
 
-  // Derive namespace from scope.
+  // Private/incognito sub-mode — only meaningful inside Personal scope.
+  // Session-only (never persisted): reloading the app always starts non-private.
+  const [isPrivate, setIsPrivate] = useState(false)
+
+  // Derive namespace from scope. "personal" (private off) still requires an
+  // explicit opt_in at the memory layer (see useChatHistory's firewall
+  // handling) — private mode additionally skips server-side persistence
+  // entirely by using a namespace the daemon never long-term stores.
   const namespace =
     chatScope === 'projects'
       ? `projects:${selectedProjectId ?? 'default'}`
-      : chatScope
+      : chatScope === 'cascade'
+        ? 'meta'
+        : isPrivate
+          ? 'personal:private'
+          : 'personal'
 
   const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } =
     useChat(sessionId, namespace)
+
+  // Consume a `seed` URL param (e.g. from AllProjectsBoard's "Plan" action:
+  // `/chat?scope=projects&seed=<prompt>`) — auto-send it once as the first
+  // message, then strip it from the URL so remounts/refreshes don't resend.
+  useEffect(() => {
+    const seed = searchParams.get('seed')
+    if (!seed) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('seed')
+        return next
+      },
+      { replace: true },
+    )
+    void sendMessage(seed, selectedProvider ?? undefined)
+    // Only run once on mount — sendMessage/selectedProvider are read at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Track last served provider for header display.
   const lastServedBy =
@@ -106,9 +152,15 @@ export function ChatPage() {
     setSessionId(id)
   }
 
-  function handleScopeChange(scope: 'personal' | 'projects') {
+  function handleScopeChange(scope: ChatScope) {
     setScope(scope)
     setSearchParams({ scope }, { replace: true })
+    setIsPrivate(false) // leaving/entering a scope always resets private mode
+    handleNewChat()
+  }
+
+  function handleTogglePrivate() {
+    setIsPrivate((prev) => !prev)
     handleNewChat()
   }
 
@@ -174,22 +226,45 @@ export function ChatPage() {
       </div>
 
       {/* ── Scope switcher ─────────────────────────────────────── */}
-      <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-background shrink-0">
-        {(['personal', 'projects'] as const).map((s) => (
+      <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-border bg-background shrink-0">
+        <div className="flex items-center gap-1">
+          {(['personal', 'cascade', 'projects'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => handleScopeChange(s)}
+              aria-pressed={chatScope === s}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                chatScope === s
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              )}
+            >
+              {s === 'personal' ? 'Personal' : s === 'cascade' ? 'Cascade' : 'Projects'}
+            </button>
+          ))}
+        </div>
+
+        {/* Private/incognito sub-mode — only available inside Personal scope */}
+        {chatScope === 'personal' && (
           <button
-            key={s}
             type="button"
-            onClick={() => handleScopeChange(s)}
+            onClick={handleTogglePrivate}
+            aria-pressed={isPrivate}
+            aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
+            title="Private chat: not saved to Cascade's memory, session-only"
             className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-              chatScope === s
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
+              isPrivate
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                : 'text-muted-foreground border-transparent hover:bg-accent/50 hover:text-foreground',
             )}
           >
-            {s === 'personal' ? 'Personal' : 'Projects'}
+            <Lock className="h-3 w-3" aria-hidden="true" />
+            Private
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── Error banner ───────────────────────────────────────── */}

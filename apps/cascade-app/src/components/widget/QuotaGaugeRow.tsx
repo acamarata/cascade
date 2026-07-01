@@ -14,9 +14,21 @@
 
 import React from 'react'
 
-/** Default estimated monthly token quota per model (P3 defaults; user-configurable in P4). */
+/**
+ * Default estimated monthly token quota per model (P3 defaults; user-configurable
+ * in P4). Includes both the current canonical model ids (cascade-core::model_ids)
+ * and prior-generation ids so historical usage rows still resolve to an estimate.
+ */
 export const MODEL_QUOTA_ESTIMATE: Record<string, number> = {
+  // Current canonical fleet ids (cascade-core::model_ids)
   'claude-opus-4-8': 2_000_000,
+  'claude-sonnet-5': 10_000_000,
+  'claude-haiku-4-5': 50_000_000,
+  'claude-fable-5': 10_000_000,
+  'gemini-3.1-pro': 2_000_000,
+  'gemini-3.5-flash': 20_000_000,
+  'gpt-5.5': 2_000_000,
+  // Prior-generation ids retained for historical usage rows
   'claude-sonnet-4-6': 10_000_000,
   'claude-haiku-3-5': 50_000_000,
   'claude-haiku-3': 100_000_000,

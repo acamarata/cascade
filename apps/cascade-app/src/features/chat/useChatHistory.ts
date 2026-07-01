@@ -5,11 +5,16 @@
  *   and exposes a clear function. SSR-safe (typeof window guard).
  *   Ported from cascade-dashboard GPChatPanel (T-P3-E02-20).
  * Inputs:  sessionId string — must be non-empty; used as storage key.
- *          namespace string (optional) — routing namespace, defaults to 'personal'.
+ *          namespace string (optional) — chat scope key ('personal' | 'meta' |
+ *          'projects:<id>'), defaults to 'personal'. Mapped to the memory-API's
+ *          namespace format (personal/meta/dev-<slug>) via toMemoryNamespace().
  * Outputs: { messages, append, clear }
  * Constraints: Max 50 messages (rolling; oldest trimmed). JSON.parse wrapped in
  *   try/catch — corrupt storage yields empty array. API errors are silently
  *   swallowed; localStorage is always the sync initial state and fallback.
+ *   The daemon's /api/memory/chat endpoint requires BOTH `scope` and `namespace`
+ *   query/body params (400 without them) and firewalls the "personal" namespace
+ *   behind `opt_in: true` (403 without it) — see cascade-rag memory::namespace.
  * SPORT: E-P9-03 in-app chat — useChatHistory
  */
 import { useState, useCallback, useEffect } from 'react'
@@ -81,31 +86,75 @@ function clearFromStorage(sessionId: string): void {
   }
 }
 
+/** Sentinel namespace meaning "never sync to the daemon — local-only". */
+const PRIVATE_NAMESPACE = 'personal:private'
+
+/**
+ * Map a chat-scope namespace key ('personal' | 'meta' | 'projects:<id>' |
+ * 'personal:private') to the memory API's validated namespace format
+ * ('personal' | 'meta' | 'dev-<slug>'). Falls back to 'personal' for
+ * unrecognized input. Private mode is handled separately by isPrivateNamespace()
+ * before this is called — it never reaches the daemon.
+ */
+function toMemoryNamespace(ns: string): string {
+  if (ns === 'personal' || ns === 'meta') return ns
+  if (ns.startsWith('projects:')) {
+    const slug = ns
+      .slice('projects:'.length)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+|-+$/g, '')
+    return `dev-${slug || 'default'}`
+  }
+  return 'personal'
+}
+
+/** True when the mapped namespace requires the personal-firewall opt_in flag. */
+function needsOptIn(memoryNamespace: string): boolean {
+  return memoryNamespace === 'personal'
+}
+
 export function useChatHistory(
   sessionId: string,
   namespace?: string,
 ): UseChatHistoryResult {
   const ns = namespace ?? 'personal'
+  // Private/incognito chat (Personal mode's Private toggle): local-only,
+  // never touches the daemon's long-term memory store at all.
+  const isPrivate = ns === PRIVATE_NAMESPACE
+  const memoryNs = toMemoryNamespace(ns)
+  const optIn = needsOptIn(memoryNs)
+  // Scope identifies the calling surface — distinct from namespace (the data
+  // partition). The in-app chat always scopes itself as "cascade-app".
+  const scope = 'cascade-app'
 
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     loadFromStorage(sessionId),
   )
 
   // On mount / sessionId change: try API first, fall back to localStorage.
+  // Private sessions skip the API entirely — localStorage only.
   useEffect(() => {
     // Optimistically load from localStorage while API request is in-flight.
     setMessages(loadFromStorage(sessionId))
+    if (isPrivate) return
 
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(
-          `${DAEMON_BASE_URL}/api/memory/chat?namespace=${encodeURIComponent(ns)}&session_id=${encodeURIComponent(sessionId)}`,
-        )
+        const params = new URLSearchParams({
+          scope,
+          namespace: memoryNs,
+          opt_in: String(optIn),
+        })
+        const res = await fetch(`${DAEMON_BASE_URL}/api/memory/chat?${params.toString()}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = (await res.json()) as { messages?: ChatMessage[] }
         if (!cancelled) {
-          setMessages(data.messages ?? [])
+          // The daemon stores flat chat rows per-namespace (not per-session), so
+          // filter client-side is not needed yet — sessionId partitioning is
+          // handled by localStorage only until per-session server storage lands.
+          setMessages(data.messages ?? loadFromStorage(sessionId))
         }
       } catch {
         // API unavailable — keep localStorage snapshot loaded above.
@@ -116,45 +165,46 @@ export function useChatHistory(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, ns])
+  }, [sessionId, memoryNs, optIn, isPrivate])
 
   const append = useCallback(
     (msg: ChatMessage) => {
       setMessages((prev) => {
         const next = [...prev, msg].slice(-MAX_MESSAGES)
-        // Async persist to API; fall back to localStorage on failure.
-        ;(async () => {
-          try {
-            const res = await fetch(`${DAEMON_BASE_URL}/api/memory/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ namespace: ns, session_id: sessionId, messages: next }),
-            })
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          } catch {
-            saveToStorage(sessionId, next)
-          }
-        })()
+        // Always keep localStorage in sync (session-scoped persistence); the
+        // daemon call is best-effort long-term memory, not the source of truth
+        // for a specific session's transcript.
+        saveToStorage(sessionId, next)
+        if (!isPrivate) {
+          ;(async () => {
+            try {
+              const res = await fetch(`${DAEMON_BASE_URL}/api/memory/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  scope,
+                  namespace: memoryNs,
+                  opt_in: optIn,
+                  role: msg.role,
+                  content: msg.content,
+                }),
+              })
+              if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            } catch {
+              // Already persisted to localStorage above — nothing further to do.
+            }
+          })()
+        }
         return next
       })
     },
-    [sessionId, ns],
+    [sessionId, memoryNs, optIn, isPrivate],
   )
 
   const clear = useCallback(() => {
     setMessages([])
-    ;(async () => {
-      try {
-        const res = await fetch(
-          `${DAEMON_BASE_URL}/api/memory/chat?namespace=${encodeURIComponent(ns)}&session_id=${encodeURIComponent(sessionId)}`,
-          { method: 'DELETE' },
-        )
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      } catch {
-        clearFromStorage(sessionId)
-      }
-    })()
-  }, [sessionId, ns])
+    clearFromStorage(sessionId)
+  }, [sessionId])
 
   return { messages, append, clear }
 }

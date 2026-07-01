@@ -70,6 +70,11 @@ pub struct ContextSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sites_root: Option<String>,
 
+    /// Override the default personal-workspace root used by Personal-scope
+    /// chat and the personal vault. Null = system default (`~/Downloads`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub personal_root: Option<String>,
+
     /// Preserve unknown fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,

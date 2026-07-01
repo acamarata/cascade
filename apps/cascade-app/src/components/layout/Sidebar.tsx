@@ -10,6 +10,7 @@
  */
 
 import { useRef, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import {
   FolderGit2,
   Layers,
@@ -86,14 +87,23 @@ export function Sidebar() {
       <div ref={navRef} className="flex flex-1 flex-col gap-1 p-2">
         {NAV_ITEMS.map((item) =>
           collapsed ? (
-            <a
+            <NavLink
               key={item.to}
-              href={item.to}
+              to={item.to}
               title={item.label}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+              aria-label={item.label}
+              className={({ isActive }) =>
+                [
+                  'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  isActive
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                ].join(' ')
+              }
             >
               {item.icon}
-            </a>
+            </NavLink>
           ) : (
             <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} />
           )

@@ -538,26 +538,55 @@ pub fn detect_cli(name: &str) -> bool {
 
 /// Count GFP API keys in `~/.claude/vault.env` and `~/.cascade/vault.env`.
 ///
-/// Counts lines matching `GEMINI_FREE_KEY_*`, `GEMINI_KEY_*`, `GEMINI_API_KEY_*`.
-/// NEVER logs key values — only the count.
+/// Counts **unique key values** across both files — the same key duplicated
+/// between vaults (or aliased under two var names) is one usable key, not two.
+/// Only values that look like real Google API keys (`AIza…`) are counted, so a
+/// placeholder or empty assignment can't inflate the pool size the widget
+/// reports. NEVER logs key values — only the count.
 pub fn count_gfp_keys() -> u32 {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-    [home.join(".claude").join("vault.env"), home.join(".cascade").join("vault.env")]
-        .iter()
-        .map(|p| count_gfp_keys_from_path(p))
-        .fold(0u32, |a, b| a.saturating_add(b))
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for p in [
+        home.join(".claude").join("vault.env"),
+        home.join(".cascade").join("vault.env"),
+    ] {
+        collect_gfp_keys_from_path(&p, &mut seen);
+    }
+    seen.len() as u32
 }
 
-/// Count GFP API keys from a specific vault file (testable inner implementation).
+/// Collect unique GFP key values from one vault file into `seen`.
+/// No-op if the file is absent or unreadable (testable inner implementation).
+pub fn collect_gfp_keys_from_path(vault_path: &Path, seen: &mut std::collections::HashSet<String>) {
+    let Ok(content) = std::fs::read_to_string(vault_path) else { return };
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let t = t.strip_prefix("export ").unwrap_or(t);
+        let mut parts = t.splitn(2, '=');
+        let k = parts.next().unwrap_or("").trim();
+        let v = parts
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_matches(|c| c == '"' || c == '\'');
+        let named_key = k.starts_with("GEMINI_FREE_KEY_")
+            || k.starts_with("GEMINI_KEY_")
+            || k.starts_with("GEMINI_API_KEY_");
+        if named_key && v.starts_with("AIza") && v.len() >= 30 {
+            seen.insert(v.to_string());
+        }
+    }
+}
+
+/// Count GFP API keys from a specific vault file (unique valid values).
 /// Returns 0 if the file is absent or unreadable.
 pub fn count_gfp_keys_from_path(vault_path: &Path) -> u32 {
-    let Ok(content) = std::fs::read_to_string(vault_path) else { return 0 };
-    content.lines().filter(|line| {
-        let t = line.trim();
-        if t.is_empty() || t.starts_with('#') { return false; }
-        let k = t.split('=').next().unwrap_or("").trim();
-        k.starts_with("GEMINI_FREE_KEY_") || k.starts_with("GEMINI_KEY_") || k.starts_with("GEMINI_API_KEY_")
-    }).count() as u32
+    let mut seen = std::collections::HashSet::new();
+    collect_gfp_keys_from_path(vault_path, &mut seen);
+    seen.len() as u32
 }
 
 // ── Default registry seed ─────────────────────────────────────────────────────
@@ -603,19 +632,44 @@ mod tests {
         assert_eq!(decoded.accounts.len(), 0, "default registry has no seeded accounts");
     }
 
-    /// Write fixture vault.env with 3 GEMINI_FREE_KEY_* entries; assert count == 3.
+    /// Unique-value key counting: valid AIza keys count once each; duplicates
+    /// (same value under two var names), placeholders, and non-key lines don't
+    /// inflate the count.
     #[test]
     fn gfp_key_count_fixture() {
         let dir = TempDir::new().unwrap();
         let vault_path = dir.path().join("vault.env");
         let mut f = std::fs::File::create(&vault_path).unwrap();
         writeln!(f, "# Vault file").unwrap();
-        writeln!(f, "GEMINI_FREE_KEY_1=fake-key-aaa").unwrap();
-        writeln!(f, "GEMINI_FREE_KEY_2=fake-key-bbb").unwrap();
-        writeln!(f, "GEMINI_FREE_KEY_3=fake-key-ccc").unwrap();
+        writeln!(f, "GEMINI_FREE_KEY_1=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA1").unwrap();
+        writeln!(f, "GEMINI_FREE_KEY_2=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA2").unwrap();
+        writeln!(f, "export GEMINI_KEY_3=\"AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA3\"").unwrap();
+        // Duplicate value under another name — still one usable key.
+        writeln!(f, "GEMINI_API_KEY_DUP=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA1").unwrap();
+        // Placeholder / non-AIza values must not count.
+        writeln!(f, "GEMINI_FREE_KEY_4=fake-key-placeholder").unwrap();
+        writeln!(f, "GEMINI_FREE_KEY_5=").unwrap();
         writeln!(f, "OTHER_KEY=some-value").unwrap();
         drop(f);
-        assert_eq!(count_gfp_keys_from_path(&vault_path), 3, "expected 3 GFP keys");
+        assert_eq!(
+            count_gfp_keys_from_path(&vault_path),
+            3,
+            "expected 3 unique valid GFP keys"
+        );
+    }
+
+    /// Cross-file dedup: the same key present in two vault files counts once.
+    #[test]
+    fn gfp_key_dedup_across_files() {
+        let dir = TempDir::new().unwrap();
+        let v1 = dir.path().join("vault1.env");
+        let v2 = dir.path().join("vault2.env");
+        std::fs::write(&v1, "GEMINI_FREE_KEY_1=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB1\n").unwrap();
+        std::fs::write(&v2, "GEMINI_KEY_A=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB1\nGEMINI_KEY_B=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB2\n").unwrap();
+        let mut seen = std::collections::HashSet::new();
+        collect_gfp_keys_from_path(&v1, &mut seen);
+        collect_gfp_keys_from_path(&v2, &mut seen);
+        assert_eq!(seen.len(), 2, "duplicate across files must count once");
     }
 
     /// detect_cli should return a bool without panicking; absent binary must be false.

@@ -1,21 +1,31 @@
 /**
- * Purpose: Personal hub — shows threads/topics from rag-15 personal endpoints,
- *   and the encrypted personal vault (cascade-personal IPC) on a second tab.
+ * Purpose: Personal hub — shows threads/topics from the daemon's personal-workspace
+ *   API (/api/personal/threads), and the encrypted personal vault (cascade-personal
+ *   IPC) on a second tab.
  * Inputs:  None (standalone route page).
  * Outputs: Tab bar ("Threads" | "Encrypted Vault") with two panels:
  *   - Threads: two-panel layout (thread list left, detail right).
  *   - Encrypted Vault: PersonalEncryptedVaultPanel.
+ * Constraints:
+ *   - GET /api/personal/threads returns a raw Thread[] array (not { threads }).
+ *   - GET /api/personal/threads/:id returns the single Thread; there is no
+ *     server-side endpoint yet to list a thread's chat/task history, so the
+ *     detail panel shows thread metadata only (title/sensitivity/created_at) —
+ *     no fabricated message list.
  * SPORT: MASTER-ROUTES.md — /personal
  */
 import { useEffect, useState } from 'react'
 import { User, MessageSquare } from 'lucide-react'
 import { PersonalEncryptedVaultPanel } from '../features/personal/PersonalEncryptedVaultPanel'
 
+/** Mirrors cascade_core::threads::store::Thread. */
 interface PersonalThread {
   id: string
+  parent_id: string | null
   title: string
-  updatedAt: number
-  messageCount: number
+  sensitivity: string
+  created_at: string
+  archived: boolean
 }
 
 const DAEMON_BASE_URL =
@@ -28,6 +38,8 @@ type Tab = 'threads' | 'vault'
 export function PersonalPage() {
   const [threads, setThreads] = useState<PersonalThread[]>([])
   const [selected, setSelected] = useState<string | null>(null)
+  const [selectedThread, setSelectedThread] = useState<PersonalThread | null>(null)
+  const [detailError, setDetailError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('threads')
 
@@ -35,10 +47,11 @@ export function PersonalPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${DAEMON_BASE_URL}/api/memory/personal/threads`)
+        const res = await fetch(`${DAEMON_BASE_URL}/api/personal/threads`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as { threads?: PersonalThread[] }
-        if (!cancelled) setThreads(data.threads ?? [])
+        // Endpoint returns a raw array, not { threads: [...] }.
+        const data = (await res.json()) as PersonalThread[]
+        if (!cancelled) setThreads(Array.isArray(data) ? data : [])
       } catch {
         if (!cancelled) setError('Personal threads unavailable — daemon may be offline.')
       }
@@ -47,6 +60,29 @@ export function PersonalPage() {
       cancelled = true
     }
   }, [])
+
+  // Fetch the selected thread's detail on selection change.
+  useEffect(() => {
+    if (!selected) {
+      setSelectedThread(null)
+      return
+    }
+    let cancelled = false
+    setDetailError(null)
+    ;(async () => {
+      try {
+        const res = await fetch(`${DAEMON_BASE_URL}/api/personal/threads/${encodeURIComponent(selected)}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as PersonalThread
+        if (!cancelled) setSelectedThread(data)
+      } catch {
+        if (!cancelled) setDetailError('Thread detail unavailable — daemon may be offline.')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selected])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -106,7 +142,7 @@ export function PersonalPage() {
                   }`}
                 >
                   <div className="font-medium truncate">{t.title}</div>
-                  <div className="text-xs opacity-60">{t.messageCount} messages</div>
+                  <div className="text-xs opacity-60">{t.sensitivity}</div>
                 </button>
               ))}
             </div>
@@ -114,11 +150,34 @@ export function PersonalPage() {
 
           {/* Detail panel */}
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            {selected ? (
-              <div className="p-4 w-full max-w-2xl">
-                <p className="text-sm text-muted-foreground">Thread: {selected}</p>
+            {selected && detailError && (
+              <p className="text-sm text-muted-foreground">{detailError}</p>
+            )}
+            {selected && !detailError && selectedThread && (
+              <div className="p-4 w-full max-w-2xl self-start">
+                <h2 className="text-lg font-semibold text-foreground mb-2">
+                  {selectedThread.title}
+                </h2>
+                <dl className="text-sm space-y-1">
+                  <div className="flex gap-2">
+                    <dt className="text-muted-foreground">Sensitivity:</dt>
+                    <dd>{selectedThread.sensitivity}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="text-muted-foreground">Created:</dt>
+                    <dd>{selectedThread.created_at}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="text-muted-foreground">Archived:</dt>
+                    <dd>{selectedThread.archived ? 'Yes' : 'No'}</dd>
+                  </div>
+                </dl>
               </div>
-            ) : (
+            )}
+            {selected && !detailError && !selectedThread && (
+              <p className="text-sm text-muted-foreground">Loading thread…</p>
+            )}
+            {!selected && (
               <div className="flex flex-col items-center gap-2">
                 <MessageSquare className="h-8 w-8 opacity-30" aria-hidden="true" />
                 <p className="text-sm">Select a thread or start a new Personal chat</p>

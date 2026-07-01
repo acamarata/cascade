@@ -3,18 +3,25 @@
  *   or CASCADE_PCI_PATH override) as a first-class vault alongside the project/global vault.
  *   Provides tree data, file selection, and daily-notes for the personal vault at /vault/personal.
  * Inputs:  PersonalVaultProviderProps.pciPath — PCI vault root (default: ~/Downloads/.cascade).
- *          Can be overridden via CASCADE_PCI_PATH env / window.__CASCADE_PCI_PATH.
+ *          Can be overridden via CASCADE_PCI_PATH env / window.__CASCADE_PCI_PATH, an explicit
+ *          localStorage override (setPciRoot), or the `context.personalRoot` setting
+ *          (~/.cascade/settings.json, edited via get_settings/update_settings IPC).
  * Outputs: PersonalVaultContextValue exposed via usePersonalVault() hook.
  * Constraints:
  *   - Mirrors the shape of VaultContextValue for nav/editor reuse.
  *   - Falls back to a fixture when __TAURI__ is absent (Vitest/browser dev).
  *   - PCI path is stored in localStorage under "cascade.pciPath" for settings persistence.
+ *   - Resolution priority: window override > localStorage explicit override >
+ *     settings.json personalRoot > DEFAULT_PCI_PATH. The settings.json value is
+ *     fetched async on mount (Tauri only) and applied only when no explicit
+ *     localStorage override already exists, so a user's manual override always wins.
  * SPORT: MASTER-COMPONENTS.md — PersonalVaultContext (E-P9-01)
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { VaultNode, MemoryEntry } from '../types/vault'
+import type { CascadeSettings } from '../types/settings'
 import { buildMemoryIndex } from '../services/vault/memoryAggregator'
 
 // ── Default PCI path resolution ───────────────────────────────────────────────
@@ -35,6 +42,12 @@ function resolvePciRoot(): string {
     if (stored) return stored
   }
   return DEFAULT_PCI_PATH
+}
+
+/** True when the current pciRoot came from an explicit, user-set localStorage override. */
+function hasExplicitLocalOverride(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  return localStorage.getItem(PCI_STORAGE_KEY) !== null
 }
 
 // ── Dev fixture ───────────────────────────────────────────────────────────────
@@ -150,6 +163,30 @@ export function PersonalVaultProvider({
       localStorage.setItem(PCI_STORAGE_KEY, newRoot)
     }
     setPciRootState(newRoot)
+  }, [])
+
+  // Apply the `context.personalRoot` setting on mount when no explicit
+  // localStorage override exists and no initialPciPath prop was passed. This
+  // makes the personal_root config actually take effect once set, while never
+  // clobbering a user's manual override.
+  useEffect(() => {
+    if (initialPciPath || hasExplicitLocalOverride() || !isTauri()) return
+    let cancelled = false
+    invoke<CascadeSettings>('get_settings')
+      .then((settings) => {
+        const configured = settings.context?.personalRoot
+        if (!cancelled && configured) {
+          setPciRootState(configured)
+        }
+      })
+      .catch(() => {
+        // Settings unavailable — keep the env/default resolution already applied.
+      })
+    return () => {
+      cancelled = true
+    }
+    // Runs once on mount only — initialPciPath/localStorage are captured at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const refreshTree = useCallback(async () => {

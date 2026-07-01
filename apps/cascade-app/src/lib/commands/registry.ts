@@ -56,11 +56,11 @@ export function registerDefaultCommands(
 ): void {
   const navCommands: CommandAction[] = [
     {
-      id: 'nav:dashboard',
-      label: 'Go to Dashboard',
+      id: 'nav:chat',
+      label: 'Go to Chat',
       group: 'Navigate',
-      keywords: ['home', 'main'],
-      onExecute: () => navigate('/dashboard'),
+      keywords: ['home', 'main', 'dashboard'],
+      onExecute: () => navigate('/chat'),
     },
     {
       id: 'nav:inbox',

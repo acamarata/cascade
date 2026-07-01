@@ -83,7 +83,9 @@ export function ProviderSettingsSection() {
             Add
           </Button>
           <Button variant="ghost" size="sm" asChild className="gap-1">
-            <Link to="/settings/providers" aria-label="Manage all AI providers">
+            {/* /settings/providers still redirects here, but link the
+                consolidated hub directly to skip the extra redirect hop. */}
+            <Link to="/accounts?tab=providers" aria-label="Manage all AI providers">
               Manage
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Link>
