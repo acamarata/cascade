@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.16] - 2026-07-01
+
+Cascade Conductor — quota-aware multi-account/multi-provider routing — plus the Sonnet 5 model bump.
+
+### Added
+- **Cascade Conductor** (`cascade conductor`): the primary Claude Code session (A1, T0) stays interactive on its own account while delegated work is routed to the best available backend, matching each task to the model best at it and spilling by live quota. Worker spill order: **A2 → A1 spare → Codex → Gemini → OC Go → GP** (skipping any account that is auth-dead or at its 5h/7d cap). Model class per tier (T1→Opus, T2→Sonnet, T3→Haiku; Fable when available), mapped to concrete model ids.
+  - `cascade-core/conductor_router.rs` — pure, unit-tested selection (`select_target`) reading live `quota.json`.
+  - `cascade-cli` `cascade conductor --tier <T1|T2|T3> [--model …] [--account …] --prompt … [--dry-run]` + `conductor selftest` (live per-provider probe: available/unavailable + latency, so no adapter can be a silent stub).
+  - Real executor adapters for Claude (A1/A2 via `claude -p`), Codex, OC Go, Gemini, and GP; on backend failure it falls to the next target and never fabricates success.
+
+### Changed
+- **Sonnet 5** is now the canonical Sonnet model (`claude-sonnet-5`), used by the harness default and Conductor T2 routing. Added its pricing entry.
+
 ## [1.9.15] - 2026-07-01
 
 Daemon-owned nSentry local sync — Cascade fully owns the developer-machine side of the observability pipeline.
