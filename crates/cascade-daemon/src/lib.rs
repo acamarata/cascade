@@ -75,6 +75,9 @@ pub mod budget_guard;
 // E-P6-03 v1.1: fleet poller loop — periodic quota-store.json refresh
 pub mod fleet_poller;
 
+// live Claude Max usage fetcher (fetch_claude_usage + parse_usage_response)
+pub mod claude_usage;
+
 // auto-01: background automation scheduler
 pub mod scheduler;
 

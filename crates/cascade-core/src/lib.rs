@@ -107,6 +107,7 @@ pub mod worktree_store;
 pub(crate) mod test_support;
 
 // Re-export the most commonly used top-level items.
+pub use external_accounts::read_claude_access_token;
 pub use accounts_store::{
     accounts_dir, accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry,
     detect_cli, init_accounts_dir, migrate_accounts_if_needed, quota_json_path,

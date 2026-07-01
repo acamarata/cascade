@@ -30,8 +30,10 @@ mod ipc_tasks;
 mod rotation_selector;
 // E-P6-02 T-05: hard-stop per-window budget guard
 mod budget_guard;
-// E-P6-03 v1.1: fleet poller loop — periodic quota-store.json refresh
+// E-P6-03 v1.2: fleet poller loop — periodic quota-store.json refresh
 mod fleet_poller;
+// live Claude Max usage fetcher (fetch_claude_usage + parse_usage_response)
+mod claude_usage;
 mod key_index;
 mod key_loader;
 mod log;

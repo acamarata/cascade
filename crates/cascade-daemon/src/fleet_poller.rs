@@ -1,4 +1,4 @@
-//! Fleet poller — periodic multi-source quota aggregation loop (E-P6-03 v1.1).
+//! Fleet poller — periodic multi-source quota aggregation loop (E-P6-03 v1.2).
 //!
 //! Purpose: Runs every `interval_secs` (default 60 s). Each registered
 //! [`FleetSource`] is polled for a [`QuotaState`] snapshot. Non-`None`
@@ -13,16 +13,19 @@
 //! Outputs: `~/.cascade/quota-store.json` refreshed on each tick.
 //!
 //! Constraints:
-//!   - Stub sources (`ClaudeMaxSource`, `CodexSource`, `AgySource`) always
-//!     return `None`; they exist as object-safe placeholders until real API
-//!     polling lands in a future epic.
+//!   - `ClaudeMaxSource` was a stub; it is now superseded by the async live-
+//!     usage path in `refresh_accounts` (see below).  The struct is kept as a
+//!     synchronous `FleetSource` placeholder; the real Claude usage flows via
+//!     the accounts-refresh path, which writes `~/.claude/usage-cache.json`
+//!     before `write_quota_json` merges it.
+//!   - `CodexSource` and `AgySource` remain stubs.
 //!   - `GfpSource` reads the existing `quota-state.json` written by the
-//!     `gfp`-feature quota poller. If the file is absent or stale (>120 s),
+//!     `gfp`-feature quota poller.  If the file is absent or stale (>120 s),
 //!     it returns `None`.
 //!   - No `unwrap()` outside `#[cfg(test)]` blocks.
 //!   - File ≤ 300 lines.
 //!
-//! SPORT: `.claude/docs/MASTER-DAEMON.md` — fleet_poller (E-P6-03 v1.1)
+//! SPORT: `.claude/docs/MASTER-DAEMON.md` — fleet_poller (E-P6-03 v1.2)
 
 use std::path::PathBuf;
 
@@ -33,6 +36,8 @@ use cascade_core::accounts_store::{
     accounts_dir, count_gfp_keys, detect_cli, read_accounts_registry, write_accounts_registry,
     write_quota_json,
 };
+use cascade_core::external_accounts::{discover as discover_external, ExternalAgent};
+use cascade_core::read_claude_access_token;
 use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_types::accounts::{AccessMethod, AccountFamily};
@@ -41,6 +46,7 @@ use cascade_types::quota_store::{
     PROVIDER_OPENAI_CODEX,
 };
 
+use crate::claude_usage::fetch_claude_usage;
 use crate::config::FleetConfig;
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
@@ -227,30 +233,36 @@ impl FleetPoller {
                 }
             }
 
-            Self::tick(&sources, &store_path);
+            Self::tick_async(&sources, &store_path).await;
         }
 
         info!("fleet poller stopped");
     }
 
-    /// Execute one polling tick across all sources and write the result.
+    /// Async tick: fetch live Claude usage, then run the synchronous quota
+    /// source aggregation pass.
     ///
     /// Inputs: `sources` — registered fleet sources; `store_path` — destination.
-    /// Outputs: `quota-store.json` and (if it already exists) `accounts.json` written.
-    /// Constraints: synchronous — must not be called from an async context
-    ///              without `spawn_blocking` if sources perform blocking I/O.
-    fn tick(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
-        // Refresh accounts/ CLI availability and GFP key count, and regenerate the
-        // native widget's quota.json — on EVERY tick, independent of whether the
-        // live quota sources have data yet. This must run before the early-return
-        // below: in the common case where no source has live quota data, the widget
-        // would otherwise never see a refreshed quota.json. Only runs when
-        // accounts/accounts.json already exists (creation is `cascade accounts detect`).
+    /// Outputs: `quota.json` + `quota-store.json` updated.
+    async fn tick_async(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
+        // Refresh accounts/ CLI availability, fetch live Claude usage, and write
+        // quota.json.  This must run before the quota-store aggregation so the
+        // widget has fresh data even when no synchronous source has returned data.
         let accts_path = accounts_dir().join("accounts.json");
         if accts_path.exists() {
-            Self::refresh_accounts(&accts_path);
+            Self::refresh_accounts(&accts_path).await;
         }
+        Self::tick(sources, store_path);
+    }
 
+    /// Execute one polling tick across all synchronous sources and write the result.
+    ///
+    /// Inputs: `sources` — registered fleet sources; `store_path` — destination.
+    /// Outputs: `quota-store.json` written.
+    /// Constraints: synchronous — must not be called from an async context
+    ///              without `spawn_blocking` if sources perform blocking I/O.
+    ///              `refresh_accounts` (async) has already run before this call.
+    fn tick(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
         let snapshots: Vec<QuotaState> = sources
             .iter()
             .filter_map(|src| {
@@ -292,14 +304,21 @@ impl FleetPoller {
     }
 
     /// Refresh `cli_available` and `key_count` in an existing `accounts/accounts.json`,
-    /// then atomically regenerate `accounts/quota.json` for the native widget.
+    /// fetch live Claude usage for each discovered Claude account, and atomically
+    /// regenerate `accounts/quota.json` for the native widget.
     ///
     /// Purpose: keeps the registry and widget data in sync with the current PATH state
     /// on each daemon tick without requiring the user to run `cascade accounts detect`.
+    /// Live Claude usage is fetched via `api.anthropic.com/api/oauth/usage` for each
+    /// account whose token is valid (or after a `claude -p` refresh attempt if expired).
+    /// Fetched usage is written to `~/.claude/usage-cache.json` so `write_quota_json`
+    /// picks it up via its existing merge path.
+    ///
     /// Inputs:  `path` — existing `accounts/accounts.json` file.
     /// Outputs: updated `accounts.json` + `quota.json` on success; warn log on error.
-    /// Constraints: only called when the file exists; never creates it.
-    fn refresh_accounts(path: &std::path::Path) {
+    /// Constraints: async; bounded per-account (10s network timeout + 45s refresh);
+    ///              never overwrites existing usage with zeros on failure.
+    async fn refresh_accounts(path: &std::path::Path) {
         let mut registry = match read_accounts_registry(path) {
             Ok(r) => r,
             Err(e) => {
@@ -335,6 +354,12 @@ impl FleetPoller {
             Err(e) => warn!(%e, "fleet: failed to write accounts.json"),
         }
 
+        // ── Live Claude usage fetch ────────────────────────────────────────────
+        // Discover all Claude config dirs, fetch live usage for each valid token,
+        // and write results to ~/.claude/usage-cache.json so write_quota_json
+        // picks them up via its existing merge path.
+        Self::fetch_and_cache_claude_usage().await;
+
         // Refresh quota.json (same directory as accounts.json).
         if let Some(dir) = path.parent() {
             let quota_path = dir.join("quota.json");
@@ -343,6 +368,258 @@ impl FleetPoller {
                 Err(e) => warn!(%e, "fleet: failed to write quota.json"),
             }
         }
+    }
+
+    /// Discover all Claude config dirs, fetch live usage for each, and write
+    /// the results to `~/.claude/usage-cache.json` in the shape that
+    /// `write_quota_json` already merges.
+    ///
+    /// For accounts with an expired token: attempt a `claude -p "ok"` refresh
+    /// (bounded to 45 s), then re-read the token.
+    ///
+    /// On per-account failure: log a warning, do NOT write zeros — the prior
+    /// cache entry is preserved (we only write when we have real data).
+    ///
+    /// Outputs: atomically overwrites `~/.claude/usage-cache.json` with an
+    ///          `{"accounts":[...]}` array containing all successfully-fetched
+    ///          usage entries.
+    async fn fetch_and_cache_claude_usage() {
+        let home = match dirs::home_dir() {
+            Some(h) => h,
+            None => {
+                warn!("fleet: cannot determine home dir for usage cache write");
+                return;
+            }
+        };
+
+        let cache_path = home.join(".claude").join("usage-cache.json");
+
+        // Load the existing cache so we can preserve entries for accounts that
+        // fail this round (never overwrite with zeros).
+        let mut existing: Vec<serde_json::Value> = (|| -> Option<Vec<serde_json::Value>> {
+            let bytes = std::fs::read(&cache_path).ok()?;
+            let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+            v.get("accounts")?.as_array().cloned()
+        })()
+        .unwrap_or_default();
+
+        let external_accounts = discover_external();
+        let now_epoch = chrono::Utc::now().timestamp() as f64;
+
+        for ext in &external_accounts {
+            if ext.agent != ExternalAgent::Claude {
+                continue;
+            }
+
+            // Derive the account_id label (e.g. "claude", "claude-acc1", "claude-acc2").
+            let account_id = label_to_account_id(&ext.label);
+
+            // Try to get a valid access token; attempt refresh if expired.
+            //
+            // `Some(token)`  → usable token, proceed to fetch.
+            // `None` with `definitive_auth_failure = true`  → the refresh ran and
+            //   produced a definitive auth failure (token still dead): write an
+            //   http_401 marker so write_quota_json flags the account.
+            // `None` with `definitive_auth_failure = false` → transient (refresh
+            //   timed out / spawn error, or no token entry at all): skip and
+            //   preserve any prior-good cache entry.
+            let mut definitive_auth_failure = false;
+            let access_token: Option<String> = match read_claude_access_token(&ext.config_dir) {
+                Some((tok, true)) => Some(tok),
+                Some((_, false)) => {
+                    // Token expired — attempt claude -p refresh (bounded).
+                    info!(account = %account_id, "fleet: token expired, attempting refresh via claude -p");
+                    if Self::refresh_token_via_claude_p(&ext.config_dir).await {
+                        // Refresh process ran to completion (definitive result).
+                        match read_claude_access_token(&ext.config_dir) {
+                            Some((tok, true)) => Some(tok),
+                            _ => {
+                                // claude -p ran but the token is STILL invalid →
+                                // the refresh token is revoked: a definitive 401.
+                                warn!(account = %account_id, "fleet: token still invalid after refresh — definitive auth failure");
+                                definitive_auth_failure = true;
+                                None
+                            }
+                        }
+                    } else {
+                        // Refresh timed out / spawn error — transient, not auth-dead.
+                        warn!(account = %account_id, "fleet: claude -p refresh inconclusive (transient) — preserving prior cache");
+                        None
+                    }
+                }
+                None => {
+                    // No keychain entry at all — cannot conclude auth-dead; skip.
+                    None
+                }
+            };
+
+            let access_token = match access_token {
+                Some(tok) => tok,
+                None => {
+                    if definitive_auth_failure {
+                        // Write a definitive auth-failure marker (usage null) so the
+                        // widget renders the re-auth prompt instead of stale data.
+                        let entry = serde_json::json!({
+                            "account":      account_id,
+                            "provider":     "claude",
+                            "usage":        serde_json::Value::Null,
+                            "last_pull_at": now_epoch,
+                            "quota_opaque": false,
+                            "last_error":   "http_401"
+                        });
+                        upsert_cache_entry(&mut existing, account_id, entry);
+                    }
+                    // Transient → preserve prior entry untouched.
+                    continue;
+                }
+            };
+
+            // Fetch live usage.
+            match fetch_claude_usage(&access_token).await {
+                Some(usage) => {
+                    info!(account = %account_id, "fleet: live Claude usage fetched successfully");
+                    // Upsert into existing cache: replace matching entry or append.
+                    let entry = serde_json::json!({
+                        "account":      account_id,
+                        "provider":     "claude",
+                        "usage":        usage,
+                        "last_pull_at": now_epoch,
+                        "quota_opaque": false,
+                        "last_error":   serde_json::Value::Null
+                    });
+                    upsert_cache_entry(&mut existing, account_id, entry);
+                }
+                None => {
+                    // Transport/HTTP error or error envelope — transient. Do NOT
+                    // overwrite a prior-good entry with zeros; preserve it.
+                    warn!(account = %account_id, "fleet: live usage fetch returned None — preserving prior cache");
+                }
+            }
+        }
+
+        // Write the merged cache atomically.
+        let payload = serde_json::json!({ "accounts": existing });
+        match serde_json::to_vec_pretty(&payload) {
+            Ok(bytes) => {
+                let tmp = cache_path.with_extension("tmp");
+                if let Err(e) = std::fs::write(&tmp, &bytes) {
+                    warn!(%e, "fleet: failed to write usage-cache.json.tmp");
+                    return;
+                }
+                if let Err(e) = std::fs::rename(&tmp, &cache_path) {
+                    warn!(%e, "fleet: failed to rename usage-cache.json");
+                }
+            }
+            Err(e) => warn!(%e, "fleet: failed to serialize usage cache"),
+        }
+    }
+
+    /// Attempt a token refresh by running `CLAUDE_CONFIG_DIR=<dir> claude -p "ok"`.
+    ///
+    /// Bounded to 45 seconds.  Returns `true` if the process exits successfully
+    /// (exit code 0 or 1 — both mean Claude ran and potentially refreshed the
+    /// token; only a timeout or spawn failure returns `false`).
+    ///
+    /// This mirrors the proven refresh path used by the external bash poller and
+    /// `cascade-reauth`: Claude Code itself refreshes the OAuth token on startup.
+    async fn refresh_token_via_claude_p(config_dir: &std::path::Path) -> bool {
+        let dir_str = config_dir.to_string_lossy().into_owned();
+        let claude_bin = resolve_claude_bin();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(45),
+            tokio::task::spawn_blocking(move || {
+                // Skip MCP-server / plugin / settings startup so a heavy config
+                // (e.g. ~/.claude with many MCP servers) does NOT hang for 45 s —
+                // these flags make a dead token return its 401 in seconds.
+                std::process::Command::new(&claude_bin)
+                    .args([
+                        "-p",
+                        "ok",
+                        "--model",
+                        "claude-haiku-4-5",
+                        "--strict-mcp-config",
+                        "--mcp-config",
+                        r#"{"mcpServers":{}}"#,
+                        "--setting-sources",
+                        "",
+                    ])
+                    .env("CLAUDE_CONFIG_DIR", &dir_str)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+            }),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(Ok(_status))) => true, // process ran (status 0 or non-zero both OK for our purposes)
+            Ok(Ok(Err(e))) => {
+                warn!(%e, "fleet: claude -p refresh: spawn error");
+                false
+            }
+            Ok(Err(e)) => {
+                warn!(%e, "fleet: claude -p refresh: join error");
+                false
+            }
+            Err(_) => {
+                warn!("fleet: claude -p refresh: 45 s timeout exceeded");
+                false
+            }
+        }
+    }
+}
+
+// ── Free helpers ──────────────────────────────────────────────────────────────
+
+/// Convert an external account `label` (e.g. `"claude"`, `"claude-acc1"`) to
+/// the account_id string used in `usage-cache.json` and `quota.json`.
+///
+/// The external account label is the directory name without its leading dot
+/// (e.g. `.claude` → `"claude"`, `.claude-acc1` → `"claude-acc1"`).
+/// This matches the `acc.id` strings in `accounts.json`.
+fn label_to_account_id(label: &str) -> &str {
+    label
+}
+
+/// Resolve the `claude` CLI binary path.
+///
+/// Under launchd the daemon inherits a minimal PATH that usually excludes
+/// Homebrew, so a bare `claude` spawn fails with ENOENT and the refresh probe
+/// is wrongly treated as a transient error (no re-auth flag). Probe the common
+/// install locations and fall back to a bare `claude` for PATH-based lookup.
+fn resolve_claude_bin() -> std::path::PathBuf {
+    if let Some(home) = dirs::home_dir() {
+        for c in [
+            std::path::PathBuf::from("/opt/homebrew/bin/claude"),
+            std::path::PathBuf::from("/usr/local/bin/claude"),
+            home.join(".local/bin/claude"),
+            home.join("bin/claude"),
+        ] {
+            if c.is_file() {
+                return c;
+            }
+        }
+    }
+    std::path::PathBuf::from("claude")
+}
+
+/// Upsert a usage-cache entry: if an entry with the given `account_id` exists,
+/// replace it; otherwise append it.
+///
+/// Inputs:  `entries` — mutable reference to the existing cache array;
+///          `account_id` — the account's string id;
+///          `entry` — the new JSON entry to insert.
+fn upsert_cache_entry(
+    entries: &mut Vec<serde_json::Value>,
+    account_id: &str,
+    entry: serde_json::Value,
+) {
+    if let Some(pos) = entries.iter().position(|e| {
+        e.get("account").and_then(|v| v.as_str()) == Some(account_id)
+    }) {
+        entries[pos] = entry;
+    } else {
+        entries.push(entry);
     }
 }
 

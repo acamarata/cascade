@@ -243,31 +243,39 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             live_accounts.iter().find(|la| &la.config_dir == cd).map(|la| &la.auth)
         });
 
-        // Determine auth_dead using live bridge first; fall back to legacy last_error.
+        // A definitive live-fetch auth error is GROUND TRUTH and overrides the
+        // optimistic keychain bridge. The bridge reports Ok merely because a
+        // refreshToken STRING exists in the keychain — but an actual API 401
+        // (observed AFTER a `claude -p` refresh attempt) means the token is truly
+        // dead. So a definitive `last_error` forces auth_dead = true regardless of
+        // the bridge status.
         //
-        // Live bridge overrides the legacy heuristic:
-        //   - Live Ok  → status MUST be "ok" (suppresses false re-auth nagging).
-        //   - Live NeedsReauth → auth_dead = true.
-        //   - Live Unknown / no bridge mapping → use legacy last_error heuristics.
-        //
-        // api_failed = curl network/timeout error — transient, NOT a credential failure.
-        // parse_failed = unparseable API response (503 HTML page, etc.) — also transient.
-        // rate_limit_error / http_429 = throttled, not auth-dead.
-        let auth_dead = match live_auth {
-            Some(AuthStatus::Ok { .. }) => false, // live bridge says OK — never nag
-            Some(AuthStatus::NeedsReauth) => true,
-            _ => {
-                // Fallback: legacy error heuristics.
-                legacy_entry
-                    .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
-                    .map(|e| {
-                        matches!(
-                            e,
-                            "keychain_failed" | "refresh_failed" | "auth_invalid"
-                                | "invalid_grant" | "authentication_error"
-                        ) || e == "http_401" || e == "http_403"
-                    })
-                    .unwrap_or(false)
+        // Definitive auth failures: http_401, http_403, invalid_grant,
+        //   authentication_error, refresh_failed, keychain_failed, auth_invalid.
+        // Transient (NON-auth-dead, no nag): api_failed (network/timeout),
+        //   parse_failed (503 HTML page), rate_limit_error, http_429.
+        let legacy_definitive_auth_failure = legacy_entry
+            .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
+            .map(|e| {
+                matches!(
+                    e,
+                    "keychain_failed" | "refresh_failed" | "auth_invalid"
+                        | "invalid_grant" | "authentication_error" | "http_401" | "http_403"
+                )
+            })
+            .unwrap_or(false);
+
+        // Determine auth_dead.
+        //   1. A definitive live-fetch auth error wins over everything (incl. bridge Ok).
+        //   2. Otherwise the live bridge decides: Ok → not dead, NeedsReauth → dead.
+        //   3. Otherwise (bridge Unknown / unmapped) fall back to legacy heuristics.
+        let auth_dead = if legacy_definitive_auth_failure {
+            true
+        } else {
+            match live_auth {
+                Some(AuthStatus::Ok { .. }) => false, // bridge Ok + no definitive error → never nag
+                Some(AuthStatus::NeedsReauth) => true,
+                _ => false, // bridge Unknown/unmapped + no definitive error → not dead
             }
         };
 
@@ -349,19 +357,27 @@ fn load_legacy_usage_cache() -> Option<Vec<Value>> {
 /// Find a matching entry in the legacy cache by account id or provider family.
 ///
 /// Match strategy:
-///   1. Exact `account` field match (e.g. "claude-acc1")
-///   2. Provider string match — legacy "codex" entry → our "codex" provider,
-///      legacy "opencode-1" → our "opencode", legacy "gemini-1" → our "gemini".
+///   1. Exact `account` field match (e.g. "claude-acc1").
+///   2. Provider-level fallback — ONLY when exactly one entry exists for that
+///      provider (single-account family). When 2+ entries share the provider
+///      (e.g. "claude" + "claude2"), an exact account-id match is required;
+///      otherwise return `None`. This prevents a dead account from borrowing
+///      another account's usage numbers.
 fn find_legacy_entry<'a>(entries: &'a [Value], acc_id: &str, provider: &str) -> Option<&'a Value> {
     // 1. Exact account id match.
     if let Some(e) = entries.iter().find(|e| e.get("account").and_then(|v| v.as_str()) == Some(acc_id)) {
         return Some(e);
     }
-    // 2. Provider-level match: the legacy entry's `provider` field matches ours.
-    //    Return the first matching entry for that provider (single-account families).
-    entries.iter().find(|e| {
+    // 2. Provider-level fallback — only safe when exactly one entry shares the
+    //    provider. With multiple same-provider accounts, no exact id match means
+    //    we must NOT guess (return None) to avoid cross-assigning usage.
+    let mut provider_matches = entries.iter().filter(|e| {
         e.get("provider").and_then(|v| v.as_str()) == Some(provider)
-    })
+    });
+    match (provider_matches.next(), provider_matches.next()) {
+        (Some(only), None) => Some(only), // exactly one → safe fallback
+        _ => None,                        // zero or 2+ → require exact id match
+    }
 }
 
 /// Write `~/.cascade/accounts/README.md` explaining the directory layout.
@@ -739,43 +755,63 @@ mod tests {
         // Default registry has no models — matrix table is empty but headings are present.
     }
 
-    /// Live bridge override logic: when parse_claude_blob returns Ok (live token present),
-    /// the auth_dead flag must be false even if the legacy last_error says "refresh_failed".
-    ///
-    /// This test exercises the bridge decision logic directly (pure functions only, no
-    /// real keychain) to verify the invariant that "live Ok → status must be ok".
+    // Helper mirroring the auth_dead decision in write_quota_json (FIX 4):
+    // a definitive live-fetch auth error is ground truth and OVERRIDES the
+    // optimistic keychain bridge.
+    fn decide_auth_dead(
+        live_auth: Option<&crate::external_accounts::AuthStatus>,
+        last_error: Option<&str>,
+    ) -> bool {
+        use crate::external_accounts::AuthStatus;
+        let definitive = last_error
+            .map(|e| {
+                matches!(
+                    e,
+                    "keychain_failed" | "refresh_failed" | "auth_invalid"
+                        | "invalid_grant" | "authentication_error" | "http_401" | "http_403"
+                )
+            })
+            .unwrap_or(false);
+        if definitive {
+            return true;
+        }
+        match live_auth {
+            Some(AuthStatus::Ok { .. }) => false,
+            Some(AuthStatus::NeedsReauth) => true,
+            _ => false,
+        }
+    }
+
+    /// FIX 4: a definitive live-fetch auth error (http_401) OVERRIDES the bridge's
+    /// optimistic Ok. The bridge reports Ok only because a refreshToken string
+    /// exists, but an actual API 401 means the token is truly dead.
     #[test]
-    fn live_bridge_ok_overrides_legacy_refresh_failed() {
+    fn definitive_auth_failure_overrides_bridge_ok() {
         use crate::external_accounts::{parse_claude_blob, AuthStatus};
 
-        // Simulate: live keychain returns a valid future-expiry token.
+        // Live bridge sees a (string-present) future-expiry token → Ok.
         let far_future_ms = 9_999_999_999_999i64;
         let live_blob = format!(
             r#"{{"claudeAiOauth":{{"accessToken":"tok","refreshToken":"rtok","expiresAt":{far_future_ms}}}}}"#
         );
         let live_auth = parse_claude_blob(&live_blob);
+        assert!(matches!(live_auth, AuthStatus::Ok { .. }));
+
+        // But the live fetch 401'd → ground truth wins: auth_dead must be true.
         assert!(
-            matches!(live_auth, AuthStatus::Ok { .. }),
-            "live blob with valid future token must be Ok"
+            decide_auth_dead(Some(&live_auth), Some("http_401")),
+            "http_401 ground truth must override bridge Ok"
+        );
+        assert!(
+            decide_auth_dead(Some(&live_auth), Some("refresh_failed")),
+            "refresh_failed must override bridge Ok"
         );
 
-        // Bridge decision: if live is Ok, auth_dead must be false regardless of legacy error.
-        let legacy_last_error = Some("refresh_failed");
-        let auth_dead = match live_auth {
-            AuthStatus::Ok { .. } => false, // live Ok overrides legacy
-            AuthStatus::NeedsReauth => true,
-            AuthStatus::Unknown => {
-                // fallback: use legacy heuristic
-                legacy_last_error
-                    .map(|e| matches!(e, "keychain_failed" | "refresh_failed" | "auth_invalid" | "invalid_grant" | "authentication_error"))
-                    .unwrap_or(false)
-            }
-        };
-
-        assert!(
-            !auth_dead,
-            "live Ok must override legacy refresh_failed: auth_dead must be false"
-        );
+        // Transient errors must NOT mark auth-dead when the bridge is Ok.
+        assert!(!decide_auth_dead(Some(&live_auth), Some("api_failed")));
+        assert!(!decide_auth_dead(Some(&live_auth), Some("rate_limit_error")));
+        assert!(!decide_auth_dead(Some(&live_auth), Some("http_429")));
+        assert!(!decide_auth_dead(Some(&live_auth), None));
     }
 
     /// Live bridge NeedsReauth → auth_dead must be true.
@@ -795,5 +831,51 @@ mod tests {
         };
 
         assert!(auth_dead, "live NeedsReauth must result in auth_dead = true");
+    }
+
+    /// FIX 1: with 2+ entries sharing a provider, a lookup with no exact id match
+    /// must return None — NOT borrow another account's entry.
+    #[test]
+    fn find_legacy_entry_no_cross_assign_with_multiple_same_provider() {
+        use serde_json::json;
+
+        let entries = vec![
+            json!({ "account": "claude",  "provider": "claude", "usage": { "five_hour": { "utilization": 99.0 } } }),
+            json!({ "account": "claude2", "provider": "claude", "usage": { "five_hour": { "utilization": 3.0 } } }),
+        ];
+
+        // Exact match present → returns that exact entry.
+        let exact = find_legacy_entry(&entries, "claude2", "claude");
+        assert_eq!(
+            exact.and_then(|e| e.get("account")).and_then(|v| v.as_str()),
+            Some("claude2"),
+            "exact id match must win"
+        );
+
+        // No exact match for a dead "claude-dead" id with 2 claude entries → None.
+        // (Dead account must NOT grab claude2's numbers.)
+        let dead = find_legacy_entry(&entries, "claude-dead", "claude");
+        assert!(
+            dead.is_none(),
+            "with 2+ same-provider entries and no exact id match, must return None"
+        );
+    }
+
+    /// FIX 1: single same-provider entry still falls back by provider (back-compat).
+    #[test]
+    fn find_legacy_entry_single_provider_fallback_preserved() {
+        use serde_json::json;
+
+        let entries = vec![
+            json!({ "account": "codex", "provider": "codex", "usage": { "five_hour": null } }),
+        ];
+
+        // Lookup by a non-matching id but matching single provider → returns the one entry.
+        let got = find_legacy_entry(&entries, "codex-c1", "codex");
+        assert_eq!(
+            got.and_then(|e| e.get("account")).and_then(|v| v.as_str()),
+            Some("codex"),
+            "single same-provider entry must still fall back by provider"
+        );
     }
 }

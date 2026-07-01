@@ -361,6 +361,54 @@ pub fn parse_codex_blob(blob: &str) -> AuthStatus {
     }
 }
 
+// ── Access-token reader ───────────────────────────────────────────────────────
+
+/// Read the Claude OAuth access token from the given config directory.
+///
+/// Returns `Some((token, is_valid_now))` when:
+/// - The keychain/credentials file is readable, and
+/// - `claudeAiOauth.accessToken` is non-empty.
+///
+/// `is_valid_now` is `true` when `expiresAt/1000 > now + 60` (i.e. at least
+/// 60 seconds of validity remain).  It is also `true` when no `expiresAt`
+/// field is present (token assumed valid).
+///
+/// Returns `None` when the entry is absent, unreadable, or has no access token.
+///
+/// Token values are NEVER logged.
+pub fn read_claude_access_token(dir: &Path) -> Option<(String, bool)> {
+    #[cfg(target_os = "macos")]
+    let blob = {
+        let service = claude_keychain_service(dir);
+        read_keychain_secret(&service)?
+    };
+    #[cfg(not(target_os = "macos"))]
+    let blob = {
+        let creds_path = dir.join(".credentials.json");
+        std::fs::read_to_string(&creds_path).ok()?
+    };
+
+    let v: serde_json::Value = serde_json::from_str(&blob).ok()?;
+    let oauth = v.get("claudeAiOauth")?;
+    let access_token = oauth.get("accessToken").and_then(|t| t.as_str()).unwrap_or("");
+    if access_token.is_empty() {
+        return None;
+    }
+
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let is_valid = match oauth.get("expiresAt").and_then(|v| v.as_i64()) {
+        // expiresAt is in milliseconds; require at least 60 s remaining.
+        Some(exp_ms) => (exp_ms / 1000) > now_secs + 60,
+        None => true, // no expiry field → assume valid
+    };
+
+    Some((access_token.to_owned(), is_valid))
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
