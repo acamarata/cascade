@@ -83,6 +83,7 @@ pub mod loader;
 pub mod maps;
 pub mod memory;
 pub mod nsentry;
+pub mod nsentry_config;
 pub mod build;
 pub mod pbd;
 pub mod providers_store;

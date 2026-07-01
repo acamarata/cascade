@@ -225,6 +225,10 @@ pub fn cache_dir(id: &str, project_slug: &str) -> PathBuf {
 pub struct SyncReport {
     /// Number of new files copied into the inbox during this run.
     pub new: usize,
+    /// Number of eligible (not-yet-consumed) files left undelivered because
+    /// `max_new` capped this run. They are NOT recorded as consumed, so they
+    /// deliver on a subsequent run.
+    pub dropped: usize,
     /// Total `*.md` files in the local cache after rsync.
     pub cache_total: usize,
     /// The developer ID used for this sync.
@@ -244,9 +248,18 @@ pub struct SyncReport {
 /// When `dry_run` is `true`, steps 3 and 4 are skipped (no files are written);
 /// `SyncReport.new` still reports what would have been copied.
 ///
+/// `max_new` bounds how many new files are delivered in one run (the flood
+/// guard). When more are eligible than `max_new`, the excess is left unconsumed
+/// (delivered next run) and reported as `SyncReport.dropped`. `None` = no cap.
+///
 /// rsync failure (unreachable host, missing binary) returns a `CascadeError::Other`
 /// — never panics.
-pub fn sync(project_root: &Path, cfg: &NsentryConfig, dry_run: bool) -> Result<SyncReport> {
+pub fn sync(
+    project_root: &Path,
+    cfg: &NsentryConfig,
+    dry_run: bool,
+    max_new: Option<usize>,
+) -> Result<SyncReport> {
     let id = dev_id();
     let slug = project_slug(project_root);
     let cache = cache_dir(&id, &slug);
@@ -324,8 +337,11 @@ pub fn sync(project_root: &Path, cfg: &NsentryConfig, dry_run: bool) -> Result<S
         HashSet::new()
     };
 
-    // Copy new files into the inbox.
+    // Copy new files into the inbox, bounded by `max_new` (the flood guard).
+    // Eligible files beyond the cap are left unconsumed and counted as dropped
+    // so they deliver on a subsequent run.
     let mut new_names: Vec<String> = Vec::new();
+    let mut dropped: usize = 0;
     for path in &cache_files {
         let name = path
             .file_name()
@@ -334,6 +350,12 @@ pub fn sync(project_root: &Path, cfg: &NsentryConfig, dry_run: bool) -> Result<S
             .to_string();
         if name.is_empty() || consumed.contains(&name) {
             continue;
+        }
+        if let Some(cap) = max_new {
+            if new_names.len() >= cap {
+                dropped += 1;
+                continue;
+            }
         }
         if !dry_run {
             let dest = inbox.join(&name);
@@ -368,6 +390,7 @@ pub fn sync(project_root: &Path, cfg: &NsentryConfig, dry_run: bool) -> Result<S
 
     Ok(SyncReport {
         new: new_names.len(),
+        dropped,
         cache_total,
         dev_id: id,
         inbox,

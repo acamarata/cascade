@@ -147,7 +147,7 @@ impl Command for SentrySyncArgs {
             println!("[dry-run] would sync from {}:{}", cfg.sentry_server, cfg.remote_dir);
         }
 
-        let report = nsentry::sync(&project_root, &cfg, self.dry_run)?;
+        let report = nsentry::sync(&project_root, &cfg, self.dry_run, None)?;
         if self.dry_run {
             println!("[dry-run] would copy {} new file(s) into {}", report.new, report.inbox.display());
         } else {

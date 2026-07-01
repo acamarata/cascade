@@ -68,6 +68,8 @@ mod mcp_registration;
 mod scheduler;
 // auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
 mod automation_router;
+// nsentry-sync: daemon-owned multi-stream nSentry sync subsystem
+mod nsentry_sync;
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::ProviderRegistry;

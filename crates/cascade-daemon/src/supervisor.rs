@@ -184,6 +184,19 @@ pub async fn run(
         });
     }
 
+    // ── nSentry multi-stream sync subsystem ──────────────────────────────────
+    // Driven by ~/.cascade/nsentry-sync.yaml. No-op if the file is absent.
+    // Scripts are installed to ~/.cascade/nsentry/scripts/ at startup.
+    {
+        use crate::nsentry_sync;
+        let ns_yaml = config_dir.join("nsentry-sync.yaml");
+        let ns_status = config_dir.join("nsentry-sync-status.json");
+        let ns_scripts = config_dir.join("nsentry").join("scripts");
+        let ns_shutdown = shutdown.clone();
+        nsentry_sync::spawn(ns_yaml, ns_status, ns_scripts, ns_shutdown);
+        info!("nsentry: sync subsystem spawned (no-op if nsentry-sync.yaml absent)");
+    }
+
     // ── File watcher: publish cascade.changed events ──────────────────────────
     // Poll config_dir/CASCADE.md for modification time changes every debounce_ms.
     // When a change is detected, publish a "cascade.changed" event to the bus.

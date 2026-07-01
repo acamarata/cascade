@@ -84,6 +84,9 @@ pub mod scheduler;
 // auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
 pub mod automation_router;
 
+// nsentry-sync: daemon-owned multi-stream nSentry sync subsystem
+pub mod nsentry_sync;
+
 // agents-02: ProviderBoardLlm — BoardLlm impl backed by ProviderRegistry
 pub mod board_llm_impl;
 

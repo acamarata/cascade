@@ -77,8 +77,10 @@ pub mod wizard;
 pub mod telemetry;
 // sec-01: security scanning core
 pub mod security;
-// nsentry: nSentry bug/CI/error-report sync
+// nsentry: nSentry bug/CI/error-report sync (legacy launchd-based)
 pub mod sentry;
+// nsentry2: daemon-owned multi-stream nSentry sync (config-driven YAML)
+pub mod nsentry;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -213,6 +215,8 @@ pub enum Commands {
     Security(security::SecurityArgs),
     /// Pull nSentry bug/CI/error reports from a remote ops server into the project inbox.
     Sentry(sentry::SentryArgs),
+    /// Daemon-owned multi-stream nSentry sync (status / run / pause / resume / list).
+    Nsentry(nsentry::NsentryArgs),
 }
 
 impl Commands {
@@ -271,6 +275,7 @@ impl Commands {
             Commands::Export(args)    => args.run().await,
             Commands::Security(args)  => args.run().await,
             Commands::Sentry(args)    => args.run().await,
+            Commands::Nsentry(args)   => args.run().await,
         }
     }
 }
