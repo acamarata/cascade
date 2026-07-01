@@ -6,7 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [1.9.13] - 2026-06-30
+## [1.9.14] - 2026-06-30
+
+Live Claude usage in the daemon, and honest multi-account auth state.
+
+### Added
+- **The daemon now fetches live Claude Max usage itself.** Previously `ClaudeMaxSource` was a stub returning `None`, so the widget/app could only show usage second-hand from an external poller — and it went stale. A new `cascade-daemon/claude_usage` module calls `GET api.anthropic.com/api/oauth/usage` for each discovered Claude account (10s timeout, ISO-8601 `resets_at` → epoch, error-envelope aware), refreshing an expired token via a bounded headless `claude` invocation (MCP/plugins skipped so heavy configs don't hang). `external_accounts::read_claude_access_token` exposes the live keychain token for the fetch.
+
+### Fixed
+- **Per-account usage isolation.** `find_legacy_entry`'s provider-level fallback no longer assigns one Claude account's usage to another when several share a provider — it requires an exact id match when 2+ same-provider entries exist. A credential-dead account shows dashes, not a sibling's numbers.
+- **Auth state reflects ground truth.** A real API 401 (after a `claude` refresh attempt) now flags an account for re-auth even when a refresh-token string is still present in the keychain — the live fetch is authoritative over the optimistic keychain heuristic. Transient errors (network, rate-limit, parse) still never trigger a false re-auth nag. The daemon resolves the `claude` binary by absolute path so this works under launchd's minimal PATH.
 
 nSentry per-project state isolation, plus FOSS cleanup of the Forgejo CI mirror.
 
