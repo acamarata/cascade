@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.19] - 2026-07-02
+
+`cascade update` works end to end, chat privacy is consent-gated, and the GP pool reports only real keys.
+
+### Added
+- **`cascade update` is functional.** The daemon now registers the `update_check` / `update_apply` / `update_auto` IPC handlers (they existed CLI-side only). `check` compares the running version against the latest GitHub release; `apply` downloads the release bundle (`cascade-v{version}-macos-aarch64.tar.gz`), verifies it against the release's `SHA256SUMS` (hard-fails on mismatch — never installs unverified bytes), snapshots the old binaries for rollback, swaps atomically, and restarts the daemon; `auto` toggles auto-update in config. Releases now ship the bundle + checksums as assets, so updating is one command from here on.
+
+### Fixed
+- **Personal chat persistence is consent-gated.** An adversarial review found the app self-asserted the personal-namespace `opt_in` whenever the Personal tab was active, silently persisting chats server-side with no user decision. Persistence is now off by default and gated behind a real setting (`memory.personalChatSync`); when off, Personal history stays on-device and the UI says so.
+- **"Clear chat" clears server-side history too** — it previously wiped only localStorage while daemon-persisted turns silently survived. A DELETE endpoint now purges the scope+namespace and the UI calls it.
+- **Private-mode copy is honest** — it now states that private messages skip history and memory but are still processed by the selected model provider.
+- **GP pool lists only real keys** — invalid vault entries are no longer counted or given proxy slots, and an IP-restricted key is kept but disabled locally. Pool errors now surface Google's actual reason (rate-limit, IP restriction) instead of a generic exhaustion message.
+
 ## [1.9.18] - 2026-07-01
 
 Chat modes made real, honest GP pool count, and a broad app fix pass.
