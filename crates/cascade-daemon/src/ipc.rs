@@ -865,6 +865,40 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 _ => {}
             }
 
+            // ── update_check / update_apply / update_auto (T-P4-E04-14/16) ──
+            // Backs `cascade update check|apply|auto`. Handlers live in
+            // updates::ipc_handlers to keep this dispatch slim; see that
+            // module for the delta-then-full-bundle apply flow.
+            match typed_req.method.as_str() {
+                "update_check" => {
+                    return match crate::updates::check_for_update().await {
+                        Ok(result) => Response::ok(result),
+                        Err(e) => Response::err(-32005, format!("update check failed: {e}")),
+                    };
+                }
+                "update_apply" => {
+                    let result = crate::updates::apply_update().await;
+                    return Response::ok(result);
+                }
+                "update_auto" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let params: cascade_types::ipc::UpdateAutoParams =
+                        match serde_json::from_value(params_val) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                return Response::err(-32602, format!("invalid params: {e}"))
+                            }
+                        };
+                    return match crate::updates::set_auto_update(params.enable) {
+                        Ok(result) => Response::ok(result),
+                        Err(e) => {
+                            Response::err(-32603, format!("failed to write config.toml: {e}"))
+                        }
+                    };
+                }
+                _ => {}
+            }
+
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {

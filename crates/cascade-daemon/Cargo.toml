@@ -55,6 +55,9 @@ dirs          = "5"
 chrono        = { workspace = true }
 uuid          = { workspace = true }
 toml          = "0.8"
+# cascade update auto: format-preserving TOML edit of [updates] in config.toml
+# (same crate/pattern as cascade-cli's `cascade telemetry enable/disable`).
+toml_edit     = "0.22"
 fs2           = "0.4"
 serde_yaml    = "0.9"
 notify        = { workspace = true }

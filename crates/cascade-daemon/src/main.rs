@@ -70,6 +70,10 @@ mod scheduler;
 mod automation_router;
 // nsentry-sync: daemon-owned multi-stream nSentry sync subsystem
 mod nsentry_sync;
+// T-P4-E04-12/13/14/16: delta bundle format, snapshot layout, Ed25519
+// verification, full-bundle fallback install, and the update_check/apply/auto
+// IPC handlers (wired in ipc.rs try_typed_dispatch).
+mod updates;
 
 use cascade_core::providers_store::read_providers_store;
 use cascade_providers::ProviderRegistry;
