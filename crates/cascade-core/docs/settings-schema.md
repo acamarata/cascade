@@ -25,6 +25,7 @@ Unknown top-level fields are preserved in `extra` (serde flatten) so a v2 binary
 | `schemaVersion` | `String` | `"2"` | Schema version — increment on incompatible changes. |
 | `library` | `LibrarySettings` | see below | Library item defaults. |
 | `context` | `ContextSettings` | see below | Context resolution overrides. |
+| `memory` | `MemorySettings` | see below | Chat-history memory consent. |
 | `projectMap` | `ProjectMapSettings` | see below | Project-map overrides. |
 | `providers` | `ProvidersSettings` | see below | Per-provider API keys. |
 | `geminiPool` | `GeminiPoolSettings` | see below | Gemini proxy pool. |
@@ -53,6 +54,14 @@ Unknown top-level fields are preserved in `extra` (serde flatten) so a v2 binary
 |---|---|---|---|
 | `sitesRoot` | `string \| null` | `null` | Override for `~/Sites/` used in context resolution. Null = system default. |
 | `personalRoot` | `string \| null` | `null` | Override for the personal-workspace root used by Personal-scope chat and the personal vault. Null = system default (`~/Downloads`). |
+
+---
+
+## `memory` — MemorySettings
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `personalChatSync` | `bool` | `false` | Explicit user consent to persist Personal-scope chat history to the daemon's long-term memory store (`personal` namespace). When `false`, Personal-scope chat is localStorage-only and the daemon is never contacted. |
 
 ---
 

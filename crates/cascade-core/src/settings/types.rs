@@ -80,6 +80,26 @@ pub struct ContextSettings {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+// ── Memory ────────────────────────────────────────────────────────────────────
+
+/// Chat-history memory consent settings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[derive(Default)]
+pub struct MemorySettings {
+    /// Explicit user consent to persist Personal-scope chat history to the
+    /// daemon's long-term memory store (`personal` namespace). Default: false.
+    /// When false, Personal-scope chat is localStorage-only — the daemon is
+    /// never contacted, matching the same firewall the `opt_in` flag guards
+    /// server-side (see cascade-rag memory::namespace).
+    #[serde(default)]
+    pub personal_chat_sync: bool,
+
+    /// Preserve unknown fields.
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
+}
+
 // ── Project Map ───────────────────────────────────────────────────────────────
 
 /// Project-map resolution overrides.
@@ -430,6 +450,10 @@ pub struct CascadeSettings {
     #[serde(default)]
     pub context: ContextSettings,
 
+    /// Chat-history memory consent settings.
+    #[serde(default)]
+    pub memory: MemorySettings,
+
     /// Project-map resolution overrides.
     #[serde(default)]
     pub project_map: ProjectMapSettings,
@@ -485,6 +509,7 @@ impl Default for CascadeSettings {
             schema_version: default_schema_version(),
             library: LibrarySettings::default(),
             context: ContextSettings::default(),
+            memory: MemorySettings::default(),
             project_map: ProjectMapSettings::default(),
             providers: ProvidersSettings::default(),
             gemini_pool: GeminiPoolSettings::default(),

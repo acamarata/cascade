@@ -6,7 +6,7 @@
  * SPORT: E-P9-03 in-app chat — test suite
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { renderHook } from '@testing-library/react'
 
@@ -204,6 +204,178 @@ describe('useChatHistory', () => {
     const { result } = renderHook(() => useChatHistory('load-session'))
     expect(result.current.messages).toHaveLength(1)
     expect(result.current.messages[0].content).toBe('persisted')
+  })
+})
+
+// ── 3b. useChatHistory — personalChatSync consent gating ────────────────────
+
+import { invoke } from '@tauri-apps/api/core'
+
+describe('useChatHistory personalChatSync gating', () => {
+  const PROVIDERS_FIXTURE = [
+    { id: 'anthropic', name: 'Anthropic', status: 'healthy' },
+    { id: 'local:ollama', name: 'Ollama', status: 'healthy' },
+  ]
+
+  const invokeMock = invoke as unknown as ReturnType<typeof vi.fn>
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  /** Route the mocked Tauri IPC: get_settings → consent fixture, else providers. */
+  function mockSettings(personalChatSync: boolean) {
+    invokeMock.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === 'get_settings'
+          ? { memory: { personalChatSync } }
+          : PROVIDERS_FIXTURE,
+      ),
+    )
+  }
+
+  /** Flush pending promises (settings IPC + fire-and-forget fetches). */
+  async function flush() {
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  beforeEach(() => {
+    clearLocalStorage()
+    // loadPersonalChatSync gates the settings IPC behind the Tauri marker.
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+    vi.unstubAllGlobals()
+    invokeMock.mockReset()
+    invokeMock.mockResolvedValue(PROVIDERS_FIXTURE)
+    clearLocalStorage()
+  })
+
+  it('personalChatSync=false: never contacts the daemon for the personal namespace', async () => {
+    mockSettings(false)
+    const { result } = renderHook(() => useChatHistory('sync-off', 'personal'))
+    await flush()
+    act(() => {
+      result.current.append({ role: 'user', content: 'secret', ts: 1 })
+    })
+    await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
+    // Still persisted locally.
+    const stored = JSON.parse(
+      localStorage.getItem('cascade-chat-history-sync-off') ?? '[]',
+    )
+    expect(stored).toHaveLength(1)
+  })
+
+  it('personalChatSync=true: GET and POST send opt_in=true for personal', async () => {
+    mockSettings(true)
+    const { result } = renderHook(() => useChatHistory('sync-on', 'personal'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const getUrl = String(fetchMock.mock.calls[0][0])
+    expect(getUrl).toContain('/api/memory/chat')
+    expect(getUrl).toContain('namespace=personal')
+    expect(getUrl).toContain('opt_in=true')
+
+    act(() => {
+      result.current.append({ role: 'user', content: 'hello', ts: 1 })
+    })
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(post).toBeTruthy()
+      const body = JSON.parse((post![1] as RequestInit).body as string)
+      expect(body.opt_in).toBe(true)
+      expect(body.namespace).toBe('personal')
+    })
+  })
+
+  it('clear() issues DELETE with matching params when sync is active', async () => {
+    mockSettings(true)
+    const { result } = renderHook(() => useChatHistory('sync-clear', 'personal'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    act(() => {
+      result.current.clear()
+    })
+    await waitFor(() => {
+      const del = fetchMock.mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'DELETE',
+      )
+      expect(del).toBeTruthy()
+      const url = String(del![0])
+      expect(url).toContain('/api/memory/chat')
+      expect(url).toContain('scope=cascade-app')
+      expect(url).toContain('namespace=personal')
+      expect(url).toContain('opt_in=true')
+    })
+    expect(result.current.messages).toHaveLength(0)
+  })
+
+  it('clear() does not issue DELETE for personal when sync is off', async () => {
+    mockSettings(false)
+    const { result } = renderHook(() => useChatHistory('sync-off-clear', 'personal'))
+    await flush()
+    act(() => {
+      result.current.append({ role: 'user', content: 'hi', ts: 1 })
+    })
+    act(() => {
+      result.current.clear()
+    })
+    await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.current.messages).toHaveLength(0)
+    expect(localStorage.getItem('cascade-chat-history-sync-off-clear')).toBeNull()
+  })
+
+  it('clear() failure still clears locally and warns', async () => {
+    mockSettings(true)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useChatHistory('sync-clear-fail', 'personal'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) })
+    act(() => {
+      result.current.clear()
+    })
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('server history may persist'),
+        expect.anything(),
+      )
+    })
+    expect(result.current.messages).toHaveLength(0)
+    warnSpy.mockRestore()
+  })
+
+  it('meta namespace still syncs without personal consent', async () => {
+    mockSettings(false)
+    renderHook(() => useChatHistory('meta-session', 'meta'))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const url = String(fetchMock.mock.calls[0][0])
+    expect(url).toContain('namespace=meta')
+    expect(url).toContain('opt_in=false')
+  })
+
+  it('private namespace never contacts the daemon even with consent on', async () => {
+    mockSettings(true)
+    const { result } = renderHook(() =>
+      useChatHistory('priv-session', 'personal:private'),
+    )
+    await flush()
+    act(() => {
+      result.current.append({ role: 'user', content: 'x', ts: 1 })
+    })
+    act(() => {
+      result.current.clear()
+    })
+    await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

@@ -31,6 +31,18 @@ export interface ContextSettings {
   personalRoot?: string | null
 }
 
+// ── Memory ────────────────────────────────────────────────────────────────────
+
+/** Chat-history memory consent settings. */
+export interface MemorySettings {
+  /**
+   * Explicit user consent to persist Personal-scope chat history to the
+   * daemon's long-term memory store (`personal` namespace). Default: false.
+   * When false, Personal-scope chat is localStorage-only.
+   */
+  personalChatSync: boolean
+}
+
 // ── Project Map ───────────────────────────────────────────────────────────────
 
 /** Project-map resolution overrides. */
@@ -200,6 +212,8 @@ export interface CascadeSettings {
   library: LibrarySettings
   /** Context resolution overrides. */
   context: ContextSettings
+  /** Chat-history memory consent settings. */
+  memory: MemorySettings
   /** Project-map resolution overrides. */
   projectMap: ProjectMapSettings
   /** Per-provider API keys and routing defaults. */

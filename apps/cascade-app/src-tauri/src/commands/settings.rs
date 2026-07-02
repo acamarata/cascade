@@ -36,8 +36,8 @@
 use cascade_core::settings::store::{load, save};
 use cascade_core::settings::types::{
     ContextSettings, GeminiPoolSettings, HarnessBridgesSettings, HookDefinition, LibrarySettings,
-    McpServerEntry, PluginsSettings, ProjectMapSettings, ProvidersSettings, ScheduledTaskEntry,
-    TelemetrySettings, VaultDisplaySettings, WidgetsSettings,
+    McpServerEntry, MemorySettings, PluginsSettings, ProjectMapSettings, ProvidersSettings,
+    ScheduledTaskEntry, TelemetrySettings, VaultDisplaySettings, WidgetsSettings,
 };
 use cascade_core::settings::CascadeSettings;
 use cascade_types::paths::global_cascade_dir;
@@ -75,6 +75,7 @@ pub async fn get_settings(_state: State<'_, AppState>) -> Result<CascadeSettings
 /// - `schemaVersion`
 /// - `library`
 /// - `context`
+/// - `memory`
 /// - `projectMap`
 /// - `providers`
 /// - `geminiPool`
@@ -119,6 +120,10 @@ pub async fn update_settings(
                 "context" => {
                     current.context = serde_json::from_value::<ContextSettings>(v)
                         .map_err(|e| format!("invalid context: {e}"))?;
+                }
+                "memory" => {
+                    current.memory = serde_json::from_value::<MemorySettings>(v)
+                        .map_err(|e| format!("invalid memory: {e}"))?;
                 }
                 "projectMap" => {
                     current.project_map = serde_json::from_value::<ProjectMapSettings>(v)

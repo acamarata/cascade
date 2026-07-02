@@ -23,6 +23,7 @@ export function defaultSettings(): CascadeSettings {
     schemaVersion: '2',
     library: { defaultHarnessTargets: [] },
     context: {},
+    memory: { personalChatSync: false },
     projectMap: {},
     providers: { google: [] },
     geminiPool: { keys: [], proxyPort: 3761, enabled: false },

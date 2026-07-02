@@ -1,25 +1,28 @@
 //! Purpose: HTTP handlers for the RAG-08 chat_history API.
-//!   Exposes POST and GET endpoints for persisting and retrieving chat turns
-//!   per scope + namespace.
+//!   Exposes POST, GET, and DELETE endpoints for persisting, retrieving, and
+//!   purging chat turns per scope + namespace. Consumed by the app's
+//!   useChatHistory hook, gated behind the `memory.personalChatSync` setting
+//!   for the "personal" namespace (see apps/cascade-app useChatHistory.ts).
 //!
 //! # Routes (nested at /api/memory by the parent router)
-//!   POST /chat        — insert a chat message
-//!   GET  /chat        — list recent chat messages
+//!   POST   /chat        — insert a chat message
+//!   GET    /chat        — list recent chat messages
+//!   DELETE /chat        — purge all chat messages for scope + namespace
 //!
 //! # Inputs
-//!   POST body: { scope, namespace, role, content, opt_in? }
-//!   GET  query: scope, namespace, limit?, opt_in?
+//!   POST body:   { scope, namespace, role, content, opt_in? }
+//!   GET  query:  scope, namespace, limit?, opt_in?
+//!   DELETE query: scope, namespace, opt_in?
 //!
 //! # Outputs
-//!   POST: 200 { id }
-//!   GET:  200 { messages: [...] }
+//!   POST:   200 { id }
+//!   GET:    200 { messages: [...] }
+//!   DELETE: 200 { removed: <count> }
 //!
 //! # Constraints
 //!   - Personal namespace blocked without opt_in=true (firewall enforced at DB layer).
 //!   - rusqlite is sync; all DB work runs in spawn_blocking.
 //!   - DB path: ~/.cascade/memory.db (shared with MCP memory handlers).
-//!
-//! // TODO app-01: swap app's localStorage to use this endpoint
 
 use axum::{
     extract::Query,
@@ -33,7 +36,7 @@ use std::collections::HashMap;
 
 use cascade_rag::db::run_migrations;
 use cascade_rag::memory::{
-    chat::{insert_chat, list_chat, ChatMessage},
+    chat::{clear_chat, insert_chat, list_chat, ChatMessage},
     namespace::validate_with_firewall,
 };
 
@@ -59,6 +62,11 @@ pub struct InsertChatResponse {
 #[derive(Debug, Serialize)]
 pub struct ListChatResponse {
     pub messages: Vec<ChatMessageDto>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteChatResponse {
+    pub removed: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,6 +98,7 @@ pub fn router() -> Router<DashboardState> {
     Router::new()
         .route("/chat", post(insert_chat_handler))
         .route("/chat", get(list_chat_handler))
+        .route("/chat", axum::routing::delete(delete_chat_handler))
 }
 
 // ── DB helper ────────────────────────────────────────────────────────────────
@@ -227,6 +236,74 @@ async fn list_chat_handler(
     }
 }
 
+/// DELETE /api/memory/chat?scope=...&namespace=...&opt_in=...
+///
+/// Purges all chat rows for the given scope + namespace. Used by the app's
+/// "Clear chat" action so the server-side copy (when persistence is active)
+/// does not silently outlive the client-side clear.
+async fn delete_chat_handler(
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let scope = match params.get("scope") {
+        Some(s) => s.clone(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "'scope' query param is required" })),
+            )
+                .into_response();
+        }
+    };
+    let namespace_raw = match params.get("namespace") {
+        Some(n) => n.clone(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "'namespace' query param is required" })),
+            )
+                .into_response();
+        }
+    };
+    let opt_in = params
+        .get("opt_in")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let namespace = match validate_with_firewall(&namespace_raw, opt_in) {
+        Ok(ns) => ns,
+        Err(e) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response();
+        }
+    };
+
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = open_memory_db()?;
+        clear_chat(&conn, &scope, &namespace)
+            .map_err(|e| format!("clear_chat failed: {e}"))
+    })
+    .await;
+
+    match result {
+        Ok(Ok(removed)) => {
+            (StatusCode::OK, Json(serde_json::json!({ "removed": removed }))).into_response()
+        }
+        Ok(Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("spawn_blocking panic: {e}") })),
+        )
+            .into_response(),
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -300,4 +377,58 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
+
+    #[tokio::test]
+    async fn delete_chat_blocks_personal_without_opt_in() {
+        let app = router().with_state(test_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/chat?scope=cascade-app&namespace=personal")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn delete_chat_missing_scope_returns_400() {
+        let app = router().with_state(test_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/chat?namespace=dev-test")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn delete_chat_missing_namespace_returns_400() {
+        let app = router().with_state(test_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/chat?scope=cascade-app")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // NOTE: no 200-path test here — like the GET/POST tests above, handler
+    // tests stop at the validation layer. The 200 path opens the real
+    // ~/.cascade/memory.db (and would delete real rows); the underlying
+    // clear behaviour is covered by cascade-rag
+    // memory::chat::tests::clear_removes_messages against an in-memory DB.
 }

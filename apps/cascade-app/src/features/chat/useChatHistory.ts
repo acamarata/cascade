@@ -15,9 +15,18 @@
  *   The daemon's /api/memory/chat endpoint requires BOTH `scope` and `namespace`
  *   query/body params (400 without them) and firewalls the "personal" namespace
  *   behind `opt_in: true` (403 without it) — see cascade-rag memory::namespace.
+ *   The "personal" namespace additionally requires REAL user consent: the
+ *   `memory.personalChatSync` setting (default false, read via get_settings
+ *   IPC). Without it, personal chat never contacts the daemon at all
+ *   (localStorage-only) — opt_in is asserted only when the user has explicitly
+ *   enabled sync in Settings. clear() also purges the server-side copy
+ *   (DELETE /api/memory/chat) whenever server persistence is active, so
+ *   "Clear chat" is never silently local-only.
  * SPORT: E-P9-03 in-app chat — useChatHistory
  */
 import { useState, useCallback, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import type { CascadeSettings } from '../../types/settings'
 
 export interface ChatMessage {
   /** Speaker role */
@@ -114,6 +123,27 @@ function needsOptIn(memoryNamespace: string): boolean {
   return memoryNamespace === 'personal'
 }
 
+/** True when running inside the Tauri shell (settings IPC available). */
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+/**
+ * Read the `memory.personalChatSync` consent setting via the get_settings IPC
+ * (same pattern PersonalVaultContext uses for `context.personalRoot`).
+ * Defaults to false — no Tauri shell, IPC failure, or absent field all mean
+ * "no consent": personal chat stays on-device.
+ */
+export async function loadPersonalChatSync(): Promise<boolean> {
+  if (!isTauri()) return false
+  try {
+    const settings = await invoke<CascadeSettings>('get_settings')
+    return settings.memory?.personalChatSync === true
+  } catch {
+    return false
+  }
+}
+
 export function useChatHistory(
   sessionId: string,
   namespace?: string,
@@ -132,12 +162,35 @@ export function useChatHistory(
     loadFromStorage(sessionId),
   )
 
+  // Consent for syncing the "personal" namespace to the daemon. null =
+  // settings not yet resolved (treated as no consent — no daemon calls).
+  // Non-personal namespaces never consult this.
+  const [personalSyncConsent, setPersonalSyncConsent] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (isPrivate || memoryNs !== 'personal') return
+    let cancelled = false
+    void loadPersonalChatSync().then((consent) => {
+      if (!cancelled) setPersonalSyncConsent(consent)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [memoryNs, isPrivate])
+
+  // Server persistence is active only when not private AND either the
+  // namespace is non-personal (meta / dev-*) or the user has explicitly
+  // enabled personal chat sync in Settings (memory.personalChatSync).
+  const serverSync =
+    !isPrivate && (memoryNs !== 'personal' || personalSyncConsent === true)
+
   // On mount / sessionId change: try API first, fall back to localStorage.
-  // Private sessions skip the API entirely — localStorage only.
+  // Sessions without active server persistence (private, or personal without
+  // sync consent) skip the API entirely — localStorage only.
   useEffect(() => {
     // Optimistically load from localStorage while API request is in-flight.
     setMessages(loadFromStorage(sessionId))
-    if (isPrivate) return
+    if (!serverSync) return
 
     let cancelled = false
     ;(async () => {
@@ -165,7 +218,7 @@ export function useChatHistory(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, memoryNs, optIn, isPrivate])
+  }, [sessionId, memoryNs, optIn, serverSync])
 
   const append = useCallback(
     (msg: ChatMessage) => {
@@ -175,7 +228,7 @@ export function useChatHistory(
         // daemon call is best-effort long-term memory, not the source of truth
         // for a specific session's transcript.
         saveToStorage(sessionId, next)
-        if (!isPrivate) {
+        if (serverSync) {
           ;(async () => {
             try {
               const res = await fetch(`${DAEMON_BASE_URL}/api/memory/chat`, {
@@ -198,13 +251,37 @@ export function useChatHistory(
         return next
       })
     },
-    [sessionId, memoryNs, optIn, isPrivate],
+    [sessionId, memoryNs, optIn, serverSync],
   )
 
   const clear = useCallback(() => {
     setMessages([])
     clearFromStorage(sessionId)
-  }, [sessionId])
+    // When server persistence is active, purge the server-side copy too so
+    // "Clear chat" is never silently local-only. Failure is non-fatal: the
+    // local clear stands, but warn that server history may persist.
+    if (serverSync) {
+      ;(async () => {
+        try {
+          const params = new URLSearchParams({
+            scope,
+            namespace: memoryNs,
+            opt_in: String(optIn),
+          })
+          const res = await fetch(
+            `${DAEMON_BASE_URL}/api/memory/chat?${params.toString()}`,
+            { method: 'DELETE' },
+          )
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        } catch (e) {
+          console.warn(
+            'Failed to clear chat history on the daemon — server history may persist.',
+            e,
+          )
+        }
+      })()
+    }
+  }, [sessionId, memoryNs, optIn, serverSync])
 
   return { messages, append, clear }
 }

@@ -23,7 +23,9 @@
  *   endpoint (127.0.0.1:9761) following the P7 E-P7-07 priority chain:
  *   selected > default > healthy cloud > local fallback. Chat history persists
  *   through /api/memory/chat, scoped+namespaced per cascade-rag's personal
- *   firewall (see useChatHistory.ts).
+ *   firewall (see useChatHistory.ts). Personal-namespace persistence requires
+ *   the memory.personalChatSync setting (default false) — without it, Personal
+ *   chat is localStorage-only and a note in the UI says so.
  *
  *   The prompt box runs with cascade context available — tools exposed by the
  *   daemon (provide_harness_context, search, pbd tools) are dispatched server-side.
@@ -43,6 +45,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChat } from './useChat'
+import { loadPersonalChatSync } from './useChatHistory'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ProviderSelector } from './ProviderSelector'
@@ -98,10 +101,26 @@ export function ChatPage() {
   // Session-only (never persisted): reloading the app always starts non-private.
   const [isPrivate, setIsPrivate] = useState(false)
 
-  // Derive namespace from scope. "personal" (private off) still requires an
-  // explicit opt_in at the memory layer (see useChatHistory's firewall
-  // handling) — private mode additionally skips server-side persistence
-  // entirely by using a namespace the daemon never long-term stores.
+  // Whether the user has consented to syncing Personal chat to Cascade memory
+  // (memory.personalChatSync setting, default false). Drives the on-device
+  // note shown in Personal mode when sync is off. useChatHistory reads the
+  // same setting independently to gate all daemon persistence calls.
+  const [personalChatSync, setPersonalChatSync] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    void loadPersonalChatSync().then((consent) => {
+      if (!cancelled) setPersonalChatSync(consent)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Derive namespace from scope. "personal" (private off) persists to the
+  // daemon only with real consent (memory.personalChatSync — see
+  // useChatHistory's firewall handling); private mode additionally skips
+  // server-side persistence entirely by using a namespace the daemon never
+  // long-term stores.
   const namespace =
     chatScope === 'projects'
       ? `projects:${selectedProjectId ?? 'default'}`
@@ -253,7 +272,7 @@ export function ChatPage() {
             onClick={handleTogglePrivate}
             aria-pressed={isPrivate}
             aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
-            title="Private chat: not saved to Cascade's memory, session-only"
+            title="Private: not saved to chat history or Cascade memory. Messages are still processed by the selected model provider."
             className={cn(
               'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
               isPrivate
@@ -266,6 +285,14 @@ export function ChatPage() {
           </button>
         )}
       </div>
+
+      {/* ── Personal sync-off note ─────────────────────────────── */}
+      {chatScope === 'personal' && !isPrivate && !personalChatSync && (
+        <div className="px-4 py-1 text-[0.65rem] text-muted-foreground/70 border-b border-border bg-background shrink-0">
+          History stays on this device. Enable personal chat sync in Settings to
+          persist to Cascade memory.
+        </div>
+      )}
 
       {/* ── Error banner ───────────────────────────────────────── */}
       {error && (() => {
