@@ -17,7 +17,9 @@
 //! - `tokio::sync::mpsc::Receiver<WatchSignal>` — consumed by the ingest pipeline
 //!
 //! ## Constraints
-//! - `.git/`, `target/`, `node_modules/`, `.cascade/` are excluded.
+//! - `.git/`, `target/`, `node_modules/`, `.cascade/` are excluded — EXCEPT
+//!   `.cascade/context-sync/` (E2-S3 digest JSONL dir; its appends are the
+//!   index-refresh nudge from the post-processing middleware).
 //! - Events for the same path are debounced: a new event within the window resets
 //!   the 500 ms timer rather than stacking.
 //! - The notify callback is sync and only does a cheap channel send; the tokio
@@ -52,13 +54,25 @@ use tracing::{debug, warn};
 // ── Extensions that trigger ingest ───────────────────────────────────────────
 
 /// File extensions that trigger ingest on create/modify events.
+/// `jsonl` (E2-S3): context-sync digest files — the parse dispatcher falls
+/// back to the plain-text parser for unrecognised extensions, so JSONL
+/// ingests as text.
 const WATCHED_EXTENSIONS: &[&str] = &[
     "md", "rs", "ts", "py", "json", "yaml", "toml", "html",
-    "txt", "pdf", "docx", "xlsx",
+    "txt", "pdf", "docx", "xlsx", "jsonl",
 ];
 
 /// Directory name segments that are always excluded from watching.
+///
+/// `.cascade` keeps the watcher away from its own index internals
+/// (`.cascade/index/vec.db` etc.) — but `.cascade/context-sync/` is carved
+/// out in [`is_excluded`]: E2-S3 post-middleware appends response digests
+/// there, and that append IS the index-refresh nudge.
 const EXCLUDED_DIRS: &[&str] = &[".git", "target", "node_modules", ".cascade"];
+
+/// Subdirectory of `.cascade` that is exempt from the exclusion filter.
+/// Kept in sync with `context_sync::CONTEXT_SYNC_DIR_NAME`.
+const CONTEXT_SYNC_DIR: &str = "context-sync";
 
 // ── Signal enum ──────────────────────────────────────────────────────────────
 
@@ -116,12 +130,19 @@ impl WatcherConfig {
     }
 
     /// Returns default watch directories derived from `project_root` (existing only).
+    ///
+    /// `context-sync` (E2-S3): when the watcher's root is the daemon config
+    /// dir (`~/.cascade`, as wired by the supervisor), this picks up the
+    /// post-middleware digest directory — the supervisor pre-creates it at
+    /// boot so it exists when the watch set is registered. For ordinary
+    /// project roots the subdir does not exist and is filtered out.
     pub fn default_watch_dirs(&self) -> Vec<PathBuf> {
         let candidates = [
             self.project_root.join(".claude/memory"),
             self.project_root.join(".claude/planning"),
             self.project_root.join(".github/wiki"),
             self.project_root.join("docs"),
+            self.project_root.join(CONTEXT_SYNC_DIR),
         ];
         candidates
             .into_iter()
@@ -144,11 +165,27 @@ impl WatcherConfig {
 // ── Path helpers ─────────────────────────────────────────────────────────────
 
 /// Returns `true` if any component of `path` is an excluded directory name.
+///
+/// Carve-out (E2-S3): a `.cascade` component immediately followed by
+/// `context-sync` is NOT excluded — the post-middleware digest JSONL files
+/// live there and their append is the RAG index-refresh trigger. Everything
+/// else under `.cascade` (index internals, sockets, logs) stays excluded.
 pub(crate) fn is_excluded(path: &Path) -> bool {
-    path.components().any(|c| {
-        let s = c.as_os_str().to_string_lossy();
-        EXCLUDED_DIRS.iter().any(|ex| s == *ex)
-    })
+    let comps: Vec<_> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    for (i, s) in comps.iter().enumerate() {
+        if EXCLUDED_DIRS.iter().any(|ex| s == ex) {
+            if s == ".cascade"
+                && comps.get(i + 1).map(String::as_str) == Some(CONTEXT_SYNC_DIR)
+            {
+                continue;
+            }
+            return true;
+        }
+    }
+    false
 }
 
 /// Returns `true` if `path`'s extension is in [`WATCHED_EXTENSIONS`].
@@ -419,11 +456,31 @@ mod tests {
         )));
     }
 
+    /// E2-S3 carve-out: `.cascade/context-sync/` is watchable; every other
+    /// `.cascade` subpath stays excluded.
+    #[test]
+    fn test_context_sync_carveout() {
+        assert!(!is_excluded(&PathBuf::from(
+            "/home/u/.cascade/context-sync/2026-07-03.jsonl"
+        )));
+        assert!(!is_excluded(&PathBuf::from("/home/u/.cascade/context-sync")));
+        // Index internals and other .cascade content remain excluded.
+        assert!(is_excluded(&PathBuf::from("/home/u/.cascade/index/vec.db")));
+        assert!(is_excluded(&PathBuf::from("/home/u/.cascade/logs/daemon.log")));
+        // A `.cascade` deeper in the path without the carve-out is excluded
+        // even when context-sync appears elsewhere.
+        assert!(is_excluded(&PathBuf::from(
+            "/home/u/context-sync/.cascade/index/x.md"
+        )));
+    }
+
     #[test]
     fn test_watched_extension() {
         assert!(has_watched_extension(&PathBuf::from("file.md")));
         assert!(has_watched_extension(&PathBuf::from("file.rs")));
         assert!(has_watched_extension(&PathBuf::from("file.yaml")));
+        // E2-S3: context-sync digests are JSONL.
+        assert!(has_watched_extension(&PathBuf::from("2026-07-03.jsonl")));
         assert!(!has_watched_extension(&PathBuf::from("file.lock")));
         assert!(!has_watched_extension(&PathBuf::from("file.bak")));
         assert!(!has_watched_extension(&PathBuf::from("file")));
@@ -438,6 +495,19 @@ mod tests {
         let dirs = cfg.default_watch_dirs();
         assert_eq!(dirs.len(), 1);
         assert!(dirs[0].ends_with(".claude/memory"));
+    }
+
+    /// E2-S3: an existing `context-sync/` under the watcher root joins the
+    /// default watch set (the supervisor pre-creates it under ~/.cascade).
+    #[test]
+    fn test_config_includes_context_sync_dir_when_present() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("context-sync")).unwrap();
+
+        let cfg = WatcherConfig::new(tmp.path());
+        let dirs = cfg.default_watch_dirs();
+        assert_eq!(dirs.len(), 1);
+        assert!(dirs[0].ends_with("context-sync"));
     }
 
     // ── Integration tests (real watcher) ─────────────────────────────────────

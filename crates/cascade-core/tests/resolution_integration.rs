@@ -25,6 +25,9 @@ fn plant_cascade(dir: &std::path::Path, content: &str) {
 /// A single-tier hierarchy (one `.cascade/CASCADE.md`) resolves to one source.
 #[tokio::test]
 #[serial(global_env)]
+// Deliberate: the std MutexGuard must span the await so the HOME mutation stays
+// serialized while the async resolve reads it.
+#[allow(clippy::await_holding_lock)]
 async fn test_resolver_single_tier() {
     let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
@@ -51,6 +54,8 @@ async fn test_resolver_single_tier() {
 /// within the synthetic tree).
 #[tokio::test]
 #[serial(global_env)]
+// Deliberate: guard spans the await to serialize the HOME env mutation.
+#[allow(clippy::await_holding_lock)]
 async fn test_resolver_multi_tier_sources() {
     let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
@@ -77,6 +82,8 @@ async fn test_resolver_multi_tier_sources() {
 /// `merged_text` contains content from each tier that was discovered.
 #[tokio::test]
 #[serial(global_env)]
+// Deliberate: guard spans the await to serialize the HOME env mutation.
+#[allow(clippy::await_holding_lock)]
 async fn test_resolver_merged_text_contains_all_tiers() {
     let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();
@@ -104,6 +111,8 @@ async fn test_resolver_merged_text_contains_all_tiers() {
 /// Dedup mode does not return duplicate lines from multiple tiers.
 #[tokio::test]
 #[serial(global_env)]
+// Deliberate: guard spans the await to serialize the HOME env mutation.
+#[allow(clippy::await_holding_lock)]
 async fn test_resolver_dedup_removes_duplicate_lines() {
     let _env_guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = TempDir::new().unwrap();

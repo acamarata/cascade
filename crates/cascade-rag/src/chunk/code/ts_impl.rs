@@ -6,10 +6,14 @@
 #[cfg(feature = "code-chunker")]
 use tree_sitter::{Language, Parser};
 
+#[cfg(feature = "code-chunker")]
 use std::collections::HashMap;
+#[cfg(feature = "code-chunker")]
 use std::path::Path;
 
+#[cfg(feature = "code-chunker")]
 use super::super::{Chunk, ChunkerConfig};
+#[cfg(feature = "code-chunker")]
 use super::language::SourceLanguage;
 
 // ── Language → tree-sitter grammar ───────────────────────────────────────────

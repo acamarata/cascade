@@ -4,10 +4,10 @@
 //!   - serving: true when index_count > 0
 //!   - last_indexed: MAX(indexed_at) from cascade_state.db, formatted as ISO 8601 UTC
 //!   - index_size_bytes: sum of file sizes under ~/.cascade/index/
-//!   Degrades gracefully to zeros/false/None when no index exists.
-//! Inputs:  HTTP GET (no query params, no request body).
-//! Outputs: 200 JSON — cascade_types::rag::RagStatusResponse.
-//! Constraints:
+//!     Degrades gracefully to zeros/false/None when no index exists.
+//!     Inputs:  HTTP GET (no query params, no request body).
+//!     Outputs: 200 JSON — cascade_types::rag::RagStatusResponse.
+//!     Constraints:
 //!   - All I/O errors swallowed; fields default to 0/false/None.
 //!   - No writes; no side effects; always returns 200.
 //!     SPORT: T-P3-E02-29 — MASTER-ROUTES.md GET /api/gci/rag-status
@@ -179,6 +179,7 @@ mod tests {
             token: std::sync::Arc::new("test-token".to_string()),
             provider_registry: None,
             routing_ring: None,
+            middleware: Default::default(),
         }
     }
 

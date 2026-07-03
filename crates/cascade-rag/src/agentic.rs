@@ -41,7 +41,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, warn};
 
 use cascade_types::{error::Result, query_strategy::QueryStrategy};
 

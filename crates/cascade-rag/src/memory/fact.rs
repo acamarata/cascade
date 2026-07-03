@@ -5,9 +5,10 @@
 //!   decay (archive facts not seen in T duration).
 //!
 //! ## Content-hash dedup
-//! The content_hash is BLAKE3(namespace + "\x00" + subject + "\x00" + predicate
-//! + "\x00" + value). The namespace prefix prevents two namespaces from sharing
-//! the same hash even if the factual text is identical.
+//! The content_hash is `BLAKE3(namespace + "\x00" + subject + "\x00" +
+//! predicate + "\x00" + value)`. The namespace prefix prevents two
+//! namespaces from sharing the same hash even if the factual text is
+//! identical.
 //!
 //! ## Consolidation
 //! `consolidate_namespace` scans `memory_episodes`, groups by content hash of

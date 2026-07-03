@@ -116,6 +116,10 @@ impl CeoRuntime {
     /// The fallback router returns an honest "no provider configured" error
     /// rather than a misleading synthetic success. Use `with_registry` to wire
     /// a real `ProviderRegistry`.
+    // Production wires the registry via `with_registry` (ipc.rs); this
+    // registry-less form is the documented test/fallback constructor and is
+    // dead only in the bin's private module tree.
+    #[allow(dead_code)]
     pub fn new(session_base_dir: Option<std::path::PathBuf>) -> Self {
         let registry = Arc::new(AgentRegistry::new());
         registry.register(builtin_ceo()).expect("ceo spec");

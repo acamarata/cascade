@@ -290,7 +290,29 @@ impl ProviderRegistry {
         &self,
         preferred_id: Option<&str>,
     ) -> Option<(Arc<dyn ProviderAdapter + Send + Sync>, String)> {
-        // ── Step 1: explicit selection ────────────────────────────────────────
+        self.pick_for_chat_filtered(preferred_id, None).await
+    }
+
+    /// [`Self::pick_for_chat`] with an optional candidate filter over
+    /// provider ids.
+    ///
+    /// When `allow` is `Some`, the routing-table default (step 2) and both
+    /// scan steps (3: healthy cloud, 4: local fallback) only consider
+    /// adapters whose id passes the predicate. The EXPLICIT selection
+    /// (step 1) deliberately bypasses the filter — a provider the caller
+    /// names outranks any policy; callers that must not allow that
+    /// (e.g. privacy gating) simply pass `preferred_id: None`.
+    ///
+    /// Fail-closed: if every registered adapter is filtered out, the result
+    /// is `None` — the caller decides how to surface that, never this layer.
+    pub async fn pick_for_chat_filtered(
+        &self,
+        preferred_id: Option<&str>,
+        allow: Option<&(dyn Fn(&str) -> bool + Send + Sync)>,
+    ) -> Option<(Arc<dyn ProviderAdapter + Send + Sync>, String)> {
+        let permitted = |id: &str| allow.is_none_or(|f| f(id));
+
+        // ── Step 1: explicit selection (bypasses the filter by contract) ─────
         if let Some(id) = preferred_id {
             if let Some(arc) = self.get(id) {
                 return Some((arc, id.to_string()));
@@ -300,7 +322,10 @@ impl ProviderRegistry {
         // ── Step 2: routing-table default ─────────────────────────────────────
         if let Some(arc) = self.default_for_task(&TaskType::Chat) {
             let id = arc.provider_info().id;
-            return Some((arc, id));
+            if permitted(&id) {
+                return Some((arc, id));
+            }
+            // Filtered out — fall through to the health scan.
         }
 
         // ── Steps 3 + 4: health-based scan ────────────────────────────────────
@@ -322,7 +347,7 @@ impl ProviderRegistry {
         // Step 3 — first healthy cloud provider.
         let cloud_pairs: Vec<_> = pairs
             .iter()
-            .filter(|(id, _)| !id.starts_with("local"))
+            .filter(|(id, _)| !id.starts_with("local") && permitted(id))
             .cloned()
             .collect();
 
@@ -334,7 +359,7 @@ impl ProviderRegistry {
 
         // Step 4 — any local provider as final fallback.
         for (id, arc) in &pairs {
-            if id.starts_with("local") {
+            if id.starts_with("local") && permitted(id) {
                 return Some((arc.clone(), id.clone()));
             }
         }
@@ -763,5 +788,88 @@ mod tests {
 
         let result = registry.pick_for_chat(None).await;
         assert!(result.is_none());
+    }
+
+    // ── pick_for_chat_filtered (privacy trust gating) ─────────────────────────
+
+    /// A routing-table default that fails the predicate is skipped and the
+    /// scan continues among permitted ids only.
+    #[tokio::test]
+    async fn pick_for_chat_filtered_skips_untrusted_routing_default() {
+        let registry = ProviderRegistry::new();
+        // "openai" is the routing-table default for Chat; the filter must
+        // exclude it and land on anthropic via the health scan.
+        registry
+            .register("openai".into(), HealthMock::healthy("openai"))
+            .unwrap();
+        registry
+            .register("anthropic".into(), HealthMock::healthy("anthropic"))
+            .unwrap();
+
+        let allow = |id: &str| id == "anthropic";
+        let (_, id) = registry
+            .pick_for_chat_filtered(None, Some(&allow))
+            .await
+            .expect("anthropic passes the filter");
+        assert_eq!(id, "anthropic");
+    }
+
+    /// Fail-closed: when every registered adapter is filtered out the result
+    /// is None — a filtered-out adapter is never returned.
+    #[tokio::test]
+    async fn pick_for_chat_filtered_returns_none_when_all_filtered_out() {
+        let registry = ProviderRegistry::new();
+        registry
+            .register("gp-pool".into(), HealthMock::healthy("gp-pool"))
+            .unwrap();
+        registry
+            .register("gemini".into(), HealthMock::healthy("gemini"))
+            .unwrap();
+
+        let allow = |id: &str| !matches!(id, "gp-pool" | "gemini");
+        assert!(registry
+            .pick_for_chat_filtered(None, Some(&allow))
+            .await
+            .is_none());
+    }
+
+    /// The health scan honors the filter: a healthy-but-excluded cloud id is
+    /// skipped in favor of a permitted local adapter.
+    #[tokio::test]
+    async fn pick_for_chat_filtered_health_scan_skips_untrusted() {
+        let routing = RoutingTable {
+            table: HashMap::new(),
+        };
+        let registry = ProviderRegistry::with_routing(routing);
+        registry
+            .register("gp-pool".into(), HealthMock::healthy("gp-pool"))
+            .unwrap();
+        registry
+            .register("local:ollama".into(), HealthMock::unhealthy("local:ollama"))
+            .unwrap();
+
+        let allow = |id: &str| id.starts_with("local");
+        let (_, id) = registry
+            .pick_for_chat_filtered(None, Some(&allow))
+            .await
+            .expect("local passes the filter");
+        assert_eq!(id, "local:ollama");
+    }
+
+    /// Explicit selection bypasses the filter by contract — a provider the
+    /// caller names outranks policy (privacy callers pass preferred=None).
+    #[tokio::test]
+    async fn pick_for_chat_filtered_explicit_bypasses_filter() {
+        let registry = ProviderRegistry::new();
+        registry
+            .register("gemini".into(), HealthMock::healthy("gemini"))
+            .unwrap();
+
+        let allow = |_: &str| false;
+        let (_, id) = registry
+            .pick_for_chat_filtered(Some("gemini"), Some(&allow))
+            .await
+            .expect("explicit id bypasses filter");
+        assert_eq!(id, "gemini");
     }
 }

@@ -326,7 +326,7 @@ mod tests {
         let mut reg = ProjectRegistry::open(d.path()).expect("open");
 
         let root = PathBuf::from("/tmp/err_proj");
-        let mut rec = ProjectRecord {
+        let rec = ProjectRecord {
             id: ProjectRecord::id_for(&root),
             root,
             name: "err_proj".into(),
@@ -337,7 +337,7 @@ mod tests {
             parent_id: None,
             index_status: IndexStatus::Error("disk full".into()),
         };
-        reg.upsert(&mut rec).expect("upsert");
+        reg.upsert(&rec).expect("upsert");
 
         let got = reg.get(&rec.id).expect("get").expect("exists");
         assert_eq!(got.index_status, IndexStatus::Error("disk full".into()));

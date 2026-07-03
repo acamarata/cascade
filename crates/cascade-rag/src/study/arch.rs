@@ -99,7 +99,7 @@ pub fn extract_arch(
         .iter()
         .map(|(label, indices)| (label.as_str(), indices.clone()))
         .collect();
-    sorted_modules.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    sorted_modules.sort_by_key(|(_, indices)| std::cmp::Reverse(indices.len()));
     sorted_modules.truncate(MAX_NODES);
 
     // Build a stable node list.
@@ -212,12 +212,12 @@ fn detect_edges(
             .map(|&ri| rows[ri].symbol.as_str())
             .collect();
 
-        for b_idx in 0..n {
+        for (b_idx, module_b) in modules.iter().enumerate().take(n) {
             if a_idx == b_idx {
                 continue;
             }
             // Check if any chunk in B mentions any symbol from A.
-            let referenced = modules[b_idx].1.iter().any(|&ri| {
+            let referenced = module_b.1.iter().any(|&ri| {
                 let text = &rows[ri].chunk_text;
                 a_syms.iter().any(|sym| text.contains(sym))
             });

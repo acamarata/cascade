@@ -476,6 +476,45 @@ impl Default for BackupConfig {
     }
 }
 
+/// `[middleware]` section of config.toml (E2-S2 pre-processing middleware).
+///
+/// GP-powered request pre-processing on the daemon chat path. Every feature
+/// is opt-in and OFF by default — with all flags false the chat path is a
+/// no-op passthrough (no GP probes, zero added latency).
+///
+/// # TOML example
+///
+/// ```toml
+/// [middleware]
+/// compress_context  = true   # GP-summarize old turns past the token threshold
+/// inject_context    = true   # inject project-context system prefix
+/// classify_requests = true   # GP classifier may downgrade the model choice
+/// context_sync      = true   # background response digest → context-sync JSONL
+/// ```
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct MiddlewareConfig {
+    /// Compress old chat turns via one bounded GP call when the estimated
+    /// token count exceeds the threshold; keep the last N turns verbatim.
+    /// On any GP failure the original messages are used unchanged.
+    /// Default `false`.
+    pub compress_context: bool,
+    /// Inject a stable project-context system prefix (pure template merge,
+    /// no timestamps — cache-prefix-safe). Default `false`.
+    pub inject_context: bool,
+    /// Classify each request Trivial/Medium/Complex via one bounded GP call;
+    /// the result may downgrade the model choice only when the user did not
+    /// explicitly pick a provider/model. Default `false`.
+    pub classify_requests: bool,
+    /// E2-S3 POST-processing: after a chat response has been delivered,
+    /// spawn a background task that extracts a structured digest (decisions,
+    /// files touched, completed tasks, taxonomy tags) and appends it to
+    /// `~/.cascade/context-sync/<yyyy-mm-dd>.jsonl` — which the RAG watcher
+    /// picks up for index refresh. NEVER on the hot path; with the flag off
+    /// there is literally no spawn (zero overhead). Default `false`.
+    pub context_sync: bool,
+}
+
 // -- Root config ---------------------------------------------------------------
 
 /// Full `~/.cascade/config.toml` schema.
@@ -525,6 +564,10 @@ pub struct Config {
     /// `[telemetry]` section — opt-in OTLP tracing export.
     #[serde(default)]
     pub telemetry: TelemetryDaemonConfig,
+    /// `[middleware]` section — GP-powered chat pre-processing (E2-S2).
+    /// All flags default to `false` (feature fully off).
+    #[serde(default)]
+    pub middleware: MiddlewareConfig,
 }
 
 // ── TelemetryDaemonConfig ─────────────────────────────────────────────────────
@@ -534,22 +577,13 @@ pub struct Config {
 /// Mirrors `cascade_types::config::TelemetryConfig` but lives here to avoid
 /// importing the full types crate into daemon-internal config. Defaults to
 /// disabled with no endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct TelemetryDaemonConfig {
     /// When `false` (the default), no OTLP exporter is constructed.
     pub enabled: bool,
     /// Optional OTLP/gRPC endpoint, e.g. `http://localhost:4317`.
     pub endpoint: Option<String>,
-}
-
-impl Default for TelemetryDaemonConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            endpoint: None,
-        }
-    }
 }
 
 // WHY manual Default: Config has #[cfg(feature = "gfp")]-gated fields
@@ -576,6 +610,7 @@ impl Default for Config {
             fleet: FleetConfig::default(),
             hooks: Vec::new(),
             telemetry: TelemetryDaemonConfig::default(),
+            middleware: MiddlewareConfig::default(),
         }
     }
 }
@@ -737,6 +772,50 @@ mod tests {
             }
             other => panic!("expected InvalidValue, got: {other:?}"),
         }
+    }
+
+    /// `[middleware]` flags: absent section → all false (feature fully off);
+    /// a partial section sets only the named flag.
+    #[test]
+    fn config_middleware_defaults_off_and_partial_parse() {
+        // Default: all four flags false.
+        let cfg = Config::default();
+        assert!(!cfg.middleware.compress_context);
+        assert!(!cfg.middleware.inject_context);
+        assert!(!cfg.middleware.classify_requests);
+        assert!(!cfg.middleware.context_sync);
+
+        // Absent section in a real file → defaults.
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("config.toml"), "[daemon]\nlog_level = \"info\"\n")
+            .expect("write");
+        let loaded = Config::load(dir.path()).expect("load");
+        assert!(!loaded.middleware.compress_context);
+        assert!(!loaded.middleware.inject_context);
+        assert!(!loaded.middleware.classify_requests);
+        assert!(!loaded.middleware.context_sync);
+
+        // Partial section: only the named flag flips.
+        std::fs::write(
+            dir.path().join("config.toml"),
+            "[middleware]\ncompress_context = true\n",
+        )
+        .expect("write");
+        let loaded = Config::load(dir.path()).expect("load");
+        assert!(loaded.middleware.compress_context);
+        assert!(!loaded.middleware.inject_context);
+        assert!(!loaded.middleware.classify_requests);
+        assert!(!loaded.middleware.context_sync);
+
+        // context_sync flips independently (E2-S3 post-middleware).
+        std::fs::write(
+            dir.path().join("config.toml"),
+            "[middleware]\ncontext_sync = true\n",
+        )
+        .expect("write");
+        let loaded = Config::load(dir.path()).expect("load");
+        assert!(loaded.middleware.context_sync);
+        assert!(!loaded.middleware.compress_context);
     }
 
     /// history.retention_days: 0 parses Ok; 99999 returns Err(InvalidValue).

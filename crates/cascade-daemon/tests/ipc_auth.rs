@@ -24,7 +24,7 @@ use cascade_daemon::{event_bus::EventBus, healthcheck::HealthState, ipc::IpcServ
 
 /// Write a 4-byte LE length-prefixed frame to a UnixStream.
 async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
-    let len = (body.len() as u32).to_le_bytes();
+    let len = (body.len() as u32).to_be_bytes();
     stream.write_all(&len).await.expect("write len");
     stream.write_all(body).await.expect("write body");
     stream.flush().await.expect("flush");
@@ -34,7 +34,7 @@ async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
 async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).await.expect("read len");
-    let len = u32::from_le_bytes(len_buf) as usize;
+    let len = u32::from_be_bytes(len_buf) as usize;
     let mut body = vec![0u8; len];
     stream.read_exact(&mut body).await.expect("read body");
     body
@@ -61,7 +61,12 @@ async fn start_test_server(
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
 
-    let ipc = IpcServer::new(config_dir.clone(), health, bus)
+    let ipc = IpcServer::new(
+        config_dir.clone(),
+        health,
+        bus,
+        std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
+    )
         .await
         .expect("IpcServer::new");
 
@@ -89,7 +94,7 @@ async fn start_test_server(
 
 /// Ping method returns a response (smoke test: server accepts connections and
 /// responds to a known method).
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ping_returns_response() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -114,7 +119,7 @@ async fn test_ping_returns_response() {
 
 /// Health method returns a minimal response with only "status": "ok".
 /// Verifies that internal state (pid, uptime, queue depth, etc.) is not exposed.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_health_returns_minimal_response() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -123,34 +128,40 @@ async fn test_health_returns_minimal_response() {
 
     let resp = send_request(&mut stream, serde_json::json!({ "method": "health" })).await;
 
-    // The health response must be exactly {"status":"ok"} with no other fields.
+    // Success responses are wrapped in the JSON-RPC 2.0 envelope under "result"
+    // (see write_response() in ipc.rs); errors would be nested under "error".
     assert!(
-        resp.get("code").is_none(),
-        "health response should not contain error code: {resp}"
+        resp.get("error").is_none(),
+        "health response should not contain an error: {resp}"
     );
+    let result = resp
+        .get("result")
+        .expect("health response must contain a result field");
+
+    // The health result must be exactly {"status":"ok"} with no other fields.
     assert_eq!(
-        resp.get("status"),
+        result.get("status"),
         Some(&serde_json::Value::String("ok".to_string())),
         "health response status must be \"ok\": {resp}"
     );
     assert!(
-        resp.get("pid").is_none(),
+        result.get("pid").is_none(),
         "health response must not expose pid: {resp}"
     );
     assert!(
-        resp.get("uptime_secs").is_none(),
+        result.get("uptime_secs").is_none(),
         "health response must not expose uptime_secs: {resp}"
     );
     assert!(
-        resp.get("queue_depth").is_none(),
+        result.get("queue_depth").is_none(),
         "health response must not expose queue_depth: {resp}"
     );
     assert!(
-        resp.get("ram_kb").is_none(),
+        result.get("ram_kb").is_none(),
         "health response must not expose ram_kb: {resp}"
     );
     assert!(
-        resp.get("cpu_pct").is_none(),
+        result.get("cpu_pct").is_none(),
         "health response must not expose cpu_pct: {resp}"
     );
 
@@ -160,7 +171,7 @@ async fn test_health_returns_minimal_response() {
 
 /// Graceful drain: cancel the shutdown token while a connection is held open,
 /// then verify the server exits within 6 s (5 s drain + 1 s margin).
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_graceful_drain_completes() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;

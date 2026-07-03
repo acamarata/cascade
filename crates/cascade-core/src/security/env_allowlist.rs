@@ -187,6 +187,9 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    // Deliberate: the std MutexGuard must span the await so process-env mutation
+    // stays serialized while `apply()` reads and strips env vars.
+    #[allow(clippy::await_holding_lock)]
     async fn strips_disallowed_var() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Inject a rogue variable.

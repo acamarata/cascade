@@ -200,6 +200,9 @@ pub fn list_intents(dir: &Path) -> Vec<ContinuityIntent> {
 }
 
 /// Delete an intent file by id. `Ok(false)` if it did not exist.
+// Daemon-side intent removal: public lib API + unit-tested here; the CLI's
+// `continuity rm` deletes the file directly, so the bin tree never calls it.
+#[allow(dead_code)]
 pub fn remove_intent(dir: &Path, id: &str) -> std::io::Result<bool> {
     let path = intent_path(dir, id);
     if !path.exists() {

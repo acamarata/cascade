@@ -12,8 +12,9 @@ use cascade_types::{
 };
 
 use super::async_impl::async_chunk_impl;
-use super::language::detect_language_for;
 
+#[cfg(feature = "code-chunker")]
+use super::language::detect_language_for;
 #[cfg(feature = "code-chunker")]
 use super::ts_impl::ts_chunk;
 

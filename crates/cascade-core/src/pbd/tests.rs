@@ -712,7 +712,7 @@ mod tests {
             ("archived", PhaseStatus::Archived),
         ];
         for (raw, expected) in &cases {
-            let yaml = format!("{raw}");
+            let yaml = raw.to_string();
             let parsed: PhaseStatus =
                 serde_yaml::from_str(&yaml).unwrap_or_else(|e| panic!("Failed to parse '{raw}': {e}"));
             assert_eq!(parsed, *expected, "Mismatch for raw value '{raw}'");

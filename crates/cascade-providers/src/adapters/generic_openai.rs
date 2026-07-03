@@ -186,21 +186,27 @@ impl GenericOpenAIAdapter {
     }
 
     /// Build the OpenAI chat-completions request body.
+    ///
+    /// An explicit `req.system` prompt becomes the FIRST `system` message —
+    /// the OpenAI-compat wire shape has no top-level system field, and
+    /// ignoring `req.system` (the pre-fix behaviour) silently discarded the
+    /// middleware's injected project context for every generic/ollama-served
+    /// request.
     fn build_chat_body(&self, req: &CompletionRequest, stream: bool) -> Value {
-        let messages: Vec<Value> = req
-            .messages
-            .iter()
-            .map(|m| {
-                serde_json::json!({
-                    "role": match m.role {
-                        MessageRole::System    => "system",
-                        MessageRole::User      => "user",
-                        MessageRole::Assistant => "assistant",
-                    },
-                    "content": m.content,
-                })
+        let mut messages: Vec<Value> = Vec::with_capacity(req.messages.len() + 1);
+        if let Some(sys) = req.system.as_deref() {
+            messages.push(serde_json::json!({ "role": "system", "content": sys }));
+        }
+        messages.extend(req.messages.iter().map(|m| {
+            serde_json::json!({
+                "role": match m.role {
+                    MessageRole::System    => "system",
+                    MessageRole::User      => "user",
+                    MessageRole::Assistant => "assistant",
+                },
+                "content": m.content,
             })
-            .collect();
+        }));
 
         let mut body = serde_json::json!({
             "model": self.config.model_id,
@@ -503,6 +509,35 @@ mod tests {
                 "total_tokens": 15
             }
         })
+    }
+
+    // ── req.system becomes the first system message ───────────────────────────
+
+    /// The middleware inject_context prefix travels in `req.system`; this
+    /// adapter (and the ollama adapter that wraps it) must place it as the
+    /// FIRST `system` message. The pre-fix builder never read `req.system`,
+    /// so the injected project context was silently discarded.
+    #[test]
+    fn build_chat_body_prepends_req_system_as_system_message() {
+        let config = GenericOpenAIConfig::new("http://localhost:1234", "local-model");
+        let adapter = GenericOpenAIAdapter::new(config).unwrap();
+
+        let mut req = crate::CompletionRequest::simple("local-model", "hello");
+        req.system = Some("# Project context".into());
+        let body = adapter.build_chat_body(&req, false);
+
+        let messages = body["messages"].as_array().expect("messages array");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(messages[0]["content"], "# Project context");
+        assert_eq!(messages[1]["role"], "user");
+
+        // Without req.system the shape is unchanged (no empty system turn).
+        let req = crate::CompletionRequest::simple("local-model", "hello");
+        let body = adapter.build_chat_body(&req, false);
+        let messages = body["messages"].as_array().expect("messages array");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], "user");
     }
 
     // ── T-P3-E04-13-01: happy-path completion ─────────────────────────────────

@@ -26,7 +26,7 @@ use cascade_daemon::{event_bus::EventBus, healthcheck::HealthState, ipc::IpcServ
 
 /// Write a 4-byte LE length-prefixed frame to a UnixStream.
 async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
-    let len = (body.len() as u32).to_le_bytes();
+    let len = (body.len() as u32).to_be_bytes();
     stream.write_all(&len).await.expect("write len");
     stream.write_all(body).await.expect("write body");
     stream.flush().await.expect("flush");
@@ -36,7 +36,7 @@ async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
 async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).await.expect("read len");
-    let len = u32::from_le_bytes(len_buf) as usize;
+    let len = u32::from_be_bytes(len_buf) as usize;
     let mut body = vec![0u8; len];
     stream.read_exact(&mut body).await.expect("read body");
     body
@@ -64,7 +64,12 @@ async fn start_test_server(
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
 
-    let ipc = IpcServer::new(config_dir.clone(), health, bus)
+    let ipc = IpcServer::new(
+        config_dir.clone(),
+        health,
+        bus,
+        std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
+    )
         .await
         .expect("IpcServer::new");
 
@@ -96,7 +101,7 @@ async fn start_test_server(
 /// IpcError (unknown field).
 ///
 /// Acceptance: response must contain `"code": -32600`.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_typed_unknown_field_returns_structured_error() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -119,7 +124,9 @@ async fn test_typed_unknown_field_returns_structured_error() {
     .await;
 
     assert_eq!(
-        resp.get("code").and_then(|v| v.as_i64()),
+        resp.get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(|v| v.as_i64()),
         Some(-32600),
         "expected -32600 for unknown field; got: {resp}"
     );
@@ -132,7 +139,7 @@ async fn test_typed_unknown_field_returns_structured_error() {
 /// methods returns METHOD_NOT_FOUND (-32601) from the typed scaffold.
 ///
 /// Acceptance: response must contain `"code": -32601`.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_typed_unknown_method_returns_method_not_found() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -155,7 +162,9 @@ async fn test_typed_unknown_method_returns_method_not_found() {
     .await;
 
     assert_eq!(
-        resp.get("code").and_then(|v| v.as_i64()),
+        resp.get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(|v| v.as_i64()),
         Some(-32601),
         "expected -32601 for unknown method; got: {resp}"
     );
@@ -169,7 +178,7 @@ async fn test_typed_unknown_method_returns_method_not_found() {
 ///
 /// Acceptance: confirms P2 backward-compatibility — all 8 legacy methods still
 /// reachable; typed scaffold is additive only.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_legacy_ping_still_works_through_typed_routing() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;

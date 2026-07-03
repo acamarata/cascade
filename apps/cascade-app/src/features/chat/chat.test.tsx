@@ -379,6 +379,111 @@ describe('useChatHistory personalChatSync gating', () => {
   })
 })
 
+// ── 3b. useChat GP fast-path privacy gate ────────────────────────────────────
+
+import { useChat, isProtectedNamespace } from './useChat'
+
+describe('isProtectedNamespace', () => {
+  it('mirrors the daemon classification exactly (chat_handlers.rs)', () => {
+    expect(isProtectedNamespace('personal')).toBe(true)
+    expect(isProtectedNamespace('personal:private')).toBe(true)
+    expect(isProtectedNamespace('private')).toBe(true)
+    expect(isProtectedNamespace('Personal:Private')).toBe(true) // case-insensitive
+    expect(isProtectedNamespace(' personal ')).toBe(true) // trimmed
+    expect(isProtectedNamespace('projects:cascade')).toBe(false)
+    expect(isProtectedNamespace('meta')).toBe(false)
+    expect(isProtectedNamespace('')).toBe(false)
+    expect(isProtectedNamespace(undefined)).toBe(false)
+  })
+})
+
+describe('useChat GP fast-path privacy gate', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  /** Minimal SSE response for the daemon /api/chat fallback path. */
+  function sseResponse(...frames: string[]) {
+    const encoder = new TextEncoder()
+    let i = 0
+    return {
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () =>
+            i < frames.length
+              ? { done: false, value: encoder.encode(frames[i++]) }
+              : { done: true, value: undefined },
+          cancel: () => Promise.resolve(),
+        }),
+      },
+    }
+  }
+
+  beforeEach(() => {
+    clearLocalStorage()
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  })
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+    vi.unstubAllGlobals()
+    clearLocalStorage()
+  })
+
+  it('protected namespace: never touches :3762, goes straight to the daemon', async () => {
+    fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        sseResponse(
+          'event: served_by\ndata: {"provider":"anthropic"}\n\n',
+          'data: {"type":"token","text":"ok"}\n\n',
+          'data: [DONE]\n\n',
+        ),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useChat('priv-chat', 'personal:private'))
+    await act(async () => {
+      await result.current.sendMessage('secret question')
+    })
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes(':3762'))).toBe(false)
+    const chatCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/chat'),
+    )
+    expect(chatCall).toBeTruthy()
+    const body = JSON.parse((chatCall![1] as RequestInit).body as string)
+    expect(body.namespace).toBe('personal:private')
+    expect(result.current.servedBy).toBe('anthropic')
+  })
+
+  it('unprotected namespace: GP fast-path is still used first', async () => {
+    fetchMock = vi.fn().mockImplementation((url: unknown) => {
+      if (String(url).includes(':3762')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            model: 'gemini-2.0-flash',
+            content: [{ type: 'text', text: 'hi there' }],
+          }),
+        })
+      }
+      // useChatHistory sync traffic (GET/POST /api/memory/chat)
+      return Promise.resolve({ ok: true, json: async () => ({ messages: [] }) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useChat('open-chat', 'meta'))
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    const gpCall = fetchMock.mock.calls.find((c) => String(c[0]).includes(':3762'))
+    expect(gpCall).toBeTruthy()
+    expect(result.current.servedBy).toBe('gp:gemini-2.0-flash')
+  })
+})
+
 // ── 4. ProviderBadge render ──────────────────────────────────────────────────
 
 import { ProviderBadge } from './ProviderBadge'

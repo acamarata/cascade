@@ -19,7 +19,7 @@
 //!     read by `cascade ram status` and other tooling.
 //!   - `~/.cascade/ram-guardian/reports/*.md` — one report per sweep that
 //!     killed at least one process.
-//! Constraints:
+//!     Constraints:
 //!   - Never panics: every sampling/kill failure is logged at WARN and the
 //!     loop continues.
 //!   - Reaping is conservative by design (see `should_reap`) — a false kill

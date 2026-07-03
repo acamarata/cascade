@@ -322,6 +322,7 @@ mod tests {
             token: std::sync::Arc::new("test-token".to_string()),
             provider_registry: None,
             routing_ring: None,
+            middleware: Default::default(),
         }
     }
 

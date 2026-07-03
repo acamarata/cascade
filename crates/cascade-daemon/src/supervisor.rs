@@ -427,6 +427,14 @@ pub async fn run(
                     // ── AutoRagWatcher + IndexingPipeline ─────────────────────
                     // Use config_dir as the project root for the watcher so the
                     // global .cascade/ memory/planning dirs are always watched.
+                    //
+                    // E2-S3: pre-create ~/.cascade/context-sync so the watcher
+                    // (which only registers dirs that exist at start) picks up
+                    // post-middleware digest appends — that FS event IS the
+                    // index-refresh nudge. Best-effort: an empty dir either way.
+                    if let Err(e) = crate::context_sync::ensure_context_sync_dir(&config_dir) {
+                        warn!(%e, "rag: could not pre-create context-sync dir (context-sync digests will not be watched)");
+                    }
                     let watcher_cfg = WatcherConfig::new(config_dir.clone());
                     let rag_shutdown = shutdown.clone();
                     match AutoRagWatcher::start(watcher_cfg, rag_shutdown.clone()) {

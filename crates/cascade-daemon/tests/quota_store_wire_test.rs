@@ -65,14 +65,14 @@ fn wait_for_file(path: &Path, timeout: Duration) -> bool {
 /// length-prefixed JSON response.
 fn ipc_round_trip(stream: &mut UnixStream, request: &serde_json::Value) -> serde_json::Value {
     let body = serde_json::to_vec(request).expect("serialise request");
-    let len = (body.len() as u32).to_le_bytes();
+    let len = (body.len() as u32).to_be_bytes();
     stream.write_all(&len).expect("write len");
     stream.write_all(&body).expect("write body");
     stream.flush().expect("flush");
 
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).expect("read len");
-    let resp_len = u32::from_le_bytes(len_buf) as usize;
+    let resp_len = u32::from_be_bytes(len_buf) as usize;
 
     let mut resp_body = vec![0u8; resp_len];
     stream.read_exact(&mut resp_body).expect("read body");
@@ -153,18 +153,26 @@ fn quota_store_wire() {
     let _ = child.kill();
     let _ = child.wait();
 
+    // Successful responses are wrapped in the JSON-RPC 2.0 envelope under
+    // "result" (errors under "error") per write_response() in ipc.rs.
+    assert!(
+        response.get("error").is_none(),
+        "read_quota_store returned an error: {response}"
+    );
+    let result = response
+        .get("result")
+        .expect("response must contain a result field");
+
     // Assert the response contains the expected QuotaStore fields.
     assert!(
-        response.get("schema_version").is_some(),
+        result.get("schema_version").is_some(),
         "response must contain schema_version; got: {response}"
     );
     assert!(
-        response.get("accounts").is_some(),
+        result.get("accounts").is_some(),
         "response must contain accounts; got: {response}"
     );
-    let accounts = response["accounts"]
-        .as_array()
-        .expect("accounts is an array");
+    let accounts = result["accounts"].as_array().expect("accounts is an array");
     assert_eq!(accounts.len(), 1, "expected exactly one account");
     assert_eq!(
         accounts[0]["account_id"], "test-acct-1",

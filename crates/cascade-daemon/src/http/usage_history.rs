@@ -362,6 +362,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_no_file_returns_200_empty() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -388,6 +389,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_empty_store_returns_200_empty() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -420,6 +422,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_days_91_returns_400() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -452,6 +455,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_days_0_returns_400() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -471,6 +475,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_days_90_returns_200() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -497,6 +502,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn usage_history_with_data_returns_ordered_dates() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         use cascade_types::{AccountEntry, HistoryEntry};

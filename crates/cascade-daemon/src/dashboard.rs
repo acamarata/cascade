@@ -85,6 +85,13 @@ pub struct DashboardState {
     /// `None` in minimal test setups that do not call `Router::select()`.
     /// The Fleet UI polls `GET /api/fleet/routing` to read from this ring.
     pub routing_ring: Option<crate::http::fleet_routing::RoutingRing>,
+
+    /// `[middleware]` flags from config.toml (E2-S2 pre-processing).
+    ///
+    /// All flags default to `false`; the chat handler consults them per
+    /// request. When every flag is off the chat path performs no middleware
+    /// work at all (no GP probes, zero added latency).
+    pub middleware: crate::config::MiddlewareConfig,
 }
 
 // ── Token generation + persistence ───────────────────────────────────────────
@@ -321,10 +328,18 @@ impl Dashboard {
 
         let token = generate_dashboard_token(config_dir).map_err(DashboardError::Listener)?;
         let routing_ring = Some(crate::http::fleet_routing::new_routing_ring());
+        // E2-S2: middleware flags come from config.toml's [middleware] section.
+        // Config::load returns defaults (all flags off) when the file is
+        // absent; a malformed file also falls back to defaults here — the
+        // dashboard must never fail to start over an optional feature flag.
+        let middleware = crate::config::Config::load(config_dir)
+            .map(|c| c.middleware)
+            .unwrap_or_default();
         let state = DashboardState {
             token: Arc::new(token),
             provider_registry: None,
             routing_ring,
+            middleware,
         };
 
         Ok(Self {
@@ -388,6 +403,7 @@ mod tests {
             token: Arc::new(token.to_string()),
             provider_registry: None,
             routing_ring: None,
+            middleware: Default::default(),
         }
     }
 

@@ -334,8 +334,10 @@ fn eval_regression_detection() {
         k: 10,
         mrr_at_k: 0.7,
         ndcg_at_k: 0.65,
+        map_at_k: 0.6,
         recall_at_k: 0.8,
         precision_at_k: 0.5,
+        latency_ms: None,
     };
     let degraded = EvalMetrics {
         mrr_at_k: 0.5, // 28% drop

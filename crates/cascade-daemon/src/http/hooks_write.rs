@@ -417,6 +417,7 @@ mod tests {
             token: Arc::new("test-token".to_string()),
             provider_registry: None,
             routing_ring: None,
+            middleware: Default::default(),
         };
         router().with_state(state)
     }
@@ -532,6 +533,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_post_hook_adds_to_empty_settings() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -558,6 +560,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_post_hook_invalid_event_returns_400() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -585,6 +588,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_post_hook_empty_command_returns_400() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -610,6 +614,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_delete_hook_removes_entry() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
@@ -639,6 +644,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_delete_hook_not_found_returns_404() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();

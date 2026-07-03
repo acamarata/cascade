@@ -529,6 +529,15 @@ impl ProviderIpcHandler {
     /// Issues a `GET /health` request with a 200 ms timeout.
     /// Returns `true` iff the response status is HTTP 200.
     pub async fn check_gfp_proxy(&self) -> bool {
+        self.check_gfp_proxy_at(3761).await
+    }
+
+    /// Port-injectable body of [`Self::check_gfp_proxy`].
+    ///
+    /// WHY separate: lets tests probe an ephemeral unused port so the result
+    /// is deterministic regardless of whether a real GFP daemon is running
+    /// on the host's :3761.
+    async fn check_gfp_proxy_at(&self, port: u16) -> bool {
         // WHY reqwest::Client::builder: we need a short timeout (200 ms) to
         // avoid blocking the IPC handler thread.  A 200 ms deadline is generous
         // for a loopback request.
@@ -543,7 +552,11 @@ impl ProviderIpcHandler {
             }
         };
 
-        match client.get("http://localhost:3761/health").send().await {
+        match client
+            .get(format!("http://localhost:{port}/health"))
+            .send()
+            .await
+        {
             Ok(resp) => resp.status() == reqwest::StatusCode::OK,
             Err(_) => false,
         }
@@ -644,11 +657,17 @@ mod tests {
     async fn check_gfp_proxy_returns_false_when_not_running() {
         let tmp = TempDir::new().unwrap();
         let handler = make_handler(&tmp);
-        // Nothing is listening on 3761 in test environment.
-        let result = handler.check_gfp_proxy().await;
+        // Bind an ephemeral port to discover one that is free, then release
+        // it before probing.  This keeps the test deterministic even on dev
+        // machines where a real GFP daemon is listening on :3761.
+        let free_port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let result = handler.check_gfp_proxy_at(free_port).await;
         assert!(
             !result,
-            "check_gfp_proxy must return false when nothing is on :3761"
+            "check_gfp_proxy must return false when nothing is on the probed port"
         );
     }
 

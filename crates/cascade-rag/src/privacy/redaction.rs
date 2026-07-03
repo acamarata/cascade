@@ -230,7 +230,7 @@ impl RedactionPipeline {
             if chars[i].is_whitespace() {
                 // Flush accumulated non-whitespace token.
                 if !token_buf.is_empty() {
-                    let token = token_buf.drain(..).collect::<String>();
+                    let token = std::mem::take(&mut token_buf);
                     if self.should_redact_by_entropy(&token) {
                         result.push_str(ph);
                     } else {

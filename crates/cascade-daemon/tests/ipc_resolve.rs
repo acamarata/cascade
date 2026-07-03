@@ -22,7 +22,7 @@ use cascade_daemon::{event_bus::EventBus, healthcheck::HealthState, ipc::IpcServ
 // ── Frame helpers ─────────────────────────────────────────────────────────
 
 async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
-    let len = (body.len() as u32).to_le_bytes();
+    let len = (body.len() as u32).to_be_bytes();
     stream.write_all(&len).await.expect("write len");
     stream.write_all(body).await.expect("write body");
     stream.flush().await.expect("flush");
@@ -31,7 +31,7 @@ async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
 async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).await.expect("read len");
-    let len = u32::from_le_bytes(len_buf) as usize;
+    let len = u32::from_be_bytes(len_buf) as usize;
     let mut body = vec![0u8; len];
     stream.read_exact(&mut body).await.expect("read body");
     body
@@ -55,7 +55,12 @@ async fn start_test_server(
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
 
-    let ipc = IpcServer::new(config_dir.clone(), health, bus)
+    let ipc = IpcServer::new(
+        config_dir.clone(),
+        health,
+        bus,
+        std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
+    )
         .await
         .expect("IpcServer::new");
 
@@ -86,7 +91,7 @@ async fn start_test_server(
 /// This test would FAIL against the old placeholder code path (which fell
 /// through to METHOD_NOT_FOUND) because no content was returned at all. With
 /// the real handler the project marker must appear in the merged output.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_project_tier_reachable_via_cwd() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -120,14 +125,17 @@ async fn test_resolve_project_tier_reachable_via_cwd() {
     )
     .await;
 
-    // Must NOT be an error.
+    // Must NOT be an error. Success responses nest under "result" (errors
+    // under "error") per the JSON-RPC 2.0 envelope written by write_response()
+    // in ipc.rs.
     assert!(
-        resp.get("code").is_none(),
+        resp.get("error").is_none(),
         "cascade_resolve returned an error: {resp}"
     );
 
     let content = resp
-        .get("content")
+        .get("result")
+        .and_then(|r| r.get("content"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
@@ -148,7 +156,7 @@ async fn test_resolve_project_tier_reachable_via_cwd() {
 ///
 /// Creates two nested dirs each with their own `.cascade/CASCADE.md` and
 /// verifies BOTH markers appear in the merged output.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_full_merge_both_tiers_present() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -192,12 +200,13 @@ async fn test_resolve_full_merge_both_tiers_present() {
     .await;
 
     assert!(
-        resp.get("code").is_none(),
+        resp.get("error").is_none(),
         "cascade_resolve returned an error: {resp}"
     );
 
     let content = resp
-        .get("content")
+        .get("result")
+        .and_then(|r| r.get("content"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
@@ -216,7 +225,7 @@ async fn test_resolve_full_merge_both_tiers_present() {
 
 /// Proves `format="json"` returns parseable JSON (serde_json::from_str succeeds)
 /// and the outer `format` field equals `"json"`.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_format_json_returns_parseable_json() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -247,12 +256,16 @@ async fn test_resolve_format_json_returns_parseable_json() {
     .await;
 
     assert!(
-        resp.get("code").is_none(),
+        resp.get("error").is_none(),
         "cascade_resolve format=json returned an error: {resp}"
     );
 
+    let result = resp
+        .get("result")
+        .expect("cascade_resolve response missing result field");
+
     // The `content` field must be a JSON string that itself parses as JSON.
-    let content_str = resp
+    let content_str = result
         .get("content")
         .and_then(|v| v.as_str())
         .expect("content field missing");
@@ -268,7 +281,7 @@ async fn test_resolve_format_json_returns_parseable_json() {
 
     // The outer format field must be "json".
     assert_eq!(
-        resp.get("format").and_then(|v| v.as_str()),
+        result.get("format").and_then(|v| v.as_str()),
         Some("json"),
         "format field must be 'json'"
     );
@@ -278,7 +291,7 @@ async fn test_resolve_format_json_returns_parseable_json() {
 }
 
 /// Proves `format="xml"` (unsupported) returns -32602 INVALID_PARAMS.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_invalid_format_returns_32602() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -300,7 +313,9 @@ async fn test_resolve_invalid_format_returns_32602() {
     .await;
 
     assert_eq!(
-        resp.get("code").and_then(|v| v.as_i64()),
+        resp.get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(|v| v.as_i64()),
         Some(-32602),
         "expected -32602 for invalid format; got: {resp}"
     );
@@ -311,7 +326,7 @@ async fn test_resolve_invalid_format_returns_32602() {
 
 /// Proves `deny_unknown_fields` on `ResolveParams`: an unknown param field
 /// must return -32602 (serde rejects the unknown key).
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_deny_unknown_fields() {
     let tmp = TempDir::new().unwrap();
     let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
@@ -336,7 +351,10 @@ async fn test_resolve_deny_unknown_fields() {
 
     // Either -32602 (invalid params — serde deny_unknown_fields on ResolveParams)
     // or -32600 (envelope unknown field) is acceptable.
-    let code = resp.get("code").and_then(|v| v.as_i64());
+    let code = resp
+        .get("error")
+        .and_then(|e| e.get("code"))
+        .and_then(|v| v.as_i64());
     assert!(
         code == Some(-32602) || code == Some(-32600),
         "expected -32602 or -32600 for unknown param field; got: {resp}"

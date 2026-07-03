@@ -398,6 +398,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_writes_mcp_entry() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -416,6 +417,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_idempotent() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -434,6 +436,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_non_clobbering() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -465,6 +468,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_cc_stop_hook_idempotent() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -488,6 +492,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_writes_post_tool_use_entry() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -519,6 +524,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_idempotent() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
@@ -543,6 +549,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_preserves_other_keys() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();

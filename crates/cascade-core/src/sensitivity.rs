@@ -149,6 +149,55 @@ pub fn provider_is_trusted_for_sensitive(provider_id: &str) -> bool {
         || lower.starts_with("local-llm-")
 }
 
+/// Returns `true` when a daemon PROVIDER-REGISTRY adapter id is trusted for
+/// sensitive / protected-namespace content.
+///
+/// [`provider_is_trusted_for_sensitive`] speaks fleet ACCOUNT ids
+/// (`claude-acc1`, `acc2`, …); the daemon's provider registry uses ADAPTER
+/// ids (`anthropic`, `gemini`, `gp-pool`, `local:ollama`, …). This variant
+/// covers both vocabularies. Trusted: the Anthropic API, any Claude account
+/// variant, and anything local (registry semantics: every local adapter id
+/// starts with `local`). Everything else — gemini, gp-pool, openai, generic
+/// OpenAI-compat endpoints — is untrusted. Deny-by-default: an unknown id is
+/// NOT trusted.
+pub fn registry_provider_is_trusted_for_sensitive(provider_id: &str) -> bool {
+    let lower = provider_id.to_lowercase();
+    lower == "anthropic"
+        || lower.starts_with("anthropic-")
+        || lower.starts_with("local")
+        // The auto-detected Ollama adapter registers under the bare id
+        // "ollama" (not "local:…") but serves from localhost — local in
+        // fact, so private chat may use it.
+        || lower == "ollama"
+        || lower.starts_with("ollama-")
+        || provider_is_trusted_for_sensitive(&lower)
+}
+
+/// `true` when a chat-request namespace marks personal or private content.
+///
+/// The app sends `"personal"` (consent-gated persistence) or
+/// `"personal:private"` (private mode — "not saved to chat history or
+/// Cascade memory"); both must be shielded from content-capturing
+/// middleware AND from untrusted providers. `projects:*` / `meta` / absent
+/// namespaces are not protected.
+///
+/// SINGLE SOURCE OF TRUTH for this classification: the daemon chat handler
+/// and the :3762 anthropic-compat proxy both call this, and
+/// `isProtectedNamespace` in the app's `useChat.ts` mirrors it — keep all
+/// three in lock-step.
+pub fn is_protected_namespace(namespace: Option<&str>) -> bool {
+    match namespace {
+        Some(ns) => {
+            let ns = ns.trim().to_ascii_lowercase();
+            ns == "private"
+                || ns.ends_with(":private")
+                || ns == "personal"
+                || ns.starts_with("personal:")
+        }
+        None => false,
+    }
+}
+
 // ── classify_sensitivity ──────────────────────────────────────────────────────
 
 /// Classify the sensitivity of `text`.
@@ -214,6 +263,7 @@ fn matches_any_sensitive_pattern(lower: &str) -> bool {
         || matches_custody_family(lower)
         || matches_health_medical(lower)
         || matches_financial_account(lower)
+        || matches_credential_secret(lower)
 }
 
 /// SSN patterns: `123-45-6789`, `ssn:`, `social security number`.
@@ -362,6 +412,49 @@ fn matches_financial_account(lower: &str) -> bool {
         || lower.contains("taxpayer id")
         || lower.contains("w-2")
         || lower.contains("1099")
+}
+
+/// Credential / secret / key-material patterns.
+///
+/// Echoed secrets (API keys, tokens, passwords, PEM blocks) must be treated
+/// as Sensitive so the firewall blocks them from external providers and from
+/// sync/digest surfaces. Covers both the *vocabulary* ("api key", "password")
+/// and the well-known *token prefixes* (`sk-ant-`, `ghp_`, `AKIA…`, `AIza…`,
+/// `xoxb-`). Conservative by design: a benign "how do I set an api key"
+/// question classifying Sensitive merely degrades to a local/rule-based path.
+fn matches_credential_secret(lower: &str) -> bool {
+    // Vocabulary: named credential material.
+    lower.contains("api key")
+        || lower.contains("api_key")
+        || lower.contains("api-key")
+        || lower.contains("apikey")
+        || lower.contains("access token")
+        || lower.contains("access_token")
+        || lower.contains("refresh token")
+        || lower.contains("refresh_token")
+        || lower.contains("auth token")
+        || lower.contains("auth_token")
+        || lower.contains("session token")
+        || lower.contains("bearer ")
+        || lower.contains("password")
+        || lower.contains("passphrase")
+        || lower.contains("client secret")
+        || lower.contains("client_secret")
+        || lower.contains("secret key")
+        || lower.contains("secret_key")
+        || lower.contains("signing key")
+        || lower.contains("private key")
+        || lower.contains("-----begin")      // PEM key/cert blocks
+        // Well-known secret token prefixes (input is lowercased upstream).
+        || lower.contains("sk-ant-")          // Anthropic API keys
+        || lower.contains("sk-proj-")         // OpenAI project keys
+        || lower.contains("ghp_")             // GitHub PAT (classic)
+        || lower.contains("github_pat_")      // GitHub PAT (fine-grained)
+        || lower.contains("xoxb-")            // Slack bot token
+        || lower.contains("xoxp-")            // Slack user token
+        || lower.contains("akia")             // AWS access key id (AKIA…)
+        || lower.contains("aiza")             // Google API key (AIza…)
+        || lower.contains("aws_secret")
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -530,6 +623,29 @@ mod tests {
         assert!(sensitive("credit card ending in 4242"));
     }
 
+    // ── Credentials / secrets ─────────────────────────────────────────────────
+
+    #[test]
+    fn api_key_vocabulary_triggers_sensitive() {
+        assert!(sensitive("here is the api key for staging"));
+        assert!(sensitive("export ANTHROPIC_API_KEY=abc"));
+        assert!(sensitive("rotate the password on the admin account"));
+        assert!(sensitive("the client secret expired"));
+    }
+
+    #[test]
+    fn secret_token_prefixes_trigger_sensitive() {
+        assert!(sensitive("key is sk-ant-api03-abc123"));
+        assert!(sensitive("token ghp_abcdefghijklmnop"));
+        assert!(sensitive("creds: AKIAIOSFODNN7EXAMPLE"));
+        assert!(sensitive("slack bot xoxb-1234-5678"));
+    }
+
+    #[test]
+    fn pem_block_triggers_sensitive() {
+        assert!(sensitive("-----BEGIN RSA PRIVATE KEY-----"));
+    }
+
     // ── Personal-scope path ───────────────────────────────────────────────────
 
     #[test]
@@ -657,5 +773,53 @@ mod tests {
         assert!(!provider_is_trusted_for_sensitive("oc-go"));
         assert!(!provider_is_trusted_for_sensitive("codex"));
         assert!(!provider_is_trusted_for_sensitive("opencode"));
+    }
+
+    /// Registry ADAPTER ids (daemon vocabulary) classify correctly: the
+    /// Anthropic API, Claude account variants, and anything local are
+    /// trusted; the Gemini family, GP pool, and OpenAI-compat ids are not.
+    /// Deny-by-default: unknown / empty ids are untrusted.
+    #[test]
+    fn registry_trust_classification() {
+        for id in [
+            "anthropic",
+            "Anthropic",
+            "anthropic-a2",
+            "local",
+            "local:ollama",
+            "local-llm",
+            "ollama",
+            "claude",
+            "claude-acc1",
+            "acc2",
+        ] {
+            assert!(registry_provider_is_trusted_for_sensitive(id), "{id}");
+        }
+        for id in [
+            "gemini", "gp-pool", "openai", "codex", "oc-go", "gfp", "generic-openai",
+            "noop-x", "",
+        ] {
+            assert!(!registry_provider_is_trusted_for_sensitive(id), "{id}");
+        }
+    }
+
+    /// Canonical protected-namespace classification (mirrored by the daemon
+    /// chat handler, the :3762 proxy gate, and useChat.ts in the app).
+    #[test]
+    fn protected_namespace_classification_canonical() {
+        for ns in [
+            "personal",
+            "personal:private",
+            "personal:work",
+            "private",
+            "x:private",
+            "Personal:Private",
+            " personal ",
+        ] {
+            assert!(is_protected_namespace(Some(ns)), "{ns}");
+        }
+        for ns in [Some("projects:cascade"), Some("meta"), Some(""), None] {
+            assert!(!is_protected_namespace(ns), "{ns:?}");
+        }
     }
 }

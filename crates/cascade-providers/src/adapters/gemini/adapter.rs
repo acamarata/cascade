@@ -174,14 +174,33 @@ impl GeminiAdapter {
 
     /// Map a `CompletionRequest` to a `GeminiRequest` wire body.
     pub(super) fn map_request(&self, req: &CompletionRequest) -> GeminiRequest {
-        // Separate system prompt from user/assistant messages.
-        let system_instruction = req.system.as_deref().map(|text| GeminiSystemInstruction {
-            parts: vec![GeminiPart {
-                text: text.to_string(),
-            }],
-        });
+        // Separate system prompt from user/assistant messages. Gemini has no
+        // system role in `contents`, so BOTH sources of system text must be
+        // hoisted into `systemInstruction`: the explicit `req.system` field
+        // AND any system-role turns in the messages array (e.g. the
+        // middleware compression summary). Filtering the latter without
+        // hoisting silently deleted that context from the wire request.
+        let mut system_texts: Vec<&str> = Vec::new();
+        if let Some(s) = req.system.as_deref() {
+            system_texts.push(s);
+        }
+        system_texts.extend(
+            req.messages
+                .iter()
+                .filter(|m| m.role == MessageRole::System)
+                .map(|m| m.content.as_str()),
+        );
+        let system_instruction = if system_texts.is_empty() {
+            None
+        } else {
+            Some(GeminiSystemInstruction {
+                parts: vec![GeminiPart {
+                    text: system_texts.join("\n"),
+                }],
+            })
+        };
 
-        // Filter out system-role messages (handled via systemInstruction).
+        // System-role messages were hoisted into systemInstruction above.
         let contents: Vec<GeminiContent> = req
             .messages
             .iter()

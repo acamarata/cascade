@@ -391,25 +391,6 @@ pub fn handle_usage_ledger(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    /// Build a mock daily usage directory with N files and return the TempDir
-    /// (keep it alive for the test's lifetime).
-    fn make_usage_dir(entries_per_day: &[(&str, Vec<DailyEntry>)]) -> TempDir {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        for (date_str, entries) in entries_per_day {
-            let file = DailyUsageFile {
-                date: date_str.to_string(),
-                entries: entries.clone(),
-            };
-            let path = tmp.path().join(format!("{}.json", date_str));
-            let mut f = std::fs::File::create(&path).unwrap();
-            f.write_all(serde_json::to_vec(&file).unwrap().as_slice())
-                .unwrap();
-        }
-        tmp
-    }
 
     fn make_entry(
         account: &str,

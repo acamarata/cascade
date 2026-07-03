@@ -371,23 +371,27 @@ impl AnthropicAdapter {
         stream: bool,
         options: AnthropicRequestOptions,
     ) -> AnthropicRequest {
-        // Extract system prompt: prefer explicit `req.system`, else pull system
-        // messages out of the messages array.
-        let system_text = if let Some(s) = &req.system {
-            Some(s.clone())
-        } else {
-            let sys: String = req
-                .messages
+        // Extract system prompt: MERGE explicit `req.system` with any
+        // system-role turns in the messages array (explicit field first).
+        // The messages below unconditionally drop system-role turns, so a
+        // "prefer req.system" choice here would silently delete them from
+        // the wire request whenever both sources are present (e.g. the
+        // middleware inject_context prefix in `req.system` plus a
+        // compression-summary system turn in `messages`).
+        let mut system_parts: Vec<&str> = Vec::new();
+        if let Some(s) = req.system.as_deref() {
+            system_parts.push(s);
+        }
+        system_parts.extend(
+            req.messages
                 .iter()
                 .filter(|m| m.role == MessageRole::System)
-                .map(|m| m.content.as_str())
-                .collect::<Vec<_>>()
-                .join("\n");
-            if sys.is_empty() {
-                None
-            } else {
-                Some(sys)
-            }
+                .map(|m| m.content.as_str()),
+        );
+        let system_text = if system_parts.is_empty() {
+            None
+        } else {
+            Some(system_parts.join("\n"))
         };
 
         // Only user/assistant messages go into the Anthropic messages array.
@@ -954,6 +958,35 @@ mod tests {
             !s.contains("sk-secret"),
             "API key must not appear in provider_info debug output"
         );
+    }
+
+    // ── system merge: req.system + system-role messages ───────────────────────
+
+    /// With BOTH an explicit `req.system` (e.g. the middleware inject_context
+    /// prefix) and a system-role turn in `messages` (e.g. the compression
+    /// summary), the two must be MERGED into the top-level system field.
+    /// The pre-fix "prefer req.system" logic silently deleted the summary
+    /// turn from the wire request whenever both were present.
+    #[test]
+    fn build_request_merges_req_system_and_system_messages() {
+        let adapter = AnthropicAdapter::new("test-key");
+        let mut req = CompletionRequest::simple("claude-3-5-haiku-20241022", "continue");
+        req.system = Some("# Project context".into());
+        req.messages.insert(
+            0,
+            crate::types::Message::system("Summary of the earlier conversation: chose sqlite."),
+        );
+
+        let body = adapter.build_request(&req, false, AnthropicRequestOptions::default());
+
+        let system = body.system.expect("system block present");
+        let text = &system[0].text;
+        let prefix_pos = text.find("# Project context").expect("req.system kept");
+        let summary_pos = text.find("chose sqlite").expect("system turn merged");
+        assert!(prefix_pos < summary_pos, "req.system must come first: {text}");
+        // The system turn is hoisted, never left in (or dropped from) messages.
+        assert_eq!(body.messages.len(), 1);
+        assert!(body.messages.iter().all(|m| m.role != "system"));
     }
 
     // ── prompt caching: CacheStrategy gating ──────────────────────────────────

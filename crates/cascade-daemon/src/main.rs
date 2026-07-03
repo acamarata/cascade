@@ -68,6 +68,11 @@ mod indexer;
 mod discovery;
 // rag-11: MCP self-registration trigger point (frame-01 stub)
 mod mcp_registration;
+// Shared test-only helpers (ENV_TEST_LOCK) — mirrors the lib.rs declaration
+// so modules compiled into BOTH targets resolve crate::test_support in the
+// bin's test target too.
+#[cfg(test)]
+pub(crate) mod test_support;
 // auto-01: background automation scheduler
 mod scheduler;
 // auto-02: real ProviderRouter + SafeToolInvoker for AutomationRunner
@@ -77,6 +82,9 @@ mod nsentry_sync;
 // continuity: reset-time triggers to auto-resume Claude Code sessions once a
 // usage-cap window clears (E2-S1)
 mod continuity;
+// E2-S3: POST-processing middleware — background response digest →
+// ~/.cascade/context-sync JSONL (the rag_watcher index-refresh nudge)
+mod context_sync;
 // T-P4-E04-12/13/14/16: delta bundle format, snapshot layout, Ed25519
 // verification, full-bundle fallback install, and the update_check/apply/auto
 // IPC handlers (wired in ipc.rs try_typed_dispatch).

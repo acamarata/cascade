@@ -12,6 +12,9 @@
  *   Health-gated: any non-2xx response (network error, "all Gemini providers
  *   exhausted", or any other upstream failure) is treated as unhealthy and
  *   triggers the fallback path below — chat never silently fails.
+ *   Privacy-gated: protected namespaces (personal / personal:private) skip
+ *   this path entirely (see isProtectedNamespace) — private chat never
+ *   leaves via the GP pool.
  *
  * Fallback path (port 9761):
  *   POST http://127.0.0.1:9761/api/chat — daemon SSE endpoint. This is the same
@@ -35,6 +38,29 @@ const DAEMON_BASE_URL =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
     ? 'http://127.0.0.1:9761'
     : ''
+
+// ── Privacy: protected namespaces ─────────────────────────────────────────────
+
+/**
+ * Mirror of the daemon's `is_protected_namespace` (chat_handlers.rs).
+ *
+ * `personal` (consent-gated persistence) and `personal:private` (private
+ * mode — "not saved to chat history or Cascade memory") chats must never
+ * leave the machine via the GP pool (:3762 → Google). For these namespaces
+ * the GP fast-path is skipped entirely; the request goes to the daemon,
+ * which applies the same guard to its own GP-first preference and routes
+ * through its normal chain (routing default → healthy cloud → local).
+ */
+export function isProtectedNamespace(namespace?: string): boolean {
+  if (!namespace) return false
+  const ns = namespace.trim().toLowerCase()
+  return (
+    ns === 'private' ||
+    ns.endsWith(':private') ||
+    ns === 'personal' ||
+    ns.startsWith('personal:')
+  )
+}
 
 // ── SSE event types (daemon fallback) ─────────────────────────────────────────
 
@@ -142,11 +168,16 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
       // always wins — skip the GP fast-path entirely so the request goes
       // straight to the daemon's routing chain with `provider` pinned.
       const userForcedProvider = Boolean(provider)
+      // Protected namespaces (personal / personal:private) never take the GP
+      // fast-path: private chat must not leave via the Google-backed pool.
+      // The daemon applies the same guard server-side, so falling through to
+      // it cannot re-introduce the leak one hop later.
+      const protectedNs = isProtectedNamespace(namespace)
 
       try {
         // ── Primary: GP proxy (Anthropic-compat, near-free Gemini pool) ──────
         let gpSuccess = false
-        if (!userForcedProvider) {
+        if (!userForcedProvider && !protectedNs) {
           try {
             const gpRes = await fetch(`${GP_PROXY_URL}/v1/messages`, {
               method: 'POST',

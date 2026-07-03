@@ -29,6 +29,12 @@
 //! - Fixture JSON files live at `tests/fixtures/*.json`.
 //! - `MockProviderServer` is thread-safe; spawn one per test function.
 
+/// Serializes tests that mutate process-global env vars. Acquire at the start
+/// of every test that calls `std::env::set_var` or `std::env::remove_var`.
+/// (Declared before the test module — clippy::items_after_test_module.)
+#[cfg(test)]
+pub static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 pub mod test_support {
     use std::path::PathBuf;
@@ -348,7 +354,3 @@ pub mod test_support {
     }
 }
 
-/// Serializes tests that mutate process-global env vars. Acquire at the start
-/// of every test that calls `std::env::set_var` or `std::env::remove_var`.
-#[cfg(test)]
-pub static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

@@ -65,7 +65,10 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tracing::{info, instrument, warn};
+use tracing::{info, instrument};
+// `warn!` fires only in the no-fastembed stub branch.
+#[cfg(not(feature = "fastembed"))]
+use tracing::warn;
 
 use cascade_types::{
     error::{CascadeError, Result},
@@ -398,7 +401,7 @@ impl EmbedModel for BgeM3Embedder {
 
             // Re-sort to original order.
             results.sort_by_key(|(i, _)| *i);
-            return Ok(results.into_iter().map(|(_, v)| v).collect());
+            Ok(results.into_iter().map(|(_, v)| v).collect())
         }
 
         #[cfg(not(feature = "fastembed"))]

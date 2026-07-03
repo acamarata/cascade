@@ -181,7 +181,6 @@ impl MarkdownChunker {
                 let parent_idx = chunks.len() as i64;
                 let sem = SemanticChunker {
                     config: config.clone(),
-                    ..SemanticChunker::default()
                 };
                 let sub = Chunker::chunk(&sem, source_path, section_text)?;
                 for mut sc in sub {

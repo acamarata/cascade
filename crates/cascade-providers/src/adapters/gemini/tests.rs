@@ -1,5 +1,8 @@
 //! Tests for the Gemini adapter.
 
+// tests.rs is itself declared `mod tests;` by the parent module; the inner
+// wrapper keeps the cfg(test) scoping self-contained in this file.
+#[allow(clippy::module_inception)]
 #[cfg(test)]
 mod tests {
     use crate::adapters::gemini::{
@@ -393,5 +396,62 @@ mod tests {
             matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "gemini"),
             "expected OAuthExpired(gemini), got: {err:?}"
         );
+    }
+
+    // ── system-role hoisting into systemInstruction ────────────────────────────
+
+    /// Gemini has no system role in `contents`, so system-role turns (e.g.
+    /// the middleware compression summary) must be HOISTED into
+    /// `systemInstruction`, merged after `req.system`. The pre-fix mapper
+    /// filtered them out of `contents` without hoisting — the summary was
+    /// deleted from the wire request entirely on the default gp-pool path.
+    #[test]
+    fn map_request_hoists_system_turns_into_system_instruction() {
+        use crate::types::Message;
+
+        let adapter = GeminiAdapter::new(GeminiConfig::proxy());
+        let req = CompletionRequest {
+            model: "gemini-2.0-flash".into(),
+            messages: vec![
+                Message::system("Summary of the earlier conversation: chose sqlite."),
+                Message::user("continue"),
+            ],
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            system: Some("# Project context".into()),
+        };
+
+        let wire = adapter.map_request(&req);
+
+        let si = wire.system_instruction.expect("systemInstruction present");
+        let text = &si.parts[0].text;
+        let prefix_pos = text.find("# Project context").expect("req.system kept");
+        let summary_pos = text.find("chose sqlite").expect("system turn hoisted");
+        assert!(prefix_pos < summary_pos, "req.system must come first: {text}");
+        // contents holds only the non-system turns.
+        assert_eq!(wire.contents.len(), 1);
+        assert_eq!(wire.contents[0].role, "user");
+    }
+
+    /// A system turn with NO explicit `req.system` still reaches the wire.
+    #[test]
+    fn map_request_system_turn_alone_becomes_system_instruction() {
+        use crate::types::Message;
+
+        let adapter = GeminiAdapter::new(GeminiConfig::proxy());
+        let req = CompletionRequest {
+            model: "gemini-2.0-flash".into(),
+            messages: vec![Message::system("only summary"), Message::user("q")],
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            system: None,
+        };
+
+        let wire = adapter.map_request(&req);
+        let si = wire.system_instruction.expect("systemInstruction present");
+        assert_eq!(si.parts[0].text, "only summary");
+        assert_eq!(wire.contents.len(), 1);
     }
 }

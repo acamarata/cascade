@@ -8,7 +8,7 @@ use cascade_types::{
     error::Result as TypesResult,
 };
 
-use super::super::{Chunk, Chunker, ChunkerConfig};
+use super::super::{Chunker, ChunkerConfig};
 use super::chunker::CodeChunker;
 use super::language::detect_language_for;
 

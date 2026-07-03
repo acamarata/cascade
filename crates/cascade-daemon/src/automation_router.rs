@@ -208,7 +208,7 @@ mod tests {
     use cascade_agents::tool_registry::ToolRegistry;
     use cascade_providers::{
         CompletionResponse, ModelInfo, ProviderAdapter, ProviderCapabilities, ProviderError,
-        ProviderInfo, StreamChunk, TaskType, TokenUsage as PTokenUsage,
+        ProviderInfo, StreamChunk, TokenUsage as PTokenUsage,
     };
     use cascade_types::agent::Tier;
 

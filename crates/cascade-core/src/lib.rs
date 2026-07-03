@@ -84,6 +84,7 @@ pub mod library;
 pub mod loader;
 pub mod maps;
 pub mod memory;
+pub mod middleware;
 pub mod nsentry;
 pub mod nsentry_config;
 pub mod build;

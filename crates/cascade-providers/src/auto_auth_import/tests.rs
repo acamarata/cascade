@@ -1,3 +1,6 @@
+// tests.rs is itself declared `mod tests;` by the parent module; the inner
+// wrapper keeps the cfg(test) scoping self-contained in this file.
+#[allow(clippy::module_inception)]
 #[cfg(test)]
 mod tests {
     use super::super::{

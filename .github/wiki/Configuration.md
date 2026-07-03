@@ -166,6 +166,29 @@ poll_interval_secs = 30
 
 ---
 
+## Middleware settings (pre- and post-processing)
+
+```toml
+[middleware]
+compress_context  = false
+inject_context    = false
+classify_requests = false
+context_sync      = false
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `middleware.compress_context` | boolean | `false` | When a chat exceeds the token threshold (~8k estimated), summarize older turns with one bounded free-pool (GP) call and keep the last 6 turns verbatim. On any GP failure the original messages are sent unchanged. |
+| `middleware.inject_context` | boolean | `false` | Inject a project-context system prefix (summary of the global CASCADE.md). The prefix is byte-stable across requests — fixed section order, no timestamps — so provider prompt-prefix caching keeps working. |
+| `middleware.classify_requests` | boolean | `false` | Classify each request Trivial/Medium/Complex with one bounded GP call. The result may only downgrade the model choice (e.g. Gemini Flash to Flash-Lite for trivial requests) and only when you did not explicitly pick a provider or model. |
+| `middleware.context_sync` | boolean | `false` | After a chat response is delivered, extract a digest (decisions, files touched, completed tasks, taxonomy tags) on a background task and append it to `~/.cascade/context-sync/<date>.jsonl`. The RAG watcher watches that directory, so each append refreshes the search index. Never runs on the request path. |
+
+The three pre-processing features spend free Gemini-pool tokens to save premium tokens. They are quality-guarded: any GP failure falls back to the unmodified request. `context_sync` runs only after the response has been sent and degrades to deterministic rule-based tagging when the GP pool is unavailable. With all flags off (the default) the chat path performs no middleware work at all.
+
+**Privacy firewall:** protected namespaces (`personal`, `personal:private`, and any `*:private`) neutralise every content-capturing flag regardless of this configuration — no context-sync digest, no GP compression, no GP classification — and their conversations are never routed to the GP pool or any other untrusted provider unless you explicitly pin one. With no trusted provider (Claude account or local model) available, private chat refuses with an error instead of falling back.
+
+---
+
 ## Policy settings
 
 ```toml

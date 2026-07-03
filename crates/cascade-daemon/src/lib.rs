@@ -94,6 +94,10 @@ pub mod nsentry_sync;
 // usage-cap window clears (E2-S1)
 pub mod continuity;
 
+// E2-S3: POST-processing middleware — background response digest →
+// ~/.cascade/context-sync JSONL (the rag_watcher index-refresh nudge)
+pub mod context_sync;
+
 // agents-02: ProviderBoardLlm — BoardLlm impl backed by ProviderRegistry
 pub mod board_llm_impl;
 

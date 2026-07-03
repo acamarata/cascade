@@ -70,6 +70,9 @@ pub enum DownloadError {
     },
 
     #[error("no delta asset found in GitHub release for transition {0} -> {1}")]
+    // Constructed by lib consumers / kept for the delta-path API; dead only
+    // in the bin's private module tree.
+    #[allow(dead_code)]
     NoDeltaAsset(String, String),
 
     #[error("update precondition failed: {0}")]

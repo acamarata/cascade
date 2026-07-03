@@ -395,6 +395,7 @@ mod tests {
             token: Arc::new("test-token".to_string()),
             provider_registry: None,
             routing_ring: None,
+            middleware: Default::default(),
         })
     }
 
@@ -411,6 +412,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_harness_status_returns_cc_and_oc_entries() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();
@@ -447,6 +449,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_harness_status_both_entries_present() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _tmp = set_fake_home();
@@ -476,6 +479,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_harness_regenerate_invalid_harness_returns_400() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _tmp = set_fake_home();
@@ -503,6 +507,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_harness_regenerate_cc_creates_symlinks_count_gt_zero() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();
@@ -541,6 +546,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_harness_regenerate_idempotent() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = set_fake_home();

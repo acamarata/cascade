@@ -15,6 +15,11 @@ pub mod classifier;
 pub mod registry;
 pub mod scanner;
 
+// Re-exports are lib API surface; the bin compiles this module tree
+// privately, so they count as unused imports there.
+#[allow(unused_imports)]
 pub use classifier::classify;
+#[allow(unused_imports)]
 pub use registry::{ProjectRegistry, RegistryError};
+#[allow(unused_imports)]
 pub use scanner::{dedup_nested_roots, ProjectScanner};

@@ -33,7 +33,10 @@
 
 use async_trait::async_trait;
 use std::path::PathBuf;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
+// `warn!` fires only in the no-reranker stub branch.
+#[cfg(not(feature = "reranker"))]
+use tracing::warn;
 
 use cascade_types::{
     chunker::Chunk,

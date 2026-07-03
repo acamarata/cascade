@@ -41,7 +41,7 @@ use axum::{
     Json, Router,
     body::Body,
     extract::State,
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -253,11 +253,49 @@ async fn health(State(state): State<AdapterState>) -> Json<Value> {
     Json(json!({ "status": "ok", "upstream": state.upstream_url }))
 }
 
+/// Privacy firewall, server-side mirror of the app's fast-path gate: every
+/// request that declares a protected namespace (`X-Cascade-Namespace:
+/// personal` / `personal:private` / `*:private`) is refused HERE, before any
+/// byte reaches the GP pool (:3761 → Google). The app already skips this
+/// port for protected chats; this guard exists so a future non-app localhost
+/// caller cannot bypass the firewall by talking to :3762 directly.
+///
+/// Returns `None` when the request may proceed, or the 403 response to send.
+fn protected_namespace_refusal(headers: &HeaderMap) -> Option<Response> {
+    let ns = headers
+        .get("x-cascade-namespace")
+        .and_then(|v| v.to_str().ok())?;
+    if !cascade_core::sensitivity::is_protected_namespace(Some(ns)) {
+        return None;
+    }
+    warn!(
+        namespace = %ns,
+        "anthropic_compat: refusing protected-namespace request — private \
+         chat must not leave via the GP pool"
+    );
+    let err = json!({
+        "error": {
+            "type": "permission_error",
+            "message": "protected namespace: private/personal chat is never \
+                        routed through the GP pool. Use the daemon /api/chat \
+                        endpoint, which selects a trusted provider."
+        }
+    });
+    Some((StatusCode::FORBIDDEN, Json(err)).into_response())
+}
+
 /// POST /v1/messages
 async fn messages(
     State(state): State<AdapterState>,
+    headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
+    // Both the buffered and streaming paths branch AFTER this guard, so one
+    // check covers every request shape.
+    if let Some(refusal) = protected_namespace_refusal(&headers) {
+        return refusal;
+    }
+
     if body.get("stream").and_then(Value::as_bool) == Some(true) {
         return messages_stream(state, body).await;
     }
@@ -514,6 +552,26 @@ mod tests {
     /// those timeouts configured (no network I/O — `reqwest::Client` does
     /// not expose configured timeouts for inspection, so this exercises the
     /// builder call itself rather than making a live request).
+    /// The :3762 privacy firewall refuses protected namespaces with 403 and
+    /// lets everything else through (no header, project/meta namespaces).
+    #[test]
+    fn protected_namespace_refusal_blocks_protected_passes_others() {
+        let mut h = HeaderMap::new();
+        assert!(protected_namespace_refusal(&h).is_none(), "no header");
+
+        h.insert("x-cascade-namespace", "projects:cascade".parse().unwrap());
+        assert!(protected_namespace_refusal(&h).is_none(), "project ns");
+        h.insert("x-cascade-namespace", "meta".parse().unwrap());
+        assert!(protected_namespace_refusal(&h).is_none(), "meta ns");
+
+        for ns in ["personal", "personal:private", "private", "Personal:Private"] {
+            h.insert("x-cascade-namespace", ns.parse().unwrap());
+            let resp = protected_namespace_refusal(&h)
+                .unwrap_or_else(|| panic!("{ns} must be refused"));
+            assert_eq!(resp.status(), StatusCode::FORBIDDEN, "{ns}");
+        }
+    }
+
     #[test]
     fn build_upstream_client_succeeds_with_configured_timeouts() {
         // reqwest::Client::builder().connect_timeout(..).timeout(..).build()

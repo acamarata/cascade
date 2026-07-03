@@ -41,7 +41,9 @@ use cascade_daemon::{audit, event_bus::EventBus, healthcheck::HealthState, ipc::
 // ── Frame helpers ─────────────────────────────────────────────────────────
 
 async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
-    let len = (body.len() as u32).to_le_bytes();
+    // Big-endian length prefix — matches the canonical cascade-types FrameCodec
+    // and crates/cascade-daemon/src/ipc.rs (handle_connection reads/writes BE).
+    let len = (body.len() as u32).to_be_bytes();
     stream.write_all(&len).await.expect("write len");
     stream.write_all(body).await.expect("write body");
     stream.flush().await.expect("flush");
@@ -50,7 +52,7 @@ async fn write_frame(stream: &mut UnixStream, body: &[u8]) {
 async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).await.expect("read len");
-    let len = u32::from_le_bytes(len_buf) as usize;
+    let len = u32::from_be_bytes(len_buf) as usize;
     let mut body = vec![0u8; len];
     stream.read_exact(&mut body).await.expect("read body");
     body
@@ -104,7 +106,12 @@ async fn start_test_server_with_audit(
 
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
-    let ipc = IpcServer::new(config_dir.clone(), health, bus)
+    let ipc = IpcServer::new(
+        config_dir.clone(),
+        health,
+        bus,
+        std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
+    )
         .await
         .expect("IpcServer::new");
 
@@ -149,7 +156,10 @@ fn privileged_request(method: &str) -> serde_json::Value {
 /// still return METHOD_NOT_FOUND (-32601) — their handlers are pending.
 /// `cascade_resolve` has a real handler (E-P5-02) and returns a success
 /// response; it is still audited (write-then-audit ordering).
-#[tokio::test]
+// multi_thread: IpcServer::new initialises the RAG reranker, which uses
+// tokio::task::block_in_place — illegal on the default current-thread test
+// runtime (and the real daemon runs multi-threaded).
+#[tokio::test(flavor = "multi_thread")]
 #[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let tmp = TempDir::new().unwrap();
@@ -177,7 +187,12 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
     for (method, _expected_op) in &methods {
         let resp = send_request(&mut stream, privileged_request(method)).await;
-        let code = resp.get("code").and_then(|c| c.as_i64());
+        // Errors are nested under "error": {"code", "message"} per the JSON-RPC
+        // 2.0 envelope written by write_response() in ipc.rs.
+        let code = resp
+            .get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(|c| c.as_i64());
         if *method == "cascade_resolve" {
             // Real handler: must succeed (no error code).
             assert!(
@@ -227,7 +242,7 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
 
 /// Non-privileged typed methods must NOT produce audit entries.
 /// Sending an unknown method name should not grow the audit log.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial(global_env)]
 async fn non_privileged_methods_do_not_emit_audit_entries() {
     // Use a second temp dir — OnceLock means this test reuses the global from
@@ -247,7 +262,12 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
 
     let health = HealthState::new(std::time::Instant::now());
     let bus = EventBus::new(config_dir.clone()).await.expect("event bus");
-    let ipc = IpcServer::new(config_dir.clone(), health, bus)
+    let ipc = IpcServer::new(
+        config_dir.clone(),
+        health,
+        bus,
+        std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
+    )
         .await
         .expect("IpcServer::new");
     let socket_path = config_dir.join("daemon.sock");
@@ -283,7 +303,13 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
         }),
     )
     .await;
-    let code = resp.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+    // Errors are nested under "error": {"code", "message"} per the JSON-RPC
+    // 2.0 envelope written by write_response() in ipc.rs.
+    let code = resp
+        .get("error")
+        .and_then(|e| e.get("code"))
+        .and_then(|c| c.as_i64())
+        .unwrap_or(0);
     assert_eq!(
         code, -32601,
         "unknown method must return -32601, got: {resp}"

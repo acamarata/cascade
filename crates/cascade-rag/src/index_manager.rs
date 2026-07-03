@@ -484,6 +484,10 @@ mod tests {
     /// DB file is created at the expected default path.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_open_creates_db() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
@@ -502,6 +506,10 @@ mod tests {
     /// Two IndexManagers on different roots use separate DB files.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_multi_project_isolation() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
@@ -574,6 +582,10 @@ mod tests {
     /// register_source returns false when paused, true when active.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_register_paused_skips() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
@@ -602,6 +614,10 @@ mod tests {
     /// Registered sources carry the correct tier tag.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_tier_tagging() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
@@ -646,6 +662,10 @@ mod tests {
     /// get_or_open returns the same Arc on repeated calls.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_registry_caches_manager() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
@@ -664,6 +684,10 @@ mod tests {
     /// evict_project removes the entry from the cache.
     #[tokio::test]
     #[serial(global_env)]
+    // Test-only: std Mutex serializes global env-var mutation across
+    // `#[serial(global_env)]` tests, which never run concurrently, so this
+    // cannot deadlock despite being held across `.await`.
+    #[allow(clippy::await_holding_lock)]
     async fn test_registry_evict() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("CASCADE_INDEX_ROOT");
