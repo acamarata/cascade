@@ -6,6 +6,66 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.21] - 2026-07-03
+
+GP pre/post middleware (flag-gated, all OFF by default) and a private-chat
+provider firewall.
+
+### Added
+- **GP pre-middleware** (`[middleware]` config, every flag defaults OFF —
+  zero hot-path cost when disabled): context compression (GP-summarize old
+  turns past a token threshold, keep recent turns verbatim), byte-stable
+  system-prompt injection from `~/.cascade/CASCADE.md` (prompt-cache-safe),
+  and bounded request classification that may only DOWNGRADE the model
+  (Gemini family only). Every middleware failure falls back to the original
+  request unchanged.
+- **Context-sync post-middleware** (`middleware.context_sync`, default OFF):
+  background response digests to `~/.cascade/context-sync/` JSONL with a
+  RAG-watcher index nudge; never blocks or delays the chat response.
+- `ProviderRegistry::pick_for_chat_filtered` — provider selection with a
+  candidate filter; explicit selection bypasses by contract, fail-closed
+  when everything is filtered out.
+- `registry_provider_is_trusted_for_sensitive` — deny-by-default trust
+  classifier for daemon adapter ids (trusted: Anthropic, Claude accounts,
+  local models).
+
+### Security
+- **Private-chat provider firewall**: protected namespaces (`personal`,
+  `personal:private`, `*:private`) can no longer reach the GP pool or any
+  untrusted provider on the default path — the app skips the :3762
+  fast-path, the daemon skips GP-first steering AND constrains fallback
+  provider selection to trusted providers, failing closed with an honest
+  error when none is registered. An explicitly user-pinned provider still
+  wins (deliberate choice).
+- Protected namespaces neutralise content-capturing middleware
+  (context-sync digests, GP compression, GP classification) so private
+  chat never feeds the global RAG index or leaves via Google side
+  channels; local-only prompt injection stays available.
+- **:3762 proxy server-side firewall**: the Anthropic-compat GP proxy now
+  refuses protected-namespace requests (403) itself, so a non-app
+  localhost caller cannot bypass the app-side gate. One canonical
+  namespace classifier now lives in cascade-core, shared by the chat
+  handler, the proxy, and mirrored in the app.
+- **Never-resurrect applies to loading**: a curated providers.json with
+  zero gemini-free entries now blocks the keychain/env key fallbacks at
+  boot (previously revoked keys were still used in memory for the current
+  boot; only the write-back respected revocation).
+
+### Fixed
+- The auto-detected `ollama` adapter is trusted for private chat (it is
+  local in fact); previously a private chat with only Ollama available
+  would over-refuse.
+- Daemon bin test target compiles again (missing `test_support`
+  declaration); IPC integration tests updated to the 4-arg
+  `IpcServer::new`; env-mutating key_loader tests serialized under the
+  shared env lock.
+- `cascade-core` clippy: MutexGuard-held-across-await in the env allowlist
+  and integration tests; misc test lints. Daemon test hygiene (dead helper,
+  unused imports).
+- Packaging workflows (Homebrew/Scoop/Chocolatey) download release assets
+  with authenticated `gh release download` — required for private-repo
+  assets.
+
 ## [1.9.20] - 2026-07-02
 
 Routing unified, overnight continuity, RAM guardian, and adversarial-review hardening.
