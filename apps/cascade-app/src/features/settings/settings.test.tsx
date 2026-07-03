@@ -260,6 +260,113 @@ describe('HooksTab', () => {
 })
 
 // ---------------------------------------------------------------------------
+// ContextPrivacyTab
+// ---------------------------------------------------------------------------
+
+describe('ContextPrivacyTab', () => {
+  it('renders personalRoot, sitesRoot inputs and the chat-sync toggle', async () => {
+    const { ContextPrivacyTab } = await import('./ContextPrivacyTab')
+    const { context, memory } = defaultSettings()
+    render(
+      <ContextPrivacyTab
+        context={context}
+        memory={memory}
+        isSaving={false}
+        error={null}
+        onUpdateContext={vi.fn()}
+        onUpdateMemory={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(document.getElementById('personal-root')).toBeInTheDocument()
+    expect(document.getElementById('sites-root')).toBeInTheDocument()
+    expect(document.getElementById('personal-chat-sync')).toBeInTheDocument()
+  })
+
+  it('personalChatSync toggle defaults to off (aria-checked=false)', async () => {
+    const { ContextPrivacyTab } = await import('./ContextPrivacyTab')
+    const { context, memory } = defaultSettings()
+    render(
+      <ContextPrivacyTab
+        context={context}
+        memory={memory}
+        isSaving={false}
+        error={null}
+        onUpdateContext={vi.fn()}
+        onUpdateMemory={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const toggle = document.getElementById('personal-chat-sync')
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('clicking the chat-sync toggle calls onUpdateMemory with personalChatSync flipped', async () => {
+    const { ContextPrivacyTab } = await import('./ContextPrivacyTab')
+    const { context, memory } = defaultSettings()
+    const onUpdateMemory = vi.fn()
+    render(
+      <ContextPrivacyTab
+        context={context}
+        memory={memory}
+        isSaving={false}
+        error={null}
+        onUpdateContext={vi.fn()}
+        onUpdateMemory={onUpdateMemory}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(document.getElementById('personal-chat-sync')!)
+    expect(onUpdateMemory).toHaveBeenCalledOnce()
+    expect(onUpdateMemory).toHaveBeenCalledWith({ personalChatSync: true })
+  })
+
+  it('typing in personalRoot calls onUpdateContext with the new path', async () => {
+    const { ContextPrivacyTab } = await import('./ContextPrivacyTab')
+    const { context, memory } = defaultSettings()
+    const onUpdateContext = vi.fn()
+    render(
+      <ContextPrivacyTab
+        context={context}
+        memory={memory}
+        isSaving={false}
+        error={null}
+        onUpdateContext={onUpdateContext}
+        onUpdateMemory={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const input = document.getElementById('personal-root') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/Users/alice/Downloads' } })
+    expect(onUpdateContext).toHaveBeenCalledWith({ personalRoot: '/Users/alice/Downloads' })
+  })
+
+  it('clicking Save fires onSave', async () => {
+    const { ContextPrivacyTab } = await import('./ContextPrivacyTab')
+    const { context, memory } = defaultSettings()
+    const onSave = vi.fn()
+    render(
+      <ContextPrivacyTab
+        context={context}
+        memory={memory}
+        isSaving={false}
+        error={null}
+        onUpdateContext={vi.fn()}
+        onUpdateMemory={vi.fn()}
+        onSave={onSave}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText(/save context & privacy/i))
+    expect(onSave).toHaveBeenCalledOnce()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // McpServersTab smoke — env parsing edge cases
 // ---------------------------------------------------------------------------
 

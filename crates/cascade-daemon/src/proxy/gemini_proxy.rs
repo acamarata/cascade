@@ -93,6 +93,7 @@ mod tests {
                 auth_kind: "ApiKey".to_string(),
                 enabled: true,
                 source: "manual".to_string(),
+                local_ok: true,
             })
             .collect();
         ProvidersStore {

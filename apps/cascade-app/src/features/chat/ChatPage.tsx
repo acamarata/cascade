@@ -41,7 +41,7 @@
  */
 import { useRef, useState, useId, useEffect } from 'react'
 import { MessageSquare, RotateCcw, Lock } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChat } from './useChat'
@@ -289,8 +289,14 @@ export function ChatPage() {
       {/* ── Personal sync-off note ─────────────────────────────── */}
       {chatScope === 'personal' && !isPrivate && !personalChatSync && (
         <div className="px-4 py-1 text-[0.65rem] text-muted-foreground/70 border-b border-border bg-background shrink-0">
-          History stays on this device. Enable personal chat sync in Settings to
-          persist to Cascade memory.
+          History stays on this device.{' '}
+          <Link
+            to="/settings?tab=general&section=privacy"
+            className="underline hover:text-foreground"
+          >
+            Enable personal chat sync in Settings
+          </Link>{' '}
+          to persist to Cascade memory.
         </div>
       )}
 

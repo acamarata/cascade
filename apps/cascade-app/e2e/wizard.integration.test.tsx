@@ -31,6 +31,14 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import type { WizardCheckpoint } from '@/features/onboarding/types'
 
+// Raise the per-test timeout for this file only. Under parallel-suite load
+// (full `pnpm vitest run`), this 10-step wizard suite's async waitFor chains
+// occasionally exceed vitest's 5000ms default even though every test passes
+// reliably in isolation (21/21). This is a scheduling/contention fix, not a
+// weakened assertion — timeouts inside individual waitFor() calls are
+// unchanged; this only extends the outer per-test budget.
+vi.setConfig({ testTimeout: 20000 })
+
 // ---------------------------------------------------------------------------
 // Tauri mock — vi.hoisted ensures spies exist before vi.mock factories run
 // ---------------------------------------------------------------------------

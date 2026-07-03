@@ -1,8 +1,8 @@
 /**
  * Purpose: Full tabbed settings surface for the /settings route.
  *   Two-pane layout: left sidebar of tab links + right content area (VS Code style).
- *   Tabs: Providers, Gemini Pool, Harness Bridges, Hooks, Scheduled Tasks,
- *         Plugins, Widgets, Vault, MCP Servers.
+ *   Tabs: Context & Privacy, Providers, Gemini Pool, Harness Bridges, Hooks,
+ *         Scheduled Tasks, Plugins, Widgets, Vault, MCP Servers.
  *   Each tab reads from useSettings (get_settings IPC) and saves via update_settings
  *   (per-section partial update pattern).
  * Inputs:  None — fetches settings on mount via useSettings hook.
@@ -20,6 +20,7 @@
 import { useState } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSettings } from './useSettings'
+import { ContextPrivacyTab } from './ContextPrivacyTab'
 import { ProvidersTab } from './ProvidersTab'
 import { GeminiPoolTab } from './GeminiPoolTab'
 import { HarnessBridgesTab } from './HarnessBridgesTab'
@@ -35,6 +36,7 @@ import type { CascadeSettings } from '@/types/settings'
 // ── Tab definition ────────────────────────────────────────────────────────────
 
 const TABS = [
+  { id: 'context-privacy', label: 'Context & Privacy' },
   { id: 'providers', label: 'Providers' },
   { id: 'gemini-pool', label: 'Gemini Pool' },
   { id: 'harness-bridges', label: 'Harness Bridges' },
@@ -71,9 +73,14 @@ function SaveToast({ message }: SaveToastProps) {
 
 // ── SettingsPanel ─────────────────────────────────────────────────────────────
 
-export function SettingsPanel() {
+export interface SettingsPanelProps {
+  /** Tab to open on mount. Defaults to 'providers'. Unknown values fall back silently. */
+  initialTab?: TabId
+}
+
+export function SettingsPanel({ initialTab }: SettingsPanelProps = {}) {
   const { draft, isLoading, updateSection, saveSection, discard, error } = useSettings()
-  const [activeTab, setActiveTab] = useState<TabId>('providers')
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? 'providers')
   const [isSaving, setIsSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -85,6 +92,15 @@ export function SettingsPanel() {
   async function handleSave(section: keyof CascadeSettings) {
     setIsSaving(true)
     await saveSection(section)
+    setIsSaving(false)
+    showToast('Settings saved.')
+  }
+
+  /** Context & Privacy spans two independent top-level sections; save both. */
+  async function handleSaveContextPrivacy() {
+    setIsSaving(true)
+    await saveSection('context')
+    await saveSection('memory')
     setIsSaving(false)
     showToast('Settings saved.')
   }
@@ -145,6 +161,19 @@ export function SettingsPanel() {
                 {error}
               </div>
             )}
+
+            <TabsContent value="context-privacy" className="mt-0 focus-visible:outline-none">
+              <ContextPrivacyTab
+                context={draft.context}
+                memory={draft.memory}
+                isSaving={isSaving}
+                error={null}
+                onUpdateContext={(v) => updateSection('context', v)}
+                onUpdateMemory={(v) => updateSection('memory', v)}
+                onSave={handleSaveContextPrivacy}
+                onDiscard={handleDiscard}
+              />
+            </TabsContent>
 
             <TabsContent value="providers" className="mt-0 focus-visible:outline-none">
               <ProvidersTab

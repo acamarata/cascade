@@ -2,38 +2,56 @@
 //!
 //! Purpose: HTTP server on `127.0.0.1:3762` that accepts `POST /v1/messages`
 //! in Anthropic Messages API format, translates to Gemini `generateContent`
-//! format, forwards to the existing GP proxy at `http://127.0.0.1:3761`, and
-//! translates the response back to Anthropic format.
+//! (or `streamGenerateContent` when `"stream":true`) format, forwards to the
+//! existing GP proxy at `http://127.0.0.1:3761` (preserving its key-slot
+//! rotation/cooldown pool), and translates the response back to Anthropic
+//! format — either a single JSON body or an Anthropic-shaped SSE stream.
 //!
 //! Inputs:
 //!   - `POST /v1/messages` — Anthropic Messages API request body (JSON).
 //!   - `GET /v1/health`    — health probe.
 //!
 //! Outputs:
-//!   - `POST /v1/messages` — Anthropic Messages API response body (JSON).
+//!   - `POST /v1/messages` (`stream` absent/false) — Anthropic Messages API
+//!     response body (JSON).
+//!   - `POST /v1/messages` (`stream: true`) — `text/event-stream` body:
+//!     `message_start` → `content_block_start` → N × `content_block_delta`
+//!     → `content_block_stop` → `message_delta` → `message_stop`. A mid-stream
+//!     upstream failure emits an Anthropic `error` SSE event and closes.
 //!   - `GET /v1/health`    — `{"status":"ok","upstream":"<url>"}`.
 //!
 //! Constraints:
-//!   - Streaming not supported; `"stream":true` returns HTTP 400.
-//!   - No new Cargo dependencies — uses axum, serde_json, reqwest, uuid
-//!     already present in Cargo.toml.
+//!   - The GP proxy at `:3761` buffers its entire upstream response before
+//!     replying (see `gemini_proxy/dispatch.rs`), so pool rotation/cooldown
+//!     is preserved but the byte-level response is not truly incremental
+//!     across that hop. This adapter re-frames the buffered Gemini SSE body
+//!     into a real chunked Anthropic SSE stream on ITS OWN response, so
+//!     `:3762` clients still see standard incremental SSE framing.
+//!   - No new Cargo dependencies — uses axum, serde_json, reqwest, uuid,
+//!     futures-util already present in Cargo.toml.
 //!   - Translation is pure JSON manipulation; no schema-generated types.
 //!
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — proxy/anthropic_compat
 
+use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use axum::{
     Json, Router,
+    body::Body,
     extract::State,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use futures_util::stream;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
+
+mod sse;
+use sse::{GeminiSseParser, StreamTranslator};
 
 // ── Model mapping ─────────────────────────────────────────────────────────────
 
@@ -200,15 +218,8 @@ async fn messages(
     State(state): State<AdapterState>,
     Json(body): Json<Value>,
 ) -> Response {
-    // Reject streaming requests.
     if body.get("stream").and_then(Value::as_bool) == Some(true) {
-        let err = json!({
-            "error": {
-                "type": "not_supported",
-                "message": "Streaming not yet supported by GP adapter"
-            }
-        });
-        return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        return messages_stream(state, body).await;
     }
 
     // Translate request.
@@ -289,6 +300,159 @@ async fn messages(
 
     let anthropic_resp = translate_response(&gemini_json, &gemini_model);
     (StatusCode::OK, Json(anthropic_resp)).into_response()
+}
+
+/// Streaming path for `POST /v1/messages` when `"stream": true`.
+///
+/// Calls the upstream GP proxy's `streamGenerateContent?alt=sse` route
+/// through the SAME `:3761` internal path as the non-streaming call, so
+/// key-slot rotation/cooldown (owned by `gemini_proxy::dispatch`) still
+/// applies. `:3761` buffers the full upstream body before replying (it has
+/// no chunked-transfer support), so the bytes arrive from `:3761` in one
+/// shot; this function re-frames them into a real incremental Anthropic SSE
+/// stream on ITS OWN response so `:3762` clients see standard streaming.
+///
+/// Errors before any bytes have streamed return the same non-2xx JSON shape
+/// as the non-streaming path. Errors discovered after streaming has started
+/// (upstream returned a non-JSON body, or an embedded Gemini `error` frame)
+/// emit an Anthropic `error` SSE event and close — never a silent truncation.
+async fn messages_stream(state: AdapterState, body: Value) -> Response {
+    let (gemini_model, mut gemini_body) = match translate_request(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, "anthropic_compat: stream request translation failed");
+            let err = json!({
+                "error": { "type": "invalid_request_error", "message": e }
+            });
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+    // Gemini's own `stream` flag is irrelevant to the endpoint chosen (the
+    // URL selects streaming vs non-streaming); strip it so it isn't echoed
+    // upstream as an unrecognized field.
+    if let Some(obj) = gemini_body.as_object_mut() {
+        obj.remove("stream");
+    }
+
+    let upstream = format!(
+        "{}/v1beta/models/{}:streamGenerateContent?alt=sse",
+        state.upstream_url, gemini_model
+    );
+
+    let resp = match state
+        .client
+        .post(&upstream)
+        .header("Content-Type", "application/json")
+        .json(&gemini_body)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(error = %e, "anthropic_compat: stream upstream request failed");
+            let err = json!({
+                "error": {
+                    "type": "api_error",
+                    "message": format!("upstream request failed: {e}")
+                }
+            });
+            return (StatusCode::BAD_GATEWAY, Json(err)).into_response();
+        }
+    };
+
+    let upstream_status = resp.status();
+
+    if !upstream_status.is_success() {
+        // Nothing has streamed yet — return the same JSON error shape as the
+        // non-streaming path.
+        let raw = resp.bytes().await.unwrap_or_default();
+        let gemini_json: Value = serde_json::from_slice(&raw).unwrap_or(Value::Null);
+        let msg = gemini_json
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("upstream error");
+        let err = json!({ "error": { "type": "api_error", "message": msg } });
+        let status =
+            StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+        return (status, Json(err)).into_response();
+    }
+
+    // Buffer the (already-complete) upstream body, then re-frame it as an
+    // incrementally-emitted Anthropic SSE stream.
+    let raw_body = match resp.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            warn!(error = %e, "anthropic_compat: failed to read stream upstream body");
+            let err = json!({
+                "error": {
+                    "type": "api_error",
+                    "message": format!("failed to read upstream stream body: {e}")
+                }
+            });
+            return (StatusCode::BAD_GATEWAY, Json(err)).into_response();
+        }
+    };
+
+    let events = translate_stream_body(&raw_body, &gemini_model);
+
+    let body_stream = stream::iter(
+        events
+            .into_iter()
+            .map(|bytes| Ok::<_, Infallible>(axum::body::Bytes::from(bytes))),
+    );
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/event-stream")
+        .header(header::CACHE_CONTROL, "no-cache")
+        .body(Body::from_stream(body_stream))
+        .unwrap_or_else(|e| {
+            warn!(error = %e, "anthropic_compat: failed to build SSE response");
+            (StatusCode::INTERNAL_SERVER_ERROR, "stream build failed").into_response()
+        })
+}
+
+/// Translate a complete Gemini SSE response body into the full sequence of
+/// Anthropic SSE wire-format events (`message_start` … `message_stop`).
+///
+/// If the buffered body contains a Gemini `error` frame (upstream failed
+/// after headers were already 2xx — e.g. a streamed safety block), the
+/// sequence emitted so far is closed with an Anthropic `error` event instead
+/// of the normal `message_delta`/`message_stop` pair, matching the "error
+/// mid-stream → error event, never silent truncation" contract.
+fn translate_stream_body(raw_body: &[u8], gemini_model: &str) -> Vec<Vec<u8>> {
+    let mut parser = GeminiSseParser::new();
+    let mut translator = StreamTranslator::new(gemini_model);
+    let mut out = Vec::new();
+
+    let (name, data) = translator.start();
+    out.push(sse::format_event(name, &data));
+
+    let mut saw_error = false;
+    for chunk in parser.push(raw_body) {
+        if let Some(err) = chunk.get("error") {
+            let msg = err
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("upstream error");
+            let (name, data) = StreamTranslator::error_event(msg);
+            out.push(sse::format_event(name, &data));
+            saw_error = true;
+            break;
+        }
+        for (name, data) in translator.on_chunk(&chunk) {
+            out.push(sse::format_event(name, &data));
+        }
+    }
+
+    if !saw_error {
+        for (name, data) in translator.finish() {
+            out.push(sse::format_event(name, &data));
+        }
+    }
+
+    out
 }
 
 // ── Public server struct ──────────────────────────────────────────────────────

@@ -115,15 +115,18 @@ impl RoutingTable {
     /// Build a new [`RoutingTable`] from a slice of provider entries.
     ///
     /// Inputs:  `providers` — all configured providers (any harness).
-    /// Outputs: table populated with slots for entries where `enabled == true`
-    ///          AND `harness == "gemini"`. Cursor starts at 0.
+    /// Outputs: table populated with slots for entries where `enabled == true`,
+    ///          `harness == "gemini"`, AND `local_ok == true`. Cursor starts at 0.
     /// Constraints: order of slots matches order in `providers` slice after
     ///              filtering — callers should sort before construction if they
-    ///              want a stable order.
+    ///              want a stable order. `local_ok = false` is a hard exclusion
+    ///              independent of `enabled` — it marks a key as never routable
+    ///              from this deployment context (e.g. IP-locked to a server),
+    ///              so it must be skipped even if re-enabled.
     pub fn new(providers: &[ProviderEntry]) -> Self {
         let slots = providers
             .iter()
-            .filter(|p| p.enabled && p.harness == "gemini")
+            .filter(|p| p.enabled && p.harness == "gemini" && p.local_ok)
             .map(|p| ProviderSlot {
                 id: p.id.clone(),
                 display_name: p.display_name.clone(),
@@ -291,6 +294,7 @@ mod tests {
             auth_kind: "ApiKey".to_string(),
             enabled: true,
             source: "auto-detected".to_string(),
+            local_ok: true,
         }
     }
 
@@ -389,6 +393,7 @@ mod tests {
                 auth_kind: "OAuthToken".to_string(),
                 enabled: true,
                 source: "auto-detected".to_string(),
+                local_ok: true,
             },
             ProviderEntry {
                 id: "gemini-disabled".to_string(),
@@ -398,6 +403,30 @@ mod tests {
                 auth_kind: "ApiKey".to_string(),
                 enabled: false, // should be excluded
                 source: "manual".to_string(),
+                local_ok: true,
+            },
+        ];
+        let table = RoutingTable::new(&providers);
+        assert_eq!(table.slot_count(), 1);
+        assert_eq!(table.slots[0].id, "slot-0");
+    }
+
+    /// A gemini slot with `local_ok = false` is excluded even when `enabled`.
+    /// This is the IP-locked-key defense: `enabled` and `local_ok` are
+    /// independent gates, both must be true for a slot to be routable.
+    #[test]
+    fn filters_local_ok_false() {
+        let providers = vec![
+            gemini_entry("slot-0", "Gemini"),
+            ProviderEntry {
+                id: "gemini-ip-locked".to_string(),
+                harness: "gemini".to_string(),
+                account_id: "ip-locked-account".to_string(),
+                display_name: "IP-locked Gemini".to_string(),
+                auth_kind: "ApiKey".to_string(),
+                enabled: true,
+                source: "vault".to_string(),
+                local_ok: false, // should be excluded even though enabled
             },
         ];
         let table = RoutingTable::new(&providers);

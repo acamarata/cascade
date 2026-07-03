@@ -58,8 +58,26 @@ pub struct ProviderEntry {
     /// Whether this provider is enabled for use
     pub enabled: bool,
 
-    /// Source of this entry: "auto-detected" | "manual"
+    /// Source of this entry: "auto-detected" | "manual" | "vault"
     pub source: String,
+
+    /// Whether this key is usable from a local (non-server) daemon instance.
+    ///
+    /// Some Gemini free-pool keys are IP-locked to a specific server and must
+    /// never be routed to from a developer machine. `enabled` still governs
+    /// whether the key is usable AT ALL (e.g. quota-exhausted or revoked);
+    /// `local_ok` is a narrower, deployment-context restriction layered on
+    /// top. Defaults to `true` via serde so existing providers.json files
+    /// without this field (pre-migration) are read as "usable everywhere."
+    #[serde(default = "default_local_ok")]
+    pub local_ok: bool,
+}
+
+/// Default value for `ProviderEntry::local_ok` when absent from JSON — `true`
+/// (usable from any deployment context) preserves prior behavior for entries
+/// written before this field existed.
+fn default_local_ok() -> bool {
+    true
 }
 
 /// The top-level providers store wrapper, serialized as `~/.cascade/providers.json`.
@@ -136,6 +154,7 @@ pub fn merge_providers(existing: &mut Vec<ProviderEntry>, detected: &[DetectedAc
                 auth_kind: auth_kind_str,
                 enabled: true,
                 source: "auto-detected".to_string(),
+                local_ok: true,
             };
             existing.push(new_entry);
         }
@@ -267,6 +286,7 @@ mod tests {
             auth_kind: "OAuthToken".to_string(),
             enabled: true,
             source: "manual".to_string(),
+            local_ok: true,
         };
         let mut existing = vec![existing_entry];
 
@@ -294,6 +314,7 @@ mod tests {
             auth_kind: "Unknown".to_string(),
             enabled: true,
             source: "auto-detected".to_string(),
+            local_ok: true,
         };
         let mut existing = vec![existing_entry];
 
@@ -328,6 +349,7 @@ mod tests {
                 auth_kind: "OAuthToken".to_string(),
                 enabled: true,
                 source: "auto-detected".to_string(),
+                local_ok: true,
             }],
         };
 

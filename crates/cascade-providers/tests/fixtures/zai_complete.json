@@ -1,0 +1,21 @@
+{
+  "id": "zai-4a2c8e1f6b9d3a7c0e5b2d9f",
+  "object": "chat.completion",
+  "created": 1722000000,
+  "model": "glm-4.6",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 14,
+    "completion_tokens": 9,
+    "total_tokens": 23
+  }
+}
