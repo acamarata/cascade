@@ -45,6 +45,56 @@ fn github_api_base() -> String {
         .unwrap_or_else(|_| "https://api.github.com/repos/acamarata/cascade".to_string())
 }
 
+/// Resolve a GitHub token for API auth so private repos work: `GITHUB_TOKEN`
+/// then `GH_TOKEN` env, then a bounded `gh auth token` probe (the gh CLI is
+/// resolved by absolute path because the daemon's launchd PATH is minimal).
+/// Returns `None` when nothing is available — callers then run unauthenticated
+/// and public repos keep working.
+fn github_auth_token() -> Option<String> {
+    for var in ["GITHUB_TOKEN", "GH_TOKEN"] {
+        if let Ok(v) = std::env::var(var) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    let gh = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
+        .iter()
+        .find(|p| std::path::Path::new(p).is_file())?;
+    let out = std::process::Command::new(gh)
+        .args(["auth", "token"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let tok = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if tok.is_empty() {
+        None
+    } else {
+        Some(tok)
+    }
+}
+
+/// Is the repository itself visible to us? Used to disambiguate a 404 from
+/// `releases/latest` (public repo with zero releases vs invisible/private repo).
+async fn repo_visible(client: &reqwest::Client) -> bool {
+    let mut req = client
+        .get(github_api_base())
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "cascade-updater/1")
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(tok) = github_auth_token() {
+        req = req.header("Authorization", format!("Bearer {tok}"));
+    }
+    match req.send().await {
+        Ok(r) => r.status().is_success(),
+        Err(_) => false,
+    }
+}
+
 fn home_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -68,22 +118,38 @@ pub async fn check_for_update() -> Result<UpdateCheckResult, DownloadError> {
 
     let client = reqwest::Client::builder().use_rustls_tls().build()?;
     let url = format!("{}/releases/latest", github_api_base());
-    let resp = client
+    let mut req = client
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .header("User-Agent", "cascade-updater/1")
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await?;
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(tok) = github_auth_token() {
+        req = req.header("Authorization", format!("Bearer {tok}"));
+    }
+    let resp = req.send().await?;
 
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
-        // No releases published yet.
-        return Ok(UpdateCheckResult {
-            update_available: false,
-            current_version,
-            latest_version: None,
-        });
+        // 404 is ambiguous: a public repo with zero releases AND a private
+        // repo invisible to this (possibly unauthenticated) caller both 404
+        // here. Disambiguate via the repo endpoint itself — reporting
+        // "up to date" for a repo we cannot even see would be fabricated data
+        // (live incident 2026-07-02: private repo made `check` claim
+        // up-to-date while a newer release existed).
+        return if repo_visible(&client).await {
+            Ok(UpdateCheckResult {
+                update_available: false,
+                current_version,
+                latest_version: None,
+            })
+        } else {
+            Err(DownloadError::Precondition(
+                "releases endpoint returned 404 and the repository itself is \
+                 not visible — private repo? Set GITHUB_TOKEN/GH_TOKEN or \
+                 authenticate the gh CLI so the updater can see releases"
+                    .to_string(),
+            ))
+        };
     }
     resp.error_for_status_ref()?;
 
@@ -232,12 +298,17 @@ async fn apply_full_bundle(
     };
 
     let url = format!("{}/releases/latest", github_api_base());
-    let release: GhRelease = match client
+    let auth_token = github_auth_token();
+    let mut rel_req = client
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .header("User-Agent", "cascade-updater/1")
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(10));
+    if let Some(tok) = &auth_token {
+        rel_req = rel_req.header("Authorization", format!("Bearer {tok}"));
+    }
+    let release: GhRelease = match rel_req
         .send()
         .await
         .and_then(|r| r.error_for_status())
@@ -274,13 +345,31 @@ async fn apply_full_bundle(
             }
         }
     };
-    let bundle_url = bundle_asset.browser_download_url.clone();
-    let checksums_url = checksums_asset.browser_download_url.clone();
+    // Private repos: browser_download_url 404s for API-token callers — the
+    // asset must be fetched via its API url with Accept: application/octet-stream.
+    let use_api_urls = auth_token.is_some()
+        && !bundle_asset.url.is_empty()
+        && !checksums_asset.url.is_empty();
+    let (bundle_url, checksums_url) = if use_api_urls {
+        (bundle_asset.url.clone(), checksums_asset.url.clone())
+    } else {
+        (
+            bundle_asset.browser_download_url.clone(),
+            checksums_asset.browser_download_url.clone(),
+        )
+    };
 
     // Download SHA256SUMS and find our asset's expected digest.
-    let checksums_raw = match client
+    let mut sums_req = client
         .get(&checksums_url)
-        .header("User-Agent", "cascade-updater/1")
+        .header("User-Agent", "cascade-updater/1");
+    if use_api_urls {
+        sums_req = sums_req.header("Accept", "application/octet-stream");
+    }
+    if let Some(tok) = &auth_token {
+        sums_req = sums_req.header("Authorization", format!("Bearer {tok}"));
+    }
+    let checksums_raw = match sums_req
         .send()
         .await
         .and_then(|r| r.error_for_status())
@@ -358,7 +447,7 @@ async fn apply_full_bundle(
     };
 
     match installer
-        .download_and_install(latest, &bundle_url, &expected_sha)
+        .download_and_install(latest, &bundle_url, &expected_sha, auth_token.as_deref())
         .await
     {
         Ok(outcome) => {

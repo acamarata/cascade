@@ -71,6 +71,9 @@ pub enum DownloadError {
 
     #[error("no delta asset found in GitHub release for transition {0} -> {1}")]
     NoDeltaAsset(String, String),
+
+    #[error("update precondition failed: {0}")]
+    Precondition(String),
 }
 
 // ── GitHub Releases API types ─────────────────────────────────────────────────

@@ -124,12 +124,14 @@ async fn run_apply(yes: bool) -> Result<()> {
     match result {
         Ok(res) if res.ok => {
             let version = res.installed_version.as_deref().unwrap_or("unknown");
-            let snapshot_msg = res
-                .snapshot_id
-                .as_deref()
-                .map(|id| format!(" (snapshot: {id})"))
-                .unwrap_or_default();
-            println!("Updated to {version}{snapshot_msg}. Daemon reloading.");
+            match res.snapshot_id.as_deref() {
+                // A real install always snapshots the old binaries first; no
+                // snapshot means nothing was swapped — we were already current.
+                None => println!("Already up to date ({version})."),
+                Some(id) => {
+                    println!("Updated to {version} (snapshot: {id}). Daemon reloading.")
+                }
+            }
             Ok(())
         }
         Ok(res) => {

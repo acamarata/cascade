@@ -94,6 +94,11 @@ pub struct GhRelease {
 pub struct GhAsset {
     pub name: String,
     pub browser_download_url: String,
+    /// GitHub API asset URL — required for downloading assets from PRIVATE
+    /// repos (with `Accept: application/octet-stream` + auth); the
+    /// `browser_download_url` only works unauthenticated on public repos.
+    #[serde(default)]
+    pub url: String,
 }
 
 // ── Outcome ───────────────────────────────────────────────────────────────────
@@ -228,8 +233,9 @@ impl FullBundleInstaller {
         version: &str,
         bundle_url: &str,
         expected_sha256: &str,
+        auth_token: Option<&str>,
     ) -> Result<FullBundleOutcome, FullBundleError> {
-        let bytes = download_bytes(bundle_url).await?;
+        let bytes = download_bytes(bundle_url, auth_token).await?;
 
         let actual = sha256_hex(&bytes);
         if !actual.eq_ignore_ascii_case(expected_sha256) {
@@ -271,13 +277,20 @@ impl FullBundleInstaller {
 }
 
 /// Stream `url` to memory and return the bytes.
-async fn download_bytes(url: &str) -> Result<Vec<u8>, FullBundleError> {
+///
+/// `auth` carries an optional GitHub token; when present the request also
+/// sends `Accept: application/octet-stream` — the combination required to
+/// download release assets from PRIVATE repos via their API asset URL
+/// (`browser_download_url` does not honor token auth).
+async fn download_bytes(url: &str, auth: Option<&str>) -> Result<Vec<u8>, FullBundleError> {
     let client = reqwest::Client::builder().use_rustls_tls().build()?;
-    let resp = client
-        .get(url)
-        .header("User-Agent", "cascade-updater/1")
-        .send()
-        .await?;
+    let mut req = client.get(url).header("User-Agent", "cascade-updater/1");
+    if let Some(tok) = auth {
+        req = req
+            .header("Authorization", format!("Bearer {tok}"))
+            .header("Accept", "application/octet-stream");
+    }
+    let resp = req.send().await?;
     resp.error_for_status_ref()?;
     let bytes = resp.bytes().await?;
     Ok(bytes.to_vec())
@@ -431,10 +444,12 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
                 GhAsset {
                     name: "cascade-v1.9.19-macos-aarch64.tar.gz".to_string(),
                     browser_download_url: "https://example.com/bundle.tar.gz".to_string(),
+                    url: String::new(),
                 },
                 GhAsset {
                     name: "SHA256SUMS".to_string(),
                     browser_download_url: "https://example.com/SHA256SUMS".to_string(),
+                    url: String::new(),
                 },
             ],
         };
@@ -450,6 +465,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
             assets: vec![GhAsset {
                 name: "SHA256SUMS".to_string(),
                 browser_download_url: "https://example.com/SHA256SUMS".to_string(),
+                    url: String::new(),
             }],
         };
         let err = find_release_assets(&release, "1.9.19").unwrap_err();
@@ -463,6 +479,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
             assets: vec![GhAsset {
                 name: "cascade-v1.9.19-macos-aarch64.tar.gz".to_string(),
                 browser_download_url: "https://example.com/bundle.tar.gz".to_string(),
+                    url: String::new(),
             }],
         };
         let err = find_release_assets(&release, "1.9.19").unwrap_err();
@@ -561,6 +578,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
                 "1.9.19",
                 &format!("{}/bundle.tar.gz", server.uri()),
                 &expected_sha,
+                None,
             )
             .await
             .expect("install succeeds");
@@ -597,6 +615,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
                 "1.9.19",
                 &format!("{}/bundle.tar.gz", server.uri()),
                 &wrong_sha,
+                None,
             )
             .await
             .unwrap_err();
