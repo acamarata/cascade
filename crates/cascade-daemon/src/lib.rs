@@ -43,6 +43,9 @@ pub mod proxy;
 pub mod quota_poller;
 #[cfg(feature = "gfp")]
 pub mod project_poller;
+// ram-guardian: OOM-prevention subsystem — memory sampling + conservative
+// stray rustc/vitest reaper.
+pub mod ram_guardian;
 // T-P4-E01-26: auto-RAG file watcher (notify-based)
 pub mod rag_watcher;
 // T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)
@@ -86,6 +89,10 @@ pub mod automation_router;
 
 // nsentry-sync: daemon-owned multi-stream nSentry sync subsystem
 pub mod nsentry_sync;
+
+// continuity: reset-time triggers to auto-resume Claude Code sessions once a
+// usage-cap window clears (E2-S1)
+pub mod continuity;
 
 // agents-02: ProviderBoardLlm — BoardLlm impl backed by ProviderRegistry
 pub mod board_llm_impl;

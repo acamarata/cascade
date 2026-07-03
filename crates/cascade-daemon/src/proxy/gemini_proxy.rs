@@ -162,6 +162,95 @@ mod tests {
         }
     }
 
+    // ── Test: GET /health — live pool state (E1-S6) ───────────────────────────
+
+    /// /health must report LIVE routing-table state: enabled slots count as
+    /// healthy; the response is answered locally (never forwarded upstream).
+    #[tokio::test]
+    async fn test_health_reports_live_slot_counts() {
+        let store = make_providers_store(3);
+        let (table, creds) = {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_providers(tmp.path(), &store);
+            build_routing_state(&path)
+        };
+        let state = make_proxy_state(table, creds, "http://mock", ProxyConfig::default());
+        let client = reqwest::Client::new();
+
+        let (status, body) = dispatch_request("GET", "/health", b"", &state, &client, None)
+            .await
+            .expect("health must answer locally");
+        assert_eq!(status, "200 OK");
+        let v: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert_eq!(v["status"], "ok");
+        assert_eq!(v["healthy_slots"], 3);
+        assert_eq!(v["total_slots"], 3);
+    }
+
+    /// Regression (E1-S6 review): 429 cooldowns must be visible in /health —
+    /// the chat GP-preference relies on this to avoid firing into an
+    /// exhausted pool. A fresh-from-config table can never show this.
+    #[tokio::test]
+    async fn test_health_reflects_429_cooldowns() {
+        let store = make_providers_store(2);
+        let (table, creds) = {
+            let tmp = TempDir::new().expect("tempdir");
+            let path = write_providers(tmp.path(), &store);
+            build_routing_state(&path)
+        };
+        let state = make_proxy_state(table, creds, "http://mock", ProxyConfig::default());
+        // Put every slot into a long 429 cooldown, as a saturated pool would be.
+        {
+            let mut guard = state.table.lock().unwrap();
+            guard.mark_rate_limited("gemini-test-key-0", 3600);
+            guard.mark_rate_limited("gemini-test-key-1", 3600);
+        }
+        let client = reqwest::Client::new();
+
+        let (status, body) = dispatch_request("GET", "/health", b"", &state, &client, None)
+            .await
+            .expect("health must answer locally");
+        assert_eq!(status, "200 OK");
+        let v: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert_eq!(v["healthy_slots"], 0, "cooldown slots must not count as healthy");
+        assert_eq!(v["total_slots"], 2);
+    }
+
+    /// /health with an empty table: reachable proxy but zero routable slots.
+    #[tokio::test]
+    async fn test_health_empty_table_zero_slots() {
+        let state = make_proxy_state(
+            RoutingTable::new(&[]),
+            HashMap::new(),
+            "http://mock",
+            ProxyConfig::default(),
+        );
+        let client = reqwest::Client::new();
+        let (status, body) = dispatch_request("GET", "/health", b"", &state, &client, None)
+            .await
+            .expect("health must answer locally");
+        assert_eq!(status, "200 OK");
+        let v: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert_eq!(v["healthy_slots"], 0);
+    }
+
+    /// POST /health is NOT the health endpoint — it falls through to the
+    /// /v1beta allowlist and is rejected (no new unauthenticated surface).
+    #[tokio::test]
+    async fn test_health_post_falls_to_allowlist() {
+        let state = make_proxy_state(
+            RoutingTable::new(&[]),
+            HashMap::new(),
+            "http://mock",
+            ProxyConfig::default(),
+        );
+        let client = reqwest::Client::new();
+        let (status, _) = dispatch_request("POST", "/health", b"{}", &state, &client, None)
+            .await
+            .expect("must answer locally");
+        assert_eq!(status, "403 Forbidden");
+    }
+
     /// Unit test: /v2/ path returns HTTP 403 with allowlist error message.
     #[tokio::test]
     async fn test_path_allowlist_rejects_v2() {

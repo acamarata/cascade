@@ -83,6 +83,10 @@ pub mod sentry;
 pub mod nsentry;
 // conductor: Cascade Conductor — quota-aware multi-account routing engine
 pub mod conductor;
+// ram-guardian: inspect/trigger the daemon's OOM-prevention RAM Guardian
+pub mod ram;
+// continuity: manage Cascade Continuity session-resume intents (E2-S1)
+pub mod continuity;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -221,6 +225,10 @@ pub enum Commands {
     Nsentry(nsentry::NsentryArgs),
     /// Route a prompt to the best available worker account (quota-aware delegation).
     Conductor(conductor::ConductorArgs),
+    /// Inspect or manually trigger the RAM Guardian (OOM-prevention subsystem).
+    Ram(ram::RamArgs),
+    /// Manage Cascade Continuity intents (auto-resume sessions on quota reset).
+    Continuity(continuity::ContinuityArgs),
 }
 
 impl Commands {
@@ -281,6 +289,8 @@ impl Commands {
             Commands::Sentry(args)    => args.run().await,
             Commands::Nsentry(args)   => args.run().await,
             Commands::Conductor(args)  => args.run().await,
+            Commands::Ram(args)       => args.run().await,
+            Commands::Continuity(args) => args.run().await,
         }
     }
 }

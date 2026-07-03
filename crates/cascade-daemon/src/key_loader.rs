@@ -179,6 +179,47 @@ fn load_from_env() -> Vec<SecretString> {
     keys
 }
 
+// ── Boot-time permission hardening ───────────────────────────────────────────
+
+/// Best-effort: tighten `providers.json` to `0o600` (owner read/write only)
+/// if it exists with looser permissions.
+///
+/// Purpose: `providers.json` is the plaintext-secret source of truth (Gemini
+///   free-pool keys, etc.); [`write_providers_store`] has always written new
+///   copies at `0o600` (tmp-perms-before-rename), but a file created before
+///   that hardening landed, or written by some other tool, may still carry
+///   the default umask perms (typically `0o644`). This runs once at daemon
+///   boot to close that gap for pre-existing files without waiting for the
+///   next write.
+/// Inputs: `path` — providers.json path.
+/// Outputs: none. Logs at INFO when permissions were actually tightened;
+///   silent no-op when the file is absent, already `0o600`, or on non-Unix.
+/// Constraints: best-effort only — a metadata/chmod failure (e.g. no
+///   permission, unsupported filesystem) is silently ignored so it can never
+///   block daemon startup.
+#[cfg(unix)]
+fn tighten_providers_store_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return; // absent — nothing to tighten.
+    };
+    let mode = metadata.permissions().mode() & 0o777;
+    if mode != 0o600 {
+        if std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).is_ok() {
+            tracing::info!(
+                path = %path.display(),
+                previous_mode = format!("{mode:o}"),
+                "tightened providers.json permissions to 0600"
+            );
+        }
+    }
+}
+
+/// Non-Unix no-op — permission bits are not modeled the same way; skip.
+#[cfg(not(unix))]
+fn tighten_providers_store_permissions(_path: &Path) {}
+
 // ── Migration: write imported fallback keys back into providers.json ────────
 
 /// Write freshly-imported fallback keys into `providers.json` as gemini-free-N
@@ -187,6 +228,30 @@ fn load_from_env() -> Vec<SecretString> {
 /// Purpose: one-time migration so a keychain/env fallback only ever fires
 ///   once per key — subsequent boots find these keys in providers.json and
 ///   never touch the keychain/env path again.
+///
+/// # Migration rule (never resurrect a revoked key)
+///
+/// This is called only when `load_from_providers_store` returned zero
+/// gemini-free entries for this boot — but "zero gemini-free entries" is
+/// ambiguous: it could mean "never migrated yet" (safe to import) or "the
+/// user intentionally deleted every gemini-free entry to revoke them" (must
+/// NOT re-import — that would silently resurrect revoked keys forever).
+///
+/// The honest rule this function enforces: **only migrate when
+/// `providers.json` is absent, unreadable/unparseable, or contains zero
+/// provider entries of ANY kind** (a truly fresh store). If the file exists
+/// and parses with at least one provider entry — of any harness — that is
+/// treated as proof the store has been intentionally curated at least once,
+/// so an empty gemini-free subset means "revoked," not "never set up," and
+/// no fallback import happens.
+///
+/// Even when migration is permitted, entries are also deduped **by key
+/// value** against every existing `account_id` in the store (not just
+/// AIza-shaped gemini-free ones) so a key that already exists anywhere in
+/// the store — under any id/slot — is never appended a second time. This
+/// bounds growth even if this function is ever called with a mix of
+/// already-known and genuinely-new keys.
+///
 /// Inputs: `path` — providers.json path; `keys` — imported keys, in order.
 /// Outputs: appends new `ProviderEntry` rows (harness "gemini", source
 ///   "vault", enabled + local_ok true) and writes atomically. Best-effort —
@@ -197,11 +262,37 @@ fn migrate_fallback_keys_into_providers_store(path: &Path, keys: &[SecretString]
         return;
     }
 
-    let mut store = read_providers_store(path).unwrap_or_else(|_| ProvidersStore {
+    let existing_store = read_providers_store(path);
+
+    // Never-resurrect rule: only migrate into a truly fresh store (absent,
+    // unreadable, or zero provider entries of any kind). A store that exists
+    // and has at least one entry has been intentionally curated — an empty
+    // gemini-free subset in that case means "revoked," not "never set up."
+    let store_is_fresh = match &existing_store {
+        Ok(s) => s.providers.is_empty(),
+        Err(_) => true,
+    };
+    if !store_is_fresh {
+        tracing::info!(
+            "providers.json exists with curated entries but no gemini-free keys — \
+             treating as intentional revocation, skipping fallback import"
+        );
+        return;
+    }
+
+    let mut store = existing_store.unwrap_or_else(|_| ProvidersStore {
         schema_version: PROVIDERS_STORE_SCHEMA_VERSION,
         updated_at: chrono::Utc::now().to_rfc3339(),
         providers: Vec::new(),
     });
+
+    // Dedup by value: skip any imported key whose value already exists
+    // anywhere in the store (any harness/id), not just AIza-shaped
+    // gemini-free slots — this is what makes repeated boots idempotent.
+    // Owned Strings (not &str) so the set does not borrow `store.providers`
+    // while the loop below pushes into it (E0502).
+    let existing_values: std::collections::HashSet<String> =
+        store.providers.iter().map(|p| p.account_id.clone()).collect();
 
     let next_slot_start = store
         .providers
@@ -213,25 +304,36 @@ fn migrate_fallback_keys_into_providers_store(path: &Path, keys: &[SecretString]
         .map(|n| n + 1)
         .unwrap_or(1);
 
-    for (offset, key) in keys.iter().enumerate() {
-        let slot = next_slot_start + offset as u32;
+    let mut appended = 0u32;
+    let mut slot = next_slot_start;
+    for key in keys {
+        let value = key.expose_secret();
+        if existing_values.contains(value.as_str()) {
+            continue; // already present under some id — never duplicate.
+        }
         store.providers.push(ProviderEntry {
             id: format!("{GEMINI_FREE_ID_PREFIX}{slot}"),
             harness: "gemini".to_string(),
-            account_id: key.expose_secret().to_owned(),
+            account_id: value.to_owned(),
             display_name: format!("{GEMINI_FREE_DISPLAY_PREFIX}{slot}"),
             auth_kind: "ApiKey".to_string(),
             enabled: true,
             source: "vault".to_string(),
             local_ok: true,
         });
+        slot += 1;
+        appended += 1;
+    }
+
+    if appended == 0 {
+        return; // nothing new — avoid a needless write + updated_at bump.
     }
 
     store.updated_at = chrono::Utc::now().to_rfc3339();
 
     match write_providers_store(path, &store) {
         Ok(()) => tracing::info!(
-            imported = keys.len(),
+            imported = appended,
             "migrated fallback Gemini keys into providers.json (one-time)"
         ),
         Err(e) => tracing::warn!(%e, "failed to migrate fallback keys into providers.json"),
@@ -266,6 +368,8 @@ pub fn load_api_keys() -> Vec<SecretString> {
 
 /// Testable variant of [`load_api_keys`] accepting an explicit providers.json path.
 pub fn load_api_keys_from_path(providers_path: &Path) -> Vec<SecretString> {
+    tighten_providers_store_permissions(providers_path);
+
     let from_store = load_from_providers_store(providers_path);
     if !from_store.is_empty() {
         tracing::info!(
@@ -430,26 +534,114 @@ mod tests {
 
     #[test]
     fn migrate_appends_after_highest_existing_slot() {
+        // Slot numbering must still increment correctly for a multi-key
+        // migration batch into a genuinely fresh (empty) store.
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("providers.json");
-        let store = make_store(vec![gemini_free_entry(
-            5,
-            "AIzaFixtureExistingAAAAAAAAAAAA1",
-            true,
-            true,
-        )]);
-        write_providers_store(&path, &store).unwrap();
+        write_providers_store(&path, &make_store(vec![])).unwrap();
 
-        let imported = vec![SecretString::new(
-            "AIzaFixtureImportedAAAAAAAAAAAA1".to_string(),
-        )];
+        let imported = vec![
+            SecretString::new("AIzaFixtureImportedAAAAAAAAAAAA1".to_string()),
+            SecretString::new("AIzaFixtureImportedAAAAAAAAAAAA2".to_string()),
+        ];
         migrate_fallback_keys_into_providers_store(&path, &imported);
 
         let reloaded = read_providers_store(&path).unwrap();
         assert!(
-            reloaded.providers.iter().any(|p| p.id == "gemini-free-6"),
-            "new entry must continue numbering after the highest existing slot"
+            reloaded.providers.iter().any(|p| p.id == "gemini-free-1"),
+            "first imported key must take slot 1 in a fresh store"
         );
+        assert!(
+            reloaded.providers.iter().any(|p| p.id == "gemini-free-2"),
+            "second imported key must continue numbering to slot 2"
+        );
+    }
+
+    // ── never-resurrect + dedup-by-value rules ───────────────────────────
+
+    #[test]
+    fn repeated_boot_is_idempotent_no_duplicate_entries() {
+        // Two consecutive load_api_keys_from_path calls with the same env
+        // fallback keys present must not create duplicate provider entries —
+        // dedup-by-value must hold even across separate migration calls.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("providers.json");
+        write_providers_store(&path, &make_store(vec![])).unwrap();
+
+        std::env::set_var("GEMINI_API_KEY_1", "AIzaFixtureIdemAAAAAAAAAAAAAAAA1");
+        std::env::remove_var("GEMINI_API_KEY_2");
+
+        let first = load_api_keys_from_path(&path);
+        assert_eq!(first.len(), 1);
+
+        // Second boot: providers.json now has the migrated key, so the
+        // providers-store-first path should short-circuit and the fallback
+        // should never re-fire — but exercise migrate directly too, to prove
+        // dedup-by-value holds even if it were called again with the same
+        // fallback key.
+        let second = load_api_keys_from_path(&path);
+        assert_eq!(second.len(), 1, "second boot must read the same single key");
+
+        migrate_fallback_keys_into_providers_store(
+            &path,
+            &[SecretString::new(
+                "AIzaFixtureIdemAAAAAAAAAAAAAAAA1".to_string(),
+            )],
+        );
+
+        let reloaded = read_providers_store(&path).unwrap();
+        let gfp_count = reloaded
+            .providers
+            .iter()
+            .filter(|p| p.id.starts_with(GEMINI_FREE_ID_PREFIX))
+            .count();
+        assert_eq!(
+            gfp_count, 1,
+            "dedup-by-value must prevent a duplicate entry for the same key value"
+        );
+
+        std::env::remove_var("GEMINI_API_KEY_1");
+    }
+
+    #[test]
+    fn revocation_is_respected_no_import_when_store_has_other_providers_but_no_gemini_free() {
+        // The store exists and has been curated (one non-gemini-free entry)
+        // but deliberately has zero gemini-free entries — this must be read
+        // as intentional revocation, not "never set up," so no fallback
+        // import may occur even though GEMINI_API_KEY_1 is set.
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("providers.json");
+        let curated_entry = ProviderEntry {
+            id: "cc-cc-default".to_string(),
+            harness: "cc".to_string(),
+            account_id: "cc-default".to_string(),
+            display_name: "Claude Code".to_string(),
+            auth_kind: "OAuthToken".to_string(),
+            enabled: true,
+            source: "manual".to_string(),
+            local_ok: true,
+        };
+        write_providers_store(&path, &make_store(vec![curated_entry])).unwrap();
+
+        std::env::set_var("GEMINI_API_KEY_1", "AIzaFixtureRevokedAAAAAAAAAAAAA1");
+        std::env::remove_var("GEMINI_API_KEY_2");
+
+        let keys = load_api_keys_from_path(&path);
+        assert!(
+            keys.is_empty(),
+            "revoked gemini-free keys must not be resurrected from env fallback"
+        );
+
+        let reloaded = read_providers_store(&path).unwrap();
+        assert!(
+            !reloaded
+                .providers
+                .iter()
+                .any(|p| p.id.starts_with(GEMINI_FREE_ID_PREFIX)),
+            "no gemini-free entry may be written back when revocation is intentional"
+        );
+
+        std::env::remove_var("GEMINI_API_KEY_1");
     }
 
     // ── keychain timeout path ────────────────────────────────────────────

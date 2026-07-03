@@ -1,8 +1,10 @@
-// conductor_router.rs — Quota-aware delegation target selector.
+// conductor_router.rs — Quota-aware delegation target selector (thin wrapper).
 //
-// Purpose: given a `ConductorRequest` (tier + optional model class + optional
-//   account override) and a `QuotaSnapshot` (live from quota.json), pick the
-//   best available worker backend and return a `ConductorTarget`.
+// Purpose: public API for the CLI conductor path. Since E1-S6 (router
+//   unification) the spill order + saturation/auth gating logic lives in
+//   `crate::selection` — the single shared selection module — and this module
+//   is a thin wrapper that preserves the original public API exactly:
+//   `select_target(&ConductorRequest, &QuotaSnapshot) -> Option<ConductorTarget>`.
 //
 //   Worker spill order: claude2(A2) → claude(A1 spare) → codex → gemini →
 //   opencode → gfp(GP). Any account whose five_hour or seven_day utilization
@@ -14,68 +16,24 @@
 // Outputs: `Option<ConductorTarget>` — None when all backends are exhausted.
 //
 // Constraints: pure (no I/O, no network, no async). All path resolution is
-//   the executor's responsibility.  Unit-tested via injected `QuotaSnapshot`.
+//   the executor's responsibility. The wrapper passes a default (no-signal)
+//   `GpHealthSnapshot`, so its behavior is IDENTICAL to the pre-unification
+//   implementation — no T3-GP preference on this path. Callers that have a
+//   live GP health signal should use `selection::select_account` directly.
 //
 // SPORT: MASTER-CLI.md — cascade delegate / conductor_router
 
-use std::path::PathBuf;
+use crate::selection::{self, SelectionRequest};
 
-use crate::model_ids::{
-    MODEL_CLAUDE_FABLE, MODEL_CLAUDE_HAIKU, MODEL_CLAUDE_OPUS, MODEL_CLAUDE_SONNET,
-    MODEL_GEMINI_FLASH, MODEL_GEMINI_PRO, MODEL_GLM, MODEL_GPT,
+// Canonical type definitions moved to `crate::selection` (E1-S6); re-exported
+// here so existing consumers (`cascade-cli` conductor) compile unchanged.
+pub use crate::selection::{
+    GpHealthSnapshot, ModelClass, Provider, QuotaAccount, QuotaSnapshot, Tier,
 };
 
+use std::path::PathBuf;
+
 // ── Public types ──────────────────────────────────────────────────────────────
-
-/// Work tier — mirrors the GCI T1/T2/T3 classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tier {
-    /// T1: decisions, architecture gates, CR-C. Default model: Opus.
-    T1,
-    /// T2: bulk execution, code gen, QA. Default model: Sonnet.
-    T2,
-    /// T3: cheap triage, grep+summarize, taxonomy. Default model: Haiku.
-    T3,
-}
-
-/// Optional model-class override. When absent the tier default is used.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModelClass {
-    Opus,
-    Sonnet,
-    Haiku,
-    /// Fable — hardest-reasoning tasks; only routed when a Fable-capable account
-    /// exists (identified by the `fable` provider tag in the registry).
-    Fable,
-}
-
-/// Which provider/CLI to use for execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Provider {
-    /// Anthropic Claude Code CLI (`claude`). Config dir selects the account.
-    Claude,
-    /// OpenAI Codex CLI (`codex`).
-    Codex,
-    /// Google Gemini via cascade-agy CLI. Unavailable when agy is absent.
-    Gemini,
-    /// OpenCode CLI (`opencode`).
-    OpenCode,
-    /// GFP: Gemini Free Pool via HTTP POST to the GP proxy (localhost:3762).
-    Gfp,
-}
-
-impl Provider {
-    /// Human-readable name for reporting.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Provider::Claude => "claude",
-            Provider::Codex => "codex",
-            Provider::Gemini => "gemini",
-            Provider::OpenCode => "opencode",
-            Provider::Gfp => "gfp",
-        }
-    }
-}
 
 /// A routing request — what kind of work and which account (if forced).
 #[derive(Debug, Clone)]
@@ -87,29 +45,6 @@ pub struct ConductorRequest {
     /// Force a specific account by account-id (e.g. `"claude2"`). When None
     /// the router applies the normal spill order.
     pub account_override: Option<String>,
-}
-
-/// A snapshot of one account's quota from `quota.json`.
-#[derive(Debug, Clone)]
-pub struct QuotaAccount {
-    /// Account identifier (e.g. `"claude"`, `"claude2"`, `"gfp-pool"`).
-    pub account: String,
-    /// Provider tag (e.g. `"claude"`, `"codex"`, `"gfp"`, `"opencode"`).
-    pub provider: String,
-    /// Auth status (`"ok"`, `"needs_reauth"`, `"pool"`, etc.).
-    pub status: String,
-    /// 5-hour utilization 0–100 (None = unknown / no window).
-    pub five_hour_utilization: Option<f64>,
-    /// 7-day utilization 0–100 (None = unknown / no window).
-    pub seven_day_utilization: Option<f64>,
-    /// Config dir for Claude accounts (e.g. `~/.claude2`).
-    pub config_dir: Option<PathBuf>,
-}
-
-/// Injected quota snapshot (all accounts from quota.json).
-#[derive(Debug, Clone, Default)]
-pub struct QuotaSnapshot {
-    pub accounts: Vec<QuotaAccount>,
 }
 
 /// The resolved dispatch target returned by `select_target`.
@@ -127,27 +62,6 @@ pub struct ConductorTarget {
     pub reason: String,
 }
 
-// ── Selection order ───────────────────────────────────────────────────────────
-
-/// Ordered list of preferred accounts per provider. The router tries each in
-/// order, skipping saturated or auth-dead entries.
-///
-/// The spill order is:
-///   claude2(A2) → claude(A1 spare) → codex → gemini → opencode → gfp
-///
-/// A1 is intentionally kept near the front so it remains usable as a worker
-/// spare; the interactive session runs A1 but does not exhaust it.
-const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
-    ("claude2", Provider::Claude),
-    ("claude", Provider::Claude),
-    ("codex-acc1", Provider::Codex),
-    ("codex", Provider::Codex),
-    ("gemini-agt", Provider::Gemini),
-    ("opencode-acc1", Provider::OpenCode),
-    ("opencode", Provider::OpenCode),
-    ("gfp-pool", Provider::Gfp),
-];
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Select the best available delegation target for `req` given live `quota`.
@@ -161,161 +75,43 @@ const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
 /// The provider field of the returned target tells the executor which CLI/
 /// adapter to invoke.  Whether the CLI binary is actually present on disk is
 /// the executor's responsibility — it should re-fall on `Unavailable` errors.
+///
+/// Thin wrapper over [`selection::select_account`] with a default (no-signal)
+/// GP health snapshot — semantics identical to the pre-E1-S6 implementation.
+/// Callers with a LIVE GP health signal (the CLI conductor probes
+/// `:3761/health`) must use [`select_target_with_gp`] so the T3-GP
+/// preference can actually fire in production.
 pub fn select_target(req: &ConductorRequest, quota: &QuotaSnapshot) -> Option<ConductorTarget> {
-    // Resolve the model-ID string to pass to the backend.
-    let model_class = req.model_class.unwrap_or_else(|| default_model_class(req.tier));
-    let base_model = model_id_for_class(model_class);
-
-    // Account override: try exactly that account; fail if saturated.
-    if let Some(ref acc_id) = req.account_override {
-        let qa = quota.accounts.iter().find(|a| &a.account == acc_id)?;
-        if is_saturated(qa) || !is_alive(qa) {
-            return None;
-        }
-        let (provider, model, reason) = resolve_provider_model(qa, model_class, base_model);
-        return Some(ConductorTarget {
-            provider,
-            account_id: qa.account.clone(),
-            config_dir: qa.config_dir.clone(),
-            model,
-            reason: format!("override: {reason}"),
-        });
-    }
-
-    // Normal spill: iterate the ordered list, find the first healthy account.
-    let mut tried: Vec<String> = Vec::new();
-
-    for (preferred_id, preferred_provider) in ACCOUNT_SPILL_ORDER {
-        // Look up this account in the snapshot; skip if absent.
-        let qa = quota.accounts.iter().find(|a| &a.account == preferred_id);
-        let Some(qa) = qa else {
-            continue;
-        };
-
-        if is_saturated(qa) || !is_alive(qa) {
-            tried.push(format!("{} (saturated/dead)", qa.account));
-            continue;
-        }
-
-        // Provider-model adaptation.
-        let (provider, model, why) = resolve_provider_model(qa, model_class, base_model);
-
-        // Sanity: prefer field and resolved provider should match.
-        // (They will always match — provider in snapshot drives it.)
-        let _ = preferred_provider; // used in ordering only
-
-        let reason = if tried.is_empty() {
-            format!("first-available: {why}")
-        } else {
-            format!("spill after [{}]: {why}", tried.join(", "))
-        };
-
-        return Some(ConductorTarget {
-            provider,
-            account_id: qa.account.clone(),
-            config_dir: qa.config_dir.clone(),
-            model,
-            reason,
-        });
-    }
-
-    None // All candidates exhausted.
+    select_target_with_gp(req, quota, &GpHealthSnapshot::default())
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Default model class per tier.
-fn default_model_class(tier: Tier) -> ModelClass {
-    match tier {
-        Tier::T1 => ModelClass::Opus,
-        Tier::T2 => ModelClass::Sonnet,
-        Tier::T3 => ModelClass::Haiku,
-    }
-}
-
-/// Model-ID string for a `ModelClass`.
+/// [`select_target`] with an injected live GP pool-health snapshot (E1-S6).
 ///
-/// Non-Claude model IDs:
-///   - Codex uses `gpt-5.5` (MODEL_GPT) regardless of class.
-///   - Gemini T1/T2 uses `gemini-3.1-pro`; T3/Haiku uses `gemini-3.5-flash`.
-///   - OpenCode uses `glm-5.2` (MODEL_GLM) regardless of class.
-///   - GFP always uses `gemini-3.5-flash` (free pool, Flash only).
-fn model_id_for_class(class: ModelClass) -> &'static str {
-    match class {
-        ModelClass::Opus => MODEL_CLAUDE_OPUS,
-        ModelClass::Sonnet => MODEL_CLAUDE_SONNET,
-        ModelClass::Haiku => MODEL_CLAUDE_HAIKU,
-        ModelClass::Fable => MODEL_CLAUDE_FABLE,
-    }
-}
-
-/// Return true if the account is quota-saturated (either window >= 100).
-fn is_saturated(qa: &QuotaAccount) -> bool {
-    let fh = qa.five_hour_utilization.unwrap_or(0.0);
-    let sd = qa.seven_day_utilization.unwrap_or(0.0);
-    fh >= 100.0 || sd >= 100.0
-}
-
-/// Return true if the account status is usable ("ok" or "pool").
-fn is_alive(qa: &QuotaAccount) -> bool {
-    matches!(qa.status.as_str(), "ok" | "pool")
-}
-
-/// Map a `QuotaAccount` to `(Provider, model_id, reason_fragment)`.
-///
-/// Provider is derived from the account's provider tag; the model-ID is
-/// adapted when the account is not Claude (Claude uses the requested class
-/// directly; others use their own model families).
-fn resolve_provider_model(
-    qa: &QuotaAccount,
-    class: ModelClass,
-    claude_model: &str,
-) -> (Provider, String, String) {
-    match qa.provider.as_str() {
-        "claude" => {
-            let model = claude_model.to_string();
-            let reason = format!("claude account `{}`, model {}", qa.account, model);
-            (Provider::Claude, model, reason)
+/// Inputs:  `gp` — built from the GP proxy's live `/health` endpoint (see
+///          `routing::gfp_http::probe_gp_health`) or from real routing-table
+///          slots; pass `GpHealthSnapshot::default()` when no live signal
+///          exists (disables the T3-GP preference — never guess health).
+/// Outputs: identical to [`select_target`], except that a T3 request with a
+///          healthy pool prefers `gfp` BEFORE the claude spill.
+pub fn select_target_with_gp(
+    req: &ConductorRequest,
+    quota: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
+) -> Option<ConductorTarget> {
+    let sel_req = SelectionRequest {
+        tier: req.tier,
+        model_class: req.model_class,
+        account_override: req.account_override.clone(),
+    };
+    selection::select_account(&sel_req, quota, gp).map(|t| {
+        ConductorTarget {
+            provider: t.provider,
+            account_id: t.account_id,
+            config_dir: t.config_dir,
+            model: t.model,
+            reason: t.reason,
         }
-        "codex" => {
-            // Codex uses GPT-5.5 for all tiers; class is noted for logging only.
-            let model = MODEL_GPT.to_string();
-            let reason = format!(
-                "codex account `{}`, model {} (requested class={:?})",
-                qa.account, model, class
-            );
-            (Provider::Codex, model, reason)
-        }
-        "gemini" | "google-agt" | "google-agy" => {
-            // Gemini: T1/Opus/Fable → pro; T3/Haiku → flash; T2/Sonnet → pro.
-            let model = match class {
-                ModelClass::Haiku => MODEL_GEMINI_FLASH.to_string(),
-                _ => MODEL_GEMINI_PRO.to_string(),
-            };
-            let reason = format!("gemini account `{}`, model {}", qa.account, model);
-            (Provider::Gemini, model, reason)
-        }
-        "opencode" => {
-            let model = MODEL_GLM.to_string();
-            let reason = format!("opencode account `{}`, model {}", qa.account, model);
-            (Provider::OpenCode, model, reason)
-        }
-        "gfp" => {
-            // GFP free-pool: always Flash.
-            let model = MODEL_GEMINI_FLASH.to_string();
-            let reason = format!(
-                "gfp pool `{}`, model {} (HTTP proxy)",
-                qa.account, model
-            );
-            (Provider::Gfp, model, reason)
-        }
-        other => {
-            // Unknown provider: treat as Codex-family for lack of better option.
-            let model = MODEL_GPT.to_string();
-            let reason = format!("unknown provider `{other}` on `{}`, defaulting to gpt", qa.account);
-            (Provider::Codex, model, reason)
-        }
-    }
+    })
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -323,6 +119,9 @@ fn resolve_provider_model(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model_ids::{
+        MODEL_CLAUDE_HAIKU, MODEL_CLAUDE_OPUS, MODEL_CLAUDE_SONNET, MODEL_GEMINI_FLASH, MODEL_GPT,
+    };
 
     // Helper: build a minimal healthy Claude account entry.
     fn claude_entry(account: &str, config_dir: &str, fh: f64, sd: f64) -> QuotaAccount {
@@ -568,5 +367,78 @@ mod tests {
             "reason should mention spill: {}",
             target.reason
         );
+    }
+
+    // ── Live-GP entry point (E1-S6 review fix) ───────────────────────────────
+
+    /// Regression: the T3-GP preference was dead code because no production
+    /// caller supplied a live snapshot. `select_target_with_gp` + a healthy
+    /// pool must prefer gfp over the claude spill for T3.
+    #[test]
+    fn select_target_with_gp_prefers_gfp_on_t3_when_pool_healthy() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
+                claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
+                gfp_entry(),
+            ],
+        };
+        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let gp = GpHealthSnapshot { healthy_slots: 5 };
+        let target = select_target_with_gp(&req, &snapshot, &gp).expect("target");
+        assert_eq!(target.provider, Provider::Gfp);
+        assert_eq!(target.account_id, "gfp-pool");
+        assert!(target.reason.starts_with("t3-gp-preferred:"), "reason: {}", target.reason);
+    }
+
+    /// With no live signal (default snapshot) T3 must spill to claude2 haiku —
+    /// exactly the pre-unification behavior.
+    #[test]
+    fn select_target_with_gp_default_snapshot_keeps_claude_spill() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
+                gfp_entry(),
+            ],
+        };
+        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let target =
+            select_target_with_gp(&req, &snapshot, &GpHealthSnapshot::default()).expect("target");
+        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.model, MODEL_CLAUDE_HAIKU);
+    }
+
+    // ── Wrapper parity with selection::select_account (E1-S6) ─────────────────
+
+    /// The wrapper must produce the exact same target as calling the shared
+    /// selection module directly (default GP snapshot) — T1 and T2 cases.
+    #[test]
+    fn wrapper_parity_with_selection_module() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                claude_entry("claude2", "/home/user/.claude2", 100.0, 50.0),
+                claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
+                codex_entry("codex-acc1"),
+            ],
+        };
+        for tier in [Tier::T1, Tier::T2] {
+            let req = ConductorRequest { tier, model_class: None, account_override: None };
+            let wrapped = select_target(&req, &snapshot).expect("wrapper target");
+            let direct = crate::selection::select_account(
+                &crate::selection::SelectionRequest {
+                    tier,
+                    model_class: None,
+                    account_override: None,
+                },
+                &snapshot,
+                &crate::selection::GpHealthSnapshot::default(),
+            )
+            .expect("direct target");
+            assert_eq!(wrapped.provider, direct.provider);
+            assert_eq!(wrapped.account_id, direct.account_id);
+            assert_eq!(wrapped.config_dir, direct.config_dir);
+            assert_eq!(wrapped.model, direct.model);
+            assert_eq!(wrapped.reason, direct.reason);
+        }
     }
 }

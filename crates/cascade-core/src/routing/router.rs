@@ -69,6 +69,7 @@ use crate::{
     accounts_store::read_accounts_registry,
     quota_store::read_quota_store,
     routing::task_class::TaskClass,
+    selection::{self, Gate, Tier},
     sensitivity::{classify_sensitivity, ContentSensitivity, SensitivityPolicy},
 };
 
@@ -234,6 +235,12 @@ impl Router {
         let registry = self.load_registry();
         let quota = self.load_quota();
 
+        // E1-S6: the six TaskClass semantics resolve through the shared
+        // selection module — TaskClass → Tier mapping + the shared spill/
+        // gating engine (`selection::spill_select`). Sensitivity gating is
+        // applied here BEFORE any account reaches the shared spill logic.
+        let tier = selection::tier_for_task_class(task_class);
+
         let decision = match task_class {
             // ── InteractiveChat: PrimaryT0 Claude, never delegated ────────────
             TaskClass::InteractiveChat => RoutingDecision::Reserved {
@@ -253,16 +260,20 @@ impl Router {
 
                 // Pooled Claude first (drain before PrimaryT0).
                 if let Some(accs) = &registry {
-                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
+                    let pooled = sorted_by_priority(accs.accounts.iter().filter(|a| {
                         a.family == AccountFamily::Claude && a.role == AccountRole::Pooled
-                    })) {
-                        if let Some(d) = try_account(
-                            acc, sensitivity, &quota, &self.sensitivity_policy,
-                            "BulkExec → Pooled Claude (drain first)", &mut tried,
-                        ) {
-                            self.emit_event(task_class, &d);
-                            return d;
-                        }
+                    }));
+                    if let Some(acc) = selection::spill_select(
+                        pooled.iter().copied(),
+                        |a| self.gate_account(a, sensitivity, &quota),
+                        |a| a.id.clone(),
+                        &mut tried,
+                    ) {
+                        let d = lane_decision(
+                            acc, tier, "BulkExec → Pooled Claude (drain first)",
+                        );
+                        self.emit_event(task_class, &d);
+                        return d;
                     }
                 }
 
@@ -270,16 +281,20 @@ impl Router {
                 if sensitivity == ContentSensitivity::Public {
                     if let Some(accs) = &registry {
                         for family in &[AccountFamily::Openai, AccountFamily::Opencode] {
-                            for acc in sorted_by_priority(
+                            let cands = sorted_by_priority(
                                 accs.accounts.iter().filter(|a| &a.family == family),
+                            );
+                            if let Some(acc) = selection::spill_select(
+                                cands.iter().copied(),
+                                |a| self.gate_account(a, sensitivity, &quota),
+                                |a| a.id.clone(),
+                                &mut tried,
                             ) {
-                                if let Some(d) = try_account(
-                                    acc, sensitivity, &quota, &self.sensitivity_policy,
-                                    "BulkExec → external overflow", &mut tried,
-                                ) {
-                                    self.emit_event(task_class, &d);
-                                    return d;
-                                }
+                                let d = lane_decision(
+                                    acc, tier, "BulkExec → external overflow",
+                                );
+                                self.emit_event(task_class, &d);
+                                return d;
                             }
                         }
                     }
@@ -297,16 +312,18 @@ impl Router {
 
                 if sensitivity == ContentSensitivity::Public {
                     if let Some(accs) = &registry {
-                        for acc in sorted_by_priority(
+                        let cands = sorted_by_priority(
                             accs.accounts.iter().filter(|a| a.family == AccountFamily::Gfp),
+                        );
+                        if let Some(acc) = selection::spill_select(
+                            cands.iter().copied(),
+                            |a| self.gate_account(a, sensitivity, &quota),
+                            |a| a.id.clone(),
+                            &mut tried,
                         ) {
-                            if let Some(d) = try_account(
-                                acc, sensitivity, &quota, &self.sensitivity_policy,
-                                "Cheap → Gfp free Flash (max it)", &mut tried,
-                            ) {
-                                self.emit_event(task_class, &d);
-                                return d;
-                            }
+                            let d = lane_decision(acc, tier, "Cheap → Gfp free Flash (max it)");
+                            self.emit_event(task_class, &d);
+                            return d;
                         }
                     }
                 } else {
@@ -342,16 +359,18 @@ impl Router {
                         AccountFamily::Openai,
                         AccountFamily::Opencode,
                     ] {
-                        for acc in sorted_by_priority(
+                        let cands = sorted_by_priority(
                             accs.accounts.iter().filter(|a| &a.family == family),
+                        );
+                        if let Some(acc) = selection::spill_select(
+                            cands.iter().copied(),
+                            |a| self.gate_account(a, sensitivity, &quota),
+                            |a| a.id.clone(),
+                            &mut tried,
                         ) {
-                            if let Some(d) = try_account(
-                                acc, sensitivity, &quota, &self.sensitivity_policy,
-                                "AdversarialReview → cross-family", &mut tried,
-                            ) {
-                                self.emit_event(task_class, &d);
-                                return d;
-                            }
+                            let d = lane_decision(acc, tier, "AdversarialReview → cross-family");
+                            self.emit_event(task_class, &d);
+                            return d;
                         }
                     }
                 }
@@ -364,27 +383,25 @@ impl Router {
                 let mut tried: Vec<String> = Vec::new();
 
                 if let Some(accs) = &registry {
-                    // Pooled Claude first (drain before PrimaryT0).
-                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
-                        a.family == AccountFamily::Claude && a.role == AccountRole::Pooled
-                    })) {
-                        if let Some(d) = try_account(
-                            acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
-                            "Sensitive → Pooled Claude (trusted, drain first)", &mut tried,
+                    // Pooled Claude first (drain before PrimaryT0), then
+                    // PrimaryT0 as last trusted option before local. Both
+                    // groups are gated with forced Sensitive classification —
+                    // the firewall applies BEFORE the shared spill logic.
+                    let groups: [(AccountRole, &str); 2] = [
+                        (AccountRole::Pooled, "Sensitive → Pooled Claude (trusted, drain first)"),
+                        (AccountRole::PrimaryT0, "Sensitive → PrimaryT0 Claude (trusted)"),
+                    ];
+                    for (role, prefix) in groups {
+                        let cands = sorted_by_priority(accs.accounts.iter().filter(|a| {
+                            a.family == AccountFamily::Claude && a.role == role
+                        }));
+                        if let Some(acc) = selection::spill_select(
+                            cands.iter().copied(),
+                            |a| self.gate_account(a, ContentSensitivity::Sensitive, &quota),
+                            |a| a.id.clone(),
+                            &mut tried,
                         ) {
-                            self.emit_event(task_class, &d);
-                            return d;
-                        }
-                    }
-
-                    // PrimaryT0 as last trusted option before local.
-                    for acc in sorted_by_priority(accs.accounts.iter().filter(|a| {
-                        a.family == AccountFamily::Claude && a.role == AccountRole::PrimaryT0
-                    })) {
-                        if let Some(d) = try_account(
-                            acc, ContentSensitivity::Sensitive, &quota, &self.sensitivity_policy,
-                            "Sensitive → PrimaryT0 Claude (trusted)", &mut tried,
-                        ) {
+                            let d = lane_decision(acc, tier, prefix);
                             self.emit_event(task_class, &d);
                             return d;
                         }
@@ -427,6 +444,31 @@ impl Router {
             model: String::new(),
             reason,
         });
+    }
+
+    /// Gate a single account for the shared spill engine (E1-S6).
+    ///
+    /// Applies, in order: sensitivity firewall (BEFORE selection — see
+    /// `selection::tier_for_task_class` docs), quota exhaustion (shared
+    /// saturation predicate `selection::pcts_saturated`), and CLI
+    /// availability. Skip reasons match the pre-unification `tried` strings.
+    fn gate_account(
+        &self,
+        acc: &Account,
+        sensitivity: ContentSensitivity,
+        quota: &Option<QuotaStore>,
+    ) -> Gate {
+        if self.sensitivity_policy.check(sensitivity, &acc.id).is_deny() {
+            return Gate::Skip("firewall: sensitive".into());
+        }
+        if account_is_exhausted(quota, &acc.id) {
+            return Gate::Skip("quota exhausted".into());
+        }
+        // GFP uses key-pool access; no CLI binary to check.
+        if !acc.cli_available && acc.family != AccountFamily::Gfp {
+            return Gate::Skip("cli unavailable".into());
+        }
+        Gate::Pass
     }
 
     /// Load the accounts registry from disk. Returns `None` on error or absent.
@@ -474,54 +516,30 @@ where
     v
 }
 
-/// Attempt to select `acc` as a routing target.
-///
-/// Skips the account on: firewall deny, quota exhaustion, or CLI unavailable.
-/// Appends a descriptive entry to `tried` on every skip.
-/// Returns `Some(RoutingDecision::Lane)` on success.
-fn try_account(
-    acc: &Account,
-    sensitivity: ContentSensitivity,
-    quota: &Option<QuotaStore>,
-    policy: &SensitivityPolicy,
-    reason_prefix: &str,
-    tried: &mut Vec<String>,
-) -> Option<RoutingDecision> {
-    if policy.check(sensitivity, &acc.id).is_deny() {
-        tried.push(format!("{} (firewall: sensitive)", acc.id));
-        return None;
-    }
-    if account_is_exhausted(quota, &acc.id) {
-        tried.push(format!("{} (quota exhausted)", acc.id));
-        return None;
-    }
-    // GFP uses key-pool access; no CLI binary to check.
-    if !acc.cli_available && acc.family != AccountFamily::Gfp {
-        tried.push(format!("{} (cli unavailable)", acc.id));
-        return None;
-    }
-    Some(RoutingDecision::Lane {
+/// Build a `Lane` decision for a gated-in account, tagging the tier resolved
+/// via `selection::tier_for_task_class` so routing reasons show the shared
+/// tier resolution.
+fn lane_decision(acc: &Account, tier: Tier, reason_prefix: &str) -> RoutingDecision {
+    RoutingDecision::Lane {
         provider_id: acc.id.clone(),
-        reason: format!("{} — {}", reason_prefix, acc.id),
-    })
+        reason: format!("{} [{:?}] — {}", reason_prefix, tier, acc.id),
+    }
 }
 
 /// Returns `true` when the account is at or above 100% usage in the quota store.
 ///
 /// When no quota store is available, or the account is not tracked, returns
-/// `false` (conservative: assume headroom exists).
+/// `false` (conservative: assume headroom exists). The threshold check uses
+/// the shared saturation predicate `selection::pcts_saturated` (E1-S6).
 fn account_is_exhausted(quota: &Option<QuotaStore>, account_id: &str) -> bool {
     let Some(qs) = quota else {
         return false;
     };
     for entry in &qs.accounts {
         if entry.account_id == account_id || entry.provider == account_id {
-            for model_usage in entry.models.values() {
-                if let Some(pct) = model_usage.pct_used {
-                    if pct >= 100.0 {
-                        return true;
-                    }
-                }
+            let pcts = entry.models.values().filter_map(|m| m.pct_used.map(f64::from));
+            if selection::pcts_saturated(pcts) {
+                return true;
             }
         }
     }

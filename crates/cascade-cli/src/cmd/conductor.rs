@@ -1,10 +1,10 @@
-// delegate.rs — `cascade delegate` subcommand.
+// conductor.rs — `cascade conductor` subcommand (Cascade Conductor).
 //
 // Purpose: quota-aware delegation to worker AI accounts. Routes a prompt to
 //   the best available backend (A2 → A1-spare → Codex → Gemini → OpenCode →
 //   GFP) and executes via the appropriate CLI, falling back on `Unavailable`.
 //
-//   Subcommand `cascade delegate selftest` probes every known provider and
+//   Subcommand `cascade conductor selftest` probes every known provider and
 //   reports available/unavailable + latency for each reachable one.
 //
 // Inputs:  CLI args (tier, model, account, prompt, --dry-run, --json).
@@ -17,7 +17,7 @@
 //   - On Unavailable → fall to next target; records fallbacks_tried.
 //   - Real backends only — no stubs, no fake success.
 //
-// SPORT: MASTER-CLI.md — cascade delegate
+// SPORT: MASTER-CLI.md — cascade conductor
 
 use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
@@ -27,9 +27,10 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use cascade_core::accounts_store::quota_json_path;
 use cascade_core::conductor_router::{
-    ConductorRequest, ConductorTarget, ModelClass, Provider, QuotaAccount, QuotaSnapshot, Tier,
-    select_target,
+    ConductorRequest, ConductorTarget, GpHealthSnapshot, ModelClass, Provider, QuotaAccount,
+    QuotaSnapshot, Tier, select_target_with_gp,
 };
+use cascade_core::routing::gfp_http::{probe_gp_health, GFP_HEALTH_URL};
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
 use serde_json::Value;
@@ -38,7 +39,7 @@ use super::Command;
 
 // ── Clap types ────────────────────────────────────────────────────────────────
 
-/// Arguments for `cascade delegate`.
+/// Arguments for `cascade conductor`.
 #[derive(Debug, Args)]
 pub struct ConductorArgs {
     #[command(subcommand)]
@@ -73,7 +74,7 @@ pub struct ConductorArgs {
     pub json: bool,
 }
 
-/// Subcommands under `cascade delegate`.
+/// Subcommands under `cascade conductor`.
 #[derive(Debug, Subcommand)]
 pub enum ConductorCommands {
     /// Probe each provider and report available/unavailable + latency.
@@ -120,7 +121,7 @@ impl Command for ConductorArgs {
             Some(TierArg::T2) => Tier::T2,
             Some(TierArg::T3) => Tier::T3,
             None => {
-                eprintln!("cascade delegate: --tier is required (T1|T2|T3)");
+                eprintln!("cascade conductor: --tier is required (T1|T2|T3)");
                 std::process::exit(1);
             }
         };
@@ -145,9 +146,15 @@ impl Command for ConductorArgs {
         // Load live quota snapshot.
         let snapshot = load_quota_snapshot();
 
+        // Live GP pool health (E1-S6): probed from the proxy's /health
+        // endpoint for T3 work so the T3-GP preference can actually fire.
+        // Any probe failure yields the default (unhealthy) snapshot — the
+        // spill order is then identical to the pre-unification behavior.
+        let gp = gp_health_for_tier(tier);
+
         // Select target.
-        let Some(target) = select_target(&req, &snapshot) else {
-            let msg = "cascade delegate: no available backend (all accounts saturated or unavailable)";
+        let Some(target) = select_target_with_gp(&req, &snapshot, &gp) else {
+            let msg = "cascade conductor: no available backend (all accounts saturated or unavailable)";
             if self.json {
                 println!("{}", serde_json::json!({"error": msg}));
             } else {
@@ -178,7 +185,23 @@ impl Command for ConductorArgs {
         }
 
         // Execute — with fallback on Unavailable.
-        execute_with_fallback(&req, &snapshot, target, &prompt, self.json)
+        execute_with_fallback(&req, &snapshot, &gp, target, &prompt, self.json)
+    }
+}
+
+// ── GP pool health probe (E1-S6) ─────────────────────────────────────────────
+
+/// Probe the live GP pool health, but only when it can change the outcome.
+///
+/// The T3-GP preference is the only consumer of this signal in the conductor
+/// path, so T1/T2 requests skip the probe entirely (no added latency). The
+/// probe hits the gemini_proxy's `/health` endpoint (:3761), which reports
+/// LIVE routing-table state including 429 cooldowns — never static config.
+fn gp_health_for_tier(tier: Tier) -> GpHealthSnapshot {
+    if tier == Tier::T3 {
+        probe_gp_health(GFP_HEALTH_URL, Duration::from_secs(2))
+    } else {
+        GpHealthSnapshot::default()
     }
 }
 
@@ -193,7 +216,7 @@ fn build_prompt(prompt_text: &Option<String>, prompt_file: &Option<PathBuf>) -> 
             .map_err(|e| CascadeError::io(path.clone(), "read", e));
     }
     Err(CascadeError::Other(
-        "cascade delegate: one of --prompt or --prompt-file is required".to_string(),
+        "cascade conductor: one of --prompt or --prompt-file is required".to_string(),
     ))
 }
 
@@ -270,6 +293,7 @@ pub enum Outcome {
 fn execute_with_fallback(
     req: &ConductorRequest,
     snapshot: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
     initial_target: ConductorTarget,
     prompt: &str,
     json_output: bool,
@@ -299,7 +323,7 @@ fn execute_with_fallback(
             }
             Outcome::Unavailable { reason } => {
                 eprintln!(
-                    "cascade delegate: {} unavailable ({}), trying next...",
+                    "cascade conductor: {} unavailable ({}), trying next...",
                     current.account_id, reason
                 );
                 tried.push(format!("{} ({})", current.account_id, reason));
@@ -321,9 +345,9 @@ fn execute_with_fallback(
                     account_override: None,
                 };
 
-                let Some(next) = select_target(&next_req, &snapshot_copy) else {
+                let Some(next) = select_target_with_gp(&next_req, &snapshot_copy, gp) else {
                     let msg = format!(
-                        "cascade delegate: all backends exhausted (tried: {})",
+                        "cascade conductor: all backends exhausted (tried: {})",
                         tried.join(", ")
                     );
                     if json_output {
@@ -342,7 +366,7 @@ fn execute_with_fallback(
             }
             Outcome::Error { message } => {
                 let msg = format!(
-                    "cascade delegate: backend `{}` error: {}",
+                    "cascade conductor: backend `{}` error: {}",
                     current.account_id, message
                 );
                 if json_output {
@@ -355,7 +379,7 @@ fn execute_with_fallback(
         }
     }
 
-    let msg = format!("cascade delegate: all backends exhausted (tried: {})", tried.join(", "));
+    let msg = format!("cascade conductor: all backends exhausted (tried: {})", tried.join(", "));
     if json_output {
         println!("{}", serde_json::json!({"error": msg}));
     } else {

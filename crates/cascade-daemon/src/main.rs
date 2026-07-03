@@ -42,6 +42,10 @@ mod provider_health;
 mod quota_poller;
 #[cfg(feature = "gfp")]
 mod project_poller;
+// ram-guardian: OOM-prevention subsystem — memory sampling + conservative
+// stray rustc/vitest reaper. Runs unconditionally alongside other daemon
+// tasks (local-only, no external network surface, no feature gate needed).
+mod ram_guardian;
 mod regen;
 mod shutdown;
 mod state;
@@ -70,6 +74,9 @@ mod scheduler;
 mod automation_router;
 // nsentry-sync: daemon-owned multi-stream nSentry sync subsystem
 mod nsentry_sync;
+// continuity: reset-time triggers to auto-resume Claude Code sessions once a
+// usage-cap window clears (E2-S1)
+mod continuity;
 // T-P4-E04-12/13/14/16: delta bundle format, snapshot layout, Ed25519
 // verification, full-bundle fallback install, and the update_check/apply/auto
 // IPC handlers (wired in ipc.rs try_typed_dispatch).
@@ -217,10 +224,45 @@ async fn main() {
         let entries = read_providers_store(&providers_path)
             .map(|s| s.providers)
             .unwrap_or_default();
+
+        // E1-S6: count routable GP slots BEFORE `entries` is consumed below —
+        // the pool-backed chat adapter is only registered when at least one
+        // exists (same filter as `RoutingTable::new`).
+        #[cfg(feature = "gemini-proxy")]
+        let routable_gp_slots = entries
+            .iter()
+            .filter(|p| p.enabled && p.harness == "gemini" && p.local_ok)
+            .count();
+
         for entry in entries.into_iter().filter(|p| p.enabled) {
             let id = entry.id.clone();
             if let Err(e) = provider_registry.register(id.clone(), Arc::new(NoopProvider)) {
                 warn!(provider_id = %id, error = %e, "failed to register provider (skipping)");
+            }
+        }
+
+        // ── GP-first chat adapter (E1-S6) ─────────────────────────────────
+        // Register a REAL pool-proxy GeminiAdapter (:3761 rotating pool, 429
+        // cooldown handled by the proxy) under the reserved id the chat
+        // GP-preference targets (`selection::GP_CHAT_PROVIDER_ID`). Without
+        // this the preference would be a silent no-op: providers.json entries
+        // above are NoopProvider placeholders under their own ids
+        // ("gemini-free-N"), and no adapter ever answers to the reserved id.
+        // Gated on the gemini-proxy feature — the :3761 pool only runs then.
+        #[cfg(feature = "gemini-proxy")]
+        if routable_gp_slots > 0 {
+            use cascade_providers::adapters::gemini::{GeminiAdapter, GeminiConfig};
+            let gp_id = cascade_core::selection::GP_CHAT_PROVIDER_ID.to_string();
+            match provider_registry
+                .register(gp_id.clone(), Arc::new(GeminiAdapter::new(GeminiConfig::proxy())))
+            {
+                Ok(()) => info!(
+                    provider_id = %gp_id,
+                    slots = routable_gp_slots,
+                    "registered GP pool-backed chat adapter"
+                ),
+                Err(e) => warn!(provider_id = %gp_id, error = %e,
+                    "failed to register GP pool-backed chat adapter"),
             }
         }
     }
@@ -243,6 +285,26 @@ async fn main() {
         health_shutdown.clone(),
     );
     info!("provider health-check task spawned (non-blocking)");
+
+    // ── RAM Guardian task ─────────────────────────────────────────────────
+    // OOM-prevention: samples free memory every 30s and, only when memory is
+    // tight, reaps orphaned rustc/vitest strays (reparented + old). See
+    // ram_guardian.rs module docs for the full safety contract. Uses its own
+    // CancellationToken (mirrors health_shutdown) so it can be cancelled
+    // independently of the top-level shutdown_token created below.
+    let ram_guardian_shutdown = CancellationToken::new();
+    let _ram_guardian_handle =
+        ram_guardian::spawn(config_dir.clone(), ram_guardian_shutdown.clone());
+    info!("ram_guardian task spawned (non-blocking)");
+
+    // ── Continuity watcher task ─────────────────────────────────────────────
+    // Watches ~/.cascade/continuity/*.json and fires due intents once the
+    // named account's quota window clears. Uses its own CancellationToken
+    // (mirrors ram_guardian_shutdown) so it can be cancelled independently of
+    // the top-level shutdown_token created below.
+    let continuity_shutdown = CancellationToken::new();
+    let _continuity_handle = continuity::spawn(continuity_shutdown.clone());
+    info!("continuity task spawned (non-blocking)");
 
     // ── Tray thread setup ─────────────────────────────────────────────────
     // Create the tray state update channel. The async side (supervisor,
@@ -358,6 +420,12 @@ async fn main() {
 
     // ── Provider health task shutdown ─────────────────────────────────────
     health_shutdown.cancel();
+
+    // ── RAM Guardian task shutdown ─────────────────────────────────────────
+    ram_guardian_shutdown.cancel();
+
+    // ── Continuity task shutdown ────────────────────────────────────────────
+    continuity_shutdown.cancel();
 
     // ── Tray thread shutdown ───────────────────────────────────────────────
     // Send the Shutdown signal so the tray thread removes the icon from the

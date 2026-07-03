@@ -258,6 +258,9 @@ mod tests {
 
     #[tokio::test]
     async fn capture_routes_to_decisions() {
+        // Hermetic: force the GFP lane off so classify_topic stays rule-based
+        // even when a live GP proxy is running on the test host.
+        std::env::set_var("CASCADE_GFP_LANE_OFF", "1");
         let tmp = tempfile::tempdir().expect("tempdir");
         let cascade_dir = tmp.path().to_path_buf();
         std::fs::create_dir_all(cascade_dir.join("memory")).expect("mkdir");
@@ -283,6 +286,8 @@ mod tests {
 
     #[tokio::test]
     async fn capture_routes_to_lessons() {
+        // Hermetic: rule-based classification only (see capture_routes_to_decisions).
+        std::env::set_var("CASCADE_GFP_LANE_OFF", "1");
         let tmp = tempfile::tempdir().expect("tempdir");
         let cascade_dir = tmp.path().to_path_buf();
         std::fs::create_dir_all(cascade_dir.join("memory")).expect("mkdir");

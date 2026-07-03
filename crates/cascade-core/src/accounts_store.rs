@@ -171,7 +171,7 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
 
         // Email: prefer subscription note, fall back to account id.
         let email: Option<&str> = acc.notes.as_deref()
-            .or_else(|| Some(acc.subscription.as_str()));
+            .or(Some(acc.subscription.as_str()));
 
         // Try to find a matching entry in the legacy cache.
         let legacy_entry = legacy.as_ref().and_then(|entries| {

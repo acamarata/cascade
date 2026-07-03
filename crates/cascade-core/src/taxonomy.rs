@@ -222,6 +222,7 @@ fn detect_domain(lower: &str) -> Vec<Tag> {
 ///
 /// # Examples
 /// ```
+/// # std::env::set_var("CASCADE_GFP_LANE_OFF", "1"); // hermetic doc test — no live GP call
 /// use cascade_core::taxonomy::classify_topic;
 /// // Works without any GFP provider configured — returns rule-based tags.
 /// let tags = classify_topic("avoid using unwrap() in library code");
@@ -243,6 +244,14 @@ fn gfp_classify(text: &str) -> Option<Vec<Tag>> {
     use crate::routing::delegate::{DelegateLane, GfpLane, LaneResult};
 
     let lane = GfpLane;
+    // Sensitivity firewall: GfpLane is an EXTERNAL lane ("blocked for
+    // Sensitive content" — delegate.rs contract). This path calls the lane
+    // directly, without Router::select, so the gate MUST be applied here:
+    // sensitive snippet text (PII / VA / health / financial) never leaves
+    // the machine for classification — the rule-based path handles it.
+    if !gfp_may_process(text, lane.provider_id()) {
+        return None;
+    }
     if !lane.check_availability().is_available() {
         return None;
     }
@@ -254,6 +263,18 @@ fn gfp_classify(text: &str) -> Option<Vec<Tag>> {
         Ok(LaneResult::Output(output)) => parse_gfp_classify_response(&output),
         _ => None,
     }
+}
+
+/// Sensitivity firewall gate for the GFP classification path (pure).
+///
+/// Returns `true` only when the canonical `SensitivityPolicy` allows sending
+/// `text` to `provider_id`. GFP (`gfp`) is untrusted for Sensitive content,
+/// so any snippet the conservative classifier flags stays local.
+fn gfp_may_process(text: &str, provider_id: &str) -> bool {
+    use crate::sensitivity::{classify_sensitivity, SensitivityPolicy};
+    SensitivityPolicy::new()
+        .check(classify_sensitivity(text), provider_id)
+        .is_allow()
 }
 
 fn build_classify_prompt(text: &str) -> String {
@@ -268,6 +289,16 @@ fn build_classify_prompt(text: &str) -> String {
     )
 }
 
+/// Parse the model's first line into tags — STRICT whitelist.
+///
+/// The rule-based result is authoritative whenever GFP produces no parseable
+/// output, so this parser must reject junk rather than adopt it:
+///   - Unknown tokens are DROPPED (never `Tag::Custom`) — a conversational
+///     first line ("Sure, here are the tags: decision") must not manufacture
+///     tags that override the deterministic rule-based result.
+///   - The parsed set must contain at least one primary tag
+///     (decision/lesson/pattern); otherwise `None` → rule-based fallback.
+///     Every memory entry needs a primary tag to route to a memory file.
 fn parse_gfp_classify_response(response: &str) -> Option<Vec<Tag>> {
     let line = response.lines().next()?.trim();
     let tags: Vec<Tag> = line
@@ -275,9 +306,17 @@ fn parse_gfp_classify_response(response: &str) -> Option<Vec<Tag>> {
         .map(|s| s.trim().to_lowercase())
         .filter_map(|s| string_to_tag(&s))
         .collect();
-    if tags.is_empty() { None } else { Some(tags) }
+    if tags.is_empty() || !tags.iter().any(Tag::is_primary) {
+        None
+    } else {
+        Some(tags)
+    }
 }
 
+/// Map a lowercase token to a known [`Tag`] — whitelist only.
+///
+/// Unknown tokens return `None` (never `Tag::Custom`): the GFP prompt asks
+/// for tags from a fixed vocabulary, so anything else is model junk.
 fn string_to_tag(s: &str) -> Option<Tag> {
     match s {
         "decision" => Some(Tag::Decision),
@@ -292,8 +331,7 @@ fn string_to_tag(s: &str) -> Option<Tag> {
         "config" => Some(Tag::Config),
         "errors" => Some(Tag::Errors),
         "data-model" => Some(Tag::DataModel),
-        "" => None,
-        other => Some(Tag::Custom(other.to_string())),
+        _ => None,
     }
 }
 
@@ -369,7 +407,9 @@ mod tests {
 
     #[test]
     fn classify_topic_without_gfp_returns_rule_based() {
-        // GFP lane returns Unavailable in test environments with no keys.
+        // Hermetic: force the GFP lane off so no live proxy on the test host
+        // can inject model output into this assertion.
+        std::env::set_var("CASCADE_GFP_LANE_OFF", "1");
         // classify_topic() must still return a valid non-empty result.
         let tags = classify_topic("learned to avoid blocking the async runtime in tests");
         assert!(!tags.is_empty(), "must return tags even without GFP");
@@ -394,10 +434,51 @@ mod tests {
         assert!(tags.is_none());
     }
 
+    /// Regression (E1-S6 review): unknown tokens must be DROPPED, not turned
+    /// into `Tag::Custom` — model junk must never override rule-based tags.
     #[test]
-    fn parse_gfp_response_unknown_tag_becomes_custom() {
+    fn parse_gfp_response_unknown_tag_is_dropped() {
         let resp = "decision, somethingweird";
         let tags = parse_gfp_classify_response(resp).unwrap();
-        assert!(tags.contains(&Tag::Custom("somethingweird".into())));
+        assert_eq!(tags, vec![Tag::Decision]);
+        assert!(!tags.iter().any(|t| matches!(t, Tag::Custom(_))));
+    }
+
+    /// A conversational first line with no whitelisted token parses to None
+    /// so the caller falls back to the rule-based result.
+    #[test]
+    fn parse_gfp_response_conversational_junk_is_none() {
+        assert!(parse_gfp_classify_response("Sure! Here are the tags you asked for").is_none());
+    }
+
+    /// Domain tags without a primary tag are unusable (no memory file to
+    /// route to) — must fall back to rule-based.
+    #[test]
+    fn parse_gfp_response_without_primary_is_none() {
+        assert!(parse_gfp_classify_response("security, config").is_none());
+    }
+
+    // ── Sensitivity firewall on the GFP path ──────────────────────────────────
+
+    /// Regression (E1-S6 review): GfpLane::execute became a REAL external
+    /// POST; sensitive snippet text must be gated BEFORE the lane is called.
+    #[test]
+    fn gfp_gate_blocks_sensitive_text() {
+        assert!(!gfp_may_process("my ssn is 123-45-6789", "gfp"));
+        assert!(!gfp_may_process("VA disability rating appeal notes", "gfp"));
+    }
+
+    #[test]
+    fn gfp_gate_allows_public_text() {
+        assert!(gfp_may_process("always use the builder idiom for structs", "gfp"));
+    }
+
+    /// End-to-end: gfp_classify must return None for sensitive text without
+    /// touching the lane (no kill-switch needed — the gate fires first).
+    #[test]
+    fn gfp_classify_returns_none_for_sensitive_text() {
+        // Deliberately do NOT rely on CASCADE_GFP_LANE_OFF here: even with a
+        // live proxy on this host, the sensitivity gate must short-circuit.
+        assert!(gfp_classify("my ssn is 123-45-6789, decided to rotate it").is_none());
     }
 }

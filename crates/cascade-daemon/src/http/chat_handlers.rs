@@ -108,8 +108,21 @@ pub async fn chat_handler(
         };
 
         // ── Step 2: pick provider via routing chain ───────────────────────────
+        // E1-S6: the account choice consults the shared selection module.
+        // Chat is GP-preferred at ALL tiers (product decision): when no
+        // explicit provider is requested and the GP pool is healthy (per the
+        // LIVE :3761 /health probe — 429 cooldowns included), prefer the
+        // pool-backed adapter registered under GP_CHAT_PROVIDER_ID at boot.
+        // An EXPLICIT provider always wins and skips the GP preference; every
+        // existing fallback step in `pick_for_chat` (routing default → health
+        // scan → local) is preserved unchanged, including when the preferred
+        // id is not registered (e.g. gemini-proxy feature off).
         let preferred = body.provider.as_deref();
-        let picked = registry.pick_for_chat(preferred).await;
+        let effective_preferred: Option<String> = match preferred {
+            Some(p) => Some(p.to_string()),
+            None => chat_gp_preference().await.map(str::to_string),
+        };
+        let picked = registry.pick_for_chat(effective_preferred.as_deref()).await;
 
         let (adapter, provider_id) = match picked {
             Some(pair) => pair,
@@ -209,6 +222,45 @@ pub async fn chat_handler(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// The GP proxy's live pool-health endpoint (gemini_proxy `GET /health`).
+const GP_HEALTH_URL: &str = "http://127.0.0.1:3761/health";
+
+/// Per-request budget for the GP health probe. Localhost answers in
+/// milliseconds; a wedged/absent proxy must not delay chat noticeably.
+const GP_HEALTH_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// GP-first chat preference via the shared selection module (E1-S6).
+///
+/// Probes the GP proxy's LIVE `/health` endpoint (:3761) — the only source
+/// that reflects in-memory 429-cooldown state — and asks
+/// `selection::preferred_chat_provider` whether the pool is healthy enough to
+/// prefer. Returns `None` on any probe failure (proxy down, timeout, garbage
+/// body) or when the pool has no routable slot — the caller then falls back
+/// to the unchanged `pick_for_chat` chain.
+///
+/// WHY not providers.json: a routing table rebuilt from disk always has
+/// `enabled=true, re_enable_at=None` slots, so it can report "healthy" while
+/// every live key sits in 429 cooldown. Health must come from the live table.
+async fn chat_gp_preference() -> Option<&'static str> {
+    let gp = fetch_gp_health(GP_HEALTH_URL).await?;
+    cascade_core::selection::preferred_chat_provider(&gp)
+}
+
+/// Async probe of the GP proxy health endpoint. `None` on any failure —
+/// health is never guessed upward.
+async fn fetch_gp_health(url: &str) -> Option<cascade_core::selection::GpHealthSnapshot> {
+    let client = reqwest::Client::builder()
+        .timeout(GP_HEALTH_TIMEOUT)
+        .build()
+        .ok()?;
+    let resp = client.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let body = resp.text().await.ok()?;
+    Some(cascade_core::routing::gfp_http::parse_gp_health(&body))
+}
+
 /// Return a sensible default model string for the given provider id.
 ///
 /// This is a best-effort hint used when no model is specified in an incoming
@@ -218,7 +270,9 @@ pub async fn chat_handler(
 /// negotiation vs. agent harness generation).
 fn default_model_for(provider_id: &str) -> String {
     match provider_id {
-        "gemini" => "gemini-2.0-flash".into(),
+        // "gp-pool" is the reserved pool-backed adapter id (GP_CHAT_PROVIDER_ID);
+        // the :3761 pool serves free Flash only.
+        "gemini" | "gp-pool" => "gemini-2.0-flash".into(),
         "anthropic" => "claude-3-5-haiku-20241022".into(),
         "openai" => "gpt-4o-mini".into(),
         _ if provider_id.starts_with("local") => "default".into(),
@@ -693,5 +747,83 @@ mod tests {
         let registry = ProviderRegistry::new();
         let result = registry.pick_for_chat(None).await;
         assert!(result.is_none(), "empty registry must return None");
+    }
+
+    // ── GP health probe (E1-S6 review fixes) ──────────────────────────────────
+
+    /// The probe against a live endpoint must read healthy_slots and enable
+    /// the preference; against a "pool fully in cooldown" body it must not.
+    #[tokio::test]
+    async fn fetch_gp_health_reads_live_endpoint() {
+        use axum::routing::get;
+
+        let app = axum::Router::new().route(
+            "/health",
+            get(|| async {
+                axum::Json(serde_json::json!({
+                    "status": "ok", "healthy_slots": 3, "total_slots": 6
+                }))
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let gp = fetch_gp_health(&format!("http://{addr}/health"))
+            .await
+            .expect("live endpoint must yield a snapshot");
+        assert_eq!(gp.healthy_slots, 3);
+        assert_eq!(
+            cascade_core::selection::preferred_chat_provider(&gp),
+            Some(cascade_core::selection::GP_CHAT_PROVIDER_ID)
+        );
+    }
+
+    /// Regression: a reachable proxy whose pool is FULLY rate-limited
+    /// (healthy_slots = 0) must NOT enable the GP preference — the old
+    /// providers.json-derived snapshot could never see this state.
+    #[tokio::test]
+    async fn fetch_gp_health_cooldown_pool_disables_preference() {
+        use axum::routing::get;
+
+        let app = axum::Router::new().route(
+            "/health",
+            get(|| async {
+                axum::Json(serde_json::json!({
+                    "status": "ok", "healthy_slots": 0, "total_slots": 28
+                }))
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let gp = fetch_gp_health(&format!("http://{addr}/health"))
+            .await
+            .expect("reachable endpoint yields a snapshot");
+        assert!(!gp.is_healthy());
+        assert_eq!(cascade_core::selection::preferred_chat_provider(&gp), None);
+    }
+
+    /// Dead port (proxy not running) → None → the pick_for_chat chain runs
+    /// exactly as before the GP preference existed.
+    #[tokio::test]
+    async fn fetch_gp_health_dead_port_is_none() {
+        let port = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let gp = fetch_gp_health(&format!("http://127.0.0.1:{port}/health")).await;
+        assert!(gp.is_none());
+    }
+
+    /// The default model for the reserved pool adapter id must be Flash.
+    #[test]
+    fn default_model_for_gp_pool_is_flash() {
+        assert_eq!(default_model_for("gp-pool"), "gemini-2.0-flash");
     }
 }

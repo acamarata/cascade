@@ -54,6 +54,7 @@
 
 pub mod accounts_store;
 pub mod conductor_router;
+pub mod selection;
 pub mod external_accounts;
 pub mod ai_folder;
 pub mod model_ids;

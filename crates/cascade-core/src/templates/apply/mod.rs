@@ -24,6 +24,9 @@ mod upgrade_helpers;
 
 pub use engine::TemplateEngine;
 pub use options::ApplyOptions;
+// Only test modules outside this tree consume the re-export (upgrade.rs tests);
+// gate it so non-test builds stay warning-free.
+#[cfg(test)]
 pub(crate) use stamp::make_stamp;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

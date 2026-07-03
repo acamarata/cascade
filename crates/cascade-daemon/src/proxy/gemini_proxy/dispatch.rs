@@ -47,6 +47,30 @@ pub async fn dispatch_request(
     client: &reqwest::Client,
     headers_raw: Option<&str>,
 ) -> Result<(String, Vec<u8>), ProxyError> {
+    // ── Live pool-health endpoint ─────────────────────────────────────────────
+    // GET /health reports the LIVE routing-table state — healthy_slots counts
+    // enabled (or cooldown-elapsed) slots, so 429 cooldowns are visible. This
+    // is the only honest GP-health signal outside this process: the chat
+    // GP-preference (:daemon http) and the CLI conductor's T3-GP preference
+    // both consume it instead of guessing from static providers.json config.
+    // Never forwarded upstream; answered locally before the /v1beta allowlist.
+    if path == "/health" && (method == "GET" || method == "HEAD") {
+        let (healthy_slots, total_slots) = {
+            let guard = state.table.lock().unwrap();
+            let gp = cascade_core::selection::gp_health_from_slots(guard.slots());
+            (gp.healthy_slots, guard.slot_count())
+        };
+        let body = serde_json::json!({
+            "status": "ok",
+            "healthy_slots": healthy_slots,
+            "total_slots": total_slots,
+        });
+        return Ok((
+            "200 OK".to_string(),
+            serde_json::to_vec(&body).unwrap_or_default(),
+        ));
+    }
+
     // ── Path allowlist check ──────────────────────────────────────────────────
     // SIEGE HIGH-1: reject paths outside /v1beta/ to prevent SSRF.
     if !path.starts_with("/v1beta/") {

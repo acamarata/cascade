@@ -165,16 +165,24 @@ pub fn merge_providers(existing: &mut Vec<ProviderEntry>, detected: &[DetectedAc
 ///
 /// Inputs:  `path` — destination file (e.g. `~/.cascade/providers.json`);
 ///          `store` — the [`ProvidersStore`] to serialise.
-/// Outputs: on success, `path` contains the new JSON; the `.tmp` sibling is
-///          deleted by the OS as part of the rename.
-/// Constraints: uses `path.with_extension("tmp")` as the staging file, then
-///              `std::fs::rename` which is atomic on POSIX when src and dst
-///              are on the same filesystem (guaranteed for a tmp sibling).
+/// Outputs: on success, `path` contains the new JSON with mode `0o600` (owner
+///          read/write only) on Unix; the `.tmp` sibling is deleted by the OS
+///          as part of the rename.
+/// Constraints: uses `path.with_extension("tmp")` as the staging file, sets
+///              its permissions to `0o600` BEFORE the rename (so there is
+///              never a window where the file is readable at the default
+///              umask), then `std::fs::rename` which is atomic on POSIX when
+///              src and dst are on the same filesystem (guaranteed for a tmp
+///              sibling). `providers.json` now stores plaintext API keys
+///              (Gemini free-pool, etc.) as the source of truth, so it must
+///              never be left world/group-readable. No-op on non-Unix.
 ///
 /// # Errors
 ///
 /// Returns [`CascadeError::Io`] if serialisation, the tmp write, or the rename
-/// fails. The caller decides whether to retry.
+/// fails. The caller decides whether to retry. Failure to set permissions is
+/// non-fatal (best-effort) since some filesystems (e.g. certain network
+/// mounts) do not support Unix permission bits.
 pub fn write_providers_store(path: &Path, store: &ProvidersStore) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(store).map_err(|e| CascadeError::Other(e.to_string()))?;
 
@@ -182,6 +190,15 @@ pub fn write_providers_store(path: &Path, store: &ProvidersStore) -> Result<()> 
 
     // Write bytes to the tmp file first.
     std::fs::write(&tmp, &bytes).map_err(|e| CascadeError::io(tmp.clone(), "write", e))?;
+
+    // Restrict permissions to owner-only BEFORE the rename, so the file is
+    // never briefly world/group-readable at the process umask (typically
+    // 0o022 → 0o644). providers.json is the plaintext-secret source of truth.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+    }
 
     // Atomically replace the target.  `std::fs::rename` is POSIX-atomic when
     // src and dst are on the same filesystem, which is always true for a .tmp
@@ -362,6 +379,31 @@ mod tests {
         let read_store = read_providers_store(&path).unwrap();
         assert_eq!(read_store.providers.len(), 1);
         assert_eq!(read_store.providers[0].display_name, "Claude Code");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_sets_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path().join("providers.json");
+
+        let store = ProvidersStore {
+            schema_version: PROVIDERS_STORE_SCHEMA_VERSION,
+            updated_at: "2026-07-02T12:00:00Z".to_string(),
+            providers: vec![],
+        };
+
+        write_providers_store(&path, &store).unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "providers.json must be owner-read/write only, got {:o}",
+            mode & 0o777
+        );
     }
 
     #[test]

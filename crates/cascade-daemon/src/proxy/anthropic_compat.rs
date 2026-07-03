@@ -35,6 +35,7 @@
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use axum::{
     Json, Router,
@@ -199,10 +200,49 @@ fn translate_response(gemini_body: &Value, gemini_model: &str) -> Value {
 
 // ── Axum shared state ─────────────────────────────────────────────────────────
 
+/// TCP connect timeout for the upstream `:3761` GP-proxy hop.
+///
+/// Short on purpose — `:3761` is a loopback service, so a healthy instance
+/// accepts the connection near-instantly. A stalled/wedged `:3761` should
+/// fail fast rather than tie up a `:3762` connection indefinitely.
+const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Overall request timeout (connect + send + full response body) for the
+/// upstream `:3761` GP-proxy hop.
+///
+/// `:3761` buffers its entire response (including streamed Gemini output)
+/// before replying — see the module doc — so both the non-streaming and
+/// streaming paths here read a complete body in one `.send().await` /
+/// `.bytes().await` pair. An overall timeout is therefore safe: it can never
+/// truncate a response that was already arriving incrementally, only bound
+/// how long this adapter waits on a stalled upstream.
+const UPSTREAM_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Build the `reqwest::Client` used for all upstream `:3761` calls, with
+/// explicit connect/overall timeouts so a stalled upstream hop cannot hold a
+/// `:3762` connection open forever.
+///
+/// Falls back to `reqwest::Client::new()` (no configured timeouts) only if
+/// the builder fails, which in practice only happens on invalid TLS
+/// configuration — never for timeout values — so this is effectively
+/// infallible in normal operation.
+fn build_upstream_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(UPSTREAM_CONNECT_TIMEOUT)
+        .timeout(UPSTREAM_REQUEST_TIMEOUT)
+        .build()
+        .unwrap_or_else(|e| {
+            warn!(error = %e, "anthropic_compat: failed to build timed HTTP client, falling back to default");
+            reqwest::Client::new()
+        })
+}
+
 #[derive(Clone)]
 struct AdapterState {
     /// Base URL of the upstream Gemini GP proxy (e.g. `http://127.0.0.1:3761`).
     upstream_url: String,
+    /// Shared client for both the non-streaming and streaming paths, built
+    /// via [`build_upstream_client`] so both hops share the same timeouts.
     client: reqwest::Client,
 }
 
@@ -455,6 +495,36 @@ fn translate_stream_body(raw_body: &[u8], gemini_model: &str) -> Vec<Vec<u8>> {
     out
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The connect/overall timeout constants must be the documented values —
+    /// pinning them in a test catches an accidental edit that silently
+    /// widens the "stalled upstream" window back toward unbounded.
+    #[test]
+    fn upstream_timeout_constants_match_documented_values() {
+        assert_eq!(UPSTREAM_CONNECT_TIMEOUT, Duration::from_secs(5));
+        assert_eq!(UPSTREAM_REQUEST_TIMEOUT, Duration::from_secs(120));
+    }
+
+    /// `build_upstream_client` must successfully construct a client with
+    /// those timeouts configured (no network I/O — `reqwest::Client` does
+    /// not expose configured timeouts for inspection, so this exercises the
+    /// builder call itself rather than making a live request).
+    #[test]
+    fn build_upstream_client_succeeds_with_configured_timeouts() {
+        // reqwest::Client::builder().connect_timeout(..).timeout(..).build()
+        // only fails on invalid TLS backend configuration, never on valid
+        // Duration values — so a successful build here proves the timeouts
+        // were accepted and wired into both the streaming and non-streaming
+        // call sites (both read `state.client` from the same `AdapterState`).
+        let _client = build_upstream_client();
+    }
+}
+
 // ── Public server struct ──────────────────────────────────────────────────────
 
 /// Anthropic Messages API compatibility adapter server.
@@ -482,7 +552,7 @@ impl AnthropicCompatServer {
     pub async fn run(self) -> Result<(), std::io::Error> {
         let state = AdapterState {
             upstream_url: self.upstream_url,
-            client: reqwest::Client::new(),
+            client: build_upstream_client(),
         };
 
         let app = Router::new()

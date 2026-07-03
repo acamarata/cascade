@@ -14,7 +14,7 @@
 //! | `CodexLane` | `codex exec -p` | `openai-codex` | OpenAI Codex headless |
 //! | `AgyLane`   | `agy -p` | `google-agy` | Google Pro / Gemini AGY headless |
 //! | `OcGoLane`  | `opencode run` | `oc-go` | OpenCode-Go headless, dollar-metered |
-//! | `GfpLane`   | via provider pool | `gfp` | Gemini Free Pool, free Flash |
+//! | `GfpLane`   | HTTP → :3762 GP proxy | `gfp` | Gemini Free Pool, free Flash (E1-S6) |
 //! | `CcAccLane` | `claude -p` | `acc{N}` | Extra Claude accounts (see § Claude-PTY lane) |
 //! | `MainClaudeLane` | `claude -p` | `claude` | Main T0 Claude (interactive / final-gate) |
 //! | `LocalLlmLane`  | (in-process) | `local` | Local LLM fallback |
@@ -287,14 +287,19 @@ impl DelegateLane for OcGoLane {
 
 // ── Concrete lane: GfpLane ────────────────────────────────────────────────────
 
-/// Gemini Free Pool lane (provider pool, not a direct CLI binary).
+/// Gemini Free Pool lane — real HTTP path to the local GP proxy (E1-S6).
 ///
 /// Provider ID: `gfp`. External — blocked for Sensitive content.
 ///
-/// In v1.2 this lane is a marker: the Router selects `gfp` as a provider ID
-/// and the actual API call flows through the `cascade-providers` GFP adapter.
-/// The lane's `execute` method signals unavailability when the GFP provider
-/// is not configured (no keys in keychain).
+/// Executes by POSTing the prompt to the daemon's Anthropic-compat adapter at
+/// `http://127.0.0.1:3762/v1/messages` (see [`super::gfp_http`]), which fronts
+/// the :3761 key-pool with rotation and 429 cooldown. When the proxy is not
+/// running, the pool is exhausted, or the response carries an error envelope,
+/// the lane returns `Unavailable` so the router spills onward — output is
+/// never fabricated.
+///
+/// Kill-switch: setting `CASCADE_GFP_LANE_OFF` (any value) forces
+/// `Unavailable` — used by hermetic tests and as an operational off-switch.
 pub struct GfpLane;
 
 impl DelegateLane for GfpLane {
@@ -303,20 +308,24 @@ impl DelegateLane for GfpLane {
     }
 
     fn check_availability(&self) -> LaneAvailability {
-        // GFP availability is determined by whether any GEMINI_API_KEY_* is
-        // configured. We signal Available here as a conservative default;
-        // the actual key check happens in the cascade-providers layer.
-        // If the provider layer returns a quota/auth error, the router skips.
-        LaneAvailability::Available
+        // The lane's transport is a curl subprocess (crate-standard sync HTTP
+        // mechanism — cascade-core has no HTTP client dependency). Proxy
+        // reachability and pool health are determined at execute() time.
+        match find_binary_opt("curl") {
+            Some(_) => LaneAvailability::Available,
+            None => LaneAvailability::Unavailable {
+                reason: "`curl` not found on PATH; cannot reach the GP proxy".into(),
+            },
+        }
     }
 
-    fn execute(&self, _payload: &str, _timeout: Duration) -> Result<LaneResult> {
-        // GFP execution is handled via cascade-providers, not a local CLI.
-        // This lane stub returns Unavailable so the router falls through to
-        // the providers layer (which is wired separately in the daemon path).
-        Ok(LaneResult::Unavailable(
-            "GFP lane: routed via cascade-providers adapter, not inline CLI".into(),
-        ))
+    fn execute(&self, payload: &str, timeout: Duration) -> Result<LaneResult> {
+        if std::env::var_os("CASCADE_GFP_LANE_OFF").is_some() {
+            return Ok(LaneResult::Unavailable(
+                "GFP lane disabled via CASCADE_GFP_LANE_OFF".into(),
+            ));
+        }
+        super::gfp_http::post_messages(super::gfp_http::GFP_MESSAGES_URL, payload, timeout)
     }
 }
 
@@ -568,10 +577,13 @@ mod tests {
         }
     }
 
-    // ── GFP and local always return Unavailable from execute ──────────────
+    // ── GFP kill-switch and local stub behavior ────────────────────────────
 
     #[test]
-    fn gfp_execute_returns_provider_unavailable() {
+    fn gfp_execute_respects_kill_switch() {
+        // Hermetic: the env kill-switch must short-circuit before any I/O.
+        // (Transport + parsing behavior is tested in `routing::gfp_http`.)
+        std::env::set_var("CASCADE_GFP_LANE_OFF", "1");
         let result = GfpLane.execute("test", Duration::from_secs(5)).unwrap();
         assert!(matches!(result, LaneResult::Unavailable(_)));
     }

@@ -127,7 +127,7 @@ pub fn save_config(project_root: &Path, cfg: &NsentryConfig) -> Result<()> {
 }
 
 /// Return all project roots (from `roots`) that have nSentry enabled.
-pub fn enabled_projects<'a>(roots: &'a [PathBuf]) -> impl Iterator<Item = &'a PathBuf> {
+pub fn enabled_projects(roots: &[PathBuf]) -> impl Iterator<Item = &PathBuf> {
     roots.iter().filter(|r| is_enabled(r))
 }
 

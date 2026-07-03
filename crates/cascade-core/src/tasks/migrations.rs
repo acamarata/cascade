@@ -22,6 +22,7 @@ use rusqlite::Connection;
 /// dynamically from the last step in `migration_steps()`.
 /// Bump this and add a new step to `migration_steps()` for every
 /// breaking schema change.
+#[allow(dead_code)] // consumed by tests; kept as the documented head marker
 pub const TASKS_DB_SCHEMA_VERSION: u32 = 2;
 
 /// Open the tasks database at `db_path`, running all pending migrations.
