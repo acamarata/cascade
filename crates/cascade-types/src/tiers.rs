@@ -775,9 +775,11 @@ load_when = "deploy"
         let prev = std::env::var(env_key).ok();
         std::env::set_var(env_key, custom_env);
 
-        let mut config = crate::config::CascadeConfig::default();
         // Even if config has a different projects_dirs, env var must win.
-        config.projects_dirs = vec![PathBuf::from("/should/not/be/used")];
+        let config = crate::config::CascadeConfig {
+            projects_dirs: vec![PathBuf::from("/should/not/be/used")],
+            ..Default::default()
+        };
 
         let root = PathBuf::from("/tmp/fake-project");
         let result = TierName::APC
@@ -807,8 +809,10 @@ load_when = "deploy"
         let prev = std::env::var(env_key).ok();
         std::env::remove_var(env_key);
 
-        let mut config = crate::config::CascadeConfig::default();
-        config.projects_dirs = vec![PathBuf::from("/custom/projects")];
+        let config = crate::config::CascadeConfig {
+            projects_dirs: vec![PathBuf::from("/custom/projects")],
+            ..Default::default()
+        };
 
         let root = PathBuf::from("/tmp/fake-project");
         let result = TierName::APC
@@ -831,8 +835,10 @@ load_when = "deploy"
     /// PCI tier uses config.effective_personal_dir() in default_path_with_config.
     #[test]
     fn test_pci_with_config_custom_personal_dir() {
-        let mut config = crate::config::CascadeConfig::default();
-        config.personal_dir = Some(PathBuf::from("/custom/personal"));
+        let config = crate::config::CascadeConfig {
+            personal_dir: Some(PathBuf::from("/custom/personal")),
+            ..Default::default()
+        };
 
         let root = PathBuf::from("/tmp/fake-project");
         let result = TierName::PCI
