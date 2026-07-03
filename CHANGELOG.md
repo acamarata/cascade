@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.20] - 2026-07-02
+
+Routing unified, overnight continuity, RAM guardian, and adversarial-review hardening.
+
+### Added
+- **Unified selection module** — one quota-aware spill brain now drives the CLI Conductor, the TaskClass matrix router, and the daemon chat picker (previously three unrelated systems). T3/cheap work prefers the free Gemini pool when it is actually healthy (live routing-table signal, not config), the GFP delegate lane executes through the local pool proxy for real, and a `gp-pool` chat adapter registers at boot so chat's pool-first behavior genuinely engages. `CASCADE_GFP_LANE_OFF` disables the lane.
+- **Cascade Continuity** (`cascade continuity add|list|rm|status`) — disk-persisted continuation intents; the daemon watches account reset times and fires a bounded headless resume (or a notification) the moment a capped account's window reopens. Idempotent, crash-safe, one shot per intent.
+- **RAM Guardian** (`cascade ram status|sweep`) — daemon memory watchdog with a conservatively quadruple-gated stray-process reaper (only reparented, old, known build/test binaries, and only under memory pressure; never the daemon or any interactive app). `RAM_GUARDIAN_DISABLE=1` makes it log-only.
+
+### Fixed (adversarial review)
+- `providers.json` — which now holds pool API keys as the source of truth — is written `0600` and tightened on boot if found looser (was world-readable).
+- Key-import fallback is value-deduplicated and respects intentional key removal — repeated boots can no longer grow the store or resurrect revoked keys.
+- The Anthropic-compat proxy's upstream client has bounded connect/overall timeouts — a stalled upstream can no longer hold client connections open forever.
+
 ## [1.9.19] - 2026-07-02
 
 `cascade update` works end to end, chat privacy is consent-gated, and the GP pool reports only real keys.
