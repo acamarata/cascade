@@ -16,13 +16,20 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           ZIP_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_windows_x64.zip"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "zip_url=${ZIP_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Download ZIP and compute SHA256
         id: sha256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -sSL "${{ steps.release.outputs.zip_url }}" -o cascade.zip
+          gh release download "${{ steps.release.outputs.tag }}" \
+            --repo acamarata/cascade \
+            --pattern "cascade_${{ steps.release.outputs.version }}_windows_x64.zip" \
+            --output cascade.zip \
+            --clobber
           SHA256=$(sha256sum cascade.zip | awk '{print $1}')
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
