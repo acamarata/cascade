@@ -667,6 +667,7 @@ fn macos_plist_template(daemon_bin: &Path) -> String {
     <dict>
         <key>HOME</key><string>{home}</string>
         <key>CASCADE_LOG_FORMAT</key><string>json</string>
+        <key>CASCADE_SUPERVISED</key><string>launchd</string>
     </dict>
     <key>StandardOutPath</key>
     <string>{home}/Library/Logs/cascade-daemon.log</string>
