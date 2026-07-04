@@ -476,6 +476,9 @@ fn resolve_claude_bin() -> PathBuf {
 mod tests {
     use super::*;
     use serde_json::json;
+    // Only the unix-gated run_resume_command tests are serialized.
+    #[cfg(unix)]
+    use serial_test::serial;
     use tempfile::TempDir;
 
     fn make_intent(id: &str) -> ContinuityIntent {
@@ -720,15 +723,21 @@ mod tests {
     /// after the timeout the PID must be gone.
     #[cfg(unix)]
     #[tokio::test]
+    #[serial(resume_subprocess)]
     async fn run_resume_command_kills_child_on_timeout() {
         use std::os::unix::fs::PermissionsExt;
 
         let tmp = TempDir::new().unwrap();
         let pid_file = tmp.path().join("child.pid");
         let script = tmp.path().join("fake-claude.sh");
+        // `exec` replaces the shell with `sleep` (same pid), so the SIGKILL
+        // from kill_on_drop kills the sleep itself. Without exec, sleep runs
+        // as a grandchild the SIGKILL never reaches: a stray 30 s process
+        // that overlaps — and can starve/interfere with — the other resume
+        // tests running in the same parallel suite.
         std::fs::write(
             &script,
-            format!("#!/bin/sh\necho $$ > {}\nsleep 30\n", pid_file.display()),
+            format!("#!/bin/sh\necho $$ > {}\nexec sleep 30\n", pid_file.display()),
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -788,6 +797,7 @@ mod tests {
     /// fast-exiting success script returns Ok.
     #[cfg(unix)]
     #[tokio::test]
+    #[serial(resume_subprocess)]
     async fn run_resume_command_success_path() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -796,8 +806,11 @@ mod tests {
         std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 
+        // 60 s is an anti-hang bound only — the script exits in milliseconds.
+        // 10 s proved too tight when the full suite spawns subprocesses from
+        // many test threads at once on a loaded machine.
         let result =
-            run_resume_command(&script, "/tmp", "sess-ok", "continue", Duration::from_secs(10))
+            run_resume_command(&script, "/tmp", "sess-ok", "continue", Duration::from_secs(60))
                 .await;
         assert!(result.is_ok(), "got: {result:?}");
     }
@@ -805,6 +818,7 @@ mod tests {
     /// A failing exit code surfaces as Err with the status (not a timeout).
     #[cfg(unix)]
     #[tokio::test]
+    #[serial(resume_subprocess)]
     async fn run_resume_command_nonzero_exit_is_error() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -813,8 +827,9 @@ mod tests {
         std::fs::write(&script, "#!/bin/sh\necho boom >&2\nexit 3\n").unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 
+        // 60 s anti-hang bound — see run_resume_command_success_path.
         let err =
-            run_resume_command(&script, "/tmp", "sess-fail", "continue", Duration::from_secs(10))
+            run_resume_command(&script, "/tmp", "sess-fail", "continue", Duration::from_secs(60))
                 .await
                 .expect_err("non-zero exit must be an error");
         assert!(err.contains("exited with"), "err: {err}");
