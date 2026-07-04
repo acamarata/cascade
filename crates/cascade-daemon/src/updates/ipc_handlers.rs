@@ -15,9 +15,11 @@
 //!      extract, and atomically swap the binaries at their current install
 //!      locations. A pre-swap snapshot is taken via `Snapshot::create` so the
 //!      old binaries can be restored if anything goes wrong downstream.
-//!   4. On success, schedule a daemon self-restart: spawn a detached replacement
-//!      `cascaded` process, then exit this process ~500ms later (after the IPC
-//!      response has been flushed to the caller).
+//!   4. On success, schedule a daemon self-restart. Under launchd supervision
+//!      (`cascade daemon install`, `KeepAlive=true`) this just exits ~500ms
+//!      later and lets launchd respawn the swapped binary. Unsupervised runs
+//!      (bare `cascade daemon start`) spawn a detached replacement `cascaded`
+//!      process before exiting, since nothing else will restart them.
 //!
 //! Inputs:  IPC params (already deserialized by ipc.rs)
 //! Outputs: typed result structs from `cascade_types::ipc`
@@ -529,21 +531,50 @@ fn which_cascade() -> Option<PathBuf> {
     }
 }
 
-/// Spawn a detached replacement `cascaded` process, then exit this process
-/// after a short delay so the IPC response reaches the caller first.
+/// True when this process is running under a supervising service manager
+/// that will itself relaunch a swapped binary after this process exits.
+///
+/// Purpose: the LaunchAgent installed by `cascade daemon install`
+/// (`supervisor.rs::macos_plist_template`) sets `KeepAlive=true` and stamps
+/// `CASCADE_SUPERVISED=launchd` into the job's environment. Detecting that
+/// marker lets `schedule_self_restart` skip spawning a child process under
+/// launchd — spawning there raced the launchd-relaunched process for the
+/// same sockets during the v1.9.21 update (live incident 2026-07-02: the old
+/// process stayed alive under launchd's tracking while a second, orphaned
+/// `cascaded` came up outside launchd; both fought over ports 3761/3762
+/// until a manual `launchctl bootout` + `bootstrap` recovered it).
+///
+/// `XPC_SERVICE_NAME` is checked as a fallback signal for launchd-managed
+/// processes installed before this marker existed — launchd sets it to the
+/// job's Label (macOS 10.10+) for every process it launches.
+fn is_supervised() -> bool {
+    if std::env::var("CASCADE_SUPERVISED").as_deref() == Ok("launchd") {
+        return true;
+    }
+    std::env::var("XPC_SERVICE_NAME").as_deref() == Ok("dev.cascade.daemon")
+}
+
+/// Exit this process ~500ms after scheduling (after the IPC response has been
+/// flushed to the caller), spawning a detached replacement `cascaded` first
+/// unless a supervisor is already watching this process.
 ///
 /// Purpose: There is no launchd/systemd auto-restart wired for the plain
 /// `cascade daemon start` flow (it's a bare child process tracked by a PID
 /// file) — self-restart has to spawn the new process itself rather than
-/// relying on a supervisor to notice the exit and relaunch it. If `cascaded`
-/// is registered as an OS service (`cascade daemon install`), that service
-/// manager will ALSO see the exit and may restart it a second time; the new
-/// process binds its own socket and exits immediately if one is already
-/// listening, so a double-start is harmless.
+/// relying on a supervisor to notice the exit and relaunch it. When
+/// `is_supervised()` is true (installed via `cascade daemon install`), the
+/// service manager's `KeepAlive` already relaunches the swapped binary on
+/// exit, so spawning a second process here would just be a competing
+/// duplicate rather than a harmless double-start.
 fn schedule_self_restart() {
-    let exe = std::env::current_exe().ok();
+    let supervised = is_supervised();
+    let exe = if supervised { None } else { std::env::current_exe().ok() };
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        if supervised {
+            info!("supervised by launchd — exiting for KeepAlive respawn, no child spawned");
+            std::process::exit(0);
+        }
         if let Some(exe) = exe {
             let mut cmd = std::process::Command::new(exe);
             cmd.stdin(std::process::Stdio::null())
@@ -744,6 +775,43 @@ mod tests {
 
         let resolved = resolve_cascade_cli_path(&cascaded);
         assert_eq!(resolved, Some(cascade));
+    }
+
+    // ── is_supervised ──
+
+    #[test]
+    #[serial]
+    fn is_supervised_true_via_marker_env() {
+        std::env::remove_var("XPC_SERVICE_NAME");
+        std::env::set_var("CASCADE_SUPERVISED", "launchd");
+        assert!(is_supervised());
+        std::env::remove_var("CASCADE_SUPERVISED");
+    }
+
+    #[test]
+    #[serial]
+    fn is_supervised_true_via_xpc_service_name_fallback() {
+        std::env::remove_var("CASCADE_SUPERVISED");
+        std::env::set_var("XPC_SERVICE_NAME", "dev.cascade.daemon");
+        assert!(is_supervised());
+        std::env::remove_var("XPC_SERVICE_NAME");
+    }
+
+    #[test]
+    #[serial]
+    fn is_supervised_false_when_unsupervised() {
+        std::env::remove_var("CASCADE_SUPERVISED");
+        std::env::remove_var("XPC_SERVICE_NAME");
+        assert!(!is_supervised());
+    }
+
+    #[test]
+    #[serial]
+    fn is_supervised_false_for_unrelated_xpc_service() {
+        std::env::remove_var("CASCADE_SUPERVISED");
+        std::env::set_var("XPC_SERVICE_NAME", "com.apple.cfprefsd.daemon");
+        assert!(!is_supervised());
+        std::env::remove_var("XPC_SERVICE_NAME");
     }
 
     #[test]

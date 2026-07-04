@@ -97,7 +97,7 @@ pub(super) async fn handle_memory_remember(
     })
     .await
     .map_err(|e| JsonRpcError::internal(format!("spawn_blocking panic: {e}")))?
-    .map_err(|e| JsonRpcError::internal(e))?;
+    .map_err(JsonRpcError::internal)?;
 
     Ok(serde_json::json!({
         "content": [{
@@ -139,7 +139,7 @@ pub(super) async fn handle_memory_recall(
     })
     .await
     .map_err(|e| JsonRpcError::internal(format!("spawn_blocking panic: {e}")))?
-    .map_err(|e| JsonRpcError::internal(e))?;
+    .map_err(JsonRpcError::internal)?;
 
     let results: Vec<Value> = hits
         .iter()
@@ -223,7 +223,7 @@ pub(super) async fn handle_memory_forget(
     })
     .await
     .map_err(|e| JsonRpcError::internal(format!("spawn_blocking panic: {e}")))?
-    .map_err(|e| JsonRpcError::internal(e))?;
+    .map_err(JsonRpcError::internal)?;
 
     Ok(serde_json::json!({
         "content": [{
@@ -255,7 +255,6 @@ pub(super) async fn handle_memory_search(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use tempfile::TempDir;
 
     use super::*;
 

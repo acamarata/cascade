@@ -675,16 +675,20 @@ kind = "bge-m3"
 
     #[test]
     fn schema_version_current_passes() {
-        let mut cfg = CascadeConfig::default();
-        cfg.schema_version = CONFIG_SCHEMA_VERSION;
+        let cfg = CascadeConfig {
+            schema_version: CONFIG_SCHEMA_VERSION,
+            ..Default::default()
+        };
         cfg.validate_schema_version(CONFIG_SCHEMA_VERSION)
             .expect("current version must be accepted");
     }
 
     #[test]
     fn schema_version_future_is_rejected() {
-        let mut cfg = CascadeConfig::default();
-        cfg.schema_version = CONFIG_SCHEMA_VERSION + 1;
+        let cfg = CascadeConfig {
+            schema_version: CONFIG_SCHEMA_VERSION + 1,
+            ..Default::default()
+        };
         let err = cfg
             .validate_schema_version(CONFIG_SCHEMA_VERSION)
             .expect_err("future version must be rejected");
