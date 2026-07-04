@@ -7,9 +7,9 @@
 //! - audit       — run dep audit for detected ecosystem
 //! - prelaunch   — full prelaunch checklist: secrets + deps + error leaks + privacy
 //! - scan-hook   — CC PostToolUse hook adapter: reads hook JSON from stdin,
-//!                 extracts tool_input.file_path, and runs scan-file logic.
-//!                 Always exits 0 so CC session is never interrupted; warns on
-//!                 findings to stderr (CC surfaces hook stderr to the user).
+//!   extracts tool_input.file_path, and runs scan-file logic. Always exits 0
+//!   so the CC session is never interrupted; warns on findings to stderr
+//!   (CC surfaces hook stderr to the user).
 //!
 //! # Outputs
 //! Human-readable table output by default; `--json` for machine-readable JSON.

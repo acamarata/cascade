@@ -37,6 +37,11 @@
 use clap::Parser;
 
 mod cmd;
+// Shared test-only helpers (ENV_TEST_LOCK) — mirrors the lib.rs declaration
+// so cmd modules compiled into BOTH targets resolve crate::test_support in
+// the bin's test target too.
+#[cfg(test)]
+pub(crate) mod test_support;
 mod daemon_install;
 mod ipc_client;
 mod telemetry;

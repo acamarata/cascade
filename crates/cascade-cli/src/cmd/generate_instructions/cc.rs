@@ -1,7 +1,7 @@
 //! CC (Claude Code) harness file generation: CLAUDE.md, AGENTS.md, settings.json.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cascade_core::cascade_resolution::TierResult;
 use cascade_types::error::{CascadeError, Result};

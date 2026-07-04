@@ -261,8 +261,8 @@ fn run_list() -> Result<()> {
     }
 
     println!(
-        "{:<34} {:<10} {:<8} {:<20} {:<8} {}",
-        "ID", "ACCOUNT", "MODE", "CREATED", "FIRED", "NOTE"
+        "{:<34} {:<10} {:<8} {:<20} {:<8} NOTE",
+        "ID", "ACCOUNT", "MODE", "CREATED", "FIRED"
     );
     println!("{}", "-".repeat(100));
     for intent in &intents {

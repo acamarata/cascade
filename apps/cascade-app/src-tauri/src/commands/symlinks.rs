@@ -776,12 +776,12 @@ pub async fn shell_open(url: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn symlink_integrity_check(path: String) -> Result<bool, String> {
     let p = std::path::Path::new(&path);
-    if !p.exists() && !p.symlink_metadata().is_ok() {
+    if !p.exists() && p.symlink_metadata().is_err() {
         return Ok(false);
     }
     if let Ok(meta) = p.symlink_metadata() {
         if meta.file_type().is_symlink() {
-            return Ok(std::fs::read_link(&p)
+            return Ok(std::fs::read_link(p)
                 .ok()
                 .map(|t| t.exists())
                 .unwrap_or(false));

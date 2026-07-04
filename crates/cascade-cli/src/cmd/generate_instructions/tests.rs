@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use super::cc::{generate_cc, update_cc_settings_json, CASCADE_HEADER_MARKER};
-use super::oc::{generate_oc, update_project_oc_instructions_field};
+use super::oc::{generate_oc};
 
 fn fake_tier_result(tier: CascadeTier, cascade_dir: &std::path::Path, instructions: &str) -> TierResult {
     TierResult {

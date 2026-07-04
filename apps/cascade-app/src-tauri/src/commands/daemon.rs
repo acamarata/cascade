@@ -425,7 +425,6 @@ pub struct ValidationResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read as _;
 
     // ------------------------------------------------------------------
     // infer_tier
@@ -471,8 +470,10 @@ mod tests {
 
     #[test]
     fn save_then_load_roundtrip() {
-        let dir = std::env::temp_dir().join("cascade_test_roundtrip");
-        std::fs::create_dir_all(&dir).unwrap();
+        // Unique per-run dir — a fixed path races other tests in the same
+        // binary under the parallel runner (rename hit EINVAL mid-cleanup).
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let dir = tmp_dir.path().to_path_buf();
         let path = dir.join("CLAUDE.md");
         let expected = "# Test\n\nHello cascade doc.\n";
 
@@ -490,8 +491,7 @@ mod tests {
         let got = std::fs::read_to_string(dest).unwrap();
         assert_eq!(got, expected);
 
-        // Cleanup.
-        let _ = std::fs::remove_dir_all(&dir);
+        // TempDir cleans up on drop.
     }
 
     // ------------------------------------------------------------------

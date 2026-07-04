@@ -19,8 +19,7 @@
 //
 // SPORT: MASTER-CLI.md — cascade conductor
 
-use std::io::Write as IoWrite;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command as StdCommand, Stdio};
 use std::time::{Duration, Instant};
 

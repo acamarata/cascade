@@ -1,6 +1,5 @@
 //! Top-level CLI argument types for `cascade mcp`.
 
-use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
 

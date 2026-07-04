@@ -44,15 +44,22 @@ use cascade_types::error::Result;
 use super::Command;
 use args::McpSubcmd;
 
-// Re-export public API at the same path as before
+// Re-export public API at the same path as before. These are lib API
+// surface; the bin compiles this module tree privately, so they count as
+// unused imports there.
+#[allow(unused_imports)]
 pub use args::{McpArgs, McpSetupArgs, McpSubcmd as McpSubcommand, ToolName};
+#[allow(unused_imports)]
 pub use clients::{
     claude_code_settings_path, claude_desktop_config_path, detect_clients, opencode_config_path,
     opencode_installed, setup_all, setup_claude_code, setup_claude_desktop, setup_list,
     setup_opencode, setup_vscode, vscode_mcp_path, DetectionResult,
 };
+#[allow(unused_imports)]
 pub use status::McpStatusArgs;
+#[allow(unused_imports)]
 pub use stdio::McpStdioArgs;
+#[allow(unused_imports)]
 pub use token::McpTokenArgs;
 
 // ── Command dispatch ──────────────────────────────────────────────────────────

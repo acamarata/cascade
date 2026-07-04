@@ -159,7 +159,6 @@ pub struct RestoreResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     /// Verifies camelCase serialization parity with the TypeScript types.
     /// A regression here breaks the Tauri IPC contract with the frontend.

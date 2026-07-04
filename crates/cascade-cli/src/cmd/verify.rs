@@ -514,6 +514,9 @@ mod tests {
         );
     }
 
+    // Deliberate: the std MutexGuard must span the await so process-env
+    // mutation stays serialized (see test_support::ENV_TEST_LOCK).
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     #[serial(global_env)]
     async fn cascade_resolves_fail_with_empty_dir() {

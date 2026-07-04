@@ -9,7 +9,7 @@
 //! # Subcommands
 //!
 //! - `status`  — per-project table: stream · enabled · last-run (relative) ·
-//!               delivered (last / total) · error.
+//!   delivered (last / total) · error.
 //! - `run`     — trigger immediately for all/one project, all/one stream.
 //! - `pause`   — flip a project's `enabled = false` in the YAML.
 //! - `resume`  — flip a project's `enabled = true`.
@@ -115,8 +115,8 @@ impl Command for NsentryStatusArgs {
 
         // Header
         println!(
-            "{:<16} {:<12} {:<8} {:<12} {:<12} {}",
-            "PROJECT", "STREAM", "ENABLED", "LAST RUN", "DELIVERED", "ERROR"
+            "{:<16} {:<12} {:<8} {:<12} {:<12} ERROR",
+            "PROJECT", "STREAM", "ENABLED", "LAST RUN", "DELIVERED"
         );
         println!("{}", "-".repeat(80));
 
