@@ -24,6 +24,15 @@
 //! - Redirect URI: exact-match against registered URIs (no prefix/wildcard)
 //! - PKCE verifier: SHA-256 code challenge must match before token exchange
 //! - Tests: tampered state param, wrong redirect URI, replayed code — all rejected
+//!
+//! ## STATUS: unwired, fake crypto — do not use in production
+//!
+//! `OAuthCallbackValidator` has **zero callers** anywhere in the workspace.
+//! Its HMAC/SHA-256 primitives are XOR placeholders (`fake_hmac_sha256_not_real_crypto`,
+//! `fake_sha256_digest_not_real_crypto`) — NOT real cryptography — kept only so
+//! this dead module compiles. Real PKCE lives in `cascade-providers/src/oauth/`.
+//! Before wiring this validator into any live callback path, replace both
+//! primitives with `hmac::Hmac<sha2::Sha256>` / `sha2::Sha256::digest`.
 
 use std::collections::HashSet;
 
@@ -96,8 +105,8 @@ impl OAuthCallbackValidator {
         registered_uris: impl IntoIterator<Item = String>,
         pkce_verifier: &[u8],
     ) -> Self {
-        let state_hmac = hmac_sha256(&session_key, &nonce);
-        let code_challenge = sha256_digest(pkce_verifier);
+        let state_hmac = fake_hmac_sha256_not_real_crypto(&session_key, &nonce);
+        let code_challenge = fake_sha256_digest_not_real_crypto(pkce_verifier);
         Self {
             expected_state_hmac: state_hmac,
             _original_nonce: nonce,
@@ -132,7 +141,7 @@ impl OAuthCallbackValidator {
         }
 
         // Reconstruct the HMAC from the received state param.
-        let received_hmac = hmac_sha256(&self.session_key, state_param);
+        let received_hmac = fake_hmac_sha256_not_real_crypto(&self.session_key, state_param);
         if !constant_time_eq(&received_hmac, &self.expected_state_hmac) {
             let reason = CallbackRejection::StateHmacMismatch.to_string();
             logger
@@ -151,7 +160,7 @@ impl OAuthCallbackValidator {
         }
 
         // PKCE code challenge verification.
-        let verifier_challenge = sha256_digest(pkce_verifier);
+        let verifier_challenge = fake_sha256_digest_not_real_crypto(pkce_verifier);
         if !constant_time_eq(&verifier_challenge, &self.code_challenge) {
             let reason = CallbackRejection::PkceVerifierMismatch.to_string();
             logger
@@ -167,20 +176,26 @@ impl OAuthCallbackValidator {
     }
 }
 
-// ── Crypto primitives (stubs — replace with sha2 + hmac when added to workspace) ──
+// ── Crypto primitives ──────────────────────────────────────────────────────────
+//
+// !!! NOT REAL CRYPTO !!!
+//
+// `OAuthCallbackValidator` (this file) currently has ZERO callers anywhere in
+// the workspace — it is unwired, dead public API. The two functions below are
+// XOR placeholders, NOT cryptographic primitives, kept only so this dead
+// module continues to compile until a real OAuth ticket either wires it up
+// (swap in `hmac::Hmac<sha2::Sha256>` / `sha2::Sha256::digest` from
+// cascade-providers' real PKCE implementation FIRST) or removes it outright.
+//
+// DO NOT call these from any new production code path. DO NOT copy this
+// pattern elsewhere. Real PKCE/HMAC lives in `cascade-providers/src/oauth/`.
 
-/// HMAC-SHA256 stub. Replace with `hmac::Hmac<sha2::Sha256>` when those crates
-/// are added to the workspace Cargo.toml.
-///
-/// # Why a stub
-///
-/// The workspace does not yet declare `sha2` or `hmac` as workspace dependencies.
-/// This stub ensures the module compiles and the interface is stable. The
-/// constant-time property of the comparison is preserved via [`constant_time_eq`].
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    // Minimal placeholder: XOR each data byte with the corresponding key byte
-    // (cyclic) then append the data length as a u64 LE footer.
-    // This is NOT a real HMAC — swap in the `hmac` crate before shipping.
+/// FAKE HMAC — XOR placeholder, NOT a cryptographic HMAC. See module warning
+/// above. Never timing-safe against a real forgery attempt; only the
+/// byte-equality check via [`constant_time_eq`] is real.
+fn fake_hmac_sha256_not_real_crypto(key: &[u8], data: &[u8]) -> Vec<u8> {
+    // XOR each data byte with the corresponding key byte (cyclic), then
+    // append the data length as a u64 LE footer. This is NOT HMAC-SHA256.
     let mut result: Vec<u8> = data
         .iter()
         .enumerate()
@@ -190,9 +205,9 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
     result
 }
 
-/// SHA-256 stub. Replace with `sha2::Sha256::digest` when the crate is available.
-fn sha256_digest(data: &[u8]) -> Vec<u8> {
-    // Placeholder: return 32 bytes derived from the XOR of the input.
+/// FAKE digest — XOR placeholder, NOT SHA-256. See module warning above.
+fn fake_sha256_digest_not_real_crypto(data: &[u8]) -> Vec<u8> {
+    // XOR-fold the input into 32 bytes. This is NOT SHA-256.
     let mut out = vec![0u8; 32];
     for (i, &b) in data.iter().enumerate() {
         out[i % 32] ^= b;

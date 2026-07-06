@@ -24,6 +24,7 @@
 // SPORT: MASTER-CLI.md — cascade delegate / conductor_router
 
 use crate::selection::{self, SelectionRequest};
+use crate::sensitivity::{classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity};
 
 // Canonical type definitions moved to `crate::selection` (E1-S6); re-exported
 // here so existing consumers (`cascade-cli` conductor) compile unchanged.
@@ -112,6 +113,51 @@ pub fn select_target_with_gp(
             reason: t.reason,
         }
     })
+}
+
+/// [`select_target_with_gp`] with a content-sensitivity firewall (parity with
+/// `routing::router::Router::select` — see `sensitivity` module docs).
+///
+/// Inputs: `prompt` — the RAW prompt text about to be delegated. Conductor
+///         dispatches coding/delegation tasks whose prompt body may itself
+///         carry PII / VA / health / financial content (the caller's own
+///         request, not just chat messages), so it must be classified before
+///         any untrusted provider is allowed to receive it.
+///
+/// Behavior: classifies `prompt` via [`crate::sensitivity::classify_sensitivity`].
+/// When `Public`, behaves identically to [`select_target_with_gp`]. When
+/// `Sensitive`, every untrusted-provider account (per
+/// [`crate::sensitivity::provider_is_trusted_for_sensitive`] — everything
+/// except Claude/local) is excluded from the spill candidate pool BEFORE
+/// selection, so the shared spill engine can only ever return a trusted
+/// target. If no trusted candidate remains, returns `None` (fail closed —
+/// never leak sensitive content to an untrusted lane).
+///
+/// This is the gated entry point conductor callers SHOULD use; the raw
+/// [`select_target_with_gp`] / [`select_target`] remain available for
+/// callers that have already classified `prompt` themselves (e.g. to avoid
+/// re-classifying on a fallback retry loop) but MUST NOT skip the check.
+pub fn select_target_for_prompt(
+    req: &ConductorRequest,
+    quota: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
+    prompt: &str,
+) -> Option<ConductorTarget> {
+    let sensitivity = classify_sensitivity(prompt);
+    if sensitivity == ContentSensitivity::Public {
+        return select_target_with_gp(req, quota, gp);
+    }
+
+    // Sensitive: only offer trusted-provider accounts to the spill engine.
+    let trusted_accounts: Vec<QuotaAccount> = quota
+        .accounts
+        .iter()
+        .filter(|a| provider_is_trusted_for_sensitive(&a.provider))
+        .cloned()
+        .collect();
+    let trusted_snapshot = QuotaSnapshot { accounts: trusted_accounts };
+
+    select_target_with_gp(req, &trusted_snapshot, gp)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -440,5 +486,131 @@ mod tests {
             assert_eq!(wrapped.model, direct.model);
             assert_eq!(wrapped.reason, direct.reason);
         }
+    }
+
+    // ── Sensitivity firewall on the conductor dispatch path ────────────────────
+    //
+    // Parity with `routing::router::Router::select`: a Sensitive prompt must
+    // never be handed to an untrusted provider. These tests exercise
+    // `select_target_for_prompt`, the gated entry point.
+
+    fn gemini_entry(account: &str) -> QuotaAccount {
+        QuotaAccount {
+            account: account.to_string(),
+            provider: "gemini".to_string(),
+            status: "ok".to_string(),
+            five_hour_utilization: None,
+            seven_day_utilization: None,
+            config_dir: None,
+        }
+    }
+
+    /// Sensitive prompt + only untrusted lanes available (codex, gemini, gfp)
+    /// → the untrusted providers must be excluded and the request refused
+    /// (`None`), never silently routed to an untrusted lane.
+    #[test]
+    fn sensitive_prompt_excludes_untrusted_lanes_and_refuses_when_none_trusted_remain() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                codex_entry("codex-acc1"),
+                gemini_entry("gemini-agt"),
+                gfp_entry(),
+            ],
+        };
+        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let target = select_target_for_prompt(
+            &req,
+            &snapshot,
+            &GpHealthSnapshot::default(),
+            "my ssn is 123-45-6789, please format this VA claim letter",
+        );
+        assert!(
+            target.is_none(),
+            "sensitive content must refuse rather than leak to an untrusted lane"
+        );
+    }
+
+    /// Sensitive prompt + a healthy trusted (Claude) lane available →
+    /// selection proceeds normally and picks the trusted account, skipping
+    /// any untrusted accounts entirely (they must not even appear in `tried`
+    /// diagnostics as viable candidates).
+    #[test]
+    fn sensitive_prompt_still_selects_trusted_claude_lane() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                codex_entry("codex-acc1"),
+                claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
+            ],
+        };
+        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let target = select_target_for_prompt(
+            &req,
+            &snapshot,
+            &GpHealthSnapshot::default(),
+            "patient diagnosis: PTSD, medical record attached",
+        )
+        .expect("trusted claude lane should still be selected for sensitive content");
+        assert_eq!(target.account_id, "claude");
+        assert_eq!(target.provider, Provider::Claude);
+    }
+
+    /// Public (non-sensitive) prompt → normal selection applies unchanged,
+    /// including external/untrusted providers when they are first in spill
+    /// order.
+    #[test]
+    fn public_prompt_uses_normal_selection_including_untrusted_lanes() {
+        let snapshot = QuotaSnapshot { accounts: vec![codex_entry("codex-acc1")] };
+        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let target = select_target_for_prompt(
+            &req,
+            &snapshot,
+            &GpHealthSnapshot::default(),
+            "refactor the auth module to use JWT",
+        )
+        .expect("public content should route normally");
+        assert_eq!(target.provider, Provider::Codex);
+    }
+
+    /// Trusted providers (Claude, local) are always allowed regardless of
+    /// sensitivity — sanity check on `provider_is_trusted_for_sensitive`
+    /// applied to the fleet vocabulary used by `QuotaAccount::provider`.
+    #[test]
+    fn trusted_claude_provider_always_allowed_for_sensitive_content() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0)],
+        };
+        let req = ConductorRequest { tier: Tier::T1, model_class: None, account_override: None };
+        let target = select_target_for_prompt(
+            &req,
+            &snapshot,
+            &GpHealthSnapshot::default(),
+            "my social security number and bank account number are attached",
+        )
+        .expect("trusted claude account must be allowed for sensitive content");
+        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.provider, Provider::Claude);
+    }
+
+    /// Sensitive content must exclude gfp specifically (T3-GP preference must
+    /// never override the firewall).
+    #[test]
+    fn sensitive_prompt_excludes_gfp_even_with_t3_gp_preference() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                gfp_entry(),
+                claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
+            ],
+        };
+        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let gp = GpHealthSnapshot { healthy_slots: 5 };
+        let target = select_target_for_prompt(
+            &req,
+            &snapshot,
+            &gp,
+            "dob: 1980-04-15, full name: John Smith, home address: 123 Main Street",
+        )
+        .expect("should fall back to trusted claude, never gfp");
+        assert_eq!(target.provider, Provider::Claude);
+        assert_ne!(target.provider, Provider::Gfp);
     }
 }

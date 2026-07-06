@@ -300,8 +300,30 @@ fn execute_with_fallback(
     let mut tried: Vec<String> = Vec::new();
     let mut current = initial_target;
 
+    // Sensitivity firewall — parity with the chat path (routing/router.rs).
+    // Classify the prompt CONTENT once; a Sensitive prompt (PII / VA / health
+    // / personal) must never be dispatched to an untrusted provider
+    // (gemini / gfp / codex / opencode). We treat an untrusted target as
+    // Unavailable so the existing spill chain continues to a trusted
+    // (Claude / local) lane, and fails closed ("all backends exhausted") if
+    // none remain — never leaking sensitive content to an external pool.
+    let sensitive = cascade_core::sensitivity::classify_sensitivity(prompt)
+        == cascade_core::sensitivity::ContentSensitivity::Sensitive;
+
     loop {
-        let result = execute_target(&current, prompt);
+        let result = if sensitive
+            && !cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive(
+                current.provider.as_str(),
+            ) {
+            Outcome::Unavailable {
+                reason: format!(
+                    "sensitive-content firewall: {} is not a trusted provider",
+                    current.provider.as_str()
+                ),
+            }
+        } else {
+            execute_target(&current, prompt)
+        };
         match result {
             Outcome::Success { output } => {
                 if json_output {
@@ -1177,6 +1199,30 @@ mod agy_tests {
         "traceId": "abc123",
         "metadata": {}
     }"#;
+
+    /// The sensitivity firewall's block condition: a Sensitive prompt routed
+    /// to an untrusted provider must be blocked; a public prompt or a trusted
+    /// provider must not. Mirrors the guard in the dispatch loop.
+    #[test]
+    fn sensitivity_firewall_blocks_untrusted_for_sensitive_content() {
+        use cascade_core::sensitivity::{
+            classify_sensitivity, registry_provider_is_trusted_for_sensitive, ContentSensitivity,
+        };
+        let sensitive_prompt = "my SSN is 123-45-6789 and my VA file number is 12345678";
+        let public_prompt = "refactor this loop to use iterators";
+        let is_sensitive = |p: &str| classify_sensitivity(p) == ContentSensitivity::Sensitive;
+        let blocked = |p: &str, prov: &str| {
+            is_sensitive(p) && !registry_provider_is_trusted_for_sensitive(prov)
+        };
+        // Sensitive + untrusted → blocked (spills / fails closed).
+        assert!(blocked(sensitive_prompt, "gemini"));
+        assert!(blocked(sensitive_prompt, "gfp"));
+        assert!(blocked(sensitive_prompt, "codex"));
+        // Sensitive + trusted → allowed.
+        assert!(!blocked(sensitive_prompt, "claude"));
+        // Public content → never blocked, even to untrusted.
+        assert!(!blocked(public_prompt, "gemini"));
+    }
 
     #[test]
     fn extract_text_unwraps_cloudcode_response_envelope() {
