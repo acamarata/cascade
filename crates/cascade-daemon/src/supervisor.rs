@@ -299,12 +299,19 @@ pub async fn run(
     if config.scheduler.enabled {
         use crate::scheduler::Scheduler;
         use cascade_core::task_store::TaskStore;
-        use cascade_types::scheduled_task::{ScheduleSpec, ScheduledTask};
-        use rusqlite::Connection;
         use std::sync::Mutex;
 
-        let sched_conn = Connection::open(":memory:")
-            .expect("scheduler: in-memory SQLite unavailable");
+        // Persistent store: `<config_dir>/scheduler.db` (mirrors the
+        // `<config_dir>/registry.db` / `<config_dir>/quota-state.json`
+        // convention used elsewhere in this file — one named SQLite/JSON
+        // file per subsystem, directly under the daemon's config_dir).
+        // WHY not ":memory:": an in-memory DB loses every scheduled task on
+        // daemon restart, silently dropping user-created schedules.
+        // `cascade_db::open_configured` applies the canonical WAL/busy-timeout
+        // PRAGMA set and creates `config_dir` if missing.
+        let sched_db_path = config_dir.join("scheduler.db");
+        let sched_conn = cascade_db::open_configured(&sched_db_path)
+            .expect("scheduler: failed to open persistent scheduler.db");
         sched_conn
             .execute_batch(
                 "CREATE TABLE IF NOT EXISTS scheduled_tasks (
@@ -325,31 +332,19 @@ pub async fn run(
         let sched_conn_arc = Arc::new(Mutex::new(sched_conn));
         let task_store = Arc::new(TaskStore::new(sched_conn_arc));
 
-        let hourly_rescan = ScheduledTask::new(
-            "daemon.index-rescan",
-            ScheduleSpec::Interval { secs: 3600 },
-            "true",
-            vec![],
-        );
-        let daily_memory = ScheduledTask::new(
-            "daemon.memory-consolidate",
-            ScheduleSpec::Interval { secs: 86400 },
-            "true",
-            vec![],
-        );
-
-        if let Err(e) = task_store.insert(&hourly_rescan) {
-            warn!(%e, "scheduler: failed to seed hourly-rescan task");
-        }
-        if let Err(e) = task_store.insert(&daily_memory) {
-            warn!(%e, "scheduler: failed to seed daily-memory task");
-        }
+        // No default/placeholder tasks are seeded here (previously two
+        // no-op `"true"` command seeds — removed; no real intended command
+        // was specified for an index-rescan or memory-consolidate job, and
+        // shipping inert seeds masks the fact that nothing actually runs).
+        // Users/operators register real scheduled tasks via the scheduler
+        // IPC/API surface; the store starts empty and persists whatever is
+        // added across restarts.
 
         let sched_config = config.scheduler.clone();
         let sched_shutdown = shutdown.clone();
         let scheduler = Scheduler::new(sched_config, task_store, sched_shutdown);
         tokio::spawn(scheduler.run());
-        info!("scheduler: spawned with default periodic tasks");
+        info!(path = %sched_db_path.display(), "scheduler: spawned with persistent store");
     }
 
     // ── RAG subsystem ─────────────────────────────────────────────────────────────
@@ -847,4 +842,74 @@ pub enum DaemonError {
     // Error variant — returned when an IPC operation fails during supervisor init.
     #[allow(dead_code)]
     Ipc(String),
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use cascade_core::task_store::TaskStore;
+    use cascade_types::scheduled_task::{ScheduleSpec, ScheduledTask};
+    use std::sync::{Arc, Mutex};
+    use tempfile::TempDir;
+
+    /// Fix 2 regression guard: the scheduler store must be a persistent
+    /// SQLite file under the daemon's config_dir (not `:memory:`), so tasks
+    /// survive a daemon restart. This test opens the store, inserts a task,
+    /// drops the connection (simulating process exit), then re-opens the
+    /// same file path and verifies the task is still there.
+    #[test]
+    fn test_scheduler_store_persists_across_reopen() {
+        let tmp = TempDir::new().unwrap();
+        let config_dir = tmp.path();
+        let sched_db_path = config_dir.join("scheduler.db");
+
+        let task_id = {
+            let conn = cascade_db::open_configured(&sched_db_path)
+                .expect("open scheduler.db (first open)");
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    schedule_json TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    args_json TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    last_run TEXT,
+                    next_run TEXT,
+                    status_json TEXT NOT NULL
+                );",
+            )
+            .expect("create scheduled_tasks table");
+
+            let store = TaskStore::new(Arc::new(Mutex::new(conn)));
+            let task = ScheduledTask::new(
+                "test.persisted-task",
+                ScheduleSpec::Interval { secs: 60 },
+                "echo",
+                vec!["hi".to_string()],
+            );
+            let id = task.id;
+            store.insert(&task).expect("insert task");
+            id
+            // `conn` (inside `store`) is dropped here, closing the file.
+        };
+
+        // Re-open the SAME path — this only proves persistence if the file
+        // actually exists on disk with real data (an in-memory DB would have
+        // no file to re-open, or a fresh file would be empty).
+        assert!(sched_db_path.exists(), "scheduler.db must exist on disk");
+
+        let conn2 =
+            cascade_db::open_configured(&sched_db_path).expect("open scheduler.db (second open)");
+        let store2 = TaskStore::new(Arc::new(Mutex::new(conn2)));
+
+        let reloaded = store2
+            .get(task_id)
+            .expect("query must succeed")
+            .expect("task must still exist after reopen");
+        assert_eq!(reloaded.name, "test.persisted-task");
+        assert_eq!(reloaded.command, "echo");
+    }
 }

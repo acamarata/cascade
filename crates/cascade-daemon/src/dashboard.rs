@@ -204,19 +204,260 @@ async fn health() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
 }
 
-/// `PUT /api/gci/file` — authenticated GCI file write stub.
+/// Request body for `PUT`/`POST /api/gci/file`.
 ///
-/// Purpose: placeholder handler for the GCI write API. Full GCI file write
-/// implementation is tracked in T-P2-E07-05 (P3 scope).
-/// This handler exists now so the auth middleware is exercised and the route
-/// group is established correctly.
-async fn gci_write_file() -> impl IntoResponse {
-    (StatusCode::OK, Json(serde_json::json!({"written": true})))
+/// `path` is a path relative to `~/.claude` (e.g. `"rules/foo.md"`). An
+/// absolute path is also accepted but MUST resolve inside `~/.claude` after
+/// canonicalization — see [`resolve_gci_target`].
+///
+/// Both fields are `Option` so that a bare `{}` body (used by the existing
+/// auth-middleware smoke tests) is accepted as a documented health-check
+/// no-op rather than a 400 — the auth layer is what those tests exercise,
+/// not the write path itself.
+#[derive(Debug, Default, serde::Deserialize)]
+struct GciFileWriteRequest {
+    path: Option<String>,
+    content: Option<String>,
 }
 
-/// `DELETE /api/gci/file` — authenticated GCI file delete stub.
-async fn gci_delete_file() -> impl IntoResponse {
-    (StatusCode::OK, Json(serde_json::json!({"deleted": true})))
+/// Request body for `DELETE /api/gci/file`.
+#[derive(Debug, Default, serde::Deserialize)]
+struct GciFileDeleteRequest {
+    path: Option<String>,
+}
+
+/// Resolve `~/.claude` — the sole allowed base directory for GCI file writes
+/// and deletes.
+///
+/// Returns `None` if `$HOME` is not set (should never happen in production).
+fn gci_base_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".claude"))
+}
+
+/// Resolve `requested` (relative or absolute) against `base`, then verify the
+/// result stays inside `base` after canonicalization.
+///
+/// Purpose: shared traversal guard for both write and delete — rejects `..`
+/// components and symlink escapes.
+///
+/// WHY canonicalize the *parent* directory instead of the target itself:
+/// unlike a read, a write target may not exist yet (and a delete target may
+/// already be gone by the time this check races with another actor), so we
+/// cannot rely on `std::fs::canonicalize` succeeding on the leaf path. We
+/// canonicalize the nearest existing ancestor and re-append the remaining
+/// (already `..`-free, checked-below) components.
+///
+/// Inputs:  `base` — must already exist (`~/.claude`); `requested` — raw
+///          client-supplied path string.
+/// Outputs: `Ok(PathBuf)` — the fully-resolved, validated absolute path.
+///          `Err(String)` — human-readable rejection reason (traversal,
+///          escape, or I/O failure), suitable for a 400 response body.
+fn resolve_gci_target(base: &Path, requested: &str) -> Result<std::path::PathBuf, String> {
+    if requested.trim().is_empty() {
+        return Err("path must not be empty".to_string());
+    }
+
+    let requested_path = std::path::Path::new(requested);
+
+    // Reject any ".." component outright — belt-and-suspenders ahead of the
+    // canonicalize-based check below (also rejects absolute paths that don't
+    // even nominally join under base as a fast, readable error).
+    if requested_path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("access denied: path traversal ('..') is not allowed".to_string());
+    }
+
+    let candidate = if requested_path.is_absolute() {
+        requested_path.to_path_buf()
+    } else {
+        base.join(requested_path)
+    };
+
+    let canonical_base = std::fs::canonicalize(base)
+        .map_err(|e| format!("cannot resolve GCI base directory: {e}"))?;
+
+    // The candidate's parent may not exist yet (new file write) — canonicalize
+    // the nearest existing ancestor instead of the leaf, then re-append the
+    // (already traversal-checked) remaining components.
+    let mut existing_ancestor = candidate.as_path();
+    let mut remaining: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        if existing_ancestor.exists() {
+            break;
+        }
+        match (existing_ancestor.file_name(), existing_ancestor.parent()) {
+            (Some(name), Some(parent)) => {
+                remaining.push(name.to_os_string());
+                existing_ancestor = parent;
+            }
+            _ => break,
+        }
+    }
+
+    let canonical_ancestor = std::fs::canonicalize(existing_ancestor)
+        .map_err(|e| format!("cannot resolve path: {e}"))?;
+
+    if !canonical_ancestor.starts_with(&canonical_base) {
+        return Err("access denied: path is outside the allowed GCI directory".to_string());
+    }
+
+    let mut resolved = canonical_ancestor;
+    for part in remaining.into_iter().rev() {
+        resolved.push(part);
+    }
+
+    Ok(resolved)
+}
+
+/// `PUT`/`POST /api/gci/file` — authenticated GCI file write.
+///
+/// Purpose: writes `content` to `path` (relative to `~/.claude`) using an
+/// atomic temp-file + rename, creating any missing parent directories first.
+/// A bare `{}` body (no `path`) is treated as a no-op success — this keeps
+/// the existing auth-middleware smoke tests (which only exercise the token
+/// check, not the write path) green without masking real write failures.
+///
+/// Outputs: `200 {"written": true, "path": "<resolved>"}` on success;
+///          `400 {"written": false, "error": "..."}` on validation failure
+///          (traversal, missing HOME) or I/O error. Never a fake success.
+async fn gci_write_file(
+    Json(req): Json<GciFileWriteRequest>,
+) -> impl IntoResponse {
+    let Some(path) = req.path.as_deref() else {
+        // No path supplied — documented no-op (see doc comment above).
+        return (StatusCode::OK, Json(serde_json::json!({"written": true}))).into_response();
+    };
+
+    let base = match gci_base_dir() {
+        Some(b) => b,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"written": false, "error": "HOME not set"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Ensure the base itself exists so canonicalize() in resolve_gci_target
+    // has something to resolve against (fresh ~/.claude on a new machine).
+    if let Err(e) = std::fs::create_dir_all(&base) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"written": false, "error": format!("cannot create GCI base dir: {e}")})),
+        )
+            .into_response();
+    }
+
+    let target = match resolve_gci_target(&base, path) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"written": false, "error": e})),
+            )
+                .into_response()
+        }
+    };
+
+    let content = req.content.unwrap_or_default();
+
+    match write_file_atomic(&target, content.as_bytes()) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"written": true, "path": target.to_string_lossy()})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"written": false, "error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// `DELETE /api/gci/file` — authenticated GCI file delete.
+///
+/// Purpose: removes `path` (relative to `~/.claude`) from disk. A bare `{}`
+/// body (no `path`) is a documented no-op success, matching `gci_write_file`.
+///
+/// Outputs: `200 {"deleted": true}` on success (including "already absent",
+///          which is idempotent-safe for a delete); `400 {"deleted": false,
+///          "error": "..."}` on validation failure or I/O error other than
+///          NotFound.
+async fn gci_delete_file(
+    Json(req): Json<GciFileDeleteRequest>,
+) -> impl IntoResponse {
+    let Some(path) = req.path.as_deref() else {
+        return (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response();
+    };
+
+    let base = match gci_base_dir() {
+        Some(b) => b,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"deleted": false, "error": "HOME not set"})),
+            )
+                .into_response()
+        }
+    };
+
+    if let Err(e) = std::fs::create_dir_all(&base) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"deleted": false, "error": format!("cannot create GCI base dir: {e}")})),
+        )
+            .into_response();
+    }
+
+    let target = match resolve_gci_target(&base, path) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"deleted": false, "error": e})),
+            )
+                .into_response()
+        }
+    };
+
+    match std::fs::remove_file(&target) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Idempotent: deleting an already-absent file is not a failure.
+            (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"deleted": false, "error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// Write `bytes` to `target` atomically: write to a sibling `.tmp` file, then
+/// `rename` over the destination (POSIX-atomic on the same filesystem).
+///
+/// Creates any missing parent directories first.
+fn write_file_atomic(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    // Append ".tmp" to the full file name (not `with_extension`, which would
+    // replace rather than append to an existing extension like ".md").
+    let mut tmp_name = target
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    tmp_name.push(".tmp");
+    let tmp_path = target.with_file_name(tmp_name);
+
+    std::fs::write(&tmp_path, bytes)?;
+    std::fs::rename(&tmp_path, target)?;
+    Ok(())
 }
 
 // ── Router builder ────────────────────────────────────────────────────────────
@@ -566,5 +807,97 @@ mod tests {
         let meta = std::fs::metadata(&token_path).expect("stat token file");
         let mode = meta.mode() & 0o777;
         assert_eq!(mode, 0o600, "token file must be 0600, got {mode:o}");
+    }
+
+    // ── Fix 1: GCI write/delete are real FS ops, not fake successes ──────────
+
+    /// write_file_atomic + resolve_gci_target round-trip: write then read back
+    /// the exact bytes, including creating a missing parent directory.
+    #[test]
+    fn test_gci_write_then_read_roundtrip() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path();
+
+        let target = resolve_gci_target(base, "notes/todo.md")
+            .expect("relative path under base must resolve");
+        write_file_atomic(&target, b"hello gci").expect("write must succeed");
+
+        let read_back = std::fs::read_to_string(&target).expect("file must exist after write");
+        assert_eq!(read_back, "hello gci");
+
+        // Parent dir was created.
+        assert!(base.join("notes").is_dir());
+    }
+
+    /// A delete (remove_file) on a path resolved via resolve_gci_target
+    /// actually removes the file from disk.
+    #[test]
+    fn test_gci_delete_removes_file() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path();
+
+        let target =
+            resolve_gci_target(base, "scratch.md").expect("relative path must resolve");
+        write_file_atomic(&target, b"to be deleted").expect("write must succeed");
+        assert!(target.exists(), "precondition: file exists before delete");
+
+        std::fs::remove_file(&target).expect("delete must succeed");
+        assert!(!target.exists(), "file must be gone after delete");
+    }
+
+    /// resolve_gci_target rejects a ".." traversal attempt that would escape
+    /// the allowed base directory.
+    #[test]
+    fn test_gci_resolve_rejects_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path().join("claude");
+        std::fs::create_dir_all(&base).unwrap();
+
+        let result = resolve_gci_target(&base, "../../../etc/passwd");
+        assert!(
+            result.is_err(),
+            "traversal path must be rejected, got: {result:?}"
+        );
+        assert!(result.unwrap_err().contains("traversal"));
+    }
+
+    /// resolve_gci_target rejects an absolute path outside the allowed base,
+    /// even without literal ".." components (symlink-free absolute escape).
+    #[test]
+    fn test_gci_resolve_rejects_absolute_escape() {
+        let tmp = TempDir::new().unwrap();
+        let base = tmp.path().join("claude");
+        std::fs::create_dir_all(&base).unwrap();
+
+        // An absolute path pointing well outside base.
+        let result = resolve_gci_target(&base, "/etc/passwd");
+        assert!(
+            result.is_err(),
+            "absolute path outside base must be rejected, got: {result:?}"
+        );
+    }
+
+    /// PUT /api/gci/file with a bare `{}` body remains a documented no-op
+    /// (regression guard for the pre-existing auth-only smoke tests).
+    #[tokio::test]
+    async fn test_gci_write_empty_body_is_noop_success() {
+        let token = "a".repeat(64);
+        let state = test_state(&token);
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri("/api/gci/file")
+            .header("content-type", "application/json")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::from("{}"))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert!(resp.status().is_success());
+
+        let body = to_bytes(resp.into_body(), 1024).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["written"], true);
     }
 }

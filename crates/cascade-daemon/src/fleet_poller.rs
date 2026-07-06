@@ -13,12 +13,15 @@
 //! Outputs: `~/.cascade/quota-store.json` refreshed on each tick.
 //!
 //! Constraints:
-//!   - `ClaudeMaxSource` was a stub; it is now superseded by the async live-
-//!     usage path in `refresh_accounts` (see below).  The struct is kept as a
-//!     synchronous `FleetSource` placeholder; the real Claude usage flows via
-//!     the accounts-refresh path, which writes `~/.claude/usage-cache.json`
-//!     before `write_quota_json` merges it.
-//!   - `CodexSource` and `AgySource` remain stubs.
+//!   - `ClaudeMaxSource::poll()` always returns `None` by design; it is
+//!     superseded by the async live-usage path in
+//!     `FleetPoller::fetch_and_cache_claude_usage` (see that fn + the
+//!     `ClaudeMaxSource` doc comment below), which writes
+//!     `~/.claude/usage-cache.json` before `write_quota_json` merges it.
+//!   - `CodexSource` and `AgySource` remain honestly inert (`poll()` →
+//!     `None`) — see each struct's doc comment for exactly what real flow
+//!     is (Codex: not implemented anywhere yet) or is not (Agy: no
+//!     credential bridge exists in this codebase) available to wire up.
 //!   - `GfpSource` reads the existing `quota-state.json` written by the
 //!     `gfp`-feature quota poller.  If the file is absent or stale (>120 s),
 //!     it returns `None`.
@@ -79,11 +82,25 @@ pub trait FleetSource: Send + Sync {
 
 // ── Stub implementations ──────────────────────────────────────────────────────
 
-/// Stub source for Anthropic Claude Max subscription accounts.
+/// Inert `FleetSource` for Anthropic Claude Max subscription accounts.
 ///
-/// Purpose: placeholder until real Claude Max API polling lands. Always
-/// returns `None`; registers the provider in the fleet source list.
-/// Constraints: must never return fake usage numbers.
+/// **This trait impl is intentionally always `None` — it is NOT where real
+/// Claude Max quota comes from.** The real per-account flow already exists
+/// and runs on every poll tick, but it bypasses the `FleetSource` trait
+/// entirely: see [`FleetPoller::fetch_and_cache_claude_usage`], which
+/// (1) discovers every Claude config dir via
+/// `cascade_core::external_accounts::discover()`, (2) reads/refreshes each
+/// account's access token via `read_claude_access_token` (keychain on macOS,
+/// `.credentials.json` elsewhere), (3) calls `fetch_claude_usage` against the
+/// live Anthropic usage API, and (4) writes the results to
+/// `~/.claude/usage-cache.json`, which `write_quota_json` then merges into
+/// `quota.json` independently of this trait's `poll()`.
+///
+/// `ClaudeMaxSource` itself stays a no-op `FleetSource` so the provider is
+/// still registered/enumerable in the generic source list (e.g. for any
+/// future code that iterates `sources` expecting one entry per provider)
+/// without duplicating or racing the real fetch path above. Fabricating a
+/// number here would either duplicate that live fetch or drift from it.
 pub struct ClaudeMaxSource;
 
 impl FleetSource for ClaudeMaxSource {
@@ -91,16 +108,27 @@ impl FleetSource for ClaudeMaxSource {
         PROVIDER_CLAUDE_MAX
     }
 
-    /// No real polling configured yet; returns `None`.
+    /// Always `None` by design — see the struct-level doc comment for the
+    /// real Claude Max quota flow (`fetch_and_cache_claude_usage`).
     fn poll(&self) -> Option<QuotaState> {
         None
     }
 }
 
-/// Stub source for OpenAI Codex accounts.
+/// Inert `FleetSource` for OpenAI Codex accounts.
 ///
-/// Purpose: placeholder until real Codex API polling lands. Always
-/// returns `None`; registers the provider in the fleet source list.
+/// Purpose: registers the Codex provider slot in the fleet source list.
+/// Returns `None` on every poll — no fabricated numbers.
+///
+/// Real quota flow: unlike Claude Max, Codex has **no live usage-fetch path
+/// implemented yet** anywhere in this crate. `cascade_core::external_accounts`
+/// already discovers Codex's `auth.json` credential dir (`ExternalAgent::Codex`)
+/// for auth/re-auth status purposes, but nothing currently calls an OpenAI
+/// usage/quota endpoint with that token. Wiring a real `CodexSource` requires:
+/// (1) an OpenAI usage API call analogous to `fetch_claude_usage`, and
+/// (2) a decision on whether Codex quota is even exposed by an API OpenAI
+/// publishes for CLI/subscription accounts (unconfirmed as of this fix).
+/// Until that lands, this source stays honestly inert rather than guessing.
 pub struct CodexSource;
 
 impl FleetSource for CodexSource {
@@ -108,16 +136,30 @@ impl FleetSource for CodexSource {
         PROVIDER_OPENAI_CODEX
     }
 
-    /// No real polling configured yet; returns `None`.
+    /// Always `None` — no Codex usage-fetch path exists yet (see doc comment).
     fn poll(&self) -> Option<QuotaState> {
         None
     }
 }
 
-/// Stub source for Google AI (agy) accounts.
+/// Inert `FleetSource` for Google AI (agy) accounts.
 ///
-/// Purpose: placeholder until real Google Agy API polling lands. Always
-/// returns `None`; registers the provider in the fleet source list.
+/// Purpose: registers the Agy provider slot in the fleet source list.
+/// Returns `None` on every poll — no fabricated numbers.
+///
+/// Real quota flow: **does not exist yet.** Unlike Claude and Codex, Agy has
+/// no credential-bridge counterpart in `cascade_core::external_accounts`
+/// (that module's `ExternalAgent` enum only has `Claude` and `Codex` variants
+/// — confirmed by inspection, not merely undocumented). The only Agy-related
+/// code elsewhere in the daemon (`AccessMethod::AgyCli` in
+/// `cascade_types::accounts` / `fleet_poller::refresh_accounts`) only checks
+/// **whether the `agy` CLI binary is present on `$PATH`** via `detect_cli`
+/// — it does not read a token or call any quota endpoint. There is no
+/// existing "agy-token" read path anywhere in this codebase to reuse, so
+/// implementing a real `AgySource` is not trivially doable from existing
+/// code; it would require net-new credential discovery (locate agy's auth
+/// storage) and a net-new Google AI quota API call. Left inert + documented
+/// rather than fabricated.
 pub struct AgySource;
 
 impl FleetSource for AgySource {
@@ -125,7 +167,8 @@ impl FleetSource for AgySource {
         PROVIDER_GOOGLE_AGY
     }
 
-    /// No real polling configured yet; returns `None`.
+    /// Always `None` — no Agy credential bridge or quota API call exists yet
+    /// anywhere in this codebase (see doc comment).
     fn poll(&self) -> Option<QuotaState> {
         None
     }
