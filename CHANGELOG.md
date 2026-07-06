@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.9.22] - 2026-07-04
+
+Update-apply handover fix and workspace-wide lint parity.
+
+### Fixed
+- **launchd-aware self-restart**: `cascade update apply` under launchd
+  supervision no longer leaves the old daemon alive while spawning an
+  orphaned child (port fight on :3761/:3762 that took the proxy down until
+  a manual bootout). When launchd-supervised the daemon now exits cleanly
+  and lets KeepAlive respawn the swapped binary.
+- Resume-subprocess tests serialized and exec-wrapped, fixing an orphan
+  process race.
+- **nSentry CI bridge no longer backfills stale failures**: the GitHub-Actions
+  poller (`gh-ci-failures-to-reports.sh`, embedded in the daemon) gained a
+  `--max-age-days` cutoff (default 3, `NSENTRY_MAX_AGE_DAYS`). Previously a
+  repo's first-ever scan — or a freshly-created `.gh-seen` after a redeploy —
+  would alert on every historical failure `gh run list` returned, however old
+  (a year-old acamarata/ali run fired as new on 2026-07-06). Runs older than
+  the cutoff are now skipped even if unseen.
+- Workspace-wide `cargo clippy --all-targets -D warnings` is clean across
+  every crate and the Tauri app (CI-parity for when Actions billing is
+  restored): bin-tree test_support declarations, redundant test module
+  wrappers removed, env-lock await allows documented, unused imports, doc
+  formatting, and a temp-dir race in an app test.
+
 ## [1.9.21] - 2026-07-03
 
 GP pre/post middleware (flag-gated, all OFF by default) and a private-chat
