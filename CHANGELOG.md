@@ -6,6 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-06
+
+Gemini Pro conductor lane (via the owner's paid Google AI Pro subscription).
+
+### Added
+- **Gemini Pro dispatch lane** — `cascade conductor --account gemini-acc1`
+  now dispatches real completions through the owner's paid Google AI Pro
+  (Google One) subscription via the agy / `cloudcode-pa` path, using the
+  existing `~/.cascade/agy-token.json` (OAuth refresh, no new browser flow).
+  Model label `gemini-3.1-pro` (the cloudcode-pa `model` field is
+  `gemini-pro-agent`). Gated on token presence — falls back to `Unavailable`
+  (spill chain intact) when absent. Owner-authorized for personal use of a
+  subscription they pay for. Live-verified end-to-end.
+- `.github/docs/MODEL-MATRIX.md` — model × subscription reference (verified
+  July 2026), including the per-project Gemini free-tier quota facts.
+
+### Fixed
+- GFP conductor lane no longer hardcodes a stale `claude-sonnet-4-6` model
+  string — uses the canonical `MODEL_CLAUDE_SONNET` (the :3762 proxy remaps
+  the `claude-sonnet` prefix to the free Gemini Flash tier).
+
 ## [1.9.22] - 2026-07-04
 
 Update-apply handover fix and workspace-wide lint parity.
