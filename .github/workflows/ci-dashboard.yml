@@ -17,7 +17,7 @@ on:
 jobs:
   test:
     name: Typecheck & Build (Node ${{ matrix.node-version }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     strategy:
       fail-fast: false
       matrix:

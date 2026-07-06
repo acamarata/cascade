@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     env:
       SNAPCRAFT_TOKEN: ${{ secrets.SNAPCRAFT_TOKEN }}
     steps:

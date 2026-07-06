@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gnome-extension:
     name: GNOME Extension (lint + pack + test)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
 
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
 
   kde-plasmoid:
     name: KDE Plasmoid (qmllint + pack + validate)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
 
     steps:
       - uses: actions/checkout@v4

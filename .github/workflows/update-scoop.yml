@@ -6,7 +6,7 @@ on:
 
 jobs:
   update-manifest:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     env:
       TAP_UPDATE_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
     steps:

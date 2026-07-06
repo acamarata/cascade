@@ -299,7 +299,7 @@ jobs:
   sign-windows:
     name: Sign Windows MSI (Authenticode)
     needs: build-tauri
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     # Only run when SIGNPATH_API_TOKEN is set.
     # Note: secrets cannot be used in `if:` directly; use env var bridge below.
     if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
@@ -365,7 +365,7 @@ jobs:
       always() &&
       needs.build-cli.result == 'success' &&
       needs.universal-macos.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     permissions:
       contents: write
     outputs:
@@ -432,7 +432,7 @@ jobs:
     name: Update Homebrew Cask
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - name: Trigger update-homebrew workflow
         uses: actions/github-script@v7
@@ -452,7 +452,7 @@ jobs:
     name: Update Winget Manifest
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - name: Trigger update-winget workflow
         uses: actions/github-script@v7
@@ -479,7 +479,7 @@ jobs:
     name: Publish to crates.io
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -561,7 +561,7 @@ jobs:
     name: Sync GitHub Wiki
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 

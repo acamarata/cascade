@@ -107,7 +107,7 @@ jobs:
   # platform-independent.
   integration-tests:
     name: integration-tests
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 
@@ -180,7 +180,7 @@ jobs:
   # platform-independent so running it on every matrix entry is redundant.
   fmt:
     name: fmt
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 
@@ -198,7 +198,7 @@ jobs:
   # regardless of target platform.
   deny:
     name: deny
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 
@@ -225,7 +225,7 @@ jobs:
   #   coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
   coverage:
     name: coverage
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 
@@ -380,7 +380,7 @@ jobs:
   # include that commit in the PR.
   bench-check:
     name: bench-check
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -480,7 +480,7 @@ jobs:
   ci-gate:
     name: ci-gate
     needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows, bench-check]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, cam-sentry]
     if: always()
     steps:
       - name: Check all CI jobs passed
