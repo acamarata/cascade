@@ -62,6 +62,35 @@ export function isProtectedNamespace(namespace?: string): boolean {
   )
 }
 
+/**
+ * Mirror of the daemon's `registry_provider_is_trusted_for_sensitive`
+ * (cascade-core::sensitivity.rs).
+ *
+ * Trusted: the Anthropic API, any Claude account variant, and anything
+ * local (every local adapter id starts with `local`; the auto-detected
+ * Ollama adapter registers under the bare id `ollama`). Everything else —
+ * gemini, gp-pool, openai, generic OpenAI-compat endpoints — is untrusted.
+ * Deny-by-default: an unknown/empty id is NOT trusted.
+ *
+ * Used to warn (not block) when a user pins an untrusted provider while
+ * a protected namespace is active — the deliberate-choice contract still
+ * lets the pin through, but the UI must not stay silent about it.
+ */
+export function isProviderTrustedForSensitive(providerId?: string | null): boolean {
+  if (!providerId) return false
+  const lower = providerId.trim().toLowerCase()
+  return (
+    lower === 'anthropic' ||
+    lower.startsWith('anthropic-') ||
+    lower.startsWith('local') ||
+    lower === 'ollama' ||
+    lower.startsWith('ollama-') ||
+    lower === 'claude' ||
+    lower.startsWith('claude-') ||
+    lower.startsWith('acc')
+  )
+}
+
 // ── SSE event types (daemon fallback) ─────────────────────────────────────────
 
 export interface ServedByEvent   { type: 'served_by';   provider: string }

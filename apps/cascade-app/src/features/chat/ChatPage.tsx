@@ -228,6 +228,7 @@ export function ChatPage() {
           <ProviderSelector
             selectedProvider={selectedProvider}
             onSelect={setSelectedProvider}
+            namespace={namespace}
           />
           {/* New chat */}
           <Button

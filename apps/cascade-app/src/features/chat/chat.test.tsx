@@ -381,7 +381,7 @@ describe('useChatHistory personalChatSync gating', () => {
 
 // ── 3b. useChat GP fast-path privacy gate ────────────────────────────────────
 
-import { useChat, isProtectedNamespace } from './useChat'
+import { useChat, isProtectedNamespace, isProviderTrustedForSensitive } from './useChat'
 
 describe('isProtectedNamespace', () => {
   it('mirrors the daemon classification exactly (chat_handlers.rs)', () => {
@@ -394,6 +394,33 @@ describe('isProtectedNamespace', () => {
     expect(isProtectedNamespace('meta')).toBe(false)
     expect(isProtectedNamespace('')).toBe(false)
     expect(isProtectedNamespace(undefined)).toBe(false)
+  })
+})
+
+describe('isProviderTrustedForSensitive', () => {
+  it('mirrors registry_provider_is_trusted_for_sensitive (sensitivity.rs)', () => {
+    for (const id of [
+      'anthropic',
+      'Anthropic',
+      'anthropic-a2',
+      'local',
+      'local:ollama',
+      'local-llm',
+      'ollama',
+      'claude',
+      'claude-acc1',
+      'acc2',
+    ]) {
+      expect(isProviderTrustedForSensitive(id)).toBe(true)
+    }
+    for (const id of [
+      'gemini', 'gp-pool', 'openai', 'codex', 'oc-go', 'gfp', 'generic-openai',
+      'noop-x', '',
+    ]) {
+      expect(isProviderTrustedForSensitive(id)).toBe(false)
+    }
+    expect(isProviderTrustedForSensitive(null)).toBe(false)
+    expect(isProviderTrustedForSensitive(undefined)).toBe(false)
   })
 })
 
@@ -599,6 +626,34 @@ describe('ProviderSelector', () => {
     )
     // Verify component renders without crash
     expect(screen.getByRole('combobox')).toBeInTheDocument()
+  })
+
+  it('warns when an untrusted provider is pinned in a protected namespace', () => {
+    render(
+      <ProviderSelector selectedProvider="gp-pool" onSelect={() => {}} namespace="personal:private" />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/untrusted pin/i)
+  })
+
+  it('does not warn when the pinned provider is trusted (protected namespace)', () => {
+    render(
+      <ProviderSelector selectedProvider="anthropic" onSelect={() => {}} namespace="personal" />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not warn for an untrusted pin outside a protected namespace', () => {
+    render(
+      <ProviderSelector selectedProvider="gp-pool" onSelect={() => {}} namespace="projects:cascade" />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not warn when no provider is pinned (auto), even in a protected namespace', () => {
+    render(
+      <ProviderSelector selectedProvider={null} onSelect={() => {}} namespace="personal:private" />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
 
