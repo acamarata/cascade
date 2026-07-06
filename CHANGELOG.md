@@ -6,6 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-06
+
+Security + correctness fixes from a deep repo audit.
+
+### Security
+- **Conductor path sensitivity firewall** — the delegation path now enforces
+  the same protected-content firewall as the chat path. `cascade-core`'s
+  `select_target_for_prompt` classifies prompt content and, when Sensitive
+  (PII / VA / health / personal), excludes untrusted providers
+  (gemini / gfp / codex / opencode), failing closed if no trusted lane
+  remains; the CLI dispatch loop applies a reactive backstop that spills a
+  sensitive prompt off an untrusted lane to a trusted Claude lane. Closes a
+  gap where conductor fan-out could send sensitive content to an external
+  provider.
+
+### Fixed
+- **GCI file ops are real** — `gci_write_file` / `gci_delete_file` now perform
+  atomic filesystem writes/deletes through a canonicalize-based path guard
+  (base `~/.claude`, rejects `..` traversal and absolute escapes) instead of
+  returning fake `{"written":true}` without touching disk.
+- **Scheduler persists** — the automation scheduler uses a persistent
+  `scheduler.db` (was `:memory:`, lost on restart); removed two no-op
+  `"true"` seed tasks.
+- **FleetPoller honesty** — inert ClaudeMax/Codex/Agy quota sources now carry
+  accurate docs pointing at the real data flow rather than silently
+  returning `None`.
+- **Dead fake-crypto labeled** — the unused XOR placeholder HMAC/SHA256 in
+  `security/oauth.rs` is renamed with loud "NOT REAL CRYPTO" warnings (real
+  PKCE lives in `cascade-providers/src/oauth`).
+
 ## [1.10.0] - 2026-07-06
 
 Gemini Pro conductor lane (via the owner's paid Google AI Pro subscription).
