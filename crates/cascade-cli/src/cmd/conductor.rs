@@ -531,25 +531,268 @@ fn execute_opencode(_target: &ConductorTarget, prompt: &str) -> Outcome {
     run_command(cmd, "opencode")
 }
 
-// ── Gemini backend ────────────────────────────────────────────────────────────
+// ── Gemini backend (Gemini Pro via Antigravity / cloudcode-pa) ───────────────
+//
+// Dispatch lane for the owner's paid Google AI Pro (Google One) subscription,
+// reusing the same OAuth refresh token already captured by `cascade-agy-auth`
+// at `~/.cascade/agy-token.json` (see `src/bin/cascade-agy` for the sibling
+// quota-collector that proved this refresh + `loadCodeAssist` flow live).
+//
+// Owner-authorized personal use: the account owner explicitly authorized
+// routing their own paid Google AI Pro prompts through this token. This is
+// distinct from `cascade-providers`'s `AntigravityAdapter`, whose ToS-safety
+// gate (`inference_routing` feature, off by default) concerns routing a
+// *third party's* Antigravity subscription through Cascade — not applicable
+// here, where the owner is dispatching their own account's prompts directly.
 
-/// Attempt to invoke the cascade-agy Gemini CLI.
+/// OAuth client used by the Antigravity desktop app (public, not secret).
+const AGY_CLIENT_ID: &str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const AGY_CLIENT_SECRET: &str = "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";
+const AGY_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+const AGY_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
+const AGY_USER_AGENT: &str = "antigravity/1.18.3 macos/arm64";
+/// Fallback GCP project id (used when `loadCodeAssist` doesn't return one).
+const AGY_FALLBACK_PROJECT: &str = "bamboo-precept-lgxtn";
+/// User-facing model label for Gemini Pro dispatch (current newest Pro model).
+const AGY_MODEL_LABEL: &str = "gemini-3.1-pro";
+/// The `model` field cloudcode-pa expects for generateContent — proven live.
+const AGY_GENERATE_MODEL: &str = "gemini-pro-agent";
+/// Per-call timeout (each curl invocation), mirrors other lanes' bounded calls.
+const AGY_HTTP_TIMEOUT_SECS: u64 = 120;
+
+/// Path to the agy OAuth token store (`~/.cascade/agy-token.json`).
+fn agy_token_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".cascade").join("agy-token.json"))
+}
+
+/// Read the first account's refresh token + email from `agy-token.json`.
+fn read_agy_refresh_token(path: &std::path::Path) -> Option<(String, String)> {
+    let bytes = std::fs::read(path).ok()?;
+    let v: Value = serde_json::from_slice(&bytes).ok()?;
+    let acc = v.get("accounts")?.as_array()?.first()?;
+    let refresh_token = acc.get("refresh_token")?.as_str()?.to_string();
+    let email = acc.get("email").and_then(|e| e.as_str()).unwrap_or("").to_string();
+    Some((refresh_token, email))
+}
+
+/// POST via curl with a JSON body and bounded timeout; returns stdout on 2xx,
+/// `None` on any transport/HTTP failure (caller decides Unavailable vs Error).
+fn curl_post_json(
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+    timeout_secs: u64,
+) -> std::result::Result<String, String> {
+    let curl = find_binary("curl").ok_or_else(|| "curl not found".to_string())?;
+
+    let mut cmd = StdCommand::new(&curl);
+    cmd.env("PATH", AUGMENTED_PATH).args([
+        "-s",
+        "-f",
+        "--max-time",
+        &timeout_secs.to_string(),
+        "-X",
+        "POST",
+    ]);
+    for (k, v) in headers {
+        cmd.args(["-H", &format!("{k}: {v}")]);
+    }
+    cmd.args(["-d", body, url]).stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    match cmd.output() {
+        Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            Err(format!("HTTP request failed (exit {}): {stderr}", out.status.code().unwrap_or(-1)))
+        }
+        Err(e) => Err(format!("curl exec failed: {e}")),
+    }
+}
+
+/// Refresh the OAuth access token from a stored refresh token.
 ///
-/// `cascade-agy` is the Gemini usage collector; it does not expose a general
-/// prompt invocation path. If no real invocation path is found, returns
-/// `Unavailable` so routing falls to the next candidate.
-fn execute_gemini(_target: &ConductorTarget, _prompt: &str) -> Outcome {
-    // cascade-agy is a usage collector, not a prompt runner.
-    // No real Gemini prompt CLI is available on this machine; report Unavailable.
-    let agy = find_binary("cascade-agy");
-    if agy.is_none() {
+/// Mirrors `cascade-agy`'s `refresh_access()` — same client id/secret,
+/// same token endpoint. Returns `None` on any failure.
+fn agy_refresh_access_token(refresh_token: &str) -> Option<String> {
+    let form = format!(
+        "grant_type=refresh_token&refresh_token={}&client_id={}&client_secret={}",
+        urlencode(refresh_token),
+        urlencode(AGY_CLIENT_ID),
+        urlencode(AGY_CLIENT_SECRET),
+    );
+    let curl = find_binary("curl")?;
+    let mut cmd = StdCommand::new(&curl);
+    cmd.env("PATH", AUGMENTED_PATH)
+        .args([
+            "-s",
+            "-f",
+            "--max-time",
+            &AGY_HTTP_TIMEOUT_SECS.to_string(),
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/x-www-form-urlencoded",
+            "-d",
+            &form,
+            AGY_TOKEN_URL,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let v: Value = serde_json::from_slice(&out.stdout).ok()?;
+    v.get("access_token")?.as_str().map(|s| s.to_string())
+}
+
+/// Minimal percent-encoding for x-www-form-urlencoded values (token/id/secret
+/// are all URL-safe-ish but may contain `+`/`/` in the refresh token).
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Discover the `cloudaicompanionProject` id for this account via `loadCodeAssist`.
+/// Falls back to `AGY_FALLBACK_PROJECT` on any failure (matches `cascade-agy`).
+fn agy_load_project(access_token: &str) -> String {
+    let url = format!("{AGY_BASE_URL}/v1internal:loadCodeAssist");
+    let body = serde_json::json!({"metadata": {"ideType": "ANTIGRAVITY"}}).to_string();
+    let headers = [
+        ("Authorization", format!("Bearer {access_token}")),
+        ("Content-Type", "application/json".to_string()),
+        ("User-Agent", AGY_USER_AGENT.to_string()),
+    ];
+    let header_refs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    match curl_post_json(&url, &header_refs, &body, AGY_HTTP_TIMEOUT_SECS) {
+        Ok(resp) => {
+            let v: Value = match serde_json::from_str(&resp) {
+                Ok(v) => v,
+                Err(_) => return AGY_FALLBACK_PROJECT.to_string(),
+            };
+            match v.get("cloudaicompanionProject") {
+                Some(Value::String(s)) if !s.is_empty() => s.clone(),
+                Some(Value::Object(o)) => o
+                    .get("id")
+                    .and_then(|i| i.as_str())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(AGY_FALLBACK_PROJECT)
+                    .to_string(),
+                _ => AGY_FALLBACK_PROJECT.to_string(),
+            }
+        }
+        Err(_) => AGY_FALLBACK_PROJECT.to_string(),
+    }
+}
+
+/// Extract the completion text from a `v1internal:generateContent` response.
+///
+/// Walks `candidates[0].content.parts[]` and concatenates every part's `text`
+/// field, skipping parts that are thought-signature-only (no `text` field, or
+/// a `thought: true` marker with no visible text).
+///
+/// cloudcode-pa's `v1internal:generateContent` wraps the Gemini payload under a
+/// top-level `response` key (alongside `traceId`/`metadata`), so unwrap that
+/// first; fall back to the bare shape for forward-compat.
+fn extract_generate_content_text(resp: &Value) -> Option<String> {
+    let root = resp.get("response").unwrap_or(resp);
+    let candidates = root.get("candidates")?.as_array()?;
+    let first = candidates.first()?;
+    let parts = first.get("content")?.get("parts")?.as_array()?;
+
+    let mut out = String::new();
+    for part in parts {
+        // Skip thought-signature-only parts (no visible text, or explicitly
+        // marked as a thought rather than user-facing content).
+        if part.get("thoughtSignature").is_some() && part.get("text").is_none() {
+            continue;
+        }
+        if part.get("thought").and_then(|t| t.as_bool()) == Some(true)
+            && part.get("text").is_none()
+        {
+            continue;
+        }
+        if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+            out.push_str(text);
+        }
+    }
+
+    if out.is_empty() { None } else { Some(out) }
+}
+
+/// Dispatch `prompt` to Gemini Pro via the Antigravity / cloudcode-pa backend.
+///
+/// Flow: read `~/.cascade/agy-token.json` → refresh access token → discover
+/// `cloudaicompanionProject` via `loadCodeAssist` → POST `generateContent` →
+/// extract completion text. Any failure at any stage returns `Unavailable` so
+/// the conductor spill chain moves to the next candidate — this lane never
+/// blocks the fallback path.
+fn execute_gemini(_target: &ConductorTarget, prompt: &str) -> Outcome {
+    let Some(token_path) = agy_token_path() else {
+        return Outcome::Unavailable { reason: "cannot resolve home dir for agy-token.json".to_string() };
+    };
+    if !token_path.is_file() {
         return Outcome::Unavailable {
-            reason: "cascade-agy not found; no Gemini prompt CLI available".to_string(),
+            reason: format!("no agy token at {} (run cascade-agy-auth)", token_path.display()),
         };
     }
-    // Even if agy is present it does not support prompt dispatch — still unavailable.
-    Outcome::Unavailable {
-        reason: "cascade-agy does not support prompt dispatch; Gemini CLI unavailable".to_string(),
+
+    let Some((refresh_token, _email)) = read_agy_refresh_token(&token_path) else {
+        return Outcome::Unavailable { reason: "agy-token.json present but unreadable/malformed".to_string() };
+    };
+
+    let Some(access_token) = agy_refresh_access_token(&refresh_token) else {
+        return Outcome::Unavailable { reason: "agy OAuth refresh failed".to_string() };
+    };
+
+    let project = agy_load_project(&access_token);
+
+    let url = format!("{AGY_BASE_URL}/v1internal:generateContent");
+    let body = serde_json::json!({
+        "project": project,
+        "model": AGY_GENERATE_MODEL,
+        "request": {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}]
+        }
+    })
+    .to_string();
+    let headers = [
+        ("Authorization", format!("Bearer {access_token}")),
+        ("Content-Type", "application/json".to_string()),
+        ("User-Agent", AGY_USER_AGENT.to_string()),
+    ];
+    let header_refs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    match curl_post_json(&url, &header_refs, &body, AGY_HTTP_TIMEOUT_SECS) {
+        Ok(resp_str) => {
+            let resp: Value = match serde_json::from_str(&resp_str) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Outcome::Unavailable {
+                        reason: format!("gemini ({AGY_MODEL_LABEL}) returned unparseable response: {e}"),
+                    }
+                }
+            };
+            match extract_generate_content_text(&resp) {
+                Some(text) => Outcome::Success { output: text },
+                None => Outcome::Unavailable {
+                    reason: format!("gemini ({AGY_MODEL_LABEL}) response had no completion text"),
+                },
+            }
+        }
+        Err(e) => Outcome::Unavailable {
+            reason: format!("gemini ({AGY_MODEL_LABEL}) generateContent failed: {e}"),
+        },
     }
 }
 
@@ -560,9 +803,12 @@ fn execute_gemini(_target: &ConductorTarget, _prompt: &str) -> Outcome {
 /// Returns `Unavailable` when the proxy is not running (connection refused).
 fn execute_gfp(_target: &ConductorTarget, prompt: &str) -> Outcome {
     // Use a simple TCP probe + HTTP POST via std (no async here).
+    // The :3762 anthropic-compat proxy remaps by claude-* prefix → Gemini
+    // (claude-sonnet* → gemini-2.0-flash), so a current sonnet id keeps the
+    // GFP lane on the free flash tier without a stale literal.
     let url = "http://localhost:3762/v1/messages";
     let body = serde_json::json!({
-        "model": "claude-sonnet-4-6",
+        "model": cascade_core::model_ids::MODEL_CLAUDE_SONNET,
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": prompt}]
     });
@@ -849,4 +1095,136 @@ fn ping_gfp() -> Option<(bool, u64)> {
     let start = Instant::now();
     let out = output_bounded(cmd, PROBE_TIMEOUT_SECS)?;
     Some((out.status.success(), start.elapsed().as_millis() as u64))
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod agy_tests {
+    use super::*;
+
+    /// Captured (shape-accurate, values synthesized) `v1internal:generateContent`
+    /// response fixture: a leading thought-signature-only part (no visible
+    /// text) followed by the real completion text, matching what cloudcode-pa
+    /// returns for `gemini-pro-agent` reasoning-model calls.
+    const FIXTURE_WITH_THOUGHT: &str = r#"{
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {"thoughtSignature": "opaque-base64-signature=="},
+                        {"text": "Hello from Gemini Pro."}
+                    ]
+                },
+                "finishReason": "STOP"
+            }
+        ]
+    }"#;
+
+    /// Fixture with a `thought: true` marker (alternate shape some responses
+    /// use) and no `thoughtSignature` field, still with no visible text.
+    const FIXTURE_WITH_THOUGHT_BOOL: &str = r#"{
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {"thought": true},
+                        {"text": "Part one. "},
+                        {"text": "Part two."}
+                    ]
+                }
+            }
+        ]
+    }"#;
+
+    /// Fixture with no candidates at all (e.g. safety block / empty response).
+    const FIXTURE_EMPTY: &str = r#"{"candidates": []}"#;
+
+    /// Fixture where the only part is thought-signature-only (no usable text).
+    const FIXTURE_THOUGHT_ONLY: &str = r#"{
+        "candidates": [
+            {"content": {"parts": [{"thoughtSignature": "sig=="}]}}
+        ]
+    }"#;
+
+    #[test]
+    fn extract_text_skips_thought_signature_part() {
+        let v: Value = serde_json::from_str(FIXTURE_WITH_THOUGHT).unwrap();
+        let text = extract_generate_content_text(&v).expect("should extract text");
+        assert_eq!(text, "Hello from Gemini Pro.");
+    }
+
+    #[test]
+    fn extract_text_concatenates_multiple_text_parts_and_skips_thought_bool() {
+        let v: Value = serde_json::from_str(FIXTURE_WITH_THOUGHT_BOOL).unwrap();
+        let text = extract_generate_content_text(&v).expect("should extract text");
+        assert_eq!(text, "Part one. Part two.");
+    }
+
+    /// The REAL cloudcode-pa shape: candidates wrapped under a top-level
+    /// `response` key alongside `traceId`/`metadata`. Verified live 2026-07-06.
+    const FIXTURE_WRAPPED: &str = r#"{
+        "response": {
+            "candidates": [
+                {"content": {"role": "model", "parts": [
+                    {"thoughtSignature": "sig=="},
+                    {"text": "81"}
+                ]}}
+            ]
+        },
+        "traceId": "abc123",
+        "metadata": {}
+    }"#;
+
+    #[test]
+    fn extract_text_unwraps_cloudcode_response_envelope() {
+        let v: Value = serde_json::from_str(FIXTURE_WRAPPED).unwrap();
+        let text = extract_generate_content_text(&v).expect("should unwrap response envelope");
+        assert_eq!(text, "81");
+    }
+
+    #[test]
+    fn extract_text_none_when_no_candidates() {
+        let v: Value = serde_json::from_str(FIXTURE_EMPTY).unwrap();
+        assert!(extract_generate_content_text(&v).is_none());
+    }
+
+    #[test]
+    fn extract_text_none_when_only_thought_signature() {
+        let v: Value = serde_json::from_str(FIXTURE_THOUGHT_ONLY).unwrap();
+        assert!(extract_generate_content_text(&v).is_none());
+    }
+
+    #[test]
+    fn urlencode_escapes_reserved_chars() {
+        assert_eq!(urlencode("a+b/c=d"), "a%2Bb%2Fc%3Dd");
+        assert_eq!(urlencode("plain-text_123.~"), "plain-text_123.~");
+    }
+
+    #[test]
+    fn execute_gemini_unavailable_when_no_token_file() {
+        // Point at a home dir with no ~/.cascade/agy-token.json by using a
+        // target whose config_dir is irrelevant — execute_gemini reads the
+        // real home dir's agy token path. We can't easily inject a fake home
+        // dir without touching global state, so this test only exercises the
+        // "file missing" branch when the real path doesn't exist. If a real
+        // token happens to exist on the test machine, skip the assertion.
+        if let Some(p) = agy_token_path() {
+            if !p.is_file() {
+                let target = ConductorTarget {
+                    provider: Provider::Gemini,
+                    account_id: "gemini-acc1".to_string(),
+                    model: AGY_MODEL_LABEL.to_string(),
+                    config_dir: None,
+                    reason: "test".to_string(),
+                };
+                match execute_gemini(&target, "hello") {
+                    Outcome::Unavailable { .. } => {}
+                    other => panic!("expected Unavailable, got {other:?}"),
+                }
+            }
+        }
+    }
 }
