@@ -24,7 +24,7 @@ Canonical, human-readable reference for "which subscription has which model" and
 | Gemini 3.5 Flash | Google | GFP free pool (28 keys) + agy paid | T3 --GFP (backbone) | Always-on grunt work, post-prompting, classify/triage/summarize | **FREE** in free tier; paid $1.50in/$9.00out | unpublished | **GA** |
 | Gemini 3.1 Flash-Lite | Google | GFP free pool | T3-cheap fallback | Cheapest possible grunt work | FREE; paid $0.25in/$1.50out | unpublished | **GA** |
 | Gemini 2.5 Pro | Google | GFP free pool (contested) | Legacy fallback | Still free-tier eligible per official page [Guessing — conflicting evidence] | FREE (disputed by 3rd parties) | unpublished | **GA** |
-| Gemini 2.0 Flash | Google | dead | none | — | N/A | — | **DEPRECATED — shut down 2026-06-01, audit GP proxy configs** |
+| Gemini 2.0 Flash | Google | live | gfp-pool | cheap grunt work | free | 1M | Older gen but STILL SERVING (verified 2026-07-07: 429 quota, not 404); prefer `gemini-flash-latest` for new routing |
 | GLM-5.2 | Zhipu/z.ai | OpenCode Go/Zen, z.ai direct | T2 --OpenCode Run | Flagship reasoning, long-horizon agentic coding | ~880 req/5hr in Go pool (priciest slot); MIT open weights | 1M | **GA** |
 | DeepSeek V4 Pro | DeepSeek (via OpenCode) | OpenCode Go/Zen | T2-value | Best raw coding $/token value | ~3,450 req/5hr; ~1/30th frontier API cost | 1M | **GA** |
 | DeepSeek V4 Flash | DeepSeek (via OpenCode) | OpenCode Go/Zen | T3-cheap | Bulk mechanical edits, triage | ~31,650 req/5hr (cheapest, highest volume) | unpublished | **GA** |
@@ -74,7 +74,7 @@ Full per-model detail, benchmarks, and source citations: `anthropic.md` · `open
 - **Two risks to actively monitor, not assume away:**
   1. **ToS exposure** — Google's documented policy explicitly names "creating multiple projects to circumvent rate limits" as prohibited. Enforcement is described as scale-dependent (hobbyist rotation tolerated, production-scale abuse risks suspension) but this is a gray-zone workaround, not sanctioned architecture.
   2. **Policy-drift risk** — two tightening events in the last ~4 months (Mar 23 billing-account consolidation, Apr 1 Pro-model free-tier restriction) show the free-tier rules this pool depends on are actively narrowing. Build a paid fallback (Gemini 3.1 Flash-Lite at $0.10-0.25/M input is cheap enough to be a trivial fallback) rather than architecting as if the free pool is permanently guaranteed.
-- **Dead model check:** Gemini 2.0 Flash was shut down 2026-06-01 — audit the GP proxy's routing tables now to confirm nothing still targets that model ID; if it does, that's a live outage, not a future risk.
+- **Model freshness:** the GP proxy currently targets `gemini-2.0-flash` — verified STILL LIVE on 2026-07-07 (returns 429 quota, not 404), so not an outage. It is older-gen, though; a future-proofing follow-up is to point the proxy at `gemini-flash-latest`/`gemini-flash-lite-latest` (auto-tracks Google's current flash, immune to retirements).
 - **Recommended action:** re-verify actual per-project RPM/RPD live at `aistudio.google.com/rate-limit` against a real GFP project rather than trusting any published table — Google itself stopped publishing static numbers.
 
 Full reasoning and sources: `google.md` § Strategy verdict.

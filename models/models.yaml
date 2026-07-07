@@ -220,7 +220,7 @@ providers:
         best_for: []
         quota_cost_weight: "N/A — shut down"
         context_tokens: null
-        availability: deprecated
+        availability: live
         notes: >
           DEPRECATED/SHUT DOWN 2026-06-01. If any GP proxy config still
           targets this model ID, that is a live outage, not a future risk —

@@ -46,7 +46,7 @@ The lineup is **not** "3.5 Pro vs 3.1 Pro" as parallel current options — it's 
 | **Gemini 2.5 Pro** | Yes (still) | $1.25-2.50 / $10-15 | Stable |
 | **Gemini 2.5 Flash** | Yes | $0.30 / $2.50 | Stable |
 | **Gemini 2.5 Flash-Lite** | Yes | $0.10 / $0.40 | Stable |
-| **Gemini 2.0 Flash** | Was free | $0.10 / $0.40 | **Deprecated / shut down June 1, 2026** — dead, remove from any rotation |
+| **Gemini 2.0 Flash** | Free tier | $0.10 / $0.40 | Older gen but STILL SERVING (verified live 2026-07-07: generateContent returns 429 quota, not 404). Prefer `gemini-flash-latest` for new routing; no urgent removal needed |
 | **Gemini 3.1 Pro** | **No** | $2-4 / $12-18 | Preview, paid-only |
 | **Gemini 3.5 Pro** | No (not GA) | unpublished | Not yet released |
 
