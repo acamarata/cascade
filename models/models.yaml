@@ -1,0 +1,297 @@
+# Cascade model reference — machine-readable source of truth.
+#
+# Purpose: canonical "which sub has which model" + "cost/context/best-for" data
+#   for Cascade's agent selection logic and daemon routing. Human-readable
+#   companion: models/README.md. Per-provider deep detail: models/{anthropic,
+#   openai,google,opencode}.md.
+#
+# Verified: 2026-07-06, via live fetches of provider docs (see per-provider .md
+#   files for source URLs). Anything `preview: true` is announced but not
+#   broadly GA — do not route production traffic to it.
+#
+# Cross-reference: crates/cascade-core/src/model_ids.rs holds the Rust
+#   constants Cascade code actually imports. As of this write, those constants
+#   ARE current (claude-opus-4-8, claude-sonnet-5, claude-haiku-4-5,
+#   claude-fable-5, gpt-5.5, gemini-3.1-pro, gemini-3.5-flash, glm-5.2) — no
+#   drift found. Re-diff this file against model_ids.rs whenever either changes.
+#
+# Update cadence: re-verify quarterly or when a provider ships a new
+#   flagship/GA. Treat "gpt-5.6", "gemini-3.5-pro" as pending — flip
+#   `availability: preview` -> `ga` only after independently confirming.
+
+schema_version: 1
+verified_date: "2026-07-06"
+
+providers:
+  - name: anthropic
+    subscription: "Claude Max (A1, A2 second seat)"
+    cascade_accounts: ["A1", "A2"]
+    dispatch: "Claude Code (native), smithers-claude-p PTY wrapper for A2"
+    models:
+      - id: claude-opus-4-8
+        tier: T1
+        best_for: ["architectural decisions", "final gates", "CR-C", "hardest synthesis", "long-horizon autonomous agentic execution"]
+        quota_cost_weight: "baseline reference (all other Max weights quoted relative to this); most expensive of the three routine tiers"
+        context_tokens: 1000000
+        max_output_tokens: 128000
+        availability: ga
+        notes: >
+          Anthropic's own guidance: "if unsure, start with Opus 4.8." Adaptive
+          thinking defaults to effort=high. Weekly Max quota is tracked on its
+          own reset schedule but the only formally separate documented CAP is
+          Sonnet's; exact numeric hour/token caps are not published by
+          Anthropic (treat any fixed-number blog claim as stale).
+      - id: claude-sonnet-5
+        tier: T2
+        best_for: ["bulk execution", "code gen", "CR-A/B", "QA", "day-to-day coding", "agent harness generation"]
+        quota_cost_weight: "cheapest frontier-tier per-turn burn; has its OWN dedicated weekly sub-cap on Max plans (separate from the all-models cap)"
+        context_tokens: 1000000
+        max_output_tokens: 128000
+        availability: ga
+        notes: >
+          Cascade's DEFAULT_HARNESS_MODEL. Intro pricing $2/$10 per MTok
+          through 2026-08-31 (list $3/$15). First Sonnet-tier model with
+          xhigh effort. Best combination of speed/intelligence per Anthropic.
+      - id: claude-haiku-4-5
+        tier: T3
+        best_for: ["triage", "grunt work", "taxonomy", "post-prompt hooks", "cheap high-volume subagent work"]
+        quota_cost_weight: "cheapest per-turn burn of the four Claude models; no Haiku-specific weekly sub-cap"
+        context_tokens: 200000
+        max_output_tokens: 64000
+        availability: ga
+        notes: >
+          dated snapshot claude-haiku-4-5-20251001. Only current Claude model
+          still on legacy budget_tokens extended-thinking (not adaptive).
+      - id: claude-fable-5
+        tier: T1-plus
+        best_for: ["hardest reasoning", "overnight/long-horizon autonomous coding runs", "deep multi-step research", "enterprise-scale deliverables"]
+        quota_cost_weight: "~2x Opus 4.8 burn rate [Likely, not Anthropic-confirmed exact multiplier — corroborated by in-app UI copy + 3rd-party trackers]; 2x Opus API price exactly ($10/$50 vs $5/$25)"
+        context_tokens: 1000000
+        max_output_tokens: 128000
+        availability: ga
+        notes: >
+          Redeployed 2026-07-01 after brief pull, with improved safety
+          classifier (blocks reported jailbreak >99% per Anthropic). Included
+          up to 50% of weekly Max limits only through 2026-07-07 — that window
+          has now passed relative to today (2026-07-06); reverify current
+          billing treatment on support.claude.com before assuming flat-pool
+          inclusion still applies. Adaptive thinking always-on, cannot disable.
+          Requires 30-day data retention (no ZDR). Org-gated twin
+          claude-mythos-5 (Project Glasswing only) is functionally identical
+          minus safety classifiers.
+
+  - name: openai
+    subscription: "ChatGPT Codex (tier TBD — verify plan; Plus/Pro assumed)"
+    cascade_accounts: ["C1"]
+    dispatch: "Codex CLI"
+    models:
+      - id: gpt-5.5
+        tier: T2
+        best_for: ["large refactors", "holding context across big systems", "ambiguous-failure debugging", "agentic tool-checking"]
+        quota_cost_weight: "$5/MTok in, $0.50 cached-in, $30/MTok out; 2x in / 1.5x out beyond 272K input tokens in one session"
+        context_tokens: 400000
+        api_context_tokens: 1050000
+        max_output_tokens: 128000
+        availability: ga
+        notes: >
+          Primary Codex driver, current flagship (released 2026-04-23,
+          snapshot gpt-5.5-2026-04-23). Codex CLI's REAL usable ceiling is
+          ~400K (272K in / 128K out) despite the 1M API-side figure — open
+          GitHub issues (openai/codex #19319, #19409, #19464) show Codex's
+          context accounting undercuts the API number. Knowledge cutoff
+          2025-12-01. No dedicated -codex fine-tune this generation.
+      - id: gpt-5.4
+        tier: T2-fallback
+        best_for: ["cheaper/faster fallback below 5.5"]
+        quota_cost_weight: "cheaper than 5.5"
+        context_tokens: 400000
+        api_context_tokens: 1000000
+        max_output_tokens: 128000
+        availability: ga
+        notes: "Still selectable in Codex alongside 5.5."
+      - id: gpt-5.4-mini
+        tier: T3
+        best_for: ["high-volume/cheap tasks", "quick edits", "low-stakes automation"]
+        quota_cost_weight: "cheapest tier on Plus/Pro plans"
+        context_tokens: 400000
+        availability: ga
+        notes: "Cheapest selectable Codex model."
+      - id: gpt-5.6-sol
+        tier: T1-announced
+        best_for: ["hardest problems", "complex coding", "security research"]
+        quota_cost_weight: "$5/MTok in, $30/MTok out (published)"
+        context_tokens: 1500000
+        availability: preview
+        notes: >
+          ANNOUNCED 2026-06-25/26, NOT PUBLICLY GA. Limited to ~20 trusted
+          partner orgs via API/Codex, cleared with US government coordination.
+          Not selectable on any normal ChatGPT/Codex plan (Free/Go/Plus/
+          Pro/Business) as of 2026-07-06. A Tech Times rumor of "silent
+          rollout to some Codex users" is UNVERIFIED/third-party — treat as
+          false until OpenAI confirms. DO NOT route production Cascade traffic
+          here; not selectable regardless.
+      - id: gpt-5.6-terra
+        tier: T2-announced
+        best_for: ["balanced high-volume business tasks", "internal tools", "doc analysis"]
+        quota_cost_weight: "$2.50/MTok in, $15/MTok out (published)"
+        context_tokens: null
+        availability: preview
+        notes: "ANNOUNCED, NOT GA. Context window not officially published [Guessing]."
+      - id: gpt-5.6-luna
+        tier: T3-announced
+        best_for: ["summarization", "drafting", "routine automation"]
+        quota_cost_weight: "$1/MTok in, $6/MTok out (published)"
+        context_tokens: null
+        availability: preview
+        notes: "ANNOUNCED, NOT GA. Context window not officially published [Guessing]."
+
+  - name: google
+    subscription: "Google AI Pro/Ultra (agy/cloudcode-pa) + GFP free-tier key pool (28 keys, GEMINI_FREE_KEY_*)"
+    cascade_accounts: ["agy (paid Pro/Ultra)", "GFP (28-project free pool)"]
+    dispatch: "agy CLI for paid Gemini; GP proxy :3761 (native) / :3762 (Anthropic-compat adapter) for GFP free pool"
+    models:
+      - id: gemini-3.1-pro
+        tier: T2
+        best_for: ["complex problem-solving", "agentic and vibe coding", "advanced intelligence tasks needing a Pro-tier model today"]
+        quota_cost_weight: "$2-4/MTok in, $12-18/MTok out; paid-only, NOT in free tier"
+        context_tokens: null
+        availability: ga
+        notes: >
+          Cascade's current MODEL_GEMINI_PRO constant. Preview status per
+          ai.google.dev models page despite being the current shipped Pro
+          model — Gemini naming is sequential/staggered, not parallel tiers.
+      - id: gemini-3.5-pro
+        tier: T1-pending
+        best_for: ["frontier reasoning + full-codebase/large-corpus ingestion (2M ctx)", "agentic coding above 3.1 Pro"]
+        quota_cost_weight: "unpublished"
+        context_tokens: 2000000
+        availability: preview
+        notes: >
+          Announced at I/O (2026-05-19), targeted June GA, SLIPPED to July
+          2026, still in limited Vertex AI enterprise preview as of late June.
+          NOT CONFIRMED PUBLICLY GA as of 2026-07-06 despite multiple
+          "July 17" leak-date blog claims (none official). Deep Think
+          reasoning mode expected (prior Gemini 3 Deep Think scored 84.6% on
+          ARC-AGI-2). DO NOT treat as selectable in Cascade routing yet —
+          reverify GA status before wiring in.
+      - id: gemini-3.5-flash
+        tier: T3
+        best_for: ["GFP backbone: always-on grunt work", "post-prompting", "classify/triage/summarize", "cheap high-volume bulk"]
+        quota_cost_weight: "FREE in free tier; paid $1.50/MTok in, $9.00/MTok out. Per-project free-tier RPD in low-hundreds-to-~1500 range, RPM low-to-low-double-digits — Google no longer publishes a static table (dashboard-only: aistudio.google.com/rate-limit)"
+        context_tokens: null
+        availability: ga
+        notes: >
+          Cascade's MODEL_GEMINI_FLASH constant — the GFP pool workhorse.
+          Reported (DeepMind/Appwrite/llm-stats) to BEAT Gemini 3.1 Pro
+          (prior-gen full Pro) on coding/agentic benchmarks — strong quality
+          signal for a "cheap" model, though no independent Flash-vs-Haiku
+          benchmark exists [Likely, not Certain]. 28-project key rotation is
+          a documented ToS gray-zone workaround for real per-project caps —
+          not "unlimited," see README GFP-backbone section.
+      - id: gemini-3-flash
+        tier: T3-alt
+        best_for: ["preview-tier cheap grunt work, alternate to 3.5 flash"]
+        quota_cost_weight: "free tier eligible; paid $0.50/MTok in, $3.00/MTok out"
+        context_tokens: null
+        availability: preview
+        notes: "Preview status, free-tier eligible per official pricing page."
+      - id: gemini-3.1-flash-lite
+        tier: T3-cheap
+        best_for: ["cheapest possible grunt work", "highest RPM within free tier"]
+        quota_cost_weight: "free tier eligible; paid $0.25/MTok in, $1.50/MTok out; ~2x the RPM of Flash"
+        context_tokens: null
+        availability: ga
+        notes: "Cheapest paid fallback if GFP free-tier daily caps are hit."
+      - id: gemini-2.5-pro
+        tier: T2-legacy
+        best_for: ["legacy fallback, still free-tier eligible per official pricing page"]
+        quota_cost_weight: "free tier eligible (contested — some 3rd-party sources claim Pro pulled from free tier April 2026, official page still shows it free) [Guessing which is correct]"
+        context_tokens: null
+        availability: ga
+        notes: >
+          Genuine conflict in evidence: official ai.google.dev pricing page
+          (fetched live) still marks free-tier available; several aggregators
+          (apiyi.com, aifreeapi.com) claim Pro models were pulled from free
+          tier 2026-04-01. Possible explanation: the April tightening applied
+          to 3.x Pro specifically, grandfathering 2.5 Pro. Unresolved — verify
+          live before depending on this being free.
+      - id: gemini-2.0-flash
+        tier: dead
+        best_for: []
+        quota_cost_weight: "N/A — shut down"
+        context_tokens: null
+        availability: deprecated
+        notes: >
+          DEPRECATED/SHUT DOWN 2026-06-01. If any GP proxy config still
+          targets this model ID, that is a live outage, not a future risk —
+          audit GP proxy routing tables immediately.
+
+  - name: opencode
+    subscription: "OpenCode Go ($10/mo) + OpenCode Zen (pay-as-you-go) + z.ai GLM Coding Plan (alt path)"
+    cascade_accounts: ["OpenCode Run"]
+    dispatch: "OpenCode CLI"
+    models:
+      - id: glm-5.2
+        tier: T2
+        best_for: ["flagship reasoning + long-horizon agentic coding", "sustained multi-hour autonomous refactors"]
+        quota_cost_weight: "~880 requests/5hr in Go pool (most expensive slot); MIT open weights; z.ai API ~$0.91in/$2.86out per MTok (promo)"
+        context_tokens: 1000000
+        availability: ga
+        notes: >
+          Cascade's MODEL_GLM constant. SWE-bench Pro 62.1 (beats GPT-5.5's
+          58.6), FrontierSWE 74.4% (near Opus 4.8's 75.1%), Terminal-Bench 2.1
+          jumped 62.0->81.0 from GLM-5.1. Available via OpenCode Go, OpenCode
+          Zen, z.ai direct (GLM Coding Plan or metered API), and third-party
+          routers (OpenRouter/Together/Fireworks).
+      - id: deepseek-v4-pro
+        tier: T2-value
+        best_for: ["best raw coding/reasoning $/token value", "general coding, algorithm work, long-context refactors"]
+        quota_cost_weight: "~3450 requests/5hr in Go pool; ~1/30th frontier API cost"
+        context_tokens: 1000000
+        availability: ga
+        notes: "LiveCodeBench 93.5% (beats Claude 88.8%), SWE-bench Verified 80.6%. Weak on factual recall/HLE."
+      - id: deepseek-v4-flash
+        tier: T3-cheap
+        best_for: ["bulk mechanical edits", "triage", "high-volume simple tasks"]
+        quota_cost_weight: "~31650 requests/5hr in Go pool (cheapest, highest volume); $0.14in/$0.28out per MTok standalone"
+        context_tokens: null
+        availability: ga
+        notes: "Not for deep reasoning — pure volume/cost play."
+      - id: qwen3.7-max
+        tier: T2-longctx
+        best_for: ["longest context (1M) + marathon autonomous agent runs", "huge codebase context loads"]
+        quota_cost_weight: "mid-tier Go pool volume"
+        context_tokens: 1000000
+        availability: ga
+        notes: "SWE-bench Verified 80.4, Terminal-Bench 2.0 69.7 (beats DeepSeek V4 Pro + Opus-4.6 Max). Demonstrated 35hr autonomous session, 1158 tool calls."
+      - id: minimax-m3
+        tier: T2-multimodal
+        best_for: ["multimodal (image/video/desktop control)", "very large context needs", "browser/desktop automation"]
+        quota_cost_weight: "mid-tier Go pool volume, newest addition"
+        context_tokens: 1000000
+        availability: ga
+        notes: "SWE-Bench Pro 59.0% (beats GPT-5.5, Gemini 3.1 Pro), BrowseComp 83.5% (beats Opus 4.7). Only roster model with native multimodality."
+      - id: kimi-k2.7-code
+        tier: T2-efficient
+        best_for: ["token-efficient large-codebase agentic coding", "cost-sensitive long agentic sessions"]
+        quota_cost_weight: "mid-tier Go pool volume"
+        context_tokens: null
+        availability: ga
+        notes: >
+          +21.8% over K2.6 on Kimi Code Bench v2, cuts reasoning tokens ~30%.
+          Caveat: benchmarks are Moonshot-proprietary, no independent
+          SWE-bench-Verified/LiveCodeBench numbers yet [Likely, not Certain].
+      - id: mimo-v2.5-pro
+        tier: T2-efficient
+        best_for: ["frontier-adjacent quality at minimal token spend"]
+        quota_cost_weight: "~1290 requests/5hr in Go pool"
+        context_tokens: null
+        availability: ga
+        notes: "SWE-bench Pro 57.2; uses 40-60% fewer tokens/trajectory than Opus 4.6/Gemini 3.1 Pro/GPT-5.4 at similar quality."
+      - id: glm-5-turbo
+        tier: T2-latency
+        best_for: ["fast low-latency agent chains where speed beats peak reasoning"]
+        quota_cost_weight: "$1.20in/$4.00out per MTok; NOT in OpenCode Go roster — z.ai direct path only"
+        context_tokens: 262000
+        availability: ga
+        notes: "48 tok/s throughput. Requires z.ai GLM Coding Plan or z.ai API, not accessible via OpenCode Go."
