@@ -45,6 +45,7 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
+use cascade_types::model_ids::MODEL_CLAUDE_HAIKU;
 use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -670,7 +671,7 @@ impl ProviderAdapter for AnthropicAdapter {
                 supports_streaming: true,
             },
             ModelInfo {
-                id: "claude-haiku-4-5".to_owned(),
+                id: MODEL_CLAUDE_HAIKU.to_owned(),
                 name: "Claude Haiku 4.5".to_owned(),
                 context_window: 200_000,
                 supports_streaming: true,
@@ -721,6 +722,7 @@ impl ProviderAdapter for AnthropicAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
     use crate::test_helpers::test_support::{
         assert_completion_contract, fixture_json, make_anthropic_sse, HttpMethod,
         MockProviderServer,
@@ -896,7 +898,7 @@ mod tests {
         let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
         assert!(ids.contains(&"claude-opus-4-5"));
         assert!(ids.contains(&"claude-sonnet-4-6"));
-        assert!(ids.contains(&"claude-haiku-4-5"));
+        assert!(ids.contains(&MODEL_CLAUDE_HAIKU));
         assert!(ids.contains(&"claude-3-opus"));
     }
 
@@ -992,7 +994,7 @@ mod tests {
     // ── prompt caching: CacheStrategy gating ──────────────────────────────────
 
     fn req_with_system(system_len: usize) -> CompletionRequest {
-        let mut req = CompletionRequest::simple("claude-opus-4-8", "Hello");
+        let mut req = CompletionRequest::simple(MODEL_CLAUDE_OPUS, "Hello");
         req.system = Some("S".repeat(system_len));
         req
     }
@@ -1140,7 +1142,7 @@ mod tests {
                 "type": "message",
                 "role": "assistant",
                 "content": [{"type": "text", "text": "Cached answer."}],
-                "model": "claude-opus-4-8",
+                "model": MODEL_CLAUDE_OPUS,
                 "stop_reason": "end_turn",
                 "stop_sequence": null,
                 "usage": {
@@ -1154,7 +1156,7 @@ mod tests {
         .await;
 
         let adapter = AnthropicAdapter::new_with_base_url("test-key", ctx.base_url());
-        let req = CompletionRequest::simple("claude-opus-4-8", "Hello again");
+        let req = CompletionRequest::simple(MODEL_CLAUDE_OPUS, "Hello again");
         let (resp, cache_usage) = adapter
             .complete_with_options(req, AnthropicRequestOptions::default())
             .await

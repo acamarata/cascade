@@ -25,6 +25,8 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use cascade_types::model_ids::{MODEL_CLAUDE_OPUS, MODEL_CLAUDE_SONNET};
+
 use crate::types::TokenUsage;
 
 // ── ModelPricing ──────────────────────────────────────────────────────────────
@@ -89,11 +91,11 @@ fn build_table() -> CostTable {
     // ── Anthropic ─────────────────────────────────────────────────────────────
     // https://www.anthropic.com/pricing — snapshot 2026-05-31
     t.insert(
-        ("anthropic", "claude-opus-4-8"),
+        ("anthropic", MODEL_CLAUDE_OPUS),
         ModelPricing::new(15.0, 75.0),
     );
     t.insert(
-        ("anthropic", "claude-sonnet-5"),
+        ("anthropic", MODEL_CLAUDE_SONNET),
         ModelPricing::new(3.0, 15.0),
     );
     t.insert(

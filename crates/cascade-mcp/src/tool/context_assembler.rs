@@ -293,6 +293,7 @@ fn default_profiles() -> Vec<ContextProfile> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::model_ids::MODEL_CLAUDE_HAIKU;
 
     fn make_chunks(n: usize, words_each: usize) -> Vec<String> {
         (0..n)
@@ -322,7 +323,7 @@ mod tests {
         let req_small = ContextRequest {
             query: "test".into(),
             role: "build".into(),
-            model: "claude-haiku-4-5".into(),
+            model: MODEL_CLAUDE_HAIKU.into(),
             token_budget: 4000,
         };
 
@@ -450,7 +451,7 @@ tier = "full"
 
     #[test]
     fn haiku_is_small_model() {
-        assert!(is_small_model("claude-haiku-4-5"));
+        assert!(is_small_model(MODEL_CLAUDE_HAIKU));
     }
 
     #[test]

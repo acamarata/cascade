@@ -71,6 +71,7 @@ pub mod hook;
 pub mod ipc;
 pub mod key_storage;
 pub mod mcp;
+pub mod model_ids;
 pub mod model_profile_types;
 pub mod model_registry;
 pub mod parser;

@@ -42,6 +42,7 @@ use cascade_core::accounts_store::{
 use cascade_core::external_accounts::{discover as discover_external, ExternalAgent};
 use cascade_core::read_claude_access_token;
 use cascade_core::quota_aggregator::aggregate_quota;
+use cascade_core::model_ids::MODEL_CLAUDE_HAIKU;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_types::accounts::{AccessMethod, AccountFamily};
 use cascade_types::quota_store::{
@@ -579,7 +580,7 @@ impl FleetPoller {
                         "-p",
                         "ok",
                         "--model",
-                        "claude-haiku-4-5",
+                        MODEL_CLAUDE_HAIKU,
                         "--strict-mcp-config",
                         "--mcp-config",
                         r#"{"mcpServers":{}}"#,
