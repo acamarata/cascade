@@ -275,15 +275,24 @@ pub fn probe_gp_health(url: &str, timeout: Duration) -> crate::selection::GpHeal
 
 /// Parse the `/health` response body into a snapshot (pure, no I/O).
 ///
-/// Expected shape: `{"status":"ok","healthy_slots":N,...}`. Anything else —
-/// missing field, wrong type, non-JSON — yields the default (unhealthy)
-/// snapshot so a broken or lying endpoint can never enable the GP preference.
+/// Expected shape: `{"status":"ok","healthy_slots":N,"total_slots":M,
+/// "exhausted":bool,"earliest_reset_secs":N|null}` (Phase B, v1.13.0 adds the
+/// last two fields; older bodies without them still parse — the fields
+/// default to `0`/`None`). Anything else — missing field, wrong type,
+/// non-JSON — yields the default (unhealthy) snapshot so a broken or lying
+/// endpoint can never enable the GP preference.
 pub fn parse_gp_health(body: &str) -> crate::selection::GpHealthSnapshot {
-    let healthy_slots = serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|v| v.get("healthy_slots").and_then(Value::as_u64))
-        .unwrap_or(0) as usize;
-    crate::selection::GpHealthSnapshot { healthy_slots }
+    let Some(v) = serde_json::from_str::<Value>(body).ok() else {
+        return crate::selection::GpHealthSnapshot::default();
+    };
+    let healthy_slots = v.get("healthy_slots").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let total_slots = v.get("total_slots").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let earliest_reset_secs = v.get("earliest_reset_secs").and_then(Value::as_u64);
+    crate::selection::GpHealthSnapshot {
+        healthy_slots,
+        total_slots,
+        earliest_reset_secs,
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -432,6 +441,32 @@ mod tests {
         assert!(!parse_gp_health("").is_healthy());
         assert!(!parse_gp_health(r#"{"status":"ok"}"#).is_healthy());
         assert!(!parse_gp_health(r#"{"healthy_slots":"three"}"#).is_healthy());
+    }
+
+    /// Phase B (v1.13.0): `total_slots` and `earliest_reset_secs` parse from
+    /// the `/health` body and feed `is_exhausted()` — this is how the CLI
+    /// conductor's T3-GP preference (and any future caller) can see the same
+    /// circuit-breaker signal the :3762 adapter uses for its fail-loud 503.
+    #[test]
+    fn parse_gp_health_reads_exhaustion_fields() {
+        let gp = parse_gp_health(
+            r#"{"status":"ok","healthy_slots":0,"total_slots":6,"exhausted":true,"earliest_reset_secs":37}"#,
+        );
+        assert_eq!(gp.total_slots, 6);
+        assert_eq!(gp.earliest_reset_secs, Some(37));
+        assert!(gp.is_exhausted());
+    }
+
+    /// A body missing the new fields entirely (older daemon, or malformed)
+    /// must still parse without panicking, defaulting to `total_slots: 0` /
+    /// `earliest_reset_secs: None` — never crash the caller on a partial body.
+    #[test]
+    fn parse_gp_health_missing_new_fields_defaults_gracefully() {
+        let gp = parse_gp_health(r#"{"status":"ok","healthy_slots":0}"#);
+        assert_eq!(gp.total_slots, 0);
+        assert_eq!(gp.earliest_reset_secs, None);
+        // total_slots == 0 means "no providers configured", not "exhausted".
+        assert!(!gp.is_exhausted());
     }
 
     /// Probe against a dead port must report unhealthy — never a guess upward.

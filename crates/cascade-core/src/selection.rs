@@ -155,12 +155,28 @@ pub struct SelectionTarget {
 pub struct GpHealthSnapshot {
     /// Number of routable, non-cooldown GP slots.
     pub healthy_slots: usize,
+    /// Total slots in the table (routable or not). Used to distinguish
+    /// "exhausted" (slots exist, all in cooldown) from "no providers
+    /// configured" (table is empty) — both report `healthy_slots == 0` but
+    /// only the former is a circuit-breaker-worthy exhaustion event.
+    pub total_slots: usize,
+    /// Seconds until the soonest slot's 429-cooldown elapses, computed at
+    /// snapshot time. `None` when the pool is healthy or the table is empty.
+    pub earliest_reset_secs: Option<u64>,
 }
 
 impl GpHealthSnapshot {
     /// Pool healthy = at least one routable slot.
     pub fn is_healthy(&self) -> bool {
         self.healthy_slots > 0
+    }
+
+    /// Pool exhausted = one or more slots exist (providers ARE configured)
+    /// but every one of them is currently in 429-cooldown. Distinct from an
+    /// empty table (`total_slots == 0`), which means no GFP keys are
+    /// configured at all — a config problem, not a transient exhaustion.
+    pub fn is_exhausted(&self) -> bool {
+        self.total_slots > 0 && self.healthy_slots == 0
     }
 }
 
@@ -181,7 +197,20 @@ pub fn gp_health_from_slots_at(slots: &[ProviderSlot], now: Instant) -> GpHealth
         .iter()
         .filter(|s| s.enabled || s.re_enable_at.is_some_and(|t| t <= now))
         .count();
-    GpHealthSnapshot { healthy_slots }
+    let earliest_reset_secs = if healthy_slots == 0 {
+        slots
+            .iter()
+            .filter_map(|s| s.re_enable_at)
+            .map(|t| t.saturating_duration_since(now).as_secs())
+            .min()
+    } else {
+        None
+    };
+    GpHealthSnapshot {
+        healthy_slots,
+        total_slots: slots.len(),
+        earliest_reset_secs,
+    }
 }
 
 // ── TaskClass → Tier mapping ───────────────────────────────────────────────────
@@ -637,7 +666,7 @@ mod tests {
 
     #[test]
     fn t3_with_healthy_gp_prefers_gfp_first() {
-        let gp = GpHealthSnapshot { healthy_slots: 3 };
+        let gp = GpHealthSnapshot { healthy_slots: 3, ..Default::default() };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
         assert_eq!(target.provider, Provider::Gfp);
         assert_eq!(target.account_id, "gfp-pool");
@@ -648,7 +677,7 @@ mod tests {
     #[test]
     fn t3_with_unhealthy_gp_spills_to_haiku_claude() {
         // GP pool in cooldown (0 healthy slots) → normal spill: claude2 haiku.
-        let gp = GpHealthSnapshot { healthy_slots: 0 };
+        let gp = GpHealthSnapshot { healthy_slots: 0, ..Default::default() };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
         assert_eq!(target.provider, Provider::Claude);
         assert_eq!(target.account_id, "claude2");
@@ -657,14 +686,14 @@ mod tests {
 
     #[test]
     fn t2_ignores_gp_preference_even_when_healthy() {
-        let gp = GpHealthSnapshot { healthy_slots: 5 };
+        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
         let target = select_account(&req(Tier::T2), &full_snapshot(), &gp).expect("target");
         assert_eq!(target.account_id, "claude2", "GP preference must be T3-only");
     }
 
     #[test]
     fn t3_gp_preferred_but_pool_account_dead_falls_back() {
-        let gp = GpHealthSnapshot { healthy_slots: 1 };
+        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
         let mut snap = full_snapshot();
         snap.accounts[5].status = "error".into(); // gfp-pool dead in quota.json
         let target = select_account(&req(Tier::T3), &snap, &gp).expect("target");
@@ -704,6 +733,51 @@ mod tests {
     fn gp_health_empty_slots_unhealthy() {
         let gp = gp_health_from_slots_at(&[], Instant::now());
         assert!(!gp.is_healthy());
+    }
+
+    // ── GFP circuit breaker: exhaustion detection (Phase B, v1.13.0) ──────────
+
+    /// All configured keys rate-limited → `is_exhausted() == true`. This is the
+    /// exact state the :3762 adapter's fail-loud path checks before forwarding.
+    #[test]
+    fn all_keys_rate_limited_reports_exhausted() {
+        let now = Instant::now();
+        let slots = vec![
+            slot(false, Some(now + Duration::from_secs(30))),
+            slot(false, Some(now + Duration::from_secs(90))),
+            slot(false, Some(now + Duration::from_secs(45))),
+        ];
+        let gp = gp_health_from_slots_at(&slots, now);
+        assert_eq!(gp.healthy_slots, 0);
+        assert_eq!(gp.total_slots, 3);
+        assert!(gp.is_exhausted(), "3 configured slots, all in cooldown, must be exhausted");
+        // Earliest reset must be the minimum across all cooldowns (30s), not
+        // the max or an arbitrary slot — this value is surfaced to the caller
+        // in the fail-loud error message.
+        assert_eq!(gp.earliest_reset_secs, Some(30));
+    }
+
+    /// An empty table (no GFP keys configured at all) is NOT "exhausted" — it
+    /// is a configuration state distinct from transient rate-limit exhaustion.
+    /// The circuit breaker must not fire a misleading "pool exhausted, wait Xs"
+    /// message when the real problem is "no keys configured".
+    #[test]
+    fn empty_table_is_not_exhausted() {
+        let gp = gp_health_from_slots_at(&[], Instant::now());
+        assert_eq!(gp.total_slots, 0);
+        assert!(!gp.is_exhausted(), "empty table is a config gap, not exhaustion");
+        assert_eq!(gp.earliest_reset_secs, None);
+    }
+
+    /// At least one healthy slot → not exhausted, and no reset time is reported
+    /// (there is nothing to wait for).
+    #[test]
+    fn partial_health_is_not_exhausted() {
+        let now = Instant::now();
+        let slots = vec![slot(true, None), slot(false, Some(now + Duration::from_secs(60)))];
+        let gp = gp_health_from_slots_at(&slots, now);
+        assert!(!gp.is_exhausted());
+        assert_eq!(gp.earliest_reset_secs, None);
     }
 
     // ── TaskClass → Tier mapping (all six) ────────────────────────────────────
@@ -762,7 +836,7 @@ mod tests {
 
     #[test]
     fn chat_prefers_gp_when_healthy() {
-        let gp = GpHealthSnapshot { healthy_slots: 1 };
+        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
         assert_eq!(preferred_chat_provider(&gp), Some(GP_CHAT_PROVIDER_ID));
     }
 
@@ -785,7 +859,7 @@ mod tests {
 
     #[test]
     fn override_bypasses_gp_preference() {
-        let gp = GpHealthSnapshot { healthy_slots: 1 };
+        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
         let r = SelectionRequest {
             tier: Tier::T3,
             model_class: None,

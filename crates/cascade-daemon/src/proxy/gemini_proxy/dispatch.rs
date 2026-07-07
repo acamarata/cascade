@@ -55,15 +55,19 @@ pub async fn dispatch_request(
     // both consume it instead of guessing from static providers.json config.
     // Never forwarded upstream; answered locally before the /v1beta allowlist.
     if path == "/health" && (method == "GET" || method == "HEAD") {
-        let (healthy_slots, total_slots) = {
+        let gp = {
             let guard = state.table.lock().unwrap();
-            let gp = cascade_core::selection::gp_health_from_slots(guard.slots());
-            (gp.healthy_slots, guard.slot_count())
+            cascade_core::selection::gp_health_from_slots(guard.slots())
         };
+        // Circuit-breaker observability (Phase B, v1.13.0): "exhausted" and
+        // "earliest_reset_secs" make pool degradation visible on /health
+        // instead of only surfacing as an opaque 503 at request time.
         let body = serde_json::json!({
             "status": "ok",
-            "healthy_slots": healthy_slots,
-            "total_slots": total_slots,
+            "healthy_slots": gp.healthy_slots,
+            "total_slots": gp.total_slots,
+            "exhausted": gp.is_exhausted(),
+            "earliest_reset_secs": gp.earliest_reset_secs,
         });
         return Ok((
             "200 OK".to_string(),
@@ -103,6 +107,11 @@ pub async fn dispatch_request(
                 if attempts == 0 {
                     return Err(ProxyError::NoProvidersAvailable);
                 } else {
+                    warn!(
+                        attempts,
+                        "gemini_proxy: GFP pool exhausted — every slot rate-limited, \
+                         returning 503 (fail-loud circuit breaker, Phase B v1.13.0)"
+                    );
                     return Err(ProxyError::AllProvidersExhausted { attempts });
                 }
             }

@@ -54,6 +54,153 @@ use uuid::Uuid;
 mod sse;
 use sse::{GeminiSseParser, StreamTranslator};
 
+// ── GFP circuit breaker (Phase B, v1.13.0) ────────────────────────────────────
+//
+// Purpose: when the upstream GFP pool (:3761) reports it has no healthy slots
+// left (every key rate-limited), this adapter must FAIL LOUD — a clear 503
+// with an explicit, actionable message — rather than silently hang or
+// silently reroute to a paid provider. Silent degradation into paid burn is
+// the exact failure mode this breaker exists to prevent.
+//
+// Design: primary behavior (env unset) is always fail-loud, unconditionally.
+// An operator MAY opt into a paid fallback via `CASCADE_GFP_FALLBACK=agy`,
+// which would route the exhausted request to the Antigravity/cloudcode-pa
+// Gemini Pro lane (see `cascade-cli/src/cmd/conductor.rs`'s `execute_gemini`)
+// instead of returning 503. That lane is NOT wired here yet — see
+// `fallback_when_exhausted` below for why and what remains.
+
+/// Environment variable that opts into a paid fallback when the GFP pool is
+/// exhausted. Unset (default) = fail-loud only, never silently spend money.
+const GFP_FALLBACK_ENV: &str = "CASCADE_GFP_FALLBACK";
+
+/// The only currently-defined fallback mode value. Any other value (or the
+/// variable being unset/empty) leaves the default fail-loud behavior intact.
+const GFP_FALLBACK_MODE_AGY: &str = "agy";
+
+/// Whether the `agy` (Antigravity Gemini Pro) fallback is requested via env.
+fn agy_fallback_requested() -> bool {
+    std::env::var(GFP_FALLBACK_ENV)
+        .map(|v| v.eq_ignore_ascii_case(GFP_FALLBACK_MODE_AGY))
+        .unwrap_or(false)
+}
+
+/// Fallback seam for when the GFP pool is exhausted and `CASCADE_GFP_FALLBACK
+/// =agy` is set.
+///
+/// DEFERRED — not wired. The agy lane (`execute_gemini` in
+/// `cascade-cli/src/cmd/conductor.rs`) is a synchronous, `curl`-subprocess-based
+/// OAuth client (refresh-token exchange → `loadCodeAssist` project discovery →
+/// `v1internal:generateContent`, all via blocking `std::process::Command`
+/// calls) built for the CLI conductor's one-shot dispatch model. This adapter
+/// is an async axum server translating streaming/non-streaming Anthropic
+/// Messages requests. Bridging the two cleanly would require: (1) porting the
+/// OAuth refresh + `loadCodeAssist` + `generateContent` calls to async
+/// `reqwest` (or spawning the blocking calls via `tokio::task::spawn_blocking`
+/// on every request — extra latency + a subprocess per call), (2) a second
+/// response-translation path (cloudcode-pa's `v1internal:generateContent`
+/// wraps candidates under a top-level `response` key, unlike the direct
+/// Gemini API shape `translate_response` already handles), and (3) mapping
+/// this adapter's streaming contract onto a backend that has no streaming
+/// support at all in `execute_gemini` today. None of that is "major" in the
+/// sense of new architecture, but it is real, untested surface — not a
+/// same-session addition. Always fails loud regardless of the flag until this
+/// is implemented.
+fn fallback_when_exhausted(gp: &cascade_core::selection::GpHealthSnapshot) -> Response {
+    warn!(
+        earliest_reset_secs = ?gp.earliest_reset_secs,
+        "anthropic_compat: CASCADE_GFP_FALLBACK=agy requested but agy fallback \
+         is not yet wired (deferred — see fallback_when_exhausted doc comment); \
+         failing loud instead of silently degrading"
+    );
+    exhausted_response(gp)
+}
+
+/// Build the fail-loud 503 response for a fully-exhausted GFP pool.
+///
+/// Always explicit: total slot count, earliest reset time (best known), and
+/// the exact env var + value an operator can set to opt into the (currently
+/// deferred) paid fallback. Never a bare "upstream error" — the whole point
+/// of the circuit breaker is that exhaustion is visible and actionable.
+fn exhausted_response(gp: &cascade_core::selection::GpHealthSnapshot) -> Response {
+    let reset_desc = match gp.earliest_reset_secs {
+        Some(secs) => format!("earliest reset in {secs}s"),
+        None => "reset time unknown".to_string(),
+    };
+    let message = format!(
+        "GFP pool exhausted — all {} key{} rate-limited; {reset_desc}. Set \
+         CASCADE_GFP_FALLBACK=agy to fall back to the paid Gemini Pro lane.",
+        gp.total_slots,
+        if gp.total_slots == 1 { "" } else { "s" },
+    );
+    let err = json!({
+        "error": {
+            "type": "api_error",
+            "message": message
+        }
+    });
+    (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response()
+}
+
+/// Query the upstream GFP proxy's `/health` endpoint and parse it into a
+/// [`cascade_core::selection::GpHealthSnapshot`]-shaped tuple
+/// `(total_slots, earliest_reset_secs)`. Best-effort: any failure to reach or
+/// parse `/health` falls back to `(0, None)` so the caller still returns a
+/// fail-loud response (just without the enriched slot count / reset time).
+async fn fetch_gp_health(client: &reqwest::Client, upstream_url: &str) -> (usize, Option<u64>) {
+    let url = format!("{upstream_url}/health");
+    let Ok(resp) = client.get(&url).send().await else {
+        return (0, None);
+    };
+    let Ok(body): Result<Value, _> = resp.json().await else {
+        return (0, None);
+    };
+    let total_slots = body.get("total_slots").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let earliest_reset_secs = body.get("earliest_reset_secs").and_then(Value::as_u64);
+    (total_slots, earliest_reset_secs)
+}
+
+/// Detect whether an upstream (`:3761`) 503 response represents true pool
+/// exhaustion (`ProxyError::AllProvidersExhausted` / `NoProvidersAvailable`,
+/// per `gemini_proxy/types.rs`) rather than an unrelated 503.
+///
+/// The `:3761` proxy's `write_error` always emits
+/// `{"error":{"code":503,"message":"..."}}` for both exhaustion variants
+/// (`"all Gemini providers exhausted"` / `"no Gemini providers available"`),
+/// so matching on status 503 is sufficient — `:3761` has no other 503 source.
+fn is_pool_exhaustion_response(upstream_status: reqwest::StatusCode) -> bool {
+    upstream_status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+}
+
+/// Circuit-breaker gate: when the upstream response is a pool-exhaustion 503,
+/// return the fail-loud (or, if requested and available, agy-fallback)
+/// response. Otherwise `None` so the caller passes the response through
+/// unchanged (its existing generic error-passthrough / success path).
+async fn handle_gp_exhaustion(
+    state: &AdapterState,
+    upstream_status: reqwest::StatusCode,
+) -> Option<Response> {
+    if !is_pool_exhaustion_response(upstream_status) {
+        return None;
+    }
+    let (total_slots, earliest_reset_secs) =
+        fetch_gp_health(&state.client, &state.upstream_url).await;
+    let gp = cascade_core::selection::GpHealthSnapshot {
+        healthy_slots: 0,
+        total_slots,
+        earliest_reset_secs,
+    };
+    warn!(
+        total_slots,
+        earliest_reset_secs = ?earliest_reset_secs,
+        "anthropic_compat: GFP pool exhausted — entering circuit-breaker fail-loud path"
+    );
+    if agy_fallback_requested() {
+        Some(fallback_when_exhausted(&gp))
+    } else {
+        Some(exhausted_response(&gp))
+    }
+}
+
 // ── Model mapping ─────────────────────────────────────────────────────────────
 
 /// Map an Anthropic model name to a Gemini model name.
@@ -353,6 +500,14 @@ async fn messages(
 
     let upstream_status = resp.status();
 
+    // GFP circuit breaker (Phase B, v1.13.0): a pool-exhaustion 503 gets the
+    // enriched fail-loud (or deferred-agy-fallback) response BEFORE the
+    // generic error-passthrough below, which would otherwise just relay
+    // `:3761`'s terse "all Gemini providers exhausted" message.
+    if let Some(resp) = handle_gp_exhaustion(&state, upstream_status).await {
+        return resp;
+    }
+
     let gemini_json: Value = match resp.json().await {
         Ok(v) => v,
         Err(e) => {
@@ -448,6 +603,13 @@ async fn messages_stream(state: AdapterState, body: Value) -> Response {
     };
 
     let upstream_status = resp.status();
+
+    // GFP circuit breaker (Phase B, v1.13.0): same fail-loud gate as the
+    // non-streaming path — nothing has streamed yet at this point, so an
+    // ordinary JSON error response (not an SSE error event) is correct here.
+    if let Some(resp) = handle_gp_exhaustion(&state, upstream_status).await {
+        return resp;
+    }
 
     if !upstream_status.is_success() {
         // Nothing has streamed yet — return the same JSON error shape as the
@@ -589,6 +751,171 @@ mod tests {
         // were accepted and wired into both the streaming and non-streaming
         // call sites (both read `state.client` from the same `AdapterState`).
         let _client = build_upstream_client();
+    }
+
+    // ── GFP circuit breaker (Phase B, v1.13.0) ────────────────────────────────
+
+    /// `:3761` only ever emits a bare 503 for pool-exhaustion (both
+    /// `AllProvidersExhausted` and `NoProvidersAvailable` — see
+    /// `gemini_proxy/dispatch.rs`'s `write_error` call sites), so any 503
+    /// from upstream must be treated as exhaustion. Non-503 statuses (200,
+    /// 400, 403, 502) must NOT trigger the circuit breaker.
+    #[test]
+    fn exhaustion_detected_only_on_503() {
+        assert!(is_pool_exhaustion_response(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::OK));
+        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::BAD_REQUEST));
+        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::FORBIDDEN));
+        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::BAD_GATEWAY));
+    }
+
+    /// Fail-loud path (env unset / default): the response is HTTP 503 with an
+    /// explicit, actionable JSON message — total key count, earliest reset
+    /// time, and the exact env var + value to opt into the (deferred) agy
+    /// fallback. This is the "never silent" contract's core assertion.
+    #[tokio::test]
+    async fn exhausted_response_is_explicit_503_with_actionable_message() {
+        let gp = cascade_core::selection::GpHealthSnapshot {
+            healthy_slots: 0,
+            total_slots: 6,
+            earliest_reset_secs: Some(42),
+        };
+        let resp = exhausted_response(&gp);
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let body: Value = serde_json::from_slice(&body_bytes).expect("json body");
+        let msg = body["error"]["message"].as_str().expect("message string");
+        assert!(msg.contains("6 keys"), "msg should mention key count: {msg}");
+        assert!(msg.contains("42s"), "msg should mention reset time: {msg}");
+        assert!(
+            msg.contains("CASCADE_GFP_FALLBACK=agy"),
+            "msg should mention the fallback env var: {msg}"
+        );
+    }
+
+    /// Singular "key" (not "keys") when exactly one slot is configured.
+    #[tokio::test]
+    async fn exhausted_response_singular_key_wording() {
+        let gp = cascade_core::selection::GpHealthSnapshot {
+            healthy_slots: 0,
+            total_slots: 1,
+            earliest_reset_secs: None,
+        };
+        let resp = exhausted_response(&gp);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let body: Value = serde_json::from_slice(&body_bytes).expect("json body");
+        let msg = body["error"]["message"].as_str().expect("message string");
+        assert!(msg.contains("1 key;") || msg.contains("1 key "), "msg: {msg}");
+        assert!(msg.contains("reset time unknown"), "msg: {msg}");
+    }
+
+    /// Env flag routing: unset (or any value other than "agy") must ALWAYS
+    /// fail loud — this is the hard "default is fail-loud" contract.
+    #[test]
+    #[serial_test::serial(gfp_fallback_env)]
+    fn agy_fallback_not_requested_when_env_unset() {
+        std::env::remove_var(GFP_FALLBACK_ENV);
+        assert!(!agy_fallback_requested());
+    }
+
+    #[test]
+    #[serial_test::serial(gfp_fallback_env)]
+    fn agy_fallback_not_requested_for_other_values() {
+        std::env::set_var(GFP_FALLBACK_ENV, "true");
+        assert!(!agy_fallback_requested(), "only the literal 'agy' value opts in");
+        std::env::remove_var(GFP_FALLBACK_ENV);
+    }
+
+    #[test]
+    #[serial_test::serial(gfp_fallback_env)]
+    fn agy_fallback_requested_when_env_set_to_agy() {
+        std::env::set_var(GFP_FALLBACK_ENV, "agy");
+        assert!(agy_fallback_requested());
+        std::env::set_var(GFP_FALLBACK_ENV, "AGY");
+        assert!(agy_fallback_requested(), "case-insensitive match");
+        std::env::remove_var(GFP_FALLBACK_ENV);
+    }
+
+    /// Deferred agy fallback: even with the flag SET, `fallback_when_exhausted`
+    /// must still return the fail-loud 503 (not silently succeed with fake
+    /// data, not hang) because the agy lane is not wired yet. This pins the
+    /// "fail-loud must work regardless" contract for the flag-set-but-deferred
+    /// case.
+    #[test]
+    #[serial_test::serial(gfp_fallback_env)]
+    fn agy_fallback_stub_still_fails_loud() {
+        std::env::set_var(GFP_FALLBACK_ENV, "agy");
+        let gp = cascade_core::selection::GpHealthSnapshot {
+            healthy_slots: 0,
+            total_slots: 3,
+            earliest_reset_secs: Some(10),
+        };
+        let resp = fallback_when_exhausted(&gp);
+        assert_eq!(
+            resp.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "deferred fallback must still fail loud, never silently succeed"
+        );
+        std::env::remove_var(GFP_FALLBACK_ENV);
+    }
+
+    /// End-to-end: `handle_gp_exhaustion` against a mock `:3761` that returns
+    /// a pool-exhaustion 503 with a `/health` body reporting 4 total slots and
+    /// a 15s earliest reset. Confirms the whole chain (503 detection → /health
+    /// enrichment → fail-loud message) without needing a real GFP pool.
+    #[tokio::test]
+    async fn handle_gp_exhaustion_end_to_end_against_mock_upstream() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "ok",
+                "healthy_slots": 0,
+                "total_slots": 4,
+                "exhausted": true,
+                "earliest_reset_secs": 15
+            })))
+            .mount(&mock_server)
+            .await;
+
+        std::env::remove_var(GFP_FALLBACK_ENV);
+        let state = AdapterState {
+            upstream_url: mock_server.uri(),
+            client: reqwest::Client::new(),
+        };
+
+        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::SERVICE_UNAVAILABLE)
+            .await
+            .expect("503 must be recognized as pool exhaustion");
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let body: Value = serde_json::from_slice(&body_bytes).expect("json body");
+        let msg = body["error"]["message"].as_str().expect("message string");
+        assert!(msg.contains("4 keys"), "msg: {msg}");
+        assert!(msg.contains("15s"), "msg: {msg}");
+    }
+
+    /// A non-503 upstream status must return `None` (no circuit-breaker
+    /// handling) so callers fall through to their normal success/error path.
+    #[tokio::test]
+    async fn handle_gp_exhaustion_none_for_non_503() {
+        let state = AdapterState {
+            upstream_url: "http://127.0.0.1:1".to_string(), // unreachable, must not matter
+            client: reqwest::Client::new(),
+        };
+        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::OK).await;
+        assert!(resp.is_none(), "200 OK must never be treated as exhaustion");
     }
 }
 

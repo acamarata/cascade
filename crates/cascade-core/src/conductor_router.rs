@@ -430,7 +430,7 @@ mod tests {
             ],
         };
         let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
-        let gp = GpHealthSnapshot { healthy_slots: 5 };
+        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
         let target = select_target_with_gp(&req, &snapshot, &gp).expect("target");
         assert_eq!(target.provider, Provider::Gfp);
         assert_eq!(target.account_id, "gfp-pool");
@@ -602,7 +602,7 @@ mod tests {
             ],
         };
         let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
-        let gp = GpHealthSnapshot { healthy_slots: 5 };
+        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
         let target = select_target_for_prompt(
             &req,
             &snapshot,
