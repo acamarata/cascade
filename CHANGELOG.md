@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-07
+
+Model-id doctrine made enforceable, with CI guards.
+
+### Changed
+- **Canonical model-id constants moved to the `cascade-types` leaf crate.**
+  They lived in `cascade-core`, but `cascade-providers`/`cascade-mcp` depend
+  only on `cascade-types` (not core), so they physically could not import the
+  constants — which is why 11 sites hardcoded model-id string literals.
+  Moving the 8 constants down to the leaf crate (with a re-export from
+  `cascade-core` for compatibility) makes the "no hardcoded model-ids"
+  doctrine actually enforceable. All 11 hardcode sites now use the constants.
+
+### CI
+- **`scripts/check-model-ids.sh`** — fails the build if any current canonical
+  model-id literal is hardcoded outside the doctrine file (tight match on the
+  8 exact values; no false positives on provider ids or GP-proxy targets).
+- **`scripts/check-models-consistency.sh`** — fails if a `model_ids.rs`
+  constant is missing from `models/models.yaml`; warns (not fails) if
+  `models.yaml` is >90 days stale (staleness detector).
+- Both wired into `.github/workflows/model-id-gate.yml`.
+
 ## [1.11.0] - 2026-07-07
 
 Disk Guardian + the canonical model reference directory.
