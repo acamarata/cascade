@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-07
+
+Phase B of the vNEXT build-out: GFP circuit-breaker.
+
+### Added
+- **GFP circuit-breaker** — when the free Gemini pool is exhausted (all keys
+  rate-limited), the `:3762` Anthropic-compat proxy returns an explicit 503
+  with the key count, earliest-reset ETA, and fallback guidance, instead of a
+  terse relay. It **never silently degrades into paid-Anthropic burn**.
+  - `GpHealthSnapshot` gains `total_slots`, `earliest_reset_secs`,
+    `is_exhausted()`; `:3761 /health` exposes `exhausted` + `earliest_reset_secs`.
+  - `warn!` on entering true exhaustion (observable, not hidden).
+  - `CASCADE_GFP_FALLBACK=agy` env flag (default unset = fail-loud). The agy
+    (paid Gemini Pro) fallback is a documented seam that still fails loud today
+    — agy needs real format translation, deferred to a future phase.
+- 16 new tests covering exhaustion detection, fail-loud messaging, and flag routing.
+
 ## [1.12.1] - 2026-07-07
 
 Phase A of the vNEXT build-out: make the `models/` reference load-bearing +
