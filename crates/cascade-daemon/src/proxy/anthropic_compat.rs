@@ -58,16 +58,25 @@ use sse::{GeminiSseParser, StreamTranslator};
 
 /// Map an Anthropic model name to a Gemini model name.
 ///
-/// - `claude-haiku-*` → `gemini-2.0-flash-lite`
-/// - `claude-sonnet-*` → `gemini-2.0-flash`
-/// - anything else → `gemini-2.0-flash` (default)
+/// - `claude-haiku-*` → `gemini-flash-lite-latest`
+/// - `claude-sonnet-*` → `gemini-flash-latest`
+/// - anything else → `gemini-flash-latest` (default)
+///
+/// Uses Google's auto-tracking `-latest` aliases (not pinned dated snapshots
+/// like `gemini-2.0-flash`) so this mapping never needs a retirement-driven
+/// edit when Google cycles the underlying model version — the alias always
+/// resolves to whatever Google currently designates as latest Flash / Flash
+/// Lite. Verified live 2026-07-07: both aliases resolve via the models
+/// endpoint (`gemini-flash-latest` → "Gemini Flash Latest", confirms
+/// `generateContent` support; `gemini-flash-lite-latest` → 200 on
+/// `generateContent`).
 fn map_model(anthropic_model: &str) -> &'static str {
     if anthropic_model.starts_with("claude-haiku") {
-        "gemini-2.0-flash-lite"
+        "gemini-flash-lite-latest"
     } else if anthropic_model.starts_with("claude-sonnet") {
-        "gemini-2.0-flash"
+        "gemini-flash-latest"
     } else {
-        "gemini-2.0-flash"
+        "gemini-flash-latest"
     }
 }
 

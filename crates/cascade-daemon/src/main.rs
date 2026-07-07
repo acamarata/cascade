@@ -61,6 +61,10 @@ mod telemetry;
 mod tray;
 // T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
 mod loader;
+// A1 (vNEXT Phase A): models/models.yaml drift check — embeds the canonical
+// provider-family list at compile time and warns (non-fatal) if the live
+// providers.json provider set disagrees with it.
+mod model_drift;
 // T-P4-E01-29: IPC search endpoint (rag.* JSON-RPC methods)
 mod search_handler;
 // T-P4-E01-32: external drive mount/unmount watch — pause/resume RAG indexing
@@ -246,6 +250,18 @@ async fn main() {
             .iter()
             .filter(|p| p.enabled && p.harness == "gemini" && p.local_ok)
             .count();
+
+        // A1 (vNEXT Phase A): snapshot the live harness set BEFORE `entries`
+        // is consumed below, then compare it against the embedded
+        // models/models.yaml canonical provider-family set. Cheap (in-memory
+        // string parse, no I/O), non-fatal, non-blocking — logs at most one
+        // WARN line and never affects startup on drift or parse failure.
+        let live_harnesses: Vec<&str> = entries
+            .iter()
+            .filter(|p| p.enabled)
+            .map(|p| p.harness.as_str())
+            .collect();
+        model_drift::check_and_warn(live_harnesses);
 
         for entry in entries.into_iter().filter(|p| p.enabled) {
             let id = entry.id.clone();

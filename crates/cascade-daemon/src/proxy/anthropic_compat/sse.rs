@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn translates_single_chunk_stream_to_full_anthropic_sequence() {
         let raw = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2}}\n\n";
-        let events = run_translation("gemini-2.0-flash", &[raw]);
+        let events = run_translation("gemini-flash-latest", &[raw]);
 
         assert_eq!(
             event_names(&events),
@@ -312,7 +312,7 @@ mod tests {
         // message_start carries model + zeroed usage.
         let start_json: Value =
             serde_json::from_str(String::from_utf8_lossy(&events[0]).lines().nth(1).unwrap().trim_start_matches("data: ")).unwrap();
-        assert_eq!(start_json["message"]["model"], "gemini-2.0-flash");
+        assert_eq!(start_json["message"]["model"], "gemini-flash-latest");
         assert_eq!(start_json["message"]["usage"]["input_tokens"], 0);
 
         // content_block_delta carries the text.
@@ -335,7 +335,7 @@ mod tests {
             "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"lo \"}]}}]}\n\n",
             "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"world\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":3}}\n\n",
         ];
-        let events = run_translation("gemini-2.0-flash", &chunks);
+        let events = run_translation("gemini-flash-latest", &chunks);
 
         assert_eq!(
             event_names(&events),
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn empty_text_chunk_produces_no_delta_events() {
-        let mut translator = StreamTranslator::new("gemini-2.0-flash");
+        let mut translator = StreamTranslator::new("gemini-flash-latest");
         let chunk: Value = serde_json::from_str(
             "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}]}}]}",
         )
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn max_tokens_finish_reason_maps_to_anthropic_max_tokens() {
-        let mut translator = StreamTranslator::new("gemini-2.0-flash");
+        let mut translator = StreamTranslator::new("gemini-flash-latest");
         let chunk: Value = serde_json::from_str(
             "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"MAX_TOKENS\"}]}",
         )
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn no_content_block_when_stream_has_only_finish_reason() {
         // Some terminal chunks carry only finishReason + usageMetadata, no text.
-        let mut translator = StreamTranslator::new("gemini-2.0-flash");
+        let mut translator = StreamTranslator::new("gemini-flash-latest");
         let chunk: Value = serde_json::from_str(
             "{\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0}}",
         )

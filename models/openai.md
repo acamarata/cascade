@@ -51,7 +51,7 @@ Announced 2026-06-25/26 (openai.com/index/previewing-gpt-5-6-sol). This is a **l
 
 Usage is metered in rolling 5-hour windows with message-count ranges depending on task complexity (ranges above are approximate published bands, not fixed counts). Codex CLI itself is free software; billing flows through ChatGPT plan sign-in — no separate CLI license fee. Real-world active-developer cost commonly runs ~$100-200/mo per the pricing writeups (third-party estimate, not an OpenAI figure). [Likely]
 
-**Action item:** verify which Codex plan tier C1 is actually on — this file assumes Plus/Pro but that has not been independently confirmed against Cascade's account config.
+**Codex plan tier (C1):** NOT recoverable from the local CLI — `~/.codex/auth.json` holds only a Google-OAuth `sub` (no plan/tier claim), and there is no `codex` status subcommand that exposes it (verified 2026-07-07). Confirm via the OpenAI/ChatGPT account dashboard (web) if needed; this file assumes Plus/Pro.
 
 ---
 

@@ -108,6 +108,11 @@ pub mod board_llm_impl;
 // rag-13: project discovery + taxonomy + registry
 pub mod discovery;
 
+// A1 (vNEXT Phase A): models/models.yaml drift check — embeds the canonical
+// provider-family list at compile time and compares it against the live
+// providers.json set on daemon boot (non-fatal WARN on drift).
+pub mod model_drift;
+
 pub use config::Config;
 
 #[cfg(test)]

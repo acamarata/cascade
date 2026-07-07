@@ -29,6 +29,7 @@ use cascade_core::conductor_router::{
     ConductorRequest, ConductorTarget, GpHealthSnapshot, ModelClass, Provider, QuotaAccount,
     QuotaSnapshot, Tier, select_target_with_gp,
 };
+use cascade_core::model_ids::MODEL_GEMINI_PRO;
 use cascade_core::routing::gfp_http::{probe_gp_health, GFP_HEALTH_URL};
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
@@ -576,7 +577,7 @@ const AGY_USER_AGENT: &str = "antigravity/1.18.3 macos/arm64";
 /// Fallback GCP project id (used when `loadCodeAssist` doesn't return one).
 const AGY_FALLBACK_PROJECT: &str = "bamboo-precept-lgxtn";
 /// User-facing model label for Gemini Pro dispatch (current newest Pro model).
-const AGY_MODEL_LABEL: &str = "gemini-3.1-pro";
+const AGY_MODEL_LABEL: &str = MODEL_GEMINI_PRO;
 /// The `model` field cloudcode-pa expects for generateContent — proven live.
 const AGY_GENERATE_MODEL: &str = "gemini-pro-agent";
 /// Per-call timeout (each curl invocation), mirrors other lanes' bounded calls.
