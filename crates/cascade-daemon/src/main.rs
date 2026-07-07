@@ -46,6 +46,11 @@ mod project_poller;
 // stray rustc/vitest reaper. Runs unconditionally alongside other daemon
 // tasks (local-only, no external network surface, no feature gate needed).
 mod ram_guardian;
+// disk-guardian: boot-volume-exhaustion prevention subsystem — free-space
+// sampling + conservative stray build-artifact reaper (isolated cargo
+// target dirs, finished agent worktrees). Sibling to ram_guardian; same
+// unconditional wiring rationale.
+mod disk_guardian;
 mod regen;
 mod shutdown;
 mod state;
@@ -305,6 +310,19 @@ async fn main() {
         ram_guardian::spawn(config_dir.clone(), ram_guardian_shutdown.clone());
     info!("ram_guardian task spawned (non-blocking)");
 
+    // ── Disk Guardian task ────────────────────────────────────────────────
+    // Boot-volume-exhaustion prevention: samples free disk space on the
+    // scratch root (system temp dir) every 30s and, only when space is
+    // tight, reaps stray isolated cargo target dirs / finished agent
+    // worktrees (old + pattern-matched). See disk_guardian.rs module docs
+    // for the full safety contract. Uses its own CancellationToken (mirrors
+    // ram_guardian_shutdown) so it can be cancelled independently of the
+    // top-level shutdown_token created below.
+    let disk_guardian_shutdown = CancellationToken::new();
+    let _disk_guardian_handle =
+        disk_guardian::spawn(config_dir.clone(), disk_guardian_shutdown.clone());
+    info!("disk_guardian task spawned (non-blocking)");
+
     // ── Continuity watcher task ─────────────────────────────────────────────
     // Watches ~/.cascade/continuity/*.json and fires due intents once the
     // named account's quota window clears. Uses its own CancellationToken
@@ -431,6 +449,9 @@ async fn main() {
 
     // ── RAM Guardian task shutdown ─────────────────────────────────────────
     ram_guardian_shutdown.cancel();
+
+    // ── Disk Guardian task shutdown ─────────────────────────────────────────
+    disk_guardian_shutdown.cancel();
 
     // ── Continuity task shutdown ────────────────────────────────────────────
     continuity_shutdown.cancel();

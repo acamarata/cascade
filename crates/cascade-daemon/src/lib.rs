@@ -46,6 +46,10 @@ pub mod project_poller;
 // ram-guardian: OOM-prevention subsystem — memory sampling + conservative
 // stray rustc/vitest reaper.
 pub mod ram_guardian;
+// disk-guardian: boot-volume-exhaustion prevention subsystem — free-space
+// sampling + conservative stray build-artifact reaper. Sibling to
+// ram_guardian.
+pub mod disk_guardian;
 // T-P4-E01-26: auto-RAG file watcher (notify-based)
 pub mod rag_watcher;
 // T-P4-E04-03: parallel indexing pipeline (WorkerPool → IndexManager)
