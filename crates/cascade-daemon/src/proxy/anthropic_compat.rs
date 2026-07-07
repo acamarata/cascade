@@ -220,9 +220,8 @@ async fn handle_gp_exhaustion(
 fn map_model(anthropic_model: &str) -> &'static str {
     if anthropic_model.starts_with("claude-haiku") {
         "gemini-flash-lite-latest"
-    } else if anthropic_model.starts_with("claude-sonnet") {
-        "gemini-flash-latest"
     } else {
+        // Covers claude-sonnet-* and everything else — see doc comment above.
         "gemini-flash-latest"
     }
 }
@@ -704,6 +703,55 @@ fn translate_stream_body(raw_body: &[u8], gemini_model: &str) -> Vec<Vec<u8>> {
     out
 }
 
+// ── Public server struct ──────────────────────────────────────────────────────
+
+/// Anthropic Messages API compatibility adapter server.
+///
+/// Listens on `bind_addr` (default `127.0.0.1:3762`) and translates incoming
+/// Anthropic-format requests to Gemini-format requests forwarded to the GP proxy
+/// at `upstream_url` (default `http://127.0.0.1:3761`).
+pub struct AnthropicCompatServer {
+    bind_addr: SocketAddr,
+    upstream_url: String,
+    shutdown: CancellationToken,
+}
+
+impl AnthropicCompatServer {
+    /// Construct a new `AnthropicCompatServer`.
+    pub fn new(bind_addr: SocketAddr, upstream_url: String, shutdown: CancellationToken) -> Self {
+        Self {
+            bind_addr,
+            upstream_url,
+            shutdown,
+        }
+    }
+
+    /// Start the server and run until `shutdown` is cancelled.
+    pub async fn run(self) -> Result<(), std::io::Error> {
+        let state = AdapterState {
+            upstream_url: self.upstream_url,
+            client: build_upstream_client(),
+        };
+
+        let app = Router::new()
+            .route("/v1/health", get(health))
+            .route("/v1/messages", post(messages))
+            .with_state(state);
+
+        let listener = tokio::net::TcpListener::bind(self.bind_addr).await?;
+        info!(addr = %self.bind_addr, "anthropic_compat: listening");
+
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                self.shutdown.cancelled().await;
+            })
+            .await?;
+
+        info!("anthropic_compat: stopped");
+        Ok(())
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -916,54 +964,5 @@ mod tests {
         };
         let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::OK).await;
         assert!(resp.is_none(), "200 OK must never be treated as exhaustion");
-    }
-}
-
-// ── Public server struct ──────────────────────────────────────────────────────
-
-/// Anthropic Messages API compatibility adapter server.
-///
-/// Listens on `bind_addr` (default `127.0.0.1:3762`) and translates incoming
-/// Anthropic-format requests to Gemini-format requests forwarded to the GP proxy
-/// at `upstream_url` (default `http://127.0.0.1:3761`).
-pub struct AnthropicCompatServer {
-    bind_addr: SocketAddr,
-    upstream_url: String,
-    shutdown: CancellationToken,
-}
-
-impl AnthropicCompatServer {
-    /// Construct a new `AnthropicCompatServer`.
-    pub fn new(bind_addr: SocketAddr, upstream_url: String, shutdown: CancellationToken) -> Self {
-        Self {
-            bind_addr,
-            upstream_url,
-            shutdown,
-        }
-    }
-
-    /// Start the server and run until `shutdown` is cancelled.
-    pub async fn run(self) -> Result<(), std::io::Error> {
-        let state = AdapterState {
-            upstream_url: self.upstream_url,
-            client: build_upstream_client(),
-        };
-
-        let app = Router::new()
-            .route("/v1/health", get(health))
-            .route("/v1/messages", post(messages))
-            .with_state(state);
-
-        let listener = tokio::net::TcpListener::bind(self.bind_addr).await?;
-        info!(addr = %self.bind_addr, "anthropic_compat: listening");
-
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move {
-                self.shutdown.cancelled().await;
-            })
-            .await?;
-
-        info!("anthropic_compat: stopped");
-        Ok(())
     }
 }

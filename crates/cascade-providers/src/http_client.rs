@@ -19,7 +19,11 @@
 //!
 //! - No credential value is ever written to a log line or `Debug` output.
 //! - `Retry-After` is parsed as seconds (integer) or HTTP-date; if parsing
-//!   fails the default backoff is used.
+//!   fails, the wait is derived from the soonest Anthropic
+//!   `anthropic-ratelimit-{requests,tokens}-reset` header (RFC 3339
+//!   timestamp or bare seconds); if that also fails the default exponential
+//!   backoff is used. Header parsing never panics — malformed or absent
+//!   headers always fall back safely.
 //! - SSE helpers yield raw `data:` payload strings; JSON decoding is the
 //!   caller's responsibility.
 
@@ -351,13 +355,41 @@ impl Default for CascadeHttpClient {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
+/// Names of the Anthropic rate-limit reset headers, checked in order when
+/// `retry-after` is absent. The soonest (minimum) parseable reset wins.
+const RATELIMIT_RESET_HEADERS: [&str; 2] = [
+    "anthropic-ratelimit-requests-reset",
+    "anthropic-ratelimit-tokens-reset",
+];
+
+/// Derive the wait duration for a rate-limited response.
+///
+/// Prefers an explicit `Retry-After` header (seconds or HTTP-date). If that
+/// header is absent or unparseable, falls back to the soonest of the
+/// Anthropic `anthropic-ratelimit-{requests,tokens}-reset` headers (RFC 3339
+/// timestamp or bare seconds). Returns `None` if no header yields a usable,
+/// positive wait — callers fall back to exponential backoff. Never panics on
+/// malformed input.
+fn parse_retry_after(response: &Response) -> Option<Duration> {
+    parse_retry_after_headers(response.headers())
+}
+
+/// Header-map-driven core of [`parse_retry_after`], split out for direct
+/// unit testing without constructing a live `reqwest::Response`.
+fn parse_retry_after_headers(headers: &HeaderMap) -> Option<Duration> {
+    if let Some(wait) = parse_retry_after_header(headers) {
+        return Some(wait);
+    }
+    parse_ratelimit_reset_headers(headers)
+}
+
 /// Parse the `Retry-After` header as a `Duration`.
 ///
 /// Handles both integer-seconds (`Retry-After: 30`) and HTTP-date formats
 /// (`Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`).  Returns `None` if the
 /// header is absent or unparseable.
-fn parse_retry_after(response: &Response) -> Option<Duration> {
-    let header_val = response.headers().get("retry-after")?;
+fn parse_retry_after_header(headers: &HeaderMap) -> Option<Duration> {
+    let header_val = headers.get("retry-after")?;
     let s = header_val.to_str().ok()?;
 
     // Integer seconds path.
@@ -367,6 +399,44 @@ fn parse_retry_after(response: &Response) -> Option<Duration> {
 
     // HTTP-date path — parse with `chrono`.
     if let Ok(dt) = chrono::DateTime::parse_from_rfc2822(s) {
+        let now = chrono::Utc::now();
+        let wait = dt.with_timezone(&chrono::Utc) - now;
+        if wait.num_seconds() > 0 {
+            return Some(Duration::from_secs(wait.num_seconds() as u64));
+        }
+    }
+
+    None
+}
+
+/// Derive a wait duration from the soonest Anthropic rate-limit reset header.
+///
+/// Checks each header in [`RATELIMIT_RESET_HEADERS`] and returns the
+/// smallest positive duration found, or `None` if none parse. Each header
+/// value may be an RFC 3339 timestamp (`reset_at - now`) or a bare integer
+/// number of seconds to wait.
+fn parse_ratelimit_reset_headers(headers: &HeaderMap) -> Option<Duration> {
+    RATELIMIT_RESET_HEADERS
+        .iter()
+        .filter_map(|name| headers.get(*name))
+        .filter_map(|v| v.to_str().ok())
+        .filter_map(parse_reset_header_value)
+        .min()
+}
+
+/// Parse a single rate-limit reset header value into a wait `Duration`.
+///
+/// Accepts a bare integer number of seconds or an RFC 3339 timestamp
+/// (wait = timestamp - now). Returns `None` for malformed input or a
+/// timestamp that has already passed.
+fn parse_reset_header_value(s: &str) -> Option<Duration> {
+    let s = s.trim();
+
+    if let Ok(secs) = s.parse::<u64>() {
+        return Some(Duration::from_secs(secs));
+    }
+
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
         let now = chrono::Utc::now();
         let wait = dt.with_timezone(&chrono::Utc) - now;
         if wait.num_seconds() > 0 {
@@ -422,6 +492,94 @@ mod tests {
             CascadeHttpClient::parse_sse_line("event: content_block_delta"),
             None
         );
+    }
+
+    // ── parse_retry_after_headers ────────────────────────────────────────────
+
+    #[test]
+    fn retry_after_seconds_preferred_over_reset_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", HeaderValue::from_static("42"));
+        // Far-future reset header — must be ignored since retry-after wins.
+        headers.insert(
+            "anthropic-ratelimit-requests-reset",
+            HeaderValue::from_static("9999-01-01T00:00:00Z"),
+        );
+        assert_eq!(
+            parse_retry_after_headers(&headers),
+            Some(Duration::from_secs(42))
+        );
+    }
+
+    #[test]
+    fn reset_header_used_when_retry_after_absent() {
+        let mut headers = HeaderMap::new();
+        let soon = chrono::Utc::now() + chrono::Duration::seconds(30);
+        headers.insert(
+            "anthropic-ratelimit-requests-reset",
+            HeaderValue::from_str(&soon.to_rfc3339()).unwrap(),
+        );
+        let wait =
+            parse_retry_after_headers(&headers).expect("expected derived wait from reset header");
+        // Allow slack for test execution time between now() calls.
+        assert!(
+            wait.as_secs() <= 30 && wait.as_secs() >= 28,
+            "wait={wait:?}"
+        );
+    }
+
+    #[test]
+    fn soonest_of_two_reset_headers_wins() {
+        let mut headers = HeaderMap::new();
+        let soon = chrono::Utc::now() + chrono::Duration::seconds(10);
+        let later = chrono::Utc::now() + chrono::Duration::seconds(100);
+        headers.insert(
+            "anthropic-ratelimit-requests-reset",
+            HeaderValue::from_str(&later.to_rfc3339()).unwrap(),
+        );
+        headers.insert(
+            "anthropic-ratelimit-tokens-reset",
+            HeaderValue::from_str(&soon.to_rfc3339()).unwrap(),
+        );
+        let wait = parse_retry_after_headers(&headers).expect("expected derived wait");
+        assert!(
+            wait.as_secs() <= 10,
+            "expected soonest reset header to win, got {wait:?}"
+        );
+    }
+
+    #[test]
+    fn bare_seconds_reset_header_supported() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "anthropic-ratelimit-tokens-reset",
+            HeaderValue::from_static("15"),
+        );
+        assert_eq!(
+            parse_retry_after_headers(&headers),
+            Some(Duration::from_secs(15))
+        );
+    }
+
+    #[test]
+    fn no_headers_present_falls_back_to_none() {
+        let headers = HeaderMap::new();
+        assert_eq!(parse_retry_after_headers(&headers), None);
+    }
+
+    #[test]
+    fn malformed_headers_fall_back_safely_without_panic() {
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", HeaderValue::from_static("not-a-number"));
+        headers.insert(
+            "anthropic-ratelimit-requests-reset",
+            HeaderValue::from_static("garbage"),
+        );
+        headers.insert(
+            "anthropic-ratelimit-tokens-reset",
+            HeaderValue::from_static("also-garbage"),
+        );
+        assert_eq!(parse_retry_after_headers(&headers), None);
     }
 
     // ── backoff_duration ──────────────────────────────────────────────────────

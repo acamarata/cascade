@@ -69,14 +69,6 @@ impl GeminiProxy {
         }
     }
 
-    /// Override the upstream base URL (for integration tests using wiremock).
-    ///
-    /// Must be called before [`GeminiProxy::run`].
-    pub fn with_upstream(mut self, upstream_base: &str) -> Self {
-        self.state.upstream_base = Arc::new(upstream_base.to_string());
-        self
-    }
-
     /// Run the proxy server until `shutdown` is cancelled.
     ///
     /// Spawns two background tasks:

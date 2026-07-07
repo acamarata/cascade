@@ -40,10 +40,6 @@ mod upstream;
 
 // ── Public re-exports (preserve original API surface) ────────────────────────
 
-pub use types::{GEMINI_UPSTREAM_BASE, MAX_REQUEST_BODY_SIZE, ProxyError, ProxyState};
-pub use state::build_routing_state;
-pub use upstream::build_upstream_url;
-pub use dispatch::dispatch_request;
 pub use server::GeminiProxy;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

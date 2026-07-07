@@ -46,10 +46,7 @@ impl GeminiSseParser {
     /// buffered, leaving any trailing partial frame in `self.buf`.
     fn drain_complete_frames(&mut self) -> Vec<Value> {
         let mut out = Vec::new();
-        loop {
-            let Some(pos) = self.buf.find("\n\n") else {
-                break;
-            };
+        while let Some(pos) = self.buf.find("\n\n") {
             let frame = self.buf[..pos].to_string();
             self.buf.drain(..pos + 2);
 
@@ -90,7 +87,6 @@ pub struct StreamTranslator {
     model: String,
     message_id: String,
     content_block_open: bool,
-    input_tokens: u64,
     output_tokens: u64,
     finish_reason: Option<String>,
 }
@@ -103,7 +99,6 @@ impl StreamTranslator {
             model: model.into(),
             message_id: format!("msg_gp_{}", Uuid::new_v4().simple()),
             content_block_open: false,
-            input_tokens: 0,
             output_tokens: 0,
             finish_reason: None,
         }
@@ -133,15 +128,14 @@ impl StreamTranslator {
     ///
     /// The first chunk carrying text triggers `content_block_start`. Every
     /// chunk carrying non-empty text produces a `content_block_delta`.
-    /// `usageMetadata` (if present) updates the running token counts.
+    /// `usageMetadata` (if present) updates the running output-token count
+    /// (Anthropic's `message_delta` event only ever reports `output_tokens`;
+    /// `input_tokens` is reported once, in `message_start`).
     /// `finishReason` (if present) is recorded for `finish()`.
     pub fn on_chunk(&mut self, chunk: &Value) -> Vec<(&'static str, Value)> {
         let mut events = Vec::new();
 
         if let Some(usage) = chunk.get("usageMetadata") {
-            if let Some(n) = usage.get("promptTokenCount").and_then(Value::as_u64) {
-                self.input_tokens = n;
-            }
             if let Some(n) = usage.get("candidatesTokenCount").and_then(Value::as_u64) {
                 self.output_tokens = n;
             }
@@ -240,11 +234,6 @@ impl StreamTranslator {
                 }
             }),
         )
-    }
-
-    /// Current running input-token count (from the most recent usageMetadata).
-    pub fn input_tokens(&self) -> u64 {
-        self.input_tokens
     }
 }
 

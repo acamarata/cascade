@@ -24,4 +24,4 @@ pub mod anthropic_compat;
 pub mod gemini_proxy;
 
 pub use anthropic_compat::AnthropicCompatServer;
-pub use gemini_proxy::{GeminiProxy, ProxyError};
+pub use gemini_proxy::GeminiProxy;

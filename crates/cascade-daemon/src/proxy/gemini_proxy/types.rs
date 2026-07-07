@@ -71,6 +71,6 @@ pub struct ProxyState {
     pub keychain_keys: Arc<RwLock<HashMap<String, SecretString>>>,
     /// Proxy configuration (immutable after startup).
     pub config: ProxyConfig,
-    /// Upstream base URL (override in tests via `GeminiProxy::with_upstream`).
+    /// Upstream base URL (defaults to `GEMINI_UPSTREAM_BASE`).
     pub upstream_base: Arc<String>,
 }
