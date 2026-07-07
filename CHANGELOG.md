@@ -6,6 +6,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-07
+
+Hardening release: richer rate-limit handling + dead-code cleanup. (Phase C
+session-failover is deferred — see note below.)
+
+### Added
+- **Richer Anthropic 429 parsing** (`cascade-providers/http_client.rs`): when a
+  bare `retry-after` header is absent, the client now derives the wait from
+  Anthropic's `anthropic-ratelimit-requests-reset` / `-tokens-reset` headers
+  (RFC3339 or bare seconds, soonest positive wait). Prefers explicit
+  `retry-after` when present; fully defensive (malformed/absent → falls back,
+  never panics). 6 new tests.
+
+### Changed
+- Cleaned up dead code surfaced while fixing clippy under `--features
+  gemini-proxy`: removed an unused `StreamTranslator` token getter/field, a
+  dead `GeminiProxy::with_upstream()`, and several unused re-exports (all
+  verified zero-caller). `clippy --features gemini-proxy -D warnings` is now clean.
+- Collapsed a redundant `map_model` branch (the `claude-sonnet` and default
+  arms became identical after the v1.12.1 `gemini-flash-latest` change).
+
+### Deferred
+- **Session-failover (was planned for this slot)** is blocked: `~/.claude2`
+  ("A2") is the *same* Anthropic account as A1 (identical account UUID/email;
+  its session store symlinks A1's), so failing A1→A2 hits the same rate limit.
+  It requires a genuinely separate Anthropic account before it can be built.
+
 ## [1.13.0] - 2026-07-07
 
 Phase B of the vNEXT build-out: GFP circuit-breaker.
