@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-07
+
+Disk Guardian + the canonical model reference directory.
+
+### Added
+- **Disk Guardian** — a daemon watchdog (sibling to the RAM Guardian) that
+  samples free space on the scratch volume every 30s and reaps stray
+  ephemeral build artifacts under the scratch root when free space drops
+  below threshold (2 GiB / 5% Critical). Targets exactly what fills the
+  boot volume during heavy agent work: isolated cargo target dirs,
+  `*claude-worktrees*`, `*-test-target`, and nested `target/` dirs.
+  Conservative multi-gating (Warn/Critical status + under scratch root +
+  ≥30 min old + known-ephemeral pattern; never the real repo target,
+  `$HOME`, or a bare-root `target`). `DISK_GUARDIAN_DISABLE=1` = log-only;
+  `DISK_GUARDIAN_SCRATCH_ROOT` overrides the default temp dir. 27 tests.
+- **`models/` reference directory** — an agent-readable model×subscription
+  matrix (README.md + machine-readable `models.yaml` + per-provider files)
+  so Cascade agents and the daemon selection can look up which subscription
+  has which model and what each is best for, with current (July 2026) info.
+
+### CI
+- Linux CI jobs moved off billing-blocked GitHub-hosted runners onto the
+  self-hosted `cam-sentry` runner (48 jobs across 16 workflows).
+
 ## [1.10.1] - 2026-07-06
 
 Security + correctness fixes from a deep repo audit.
