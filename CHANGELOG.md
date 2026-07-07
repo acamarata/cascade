@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-07-07
+
+Phase A of the vNEXT build-out: make the `models/` reference load-bearing +
+retirement-proof the GP proxy.
+
+### Added
+- **Runtime model-drift check** (`cascade-daemon/src/model_drift.rs`): the
+  daemon embeds `models/models.yaml` at compile time (`include_str!`) and warns
+  on boot if the live provider set drifts from the reference — so the models/
+  directory is enforced at runtime, not just a doc.
+
+### Changed
+- **GP proxy retirement-proofing**: `anthropic_compat` now maps to
+  `gemini-flash-latest` / `gemini-flash-lite-latest` (Google's auto-tracking
+  aliases) instead of a pinned `gemini-2.0-flash` — immune to version
+  retirements. `generateContent` serve confirmed against the aliases.
+- Documented that C1's Codex plan tier is not recoverable from the local CLI
+  (dashboard-only check).
+
+### Fixed
+- Committed the `conductor.rs` `AGY_MODEL_LABEL` → `MODEL_GEMINI_PRO` constant
+  fix that the v1.12.0 commit inadvertently left out of its staged file set
+  (the model-id gate is now clean against HEAD).
+
 ## [1.12.0] - 2026-07-07
 
 Model-id doctrine made enforceable, with CI guards.
