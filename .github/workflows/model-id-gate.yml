@@ -1,0 +1,27 @@
+name: model-id-gate
+
+on:
+  push:
+    paths:
+      - 'crates/**/*.rs'
+      - 'models/models.yaml'
+      - 'scripts/check-model-ids.sh'
+      - 'scripts/check-models-consistency.sh'
+  pull_request:
+    paths:
+      - 'crates/**/*.rs'
+      - 'models/models.yaml'
+      - 'scripts/check-model-ids.sh'
+      - 'scripts/check-models-consistency.sh'
+
+jobs:
+  model-id-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for hardcoded model-ID literals
+        run: scripts/check-model-ids.sh
+
+      - name: Check model_ids.rs vs models.yaml consistency
+        run: scripts/check-models-consistency.sh
