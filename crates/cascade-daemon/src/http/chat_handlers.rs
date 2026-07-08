@@ -300,7 +300,24 @@ pub async fn chat_handler(
             .data(json!({ "provider": provider_id }).to_string());
         let _ = tx.send(Ok(served_ev)).await;
 
-        while let Some(chunk_result) = stream.next().await {
+        // Stall-guard: a provider stream can OPEN then hang (e.g. a flaky GP
+        // pool key) with no chunk and no error, which would hang the chat
+        // forever behind SSE keep-alives. Cap the wait for each chunk; on
+        // timeout, emit a typed error and stop rather than hang.
+        const CHUNK_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+        loop {
+            let chunk_result = match tokio::time::timeout(CHUNK_STALL_TIMEOUT, stream.next()).await {
+                Ok(Some(cr)) => cr,
+                Ok(None) => break, // stream ended cleanly
+                Err(_) => {
+                    let ev = Event::default().event("error").data(
+                        json!({ "message": format!("stream timeout: {provider_id} stalled (no data in 20s)") })
+                            .to_string(),
+                    );
+                    let _ = tx.send(Ok(ev)).await;
+                    break;
+                }
+            };
             match chunk_result {
                 Err(e) => {
                     let ev = Event::default()
