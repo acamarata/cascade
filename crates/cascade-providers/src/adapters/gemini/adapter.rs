@@ -378,10 +378,27 @@ impl ProviderAdapter for GeminiAdapter {
         debug!(model, "gemini complete_stream");
 
         let wire_req = self.map_request(&req);
-        let response = self
-            .http
-            .post_sse(&url, &wire_req, Self::auth_noop())
-            .await?;
+        let response = match self.http.post_sse(&url, &wire_req, Self::auth_noop()).await {
+            Ok(r) => r,
+            Err(e) => {
+                // Google's `streamGenerateContent` 503s under high demand
+                // ("This model is currently experiencing high demand") while
+                // non-streaming `generateContent` still serves. Fall back to
+                // non-streaming so chat never fails just because the streaming
+                // endpoint is congested — emit the whole reply as one chunk.
+                debug!(%e, "gemini stream open failed — falling back to non-streaming complete()");
+                let full = self.complete(req).await?;
+                let (tx, rx) =
+                    tokio::sync::mpsc::channel::<Result<StreamChunk, ProviderError>>(1);
+                let _ = tx
+                    .send(Ok(StreamChunk {
+                        delta: full.content,
+                        finish_reason: Some("stop".to_string()),
+                    }))
+                    .await;
+                return Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)));
+            }
+        };
 
         // Spawn a task that drains the byte stream line-by-line and forwards
         // parsed StreamChunks through a bounded mpsc channel.
