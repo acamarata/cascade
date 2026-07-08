@@ -3,7 +3,7 @@
  *   1. Account quota table (Label | Provider | 5h% | 7d% | Status | Reset).
  *   2. Live routing-decision stream (Task | Account | Reason), polled from
  *      GET /api/fleet/routing every 5 s.
- * Inputs:  useAccounts() IPC (30 s poll); /api/fleet/routing HTTP (5 s poll).
+ * Inputs:  useAccounts() IPC (4 s poll); /api/fleet/routing HTTP (5 s poll).
  * Outputs: Quota table + routing-event table.
  * Constraints:
  *   - Read-only display; no actions.
@@ -125,16 +125,9 @@ export function FleetRoutingView() {
               <tbody>
                 {accounts.map((acc) => {
                   const label = accountLabel(acc)
-                  const fhPct = pct(
-                    acc.usage?.five_hour?.utilization != null
-                      ? acc.usage.five_hour.utilization * 100
-                      : null,
-                  )
-                  const sdPct = pct(
-                    acc.usage?.seven_day?.utilization != null
-                      ? acc.usage.seven_day.utilization * 100
-                      : null,
-                  )
+                  // utilization is already a 0-100 percentage — do not re-scale.
+                  const fhPct = pct(acc.usage?.five_hour?.utilization ?? null)
+                  const sdPct = pct(acc.usage?.seven_day?.utilization ?? null)
                   const statusClasses = statusColor(acc.status)
 
                   return (

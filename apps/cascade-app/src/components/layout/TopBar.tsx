@@ -1,14 +1,19 @@
 /**
  * Purpose: Top application bar — app icon, title, spacer, connection indicator, ThemeToggle.
- * Inputs:  None (reads useDaemonStatus + useThemeStore internally).
+ * Inputs:  None (reads useDaemonStatus + useAccounts + useThemeStore internally).
  * Outputs: <header role="banner"> landmark fixed to the top of the app chrome.
  * Constraints: role="banner" for accessibility. Connection dot is a 8px circle:
  *   green (connected), amber (connecting), red (disconnected/error).
+ *   Quota-store freshness (useAccounts().isLive) overrides a failing daemon
+ *   ping — `accounts_list` reads quota.json directly and has no dependency
+ *   on the RPC health-check, so the app must never show "Disconnected" while
+ *   the account data itself is fresh.
  * SPORT: MASTER-COMPONENTS.md — TopBar
  */
 
 import { MountainSnow } from 'lucide-react'
 import { useDaemonStatus } from '../../store/index'
+import { useAccounts } from '../../features/accounts/useAccounts'
 import { ThemeToggle } from '../ThemeToggle'
 
 const STATUS_DOT: Record<string, string> = {
@@ -41,10 +46,13 @@ const STATUS_ARIA: Record<string, string> = {
 
 export function TopBar() {
   const { status } = useDaemonStatus()
-  const dotClass = STATUS_DOT[status] ?? 'bg-muted-foreground'
-  const textClass = STATUS_TEXT[status] ?? 'text-muted-foreground'
-  const statusLabel = STATUS_LABEL[status] ?? status
-  const ariaLabel = STATUS_ARIA[status] ?? status
+  const { isLive } = useAccounts()
+  // Quota-store freshness wins over the raw daemon ping (see file header).
+  const effectiveStatus = isLive ? 'connected' : status
+  const dotClass = STATUS_DOT[effectiveStatus] ?? 'bg-muted-foreground'
+  const textClass = STATUS_TEXT[effectiveStatus] ?? 'text-muted-foreground'
+  const statusLabel = STATUS_LABEL[effectiveStatus] ?? effectiveStatus
+  const ariaLabel = STATUS_ARIA[effectiveStatus] ?? effectiveStatus
 
   return (
     <header

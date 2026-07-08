@@ -1,11 +1,16 @@
 /**
- * Purpose: Per-account 5h/7d quota progress bars with live countdown timer.
+ * Purpose: Per-account 5h/7d quota progress bars with live countdown timer,
+ *   plus a compact "Needs sign-in" row for unauthenticated accounts.
  *   Ported from cascade-dashboard FleetQuotaPanel; reads from useAccounts() IPC
  *   instead of HTTP /api/personal/fleet-quota.
- * Inputs:  useAccounts() IPC poll (30s refresh).
- * Outputs: Per-account cc_pct (5h) + wk_pct (7d) progress bars with countdown.
+ * Inputs:  useAccounts() IPC poll (4s refresh) — accounts (authenticated only)
+ *   + needsAuth (roster entries missing valid credentials).
+ * Outputs: Per-account cc_pct (5h) + wk_pct (7d) progress bars with countdown,
+ *   plus a re-auth affordance for accounts that need sign-in.
  * Constraints:
- *   - utilization from IPC is 0–1 float; multiply by 100 for display percentage.
+ *   - utilization from IPC is ALREADY a 0–100 percentage — never multiply by
+ *     100 again (that bug clamped small utilizations, e.g. 8%, to a false
+ *     100% once the value was re-scaled and capped).
  *   - resets_at is a unix timestamp (seconds); null when unknown.
  *   - 1s countdown timer derived from usage.five_hour.resets_at.
  *   - No external ProgressBar component — inline Tailwind divs only.
@@ -13,10 +18,11 @@
  * SPORT: MASTER-COMPONENTS.md — FleetQuotaPanel (fleet-02)
  */
 
-import { useState, useEffect } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { RefreshCw, LogIn } from 'lucide-react'
 import { useAccounts } from '../../features/accounts/useAccounts'
-import { accountLabel } from '../../features/accounts/types'
+import { accountLabel, canReauth } from '../../features/accounts/types'
 import type { AccountQuota } from '../../features/accounts/types'
 
 /** Format seconds as mm:ss or h:mm:ss */
@@ -36,10 +42,10 @@ function secsUntilUnix(unixTs: number | null | undefined): number {
   return Math.max(0, Math.floor(unixTs - Date.now() / 1000))
 }
 
-/** Convert 0-1 utilization to 0-100 percentage, null-safe. */
+/** Clamp a 0-100 utilization percentage for display, null-safe. */
 function utilPct(util: number | null | undefined): number {
   if (util == null) return 0
-  return Math.min(100, Math.round(util * 100))
+  return Math.min(100, Math.max(0, Math.round(util)))
 }
 
 /** Progress bar colour class based on percentage. */
@@ -79,6 +85,15 @@ function MiniBar({ label, pct, ariaLabel }: MiniBarProps) {
   )
 }
 
+/** Small colored account-id badge, matching the AccountsPage table convention. */
+function AccountBadge({ acc }: { acc: AccountQuota }) {
+  return (
+    <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground">
+      {accountLabel(acc)}
+    </span>
+  )
+}
+
 interface AccountRowProps {
   acc: AccountQuota
   countdown: number
@@ -91,13 +106,11 @@ function AccountRow({ acc, countdown }: AccountRowProps) {
   const hasReset = Boolean(acc.usage?.five_hour?.resets_at)
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 rounded-md border border-border/60 p-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-foreground font-mono">
-          {label}
-          {acc.email ? (
-            <span className="ml-1 text-[10px] text-muted-foreground font-normal">({acc.email})</span>
-          ) : null}
+        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <AccountBadge acc={acc} />
+          {acc.email ? <span className="text-[10px] text-muted-foreground font-normal">{acc.email}</span> : null}
         </span>
         <span className="text-xs text-muted-foreground tabular-nums">
           {hasReset ? `resets in ${formatCountdown(countdown)}` : 'no reset'}
@@ -112,8 +125,51 @@ function AccountRow({ acc, countdown }: AccountRowProps) {
   )
 }
 
+interface NeedsAuthRowProps {
+  acc: AccountQuota
+  busy: boolean
+  onReauth: (accountId: string) => void
+}
+
+/** Compact row for a roster account that isn't currently authenticated. */
+function NeedsAuthRow({ acc, busy, onReauth }: NeedsAuthRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 p-2">
+      <span className="flex items-center gap-1.5 text-xs">
+        <AccountBadge acc={acc} />
+        <span className="text-muted-foreground">Needs sign-in</span>
+      </span>
+      {canReauth(acc.provider) && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onReauth(acc.account)}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          <LogIn className="h-3 w-3" aria-hidden="true" />
+          Re-auth
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function FleetQuotaPanel() {
-  const { accounts, loading, error, refetch } = useAccounts()
+  const { accounts, needsAuth, loading, error, refetch } = useAccounts()
+  const [reauthBusy, setReauthBusy] = useState(false)
+
+  const handleReauth = useCallback(
+    async (accountId: string) => {
+      setReauthBusy(true)
+      try {
+        await invoke('account_reauth', { accountId })
+      } finally {
+        setReauthBusy(false)
+        void refetch()
+      }
+    },
+    [refetch]
+  )
 
   // Keyed by account string; value = seconds remaining
   const [countdowns, setCountdowns] = useState<Record<string, number>>({})
@@ -156,14 +212,18 @@ export function FleetQuotaPanel() {
         </button>
       </div>
 
-      {loading && accounts.length === 0 && (
+      {loading && accounts.length === 0 && needsAuth.length === 0 && (
         <p className="text-xs text-muted-foreground animate-pulse">Loading…</p>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
 
-      {!loading && !error && accounts.length === 0 && (
+      {!loading && !error && accounts.length === 0 && needsAuth.length === 0 && (
         <p className="text-xs text-muted-foreground">No accounts configured.</p>
       )}
+
+      {needsAuth.map((acc) => (
+        <NeedsAuthRow key={acc.account} acc={acc} busy={reauthBusy} onReauth={handleReauth} />
+      ))}
 
       {accounts.map((acc) => (
         <AccountRow

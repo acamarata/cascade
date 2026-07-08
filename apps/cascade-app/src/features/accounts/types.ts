@@ -47,12 +47,28 @@ export interface AccountQuota {
   quota_opaque?: boolean | null
   /** GFP pool only — number of API keys in the round-robin pool. */
   key_count?: number | null
+  /**
+   * True when the daemon holds valid credentials for this account. Absent
+   * (undefined/null) is treated as authenticated — see {@link isAuthenticated} —
+   * so the UI doesn't hide every account mid-rollout of this field.
+   */
+  authenticated?: boolean | null
   usage?: AccountUsage | null
 }
 
 /** True when this account is the GFP key pool (not a paid account). */
 export function isGfpPool(acc: AccountQuota): boolean {
   return acc.provider === 'gfp'
+}
+
+/**
+ * True when the account should be treated as authenticated.
+ * Absent/null `authenticated` (daemon hasn't shipped the field yet, or an
+ * older quota.json) defaults to true so accounts aren't hidden by mistake.
+ * Only an explicit `false` marks an account as needing re-auth.
+ */
+export function isAuthenticated(acc: AccountQuota): boolean {
+  return acc.authenticated !== false
 }
 
 /**

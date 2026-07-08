@@ -113,6 +113,11 @@ pub struct AccountQuota {
     /// Number of keys in a GFP pool account (`gfp` provider only).
     #[serde(default)]
     pub key_count: Option<u32>,
+    /// True when the daemon holds valid credentials for this account. `None`
+    /// (field absent) is treated as authenticated by the frontend so the UI
+    /// degrades gracefully during the daemon rollout of this field.
+    #[serde(default)]
+    pub authenticated: Option<bool>,
     /// The usage breakdown for this account.
     #[serde(default)]
     pub usage: Option<AccountUsage>,

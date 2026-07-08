@@ -5,7 +5,7 @@
  * Inputs:  None (self-contained; reads IPC via useAccounts).
  * Outputs: Full table page at /accounts.
  * Constraints:
- *   - Auto-polls every 30 s (via useAccounts).
+ *   - Auto-polls every 4 s (via useAccounts).
  *   - Color coding green/yellow/red per widget convention.
  *   - Re-auth shown only for claude/gemini; remove confirms first.
  *   - Add-account is informational for now (shows the terminal command).
