@@ -135,7 +135,8 @@ pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Resu
 ///     { "account": "claude-acc1", "provider": "claude", "email": "...",
 ///       "usage": { "five_hour": null, "seven_day": null, "seven_day_sonnet": null,
 ///                  "seven_day_opus": null, "extra_usage": null },
-///       "last_pull_at": 1234567890.0, "quota_opaque": false, "status": "ok" }
+///       "last_pull_at": 1234567890.0, "quota_opaque": false, "status": "ok",
+///       "authenticated": true }
 ///   ],
 ///   "queried_at": 1234567890.0
 /// }
@@ -145,6 +146,11 @@ pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Resu
 /// Accounts with no live data still appear with `last_pull_at` set to now
 /// so the widget renders them (it hides only when last_pull_at is null AND
 /// all usage slots are null).
+///
+/// `authenticated` is conservative: `true` only on positive evidence of a
+/// good credential (a live bridge `Ok`, a successful legacy pull, or — for
+/// the GFP key pool — a nonzero `key_count`). It defaults to `false` when
+/// the credential state is simply unknown; never guessed optimistic.
 ///
 /// Provider mapping by family:
 ///   Claude → "claude", Openai → "codex", Google → "gemini",
@@ -296,6 +302,43 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             _ => "ok",
         };
 
+        // ── `authenticated` — conservative, evidence-based credential state ──
+        // `auth_dead` (above) answers "do we have positive evidence this
+        // credential is broken?" (defaults to false/not-dead when unknown).
+        // `authenticated` answers the stricter question "do we have positive
+        // evidence this credential is GOOD?" and defaults to false when we
+        // simply don't know — never guessed, never optimistic.
+        //
+        // Precedence: a definitive live-fetch auth failure or a live
+        // NeedsReauth verdict → false. A live bridge `Ok` → true. No bridge
+        // for this family/dir (Google/Opencode, or an unmapped Claude/Codex
+        // dir) → fall back to genuine evidence of a successful legacy pull
+        // (usage present, no last_error). GFP is a key pool, not OAuth: a
+        // present, non-empty key pool is its "authenticated" signal.
+        let authenticated = if acc.family == AccountFamily::Gfp {
+            acc.key_count > 0
+        } else if legacy_definitive_auth_failure {
+            false
+        } else {
+            match live_auth {
+                Some(AuthStatus::Ok { .. }) => true,
+                Some(AuthStatus::NeedsReauth) => false,
+                _ => legacy_entry
+                    .map(|leg| {
+                        let no_error = leg
+                            .get("last_error")
+                            .map(|v| v.is_null())
+                            .unwrap_or(true);
+                        let has_usage = leg
+                            .get("usage")
+                            .map(|v| !v.is_null())
+                            .unwrap_or(false);
+                        no_error && has_usage
+                    })
+                    .unwrap_or(false),
+            }
+        };
+
         let mut entry = json!({
             "account": acc.id,
             "provider": provider,
@@ -303,7 +346,8 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             "usage": usage,
             "last_pull_at": last_pull_at,
             "quota_opaque": quota_opaque.unwrap_or(false),
-            "status": status
+            "status": status,
+            "authenticated": authenticated
         });
 
         // Surface the config_dir so the Swift widget can pass the correct
@@ -751,6 +795,66 @@ mod tests {
                 "must NOT have legacy 'family' field");
             assert!(entry.get("windows").is_none(),
                 "must NOT have legacy 'windows' field");
+        }
+    }
+
+    /// `authenticated` field: conservative default is `false` when no live
+    /// credential bridge maps to the account (e.g. an unmapped Claude id in
+    /// a test environment with no matching `~/.claude*` dir) and there is no
+    /// legacy cache entry to fall back on. GFP is `true` only when its
+    /// `key_count` is nonzero.
+    #[test]
+    fn authenticated_field_defaults_conservative() {
+        use cascade_types::accounts::{Account, AccountRole};
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("quota.json");
+
+        let mut registry = default_registry();
+        registry.accounts.push(Account {
+            id: "claude-does-not-exist-on-this-box".to_string(),
+            family: AccountFamily::Claude,
+            subscription: "anthropic-max".to_string(),
+            access_methods: vec![],
+            role: AccountRole::PrimaryT0,
+            exhaustion_priority: 255,
+            models: vec![],
+            cli_available: false,
+            key_count: 0,
+            quota_account_id: None,
+            notes: None,
+        });
+        registry.accounts.push(Account {
+            id: "gfp-no-keys".to_string(),
+            family: AccountFamily::Gfp,
+            subscription: "gfp-pool".to_string(),
+            access_methods: vec![],
+            role: AccountRole::Free,
+            exhaustion_priority: 1,
+            models: vec![],
+            cli_available: true,
+            key_count: 0,
+            quota_account_id: None,
+            notes: None,
+        });
+
+        write_quota_json(&path, &registry).unwrap();
+
+        let bytes = std::fs::read(&path).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
+        assert_eq!(accts.len(), 2);
+
+        for entry in accts {
+            assert!(
+                entry.get("authenticated").is_some(),
+                "every quota.json entry must have an 'authenticated' field"
+            );
+            assert_eq!(
+                entry.get("authenticated").and_then(|v| v.as_bool()),
+                Some(false),
+                "unmapped/keyless accounts must default to authenticated=false, never guessed true"
+            );
         }
     }
 

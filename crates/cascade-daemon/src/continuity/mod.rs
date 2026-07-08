@@ -34,7 +34,20 @@
 //!     the user re-adds the intent if they want another attempt.
 //!   - File ≤ 300 lines.
 //!
-//! SPORT: `.claude/docs/MASTER-DAEMON.md` — continuity module (E2-S1)
+//! Phase C (session-failover, `.claude/planning/10-session-failover-spec.md`)
+//! adds two sibling submodules that extend this watcher without touching the
+//! `Resume`/`Notify` intent format above:
+//!   - [`handoff`] (C3) — watches the CURRENT interactive session's account
+//!     (via a separate `current-session.json` pointer, not a
+//!     `ContinuityIntent`) and, on approaching its cap, checkpoints the
+//!     session (`crate::failover::session_copy`, C2) and queues a normal
+//!     `Resume` intent against a healthy target account. Opt-in only —
+//!     gated on `CASCADE_SESSION_FAILOVER=1`, default off.
+//!   - [`backstop`] (C5) — pure "are all these accounts capped" predicate
+//!     consumed by `handoff` to decide when to fall back to a notify-only
+//!     backstop instead of a handoff.
+//!
+//! SPORT: `.claude/docs/MASTER-DAEMON.md` — continuity module (E2-S1, Phase C)
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -42,6 +55,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+
+pub mod backstop;
+pub mod handoff;
 
 /// How often the watcher scans `~/.cascade/continuity/*.json` for due intents.
 pub const WATCH_INTERVAL: Duration = Duration::from_secs(60);
@@ -304,16 +320,30 @@ pub fn spawn(shutdown: CancellationToken) -> tokio::task::JoinHandle<()> {
 
 /// One watcher pass: scan intents, fire any that are eligible. Isolated from
 /// `spawn` so tests can drive a single tick deterministically if needed.
+///
+/// Also drives the Phase C (C3/C5) current-session check ([`handoff`])
+/// every tick, independent of whether any `ContinuityIntent` files exist —
+/// that check is a no-op (`HandoffOutcome::Disabled`/`NoPointer`) unless the
+/// operator has opted in and a hook has written a pointer file, so this adds
+/// no observable behavior change for anyone not using Phase C.
 async fn run_tick() {
     let dir = continuity_dir();
+    let quota_doc: Option<serde_json::Value> = std::fs::read(quota_json_path())
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok());
+
+    let outcome = handoff::check_current_session(&dir, quota_doc.as_ref()).await;
+    if !matches!(
+        outcome,
+        handoff::HandoffOutcome::Disabled | handoff::HandoffOutcome::NoPointer
+    ) {
+        info!(?outcome, "continuity: current-session check");
+    }
+
     let intents = list_intents(&dir);
     if intents.is_empty() {
         return;
     }
-
-    let quota_doc: Option<serde_json::Value> = std::fs::read(quota_json_path())
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok());
 
     for intent in intents {
         if intent.is_fired() {

@@ -1,9 +1,11 @@
 //! Fleet poller — periodic multi-source quota aggregation loop (E-P6-03 v1.2).
 //!
-//! Purpose: Runs every `interval_secs` (default 60 s). Each registered
-//! [`FleetSource`] is polled for a [`QuotaState`] snapshot. Non-`None`
-//! results are aggregated via [`aggregate_quota`] and written atomically
-//! to `~/.cascade/quota-store.json` via [`write_quota_store`].
+//! Purpose: Ticks once immediately on startup, then every `interval_secs`
+//! (default 60 s), so `~/.cascade/accounts/quota.json` is fresh within
+//! seconds of a daemon (re)start rather than up to a full interval stale.
+//! Each registered [`FleetSource`] is polled for a [`QuotaState`] snapshot.
+//! Non-`None` results are aggregated via [`aggregate_quota`] and written
+//! atomically to `~/.cascade/quota-store.json` via [`write_quota_store`].
 //!
 //! Inputs:
 //!   - `config` — `[fleet]` section from `config.toml` (interval, enabled).
@@ -267,6 +269,14 @@ impl FleetPoller {
             tokio::time::Duration::from_secs(config.interval_secs.max(1));
 
         info!(interval_secs = config.interval_secs, "fleet poller started");
+
+        // Prime quota.json / quota-store.json immediately on startup instead
+        // of waiting a full `interval_secs` for the first tick. Without this,
+        // a freshly (re)started daemon left the widget reading up-to-an-
+        // interval-stale (or, on first-ever run, entirely absent) data for as
+        // long as 60 s. `tick_async` is bounded by per-account network
+        // timeouts inside `refresh_accounts`, so this cannot hang startup.
+        Self::tick_async(&sources, &store_path).await;
 
         loop {
             tokio::select! {

@@ -95,8 +95,14 @@ pub mod automation_router;
 pub mod nsentry_sync;
 
 // continuity: reset-time triggers to auto-resume Claude Code sessions once a
-// usage-cap window clears (E2-S1)
+// usage-cap window clears (E2-S1); continuity::handoff/backstop extend it
+// for Phase C session-failover (C3/C5).
 pub mod continuity;
+
+// failover: Phase C (session-failover) shared primitives — session_copy
+// (C2), consumed by continuity::handoff. Always compiled (pure fs logic, no
+// network surface) unlike the feature-gated proxy/ module.
+pub mod failover;
 
 // E2-S3: POST-processing middleware — background response digest →
 // ~/.cascade/context-sync JSONL (the rag_watcher index-refresh nudge)

@@ -91,6 +91,7 @@ mod nsentry_sync;
 // continuity: reset-time triggers to auto-resume Claude Code sessions once a
 // usage-cap window clears (E2-S1)
 mod continuity;
+mod failover;
 // E2-S3: POST-processing middleware — background response digest →
 // ~/.cascade/context-sync JSONL (the rag_watcher index-refresh nudge)
 mod context_sync;
