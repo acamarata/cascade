@@ -17,6 +17,7 @@ pub mod personal_handlers;
 pub mod projects_handlers;
 pub mod rag_status;
 pub mod static_handler;
+pub mod topics_handlers;
 pub mod usage_history;
 pub mod harvest;
 

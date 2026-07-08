@@ -287,6 +287,7 @@ fn notify_backstop(pointer_file: &Path, pointer: &mut CurrentSessionPointer) -> 
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::await_holding_lock)] // env_lock() serialises env-var tests
     use super::*;
     use tempfile::TempDir;
 

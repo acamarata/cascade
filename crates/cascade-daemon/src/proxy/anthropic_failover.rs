@@ -55,6 +55,8 @@
 //! Master plan: `.claude/planning/11-vNEXT-master-plan.md` Phase C / C4.
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — proxy::anthropic_failover (Phase C / C4, deferred)
 
+#![allow(dead_code)] // deferred skeleton (Phase C C4) — wired when failover lands
+
 use std::net::SocketAddr;
 
 use tokio_util::sync::CancellationToken;

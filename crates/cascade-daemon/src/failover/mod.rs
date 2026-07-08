@@ -15,4 +15,5 @@
 
 pub mod session_copy;
 
+#[allow(unused_imports)] // public API — consumed when session-failover is fully wired
 pub use session_copy::{copy_session, CopyOutcome};

@@ -510,6 +510,7 @@ pub fn build_router(state: DashboardState) -> Router {
         // (auth-protected write) and /api/gci/rules (no-auth read) coexist correctly.
         .nest("/api/gci", crate::http::gci_handlers::gci_read_router())
         .nest("/api/personal", crate::http::personal_handlers::router())
+        .nest("/api/topics", crate::http::topics_handlers::router())
         .nest("/api/projects", crate::http::projects_handlers::router())
         .nest("/api/chat", crate::http::chat_handlers::router())
         .nest("/api/personal", crate::http::usage_history::router())

@@ -36,8 +36,11 @@ use cascade_providers::{CompletionRequest, Message, MessageRole};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::convert::Infallible;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::io::AsyncReadExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::dashboard::DashboardState;
@@ -114,80 +117,49 @@ pub async fn chat_handler(
             }
         };
 
-        // ── Step 2: pick provider via routing chain ───────────────────────────
-        // E1-S6: the account choice consults the shared selection module.
-        // Chat is GP-preferred at ALL tiers (product decision): when no
-        // explicit provider is requested and the GP pool is healthy (per the
-        // LIVE :3761 /health probe — 429 cooldowns included), prefer the
-        // pool-backed adapter registered under GP_CHAT_PROVIDER_ID at boot.
-        // An EXPLICIT provider always wins and skips the GP preference; every
-        // existing fallback step in `pick_for_chat` (routing default → health
-        // scan → local) is preserved unchanged, including when the preferred
-        // id is not registered (e.g. gemini-proxy feature off).
-        // Privacy guard (mirrors the app-side gate in useChat.ts): a
-        // protected namespace must never REACH the GP pool or any other
-        // untrusted provider — not via GP-first steering, not via the
-        // routing-table default, and not via the "first healthy cloud"
-        // scan. The middleware neutralisation below stops content-capturing
-        // side channels; this constrains where the primary conversation
-        // itself may be dispatched. An EXPLICIT provider named in the
-        // request still wins (deliberate user choice), because step 1 of
-        // the pick bypasses the filter.
-        let protected = is_protected_namespace(body.namespace.as_deref());
+        // ── Step 2: build provider fallback list ──────────────────────────────
         let preferred = body.provider.as_deref();
-        let effective_preferred: Option<String> =
+        let gp_preferred: Option<String> =
             if gp_preference_allowed(preferred, body.namespace.as_deref()) {
                 chat_gp_preference().await.map(str::to_string)
             } else {
-                preferred.map(str::to_string)
+                None
             };
         // User preference (project_cascade_chat_design, 2026-07): personal chat
         // MAY use the fleet — Gemini/GPT are good at personal chat, and the user
         // has no local model (no RAM/disk). Only an EXPLICIT vault / `:private`
         // namespace stays trusted-only (Anthropic/local); plain `personal` and
-        // `personal:topic:*` route by the normal fleet priority (GF→GP→Codex→
-        // A2→A1→OC-Go). `protected` still governs middleware neutralisation
-        // (below) so no content-capturing side channels run for personal chat.
-        let requires_trusted = body
-            .namespace
-            .as_deref()
-            .map(|ns| ns.contains("vault") || ns.ends_with(":private") || ns == "private")
-            .unwrap_or(false);
-        let trust_filter: fn(&str) -> bool =
-            cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive;
-        let trusted_only: Option<&(dyn Fn(&str) -> bool + Send + Sync)> =
-            if requires_trusted { Some(&trust_filter) } else { None };
-        let picked = registry
-            .pick_for_chat_filtered(effective_preferred.as_deref(), trusted_only)
-            .await;
+        // `personal:topic:*` route by the normal fleet priority
+        // (GF -> GP -> Codex -> A2 -> A1 -> OC-Go). Protected classification
+        // still governs middleware neutralisation below, so no content-capturing
+        // side channels run for personal chat.
+        let requires_trusted = namespace_requires_trusted(body.namespace.as_deref());
+        // Future refinement: detect vault-secret content even when the caller
+        // did not use a vault/private namespace; today the trusted-only gate is
+        // intentionally namespace-based.
+        let requested_first = preferred.or(gp_preferred.as_deref());
+        let quota = load_quota_saturation().await;
+        let candidates =
+            provider_fallback_candidates(&registry, requested_first, requires_trusted, &quota);
 
-        let (adapter, provider_id) = match picked {
-            Some(pair) => pair,
-            None => {
-                // Fail CLOSED for protected namespaces: with only untrusted
-                // (Google/OpenAI-family) providers registered, refusing is
-                // the promise — never silently fall back to the pool.
-                let msg = if requires_trusted {
-                    "private chat requires a trusted provider (Claude account or local \
-                     model) — refusing to send this conversation to an external pool. \
-                     Configure an Anthropic provider or start a local model."
-                } else {
-                    "no provider available — configure a provider or start a local model"
-                };
-                let ev = Event::default()
-                    .event("error")
-                    .data(json!({ "message": msg }).to_string());
-                let _ = tx.send(Ok(ev)).await;
-                let _ = tx.send(Ok(Event::default().data("[DONE]"))).await;
-                return;
-            }
-        };
-
-        // ── Step 3: emit served_by event so the UI can display the backend ────
-        let served_ev = Event::default()
-            .event("served_by")
-            .data(json!({ "provider": provider_id }).to_string());
-        let _ = tx.send(Ok(served_ev)).await;
+        if candidates.is_empty() {
+            // Fail CLOSED for vault/private namespaces: with only untrusted
+            // (Google/OpenAI-family) providers registered, refusing is the
+            // promise — never silently fall back to the pool.
+            let msg = if requires_trusted {
+                "private chat requires a trusted provider (Claude account or local \
+                 model) — refusing to send this conversation to an external pool. \
+                 Configure an Anthropic provider or start a local model."
+            } else {
+                "no provider available — configure a provider or start a local model"
+            };
+            let ev = Event::default()
+                .event("error")
+                .data(json!({ "message": msg }).to_string());
+            let _ = tx.send(Ok(ev)).await;
+            let _ = tx.send(Ok(Event::default().data("[DONE]"))).await;
+            return;
+        }
 
         // ── Step 3.5: E2-S2 pre-middleware (flag-gated; ALL OFF by default) ──
         // With every [middleware] flag false this block does nothing at all:
@@ -214,25 +186,30 @@ pub async fn chat_handler(
             chat_messages = compress_chat_messages(chat_messages).await;
         }
 
-        // 2. System-prompt injection (middleware.inject_context): pure,
-        //    byte-stable template merge (cache-prefix-safe — no timestamps).
-        let system = if flags.inject_context {
-            cascade_core::middleware::build_system_prefix(&load_project_context().await)
+        // 2. System-prompt injection: project context remains flag-gated;
+        //    personal-family namespaces always get a bounded local summary
+        //    from ~/Downloads/.claude so personal topic chat has recall.
+        let mut prompt_context = if flags.inject_context {
+            load_project_context().await
         } else {
-            None
+            cascade_core::middleware::ProjectContext::default()
         };
+        if let Some(personal_context) = load_personal_context(body.namespace.as_deref()).await {
+            append_prompt_context(&mut prompt_context.claude_md_summary, personal_context);
+        }
+        let system = cascade_core::middleware::build_system_prefix(&prompt_context);
 
         // 3. Request classification (middleware.classify_requests): one
         //    bounded GP call; may only DOWNGRADE the model, and only when the
         //    user did not explicitly pick a provider/model. GP failure →
-        //    None → the normal default model applies. Skipped when the
-        //    already-picked provider has no downgrade step at all
-        //    (`downgraded_model_for` is Some only for the Gemini family) —
-        //    the GP call's result would be discarded, so a wedged proxy must
-        //    not add up to GP_CLASSIFY_TIMEOUT of pre-dispatch latency for
-        //    nothing.
-        let mut model_override = body.model.clone();
-        if flags.classify_requests && !explicit_choice && provider_can_downgrade(&provider_id) {
+        //    None → the normal default model applies. With provider fallback,
+        //    classify at most once when any remaining candidate can consume
+        //    the downgrade result.
+        let mut classified_complexity = None;
+        if flags.classify_requests
+            && !explicit_choice
+            && candidates.iter().any(|c| provider_can_downgrade(&c.provider_id))
+        {
             let last_user = chat_messages
                 .iter()
                 .rev()
@@ -245,17 +222,11 @@ pub async fn chat_handler(
                 .await
                 .ok()
                 .flatten();
-                if let Some(c) = complexity {
-                    if let Some(cheaper) = downgraded_model_for(&provider_id, c) {
-                        model_override = Some(cheaper);
-                    }
-                }
+                classified_complexity = complexity;
             }
         }
 
-        // ── Step 4: build CompletionRequest from the chat body ────────────────
-        let model = model_override.unwrap_or_else(|| default_model_for(&provider_id));
-
+        // ── Step 4: build provider-neutral messages from the chat body ───────
         let messages: Vec<Message> = chat_messages
             .iter()
             .map(|m| {
@@ -271,33 +242,63 @@ pub async fn chat_handler(
             })
             .collect();
 
-        let completion_req = CompletionRequest {
-            model,
-            messages,
-            max_tokens: None,
-            temperature: None,
-            stream: true,
-            system,
-        };
-
-        // ── Step 5: stream from the adapter ──────────────────────────────────
+        // ── Step 5: open a provider stream, falling through request errors ───
         // E2-S3 post-middleware: with middleware.context_sync on, accumulate
         // the assistant text while streaming so a digest can be synced AFTER
         // the response is delivered. Flag off (default) → no accumulation, no
         // spawn — literally zero overhead on the hot path.
         let sync_context = crate::context_sync::should_sync(&flags);
         let mut assistant_text = String::new();
-        let mut stream = match adapter.complete_stream(completion_req).await {
-            Ok(s) => s,
-            Err(e) => {
-                let ev = Event::default()
-                    .event("error")
-                    .data(json!({ "message": format!("provider error: {e}") }).to_string());
-                let _ = tx.send(Ok(ev)).await;
-                let _ = tx.send(Ok(Event::default().data("[DONE]"))).await;
-                return;
+        let mut failures = Vec::new();
+        let mut opened = None;
+        for candidate in candidates {
+            let model = body
+                .model
+                .clone()
+                .or_else(|| {
+                    classified_complexity
+                        .and_then(|c| downgraded_model_for(&candidate.provider_id, c))
+                })
+                .unwrap_or_else(|| default_model_for(&candidate.provider_id));
+            let completion_req = CompletionRequest {
+                model,
+                messages: messages.clone(),
+                max_tokens: None,
+                temperature: None,
+                stream: true,
+                system: system.clone(),
+            };
+
+            match candidate.adapter.complete_stream(completion_req).await {
+                Ok(stream) => {
+                    opened = Some((candidate.provider_id, stream));
+                    break;
+                }
+                Err(e) => {
+                    failures.push(format!("{}: {e}", candidate.provider_id));
+                }
             }
+        }
+
+        let Some((provider_id, mut stream)) = opened else {
+            let detail = if failures.is_empty() {
+                "all providers unavailable".to_string()
+            } else {
+                failures.join("; ")
+            };
+            let ev = Event::default()
+                .event("error")
+                .data(json!({ "message": format!("provider error: {detail}") }).to_string());
+            let _ = tx.send(Ok(ev)).await;
+            let _ = tx.send(Ok(Event::default().data("[DONE]"))).await;
+            return;
         };
+
+        // The UI displays the backend that actually accepted the request.
+        let served_ev = Event::default()
+            .event("served_by")
+            .data(json!({ "provider": provider_id }).to_string());
+        let _ = tx.send(Ok(served_ev)).await;
 
         while let Some(chunk_result) = stream.next().await {
             match chunk_result {
@@ -368,11 +369,9 @@ async fn chat_gp_preference() -> Option<&'static str> {
 
 /// `true` when the GP-first chat preference may be consulted for this
 /// request (pure): only when the user named no explicit provider AND the
-/// namespace is not protected. Personal/private chat must never be steered
-/// to the GP pool — see [`is_protected_namespace`] and the matching
-/// app-side gate in `useChat.ts`.
+/// namespace does not require trusted-only routing.
 fn gp_preference_allowed(explicit_provider: Option<&str>, namespace: Option<&str>) -> bool {
-    explicit_provider.is_none() && !is_protected_namespace(namespace)
+    explicit_provider.is_none() && !namespace_requires_trusted(namespace)
 }
 
 /// Async probe of the GP proxy health endpoint. `None` on any failure —
@@ -388,6 +387,638 @@ async fn fetch_gp_health(url: &str) -> Option<cascade_core::selection::GpHealthS
     }
     let body = resp.text().await.ok()?;
     Some(cascade_core::routing::gfp_http::parse_gp_health(&body))
+}
+
+// ── Provider fallback helpers ────────────────────────────────────────────────
+
+type ProviderArc = Arc<dyn cascade_providers::ProviderAdapter + Send + Sync>;
+
+struct ProviderCandidate {
+    provider_id: String,
+    adapter: ProviderArc,
+}
+
+fn provider_fallback_candidates(
+    registry: &cascade_providers::ProviderRegistry,
+    requested_first: Option<&str>,
+    requires_trusted: bool,
+    quota: &QuotaSaturation,
+) -> Vec<ProviderCandidate> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let mut registered: Vec<String> = registry.list().into_iter().map(|p| p.id).collect();
+    registered.sort();
+
+    if let Some(id) = requested_first {
+        let quota_keys = quota_keys_for_provider_id(id);
+        push_provider_candidate(
+            registry,
+            id,
+            quota_keys,
+            requires_trusted,
+            true,
+            quota,
+            &mut seen,
+            &mut out,
+        );
+    }
+
+    push_group(
+        registry,
+        &registered,
+        &["gp-pool"],
+        &["gfp", "gp-pool"],
+        |id| id == "gp-pool",
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["gemini"],
+        &["gemini", "google-agy"],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id == "gemini" || id.starts_with("gemini-") || id.starts_with("google-agy")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["openai", "codex", "openai-codex"],
+        &["codex", "openai-codex", "openai"],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id == "openai"
+                || id == "codex"
+                || id == "openai-codex"
+                || id.starts_with("openai-")
+                || id.starts_with("codex-")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["claude2", "acc2", "claude-acc2"],
+        &["claude2", "acc2"],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id == "claude2" || id == "acc2" || id.contains("claude2") || id.contains("acc2")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["claude", "anthropic", "acc1", "claude-acc1"],
+        &["claude", "anthropic", "acc1"],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id == "claude"
+                || id == "anthropic"
+                || id == "acc1"
+                || id.starts_with("claude-")
+                || id.starts_with("anthropic-")
+                || id.starts_with("cc-")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["opencode", "oc-go"],
+        &["opencode", "oc-go"],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id == "opencode" || id == "oc-go" || id.starts_with("opencode-") || id.starts_with("oc-")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+    push_group(
+        registry,
+        &registered,
+        &["local", "ollama"],
+        &[],
+        |id| {
+            let id = id.to_ascii_lowercase();
+            id.starts_with("local") || id == "ollama" || id.starts_with("ollama-")
+        },
+        requires_trusted,
+        quota,
+        &mut seen,
+        &mut out,
+    );
+
+    out
+}
+
+fn quota_keys_for_provider_id(id: &str) -> &'static [&'static str] {
+    let id = id.to_ascii_lowercase();
+    if id == "gp-pool" {
+        &["gfp", "gp-pool"]
+    } else if id == "gemini" || id.starts_with("gemini-") {
+        &["gemini", "google-agy"]
+    } else if id == "openai" || id == "codex" || id.starts_with("openai-") || id.starts_with("codex-")
+    {
+        &["codex", "openai-codex", "openai"]
+    } else if id == "opencode" || id == "oc-go" || id.starts_with("opencode-") || id.starts_with("oc-")
+    {
+        &["opencode", "oc-go"]
+    } else {
+        &[]
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_group<F>(
+    registry: &cascade_providers::ProviderRegistry,
+    registered: &[String],
+    exact_ids: &[&str],
+    quota_keys: &[&str],
+    matches_group: F,
+    requires_trusted: bool,
+    quota: &QuotaSaturation,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<ProviderCandidate>,
+) where
+    F: Fn(&str) -> bool,
+{
+    for id in exact_ids {
+        push_provider_candidate(
+            registry,
+            id,
+            quota_keys,
+            requires_trusted,
+            false,
+            quota,
+            seen,
+            out,
+        );
+    }
+    for id in registered {
+        if matches_group(id) {
+            push_provider_candidate(
+                registry,
+                id,
+                quota_keys,
+                requires_trusted,
+                false,
+                quota,
+                seen,
+                out,
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_provider_candidate(
+    registry: &cascade_providers::ProviderRegistry,
+    id: &str,
+    quota_keys: &[&str],
+    requires_trusted: bool,
+    bypass_trust_filter: bool,
+    quota: &QuotaSaturation,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<ProviderCandidate>,
+) {
+    if seen.contains(id) || quota.is_saturated(id, quota_keys) {
+        return;
+    }
+    if requires_trusted
+        && !bypass_trust_filter
+        && !cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive(id)
+    {
+        return;
+    }
+    if let Some(adapter) = registry.get(id) {
+        seen.insert(id.to_string());
+        out.push(ProviderCandidate {
+            provider_id: id.to_string(),
+            adapter,
+        });
+    }
+}
+
+#[derive(Debug, Default)]
+struct QuotaSaturation {
+    saturated_ids: HashSet<String>,
+}
+
+impl QuotaSaturation {
+    fn is_saturated(&self, id: &str, extra_keys: &[&str]) -> bool {
+        self.saturated_ids.contains(&id.to_ascii_lowercase())
+            || extra_keys
+                .iter()
+                .any(|key| self.saturated_ids.contains(&key.to_ascii_lowercase()))
+    }
+
+    fn insert(&mut self, id: &str) {
+        let id = id.trim().to_ascii_lowercase();
+        if !id.is_empty() {
+            self.saturated_ids.insert(id);
+        }
+    }
+}
+
+async fn load_quota_saturation() -> QuotaSaturation {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return QuotaSaturation::default();
+    };
+    let path = home
+        .join(".cascade")
+        .join("accounts")
+        .join("quota.json");
+    let Ok(raw) = tokio::fs::read_to_string(path).await else {
+        return QuotaSaturation::default();
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+        return QuotaSaturation::default();
+    };
+    quota_saturation_from_value(&value)
+}
+
+fn quota_saturation_from_value(value: &Value) -> QuotaSaturation {
+    let mut out = QuotaSaturation::default();
+    if let Some(accounts) = value.get("accounts").and_then(Value::as_array) {
+        for account in accounts {
+            if !quota_entry_saturated(account) {
+                continue;
+            }
+            let account_id = account
+                .get("account")
+                .or_else(|| account.get("account_id"))
+                .and_then(Value::as_str);
+            let provider = account.get("provider").and_then(Value::as_str);
+            if let Some(id) = account_id {
+                out.insert(id);
+            } else if let Some(id) = provider {
+                out.insert(id);
+            }
+        }
+    }
+    out
+}
+
+fn quota_entry_saturated(value: &Value) -> bool {
+    if value
+        .get("status")
+        .and_then(Value::as_str)
+        .map(|s| {
+            matches!(
+                s.to_ascii_lowercase().as_str(),
+                "saturated" | "exhausted" | "quota_exhausted" | "rate_limited" | "rate-limited"
+            )
+        })
+        .unwrap_or(false)
+    {
+        return true;
+    }
+
+    let mut pcts = Vec::new();
+    collect_quota_pcts(value, &mut pcts);
+    cascade_core::selection::pcts_saturated(pcts) || has_exhausted_limit(value)
+}
+
+fn collect_quota_pcts(value: &Value, out: &mut Vec<f64>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let key = key.to_ascii_lowercase();
+                if matches!(
+                    key.as_str(),
+                    "utilization" | "pct_used" | "percent_used" | "percentage_used" | "used_pct"
+                ) {
+                    if let Some(n) = child.as_f64() {
+                        out.push(n);
+                    }
+                }
+                collect_quota_pcts(child, out);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                collect_quota_pcts(child, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn has_exhausted_limit(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            let used = map.get("used").and_then(Value::as_u64);
+            let limit = map.get("limit").and_then(Value::as_u64);
+            if let (Some(used), Some(limit)) = (used, limit) {
+                if limit > 0 && used >= limit {
+                    return true;
+                }
+            }
+            map.values().any(has_exhausted_limit)
+        }
+        Value::Array(items) => items.iter().any(has_exhausted_limit),
+        _ => false,
+    }
+}
+
+// ── Personal context helpers ─────────────────────────────────────────────────
+
+const PERSONAL_CONTEXT_MAX_CHARS: usize = 6_000;
+const PERSONAL_INDEX_MAX_TOPICS: usize = 40;
+const PERSONAL_SNIPPET_MAX_FILES: usize = 8;
+const PERSONAL_SNIPPET_MAX_CHARS: usize = 600;
+const PERSONAL_TOPIC_MAX_FILES: usize = 10;
+const PERSONAL_TOPIC_FILE_MAX_CHARS: usize = 1_000;
+const PERSONAL_READ_MAX_BYTES: u64 = 16_384;
+
+async fn load_personal_context(namespace: Option<&str>) -> Option<String> {
+    if !is_personal_namespace(namespace) {
+        return None;
+    }
+    let base = personal_claude_dir()?;
+    let mut out = String::new();
+
+    append_personal_thread_index(&mut out, &base.join("threads")).await;
+    append_personal_dir_snippets(&mut out, "Memory", &base.join("memory")).await;
+    append_personal_dir_snippets(&mut out, "Summaries", &base.join("summaries")).await;
+
+    if let Some(topic_id) = personal_topic_id(namespace) {
+        if let Some(safe_id) = safe_topic_id(topic_id) {
+            append_personal_topic(&mut out, &base.join("threads").join(&safe_id), &safe_id).await;
+        }
+    }
+
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "Personal context from ~/Downloads/.claude (bounded local excerpts):\n{}",
+            truncate_chars(trimmed, PERSONAL_CONTEXT_MAX_CHARS)
+        ))
+    }
+}
+
+fn personal_claude_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join("Downloads").join(".claude"))
+}
+
+fn is_personal_namespace(namespace: Option<&str>) -> bool {
+    namespace
+        .map(|ns| ns.trim().to_ascii_lowercase().starts_with("personal"))
+        .unwrap_or(false)
+}
+
+fn personal_topic_id(namespace: Option<&str>) -> Option<&str> {
+    let ns = namespace?.trim();
+    if ns
+        .get(.."personal:topic:".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("personal:topic:"))
+    {
+        Some(&ns["personal:topic:".len()..])
+    } else {
+        None
+    }
+}
+
+fn safe_topic_id(id: &str) -> Option<String> {
+    let id = id.trim();
+    if id.is_empty()
+        || id == "."
+        || id == ".."
+        || id.contains('/')
+        || id.contains('\\')
+        || id.contains('\0')
+    {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+async fn append_personal_thread_index(out: &mut String, threads_dir: &Path) {
+    let Some(children) = sorted_personal_children(threads_dir).await else {
+        return;
+    };
+    let mut lines = Vec::new();
+    for path in children {
+        if lines.len() >= PERSONAL_INDEX_MAX_TOPICS {
+            break;
+        }
+        let Ok(meta) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+        if !meta.is_dir() {
+            continue;
+        }
+        let Some(id) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let title = personal_topic_title(&path, id).await;
+        lines.push(format!("- {title} (id: {id})"));
+    }
+    if !lines.is_empty() {
+        out.push_str("Topics:\n");
+        out.push_str(&lines.join("\n"));
+        out.push_str("\n\n");
+    }
+}
+
+async fn append_personal_dir_snippets(out: &mut String, label: &str, dir: &Path) {
+    let Some(children) = sorted_personal_children(dir).await else {
+        return;
+    };
+    let mut snippets = Vec::new();
+    for path in children {
+        if snippets.len() >= PERSONAL_SNIPPET_MAX_FILES {
+            break;
+        }
+        let Ok(meta) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        if let Some(snippet) = read_personal_text_prefix(&path, PERSONAL_SNIPPET_MAX_CHARS).await {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            snippets.push(format!("- {name}: {}", one_line(&snippet)));
+        }
+    }
+    if !snippets.is_empty() {
+        out.push_str(label);
+        out.push_str(":\n");
+        out.push_str(&snippets.join("\n"));
+        out.push_str("\n\n");
+    }
+}
+
+async fn append_personal_topic(out: &mut String, topic_dir: &Path, topic_id: &str) {
+    let Some(children) = sorted_personal_children(topic_dir).await else {
+        return;
+    };
+    let mut snippets = Vec::new();
+    for path in children {
+        if snippets.len() >= PERSONAL_TOPIC_MAX_FILES {
+            break;
+        }
+        let Ok(meta) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        if let Some(snippet) = read_personal_text_prefix(&path, PERSONAL_TOPIC_FILE_MAX_CHARS).await
+        {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            snippets.push(format!("- {name}: {}", one_line(&snippet)));
+        }
+    }
+    if !snippets.is_empty() {
+        out.push_str("Selected topic ");
+        out.push_str(topic_id);
+        out.push_str(":\n");
+        out.push_str(&snippets.join("\n"));
+        out.push_str("\n\n");
+    }
+}
+
+async fn personal_topic_title(topic_dir: &Path, id: &str) -> String {
+    let Some(children) = sorted_personal_children(topic_dir).await else {
+        return prettify_personal_id(id);
+    };
+    for path in children {
+        let Ok(meta) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        if let Some(snippet) = read_personal_text_prefix(&path, PERSONAL_SNIPPET_MAX_CHARS).await {
+            if let Some(title) = title_from_personal_text(&snippet) {
+                return title;
+            }
+        }
+    }
+    prettify_personal_id(id)
+}
+
+async fn sorted_personal_children(dir: &Path) -> Option<Vec<PathBuf>> {
+    let mut rd = tokio::fs::read_dir(dir).await.ok()?;
+    let mut out = Vec::new();
+    while let Ok(Some(entry)) = rd.next_entry().await {
+        out.push(entry.path());
+    }
+    out.sort_by_key(|p| {
+        p.file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+    Some(out)
+}
+
+async fn read_personal_text_prefix(path: &Path, max_chars: usize) -> Option<String> {
+    let file = tokio::fs::File::open(path).await.ok()?;
+    let mut limited = file.take(PERSONAL_READ_MAX_BYTES);
+    let mut bytes = Vec::new();
+    limited.read_to_end(&mut bytes).await.ok()?;
+    let text: String = String::from_utf8_lossy(&bytes).chars().take(max_chars).collect();
+    let text = text.trim();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text.to_string())
+    }
+}
+
+fn title_from_personal_text(text: &str) -> Option<String> {
+    for line in text.lines().take(12) {
+        let line = line.trim();
+        if line.is_empty() || line == "---" {
+            continue;
+        }
+        let lower = line.to_ascii_lowercase();
+        let candidate = if lower.starts_with("title:") {
+            line.split_once(':').map(|(_, rest)| rest.trim()).unwrap_or(line)
+        } else if line.starts_with('#') {
+            line.trim_start_matches('#').trim()
+        } else {
+            line
+        };
+        let title = truncate_chars(candidate.trim_matches('"').trim_matches('\''), 96);
+        if !title.is_empty() {
+            return Some(title);
+        }
+    }
+    None
+}
+
+fn prettify_personal_id(id: &str) -> String {
+    let words: Vec<String> = id
+        .split(['-', '_'])
+        .filter(|w| !w.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut out = first.to_uppercase().collect::<String>();
+                    out.push_str(chars.as_str());
+                    out
+                }
+                None => String::new(),
+            }
+        })
+        .collect();
+    if words.is_empty() {
+        id.to_string()
+    } else {
+        words.join(" ")
+    }
+}
+
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
+}
+
+fn append_prompt_context(slot: &mut Option<String>, addition: String) {
+    match slot {
+        Some(existing) if !existing.trim().is_empty() => {
+            existing.push_str("\n\n");
+            existing.push_str(&addition);
+        }
+        _ => *slot = Some(addition),
+    }
 }
 
 // ── E2-S2 pre-middleware helpers ──────────────────────────────────────────────
@@ -470,6 +1101,12 @@ fn provider_can_downgrade(provider_id: &str) -> bool {
 /// :3762 anthropic-compat proxy and mirrored by `useChat.ts` in the app.
 fn is_protected_namespace(namespace: Option<&str>) -> bool {
     cascade_core::sensitivity::is_protected_namespace(namespace)
+}
+
+fn namespace_requires_trusted(namespace: Option<&str>) -> bool {
+    namespace
+        .map(|ns| ns.contains("vault") || ns.ends_with(":private") || ns == "private")
+        .unwrap_or(false)
 }
 
 /// Neutralise content-capturing / GP-touching middleware for protected
@@ -1228,18 +1865,20 @@ mod tests {
         assert!(!is_protected_namespace(None));
     }
 
-    /// The GP-first preference is consulted only for unprotected namespaces
-    /// with no explicit provider — private chat must never be STEERED to the
-    /// pool, and an explicit provider choice always wins as before.
+    /// The GP-first preference is consulted when no explicit provider is set
+    /// and the namespace does not require trusted-only routing. Plain personal
+    /// chat may use the fleet; vault/private chat must not be steered there.
     #[test]
     fn gp_preference_gated_by_namespace_and_explicit_provider() {
         // Default path: no provider, unprotected namespace → GP may be preferred.
         assert!(gp_preference_allowed(None, None));
         assert!(gp_preference_allowed(None, Some("projects:cascade")));
         assert!(gp_preference_allowed(None, Some("meta")));
+        assert!(gp_preference_allowed(None, Some("personal")));
+        assert!(gp_preference_allowed(None, Some("personal:topic:road-trip")));
 
-        // Protected namespaces: never steered to the pool.
-        for ns in ["personal", "personal:private", "private", "Personal:Private"] {
+        // Trusted-only namespaces: never steered to the pool.
+        for ns in ["personal:private", "private", "vault"] {
             assert!(!gp_preference_allowed(None, Some(ns)), "{ns}: must skip GP");
         }
 
