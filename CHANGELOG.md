@@ -6,6 +6,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-07-08
+
+The chat + accounts release: Cascade.app Personal chat works end-to-end, one
+source of truth for fleet quota, and Phase C failover foundations.
+
+### Added
+- **In-app chat is live** — the daemon now spawns the `:9761` dashboard/chat
+  server (`POST /api/chat`) that was never started before (the cause of the
+  app's "Load failed" / "Disconnected"). Personal chat streams real replies.
+- **3 read-only chat modes** (Personal / Cascade Setup / Project Questions)
+  with strict per-mode system prompts: none edit code ("use Claude Code in the
+  proper project directory"), and they say "I don't know" over guessing.
+- **`GET /api/topics`** + a "view all topics" selector — lists the user's
+  threads from `~/Downloads/.claude/threads` (shared personal workspace).
+- **Personal-context loading** — Personal chat reads `~/Downloads/.claude`
+  (memory + the focused thread) so it knows the user's topics.
+- **Provider fallback chain** for chat — GF→GP→Codex→A2→A1→OC-Go: on a provider
+  error it advances to the next available instead of failing.
+- **Phase C session-failover foundations** (flag-gated `CASCADE_SESSION_FAILOVER`,
+  off by default): session-copy, continuity handoff, backstop; `:3763` proxy is
+  a documented deferred skeleton.
+
+### Changed
+- **quota.json is now a single source of truth** written solely by the daemon
+  (atomic, on the poll interval) with a per-account `authenticated` field.
+- Personal chat may use the fleet (Gemini/GPT) per user preference; only an
+  explicit `vault`/`:private` namespace stays trusted-only (Anthropic/local).
+- Chat GP-pool model → `gemini-flash-latest` (the pinned `gemini-2.0-flash`
+  path 503'd).
+
+### Fixed
+- **App accounts display**: ×100 utilization bug (percentages now correct),
+  false "Disconnected" (status derives from data freshness), and un-authed
+  accounts are hidden with a "Re-auth" row.
+
+### Ops
+- Daemon binaries must be codesigned after a swap (unsigned → macOS
+  `OS_REASON_CODESIGNING` kill); documented in the deploy recipe.
+
+
 ## [1.14.0] - 2026-07-07
 
 Hardening release: richer rate-limit handling + dead-code cleanup. (Phase C
