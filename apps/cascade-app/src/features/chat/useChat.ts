@@ -23,6 +23,13 @@
  *   so a GP outage transparently lands on the next-best Claude account/tier.
  *   SSE event types: served_by | token | tool_result | error | data [DONE].
  *
+ * System prompts: every request carries a strict, per-namespace system
+ * prompt (see buildSystemPrompt) enforcing read-only Q&A/planning behavior
+ * and a verbatim refusal for any coding/dev request. Sent as the top-level
+ * `system` field on the GP proxy (Anthropic Messages API shape) and as a
+ * leading `role: "system"` message plus an `X-Cascade-Namespace` header on
+ * the daemon fallback.
+ *
  * Inputs: sessionId string, optional namespace string, optional selectedProvider string override.
  * Outputs: { messages, isStreaming, error, servedBy, sendMessage, clearMessages }
  * SPORT: E-P9-03 in-app chat — useChat
@@ -76,6 +83,57 @@ export function isProtectedNamespace(namespace?: string): boolean {
  * a protected namespace is active — the deliberate-choice contract still
  * lets the pin through, but the UI must not stay silent about it.
  */
+// ── System prompts (per scope/namespace) ──────────────────────────────────────
+
+/**
+ * Refusal contract shared by every mode: this chat is a read-only Q&A /
+ * planning surface, never a coding harness. Verbatim refusal text is a hard
+ * requirement so the UI/tests can match it exactly.
+ */
+const DEV_REFUSAL =
+  "This isn't a coding harness — use Claude Code inside the proper project directory."
+
+const COMMON_RULES = [
+  'You are a read-only question-answering and planning assistant. You never write, edit, generate, or apply code, and you never execute commands.',
+  `If the user asks you to write or edit code, or perform any development/coding task, refuse with exactly this sentence and nothing else: "${DEV_REFUSAL}"`,
+  "If you do not know or cannot verify a fact, say so plainly — never guess or fabricate an answer.",
+].join(' ')
+
+/**
+ * Build the strict system prompt for a given chat namespace. Mirrors the
+ * namespace scheme in ChatPage.tsx: `personal` / `personal:private` (with
+ * optional `personal:topic:<id>` topic focus), `meta` (Cascade), and
+ * `projects:<id>`.
+ */
+export function buildSystemPrompt(namespace?: string): string {
+  const ns = (namespace ?? '').trim().toLowerCase()
+
+  if (ns === 'meta') {
+    return [
+      'You are the Cascade self-help assistant.',
+      'Scope: you may only answer questions about the Cascade app itself — its features, settings, accounts, providers, and status.',
+      'Never answer questions unrelated to Cascade.',
+      COMMON_RULES,
+    ].join(' ')
+  }
+
+  if (ns.startsWith('projects:')) {
+    return [
+      'You are the Cascade Projects assistant for the currently selected project.',
+      'Scope: you may only answer high-level, read-only questions — what framework/stack is used, how many files or which directories exist, what tools/libraries the project uses, and lightweight planning questions.',
+      'Never answer or speculate about anything requiring you to write or modify project code.',
+      COMMON_RULES,
+    ].join(' ')
+  }
+
+  // Default: personal / personal:private / personal:topic:<id> / unset.
+  return [
+    'You are the Cascade Personal assistant, scoped to the user\'s personal thread and local vault.',
+    'Scope: personal-life topics only — never answer questions about unrelated codebases or general software development.',
+    COMMON_RULES,
+  ].join(' ')
+}
+
 export function isProviderTrustedForSensitive(providerId?: string | null): boolean {
   if (!providerId) return false
   const lower = providerId.trim().toLowerCase()
@@ -192,6 +250,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
 
       let accumulated = ''
       let resolvedProvider: string | null = null
+      const systemPrompt = buildSystemPrompt(namespace)
 
       // The user's explicit provider selection (ProviderSelector, "Auto" = null)
       // always wins — skip the GP fast-path entirely so the request goes
@@ -217,6 +276,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
               body: JSON.stringify({
                 model: DEFAULT_CHAT_MODEL,
                 max_tokens: 4096,
+                system: systemPrompt,
                 messages: contextMsgs,
               }),
               signal: controller.signal,
@@ -252,11 +312,20 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
 
         // ── Fallback: cascade daemon SSE at port 9761 (Conductor-routed) ─────
         if (!gpSuccess) {
+          // Prepend the strict per-scope system prompt as a `system`-role
+          // message (ChatRequest.messages maps role "system" -> MessageRole::
+          // System server-side — see chat_handlers.rs). Only affects the
+          // wire payload, never the persisted/displayed message history.
+          const daemonMessages = [{ role: 'system', content: systemPrompt }, ...contextMsgs]
+
           const res = await fetch(`${DAEMON_BASE_URL}/api/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(namespace ? { 'X-Cascade-Namespace': namespace } : {}),
+            },
             body: JSON.stringify({
-              messages: contextMsgs,
+              messages: daemonMessages,
               session_id: sessionId,
               ...(namespace ? { namespace } : {}),
               ...(provider ? { provider } : {}),

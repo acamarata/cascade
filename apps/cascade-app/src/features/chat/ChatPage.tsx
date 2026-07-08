@@ -42,6 +42,7 @@
 import { useRef, useState, useId, useEffect } from 'react'
 import { MessageSquare, RotateCcw, Lock } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChat } from './useChat'
@@ -49,7 +50,8 @@ import { loadPersonalChatSync } from './useChatHistory'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ProviderSelector } from './ProviderSelector'
-import { useChatScope } from '../../store'
+import { TopicSelector } from './TopicSelector'
+import { useChatScope, useAppStore } from '../../store'
 import type { ChatScope } from '../../store/chatScope.slice'
 
 // ── Session id helpers ────────────────────────────────────────────────────────
@@ -81,6 +83,15 @@ export function ChatPage() {
   const headingId = useId()
   const [searchParams, setSearchParams] = useSearchParams()
   const { chatScope, selectedProjectId, setScope } = useChatScope()
+
+  // Personal-scope topic focus (chatScope store slice) — surfaced via
+  // TopicSelector's "View all topics" control, Personal tab only.
+  const { selectedTopicId, setSelectedTopic } = useAppStore(
+    useShallow((s) => ({
+      selectedTopicId: s.selectedTopicId,
+      setSelectedTopic: s.setSelectedTopic,
+    })),
+  )
 
   // Init scope from URL param on first render. All three scopes are real,
   // visible modes — "cascade" is no longer settings-only.
@@ -120,7 +131,10 @@ export function ChatPage() {
   // daemon only with real consent (memory.personalChatSync — see
   // useChatHistory's firewall handling); private mode additionally skips
   // server-side persistence entirely by using a namespace the daemon never
-  // long-term stores.
+  // long-term stores. A TopicSelector focus (Personal, non-private only)
+  // narrows the namespace further to `personal:topic:<id>` — still caught
+  // by isProtectedNamespace's `personal:` prefix check, so it never loses
+  // the GP-pool skip / privacy guarantees of plain "personal".
   const namespace =
     chatScope === 'projects'
       ? `projects:${selectedProjectId ?? 'default'}`
@@ -128,7 +142,9 @@ export function ChatPage() {
         ? 'meta'
         : isPrivate
           ? 'personal:private'
-          : 'personal'
+          : selectedTopicId
+            ? `personal:topic:${selectedTopicId}`
+            : 'personal'
 
   const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } =
     useChat(sessionId, namespace)
@@ -175,6 +191,7 @@ export function ChatPage() {
     setScope(scope)
     setSearchParams({ scope }, { replace: true })
     setIsPrivate(false) // leaving/entering a scope always resets private mode
+    setSelectedTopic(null) // topic focus is Personal-only; reset on any scope change
     handleNewChat()
   }
 
@@ -266,24 +283,27 @@ export function ChatPage() {
           ))}
         </div>
 
-        {/* Private/incognito sub-mode — only available inside Personal scope */}
+        {/* Personal-only controls: topic focus + private/incognito sub-mode */}
         {chatScope === 'personal' && (
-          <button
-            type="button"
-            onClick={handleTogglePrivate}
-            aria-pressed={isPrivate}
-            aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
-            title="Private: not saved to chat history or Cascade memory. Messages are still processed by the selected model provider."
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
-              isPrivate
-                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                : 'text-muted-foreground border-transparent hover:bg-accent/50 hover:text-foreground',
-            )}
-          >
-            <Lock className="h-3 w-3" aria-hidden="true" />
-            Private
-          </button>
+          <div className="flex items-center gap-2">
+            <TopicSelector selectedTopicId={selectedTopicId} onSelect={setSelectedTopic} />
+            <button
+              type="button"
+              onClick={handleTogglePrivate}
+              aria-pressed={isPrivate}
+              aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
+              title="Private: not saved to chat history or Cascade memory. Messages are still processed by the selected model provider."
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
+                isPrivate
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                  : 'text-muted-foreground border-transparent hover:bg-accent/50 hover:text-foreground',
+              )}
+            >
+              <Lock className="h-3 w-3" aria-hidden="true" />
+              Private
+            </button>
+          </div>
         )}
       </div>
 
