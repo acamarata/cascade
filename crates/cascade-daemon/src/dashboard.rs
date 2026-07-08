@@ -590,6 +590,19 @@ impl Dashboard {
         })
     }
 
+    /// Inject the fleet provider registry so `/api/chat` can route to
+    /// providers. Without this the chat handler has no providers and every
+    /// chat request fails — this is why the app's Personal chat showed
+    /// "Load failed" once the server was finally spawned.
+    #[must_use]
+    pub fn with_provider_registry(
+        mut self,
+        registry: Arc<cascade_providers::ProviderRegistry>,
+    ) -> Self {
+        self.state.provider_registry = Some(registry);
+        self
+    }
+
     /// Return the bind address this server will listen on.
     pub fn bind_addr(&self) -> SocketAddr {
         self.bind_addr

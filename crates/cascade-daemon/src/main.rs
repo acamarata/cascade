@@ -438,6 +438,34 @@ async fn main() {
         }
     });
 
+    // ── Dashboard / chat HTTP server (127.0.0.1:9761) ────────────────────────
+    // Serves the app's `/api/chat` (+ management API). This was NEVER spawned —
+    // only the :3761/:3762 proxies were — so Cascade.app chat showed "Load
+    // failed" / "Disconnected". Referenced via the lib crate path
+    // (`cascade_daemon::dashboard`) because the binary does not re-compile the
+    // dashboard module tree; the fleet provider registry is injected so
+    // `/api/chat` can route personal/chat requests to a provider.
+    {
+        use std::net::SocketAddr;
+        let dash_bind: SocketAddr = "127.0.0.1:9761".parse().expect("valid loopback addr");
+        match cascade_daemon::dashboard::Dashboard::new(
+            &config_dir,
+            dash_bind,
+            shutdown_token.clone(),
+        ) {
+            Ok(dashboard) => {
+                let dashboard = dashboard.with_provider_registry(provider_registry.clone());
+                tokio::spawn(async move {
+                    if let Err(e) = dashboard.run().await {
+                        error!(%e, "dashboard/chat server (:9761) exited with error");
+                    }
+                });
+                info!("dashboard/chat server spawned on 127.0.0.1:9761");
+            }
+            Err(e) => error!(%e, "failed to construct dashboard/chat server on :9761"),
+        }
+    }
+
     tokio::select! {
         result = supervisor::run(config_dir.clone(), shutdown_token.clone(), provider_registry.clone()) => {
             if let Err(e) = result {
