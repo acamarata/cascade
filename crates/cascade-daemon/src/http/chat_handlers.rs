@@ -141,10 +141,22 @@ pub async fn chat_handler(
             } else {
                 preferred.map(str::to_string)
             };
+        // User preference (project_cascade_chat_design, 2026-07): personal chat
+        // MAY use the fleet — Gemini/GPT are good at personal chat, and the user
+        // has no local model (no RAM/disk). Only an EXPLICIT vault / `:private`
+        // namespace stays trusted-only (Anthropic/local); plain `personal` and
+        // `personal:topic:*` route by the normal fleet priority (GF→GP→Codex→
+        // A2→A1→OC-Go). `protected` still governs middleware neutralisation
+        // (below) so no content-capturing side channels run for personal chat.
+        let requires_trusted = body
+            .namespace
+            .as_deref()
+            .map(|ns| ns.contains("vault") || ns.ends_with(":private") || ns == "private")
+            .unwrap_or(false);
         let trust_filter: fn(&str) -> bool =
             cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive;
         let trusted_only: Option<&(dyn Fn(&str) -> bool + Send + Sync)> =
-            if protected { Some(&trust_filter) } else { None };
+            if requires_trusted { Some(&trust_filter) } else { None };
         let picked = registry
             .pick_for_chat_filtered(effective_preferred.as_deref(), trusted_only)
             .await;
@@ -155,7 +167,7 @@ pub async fn chat_handler(
                 // Fail CLOSED for protected namespaces: with only untrusted
                 // (Google/OpenAI-family) providers registered, refusing is
                 // the promise — never silently fall back to the pool.
-                let msg = if protected {
+                let msg = if requires_trusted {
                     "private chat requires a trusted provider (Claude account or local \
                      model) — refusing to send this conversation to an external pool. \
                      Configure an Anthropic provider or start a local model."
@@ -438,7 +450,7 @@ fn downgraded_model_for(
 ) -> Option<String> {
     use cascade_core::middleware::RequestComplexity::Trivial;
     match (provider_id, c) {
-        ("gemini" | "gp-pool", Trivial) => Some("gemini-2.0-flash-lite".into()),
+        ("gemini" | "gp-pool", Trivial) => Some("gemini-flash-lite-latest".into()),
         _ => None,
     }
 }
@@ -497,7 +509,7 @@ fn default_model_for(provider_id: &str) -> String {
     match provider_id {
         // "gp-pool" is the reserved pool-backed adapter id (GP_CHAT_PROVIDER_ID);
         // the :3761 pool serves free Flash only.
-        "gemini" | "gp-pool" => "gemini-2.0-flash".into(),
+        "gemini" | "gp-pool" => "gemini-flash-latest".into(),
         "anthropic" => "claude-3-5-haiku-20241022".into(),
         "openai" => "gpt-4o-mini".into(),
         _ if provider_id.starts_with("local") => "default".into(),
@@ -1166,7 +1178,7 @@ mod tests {
     /// The default model for the reserved pool adapter id must be Flash.
     #[test]
     fn default_model_for_gp_pool_is_flash() {
-        assert_eq!(default_model_for("gp-pool"), "gemini-2.0-flash");
+        assert_eq!(default_model_for("gp-pool"), "gemini-flash-latest");
     }
 
     // ── E2-S2 pre-middleware ──────────────────────────────────────────────────
@@ -1288,11 +1300,11 @@ mod tests {
         use cascade_core::middleware::RequestComplexity::{Complex, Medium, Trivial};
         assert_eq!(
             downgraded_model_for("gp-pool", Trivial).as_deref(),
-            Some("gemini-2.0-flash-lite")
+            Some("gemini-flash-lite-latest")
         );
         assert_eq!(
             downgraded_model_for("gemini", Trivial).as_deref(),
-            Some("gemini-2.0-flash-lite")
+            Some("gemini-flash-lite-latest")
         );
         // Never upgrade, never touch other providers.
         assert_eq!(downgraded_model_for("gp-pool", Medium), None);
