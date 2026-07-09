@@ -6,6 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-07-09
+
+Chat reliability, fleet-first routing, UI polish, and the 2026-07 models audit.
+
+### Changed
+- **Conductor spill order is now fleet-first, A1-last**: codex → gemini →
+  opencode → gfp → A2 → A1. Delegated work exhausts the separate-quota fleet
+  (Codex/Gemini/OpenCode/GFP) before touching A1 (the interactive T0 account).
+- **Cascade.app UI polish** — Fleet/Accounts/Chat visual redesign (quota bars,
+  account badges, cards, chat input/messages, status badges).
+- **models/ reference refreshed** (2026-07 audit): added github-copilot, devin,
+  cursor-cli, zai-coding-plan; prefers gemini-flash-latest aliases (fixed IDs
+  marked legacy); Z.ai flagship → GLM-5.2; use-case picks updated.
+
+### Fixed
+- **Chat never hangs** — per-chunk stall-guard (20s) errors instead of hanging
+  when a provider stream opens then stalls.
+- **Chat survives streaming congestion** — the Gemini adapter falls back to
+  non-streaming `generateContent` when Google's `streamGenerateContent` 503s.
+
+
 ## [1.15.0] - 2026-07-08
 
 The chat + accounts release: Cascade.app Personal chat works end-to-end, one
