@@ -9,7 +9,7 @@ Cascade accounts: **A1** (primary, `~/.claude`), **A2** (second Max seat, `~/.cl
 ## Claude Opus 4.8 — `claude-opus-4-8`
 
 - **Status:** GA, current top Opus-tier model. [Certain]
-- **Best for:** Complex agentic coding and enterprise work; long-horizon autonomous agentic execution, knowledge work, memory tasks. Anthropic's own guidance: "if unsure, start with Opus 4.8."
+- **Best for:** Hardest coding, complex agentic coding and enterprise work; long-horizon autonomous agentic execution, knowledge work, memory tasks. Anthropic's own guidance: "if unsure, start with Opus 4.8."
 - **Context window:** 1M tokens (default). Max output: 128K tokens (300K on Batch API with `output-300k-2026-03-24` beta).
 - **Thinking:** Extended thinking = No (removed); Adaptive thinking = Yes. `effort` defaults to `high` on all surfaces (API, Claude Code, claude.ai).
 - **API price:** $5/MTok input, $25/MTok output. [Certain]
@@ -18,7 +18,7 @@ Cascade accounts: **A1** (primary, `~/.claude`), **A2** (second Max seat, `~/.cl
 ## Claude Sonnet 5 — `claude-sonnet-5`
 
 - **Status:** GA, confirmed current. [Certain]
-- **Best for:** "Best combination of speed and intelligence" — near-Opus quality on coding/agentic work at Sonnet cost and latency. Default recommended model for most day-to-day coding. This is Cascade's `DEFAULT_HARNESS_MODEL`.
+- **Best for:** "Best combination of speed and intelligence" — near-Opus quality on coding/agentic work at Sonnet cost and latency. Default recommended model for most day-to-day coding and default bulk execution. This is Cascade's `DEFAULT_HARNESS_MODEL`.
 - **Context window:** 1M tokens. Max output: 128K tokens (300K Batch API beta).
 - **Thinking:** Extended thinking = No; Adaptive thinking = Yes (on by default when `thinking` omitted). `effort` supports full `low`/`medium`/`high`/`xhigh`/`max` range (first Sonnet-tier model with `xhigh`); defaults to `high` on API and Claude Code.
 - **API price:** $3/MTok input, $15/MTok output — **introductory pricing $2/$10 per MTok through 2026-08-31**. [Certain]
@@ -27,7 +27,7 @@ Cascade accounts: **A1** (primary, `~/.claude`), **A2** (second Max seat, `~/.cl
 ## Claude Haiku 4.5 — `claude-haiku-4-5` (dated: `claude-haiku-4-5-20251001`)
 
 - **Status:** GA, current. [Certain]
-- **Best for:** "Fastest model with near-frontier intelligence" — quick/high-volume tasks, subagent/triage work, cost-sensitive routing.
+- **Best for:** Cheap grunt work, "Fastest model with near-frontier intelligence" — quick/high-volume tasks, subagent/triage work, cost-sensitive routing.
 - **Context window:** 200K tokens. Max output: 64K tokens.
 - **Thinking:** Extended thinking = Yes (only current model still on the legacy `budget_tokens` extended-thinking path); Adaptive thinking = No.
 - **API price:** $1/MTok input, $5/MTok output. [Certain]
@@ -37,7 +37,7 @@ Cascade accounts: **A1** (primary, `~/.claude`), **A2** (second Max seat, `~/.cl
 
 - **Status:** GA as of 2026-06-09, briefly pulled and **redeployed 2026-07-01** with an improved safety classifier (blocks the reported jailbreak technique in "over 99% of cases," per Anthropic's own redeploy announcement). Confirmed current and generally available on Claude API, Claude Platform on AWS, Amazon Bedrock, Google Cloud, Microsoft Foundry, Claude.ai, Claude Code, and Claude Cowork. [Certain]
 - `claude-mythos-5` shares identical capabilities/pricing/context but is Project Glasswing-only (invitation, no self-serve), lacks the safety classifiers Fable 5 carries, and succeeds the invitation-only Claude Mythos Preview.
-- **Best for:** Anthropic's own description — "next-generation intelligence for long-running agents"; most capable widely-released model, for the most demanding reasoning and long-horizon autonomous agentic work (overnight coding runs, deep multi-step research, enterprise-scale deliverables). Not intended for research-biology or most cybersecurity-content workloads (safety classifiers specifically target that).
+- **Best for:** Highest-capability reasoning, Anthropic's own description — "next-generation intelligence for long-running agents"; most capable widely-released model, for the most demanding reasoning and long-horizon autonomous agentic work (overnight coding runs, deep multi-step research, enterprise-scale deliverables). Not intended for research-biology or most cybersecurity-content workloads (safety classifiers specifically target that).
 - **Context window:** 1M tokens (default, also the max). Max output: 128K tokens. Uses the same tokenizer as Opus 4.8/4.7 — token counts roughly unchanged vs Opus 4.7/4.8, but ~30% higher than pre-4.7-tokenizer models for the same text.
 - **Thinking:** Extended thinking = No; Adaptive thinking = Yes, **always on** (cannot be disabled — `thinking: {type:"disabled"}` returns 400; omit the param instead). Raw chain-of-thought is never returned regardless of `display` setting.
 - **API price:** $10/MTok input, $50/MTok output — **the most expensive model in the catalog**, exactly 2x Opus 4.8's per-token rate. [Certain]

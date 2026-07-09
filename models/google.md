@@ -40,13 +40,15 @@ The lineup is **not** "3.5 Pro vs 3.1 Pro" as parallel current options — it's 
 
 | Model | Free tier? | Paid price (in/out per 1M) | Status |
 |---|---|---|---|
+| **gemini-flash-latest** | **Yes** | $1.50 / $9.00 | Canonical auto-tracking alias — prefer this |
+| **gemini-flash-lite-latest** | **Yes** | $0.25 / $1.50 | Canonical auto-tracking alias — prefer this |
 | **Gemini 3.5 Flash** | **Yes** | $1.50 / $9.00 | Stable, GA |
 | **Gemini 3.1 Flash-Lite** | **Yes** | $0.25 / $1.50 | Stable |
 | **Gemini 3 Flash** (preview) | Yes | $0.50 / $3.00 | Preview |
 | **Gemini 2.5 Pro** | Yes (still) | $1.25-2.50 / $10-15 | Stable |
-| **Gemini 2.5 Flash** | Yes | $0.30 / $2.50 | Stable |
+| **Gemini 2.5 Flash** | Yes | $0.30 / $2.50 | Legacy / pinned — prefer gemini-flash-latest |
 | **Gemini 2.5 Flash-Lite** | Yes | $0.10 / $0.40 | Stable |
-| **Gemini 2.0 Flash** | Free tier | $0.10 / $0.40 | Older gen but STILL SERVING (verified live 2026-07-07: generateContent returns 429 quota, not 404). Prefer `gemini-flash-latest` for new routing; no urgent removal needed |
+| **Gemini 2.0 Flash** | Free tier | $0.10 / $0.40 | Legacy / pinned — prefer gemini-flash-latest |
 | **Gemini 3.1 Pro** | **No** | $2-4 / $12-18 | Preview, paid-only |
 | **Gemini 3.5 Pro** | No (not GA) | unpublished | Not yet released |
 

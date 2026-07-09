@@ -116,6 +116,27 @@ providers:
         context_tokens: 400000
         availability: ga
         notes: "Cheapest selectable Codex model."
+      - id: gpt-5.3-codex-spark
+        tier: T2-preview
+        best_for: ["Pro research-preview fast coding"]
+        quota_cost_weight: "Pro-only research preview"
+        context_tokens: 400000
+        availability: preview
+        notes: "Experimental fast-iteration coding variant."
+      - id: gpt-5.3-codex
+        tier: T2-legacy
+        best_for: ["legacy coding"]
+        quota_cost_weight: "deprecated"
+        context_tokens: 400000
+        availability: deprecated
+        notes: "Deprecated for ChatGPT sign-in."
+      - id: gpt-5.2
+        tier: T2-legacy
+        best_for: ["legacy coding"]
+        quota_cost_weight: "deprecated"
+        context_tokens: 200000
+        availability: deprecated
+        notes: "Deprecated for ChatGPT sign-in."
       - id: gpt-5.6-sol
         tier: T1-announced
         best_for: ["hardest problems", "complex coding", "security research"]
@@ -215,16 +236,34 @@ providers:
           tier 2026-04-01. Possible explanation: the April tightening applied
           to 3.x Pro specifically, grandfathering 2.5 Pro. Unresolved — verify
           live before depending on this being free.
+      - id: gemini-flash-latest
+        tier: T3
+        best_for: ["GFP backbone: always-on grunt work", "post-prompting", "classify/triage/summarize", "cheap high-volume bulk"]
+        quota_cost_weight: "FREE in free tier; paid $1.50/MTok in, $9.00/MTok out"
+        context_tokens: 1000000
+        availability: ga
+        notes: "Canonical auto-tracking alias for Google's current Flash model. Immune to retirements."
+      - id: gemini-flash-lite-latest
+        tier: T3-cheap
+        best_for: ["cheapest possible grunt work", "highest RPM within free tier"]
+        quota_cost_weight: "free tier eligible; paid $0.25/MTok in, $1.50/MTok out"
+        context_tokens: 1000000
+        availability: ga
+        notes: "Canonical auto-tracking alias for Google's current Flash-Lite model."
       - id: gemini-2.0-flash
-        tier: dead
-        best_for: []
-        quota_cost_weight: "N/A — shut down"
-        context_tokens: null
-        availability: live
-        notes: >
-          DEPRECATED/SHUT DOWN 2026-06-01. If any GP proxy config still
-          targets this model ID, that is a live outage, not a future risk —
-          audit GP proxy routing tables immediately.
+        tier: T3-legacy
+        best_for: ["legacy fallback / pinned"]
+        quota_cost_weight: "free tier eligible; legacy / pinned — prefer gemini-flash-latest"
+        context_tokens: 1000000
+        availability: ga
+        notes: "Legacy / pinned ID — still serving but deprecated. Prefer gemini-flash-latest."
+      - id: gemini-2.5-flash
+        tier: T3-legacy
+        best_for: ["legacy fallback / pinned"]
+        quota_cost_weight: "free tier eligible; legacy / pinned — prefer gemini-flash-latest"
+        context_tokens: 1000000
+        availability: ga
+        notes: "Legacy / pinned ID — still serving but deprecated. Prefer gemini-flash-latest."
 
   - name: opencode
     subscription: "OpenCode Go ($10/mo) + OpenCode Zen (pay-as-you-go) + z.ai GLM Coding Plan (alt path)"
@@ -238,11 +277,12 @@ providers:
         context_tokens: 1000000
         availability: ga
         notes: >
-          Cascade's MODEL_GLM constant. SWE-bench Pro 62.1 (beats GPT-5.5's
-          58.6), FrontierSWE 74.4% (near Opus 4.8's 75.1%), Terminal-Bench 2.1
-          jumped 62.0->81.0 from GLM-5.1. Available via OpenCode Go, OpenCode
-          Zen, z.ai direct (GLM Coding Plan or metered API), and third-party
-          routers (OpenRouter/Together/Fireworks).
+          Cascade's MODEL_GLM constant. Flagship reasoning model. Note that the
+          repo's zai.rs default glm-4.6 is stale, to be bumped in code separately.
+          SWE-bench Pro 62.1 (beats GPT-5.5's 58.6), FrontierSWE 74.4% (near
+          Opus 4.8's 75.1%), Terminal-Bench 2.1 jumped 62.0->81.0 from GLM-5.1.
+          Available via OpenCode Go, OpenCode Zen, z.ai direct (GLM Coding Plan
+          or metered API), and third-party routers (OpenRouter/Together/Fireworks).
       - id: deepseek-v4-pro
         tier: T2-value
         best_for: ["best raw coding/reasoning $/token value", "general coding, algorithm work, long-context refactors"]
@@ -295,3 +335,113 @@ providers:
         context_tokens: 262000
         availability: ga
         notes: "48 tok/s throughput. Requires z.ai GLM Coding Plan or z.ai API, not accessible via OpenCode Go."
+
+  - name: github-copilot
+    subscription: "GitHub Copilot (Enterprise/Individual)"
+    cascade_accounts: ["Copilot"]
+    dispatch: "Copilot API / CLI"
+    models:
+      - id: gpt-5.5
+        tier: T2
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+        notes: "Available via Copilot integration."
+      - id: gpt-5.3-codex
+        tier: T2
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 400000
+        availability: ga
+        notes: "Legacy Codex variant."
+      - id: gpt-5.4
+        tier: T2
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: gpt-5.4-mini
+        tier: T3
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 400000
+        availability: ga
+      - id: gpt-5.4-nano
+        tier: T3
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 100000
+        availability: ga
+      - id: claude-fable-5
+        tier: T1-plus
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: claude-opus-4-8
+        tier: T1
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: claude-sonnet-5
+        tier: T2
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: claude-haiku-4.5
+        tier: T3
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 200000
+        availability: ga
+      - id: gemini-3.5-flash
+        tier: T3
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: gemini-3.1-pro
+        tier: T2
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+      - id: kimi-k2.7-code
+        tier: T2-efficient
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1000000
+        availability: ga
+        notes: "Note: Grok Code Fast 1 retired in Copilot 2026-05-15."
+
+  - name: devin
+    subscription: "Devin (ex-Windsurf)"
+    cascade_accounts: ["Devin"]
+    dispatch: "Desktop/CLI/Cloud/API"
+    models:
+      - id: devin-agent
+        tier: T1
+        best_for: ["multi-agent desktop+cloud"]
+        context_tokens: null
+        availability: ga
+        notes: "Full agentic desktop and cloud environment."
+
+  - name: cursor-cli
+    subscription: "Cursor Pro/Business"
+    cascade_accounts: ["Cursor"]
+    dispatch: "official CLI + cloud agents"
+    models:
+      - id: cursor-agent
+        tier: T2
+        best_for: ["IDE/agent UX"]
+        context_tokens: null
+        availability: ga
+
+  - name: zai-coding-plan
+    subscription: "z.ai GLM Coding Plan (distinct endpoint)"
+    cascade_accounts: ["zai"]
+    dispatch: "z.ai API / direct endpoint"
+    models:
+      - id: glm-5.2
+        tier: T2
+        best_for: ["flagship coding/long-context"]
+        context_tokens: 1000000
+        availability: ga
+        notes: "Flagship reasoning and long-context model."
+      - id: glm-5-turbo
+        tier: T2-latency
+        best_for: ["latency lane"]
+        context_tokens: 262000
+        availability: ga
+        notes: "Speed-optimized low-latency model."

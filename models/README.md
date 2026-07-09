@@ -24,7 +24,10 @@ Canonical, human-readable reference for "which subscription has which model" and
 | Gemini 3.5 Flash | Google | GFP free pool (28 keys) + agy paid | T3 --GFP (backbone) | Always-on grunt work, post-prompting, classify/triage/summarize | **FREE** in free tier; paid $1.50in/$9.00out | unpublished | **GA** |
 | Gemini 3.1 Flash-Lite | Google | GFP free pool | T3-cheap fallback | Cheapest possible grunt work | FREE; paid $0.25in/$1.50out | unpublished | **GA** |
 | Gemini 2.5 Pro | Google | GFP free pool (contested) | Legacy fallback | Still free-tier eligible per official page [Guessing — conflicting evidence] | FREE (disputed by 3rd parties) | unpublished | **GA** |
-| Gemini 2.0 Flash | Google | live | gfp-pool | cheap grunt work | free | 1M | Older gen but STILL SERVING (verified 2026-07-07: 429 quota, not 404); prefer `gemini-flash-latest` for new routing |
+| gemini-flash-latest | Google | GFP free pool (28 keys) + agy paid | T3 --GFP (backbone) | Always-on grunt work, post-prompting, classify/triage/summarize | **FREE** in free tier; paid $1.50in/$9.00out | 1M | **GA** (Canonical auto-tracking alias) |
+| gemini-flash-lite-latest | Google | GFP free pool | T3-cheap fallback | Cheapest possible grunt work | FREE; paid $0.25in/$1.50out | 1M | **GA** (Canonical auto-tracking alias) |
+| Gemini 2.0 Flash | Google | GFP free pool | T3-legacy | Legacy fallback / pinned | FREE; legacy / pinned — prefer gemini-flash-latest | 1M | **GA** (Legacy / pinned) |
+| Gemini 2.5 Flash | Google | GFP free pool | T3-legacy | Legacy fallback / pinned | FREE; legacy / pinned — prefer gemini-flash-latest | 1M | **GA** (Legacy / pinned) |
 | GLM-5.2 | Zhipu/z.ai | OpenCode Go/Zen, z.ai direct | T2 --OpenCode Run | Flagship reasoning, long-horizon agentic coding | ~880 req/5hr in Go pool (priciest slot); MIT open weights | 1M | **GA** |
 | DeepSeek V4 Pro | DeepSeek (via OpenCode) | OpenCode Go/Zen | T2-value | Best raw coding $/token value | ~3,450 req/5hr; ~1/30th frontier API cost | 1M | **GA** |
 | DeepSeek V4 Flash | DeepSeek (via OpenCode) | OpenCode Go/Zen | T3-cheap | Bulk mechanical edits, triage | ~31,650 req/5hr (cheapest, highest volume) | unpublished | **GA** |
@@ -33,8 +36,29 @@ Canonical, human-readable reference for "which subscription has which model" and
 | Kimi K2.7 Code | Moonshot (via OpenCode) | OpenCode Go/Zen | T2-efficient | Token-efficient large-codebase agentic coding | mid-tier volume | unpublished | **GA** |
 | MiMo-V2.5-Pro | Xiaomi (via OpenCode) | OpenCode Go/Zen | T2-efficient | Frontier-adjacent quality, minimal token spend | ~1,290 req/5hr | unpublished | **GA** |
 | GLM-5-Turbo | Zhipu/z.ai | z.ai direct only (NOT in Go roster) | latency-sensitive lane | Fast low-latency agent chains | $1.20in/$4.00out per MTok | 262K | **GA** |
+| GPT-5.5 (Copilot) | GitHub | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Claude Fable 5 (Copilot) | Anthropic | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Claude Opus 4.8 (Copilot) | Anthropic | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Claude Sonnet 5 (Copilot) | Anthropic | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Claude Haiku 4.5 (Copilot) | Anthropic | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 200K | **GA** |
+| Gemini 3.5 Flash (Copilot) | Google | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Gemini 3.1 Pro (Copilot) | Google | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Kimi K2.7 Code (Copilot) | Moonshot | github-copilot | --copilot | GitHub issue/PR/review/CI | Included in Copilot sub | 1M | **GA** |
+| Devin Agent | Devin | devin | --devin | multi-agent desktop+cloud | Included in Devin sub | 1M | **GA** (ex-Windsurf) |
+| Cursor Agent | Cursor | cursor-cli | --cursor | IDE/agent UX | Included in Cursor sub | 1M | **GA** |
+| GLM-5.2 (z.ai) | Zhipu/z.ai | zai-coding-plan | --zai | flagship coding/long-context | Included in z.ai GLM Coding Plan | 1M | **GA** |
+| GLM-5-Turbo (z.ai) | Zhipu/z.ai | zai-coding-plan | --zai | latency lane | Included in z.ai GLM Coding Plan | 262K | **GA** |
 
 Full per-model detail, benchmarks, and source citations: `anthropic.md` · `openai.md` · `google.md` · `opencode.md`. Machine-readable: `models.yaml`.
+
+---
+
+## New Subscriptions (2026-07 Audit)
+
+- **github-copilot**: Supported models include GPT-5.5, GPT-5.3-Codex, GPT-5.4/mini/nano, Claude Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5, Gemini 3.5 Flash, Gemini 3.1 Pro, and Kimi-K2.7-Code. Note that Grok Code Fast 1 was retired in Copilot on 2026-05-15. Best for GitHub issue/PR/review/CI.
+- **devin**: Ex-Windsurf. Available via Desktop/CLI/Cloud/API. Best for multi-agent desktop+cloud.
+- **cursor-cli**: Official CLI + cloud agents. Best for IDE/agent UX.
+- **zai-coding-plan**: Distinct endpoint. Includes GLM-5.2 (flagship coding/long-context) and GLM-5-Turbo (latency lane).
 
 ---
 
@@ -42,13 +66,15 @@ Full per-model detail, benchmarks, and source citations: `anthropic.md` · `open
 
 | Task | Pick | Why |
 |---|---|---|
-| **Coding (default day-to-day)** | Claude Sonnet 5 | Best speed/intelligence combo, cheapest frontier tier, Cascade's `DEFAULT_HARNESS_MODEL` |
+| **Coding (default day-to-day)** | Claude Sonnet 5 / GPT-5.5 | Best speed/intelligence combo, cheapest frontier tier, Cascade's `DEFAULT_HARNESS_MODEL` / primary Codex driver |
+| **Hardest coding / Deep reasoning** | Claude Fable 5 / Opus 4.8 | Highest-capability reasoning and hardest coding synthesis |
+| **GitHub PR / issue / review / CI** | GitHub Copilot | Integrated directly into GitHub workflows and CI |
+| **Multi-agent desktop + cloud** | Devin | Ex-Windsurf; full agentic desktop and cloud environment |
+| **IDE / agent UX** | Cursor | Official CLI + cloud agents for seamless IDE integration |
+| **Cheap long-context** | GLM-5.2 / Kimi K2.7 Code / Qwen3.7 Max | True 1M context with strong long-context retrieval scores and token efficiency |
+| **Fast grunt work / triage** | Gemini flash-latest | Free in free tier, auto-tracking, immune to retirements |
 | **Coding, budget-value alternative** | DeepSeek V4 Pro (OpenCode) | ~1/30th frontier cost, SWE-bench Verified 80.6%, beats Claude on LiveCodeBench |
-| **Cheap grunt work / post-prompting / triage** | **Gemini 3.5 Flash (GFP free pool)** | Free, beats prior-gen Gemini 3.1 Pro on coding benchmarks — see GFP Backbone below |
-| **Deep reasoning / hardest architectural decisions** | Claude Opus 4.8 (or Fable 5 if truly maximal) | Anthropic's own "if unsure, start with Opus 4.8"; Fable 5 for overnight/long-horizon runs at ~2x quota cost |
-| **Long-context (huge codebase / corpus ingestion)** | Qwen3.7 Max or MiniMax M3 (OpenCode), or Gemini 3.5 Pro once GA | True 1M-2M context with strong long-context retrieval scores |
 | **Multimodal / desktop automation** | MiniMax M3 (OpenCode) | Only roster model with native image/video/desktop-control multimodality |
-| **Token-efficient long agentic sessions** | MiMo-V2.5-Pro or Kimi K2.7 Code (OpenCode) | 40-60% fewer tokens/trajectory at near-frontier quality |
 | **Fast low-latency agent chains** | GLM-5-Turbo (z.ai direct) | 48 tok/s, purpose-built for latency — requires z.ai path, not in OpenCode Go |
 | **Bulk mechanical edits at max volume** | DeepSeek V4 Flash or Gemini 3.1 Flash-Lite | Cheapest per-request in their respective pools |
 | **DO NOT ROUTE HERE (not GA)** | GPT-5.6 (Sol/Terra/Luna), Gemini 3.5 Pro | Announced but restricted-preview / not confirmed publicly GA as of 2026-07-06 |
