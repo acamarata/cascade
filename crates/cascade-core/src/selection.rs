@@ -280,20 +280,24 @@ pub fn spill_select<'a, T: ?Sized>(
 /// Ordered list of preferred accounts per provider (lifted from
 /// conductor_router — proven live; preserve semantics exactly).
 ///
-/// The spill order is:
-///   claude2(A2) → claude(A1 spare) → codex → gemini → opencode → gfp
+/// The spill order (user preference 2026-07 — burn the separate-quota FLEET
+/// before the Anthropic accounts; A1 is the interactive T0 session so it is
+/// used LAST):
+///   codex → gemini → opencode → gfp → claude2(A2) → claude(A1) LAST
 ///
-/// A1 is intentionally kept near the front so it remains usable as a worker
-/// spare; the interactive session runs A1 but does not exhaust it.
+/// Rationale: Codex (GPT-5.5), Gemini (Pro/Ultra), OpenCode (GLM-5.2) and the
+/// free GFP pool each have their OWN quota; delegated work should exhaust those
+/// first so A1 (which the interactive session already eats as T0) is preserved
+/// as the final fallback.
 const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
-    ("claude2", Provider::Claude),
-    ("claude", Provider::Claude),
     ("codex-acc1", Provider::Codex),
     ("codex", Provider::Codex),
     ("gemini-agt", Provider::Gemini),
     ("opencode-acc1", Provider::OpenCode),
     ("opencode", Provider::OpenCode),
     ("gfp-pool", Provider::Gfp),
+    ("claude2", Provider::Claude),
+    ("claude", Provider::Claude),
 ];
 
 // ── Core selection API ─────────────────────────────────────────────────────────
@@ -580,41 +584,54 @@ mod tests {
     // ── Every spill branch ────────────────────────────────────────────────────
 
     #[test]
-    fn a2_healthy_selects_a2() {
+    fn t2_healthy_selects_codex_first() {
         let target = select_account(&req(Tier::T2), &full_snapshot(), &GpHealthSnapshot::default())
             .expect("target");
-        assert_eq!(target.account_id, "claude2");
-        assert_eq!(target.provider, Provider::Claude);
-        assert_eq!(target.model, MODEL_CLAUDE_SONNET);
-    }
-
-    #[test]
-    fn a2_capped_spills_to_a1() {
-        let mut snap = full_snapshot();
-        snap.accounts[0] = saturated(snap.accounts[0].clone());
-        let target =
-            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
-        assert_eq!(target.account_id, "claude");
-        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
-    }
-
-    #[test]
-    fn both_claude_capped_spills_to_codex() {
-        let mut snap = full_snapshot();
-        snap.accounts[0] = saturated(snap.accounts[0].clone());
-        snap.accounts[1] = saturated(snap.accounts[1].clone());
-        let target =
-            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
         assert_eq!(target.account_id, "codex-acc1");
         assert_eq!(target.provider, Provider::Codex);
         assert_eq!(target.model, MODEL_GPT);
     }
 
     #[test]
+    fn fleet_and_a2_capped_spills_to_a1_last() {
+        let mut snap = full_snapshot();
+        snap.accounts[0] = saturated(snap.accounts[0].clone()); // claude2(A2)
+        snap.accounts[2].status = "needs_reauth".into(); // codex-acc1
+        snap.accounts[3].status = "needs_reauth".into(); // gemini-agt
+        snap.accounts[4].status = "needs_reauth".into(); // opencode-acc1
+        snap.accounts[5].status = "error".into(); // gfp-pool
+        let target =
+            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
+        assert_eq!(target.account_id, "claude");
+        assert_eq!(target.provider, Provider::Claude);
+        assert_eq!(target.model, MODEL_CLAUDE_SONNET);
+        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
+        assert!(target.reason.contains("codex-acc1"), "reason: {}", target.reason);
+        assert!(target.reason.contains("gemini-agt"), "reason: {}", target.reason);
+        assert!(target.reason.contains("opencode-acc1"), "reason: {}", target.reason);
+        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
+        assert!(target.reason.contains("claude2"), "reason: {}", target.reason);
+    }
+
+    #[test]
+    fn fleet_capped_spills_to_a2_before_a1() {
+        let mut snap = full_snapshot();
+        snap.accounts[2].status = "needs_reauth".into(); // codex-acc1
+        snap.accounts[3].status = "needs_reauth".into(); // gemini-agt
+        snap.accounts[4].status = "needs_reauth".into(); // opencode-acc1
+        snap.accounts[5].status = "error".into(); // gfp-pool
+        let target =
+            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
+        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.provider, Provider::Claude);
+        assert_eq!(target.model, MODEL_CLAUDE_SONNET);
+        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
+        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
+    }
+
+    #[test]
     fn codex_dead_spills_to_gemini() {
         let mut snap = full_snapshot();
-        snap.accounts[0] = saturated(snap.accounts[0].clone());
-        snap.accounts[1] = saturated(snap.accounts[1].clone());
         snap.accounts[2].status = "needs_reauth".into();
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
@@ -626,8 +643,6 @@ mod tests {
     #[test]
     fn gemini_dead_spills_to_opencode() {
         let mut snap = full_snapshot();
-        snap.accounts[0] = saturated(snap.accounts[0].clone());
-        snap.accounts[1] = saturated(snap.accounts[1].clone());
         snap.accounts[2].status = "needs_reauth".into();
         snap.accounts[3].status = "needs_reauth".into();
         let target =
@@ -640,9 +655,6 @@ mod tests {
     #[test]
     fn opencode_dead_spills_to_gfp() {
         let mut snap = full_snapshot();
-        for i in 0..2 {
-            snap.accounts[i] = saturated(snap.accounts[i].clone());
-        }
         for i in 2..5 {
             snap.accounts[i].status = "needs_reauth".into();
         }
@@ -675,20 +687,22 @@ mod tests {
     }
 
     #[test]
-    fn t3_with_unhealthy_gp_spills_to_haiku_claude() {
-        // GP pool in cooldown (0 healthy slots) → normal spill: claude2 haiku.
+    fn t3_unhealthy_gp_spills_to_codex_first() {
+        // GP pool in cooldown (0 healthy slots) → normal fleet-first spill.
         let gp = GpHealthSnapshot { healthy_slots: 0, ..Default::default() };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.provider, Provider::Claude);
-        assert_eq!(target.account_id, "claude2");
-        assert_eq!(target.model, MODEL_CLAUDE_HAIKU);
+        assert_eq!(target.provider, Provider::Codex);
+        assert_eq!(target.account_id, "codex-acc1");
+        assert_eq!(target.model, MODEL_GPT);
     }
 
     #[test]
     fn t2_ignores_gp_preference_even_when_healthy() {
         let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
         let target = select_account(&req(Tier::T2), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.account_id, "claude2", "GP preference must be T3-only");
+        assert_eq!(target.account_id, "codex-acc1", "GP preference must be T3-only");
+        assert_eq!(target.provider, Provider::Codex);
+        assert_eq!(target.model, MODEL_GPT);
     }
 
     #[test]
@@ -697,8 +711,11 @@ mod tests {
         let mut snap = full_snapshot();
         snap.accounts[5].status = "error".into(); // gfp-pool dead in quota.json
         let target = select_account(&req(Tier::T3), &snap, &gp).expect("target");
-        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.account_id, "codex-acc1");
+        assert_eq!(target.provider, Provider::Codex);
+        assert_eq!(target.model, MODEL_GPT);
         assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
+        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
     }
 
     // ── GP health snapshot from RoutingTable slots ────────────────────────────
@@ -871,9 +888,11 @@ mod tests {
     }
 
     #[test]
-    fn t1_defaults_to_opus() {
+    fn t1_fleet_first_selects_codex() {
         let target = select_account(&req(Tier::T1), &full_snapshot(), &GpHealthSnapshot::default())
             .expect("target");
-        assert_eq!(target.model, MODEL_CLAUDE_OPUS);
+        assert_eq!(target.account_id, "codex-acc1");
+        assert_eq!(target.provider, Provider::Codex);
+        assert_eq!(target.model, MODEL_GPT);
     }
 }
