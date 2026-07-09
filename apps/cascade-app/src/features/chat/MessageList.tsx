@@ -26,7 +26,7 @@ function StreamCursor() {
   return (
     <span
       aria-hidden="true"
-      className="inline-block w-[2px] h-[1em] bg-current align-text-bottom ml-0.5 animate-[blink_1s_step-end_infinite]"
+      className="inline-block w-[2px] h-[1.1em] bg-primary align-middle ml-1 animate-[pulse_1s_infinite]"
     />
   )
 }
@@ -34,12 +34,12 @@ function StreamCursor() {
 /** Single user message bubble. */
 function UserBubble({ content }: { content: string }) {
   return (
-    <div className="flex justify-end">
+    <div className="flex justify-end my-1">
       <div
         className={cn(
-          'max-w-[75%] rounded-2xl rounded-br-sm px-3 py-2 text-sm',
-          'bg-primary text-primary-foreground',
-          'whitespace-pre-wrap break-words',
+          'max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-sm',
+          'bg-gradient-to-br from-primary to-primary/90 text-primary-foreground',
+          'whitespace-pre-wrap break-words leading-relaxed',
         )}
       >
         {content}
@@ -63,18 +63,18 @@ function AssistantBubble({
   isLocalFallback?: boolean
 }) {
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start my-1">
       <div
         className={cn(
-          'max-w-[85%] rounded-2xl rounded-bl-sm px-3 py-2',
-          'bg-muted text-muted-foreground',
-          'break-words',
+          'max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm',
+          'bg-muted/40 text-foreground border border-border/30',
+          'break-words leading-relaxed',
         )}
       >
         <MarkdownMessage content={content} />
         {showCursor && <StreamCursor />}
         {toolResults && toolResults.length > 0 && (
-          <div className="mt-1 space-y-1">
+          <div className="mt-2 space-y-1.5">
             {toolResults.map((tr, i) => {
               const entry =
                 tr !== null && typeof tr === 'object' && !Array.isArray(tr)

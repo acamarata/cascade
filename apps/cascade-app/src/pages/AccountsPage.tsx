@@ -45,6 +45,24 @@ const PROVIDERS = [
   { id: 'gfp', name: 'GFP (pool)', cmd: 'cascade-gemini pool add' },
 ] as const
 
+function getProviderBadgeStyles(provider: string, isPool: boolean): string {
+  if (isPool) {
+    return 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+  }
+  switch (provider?.toLowerCase()) {
+    case 'claude':
+      return 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+    case 'codex':
+      return 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+    case 'gemini':
+      return 'bg-violet-500/10 text-violet-500 border border-violet-500/20'
+    case 'opencode':
+      return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+    default:
+      return 'bg-muted text-muted-foreground border border-border'
+  }
+}
+
 export function AccountsPage(): React.ReactElement {
   const { accounts, loading, error, refetch } = useAccounts()
   const [selected, setSelected] = useState<AccountQuota | null>(null)
@@ -161,19 +179,19 @@ export function AccountsPage(): React.ReactElement {
 
       {/* Table */}
       {accounts.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+        <div className="overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-md">
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Label</th>
-                <th className="px-3 py-2 font-medium">Provider</th>
-                <th className="px-3 py-2 text-right font-medium">5h%</th>
-                <th className="px-3 py-2 text-right font-medium">Wk%</th>
-                <th className="px-3 py-2 text-right font-medium">M Credit%</th>
-                <th className="px-3 py-2 font-medium">Reset 5h</th>
-                <th className="px-3 py-2 font-medium">Reset Wk</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Actions</th>
+              <tr className="border-b border-border/60 bg-muted/40 text-left text-xs font-semibold text-muted-foreground/80">
+                <th className="px-4 py-3">Label</th>
+                <th className="px-4 py-3">Provider</th>
+                <th className="px-4 py-3 text-right">5h%</th>
+                <th className="px-4 py-3 text-right">Wk%</th>
+                <th className="px-4 py-3 text-right">M Credit%</th>
+                <th className="px-4 py-3">Reset 5h</th>
+                <th className="px-4 py-3">Reset Wk</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -187,69 +205,70 @@ export function AccountsPage(): React.ReactElement {
                 return (
                   <tr
                     key={acc.account}
-                    className={`border-b border-border/50 last:border-0 hover:bg-accent/30 ${pool ? 'opacity-60' : 'cursor-pointer'}`}
+                    className={`border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors ${pool ? 'opacity-70' : 'cursor-pointer'}`}
                     onClick={pool ? undefined : () => setSelected(acc)}
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-3">
                       <span
-                        className={`rounded px-1.5 py-0.5 text-xs font-semibold ${pool ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+                        className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getProviderBadgeStyles(acc.provider, pool)}`}
                       >
                         {accountLabel(acc)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">{acc.provider}</td>
+                    <td className="px-4 py-3 text-muted-foreground capitalize font-medium">{acc.provider}</td>
 
                     {pool ? (
                       /* GP pool row — spans quota columns with capacity summary */
                       <td
                         colSpan={5}
-                        className="px-3 py-2 text-xs text-muted-foreground/70 italic"
+                        className="px-4 py-3 text-xs text-muted-foreground/80 italic font-medium"
                         title="Gemini Flash free tier · 1500 req/day · 15 RPM per key · round-robin"
                       >
                         {gfpCapacity(acc.key_count)}
                       </td>
                     ) : (
                       <>
-                        <td className={`px-3 py-2 text-right font-medium ${utilColor(fiveH)}`}>
+                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(fiveH)}`}>
                           {pct(fiveH)}
                         </td>
-                        <td className={`px-3 py-2 text-right font-medium ${utilColor(wk)}`}>
+                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(wk)}`}>
                           {pct(wk)}
                         </td>
-                        <td className={`px-3 py-2 text-right font-medium ${utilColor(credit)}`}>
+                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(credit)}`}>
                           {credit == null ? '—' : pct(credit)}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                        <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">
                           {u?.five_hour?.resets_in ?? '—'}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                        <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">
                           {u?.seven_day?.resets_in ?? '—'}
                         </td>
                       </>
                     )}
 
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-3">
                       {pool ? (
-                        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-slate-500/15 text-slate-400">
+                        <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-500/10 text-slate-400 border border-slate-500/20">
                           pool
                         </span>
                       ) : (
                         <span
-                          className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusColor(acc.status)}`}
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${statusColor(acc.status)}`}
                         >
                           {acc.status ?? 'unknown'}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       {!pool && (
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-2">
                           {canReauth(acc.provider) && (
                             <Button
                               variant="ghost"
                               size="sm"
                               disabled={actionBusy}
                               onClick={() => handleReauth(acc.account)}
+                              className="h-7 px-2.5 text-xs font-medium hover:bg-muted/80"
                             >
                               Re-auth
                             </Button>
@@ -259,6 +278,7 @@ export function AccountsPage(): React.ReactElement {
                             size="sm"
                             disabled={actionBusy}
                             onClick={() => handleRemove(acc.account)}
+                            className="h-7 px-2.5 text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             Remove
                           </Button>

@@ -52,7 +52,7 @@ export function ChatInput({ onSend, isStreaming, disabled = false }: ChatInputPr
   return (
     <div
       className={cn(
-        'flex items-end gap-2 border-t border-border px-3 py-2',
+        'flex items-end gap-3 border-t border-border/50 px-4 py-3',
         'bg-background shrink-0',
       )}
     >
@@ -67,12 +67,12 @@ export function ChatInput({ onSend, isStreaming, disabled = false }: ChatInputPr
         disabled={isStreaming || disabled}
         aria-label="Chat message input"
         className={cn(
-          'flex-1 resize-none rounded-md border border-input bg-transparent',
-          'px-3 py-1.5 text-sm ring-offset-background',
-          'placeholder:text-muted-foreground',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex-1 resize-none rounded-xl border border-border/60 bg-muted/20',
+          'px-4 py-2.5 text-sm ring-offset-background transition-all duration-200',
+          'placeholder:text-muted-foreground/70',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/50',
           'disabled:cursor-not-allowed disabled:opacity-50',
-          'overflow-y-auto min-h-[36px]',
+          'overflow-y-auto min-h-[40px] max-h-[120px]',
         )}
       />
       <Button
@@ -81,7 +81,7 @@ export function ChatInput({ onSend, isStreaming, disabled = false }: ChatInputPr
         onClick={handleSend}
         disabled={!canSend}
         aria-label="Send message"
-        className="shrink-0 h-9 w-9"
+        className="shrink-0 h-10 w-10 rounded-xl transition-all duration-200 shadow-sm"
       >
         <Send className="h-4 w-4" aria-hidden="true" />
       </Button>

@@ -30,7 +30,11 @@ export function DaemonStatusBadge() {
   }, [])
 
   const color =
-    status === null ? 'bg-muted-foreground' : status.running ? 'bg-green-500' : 'bg-red-500'
+    status === null
+      ? 'bg-muted-foreground'
+      : status.running
+        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse'
+        : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
 
   const label =
     status === null
@@ -40,9 +44,9 @@ export function DaemonStatusBadge() {
         : 'Daemon stopped'
 
   return (
-    <div className="flex items-center gap-1.5" aria-live="polite" aria-label={label}>
+    <div className="flex items-center gap-2 bg-muted/30 border border-border/40 rounded-lg px-2.5 py-1" aria-live="polite" aria-label={label}>
       <span className={['h-2 w-2 rounded-full', color].join(' ')} aria-hidden="true" />
-      <span className="text-xs text-muted-foreground">
+      <span className="text-xs font-semibold text-muted-foreground/90">
         {status === null ? '…' : status.running ? 'Running' : 'Stopped'}
       </span>
     </div>

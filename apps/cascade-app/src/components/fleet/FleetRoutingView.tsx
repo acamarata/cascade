@@ -93,11 +93,11 @@ export function FleetRoutingView() {
   const { events: routingEvents, reachable } = useRoutingEvents()
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* ── Quota table ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Routing
+    <div className="flex flex-col gap-8">
+      {/* ── Quota table ──────────────────────────────────────── */}
+      <div className="flex flex-col gap-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
+          Routing Status
         </h3>
 
         {loading && accounts.length === 0 && (
@@ -110,16 +110,16 @@ export function FleetRoutingView() {
         )}
 
         {accounts.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="py-1.5 pr-3 text-left font-medium">Label</th>
-                  <th className="py-1.5 pr-3 text-left font-medium">Provider</th>
-                  <th className="py-1.5 pr-3 text-right font-medium">5h%</th>
-                  <th className="py-1.5 pr-3 text-right font-medium">7d%</th>
-                  <th className="py-1.5 pr-3 text-left font-medium">Status</th>
-                  <th className="py-1.5 text-right font-medium">Reset</th>
+                <tr className="border-b border-border/60 bg-muted/30 text-muted-foreground/80">
+                  <th className="py-2.5 px-4 text-left font-semibold">Label</th>
+                  <th className="py-2.5 px-4 text-left font-semibold">Provider</th>
+                  <th className="py-2.5 px-4 text-right font-semibold">5h%</th>
+                  <th className="py-2.5 px-4 text-right font-semibold">7d%</th>
+                  <th className="py-2.5 px-4 text-left font-semibold">Status</th>
+                  <th className="py-2.5 px-4 text-right font-semibold">Reset</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,22 +131,22 @@ export function FleetRoutingView() {
                   const statusClasses = statusColor(acc.status)
 
                   return (
-                    <tr key={acc.account} className="border-b border-border/50 last:border-0">
-                      <td className="py-1.5 pr-3 font-mono font-medium text-foreground">{label}</td>
-                      <td className="py-1.5 pr-3 text-muted-foreground capitalize">{acc.provider}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-foreground">{fhPct}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-foreground">{sdPct}</td>
-                      <td className="py-1.5 pr-3">
+                    <tr key={acc.account} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="py-2.5 px-4 font-mono font-bold text-foreground">{label}</td>
+                      <td className="py-2.5 px-4 text-muted-foreground capitalize">{acc.provider}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">{fhPct}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">{sdPct}</td>
+                      <td className="py-2.5 px-4">
                         <span
                           className={[
-                            'inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize',
+                            'inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
                             statusClasses,
                           ].join(' ')}
                         >
                           {statusBadge(acc.status)}
                         </span>
                       </td>
-                      <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                      <td className="py-2.5 px-4 text-right tabular-nums text-muted-foreground/80">
                         {formatReset(acc)}
                       </td>
                     </tr>
@@ -159,45 +159,45 @@ export function FleetRoutingView() {
       </div>
 
       {/* ── Live routing-decision stream ──────────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
             Recent Routing Decisions
           </h3>
           {!reachable && (
-            <span className="text-[10px] text-muted-foreground">(daemon unreachable)</span>
+            <span className="text-[10px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">(daemon unreachable)</span>
           )}
         </div>
 
         {reachable && routingEvents.length === 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground bg-muted/20 border border-border/40 rounded-lg p-4 text-center">
             No routing decisions recorded yet. Decisions appear here as tasks are routed.
           </p>
         )}
 
         {routingEvents.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="py-1.5 pr-3 text-left font-medium">Task</th>
-                  <th className="py-1.5 pr-3 text-left font-medium">Account</th>
-                  <th className="py-1.5 text-left font-medium">Reason</th>
+                <tr className="border-b border-border/60 bg-muted/30 text-muted-foreground/80">
+                  <th className="py-2.5 px-4 text-left font-semibold">Task</th>
+                  <th className="py-2.5 px-4 text-left font-semibold">Account</th>
+                  <th className="py-2.5 px-4 text-left font-semibold">Reason</th>
                 </tr>
               </thead>
               <tbody>
                 {routingEvents.map((ev, i) => (
                   <tr
                     key={`${ev.task_class}-${ev.account_id}-${i}`}
-                    className="border-b border-border/50 last:border-0"
+                    className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors"
                   >
-                    <td className="py-1.5 pr-3 font-mono text-foreground whitespace-nowrap">
+                    <td className="py-2.5 px-4 font-mono font-semibold text-foreground whitespace-nowrap">
                       {ev.task_class}
                     </td>
-                    <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-muted-foreground font-mono whitespace-nowrap">
                       {ev.account_id}
                     </td>
-                    <td className="py-1.5 text-muted-foreground">{ev.reason}</td>
+                    <td className="py-2.5 px-4 text-muted-foreground/90 leading-relaxed">{ev.reason}</td>
                   </tr>
                 ))}
               </tbody>

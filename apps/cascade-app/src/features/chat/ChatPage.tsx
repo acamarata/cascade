@@ -226,16 +226,16 @@ export function ChatPage() {
           {lastServedBy && (
             <span
               className={cn(
-                'text-[0.65rem] px-1.5 py-0.5 rounded-full font-medium border',
+                'text-[10px] px-2.5 py-0.5 rounded-full font-bold border tracking-wide uppercase shadow-sm',
                 isLocalFallback
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                  : 'bg-muted text-muted-foreground border-muted-foreground/20',
+                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]',
               )}
               aria-label={`Served by ${lastServedBy}${isLocalFallback ? ' (local fallback)' : ''}`}
             >
               {isLocalFallback
                 ? `⚡ ${lastServedBy.replace(/^local:/, '')} (local)`
-                : lastServedBy}
+                : `● ${lastServedBy}`}
             </span>
           )}
         </div>
@@ -263,8 +263,8 @@ export function ChatPage() {
       </div>
 
       {/* ── Scope switcher ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-border bg-background shrink-0">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border bg-background shrink-0">
+        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/40">
           {(['personal', 'cascade', 'projects'] as const).map((s) => (
             <button
               key={s}
@@ -272,10 +272,10 @@ export function ChatPage() {
               onClick={() => handleScopeChange(s)}
               aria-pressed={chatScope === s}
               className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                'px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200',
                 chatScope === s
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                  ? 'bg-background text-foreground shadow-sm border border-border/40'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {s === 'personal' ? 'Personal' : s === 'cascade' ? 'Cascade' : 'Projects'}
@@ -294,10 +294,10 @@ export function ChatPage() {
               aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
               title="Private: not saved to chat history or Cascade memory. Messages are still processed by the selected model provider."
               className={cn(
-                'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border',
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-200 border',
                 isPrivate
-                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                  : 'text-muted-foreground border-transparent hover:bg-accent/50 hover:text-foreground',
+                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.1)]'
+                  : 'text-muted-foreground border-border/40 hover:bg-accent/50 hover:text-foreground',
               )}
             >
               <Lock className="h-3 w-3" aria-hidden="true" />
