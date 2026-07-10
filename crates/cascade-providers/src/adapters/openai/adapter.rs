@@ -25,6 +25,45 @@ use super::types::{
     OaiMessage, OaiModelList, OaiRequest, OaiResponse, OaiStreamEvent,
 };
 
+async fn forward_openai_sse_line(
+    line: &str,
+    tx: &mpsc::Sender<Result<StreamChunk, ProviderError>>,
+) -> bool {
+    let Some(payload) = CascadeHttpClient::parse_sse_line(line) else {
+        return true;
+    };
+
+    match serde_json::from_str::<OaiStreamEvent>(payload) {
+        Ok(event) => {
+            if let Some(choice) = event.choices.into_iter().next() {
+                let delta = choice.delta.content.unwrap_or_default();
+                let finish_reason = choice.finish_reason;
+                // Only emit a chunk when there is content or a stop reason.
+                if (!delta.is_empty() || finish_reason.is_some())
+                    && tx
+                        .send(Ok(StreamChunk {
+                            delta,
+                            finish_reason,
+                        }))
+                        .await
+                        .is_err()
+                {
+                    return false;
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                payload = %payload,
+                "openai SSE: failed to parse event"
+            );
+        }
+    }
+
+    true
+}
+
 // ── OpenAIAdapter ─────────────────────────────────────────────────────────────
 
 /// `ProviderAdapter` implementation for the OpenAI Chat Completions API.
@@ -275,58 +314,48 @@ impl ProviderAdapter for OpenAIAdapter {
         let (tx, rx) = mpsc::channel::<Result<StreamChunk, ProviderError>>(64);
 
         tokio::spawn(async move {
-            let bytes = match response.bytes().await {
-                Ok(b) => b,
-                Err(e) => {
-                    let _ = tx
-                        .send(Err(ProviderError::NetworkError(e.to_string())))
-                        .await;
-                    return;
-                }
-            };
+            use futures::StreamExt as _;
 
-            let text = match std::str::from_utf8(&bytes) {
-                Ok(t) => t.to_owned(),
-                Err(e) => {
-                    let _ = tx
-                        .send(Err(ProviderError::InvalidResponse(e.to_string())))
-                        .await;
-                    return;
-                }
-            };
+            let mut byte_stream = response.bytes_stream();
+            let mut buf = String::new();
 
-            // Parse SSE lines.  [DONE] is handled by parse_sse_line → None.
-            for line in text.lines() {
-                if let Some(payload) = CascadeHttpClient::parse_sse_line(line) {
-                    match serde_json::from_str::<OaiStreamEvent>(payload) {
-                        Ok(event) => {
-                            if let Some(choice) = event.choices.into_iter().next() {
-                                let delta = choice.delta.content.unwrap_or_default();
-                                let finish_reason = choice.finish_reason;
-                                // Only emit a chunk when there is content or a stop reason.
-                                if (!delta.is_empty() || finish_reason.is_some())
-                                    && tx
-                                        .send(Ok(StreamChunk {
-                                            delta,
-                                            finish_reason,
-                                        }))
-                                        .await
-                                        .is_err()
-                                {
-                                    // Receiver dropped — consumer cancelled.
-                                    return;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!(
-                                error = %e,
-                                payload = %payload,
-                                "openai SSE: failed to parse event"
-                            );
-                        }
+            while let Some(raw_chunk) = byte_stream.next().await {
+                let bytes = match raw_chunk {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::NetworkError(
+                                crate::http_client::redact_gemini_key(e.to_string()),
+                            )))
+                            .await;
+                        return;
+                    }
+                };
+
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::InvalidResponse(e.to_string())))
+                            .await;
+                        return;
+                    }
+                };
+
+                buf.push_str(text);
+
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf = buf[pos + 1..].to_string();
+
+                    if !forward_openai_sse_line(&line, &tx).await {
+                        return;
                     }
                 }
+            }
+
+            if !buf.is_empty() {
+                let _ = forward_openai_sse_line(&buf, &tx).await;
             }
         });
 
@@ -386,5 +415,4 @@ impl ProviderAdapter for OpenAIAdapter {
         }
     }
 }
-
 

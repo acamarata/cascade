@@ -104,6 +104,7 @@ impl Response {
 
 pub struct IpcServer {
     socket_path: PathBuf,
+    auth_token: String,
     health: Arc<HealthState>,
     bus: Arc<EventBus>,
     /// In-memory 60-second summary cache for cascade_usage_summary (T-P3-E04-29).
@@ -202,6 +203,7 @@ impl IpcServer {
 
         Ok(Self {
             socket_path,
+            auth_token: token,
             health,
             bus,
             usage_summary_cache: new_summary_cache(),
@@ -346,18 +348,75 @@ where
             .and_then(|id| serde_json::from_value(id.clone()).ok())
             .unwrap_or(RequestId::Number(1));
 
+        let auth_ok = parsed_envelope
+            .get("auth")
+            .and_then(|auth| auth.as_str())
+            .is_some_and(|auth| constant_time_token_eq(&server.auth_token, auth));
+        if !auth_ok {
+            let resp = Response::err(typed_ipc::AUTH_FAILED, "auth failed");
+            write_response(&mut writer, &resp, request_id).await?;
+            break;
+        }
+
         let dispatch_body: Vec<u8> = if parsed_envelope.get("rpc").is_some() {
             serde_json::to_vec(&parsed_envelope["rpc"]).unwrap_or(body)
         } else {
             body
         };
-        let response = match serde_json::from_slice::<Request>(&dispatch_body) {
-            Ok(req) => dispatch(&server, req).await,
-            Err(_legacy_err) => try_typed_dispatch(&server, &dispatch_body).await,
+        // A typed JSON-RPC frame carries `jsonrpc`/`protocol_version` and puts its
+        // arguments under `params`. The legacy `Request` enum ignores unknown fields,
+        // so such a frame ALSO deserializes into it — with every optional field set to
+        // None (e.g. `Ping { echo: None }`). Dispatching legacy-first therefore
+        // shadowed the typed handlers and silently dropped typed callers' params.
+        // Route typed frames to the typed dispatcher first, falling back to legacy
+        // only when the method is not implemented there.
+        let looks_typed = parsed_envelope
+            .get("rpc")
+            .map(|rpc| rpc.get("jsonrpc").is_some() || rpc.get("protocol_version").is_some())
+            .unwrap_or(false);
+
+        let response = if looks_typed {
+            let typed = try_typed_dispatch(&server, &dispatch_body).await;
+            if is_method_not_found(&typed) {
+                match serde_json::from_slice::<Request>(&dispatch_body) {
+                    Ok(req) => dispatch(&server, req).await,
+                    Err(_) => typed,
+                }
+            } else {
+                typed
+            }
+        } else {
+            match serde_json::from_slice::<Request>(&dispatch_body) {
+                Ok(req) => dispatch(&server, req).await,
+                Err(_legacy_err) => try_typed_dispatch(&server, &dispatch_body).await,
+            }
         };
         write_response(&mut writer, &response, request_id).await?;
     }
     Ok(())
+}
+
+/// True when `resp` is a JSON-RPC `METHOD_NOT_FOUND` (-32601) error.
+///
+/// Used to decide whether a typed-dispatch miss should fall back to the legacy
+/// `Request` enum dispatcher, which implements a wider set of methods.
+fn is_method_not_found(resp: &Response) -> bool {
+    matches!(resp, Response::Error { code, .. } if *code == typed_ipc::METHOD_NOT_FOUND)
+}
+
+fn constant_time_token_eq(expected: &str, supplied: &str) -> bool {
+    let expected = expected.as_bytes();
+    let supplied = supplied.as_bytes();
+    let mut diff = expected.len() ^ supplied.len();
+    let max_len = expected.len().max(supplied.len());
+
+    for i in 0..max_len {
+        let lhs = expected.get(i).copied().unwrap_or(0);
+        let rhs = supplied.get(i).copied().unwrap_or(0);
+        diff |= (lhs ^ rhs) as usize;
+    }
+
+    diff == 0
 }
 
 async fn write_response<W: AsyncWriteExt + Unpin>(
@@ -1099,5 +1158,124 @@ async fn dispatch_cache(
             Response::ok(serde_json::json!({ "cleared": cleared }))
         }
         other => Response::err(-32601, format!("method not found: {other}")),
+    }
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+    use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+
+    async fn test_server(tmp: &tempfile::TempDir) -> Arc<IpcServer> {
+        let health = HealthState::new(Instant::now());
+        let bus = EventBus::new(tmp.path().to_path_buf()).await.unwrap();
+        let registry = Arc::new(cascade_providers::ProviderRegistry::new());
+
+        Arc::new(
+            IpcServer::new(tmp.path().to_path_buf(), health, bus, registry)
+                .await
+                .unwrap(),
+        )
+    }
+
+    async fn write_json_frame<W: AsyncWriteExt + Unpin>(
+        writer: &mut W,
+        value: serde_json::Value,
+    ) {
+        let bytes = serde_json::to_vec(&value).unwrap();
+        writer
+            .write_all(&(bytes.len() as u32).to_be_bytes())
+            .await
+            .unwrap();
+        writer.write_all(&bytes).await.unwrap();
+    }
+
+    async fn read_json_frame<R: AsyncReadExt + Unpin>(reader: &mut R) -> serde_json::Value {
+        let mut len_buf = [0u8; 4];
+        reader.read_exact(&mut len_buf).await.unwrap();
+        let len = u32::from_be_bytes(len_buf) as usize;
+        let mut body = vec![0u8; len];
+        reader.read_exact(&mut body).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn handle_connection_rejects_bad_auth_and_closes() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+        let (mut client, server_io) = duplex(4096);
+        let (server_read, server_write) = tokio::io::split(server_io);
+
+        let task = tokio::spawn(handle_connection(server, server_read, server_write));
+        write_json_frame(
+            &mut client,
+            serde_json::json!({
+                "auth": "wrong-token",
+                "rpc": {
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "method": "ping",
+                    "protocol_version": PROTOCOL_VERSION,
+                    "params": { "echo": "hi" }
+                }
+            }),
+        )
+        .await;
+
+        let response = read_json_frame(&mut client).await;
+
+        assert_eq!(response["id"].as_i64(), Some(7));
+        assert_eq!(
+            response["error"]["code"].as_i64(),
+            Some(typed_ipc::AUTH_FAILED as i64)
+        );
+        assert_eq!(response["error"]["message"], "auth failed");
+
+        task.await.unwrap().unwrap();
+    }
+
+    // Multi-thread flavor required: an accepted request dispatches into the real
+    // handler, which reaches the RAG reranker's `block_in_place` — that panics on
+    // the single-threaded current_thread runtime.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_connection_accepts_matching_auth() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+        let token = server.auth_token.clone();
+        let (mut client, server_io) = duplex(4096);
+        let (server_read, server_write) = tokio::io::split(server_io);
+
+        let task = tokio::spawn(handle_connection(server, server_read, server_write));
+        write_json_frame(
+            &mut client,
+            serde_json::json!({
+                "auth": token,
+                "rpc": {
+                    "jsonrpc": "2.0",
+                    "id": 8,
+                    "method": "ping",
+                    "protocol_version": PROTOCOL_VERSION,
+                    "params": { "echo": "hi" }
+                }
+            }),
+        )
+        .await;
+
+        let response = read_json_frame(&mut client).await;
+        assert_eq!(response["id"].as_i64(), Some(8));
+        assert_eq!(response["result"]["pong"], "hi");
+
+        drop(client);
+        task.await.unwrap().unwrap();
+    }
+
+    #[test]
+    fn token_compare_rejects_prefix_match() {
+        assert!(constant_time_token_eq("abcdef", "abcdef"));
+        assert!(!constant_time_token_eq("abcdef", "abc"));
+        assert!(!constant_time_token_eq("abcdef", "abcdeg"));
     }
 }

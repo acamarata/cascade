@@ -309,7 +309,7 @@ async fn validate_anthropic(
             if e.is_timeout() {
                 ProviderError::Timeout { secs: 30 }
             } else {
-                ProviderError::NetworkError(e.to_string())
+                ProviderError::NetworkError(crate::http_client::redact_gemini_key(e.to_string()))
             }
         })?;
 
@@ -333,7 +333,7 @@ async fn validate_gemini(
         if e.is_timeout() {
             ProviderError::Timeout { secs: 30 }
         } else {
-            ProviderError::NetworkError(e.to_string())
+            ProviderError::NetworkError(crate::http_client::redact_gemini_key(e.to_string()))
         }
     })?;
 
@@ -357,7 +357,7 @@ async fn validate_openai_compat(
             if e.is_timeout() {
                 ProviderError::Timeout { secs: 30 }
             } else {
-                ProviderError::NetworkError(e.to_string())
+                ProviderError::NetworkError(crate::http_client::redact_gemini_key(e.to_string()))
             }
         })?;
 

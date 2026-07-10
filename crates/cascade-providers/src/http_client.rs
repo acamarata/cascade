@@ -2,8 +2,8 @@
 //!
 //! # Purpose
 //!
-//! Provides a single `CascadeHttpClient` wrapper around `reqwest::Client` with
-//! consistent configuration (30 s timeout, user-agent, connection pool) and
+//! Provides `CascadeHttpClient` wrappers around `reqwest::Client` with
+//! consistent configuration (30 s non-streaming timeout, user-agent, connection pool) and
 //! automatic retry on 429/503 responses (up to 3 retries, exponential backoff
 //! starting at 1 s, reading `Retry-After` when present).
 //!
@@ -44,8 +44,12 @@ use crate::error::ProviderError;
 /// Package version injected via `CARGO_PKG_VERSION` at compile time.
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// HTTP timeout applied to every request.
+/// HTTP timeout applied to non-streaming requests.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Connect timeout for streaming requests; streamed body reads are guarded by
+/// the daemon chat layer's per-chunk stall timeout.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum number of retries on 429/503.
 const MAX_RETRIES: u32 = 3;
@@ -76,6 +80,7 @@ const BASE_BACKOFF_SECS: u64 = 1;
 #[derive(Clone, Debug)]
 pub struct CascadeHttpClient {
     inner: Client,
+    streaming: Client,
 }
 
 impl CascadeHttpClient {
@@ -91,13 +96,20 @@ impl CascadeHttpClient {
             HeaderValue::from_str(&ua).expect("user-agent is valid ASCII"),
         );
 
+        let streaming_headers = default_headers.clone();
         let inner = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .default_headers(default_headers)
             .build()
             .expect("reqwest Client construction failed — TLS backend missing?");
 
-        Self { inner }
+        let streaming = Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .default_headers(streaming_headers)
+            .build()
+            .expect("reqwest Client construction failed — TLS backend missing?");
+
+        Self { inner, streaming }
     }
 
     // ── Auth header helpers ───────────────────────────────────────────────────
@@ -138,7 +150,7 @@ impl CascadeHttpClient {
                         secs: REQUEST_TIMEOUT.as_secs(),
                     }
                 } else {
-                    ProviderError::NetworkError(e.to_string())
+                    ProviderError::NetworkError(redact_gemini_key(e.to_string()))
                 }
             })?;
 
@@ -242,7 +254,7 @@ impl CascadeHttpClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+            .map_err(|e| ProviderError::NetworkError(redact_gemini_key(e.to_string())))?;
 
         serde_json::from_slice::<R>(&bytes)
             .map_err(|e| ProviderError::InvalidResponse(e.to_string()))
@@ -261,7 +273,7 @@ impl CascadeHttpClient {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+            .map_err(|e| ProviderError::NetworkError(redact_gemini_key(e.to_string())))?;
 
         serde_json::from_slice::<R>(&bytes)
             .map_err(|e| ProviderError::InvalidResponse(e.to_string()))
@@ -288,7 +300,7 @@ impl CascadeHttpClient {
             serde_json::to_vec(body).map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
 
         let response = auth_fn(
-            self.inner
+            self.streaming
                 .post(url)
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::ACCEPT, "text/event-stream")
@@ -299,10 +311,10 @@ impl CascadeHttpClient {
         .map_err(|e| {
             if e.is_timeout() {
                 ProviderError::Timeout {
-                    secs: REQUEST_TIMEOUT.as_secs(),
+                    secs: CONNECT_TIMEOUT.as_secs(),
                 }
             } else {
-                ProviderError::NetworkError(e.to_string())
+                ProviderError::NetworkError(redact_gemini_key(e.to_string()))
             }
         })?;
 
@@ -452,6 +464,51 @@ fn backoff_duration(attempt: u32) -> Duration {
     Duration::from_secs(BASE_BACKOFF_SECS << attempt.min(10))
 }
 
+pub(crate) fn redact_gemini_key(message: impl AsRef<str>) -> String {
+    let message = message.as_ref();
+    let mut redacted = String::with_capacity(message.len());
+    let mut cursor = 0usize;
+
+    while let Some(relative_start) = message[cursor..].find("key=") {
+        let start = cursor + relative_start;
+        let key_is_query_param =
+            start == 0 || matches!(message.as_bytes()[start - 1], b'?' | b'&');
+        if !key_is_query_param {
+            redacted.push_str(&message[cursor..start + 4]);
+            cursor = start + 4;
+            continue;
+        }
+
+        redacted.push_str(&message[cursor..start]);
+        redacted.push_str("key=***");
+
+        let mut end = start + 4;
+        for (offset, ch) in message[end..].char_indices() {
+            if matches!(
+                ch,
+                '&' | '#'
+                    | ' '
+                    | '\t'
+                    | '\n'
+                    | '\r'
+                    | '"'
+                    | '\''
+                    | ')'
+                    | ']'
+                    | '}'
+                    | '>'
+            ) {
+                break;
+            }
+            end = start + 4 + offset + ch.len_utf8();
+        }
+        cursor = end;
+    }
+
+    redacted.push_str(&message[cursor..]);
+    redacted
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -589,6 +646,16 @@ mod tests {
         assert_eq!(backoff_duration(0), Duration::from_secs(1));
         assert_eq!(backoff_duration(1), Duration::from_secs(2));
         assert_eq!(backoff_duration(2), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn gemini_key_query_param_is_redacted() {
+        let msg = "error sending request for url (https://example.test/v1beta/models?key=AIzaXYZ&alt=sse)";
+        let redacted = redact_gemini_key(msg);
+
+        assert!(redacted.contains("key=***"));
+        assert!(redacted.contains("&alt=sse"));
+        assert!(!redacted.contains("AIzaXYZ"));
     }
 
     // ── Error mapping — table-driven ──────────────────────────────────────────

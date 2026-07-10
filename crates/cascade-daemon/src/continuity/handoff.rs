@@ -403,6 +403,10 @@ mod tests {
         // to copy (this exercises C2 + C3 together end to end on tempdirs).
         let src_projects = src_home.path().join("projects").join(&pointer.project_slug);
         std::fs::create_dir_all(&src_projects).unwrap();
+        // session_copy guards on DestinationRootMissing: `<dst>/projects` must already
+        // exist, as it does in a real Claude config dir. The tempdir starts empty, so
+        // create it here rather than weakening the guard.
+        std::fs::create_dir_all(dst_home.path().join("projects")).unwrap();
         std::fs::write(
             src_projects.join("sess-handoff.jsonl"),
             "{\"turn\":1}\n",

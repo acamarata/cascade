@@ -15,9 +15,13 @@
 //!     This prevents the OS admin prompt hygiene violation described in GCI.
 
 use std::path::{Path, PathBuf};
+#[cfg(feature = "gemini-proxy")]
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "gemini-proxy")]
+use secrecy::SecretString;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -42,6 +46,7 @@ pub async fn run(
     config_dir: PathBuf,
     shutdown: CancellationToken,
     provider_registry: Arc<cascade_providers::ProviderRegistry>,
+    #[cfg(feature = "gemini-proxy")] gemini_keychain_map: HashMap<String, SecretString>,
 ) -> Result<(), DaemonError> {
     let start_time = std::time::Instant::now();
     info!(config_dir = %config_dir.display(), "supervisor starting");
@@ -272,7 +277,7 @@ pub async fn run(
             gp_bus,
             gp_bind,
             gp_shutdown,
-            std::collections::HashMap::new(),
+            gemini_keychain_map,
         );
         tokio::spawn(async move {
             if let Err(e) = gp_proxy.run().await {

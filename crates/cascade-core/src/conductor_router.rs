@@ -6,20 +6,19 @@
 //   is a thin wrapper that preserves the original public API exactly:
 //   `select_target(&ConductorRequest, &QuotaSnapshot) -> Option<ConductorTarget>`.
 //
-//   Worker spill order: claude2(A2) → claude(A1 spare) → codex → gemini →
-//   opencode → gfp(GP). Any account whose five_hour or seven_day utilization
-//   is >= 100, or whose status is not "ok"/"pool", is skipped. Any account for
-//   which the CLI binary is unavailable (checked by the caller via
-//   `ConductorTarget::provider`) is also skipped.
+//   Worker spill order is delegated to `crate::selection`: gfp(GP, T3/Haiku
+//   only) → zai → opencode → gemini → codex → claude2(A2) → claude(A1) LAST.
+//   Any account whose five_hour or seven_day utilization is >= 100, or whose
+//   status is not "ok"/"pool", is skipped.
 //
 // Inputs:  `ConductorRequest`, `QuotaSnapshot` (injectable for tests).
 // Outputs: `Option<ConductorTarget>` — None when all backends are exhausted.
 //
 // Constraints: pure (no I/O, no network, no async). All path resolution is
 //   the executor's responsibility. The wrapper passes a default (no-signal)
-//   `GpHealthSnapshot`, so its behavior is IDENTICAL to the pre-unification
-//   implementation — no T3-GP preference on this path. Callers that have a
-//   live GP health signal should use `selection::select_account` directly.
+//   `GpHealthSnapshot`. Callers that have a live GP health signal should use
+//   `select_target_with_gp` so healthy T3 GP preference is reflected in the
+//   reason string.
 //
 // SPORT: MASTER-CLI.md — cascade delegate / conductor_router
 
@@ -77,11 +76,10 @@ pub struct ConductorTarget {
 /// adapter to invoke.  Whether the CLI binary is actually present on disk is
 /// the executor's responsibility — it should re-fall on `Unavailable` errors.
 ///
-/// Thin wrapper over [`selection::select_account`] with a default (no-signal)
-/// GP health snapshot — semantics identical to the pre-E1-S6 implementation.
-/// Callers with a LIVE GP health signal (the CLI conductor probes
-/// `:3761/health`) must use [`select_target_with_gp`] so the T3-GP
-/// preference can actually fire in production.
+    /// Thin wrapper over [`selection::select_account`] with a default (no-signal)
+    /// GP health snapshot. Callers with a LIVE GP health signal (the CLI
+    /// conductor probes `:3761/health`) must use [`select_target_with_gp`] so
+    /// the T3-GP preference can be reflected in the reason string.
 pub fn select_target(req: &ConductorRequest, quota: &QuotaSnapshot) -> Option<ConductorTarget> {
     select_target_with_gp(req, quota, &GpHealthSnapshot::default())
 }
@@ -358,6 +356,13 @@ mod tests {
         assert_eq!(target.model, MODEL_GEMINI_FLASH);
     }
 
+    #[test]
+    fn gfp_skipped_for_t2_even_when_only_option() {
+        let snapshot = QuotaSnapshot { accounts: vec![gfp_entry()] };
+        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        assert!(select_target(&req, &snapshot).is_none());
+    }
+
     // ── Auth-dead account skipped ─────────────────────────────────────────────
 
     #[test]
@@ -437,10 +442,10 @@ mod tests {
         assert!(target.reason.starts_with("t3-gp-preferred:"), "reason: {}", target.reason);
     }
 
-    /// With no live signal (default snapshot) T3 must spill to claude2 haiku —
-    /// exactly the pre-unification behavior.
+    /// With no live signal (default snapshot), T3 may still use GFP because the
+    /// fixed spill order allows the pool for Haiku-class work.
     #[test]
-    fn select_target_with_gp_default_snapshot_keeps_claude_spill() {
+    fn select_target_with_gp_default_snapshot_allows_t3_gfp() {
         let snapshot = QuotaSnapshot {
             accounts: vec![
                 claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
@@ -450,8 +455,8 @@ mod tests {
         let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
         let target =
             select_target_with_gp(&req, &snapshot, &GpHealthSnapshot::default()).expect("target");
-        assert_eq!(target.account_id, "claude2");
-        assert_eq!(target.model, MODEL_CLAUDE_HAIKU);
+        assert_eq!(target.account_id, "gfp-pool");
+        assert_eq!(target.model, MODEL_GEMINI_FLASH);
     }
 
     // ── Wrapper parity with selection::select_account (E1-S6) ─────────────────

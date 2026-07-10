@@ -435,7 +435,7 @@ pub(crate) async fn validate_gemini_key_inner(
         .json(&body)
         .send()
         .await
-        .map_err(|e| OAuthError::Http(e.to_string()))?;
+        .map_err(|e| OAuthError::Http(crate::http_client::redact_gemini_key(e.to_string())))?;
 
     let status = resp.status().as_u16();
 

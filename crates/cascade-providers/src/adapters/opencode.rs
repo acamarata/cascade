@@ -30,7 +30,9 @@ use std::pin::Pin;
 
 use async_trait::async_trait;
 use futures_core::Stream;
-use tracing::debug;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tracing::{debug, warn};
 
 use crate::{
     adapter::ProviderAdapter,
@@ -44,6 +46,34 @@ use crate::{
     provider_info::{AuthMethod, ProviderCapabilities, ProviderInfo},
     types::{CompletionRequest, CompletionResponse, ModelInfo, StreamChunk},
 };
+
+async fn forward_opencode_sse_line(
+    line: &str,
+    tx: &mpsc::Sender<Result<StreamChunk, ProviderError>>,
+) -> bool {
+    let Some(payload) = CascadeHttpClient::parse_sse_line(line) else {
+        return true;
+    };
+
+    match serde_json::from_str::<OaiStreamChunk>(payload) {
+        Ok(chunk) => {
+            if let Some(mapped) = map_stream_chunk(chunk) {
+                if tx.send(Ok(mapped)).await.is_err() {
+                    return false;
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                payload = %payload,
+                "opencode SSE: failed to parse event"
+            );
+        }
+    }
+
+    true
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -268,9 +298,6 @@ impl ProviderAdapter for OpenCodeAdapter {
     }
 
     /// Send a streaming completion request and return an SSE chunk stream.
-    ///
-    /// The full SSE body is buffered before being emitted as a `futures::stream`
-    /// — this keeps P3 simple and correct. Low-latency forwarding is a P4 goal.
     async fn complete_stream(
         &self,
         req: CompletionRequest,
@@ -288,23 +315,55 @@ impl ProviderAdapter for OpenCodeAdapter {
             .await
             .map_err(Self::map_auth_error)?;
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+        let (tx, rx) = mpsc::channel::<Result<StreamChunk, ProviderError>>(64);
 
-        let text = String::from_utf8_lossy(&bytes).into_owned();
+        tokio::spawn(async move {
+            use futures::StreamExt as _;
 
-        let chunks: Vec<Result<StreamChunk, ProviderError>> = text
-            .lines()
-            .filter_map(CascadeHttpClient::parse_sse_line)
-            .filter_map(|payload| {
-                let chunk: OaiStreamChunk = serde_json::from_str(payload).ok()?;
-                map_stream_chunk(chunk).map(Ok)
-            })
-            .collect();
+            let mut byte_stream = response.bytes_stream();
+            let mut buf = String::new();
 
-        Ok(Box::pin(futures::stream::iter(chunks)))
+            while let Some(raw_chunk) = byte_stream.next().await {
+                let bytes = match raw_chunk {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::NetworkError(
+                                crate::http_client::redact_gemini_key(e.to_string()),
+                            )))
+                            .await;
+                        return;
+                    }
+                };
+
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::InvalidResponse(e.to_string())))
+                            .await;
+                        return;
+                    }
+                };
+
+                buf.push_str(text);
+
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf = buf[pos + 1..].to_string();
+
+                    if !forward_opencode_sse_line(&line, &tx).await {
+                        return;
+                    }
+                }
+            }
+
+            if !buf.is_empty() {
+                let _ = forward_opencode_sse_line(&buf, &tx).await;
+            }
+        });
+
+        Ok(Box::pin(ReceiverStream::new(rx)))
     }
 
     /// Return the hardcoded list of models available on an OpenCode subscription.

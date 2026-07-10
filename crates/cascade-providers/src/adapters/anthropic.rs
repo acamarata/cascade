@@ -315,6 +315,59 @@ struct AnthropicModelEntry {
     id: String,
 }
 
+async fn forward_anthropic_sse_line(
+    line: &str,
+    tx: &mpsc::Sender<Result<StreamChunk, ProviderError>>,
+    stopped: &mut bool,
+) -> bool {
+    let Some(payload) = CascadeHttpClient::parse_sse_line(line) else {
+        return true;
+    };
+
+    match serde_json::from_str::<AnthropicSseEvent>(payload) {
+        Ok(event) => match event.event_type.as_str() {
+            "content_block_delta" => {
+                if let Some(delta) = event.delta {
+                    if delta.delta_type == "text_delta"
+                        && !delta.text.is_empty()
+                        && tx
+                            .send(Ok(StreamChunk {
+                                delta: delta.text,
+                                finish_reason: None,
+                            }))
+                            .await
+                            .is_err()
+                    {
+                        return false;
+                    }
+                }
+            }
+            "message_stop" => {
+                *stopped = true;
+                let _ = tx
+                    .send(Ok(StreamChunk {
+                        delta: String::new(),
+                        finish_reason: Some("end_turn".to_owned()),
+                    }))
+                    .await;
+                return false;
+            }
+            // message_start, content_block_start, content_block_stop,
+            // message_delta — no chunk to yield.
+            _ => {}
+        },
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                payload = %payload,
+                "anthropic SSE: failed to parse event"
+            );
+        }
+    }
+
+    true
+}
+
 // ── AnthropicAdapter ──────────────────────────────────────────────────────────
 
 /// `ProviderAdapter` implementation for the Anthropic Messages API.
@@ -575,72 +628,51 @@ impl ProviderAdapter for AnthropicAdapter {
         let (tx, rx) = mpsc::channel::<Result<StreamChunk, ProviderError>>(64);
 
         tokio::spawn(async move {
-            // Collect the full body as bytes then parse SSE lines.
-            // (wiremock delivers the full body; production sends chunked stream.)
-            let bytes = match response.bytes().await {
-                Ok(b) => b,
-                Err(e) => {
-                    let _ = tx
-                        .send(Err(ProviderError::NetworkError(e.to_string())))
-                        .await;
-                    return;
-                }
-            };
+            use futures::StreamExt as _;
 
-            let text = match std::str::from_utf8(&bytes) {
-                Ok(t) => t.to_owned(),
-                Err(e) => {
-                    let _ = tx
-                        .send(Err(ProviderError::InvalidResponse(e.to_string())))
-                        .await;
-                    return;
-                }
-            };
-
+            let mut byte_stream = response.bytes_stream();
+            let mut buf = String::new();
             let mut stopped = false;
-            for line in text.lines() {
-                if let Some(payload) = CascadeHttpClient::parse_sse_line(line) {
-                    match serde_json::from_str::<AnthropicSseEvent>(payload) {
-                        Ok(event) => match event.event_type.as_str() {
-                            "content_block_delta" => {
-                                if let Some(delta) = event.delta {
-                                    if delta.delta_type == "text_delta"
-                                        && !delta.text.is_empty()
-                                        && tx
-                                            .send(Ok(StreamChunk {
-                                                delta: delta.text,
-                                                finish_reason: None,
-                                            }))
-                                            .await
-                                            .is_err()
-                                    {
-                                        return;
-                                    }
-                                }
-                            }
-                            "message_stop" => {
-                                stopped = true;
-                                let _ = tx
-                                    .send(Ok(StreamChunk {
-                                        delta: String::new(),
-                                        finish_reason: Some("end_turn".to_owned()),
-                                    }))
-                                    .await;
-                                break;
-                            }
-                            // message_start, content_block_start, content_block_stop,
-                            // message_delta — no chunk to yield.
-                            _ => {}
-                        },
-                        Err(e) => {
-                            tracing::warn!(
-                                error = %e,
-                                payload = %payload,
-                                "anthropic SSE: failed to parse event"
-                            );
-                        }
+
+            while let Some(raw_chunk) = byte_stream.next().await {
+                let bytes = match raw_chunk {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::NetworkError(
+                                crate::http_client::redact_gemini_key(e.to_string()),
+                            )))
+                            .await;
+                        return;
+                    }
+                };
+
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(ProviderError::InvalidResponse(e.to_string())))
+                            .await;
+                        return;
+                    }
+                };
+
+                buf.push_str(text);
+
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf = buf[pos + 1..].to_string();
+
+                    if !forward_anthropic_sse_line(&line, &tx, &mut stopped).await {
+                        return;
                     }
                 }
+            }
+
+            if !buf.is_empty()
+                && !forward_anthropic_sse_line(&buf, &tx, &mut stopped).await
+            {
+                return;
             }
 
             if !stopped {

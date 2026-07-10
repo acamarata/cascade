@@ -478,17 +478,22 @@ fn write_file_atomic(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// is presented with a token prompt. Only state-mutating GCI writes
 /// require auth, consistent with the SIEGE HIGH-3 threat model.
 pub fn build_router(state: DashboardState) -> Router {
+    let protect_writes = |router: Router<DashboardState>| {
+        router.layer(middleware::from_fn_with_state(
+            state.clone(),
+            validate_dashboard_token,
+        ))
+    };
+
     // GCI write API — requires Bearer token.
     // WHY from_fn_with_state: the middleware needs access to `state.token`
     // for the constant-time comparison.
-    let gci_router = Router::new()
-        .route("/file", put(gci_write_file))
-        .route("/file", delete(gci_delete_file))
-        .route("/file", post(gci_write_file))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            validate_dashboard_token,
-        ));
+    let gci_router = protect_writes(
+        Router::new()
+            .route("/file", put(gci_write_file))
+            .route("/file", delete(gci_delete_file))
+            .route("/file", post(gci_write_file)),
+    );
 
     // CORS policy: allow only the loopback dashboard origin.
     // WHY restrictive: this prevents a malicious web page on another origin
@@ -509,18 +514,24 @@ pub fn build_router(state: DashboardState) -> Router {
         // WHY second nest at the same prefix: axum merges both routers; /api/gci/file
         // (auth-protected write) and /api/gci/rules (no-auth read) coexist correctly.
         .nest("/api/gci", crate::http::gci_handlers::gci_read_router())
-        .nest("/api/personal", crate::http::personal_handlers::router())
+        .nest(
+            "/api/personal",
+            protect_writes(crate::http::personal_handlers::router()),
+        )
         .nest("/api/topics", crate::http::topics_handlers::router())
         .nest("/api/projects", crate::http::projects_handlers::router())
         .nest("/api/chat", crate::http::chat_handlers::router())
         .nest("/api/personal", crate::http::usage_history::router())
-        .nest("/api/gci", crate::http::hooks_write::router())
-        .nest("/api/gci", crate::http::harness::router())
+        .nest("/api/gci", protect_writes(crate::http::hooks_write::router()))
+        .nest("/api/gci", protect_writes(crate::http::harness::router()))
         .nest("/api/gci", crate::http::rag_status::router())
         // RAG-08: memory chat_history API — POST/GET /api/memory/chat
-        .nest("/api/memory", crate::http::chat_history_memory::router())
+        .nest(
+            "/api/memory",
+            protect_writes(crate::http::chat_history_memory::router()),
+        )
         // mem-01: CC session harvest — POST /api/harvest/cc-session
-        .nest("/api/harvest", crate::http::harvest::router())
+        .nest("/api/harvest", protect_writes(crate::http::harvest::router()))
         // fleet-01: routing event stream — GET /api/fleet/routing
         .nest("/api/fleet", crate::http::fleet_routing::router());
 
@@ -717,6 +728,72 @@ mod tests {
         assert_eq!(
             json["error"], "unauthorized",
             "body must contain {{\"error\":\"unauthorized\"}}"
+        );
+    }
+
+    /// POST /api/gci/hooks-write is persistent and requires Authorization.
+    #[tokio::test]
+    async fn test_unauthenticated_hooks_write_returns_401() {
+        let state = test_state("correct_token_here");
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/api/gci/hooks-write")
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing Authorization header must return 401"
+        );
+    }
+
+    /// POST /api/gci/harness-regenerate writes harness files and requires Authorization.
+    #[tokio::test]
+    async fn test_unauthenticated_harness_regenerate_returns_401() {
+        let state = test_state("correct_token_here");
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/api/gci/harness-regenerate")
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing Authorization header must return 401"
+        );
+    }
+
+    /// POST /api/personal/threads persists personal state and requires Authorization.
+    #[tokio::test]
+    async fn test_unauthenticated_personal_thread_write_returns_401() {
+        let state = test_state("correct_token_here");
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/api/personal/threads")
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing Authorization header must return 401"
         );
     }
 

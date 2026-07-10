@@ -9,8 +9,9 @@
 //   - The daemon chat path consumes [`preferred_chat_provider`] for its
 //     GP-first-for-chat account choice.
 //
-//   Spill order (lifted verbatim from conductor_router, proven live):
-//   claude2(A2) → claude(A1 spare) → codex → gemini → opencode → gfp(GP).
+//   Spill order (user decree 2026-07):
+//   gfp(GP, T3/Haiku only) → zai → opencode → gemini → codex →
+//   claude2(A2) → claude(A1) LAST.
 //   Accounts with five_hour/seven_day utilization >= 100 or a status other
 //   than "ok"/"pool" are skipped.
 //
@@ -280,26 +281,19 @@ pub fn spill_select<'a, T: ?Sized>(
 
 // ── Spill order ────────────────────────────────────────────────────────────────
 
-/// Ordered list of preferred accounts per provider (lifted from
-/// conductor_router — proven live; preserve semantics exactly).
+/// Ordered list of preferred accounts per provider.
 ///
-/// The spill order (user preference 2026-07 — burn the separate-quota FLEET
-/// before the Anthropic accounts; A1 is the interactive T0 session so it is
-/// used LAST):
-///   codex → gemini → opencode → gfp → claude2(A2) → claude(A1) LAST
-///
-/// Rationale: Codex (GPT-5.5), Gemini (Pro/Ultra), OpenCode (GLM-5.2) and the
-/// free GFP pool each have their OWN quota; delegated work should exhaust those
-/// first so A1 (which the interactive session already eats as T0) is preserved
-/// as the final fallback.
+/// User preference 2026-07: burn separate-quota fleet first, with Zai/OpenCode
+/// before Codex, A2 second-to-last, and A1 last. GFP appears first in the list
+/// but is gated to Haiku/T3-class work only.
 const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
+    ("gfp-pool", Provider::Gfp),
+    ("glm-acc1", Provider::Zai),
+    ("opencode-acc1", Provider::OpenCode),
+    ("opencode", Provider::OpenCode),
+    ("gemini-agt", Provider::Gemini),
     ("codex-acc1", Provider::Codex),
     ("codex", Provider::Codex),
-    ("gemini-agt", Provider::Gemini),
-    ("opencode-acc1", Provider::OpenCode),
-    ("glm-acc1", Provider::Zai),
-    ("opencode", Provider::OpenCode),
-    ("gfp-pool", Provider::Gfp),
     ("claude2", Provider::Claude),
     ("claude", Provider::Claude),
 ];
@@ -368,7 +362,9 @@ pub fn select_account(
     let qa = spill_select(
         resolved.iter().copied(),
         |qa| {
-            if is_saturated(qa) || !is_alive(qa) {
+            if qa.provider == "gfp" && model_class != ModelClass::Haiku {
+                Gate::Skip("not-haiku-class".into())
+            } else if is_saturated(qa) || !is_alive(qa) {
                 Gate::Skip("saturated/dead".into())
             } else {
                 Gate::Pass
@@ -563,18 +559,38 @@ mod tests {
     fn full_snapshot() -> QuotaSnapshot {
         QuotaSnapshot {
             accounts: vec![
+                entry("gfp-pool", "gfp", "pool"),
+                entry("glm-acc1", "zai", "ok"),
+                entry("opencode-acc1", "opencode", "ok"),
+                entry("opencode", "opencode", "ok"),
+                entry("gemini-agt", "gemini", "ok"),
+                entry("codex-acc1", "codex", "ok"),
+                entry("codex", "codex", "ok"),
                 claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
-                entry("codex-acc1", "codex", "ok"),
-                entry("gemini-agt", "gemini", "ok"),
-                entry("opencode-acc1", "opencode", "ok"),
-                entry("gfp-pool", "gfp", "pool"),
             ],
         }
     }
 
     fn req(tier: Tier) -> SelectionRequest {
         SelectionRequest { tier, model_class: None, account_override: None }
+    }
+
+    fn set_status(snap: &mut QuotaSnapshot, account: &str, status: &str) {
+        snap.accounts
+            .iter_mut()
+            .find(|a| a.account == account)
+            .unwrap_or_else(|| panic!("missing account {account}"))
+            .status = status.into();
+    }
+
+    fn saturate_account(snap: &mut QuotaSnapshot, account: &str) {
+        let pos = snap
+            .accounts
+            .iter()
+            .position(|a| a.account == account)
+            .unwrap_or_else(|| panic!("missing account {account}"));
+        snap.accounts[pos] = saturated(snap.accounts[pos].clone());
     }
 
     fn slot(enabled: bool, re_enable_at: Option<Instant>) -> ProviderSlot {
@@ -593,42 +609,57 @@ mod tests {
     // ── Every spill branch ────────────────────────────────────────────────────
 
     #[test]
-    fn t2_healthy_selects_codex_first() {
+    fn t2_healthy_selects_glm_first() {
         let target = select_account(&req(Tier::T2), &full_snapshot(), &GpHealthSnapshot::default())
             .expect("target");
-        assert_eq!(target.account_id, "codex-acc1");
-        assert_eq!(target.provider, Provider::Codex);
-        assert_eq!(target.model, MODEL_GPT);
+        assert_eq!(target.account_id, "glm-acc1");
+        assert_eq!(target.provider, Provider::Zai);
+        assert_eq!(target.model, MODEL_GLM);
     }
 
     #[test]
     fn fleet_and_a2_capped_spills_to_a1_last() {
         let mut snap = full_snapshot();
-        snap.accounts[0] = saturated(snap.accounts[0].clone()); // claude2(A2)
-        snap.accounts[2].status = "needs_reauth".into(); // codex-acc1
-        snap.accounts[3].status = "needs_reauth".into(); // gemini-agt
-        snap.accounts[4].status = "needs_reauth".into(); // opencode-acc1
-        snap.accounts[5].status = "error".into(); // gfp-pool
+        for account in [
+            "glm-acc1",
+            "opencode-acc1",
+            "opencode",
+            "gemini-agt",
+            "codex-acc1",
+            "codex",
+        ] {
+            saturate_account(&mut snap, account);
+        }
+        saturate_account(&mut snap, "claude2");
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
         assert_eq!(target.account_id, "claude");
         assert_eq!(target.provider, Provider::Claude);
         assert_eq!(target.model, MODEL_CLAUDE_SONNET);
         assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
-        assert!(target.reason.contains("codex-acc1"), "reason: {}", target.reason);
-        assert!(target.reason.contains("gemini-agt"), "reason: {}", target.reason);
-        assert!(target.reason.contains("opencode-acc1"), "reason: {}", target.reason);
         assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
+        assert!(target.reason.contains("glm-acc1"), "reason: {}", target.reason);
+        assert!(target.reason.contains("opencode-acc1"), "reason: {}", target.reason);
+        assert!(target.reason.contains("opencode"), "reason: {}", target.reason);
+        assert!(target.reason.contains("gemini-agt"), "reason: {}", target.reason);
+        assert!(target.reason.contains("codex-acc1"), "reason: {}", target.reason);
+        assert!(target.reason.contains("codex"), "reason: {}", target.reason);
         assert!(target.reason.contains("claude2"), "reason: {}", target.reason);
     }
 
     #[test]
     fn fleet_capped_spills_to_a2_before_a1() {
         let mut snap = full_snapshot();
-        snap.accounts[2].status = "needs_reauth".into(); // codex-acc1
-        snap.accounts[3].status = "needs_reauth".into(); // gemini-agt
-        snap.accounts[4].status = "needs_reauth".into(); // opencode-acc1
-        snap.accounts[5].status = "error".into(); // gfp-pool
+        for account in [
+            "glm-acc1",
+            "opencode-acc1",
+            "opencode",
+            "gemini-agt",
+            "codex-acc1",
+            "codex",
+        ] {
+            set_status(&mut snap, account, "needs_reauth");
+        }
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
         assert_eq!(target.account_id, "claude2");
@@ -639,21 +670,9 @@ mod tests {
     }
 
     #[test]
-    fn codex_dead_spills_to_gemini() {
+    fn glm_dead_spills_to_opencode_acc1() {
         let mut snap = full_snapshot();
-        snap.accounts[2].status = "needs_reauth".into();
-        let target =
-            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
-        assert_eq!(target.account_id, "gemini-agt");
-        assert_eq!(target.provider, Provider::Gemini);
-        assert_eq!(target.model, MODEL_GEMINI_PRO);
-    }
-
-    #[test]
-    fn gemini_dead_spills_to_opencode() {
-        let mut snap = full_snapshot();
-        snap.accounts[2].status = "needs_reauth".into();
-        snap.accounts[3].status = "needs_reauth".into();
+        set_status(&mut snap, "glm-acc1", "needs_reauth");
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
         assert_eq!(target.account_id, "opencode-acc1");
@@ -662,16 +681,36 @@ mod tests {
     }
 
     #[test]
-    fn opencode_dead_spills_to_gfp() {
+    fn glm_and_opencode_dead_spills_to_gemini() {
         let mut snap = full_snapshot();
-        for i in 2..5 {
-            snap.accounts[i].status = "needs_reauth".into();
+        for account in ["glm-acc1", "opencode-acc1", "opencode"] {
+            set_status(&mut snap, account, "needs_reauth");
         }
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
-        assert_eq!(target.account_id, "gfp-pool");
-        assert_eq!(target.provider, Provider::Gfp);
-        assert_eq!(target.model, MODEL_GEMINI_FLASH);
+        assert_eq!(target.account_id, "gemini-agt");
+        assert_eq!(target.provider, Provider::Gemini);
+        assert_eq!(target.model, MODEL_GEMINI_PRO);
+    }
+
+    #[test]
+    fn t2_fleet_saturated_spills_to_claude2_before_claude() {
+        let mut snap = full_snapshot();
+        for account in [
+            "glm-acc1",
+            "opencode-acc1",
+            "opencode",
+            "gemini-agt",
+            "codex-acc1",
+            "codex",
+        ] {
+            set_status(&mut snap, account, "needs_reauth");
+        }
+        let target =
+            select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
+        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.provider, Provider::Claude);
+        assert_eq!(target.model, MODEL_CLAUDE_SONNET);
     }
 
     #[test]
@@ -696,33 +735,34 @@ mod tests {
     }
 
     #[test]
-    fn t3_unhealthy_gp_spills_to_codex_first() {
-        // GP pool in cooldown (0 healthy slots) → normal fleet-first spill.
+    fn t3_haiku_allows_gfp_in_spill_order() {
+        // GP pool is Haiku/T3-only; once the request is T3, the fixed order can
+        // choose it even without an injected healthy-pool promotion signal.
         let gp = GpHealthSnapshot { healthy_slots: 0, ..Default::default() };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.provider, Provider::Codex);
-        assert_eq!(target.account_id, "codex-acc1");
-        assert_eq!(target.model, MODEL_GPT);
+        assert_eq!(target.provider, Provider::Gfp);
+        assert_eq!(target.account_id, "gfp-pool");
+        assert_eq!(target.model, MODEL_GEMINI_FLASH);
     }
 
     #[test]
     fn t2_ignores_gp_preference_even_when_healthy() {
         let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
         let target = select_account(&req(Tier::T2), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.account_id, "codex-acc1", "GP preference must be T3-only");
-        assert_eq!(target.provider, Provider::Codex);
-        assert_eq!(target.model, MODEL_GPT);
+        assert_eq!(target.account_id, "glm-acc1", "GP preference must be T3-only");
+        assert_eq!(target.provider, Provider::Zai);
+        assert_eq!(target.model, MODEL_GLM);
     }
 
     #[test]
     fn t3_gp_preferred_but_pool_account_dead_falls_back() {
         let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
         let mut snap = full_snapshot();
-        snap.accounts[5].status = "error".into(); // gfp-pool dead in quota.json
+        set_status(&mut snap, "gfp-pool", "error"); // gfp-pool dead in quota.json
         let target = select_account(&req(Tier::T3), &snap, &gp).expect("target");
-        assert_eq!(target.account_id, "codex-acc1");
-        assert_eq!(target.provider, Provider::Codex);
-        assert_eq!(target.model, MODEL_GPT);
+        assert_eq!(target.account_id, "glm-acc1");
+        assert_eq!(target.provider, Provider::Zai);
+        assert_eq!(target.model, MODEL_GLM);
         assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
         assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
     }
@@ -897,11 +937,11 @@ mod tests {
     }
 
     #[test]
-    fn t1_fleet_first_selects_codex() {
+    fn t1_fleet_first_selects_glm() {
         let target = select_account(&req(Tier::T1), &full_snapshot(), &GpHealthSnapshot::default())
             .expect("target");
-        assert_eq!(target.account_id, "codex-acc1");
-        assert_eq!(target.provider, Provider::Codex);
-        assert_eq!(target.model, MODEL_GPT);
+        assert_eq!(target.account_id, "glm-acc1");
+        assert_eq!(target.provider, Provider::Zai);
+        assert_eq!(target.model, MODEL_GLM);
     }
 }

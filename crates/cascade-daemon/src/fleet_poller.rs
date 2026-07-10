@@ -32,8 +32,10 @@
 //!
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — fleet_poller (E-P6-03 v1.2)
 
-use std::path::PathBuf;
+use std::fs::OpenOptions;
+use std::path::{Path, PathBuf};
 
+use fs2::FileExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -448,14 +450,7 @@ impl FleetPoller {
 
         let cache_path = home.join(".claude").join("usage-cache.json");
 
-        // Load the existing cache so we can preserve entries for accounts that
-        // fail this round (never overwrite with zeros).
-        let mut existing: Vec<serde_json::Value> = (|| -> Option<Vec<serde_json::Value>> {
-            let bytes = std::fs::read(&cache_path).ok()?;
-            let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-            v.get("accounts")?.as_array().cloned()
-        })()
-        .unwrap_or_default();
+        let mut updates: Vec<(String, serde_json::Value)> = Vec::new();
 
         let external_accounts = discover_external();
         let now_epoch = chrono::Utc::now().timestamp() as f64;
@@ -521,7 +516,7 @@ impl FleetPoller {
                             "quota_opaque": false,
                             "last_error":   "http_401"
                         });
-                        upsert_cache_entry(&mut existing, account_id, entry);
+                        updates.push((account_id.to_string(), entry));
                     }
                     // Transient → preserve prior entry untouched.
                     continue;
@@ -541,7 +536,7 @@ impl FleetPoller {
                         "quota_opaque": false,
                         "last_error":   serde_json::Value::Null
                     });
-                    upsert_cache_entry(&mut existing, account_id, entry);
+                    updates.push((account_id.to_string(), entry));
                 }
                 None => {
                     // Transport/HTTP error or error envelope — transient. Do NOT
@@ -551,20 +546,11 @@ impl FleetPoller {
             }
         }
 
-        // Write the merged cache atomically.
-        let payload = serde_json::json!({ "accounts": existing });
-        match serde_json::to_vec_pretty(&payload) {
-            Ok(bytes) => {
-                let tmp = cache_path.with_extension("tmp");
-                if let Err(e) = std::fs::write(&tmp, &bytes) {
-                    warn!(%e, "fleet: failed to write usage-cache.json.tmp");
-                    return;
-                }
-                if let Err(e) = std::fs::rename(&tmp, &cache_path) {
-                    warn!(%e, "fleet: failed to rename usage-cache.json");
-                }
-            }
-            Err(e) => warn!(%e, "fleet: failed to serialize usage cache"),
+        if updates.is_empty() {
+            return;
+        }
+        if let Err(e) = merge_usage_cache_updates(&cache_path, updates) {
+            warn!(%e, "fleet: failed to merge usage-cache.json updates");
         }
     }
 
@@ -655,6 +641,54 @@ fn resolve_claude_bin() -> std::path::PathBuf {
         }
     }
     std::path::PathBuf::from("claude")
+}
+
+fn merge_usage_cache_updates(
+    cache_path: &Path,
+    updates: Vec<(String, serde_json::Value)>,
+) -> Result<(), String> {
+    if let Some(parent) = cache_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create usage-cache parent: {e}"))?;
+    }
+
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(cache_path)
+        .map_err(|e| format!("open usage-cache lock file: {e}"))?;
+    lock_file
+        .lock_exclusive()
+        .map_err(|e| format!("lock usage-cache: {e}"))?;
+
+    let result = (|| -> Result<(), String> {
+        let mut existing: Vec<serde_json::Value> = (|| -> Option<Vec<serde_json::Value>> {
+            let bytes = std::fs::read(cache_path).ok()?;
+            let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+            v.get("accounts")?.as_array().cloned()
+        })()
+        .unwrap_or_default();
+
+        for (account_id, entry) in updates {
+            upsert_cache_entry(&mut existing, &account_id, entry);
+        }
+
+        let payload = serde_json::json!({ "accounts": existing });
+        let bytes = serde_json::to_vec_pretty(&payload)
+            .map_err(|e| format!("serialize usage cache: {e}"))?;
+        let tmp = cache_path.with_extension("tmp");
+        std::fs::write(&tmp, &bytes)
+            .map_err(|e| format!("write usage-cache tmp: {e}"))?;
+        std::fs::rename(&tmp, cache_path)
+            .map_err(|e| format!("rename usage-cache tmp: {e}"))?;
+        Ok(())
+    })();
+
+    let unlock_result = fs2::FileExt::unlock(&lock_file)
+        .map_err(|e| format!("unlock usage-cache: {e}"));
+    result.and(unlock_result)
 }
 
 /// Upsert a usage-cache entry: if an entry with the given `account_id` exists,

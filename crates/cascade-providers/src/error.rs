@@ -13,8 +13,8 @@
 //! - `#[non_exhaustive]` lets downstream crates match without a wildcard arm
 //!   breaking when new variants are added in a minor release.
 //! - `From<reqwest::Error>` and `From<serde_json::Error>` conversions keep
-//!   adapter implementations terse; no information is dropped — the source
-//!   error is preserved in the string representation.
+//!   adapter implementations terse; transport errors are preserved after
+//!   credential-bearing query params are redacted.
 //!
 //! # Constraints
 //!
@@ -111,15 +111,14 @@ pub enum ProviderError {
 impl From<reqwest::Error> for ProviderError {
     /// Convert a `reqwest` transport error into [`ProviderError`].
     ///
-    /// The conversion preserves the full `reqwest` error message, including
-    /// URL and status code when present.  No credential values are included —
-    /// reqwest errors do not carry request headers.
+    /// The conversion preserves the `reqwest` error message, including URL and
+    /// status code when present, after redacting credential query params.
     fn from(e: reqwest::Error) -> Self {
         if e.is_timeout() {
             // Extract a timeout duration if possible, otherwise 0.
             ProviderError::Timeout { secs: 0 }
         } else {
-            ProviderError::NetworkError(e.to_string())
+            ProviderError::NetworkError(crate::http_client::redact_gemini_key(e.to_string()))
         }
     }
 }

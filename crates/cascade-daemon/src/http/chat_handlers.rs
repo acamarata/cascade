@@ -32,6 +32,7 @@ use axum::{
     routing::post,
     Json, Router,
 };
+use cascade_core::model_ids::{MODEL_CLAUDE_HAIKU, MODEL_GPT};
 use cascade_providers::{CompletionRequest, Message, MessageRole};
 use futures_util::StreamExt;
 use serde::Deserialize;
@@ -1155,17 +1156,14 @@ fn effective_middleware_flags(
 /// Return a sensible default model string for the given provider id.
 ///
 /// This is a best-effort hint used when no model is specified in an incoming
-/// chat request; the provider adapter may override it. These IDs are provider
-/// API defaults, NOT fleet routing IDs — they intentionally differ from the
-/// fleet model matrix in `cascade_core::model_ids` (different purpose: API
-/// negotiation vs. agent harness generation).
+/// chat request; the provider adapter may override it.
 fn default_model_for(provider_id: &str) -> String {
     match provider_id {
         // "gp-pool" is the reserved pool-backed adapter id (GP_CHAT_PROVIDER_ID);
         // the :3761 pool serves free Flash only.
         "gemini" | "gp-pool" => "gemini-flash-latest".into(),
-        "anthropic" => "claude-3-5-haiku-20241022".into(),
-        "openai" => "gpt-4o-mini".into(),
+        "anthropic" => MODEL_CLAUDE_HAIKU.into(),
+        "openai" => MODEL_GPT.into(),
         _ if provider_id.starts_with("local") => "default".into(),
         _ => "default".into(),
     }

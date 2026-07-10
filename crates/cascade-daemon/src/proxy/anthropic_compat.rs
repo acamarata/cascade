@@ -163,12 +163,29 @@ async fn fetch_gp_health(client: &reqwest::Client, upstream_url: &str) -> (usize
 /// exhaustion (`ProxyError::AllProvidersExhausted` / `NoProvidersAvailable`,
 /// per `gemini_proxy/types.rs`) rather than an unrelated 503.
 ///
-/// The `:3761` proxy's `write_error` always emits
-/// `{"error":{"code":503,"message":"..."}}` for both exhaustion variants
-/// (`"all Gemini providers exhausted"` / `"no Gemini providers available"`),
-/// so matching on status 503 is sufficient — `:3761` has no other 503 source.
-fn is_pool_exhaustion_response(upstream_status: reqwest::StatusCode) -> bool {
-    upstream_status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+/// The `:3761` proxy's own exhaustion path emits
+/// `{"error":{"code":503,"message":"all Gemini providers exhausted"...}}`.
+/// Relayed Google 503s keep their upstream body and must not be re-labeled as
+/// pool exhaustion.
+fn is_pool_exhaustion_response(upstream_status: reqwest::StatusCode, body: &Value) -> bool {
+    if upstream_status != reqwest::StatusCode::SERVICE_UNAVAILABLE {
+        return false;
+    }
+
+    let code_matches = body
+        .get("error")
+        .and_then(|e| e.get("code"))
+        .and_then(Value::as_u64)
+        == Some(503);
+    let message = body
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    code_matches
+        && (message.starts_with("all Gemini providers exhausted")
+            || message.starts_with("no Gemini providers available"))
 }
 
 /// Circuit-breaker gate: when the upstream response is a pool-exhaustion 503,
@@ -178,8 +195,9 @@ fn is_pool_exhaustion_response(upstream_status: reqwest::StatusCode) -> bool {
 async fn handle_gp_exhaustion(
     state: &AdapterState,
     upstream_status: reqwest::StatusCode,
+    body: &Value,
 ) -> Option<Response> {
-    if !is_pool_exhaustion_response(upstream_status) {
+    if !is_pool_exhaustion_response(upstream_status, body) {
         return None;
     }
     let (total_slots, earliest_reset_secs) =
@@ -199,6 +217,15 @@ async fn handle_gp_exhaustion(
     } else {
         Some(exhausted_response(&gp))
     }
+}
+
+fn upstream_error_message(upstream_status: reqwest::StatusCode, body: &Value) -> String {
+    let msg = body
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or("upstream error");
+    format!("Gemini upstream HTTP {}: {msg}", upstream_status.as_u16())
 }
 
 // ── Model mapping ─────────────────────────────────────────────────────────────
@@ -499,14 +526,6 @@ async fn messages(
 
     let upstream_status = resp.status();
 
-    // GFP circuit breaker (Phase B, v1.13.0): a pool-exhaustion 503 gets the
-    // enriched fail-loud (or deferred-agy-fallback) response BEFORE the
-    // generic error-passthrough below, which would otherwise just relay
-    // `:3761`'s terse "all Gemini providers exhausted" message.
-    if let Some(resp) = handle_gp_exhaustion(&state, upstream_status).await {
-        return resp;
-    }
-
     let gemini_json: Value = match resp.json().await {
         Ok(v) => v,
         Err(e) => {
@@ -521,13 +540,16 @@ async fn messages(
         }
     };
 
+    // GFP circuit breaker (Phase B, v1.13.0): only the proxy-owned exhaustion
+    // body gets the enriched fail-loud response. Relayed Google 503s pass
+    // through as upstream errors below.
+    if let Some(resp) = handle_gp_exhaustion(&state, upstream_status, &gemini_json).await {
+        return resp;
+    }
+
     if !upstream_status.is_success() {
         // Pass through the Gemini error wrapped in Anthropic format.
-        let msg = gemini_json
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(Value::as_str)
-            .unwrap_or("upstream error");
+        let msg = upstream_error_message(upstream_status, &gemini_json);
         let err = json!({
             "error": {
                 "type": "api_error",
@@ -603,23 +625,15 @@ async fn messages_stream(state: AdapterState, body: Value) -> Response {
 
     let upstream_status = resp.status();
 
-    // GFP circuit breaker (Phase B, v1.13.0): same fail-loud gate as the
-    // non-streaming path — nothing has streamed yet at this point, so an
-    // ordinary JSON error response (not an SSE error event) is correct here.
-    if let Some(resp) = handle_gp_exhaustion(&state, upstream_status).await {
-        return resp;
-    }
-
     if !upstream_status.is_success() {
         // Nothing has streamed yet — return the same JSON error shape as the
         // non-streaming path.
         let raw = resp.bytes().await.unwrap_or_default();
         let gemini_json: Value = serde_json::from_slice(&raw).unwrap_or(Value::Null);
-        let msg = gemini_json
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(Value::as_str)
-            .unwrap_or("upstream error");
+        if let Some(resp) = handle_gp_exhaustion(&state, upstream_status, &gemini_json).await {
+            return resp;
+        }
+        let msg = upstream_error_message(upstream_status, &gemini_json);
         let err = json!({ "error": { "type": "api_error", "message": msg } });
         let status =
             StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
@@ -803,18 +817,39 @@ mod tests {
 
     // ── GFP circuit breaker (Phase B, v1.13.0) ────────────────────────────────
 
-    /// `:3761` only ever emits a bare 503 for pool-exhaustion (both
-    /// `AllProvidersExhausted` and `NoProvidersAvailable` — see
-    /// `gemini_proxy/dispatch.rs`'s `write_error` call sites), so any 503
-    /// from upstream must be treated as exhaustion. Non-503 statuses (200,
-    /// 400, 403, 502) must NOT trigger the circuit breaker.
+    /// Only the proxy-owned exhaustion body should trigger the circuit breaker.
+    /// Relayed upstream Google 503 bodies must stay generic upstream errors.
     #[test]
-    fn exhaustion_detected_only_on_503() {
-        assert!(is_pool_exhaustion_response(reqwest::StatusCode::SERVICE_UNAVAILABLE));
-        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::OK));
-        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::BAD_REQUEST));
-        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::FORBIDDEN));
-        assert!(!is_pool_exhaustion_response(reqwest::StatusCode::BAD_GATEWAY));
+    fn exhaustion_detected_only_on_proxy_body_shape() {
+        let exhaustion = json!({
+            "error": {
+                "code": 503,
+                "message": "all Gemini providers exhausted; earliest reset in 42s"
+            }
+        });
+        let upstream_503 = json!({
+            "error": {
+                "code": 503,
+                "message": "The model is overloaded. Please try again later."
+            }
+        });
+
+        assert!(is_pool_exhaustion_response(
+            reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            &exhaustion
+        ));
+        assert!(!is_pool_exhaustion_response(
+            reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            &upstream_503
+        ));
+        assert!(!is_pool_exhaustion_response(
+            reqwest::StatusCode::BAD_GATEWAY,
+            &exhaustion
+        ));
+        assert_eq!(
+            upstream_error_message(reqwest::StatusCode::SERVICE_UNAVAILABLE, &upstream_503),
+            "Gemini upstream HTTP 503: The model is overloaded. Please try again later."
+        );
     }
 
     /// Fail-loud path (env unset / default): the response is HTTP 503 with an
@@ -940,7 +975,13 @@ mod tests {
             client: reqwest::Client::new(),
         };
 
-        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::SERVICE_UNAVAILABLE)
+        let body = json!({
+            "error": {
+                "code": 503,
+                "message": "all Gemini providers exhausted"
+            }
+        });
+        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::SERVICE_UNAVAILABLE, &body)
             .await
             .expect("503 must be recognized as pool exhaustion");
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -962,7 +1003,13 @@ mod tests {
             upstream_url: "http://127.0.0.1:1".to_string(), // unreachable, must not matter
             client: reqwest::Client::new(),
         };
-        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::OK).await;
+        let body = json!({
+            "error": {
+                "code": 503,
+                "message": "all Gemini providers exhausted"
+            }
+        });
+        let resp = handle_gp_exhaustion(&state, reqwest::StatusCode::OK, &body).await;
         assert!(resp.is_none(), "200 OK must never be treated as exhaustion");
     }
 }

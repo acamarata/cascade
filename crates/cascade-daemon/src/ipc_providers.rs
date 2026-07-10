@@ -581,7 +581,10 @@ impl ProviderIpcHandler {
 ///
 /// `api_key` is passed by reference and cloned inside the adapter.  The
 /// caller is responsible for zeroizing the original after this call returns.
-fn build_adapter_for_id(id: &str, api_key: &str) -> Arc<dyn cascade_providers::ProviderAdapter> {
+pub fn build_adapter_for_id(
+    id: &str,
+    api_key: &str,
+) -> Arc<dyn cascade_providers::ProviderAdapter + Send + Sync> {
     // Normalize: compare against canonical slugs (case-insensitive prefix match
     // handles ids like "anthropic-acct1" in addition to bare "anthropic").
     let id_lower = id.to_lowercase();

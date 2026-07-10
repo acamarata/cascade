@@ -101,7 +101,8 @@ mod context_sync;
 mod updates;
 
 use cascade_core::providers_store::read_providers_store;
-use cascade_providers::ProviderRegistry;
+use cascade_keychain::Keychain;
+use cascade_providers::{ProviderAdapter, ProviderRegistry};
 #[cfg(feature = "gemini-proxy")]
 use secrecy::SecretString;
 #[cfg(feature = "gemini-proxy")]
@@ -182,18 +183,21 @@ async fn main() {
     // Gated on gemini-proxy: load_api_keys() and the keychain map are only
     // needed when the reverse-proxy surface is compiled in.
     #[cfg(feature = "gemini-proxy")]
-    let _keychain_map: HashMap<String, SecretString> = {
-        let raw_keys: Vec<SecretString> = key_loader::load_api_keys();
-        let gemini_slots: Vec<String> = read_providers_store(&providers_path)
+    let gemini_keychain_map: HashMap<String, SecretString> = {
+        let raw_keys: Vec<SecretString> = key_loader::load_api_keys_from_path(&providers_path);
+        let mut gemini_slots: Vec<String> = read_providers_store(&providers_path)
             .map(|store| {
                 store
                     .providers
                     .into_iter()
-                    .filter(|p| p.enabled && p.harness == "gemini")
+                    .filter(|p| {
+                        p.enabled && p.harness == "gemini" && p.id.starts_with("gemini-free-")
+                    })
                     .map(|p| p.id)
                     .collect()
             })
             .unwrap_or_default();
+        gemini_slots.sort_by_key(|id| gemini_free_slot_number(id));
         gemini_slots.into_iter().zip(raw_keys.into_iter()).collect()
     };
 
@@ -220,28 +224,22 @@ async fn main() {
     );
 
     // ── Provider health-check task (T-P3-E04-15) ─────────────────────────
-    // Build a ProviderRegistry from configured providers (presence in
-    // providers.json is sufficient — real adapters are P4+ scope; for now
-    // all enabled entries are registered as NoopProvider placeholders so the
-    // health-check task wires cleanly without depending on concrete adapters).
-    //
-    // WHY NoopProvider here: concrete adapter implementations land in P4.
-    // The task wiring (state caching, WARN logging, refresh interval) is
-    // fully testable today with the existing NoopProvider stub.
-    //
-    // Unhealthy providers emit WARN logs but NEVER block daemon startup.
+    // Build the runtime ProviderRegistry from configured providers. Real
+    // API-key providers are reconstructed with the same adapter constructor path
+    // used by the IPC add-provider flow; unsupported entries remain visible as
+    // NoopProvider placeholders but are excluded from the health sweep registry.
+    // Unhealthy real providers emit WARN logs but NEVER block daemon startup.
     let provider_registry = Arc::new(ProviderRegistry::new());
+    let provider_health_registry = Arc::new(ProviderRegistry::new());
     let provider_health_state: provider_health::HealthState =
         Arc::new(RwLock::new(std::collections::HashMap::new()));
     let health_shutdown = CancellationToken::new();
 
-    // Register enabled providers from providers.json as NoopProvider placeholders.
-    // Real adapter wiring lands in P4 (concrete provider tickets).
     {
-        use cascade_providers::NoopProvider;
         let entries = read_providers_store(&providers_path)
             .map(|s| s.providers)
             .unwrap_or_default();
+        let keychain = cascade_keychain::platform_keychain();
 
         // E1-S6: count routable GP slots BEFORE `entries` is consumed below —
         // the pool-backed chat adapter is only registered when at least one
@@ -264,12 +262,20 @@ async fn main() {
             .collect();
         model_drift::check_and_warn(live_harnesses);
 
-        for entry in entries.into_iter().filter(|p| p.enabled) {
-            let id = entry.id.clone();
-            if let Err(e) = provider_registry.register(id.clone(), Arc::new(NoopProvider)) {
-                warn!(provider_id = %id, error = %e, "failed to register provider (skipping)");
-            }
+        for entry in entries.iter().filter(|p| p.enabled) {
+            register_provider_store_entry(
+                &provider_registry,
+                &provider_health_registry,
+                keychain.as_ref(),
+                entry,
+            );
         }
+        register_connected_provider_entries(
+            &provider_registry,
+            &provider_health_registry,
+            keychain.as_ref(),
+            &config_dir,
+        );
 
         // ── GP-first chat adapter (E1-S6) ─────────────────────────────────
         // Register a REAL pool-proxy GeminiAdapter (:3761 rotating pool, 429
@@ -283,16 +289,19 @@ async fn main() {
         if routable_gp_slots > 0 {
             use cascade_providers::adapters::gemini::{GeminiAdapter, GeminiConfig};
             let gp_id = cascade_core::selection::GP_CHAT_PROVIDER_ID.to_string();
-            match provider_registry
-                .register(gp_id.clone(), Arc::new(GeminiAdapter::new(GeminiConfig::proxy())))
-            {
-                Ok(()) => info!(
+            let adapter: Arc<dyn ProviderAdapter + Send + Sync> =
+                Arc::new(GeminiAdapter::new(GeminiConfig::proxy()));
+            if register_startup_adapter(
+                &provider_registry,
+                &provider_health_registry,
+                gp_id.clone(),
+                adapter,
+            ) {
+                info!(
                     provider_id = %gp_id,
                     slots = routable_gp_slots,
                     "registered GP pool-backed chat adapter"
-                ),
-                Err(e) => warn!(provider_id = %gp_id, error = %e,
-                    "failed to register GP pool-backed chat adapter"),
+                );
             }
         }
     }
@@ -300,16 +309,16 @@ async fn main() {
     // ── Local LLM scan (E-P5-07) ──────────────────────────────────────────────
     // Scan ~/.cascade/models/ and register each present model as a local:<id>
     // provider. Never blocks startup — missing models are skipped silently.
-    try_register_local_models(&provider_registry);
+    try_register_local_models(&provider_registry, &provider_health_registry);
 
     // ── Ollama auto-detect (T-P3-E04-19) ─────────────────────────────────────
     // Probe localhost:11434 with a 500 ms timeout. If Ollama is running,
     // register the adapter as "ollama". If absent, skip silently — the
     // daemon must never block startup waiting for an optional local LLM.
-    try_register_ollama(&provider_registry).await;
+    try_register_ollama(&provider_registry, &provider_health_registry).await;
 
     let _provider_health_handle = provider_health::spawn_health_check_task(
-        provider_registry.clone(),
+        provider_health_registry.clone(),
         provider_health_state.clone(),
         std::time::Duration::from_secs(300), // 5-minute refresh interval
         health_shutdown.clone(),
@@ -466,8 +475,22 @@ async fn main() {
         }
     }
 
+    #[cfg(feature = "gemini-proxy")]
+    let supervisor_future = supervisor::run(
+        config_dir.clone(),
+        shutdown_token.clone(),
+        provider_registry.clone(),
+        gemini_keychain_map,
+    );
+    #[cfg(not(feature = "gemini-proxy"))]
+    let supervisor_future = supervisor::run(
+        config_dir.clone(),
+        shutdown_token.clone(),
+        provider_registry.clone(),
+    );
+
     tokio::select! {
-        result = supervisor::run(config_dir.clone(), shutdown_token.clone(), provider_registry.clone()) => {
+        result = supervisor_future => {
             if let Err(e) = result {
                 error!(%e, "supervisor exited with error");
                 // Signal the tray thread to exit before terminating the process.
@@ -556,6 +579,134 @@ fn open_url(url: &str) -> Result<(), std::io::Error> {
     cmd.arg(url).spawn().map(|_| ())
 }
 
+const IPC_PROVIDER_KEYCHAIN_SERVICE: &str = "dev.cascade";
+
+#[cfg(feature = "gemini-proxy")]
+fn gemini_free_slot_number(id: &str) -> u32 {
+    id.strip_prefix("gemini-free-")
+        .and_then(|n| n.parse::<u32>().ok())
+        .unwrap_or(u32::MAX)
+}
+
+fn register_provider_store_entry(
+    registry: &Arc<ProviderRegistry>,
+    health_registry: &Arc<ProviderRegistry>,
+    keychain: &dyn Keychain,
+    entry: &cascade_core::providers_store::ProviderEntry,
+) {
+    let id = entry.id.clone();
+
+    if !entry.local_ok {
+        register_noop_placeholder(registry, id, "provider is disabled for local daemon use");
+        return;
+    }
+
+    if entry.auth_kind != "ApiKey" {
+        register_noop_placeholder(registry, id, "provider auth kind has no startup adapter");
+        return;
+    }
+
+    let Some(api_key) = provider_key_for_entry(keychain, entry) else {
+        register_noop_placeholder(registry, id, "provider API key was not found");
+        return;
+    };
+
+    let adapter = cascade_daemon::ipc_providers::build_adapter_for_id(&id, &api_key);
+    register_startup_adapter(registry, health_registry, id, adapter);
+}
+
+fn provider_key_for_entry(
+    keychain: &dyn Keychain,
+    entry: &cascade_core::providers_store::ProviderEntry,
+) -> Option<String> {
+    if entry.harness == "gemini" && entry.account_id.starts_with("AIza") {
+        return Some(entry.account_id.clone());
+    }
+
+    let candidates = [
+        (IPC_PROVIDER_KEYCHAIN_SERVICE, entry.id.as_str()),
+        (cascade_providers::PROVIDER_KEYCHAIN_SERVICE, entry.id.as_str()),
+        (IPC_PROVIDER_KEYCHAIN_SERVICE, entry.account_id.as_str()),
+        (
+            cascade_providers::PROVIDER_KEYCHAIN_SERVICE,
+            entry.account_id.as_str(),
+        ),
+    ];
+
+    candidates
+        .iter()
+        .find_map(|(service, account)| keychain.get_key(service, account).ok())
+}
+
+fn register_connected_provider_entries(
+    registry: &Arc<ProviderRegistry>,
+    health_registry: &Arc<ProviderRegistry>,
+    keychain: &dyn Keychain,
+    config_dir: &std::path::Path,
+) {
+    let cascade_dir = config_dir.to_path_buf();
+    for provider in cascade_providers::list_providers_at(keychain, Some(&cascade_dir)) {
+        match keychain.get_key(cascade_providers::PROVIDER_KEYCHAIN_SERVICE, &provider.id) {
+            Ok(api_key) => {
+                let adapter =
+                    cascade_daemon::ipc_providers::build_adapter_for_id(&provider.id, &api_key);
+                register_startup_adapter(registry, health_registry, provider.id, adapter);
+            }
+            Err(_) => {
+                register_noop_placeholder(
+                    registry,
+                    provider.id,
+                    "connected provider keychain entry was not found",
+                );
+            }
+        }
+    }
+}
+
+fn register_startup_adapter(
+    registry: &Arc<ProviderRegistry>,
+    health_registry: &Arc<ProviderRegistry>,
+    id: String,
+    adapter: Arc<dyn ProviderAdapter + Send + Sync>,
+) -> bool {
+    let is_noop = adapter.provider_info().id == "noop";
+    if is_noop {
+        warn!(
+            provider_id = %id,
+            "provider registered as NoopProvider and excluded from health sweep"
+        );
+    }
+
+    if let Err(e) = registry.register(id.clone(), Arc::clone(&adapter)) {
+        warn!(provider_id = %id, error = %e, "failed to register provider (skipping)");
+        return false;
+    }
+
+    if !is_noop {
+        if let Err(e) = health_registry.register(id.clone(), adapter) {
+            warn!(
+                provider_id = %id,
+                error = %e,
+                "failed to register provider in health registry (skipping health check)"
+            );
+        }
+    }
+
+    true
+}
+
+fn register_noop_placeholder(registry: &Arc<ProviderRegistry>, id: String, reason: &'static str) {
+    warn!(
+        provider_id = %id,
+        reason,
+        "provider registered as NoopProvider and excluded from health sweep"
+    );
+    let adapter: Arc<dyn ProviderAdapter + Send + Sync> = Arc::new(cascade_providers::NoopProvider);
+    if let Err(e) = registry.register(id.clone(), adapter) {
+        warn!(provider_id = %id, error = %e, "failed to register provider (skipping)");
+    }
+}
+
 /// Probe the local Ollama daemon and register `OllamaAdapter` if present.
 ///
 /// Fires a single `GET /api/tags` with a 500 ms timeout.  When Ollama
@@ -564,14 +715,19 @@ fn open_url(url: &str) -> Result<(), std::io::Error> {
 /// an optional local LLM must never block daemon startup.
 ///
 /// SPORT: MASTER-RUST-CRATES.md — cascade-daemon: Ollama auto-detect (T-P3-E04-19)
-async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
+async fn try_register_ollama(
+    registry: &Arc<ProviderRegistry>,
+    health_registry: &Arc<ProviderRegistry>,
+) {
     use cascade_providers::adapters::ollama::OllamaAdapter;
 
     match OllamaAdapter::try_detect().await {
-        Some(adapter) => match registry.register("ollama".to_owned(), Arc::new(adapter)) {
-            Ok(()) => info!("Ollama detected and registered as provider \"ollama\""),
-            Err(e) => warn!(error = %e, "Ollama detected but registration failed"),
-        },
+        Some(adapter) => {
+            let adapter: Arc<dyn ProviderAdapter + Send + Sync> = Arc::new(adapter);
+            if register_startup_adapter(registry, health_registry, "ollama".to_owned(), adapter) {
+                info!("Ollama detected and registered as provider \"ollama\"");
+            }
+        }
         None => {
             info!("Ollama not detected on localhost:11434 (skipping registration)");
         }
@@ -593,7 +749,10 @@ async fn try_register_ollama(registry: &Arc<ProviderRegistry>) {
 ///
 /// SPORT: MASTER-RUST-CRATES.md — cascade-daemon: local LLM registration (E-P5-07)
 #[cfg(feature = "local-llm")]
-fn try_register_local_models(registry: &Arc<ProviderRegistry>) {
+fn try_register_local_models(
+    registry: &Arc<ProviderRegistry>,
+    health_registry: &Arc<ProviderRegistry>,
+) {
     use cascade_local_llm::scan_installed_models;
 
     let adapters = scan_installed_models();
@@ -602,16 +761,19 @@ fn try_register_local_models(registry: &Arc<ProviderRegistry>) {
         return;
     }
     for (provider_id, adapter) in adapters {
-        match registry.register(provider_id.clone(), Arc::new(adapter)) {
-            Ok(()) => info!(provider_id, "local LLM registered"),
-            Err(e) => warn!(provider_id, error = %e, "local LLM registration failed (skipping)"),
+        let adapter: Arc<dyn ProviderAdapter + Send + Sync> = Arc::new(adapter);
+        if register_startup_adapter(registry, health_registry, provider_id.clone(), adapter) {
+            info!(provider_id, "local LLM registered");
         }
     }
 }
 
 /// No-op stub used when the `local-llm` feature is not enabled.
 #[cfg(not(feature = "local-llm"))]
-fn try_register_local_models(_registry: &Arc<ProviderRegistry>) {
+fn try_register_local_models(
+    _registry: &Arc<ProviderRegistry>,
+    _health_registry: &Arc<ProviderRegistry>,
+) {
     info!("local LLM support not built in (build with --features local-llm to enable)");
 }
 
