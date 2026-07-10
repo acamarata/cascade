@@ -1,5 +1,7 @@
 //! Gemini adapter configuration — `GeminiConfig` and URL constants.
 
+use cascade_types::model_ids::MODEL_GEMINI_FLASH;
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Direct Gemini API base URL (without trailing slash).
@@ -9,7 +11,11 @@ pub(super) const GEMINI_DIRECT_BASE: &str = "https://generativelanguage.googleap
 pub(super) const GEMINI_PROXY_BASE: &str = "http://127.0.0.1:3761";
 
 /// Default model when none is specified in `GeminiConfig`.
-pub(super) const DEFAULT_MODEL: &str = "gemini-2.0-flash";
+///
+/// Aliases the canonical fleet constant `MODEL_GEMINI_FLASH`
+/// (`gemini-3.5-flash`) so a fleet model swap is a one-line const edit
+/// in `cascade_types::model_ids` — never re-type the literal here.
+pub(super) const DEFAULT_MODEL: &str = MODEL_GEMINI_FLASH;
 
 // ── GeminiConfig ──────────────────────────────────────────────────────────────
 
@@ -35,7 +41,7 @@ pub struct GeminiConfig {
     /// Must come from the cascade-keychain service `"cascade.gemini"`.
     pub api_key: Option<String>,
 
-    /// Gemini model identifier.  Defaults to `gemini-2.0-flash`.
+    /// Gemini model identifier.  Defaults to `MODEL_GEMINI_FLASH` (`gemini-3.5-flash`).
     pub model: String,
 }
 

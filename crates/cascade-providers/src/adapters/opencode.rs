@@ -370,7 +370,7 @@ impl ProviderAdapter for OpenCodeAdapter {
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         Ok(vec![
             ModelInfo {
-                id: "glm-5.2".into(),
+                id: cascade_types::model_ids::MODEL_GLM.into(),
                 name: "GLM 5.2".into(),
                 context_window: 1_000_000,
                 supports_streaming: true,
@@ -451,6 +451,9 @@ mod tests {
     use crate::test_helpers::test_support::{
         fixture_json, make_openai_sse, HttpMethod, MockProviderServer,
     };
+    // Model ids come from the canonical registry, never string literals — the
+    // model-id-gate CI check enforces this across crates/.
+    use cascade_types::model_ids::MODEL_GLM;
 
     // ── Happy path: fixture JSON → CompletionResponse ─────────────────────────
 
@@ -467,7 +470,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
-        let req = CompletionRequest::simple("glm-5.2", "What is the capital of France?");
+        let req = CompletionRequest::simple(MODEL_GLM, "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("should succeed");
 
         // Contract assertions: content + model + prompt_tokens all populated.
@@ -493,7 +496,7 @@ mod tests {
         // In local dev with a real token stored this test would short-circuit
         // by succeeding against the real API; we accept that trade-off.
         let err = adapter
-            .complete(CompletionRequest::simple("glm-5.2", "ping"))
+            .complete(CompletionRequest::simple(MODEL_GLM, "ping"))
             .await
             .unwrap_err();
         assert!(
@@ -521,7 +524,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "expired-token");
-        let req = CompletionRequest::simple("glm-5.2", "hello");
+        let req = CompletionRequest::simple(MODEL_GLM, "hello");
         let err = adapter.complete(req).await.unwrap_err();
 
         assert!(
@@ -547,7 +550,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
-        let req = CompletionRequest::simple("glm-5.2", "ping");
+        let req = CompletionRequest::simple(MODEL_GLM, "ping");
         let mut stream = adapter
             .complete_stream(req)
             .await
@@ -582,7 +585,7 @@ mod tests {
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
         let resp = adapter
-            .complete(CompletionRequest::simple("glm-5.2", "test"))
+            .complete(CompletionRequest::simple(MODEL_GLM, "test"))
             .await
             .expect("should succeed");
 
@@ -601,7 +604,7 @@ mod tests {
         let adapter = OpenCodeAdapter::new();
         let models = adapter.available_models().await.unwrap();
         assert_eq!(models.len(), 6, "expected 6 models, got {}", models.len());
-        assert!(models.iter().any(|m| m.id == "glm-5.2"));
+        assert!(models.iter().any(|m| m.id == MODEL_GLM));
         assert!(models.iter().any(|m| m.id == "deepseek-v4-pro"));
         assert!(models.iter().any(|m| m.id == "qwen3.7-max"));
         assert!(models.iter().any(|m| m.id == "kimi-k2.7-code"));
@@ -714,7 +717,7 @@ mod tests {
             oauth_cfg,
         );
 
-        let req = CompletionRequest::simple("glm-5.2", "hello");
+        let req = CompletionRequest::simple(MODEL_GLM, "hello");
         let result = adapter.complete(req).await;
         assert!(
             result.is_ok(),
@@ -757,7 +760,7 @@ mod tests {
             OpenCodeAdapter::with_oauth_refresh(api_server.uri(), "bad-token", "bad-rt", oauth_cfg);
 
         let err = adapter
-            .complete(CompletionRequest::simple("glm-5.2", "hi"))
+            .complete(CompletionRequest::simple(MODEL_GLM, "hi"))
             .await
             .unwrap_err();
         assert!(

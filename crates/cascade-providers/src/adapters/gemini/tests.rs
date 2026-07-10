@@ -16,6 +16,7 @@ mod tests {
     };
     use crate::types::CompletionRequest;
     use crate::adapter::ProviderAdapter;
+    use cascade_types::model_ids::{MODEL_GEMINI_FLASH, MODEL_GEMINI_PRO};
     use futures::StreamExt;
     use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -25,10 +26,11 @@ mod tests {
     #[tokio::test]
     async fn proxy_mode_no_key_in_request() {
         let server = MockServer::start().await;
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
 
         // This mock will FAIL the test if `key` query param is present.
         Mock::given(method("POST"))
-            .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(path(&gen_url))
             .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&server)
             .await;
@@ -37,7 +39,7 @@ mod tests {
         config.base_url = server.uri(); // point to mock
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "hello");
         let result = adapter.complete(req).await;
         assert!(result.is_ok(), "proxy mode should succeed: {:?}", result);
 
@@ -61,8 +63,9 @@ mod tests {
     #[tokio::test]
     async fn direct_mode_includes_key_in_url() {
         let server = MockServer::start().await;
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
         Mock::given(method("POST"))
-            .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(path(&gen_url))
             .and(query_param("key", "test-api-key"))
             .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&server)
@@ -72,7 +75,7 @@ mod tests {
         config.base_url = server.uri();
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "What is the capital of France?");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("direct mode complete");
 
         assert!(!resp.content.is_empty(), "content must not be empty");
@@ -84,9 +87,10 @@ mod tests {
     #[tokio::test]
     async fn complete_happy_path() {
         let ctx = MockProviderServer::start("gemini").await;
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
         ctx.mount_json(
             HttpMethod::Post,
-            "/v1beta/models/gemini-2.0-flash:generateContent",
+            &gen_url,
             200,
             fixture_json("gemini_complete"),
         )
@@ -96,7 +100,7 @@ mod tests {
         config.base_url = ctx.base_url();
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "What is the capital of France?");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("complete");
 
         assert_eq!(resp.content, "The capital of France is Paris.");
@@ -117,8 +121,9 @@ mod tests {
     #[tokio::test]
     async fn complete_rate_limit_maps_to_rate_limited() {
         let server = MockServer::start().await;
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
         Mock::given(method("POST"))
-            .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(path(&gen_url))
             .respond_with(ResponseTemplate::new(429).append_header("retry-after", "0"))
             .mount(&server)
             .await;
@@ -127,7 +132,7 @@ mod tests {
         config.base_url = server.uri();
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "hi");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "hi");
         let err = adapter.complete(req).await.unwrap_err();
 
         assert!(
@@ -142,9 +147,10 @@ mod tests {
     async fn complete_stream_yields_chunks() {
         let ctx = MockProviderServer::start("gemini-stream").await;
         let sse_body = fixture_text("gemini_stream");
+        let stream_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:streamGenerateContent");
         ctx.mount_raw(
             HttpMethod::Post,
-            "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+            &stream_url,
             200,
             "text/event-stream",
             sse_body,
@@ -155,7 +161,7 @@ mod tests {
         config.base_url = ctx.base_url();
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "Stream test");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "Stream test");
         let stream = adapter.complete_stream(req).await.expect("stream start");
 
         let chunks: Vec<_> = stream.collect().await;
@@ -175,9 +181,10 @@ mod tests {
     async fn stream_proxy_mode_no_key() {
         let ctx = MockProviderServer::start("gemini-stream-proxy").await;
         let sse_body = fixture_text("gemini_stream");
+        let stream_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:streamGenerateContent");
         ctx.mount_raw(
             HttpMethod::Post,
-            "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+            &stream_url,
             200,
             "text/event-stream",
             sse_body,
@@ -188,7 +195,7 @@ mod tests {
         config.base_url = ctx.base_url();
 
         let adapter = GeminiAdapter::new(config);
-        let req = CompletionRequest::simple("gemini-2.0-flash", "proxy stream");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "proxy stream");
         let stream = adapter.complete_stream(req).await.expect("stream");
         let chunks: Vec<_> = stream.collect().await;
         assert!(!chunks.is_empty());
@@ -222,16 +229,16 @@ mod tests {
         let models = adapter.available_models().await.unwrap();
         let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
         assert!(
-            ids.contains(&"gemini-2.0-flash"),
-            "must include gemini-2.0-flash"
+            ids.contains(&MODEL_GEMINI_FLASH),
+            "must include {MODEL_GEMINI_FLASH}"
         );
         assert!(
-            ids.contains(&"gemini-1.5-pro"),
-            "must include gemini-1.5-pro"
+            ids.contains(&MODEL_GEMINI_PRO),
+            "must include {MODEL_GEMINI_PRO}"
         );
         assert!(
-            ids.contains(&"gemini-1.0-pro"),
-            "must include gemini-1.0-pro"
+            ids.contains(&"gemini-3-flash"),
+            "must include gemini-3-flash"
         );
     }
 
@@ -293,14 +300,15 @@ mod tests {
 
         // First call: 401 (expired token).
         // Second call: 200 (after refresh).
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
         Mock::given(wm_method("POST"))
-            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(wm_path(&gen_url))
             .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
             .up_to_n_times(1)
             .mount(&api_server)
             .await;
         Mock::given(wm_method("POST"))
-            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(wm_path(&gen_url))
             .respond_with(ResponseTemplate::new(200).set_body_json(fixture_json("gemini_complete")))
             .mount(&api_server)
             .await;
@@ -339,7 +347,7 @@ mod tests {
             oauth_cfg,
         );
 
-        let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "hello");
         let result = adapter.complete(req).await;
         assert!(
             result.is_ok(),
@@ -359,8 +367,9 @@ mod tests {
         let token_server = MockServer::start().await;
 
         // All API calls return 401.
+        let gen_url = format!("/v1beta/models/{MODEL_GEMINI_FLASH}:generateContent");
         Mock::given(wm_method("POST"))
-            .and(wm_path("/v1beta/models/gemini-2.0-flash:generateContent"))
+            .and(wm_path(&gen_url))
             .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
             .mount(&api_server)
             .await;
@@ -390,7 +399,7 @@ mod tests {
         let adapter =
             GeminiAdapter::with_oauth_token(config, "bad-token", "bad-refresh-token", oauth_cfg);
 
-        let req = CompletionRequest::simple("gemini-2.0-flash", "hello");
+        let req = CompletionRequest::simple(MODEL_GEMINI_FLASH, "hello");
         let err = adapter.complete(req).await.unwrap_err();
         assert!(
             matches!(err, ProviderError::OAuthExpired { ref provider } if provider == "gemini"),
@@ -411,7 +420,7 @@ mod tests {
 
         let adapter = GeminiAdapter::new(GeminiConfig::proxy());
         let req = CompletionRequest {
-            model: "gemini-2.0-flash".into(),
+            model: MODEL_GEMINI_FLASH.into(),
             messages: vec![
                 Message::system("Summary of the earlier conversation: chose sqlite."),
                 Message::user("continue"),
@@ -441,7 +450,7 @@ mod tests {
 
         let adapter = GeminiAdapter::new(GeminiConfig::proxy());
         let req = CompletionRequest {
-            model: "gemini-2.0-flash".into(),
+            model: MODEL_GEMINI_FLASH.into(),
             messages: vec![Message::system("only summary"), Message::user("q")],
             max_tokens: None,
             temperature: None,

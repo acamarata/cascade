@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Removed
+- Dead `zai.rs` and `deepinfra.rs` adapter skeletons from
+  `crates/cascade-providers/src/adapters/` (plus their test fixtures).
+  Neither file was ever in the module tree (`adapters/mod.rs` declared
+  neither `pub mod zai;` nor `pub mod deepinfra;`), so they never
+  compiled and were silently rotting with stale types. **z.ai GLM is
+  dispatched through Claude Code with the GLM endpoint env** (a GLM
+  Coding Plan compliance requirement), not a direct API adapter — the
+  `opencode` adapter already covers that path. DeepInfra was never
+  provisioned.
+
+### Changed
+- `gemini::config::DEFAULT_MODEL` now references
+  `MODEL_GEMINI_FLASH` (`gemini-3.5-flash`) instead of the retired
+  `gemini-2.0-flash` literal.
+- `gemini::adapter::available_models()` roster refreshed to the current
+  GA/preview lineup: `gemini-3.1-pro`, `gemini-3.5-flash`,
+  `gemini-3-flash` (per `models/models.yaml`).
+
 ## [1.15.1] - 2026-07-09
 
 Chat reliability, fleet-first routing, UI polish, and the 2026-07 models audit.

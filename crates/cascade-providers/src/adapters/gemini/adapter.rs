@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use futures_core::Stream;
 use tracing::debug;
 
+use cascade_types::model_ids::{MODEL_GEMINI_FLASH, MODEL_GEMINI_PRO};
+
 use crate::{
     adapter::ProviderAdapter,
     cost::compute_cost,
@@ -466,35 +468,27 @@ impl ProviderAdapter for GeminiAdapter {
     }
 
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
+        // Roster per models/models.yaml (2026-07 audit). Doctrine model IDs
+        // (MODEL_GEMINI_PRO, MODEL_GEMINI_FLASH) are imported from
+        // cascade_types::model_ids; `gemini-3-flash` has no doctrine constant
+        // (it is a preview-tier alt, not one of the 8 canonical fleet IDs).
         Ok(vec![
             ModelInfo {
-                id: "gemini-2.0-flash".to_string(),
-                name: "Gemini 2.0 Flash".to_string(),
-                context_window: 1_048_576,
+                id: MODEL_GEMINI_PRO.to_string(),
+                name: "Gemini 3.1 Pro".to_string(),
+                context_window: 1_000_000,
                 supports_streaming: true,
             },
             ModelInfo {
-                id: "gemini-2.0-flash-lite".to_string(),
-                name: "Gemini 2.0 Flash Lite".to_string(),
-                context_window: 1_048_576,
+                id: MODEL_GEMINI_FLASH.to_string(),
+                name: "Gemini 3.5 Flash".to_string(),
+                context_window: 1_000_000,
                 supports_streaming: true,
             },
             ModelInfo {
-                id: "gemini-1.5-pro".to_string(),
-                name: "Gemini 1.5 Pro".to_string(),
-                context_window: 2_097_152,
-                supports_streaming: true,
-            },
-            ModelInfo {
-                id: "gemini-1.5-flash".to_string(),
-                name: "Gemini 1.5 Flash".to_string(),
-                context_window: 1_048_576,
-                supports_streaming: true,
-            },
-            ModelInfo {
-                id: "gemini-1.0-pro".to_string(),
-                name: "Gemini 1.0 Pro".to_string(),
-                context_window: 32_760,
+                id: "gemini-3-flash".to_string(),
+                name: "Gemini 3 Flash".to_string(),
+                context_window: 1_000_000,
                 supports_streaming: true,
             },
         ])
@@ -520,11 +514,11 @@ impl ProviderAdapter for GeminiAdapter {
             base_url,
             capabilities: ProviderCapabilities {
                 supports_streaming: true,
-                // Vision is supported by gemini-1.5-pro and gemini-2.0-flash
-                // via multimodal parts; text-only for now (P3 scope).
+                // Vision is supported by the Gemini 3 family via multimodal
+                // parts; text-only for now (P3 scope).
                 supports_vision: false,
-                // gemini-1.5-pro context window (largest in the default set).
-                max_context_tokens: 2_097_152,
+                // Gemini 3 family context window (1M tokens across the roster).
+                max_context_tokens: 1_000_000,
                 supports_function_calling: true,
             },
         }
