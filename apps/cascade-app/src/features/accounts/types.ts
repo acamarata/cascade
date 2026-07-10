@@ -101,11 +101,15 @@ export function accountLabel(account: AccountQuota): string {
     case 'codex':
       return 'Co'
     case 'gemini':
-      return 'Ge'
-    case 'opencode':
-      return 'OC'
-    case 'gfp':
       return 'GP'
+    case 'opencode':
+      return 'Oc'
+    case 'gfp':
+      return 'GF'
+    case 'zai':
+    case 'glm':
+      // single z.ai account → 'Za'; numbered (Z1,Z2) only with multiple
+      { const n = id.replace(/\D/g, ''); return n && n !== '1' ? `Z${n}` : 'Za' }
     default:
       return account.provider.slice(0, 2).toUpperCase()
   }

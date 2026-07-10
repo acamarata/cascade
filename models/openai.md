@@ -1,8 +1,10 @@
 # OpenAI / Codex — Deep Detail
 
-Verified July 2026. See `models/README.md` for the master matrix; see `models/models.yaml` for the machine-readable entries.
+Verified July 2026, updated 2026-07-09. See `models/README.md` for the master matrix; see `models/models.yaml` for the machine-readable entries.
 
 Cascade account: **C1**. Dispatch: Codex CLI.
+
+**2026-07-09 update:** GPT-5.6 (Sol/Terra/Luna) flipped from restricted partner preview to public GA following US Dept. of Commerce clearance. Available via API and Codex. See dedicated section below for pricing and Cascade tier mapping.
 
 ---
 
@@ -21,22 +23,22 @@ Cascade account: **C1**. Dispatch: Codex CLI.
 
 ---
 
-## GPT-5.6 (Sol / Terra / Luna) — ANNOUNCED, PREVIEW-ONLY, NOT PUBLICLY GA
+## GPT-5.6 (Sol / Terra / Luna) — GA (2026-07-09)
 
-Announced 2026-06-25/26 (openai.com/index/previewing-gpt-5-6-sol). This is a **limited/restricted preview**, explicitly **not** a public ChatGPT or open Codex rollout:
+Announced 2026-06-25/26 as a restricted partner preview (openai.com/index/previewing-gpt-5-6-sol), then flipped to **public GA on 2026-07-09** after US Dept. of Commerce clearance. New naming convention: the number (5.6) is the generation; Sol/Terra/Luna are durable **capability tiers** that will advance independently of the generation number going forward.
 
-| Model | Model id | Positioning | Context window | Pricing (per 1M tok) |
-|---|---|---|---|---|
-| GPT-5.6 Sol | `gpt-5.6-sol` | Flagship — hardest problems, complex coding, security research | ~1.5M tokens (reported, up ~43% from 5.5 Pro's 1.05M) [Likely, single-source] | $5 in / $30 out |
-| GPT-5.6 Terra | `gpt-5.6-terra` | Balanced — high-volume business tasks, internal tools, doc analysis | not officially published [Guessing] | $2.50 in / $15 out |
-| GPT-5.6 Luna | `gpt-5.6-luna` | Fast/cheap — summarization, drafting, routine automation | not officially published [Guessing] | $1 in / $6 out |
+| Model | Model id | Positioning | Context window | Pricing (per 1M tok) | Cascade tier |
+|---|---|---|---|---|---|
+| GPT-5.6 Sol | `gpt-5.6-sol` | Flagship — hardest problems, complex coding, security research, final gates, adversarial CR | ~1.5M tokens (reported, up ~43% from 5.5 Pro's 1.05M) [Likely, single-source] | $5 in / $30 out | **T1** (Opus-class) |
+| GPT-5.6 Terra | `gpt-5.6-terra` | Balanced — high-volume business tasks, bulk exec, internal tools, doc analysis | not officially published [Guessing]; assume 400K Codex ceiling like 5.5 until confirmed | $2.50 in / $15 out — ~2x cheaper than 5.5 at competitive perf | **T2** (Sonnet-class, bulk exec) |
+| GPT-5.6 Luna | `gpt-5.6-luna` | Fast/cheap — summarization, drafting, routine automation, triage, grunt | not officially published [Guessing] | $1 in / $6 out — cheapest 5.6 tier | **T3** (Haiku-class, cheap grunt/triage) |
 
-**Availability status — flag clearly:**
+**Availability status:**
 
-- Available only through the **API and Codex to ~20 trusted partner organizations**, cleared in coordination with the US government (per VentureBeat and OpenAI's own preview post). [Certain]
-- **Not available to normal ChatGPT/Codex subscribers** (Free/Go/Plus/Pro/Business) as of July 2026. OpenAI states plans to broaden ChatGPT/Codex/API access "in the coming weeks" — no confirmed GA date found. [Certain — per OpenAI's own preview announcement]
-- A Tech Times report (2026-06-29) claims GPT-5.6 was "silently rolled out to some Codex users" via a leaked/hidden system prompt reference — this is a third-party/unverified claim, not an OpenAI-confirmed rollout. Treat as [Guessing]/rumor, not GA. Some Codex CLI users report `/status` showing a 353K context window consistent with 5.6 access, but this is community-reported, unconfirmed by OpenAI. [Guessing]
-- **Bottom line: GPT-5.6 is announced, in restricted preview, NOT publicly GA as of July 2026.** Do not treat it as selectable for a normal subscription. Cascade must not route to `gpt-5.6-*` model IDs — they are not reachable from C1's plan tier.
+- GA rollout confirmed 2026-07-09 — public availability via **API and Codex**, cleared in coordination with the US government after the initial ~20-trusted-partner preview (per VentureBeat and OpenAI's own preview post). [Certain]
+- Verify `codex --model gpt-5.6-sol` (and `-terra`/`-luna`) selectability on C1's specific plan tier before routing production traffic — GA does not guarantee every plan tier surfaces every model immediately. [Likely]
+- A Tech Times report (2026-06-29) had claimed GPT-5.6 was "silently rolled out to some Codex users" ahead of the official GA date via a leaked/hidden system prompt reference — this pre-GA rumor is now superseded by the confirmed 2026-07-09 GA. [Certain — GA date confirmed]
+- **Bottom line: GPT-5.6 Sol/Terra/Luna are GA as of 2026-07-09 and routable.** Cascade maps Sol->T1, Terra->T2, Luna->T3. `gpt-5.5` remains the documented fallback (see GA table above) until 5.6 selectability is independently confirmed stable on C1.
 
 ---
 
@@ -54,6 +56,8 @@ Announced 2026-06-25/26 (openai.com/index/previewing-gpt-5-6-sol). This is a **l
 Usage is metered in rolling 5-hour windows with message-count ranges depending on task complexity (ranges above are approximate published bands, not fixed counts). Codex CLI itself is free software; billing flows through ChatGPT plan sign-in — no separate CLI license fee. Real-world active-developer cost commonly runs ~$100-200/mo per the pricing writeups (third-party estimate, not an OpenAI figure). [Likely]
 
 **Codex plan tier (C1):** NOT recoverable from the local CLI — `~/.codex/auth.json` holds only a Google-OAuth `sub` (no plan/tier claim), and there is no `codex` status subcommand that exposes it (verified 2026-07-07). Confirm via the OpenAI/ChatGPT account dashboard (web) if needed; this file assumes Plus/Pro.
+
+**gpt-5.6 plan-tier gating not yet confirmed [Guessing]:** the table above predates the 2026-07-09 GA flip and does not yet list gpt-5.6-sol/-terra/-luna per plan tier. Verify which plans surface 5.6 selection in the Codex CLI before relying on it for C1.
 
 ---
 

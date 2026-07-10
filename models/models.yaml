@@ -16,8 +16,14 @@
 #   drift found. Re-diff this file against model_ids.rs whenever either changes.
 #
 # Update cadence: re-verify quarterly or when a provider ships a new
-#   flagship/GA. Treat "gpt-5.6", "gemini-3.5-pro" as pending — flip
+#   flagship/GA. gpt-5.6 (Sol/Terra/Luna) flipped to GA 2026-07-09 (public
+#   rollout confirmed). Treat "gemini-3.5-pro" as still pending — flip
 #   `availability: preview` -> `ga` only after independently confirming.
+#
+# Badge taxonomy (app/widget): A1/A2 Anthropic · Co Codex/OpenAI · GP Google
+#   Pro (paid Antigravity sub; serves Gemini 3.1 Pro/Flash + Claude Opus/Sonnet
+#   4.6 + GPT-OSS 120B) · Oc OpenCode · Za/Z1.. z.ai GLM · GF Google Free
+#   (auto-maximized Gemini Flash key pool, provision-gfp-keys.sh).
 
 schema_version: 1
 verified_date: "2026-07-06"
@@ -138,39 +144,72 @@ providers:
         availability: deprecated
         notes: "Deprecated for ChatGPT sign-in."
       - id: gpt-5.6-sol
-        tier: T1-announced
-        best_for: ["hardest problems", "complex coding", "security research"]
-        quota_cost_weight: "$5/MTok in, $30/MTok out (published)"
+        tier: T1
+        best_for: ["hardest problems", "complex coding", "security research", "final gates", "adversarial CR"]
+        quota_cost_weight: "$5/MTok in, $30/MTok out"
         context_tokens: 1500000
-        availability: preview
+        availability: ga
         notes: >
-          ANNOUNCED 2026-06-25/26, NOT PUBLICLY GA. Limited to ~20 trusted
-          partner orgs via API/Codex, cleared with US government coordination.
-          Not selectable on any normal ChatGPT/Codex plan (Free/Go/Plus/
-          Pro/Business) as of 2026-07-06. A Tech Times rumor of "silent
-          rollout to some Codex users" is UNVERIFIED/third-party — treat as
-          false until OpenAI confirms. DO NOT route production Cascade traffic
-          here; not selectable regardless.
+          GA 2026-07-09 — public rollout after US Dept. of Commerce clearance
+          (announced 2026-06-25 as preview to ~20 trusted partners). New naming:
+          the NUMBER (5.6) is the generation; Sol/Terra/Luna are durable
+          CAPABILITY TIERS that advance independently. Sol is the flagship with
+          OpenAI's most robust safety stack to date. Available via API AND Codex.
+          Cascade maps Sol→T1 (Opus-class). Verify `codex --model gpt-5.6-sol`
+          selectability on the subscription before routing production traffic.
       - id: gpt-5.6-terra
-        tier: T2-announced
-        best_for: ["balanced high-volume business tasks", "internal tools", "doc analysis"]
-        quota_cost_weight: "$2.50/MTok in, $15/MTok out (published)"
+        tier: T2
+        best_for: ["balanced high-volume business tasks", "bulk execution", "internal tools", "doc analysis"]
+        quota_cost_weight: "$2.50/MTok in, $15/MTok out — ~2x cheaper than 5.5, competitive perf"
         context_tokens: null
-        availability: preview
-        notes: "ANNOUNCED, NOT GA. Context window not officially published [Guessing]."
+        availability: ga
+        notes: >
+          GA 2026-07-09. Balanced everyday-work tier; competitive with GPT-5.5
+          at ~2x lower cost. Cascade maps Terra→T2 (Sonnet-class, bulk exec).
+          Context window not separately published [Guessing] — assume 400K Codex
+          ceiling like 5.5 until confirmed.
       - id: gpt-5.6-luna
-        tier: T3-announced
-        best_for: ["summarization", "drafting", "routine automation"]
-        quota_cost_weight: "$1/MTok in, $6/MTok out (published)"
+        tier: T3
+        best_for: ["summarization", "drafting", "routine automation", "grunt", "triage"]
+        quota_cost_weight: "$1/MTok in, $6/MTok out — cheapest 5.6 tier"
         context_tokens: null
-        availability: preview
-        notes: "ANNOUNCED, NOT GA. Context window not officially published [Guessing]."
+        availability: ga
+        notes: >
+          GA 2026-07-09. Fastest/cheapest 5.6 tier. Cascade maps Luna→T3
+          (Haiku-class, cheap grunt/triage). Context window not separately
+          published [Guessing].
 
   - name: google
-    subscription: "Google AI Pro/Ultra (agy/cloudcode-pa) + GFP free-tier key pool (28 keys, GEMINI_FREE_KEY_*)"
-    cascade_accounts: ["agy (paid Pro/Ultra)", "GFP (28-project free pool)"]
-    dispatch: "agy CLI for paid Gemini; GP proxy :3761 (native) / :3762 (Anthropic-compat adapter) for GFP free pool"
+    subscription: "Google AI Pro/Ultra via Antigravity (badge GP) + Google Free key pool (badge GF, auto-maximized, GEMINI_FREE_KEY_*)"
+    cascade_accounts: ["GP (paid Antigravity Pro/Ultra)", "GF (auto-maximized free pool across all authed Google accounts)"]
+    dispatch: "agy/Antigravity CLI for the GP lane (Gemini 3.1 Pro/Flash + Claude Opus/Sonnet 4.6 + GPT-OSS 120B, proxied by Google); GF free pool via :3761 (native) / :3762 (Anthropic-compat). GF is self-healing: provision-gfp-keys.sh mints 1 key/GCP-project across every human Google account (free tier is per-PROJECT), dedupes against pool+vault."
     models:
+      # ── GP lane extras: Anthropic + OSS models Google proxies through Antigravity ──
+      - id: claude-opus-4-6
+        tier: T1
+        best_for: ["frontier reasoning via Google sub", "when A1/A2 Anthropic quota is exhausted"]
+        quota_cost_weight: "counts against the Google AI Pro/Ultra Antigravity quota, NOT Anthropic Max"
+        context_tokens: null
+        availability: ga
+        notes: >
+          Served THROUGH Google Antigravity (not Anthropic direct). Confirms the
+          GP lane can reach Opus-class without burning A1/A2. Dispatch requires
+          the `agy`/Antigravity CLI on PATH with model selection — verify before
+          routing. Roster confirmed 2026-07-09 (Antigravity 2.0).
+      - id: claude-sonnet-4-6
+        tier: T2
+        best_for: ["bulk execution via Google sub", "Sonnet-class work off the Anthropic quota"]
+        quota_cost_weight: "counts against Google Antigravity quota"
+        context_tokens: null
+        availability: ga
+        notes: "Served through Google Antigravity. GP lane Sonnet-class option."
+      - id: gpt-oss-120b
+        tier: T2
+        best_for: ["open-weight bulk execution", "cheap high-volume via Google sub"]
+        quota_cost_weight: "counts against Google Antigravity quota"
+        context_tokens: null
+        availability: ga
+        notes: "Open-weight 120B in the Antigravity roster (2026-07-09)."
       - id: gemini-3.1-pro
         tier: T2
         best_for: ["complex problem-solving", "agentic and vibe coding", "advanced intelligence tasks needing a Pro-tier model today"]

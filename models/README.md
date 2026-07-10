@@ -4,6 +4,8 @@ Canonical, human-readable reference for "which subscription has which model" and
 
 **Verified:** 2026-07-06, via live fetches of provider docs (platform.claude.com, developers.openai.com, ai.google.dev, opencode.ai, z.ai — see per-provider files for exact source URLs). This is not from training memory.
 
+**Update 2026-07-09:** GPT-5.6 (Sol/Terra/Luna) flipped preview -> GA (public rollout after US Dept. of Commerce clearance); Cascade maps Sol->T1, Terra->T2, Luna->T3. Google's Antigravity 2.0 roster confirmed: the paid **GP** (Google Pro) lane now proxies Claude Opus 4.6, Claude Sonnet 4.6, and GPT-OSS 120B alongside Gemini 3.1 Pro/3 Flash, billed against the Google AI Pro/Ultra quota (not Anthropic Max). The Gemini CLI stopped serving Pro/Ultra on 2026-06-18 — the paid lane now goes exclusively through the Antigravity CLI. Badge taxonomy updated: **GP** = Google Pro (paid Antigravity), **GF** = Google Free (auto-maximized free Gemini Flash pool) — this doc previously used "GP" for the free pool; those references are corrected below. Full detail: `google.md`, `openai.md`.
+
 **Cross-reference check:** `crates/cascade-core/src/model_ids.rs` holds the Rust constants Cascade's code-generation layer actually imports (`MODEL_CLAUDE_OPUS`, `MODEL_CLAUDE_SONNET`, `MODEL_CLAUDE_HAIKU`, `MODEL_CLAUDE_FABLE`, `MODEL_GPT`, `MODEL_GEMINI_PRO`, `MODEL_GEMINI_FLASH`, `MODEL_GLM`). As of this write **all eight constants are current** — `claude-opus-4-8`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-fable-5`, `gpt-5.5`, `gemini-3.1-pro`, `gemini-3.5-flash`, `glm-5.2` all match this research's GA findings. No drift found. The live fleet-routing matrix (`accounts_store::build_model_matrix()`) is populated at runtime from `~/.cascade/accounts/accounts.json`, not hardcoded, so `model_ids.rs` is the correct static-source-of-truth to diff against on future updates.
 
 ---
@@ -18,8 +20,13 @@ Canonical, human-readable reference for "which subscription has which model" and
 | Claude Fable 5 | Anthropic | Max (Fable-included window) | T1-plus, hardest reasoning only | Overnight autonomous runs, deep research, enterprise deliverables | ~2x Opus burn [Likely]; 2x Opus API price exactly | 1M / 128K out | **GA** (redeployed 2026-07-01; 50%-of-weekly-limit window ended 2026-07-07 — reverify billing) |
 | GPT-5.5 | OpenAI | Codex (C1) | T2 --C1 | Large refactors, cross-system context, ambiguous-failure debugging | $5in/$30out per MTok; 2x/1.5x beyond 272K input | 400K usable in Codex (1.05M API) | **GA** |
 | GPT-5.4 / 5.4-mini | OpenAI | Codex (C1) | T2-fallback / T3 | Cheaper fallback / high-volume cheap tasks | Lower than 5.5 | 400K (Codex) | **GA** |
-| GPT-5.6 Sol/Terra/Luna | OpenAI | Restricted partner preview only | Not usable | Hardest problems (Sol); balanced biz (Terra); cheap/fast (Luna) | Published per-tier pricing, not billable to us | ~1.5M (Sol, reported) | **PREVIEW — NOT GA, NOT accessible on any normal plan** |
-| Gemini 3.1 Pro | Google | Google AI Pro/Ultra (agy) | T2 --agy | Complex problem-solving, agentic/vibe coding | $2-4in/$12-18out per MTok, paid-only | unpublished | **GA** (preview-labeled by Google, paid-only) |
+| GPT-5.6 Sol | OpenAI | Codex (C1) | T1 --C1 | Hardest problems, complex coding, security research, final gates, adversarial CR | $5in/$30out per MTok | ~1.5M (reported) | **GA** (2026-07-09; Cascade maps Sol->T1) |
+| GPT-5.6 Terra | OpenAI | Codex (C1) | T2 --C1 | Balanced high-volume business tasks, bulk exec, doc analysis | $2.50in/$15out per MTok; ~2x cheaper than 5.5 | unpublished [Guessing] | **GA** (2026-07-09; Cascade maps Terra->T2) |
+| GPT-5.6 Luna | OpenAI | Codex (C1) | T3 --C1 | Summarization, drafting, routine automation, triage | $1in/$6out per MTok; cheapest 5.6 tier | unpublished [Guessing] | **GA** (2026-07-09; Cascade maps Luna->T3) |
+| Claude Opus 4.6 (via Google) | Anthropic (proxied) | Google AI Pro/Ultra (Antigravity, GP) | T1 --agy | Frontier reasoning via Google sub; when A1/A2 Anthropic quota exhausted | Counts against Google Antigravity quota, NOT Anthropic Max | unpublished | **GA** (Antigravity 2.0 roster, confirmed 2026-07-09) |
+| Claude Sonnet 4.6 (via Google) | Anthropic (proxied) | Google AI Pro/Ultra (Antigravity, GP) | T2 --agy | Bulk execution via Google sub, Sonnet-class work off Anthropic quota | Counts against Google Antigravity quota | unpublished | **GA** (confirmed 2026-07-09) |
+| GPT-OSS 120B (via Google) | Open-weight (proxied) | Google AI Pro/Ultra (Antigravity, GP) | T2 --agy | Open-weight bulk execution, cheap high-volume via Google sub | Counts against Google Antigravity quota | unpublished | **GA** (confirmed 2026-07-09) |
+| Gemini 3.1 Pro | Google | Google AI Pro/Ultra (agy, GP) | T2 --agy | Complex problem-solving, agentic/vibe coding | $2-4in/$12-18out per MTok, paid-only | unpublished | **GA** (preview-labeled by Google, paid-only) |
 | Gemini 3.5 Pro | Google | Google AI Pro/Ultra (pending) | Not yet wired | Frontier reasoning + 2M-token corpus ingestion | unpublished | 2M | **PREVIEW — slipped to July 2026, NOT confirmed GA as of 2026-07-06** |
 | Gemini 3.5 Flash | Google | GFP free pool (28 keys) + agy paid | T3 --GFP (backbone) | Always-on grunt work, post-prompting, classify/triage/summarize | **FREE** in free tier; paid $1.50in/$9.00out | unpublished | **GA** |
 | Gemini 3.1 Flash-Lite | Google | GFP free pool | T3-cheap fallback | Cheapest possible grunt work | FREE; paid $0.25in/$1.50out | unpublished | **GA** |
@@ -67,7 +74,7 @@ Full per-model detail, benchmarks, and source citations: `anthropic.md` · `open
 | Task | Pick | Why |
 |---|---|---|
 | **Coding (default day-to-day)** | Claude Sonnet 5 / GPT-5.5 | Best speed/intelligence combo, cheapest frontier tier, Cascade's `DEFAULT_HARNESS_MODEL` / primary Codex driver |
-| **Hardest coding / Deep reasoning** | Claude Fable 5 / Opus 4.8 | Highest-capability reasoning and hardest coding synthesis |
+| **Hardest coding / Deep reasoning** | Claude Fable 5 / Opus 4.8 / GPT-5.6 Sol | Highest-capability reasoning and hardest coding synthesis; GPT-5.6 Sol (GA 2026-07-09) is now a routable T1-class alternative via Codex |
 | **GitHub PR / issue / review / CI** | GitHub Copilot | Integrated directly into GitHub workflows and CI |
 | **Multi-agent desktop + cloud** | Devin | Ex-Windsurf; full agentic desktop and cloud environment |
 | **IDE / agent UX** | Cursor | Official CLI + cloud agents for seamless IDE integration |
@@ -77,15 +84,15 @@ Full per-model detail, benchmarks, and source citations: `anthropic.md` · `open
 | **Multimodal / desktop automation** | MiniMax M3 (OpenCode) | Only roster model with native image/video/desktop-control multimodality |
 | **Fast low-latency agent chains** | GLM-5-Turbo (z.ai direct) | 48 tok/s, purpose-built for latency — requires z.ai path, not in OpenCode Go |
 | **Bulk mechanical edits at max volume** | DeepSeek V4 Flash or Gemini 3.1 Flash-Lite | Cheapest per-request in their respective pools |
-| **DO NOT ROUTE HERE (not GA)** | GPT-5.6 (Sol/Terra/Luna), Gemini 3.5 Pro | Announced but restricted-preview / not confirmed publicly GA as of 2026-07-06 |
+| **DO NOT ROUTE HERE (not GA)** | Gemini 3.5 Pro | Announced but not confirmed publicly GA as of 2026-07-09 (GPT-5.6 Sol/Terra/Luna went GA 2026-07-09 and is now routable — see Master Matrix) |
 
 ---
 
 ## How Cascade Uses This
 
 - **Model IDs are defined once** in `crates/cascade-core/src/model_ids.rs` and consumed by code-generation/harness layers (AGENTS.md, opencode.json, etc.). This `models/` directory is the research/reference layer that justifies and keeps those constants current — update `model_ids.rs` first when a provider ships a new GA flagship, then re-diff this directory.
-- **Cascade Conductor** (`cascade conductor --tier T1/T2/T3`) routes delegated one-shot work quota-aware across accounts: worker spill order **A2 -> A1 spare -> Codex -> Gemini -> OC Go -> GP**, skipping any account that's auth-dead or at its 5h/7d cap. Tier-to-model mapping: T1 -> Opus, T2 -> Sonnet 5, T3 -> Haiku (or GP/Flash when routed there for near-free volume).
-- **GP (Gemini Flash Pool)** is the preferred cheap workhorse for research/prep that front-loads context so an Opus/Sonnet finish is faster and cheaper — see GFP Backbone verdict below. Proxy runs at `:3761` (native Gemini format) and `:3762` (Anthropic-compat adapter, lets Claude Code's own model routing transparently redirect Haiku-tier calls to Flash for free).
+- **Cascade Conductor** (`cascade conductor --tier T1/T2/T3`) routes delegated one-shot work quota-aware across accounts: worker spill order **A2 -> A1 spare -> Codex -> Gemini -> OC Go -> GF**, skipping any account that's auth-dead or at its 5h/7d cap. Tier-to-model mapping: T1 -> Opus, T2 -> Sonnet 5, T3 -> Haiku (or GF/Flash when routed there for near-free volume).
+- **GF (Google Free — auto-maximized Gemini Flash key pool)** is the preferred cheap workhorse for research/prep that front-loads context so an Opus/Sonnet finish is faster and cheaper — see GFP Backbone verdict below. Proxy runs at `:3761` (native Gemini format) and `:3762` (Anthropic-compat adapter, lets Claude Code's own model routing transparently redirect Haiku-tier calls to Flash for free). Not to be confused with **GP** (Google Pro), the paid Antigravity subscription lane.
 - **OpenCode Go/Zen models** are the overflow lane when Anthropic quota (A1+A2) and Codex are both constrained — GLM-5.2 as the flagship-tier overflow, DeepSeek V4 Flash / MiMo-V2.5 for cheap-tier overflow.
 - Never hardcode a model name outside `model_ids.rs` in Rust code — this directory and that file are the only two places model IDs should be typed. Everywhere else, import the constant.
 
@@ -95,12 +102,12 @@ Full per-model detail, benchmarks, and source citations: `anthropic.md` · `open
 
 **Should the free Gemini Flash pool (28-key/28-project rotation) be the always-on grunt-work/post-prompting backbone? Yes, with two monitored risks — not an unconditional "unlimited" assumption.**
 
-- **Quality:** Gemini 3.5 Flash is reported (DeepMind/Appwrite/llm-stats) to *beat* Gemini 3.1 Pro (the prior-gen full Pro model) on coding/agentic benchmarks — a strong proxy signal that it's quality-equal-or-better than Claude Haiku for grunt work, though no direct independent Flash-vs-Haiku benchmark exists [Likely, not Certain]. For the GCI-defined GP use case (triage, classify, grep+summarize), even a materially weaker model would suffice, so quality risk here is low regardless.
+- **Quality:** Gemini 3.5 Flash is reported (DeepMind/Appwrite/llm-stats) to *beat* Gemini 3.1 Pro (the prior-gen full Pro model) on coding/agentic benchmarks — a strong proxy signal that it's quality-equal-or-better than Claude Haiku for grunt work, though no direct independent Flash-vs-Haiku benchmark exists [Likely, not Certain]. For the triage/classify/grep+summarize use case GCI reserves for the free Gemini pool (GF), even a materially weaker model would suffice, so quality risk here is low regardless.
 - **Capacity is real but not "unlimited."** Per-project free-tier caps run low-hundreds-to-~1,500 requests/day and single-to-low-double-digit RPM — a single project would throttle fast. The 28-project rotation multiplies effective free throughput today, genuinely and technically. Call this **"high-volume-cheap," not "unlimited."**
 - **Two risks to actively monitor, not assume away:**
   1. **ToS exposure** — Google's documented policy explicitly names "creating multiple projects to circumvent rate limits" as prohibited. Enforcement is described as scale-dependent (hobbyist rotation tolerated, production-scale abuse risks suspension) but this is a gray-zone workaround, not sanctioned architecture.
   2. **Policy-drift risk** — two tightening events in the last ~4 months (Mar 23 billing-account consolidation, Apr 1 Pro-model free-tier restriction) show the free-tier rules this pool depends on are actively narrowing. Build a paid fallback (Gemini 3.1 Flash-Lite at $0.10-0.25/M input is cheap enough to be a trivial fallback) rather than architecting as if the free pool is permanently guaranteed.
-- **Model freshness:** the GP proxy currently targets `gemini-2.0-flash` — verified STILL LIVE on 2026-07-07 (returns 429 quota, not 404), so not an outage. It is older-gen, though; a future-proofing follow-up is to point the proxy at `gemini-flash-latest`/`gemini-flash-lite-latest` (auto-tracks Google's current flash, immune to retirements).
+- **Model freshness:** the GF proxy currently targets `gemini-2.0-flash` — verified STILL LIVE on 2026-07-07 (returns 429 quota, not 404), so not an outage. It is older-gen, though; a future-proofing follow-up is to point the proxy at `gemini-flash-latest`/`gemini-flash-lite-latest` (auto-tracks Google's current flash, immune to retirements).
 - **Recommended action:** re-verify actual per-project RPM/RPD live at `aistudio.google.com/rate-limit` against a real GFP project rather than trusting any published table — Google itself stopped publishing static numbers.
 
 Full reasoning and sources: `google.md` § Strategy verdict.

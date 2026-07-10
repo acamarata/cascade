@@ -31,10 +31,11 @@ extension Color {
 // Adapted from ClawFleet labelledAccounts() with new provider/label scheme:
 //   claude   → "An" (single) / "A1","A2",… (multiple)
 //   codex    → "Co" (single) / "C1","C2",… (multiple)
-//   gemini   → "Ge" (single) / "G1","G2",… (multiple)  — PAID account family
-//   opencode → always "OC" (single pool, no number)
-//   gfp      → always "GP" (Gemini Flash Free Pool, no number)
-// Provider display order: claude, codex, gemini, opencode, gfp.
+//   gemini   → "GP" (single) / "G1","G2",… (multiple)  — Google Pro (paid Antigravity)
+//   opencode → always "Oc" (single pool, no number)
+//   zai/glm  → "Za" (single) / "Z1","Z2",… (multiple)  — z.ai GLM Coding Plan
+//   gfp      → always "GF" (Google Free — Gemini Flash key pool, no number)
+// Provider display order: claude, codex, gemini(GP), opencode, zai, gfp(GF).
 // shouldAutoHide() applies only to claude rows (hide when never-pulled + all-null usage).
 
 func shouldAutoHide(_ e: AccountEntry) -> Bool {
@@ -47,11 +48,11 @@ func shouldAutoHide(_ e: AccountEntry) -> Bool {
 /// Groups accounts by provider, drops cancelled-subscription claude rows, and
 /// assigns display labels per the Cascade labeling scheme.
 ///
-/// - Single account in a provider family → 2-letter label ("An", "Co", "Ge", "OC", "GP")
-/// - Multiple accounts in a family → letter + number ("A1","A2", "C1","C2", "G1","G2")
+/// - Single account in a provider family → 2-letter label ("An", "Co", "GP", "Oc", "Za", "GF")
+/// - Multiple accounts in a family → letter + number ("A1","A2", "C1","C2", "G1","G2", "Z1","Z2")
 /// - opencode and gfp are always single-pool labels regardless of count
 func labelledAccounts(from entries: [AccountEntry]) -> [(label: String, entry: AccountEntry)] {
-    let providerOrder = ["claude", "codex", "gemini", "opencode", "gfp"]
+    let providerOrder = ["claude", "codex", "gemini", "opencode", "zai", "gfp"]
 
     // Group by provider, dropping auto-hidden claude rows.
     var byProvider: [String: [AccountEntry]] = [:]
@@ -77,7 +78,7 @@ private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
     case "opencode":
         return group.map { _ in "Oc" }
     case "gfp":
-        return group.map { _ in "GP" }
+        return group.map { _ in "GF" }
     case "claude":
         if group.count == 1 {
             return ["An"]
@@ -96,11 +97,19 @@ private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
         }
     case "gemini":
         if group.count == 1 {
-            return ["Ge"]
+            return ["GP"]
         }
         return group.enumerated().map { (idx, entry) in
             let num = providerSuffix(entry.account) ?? "\(idx + 1)"
             return "G\(num)"
+        }
+    case "zai", "glm":
+        if group.count == 1 {
+            return ["Za"]
+        }
+        return group.enumerated().map { (idx, entry) in
+            let num = providerSuffix(entry.account) ?? "\(idx + 1)"
+            return "Z\(num)"
         }
     default:
         // Unknown provider: use first letter uppercased + number.

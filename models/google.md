@@ -1,8 +1,10 @@
 # Google / Gemini — Deep Detail
 
-Verified July 2026. See `models/README.md` for the master matrix and the GFP-backbone verdict; see `models/models.yaml` for the machine-readable entries.
+Verified July 2026, updated 2026-07-09. See `models/README.md` for the master matrix and the GFP-backbone verdict; see `models/models.yaml` for the machine-readable entries.
 
-Cascade accounts: **agy** (paid Google AI Pro/Ultra via cloudcode-pa), **GFP** (28-project free-tier key pool, `GEMINI_FREE_KEY_*` in `~/.claude/vault.env`). Dispatch: `agy` CLI for paid Gemini; GP proxy `:3761` (native Gemini format) / `:3762` (Anthropic-compat adapter) for the GFP free pool.
+**Badge taxonomy (2026-07-09):** **GP** = Google Pro, the paid Antigravity subscription (dispatched via the `agy`/Antigravity CLI). **GF** = Google Free, the auto-maximized free-tier key pool (`GEMINI_FREE_KEY_*` in `~/.claude/vault.env`, historically referred to as "GFP" — that shorthand still appears below and in `scripts/provision-gfp-keys.sh`; treat it as synonymous with GF). Dispatch: `agy`/Antigravity CLI for the **GP** lane; free-pool proxy at `:3761` (native Gemini format) / `:3762` (Anthropic-compat adapter) for the **GF** lane. GF is self-healing: `provision-gfp-keys.sh` mints 1 key per GCP project across every authed human Google account (free tier is billed per-project, not per-key), dedupes against pool+vault.
+
+**2026-07-09 update — Antigravity 2.0 roster confirmed:** the paid **GP** lane now serves Gemini 3.1 Pro (High/Low), Gemini 3 Flash, Claude Sonnet 4.6, Claude Opus 4.6, and GPT-OSS 120B — Google proxies Anthropic's Opus/Sonnet through Antigravity, and usage counts against the Google AI Pro/Ultra quota, **not** Anthropic Max (A1/A2). Also confirmed: the **Gemini CLI stopped serving Pro/Ultra models on 2026-06-18** — the paid lane now goes exclusively through the Antigravity CLI (`agy`).
 
 ---
 
@@ -31,6 +33,20 @@ The lineup is **not** "3.5 Pro vs 3.1 Pro" as parallel current options — it's 
 - **Google AI Ultra**: $99.99/mo (cut from $249.99 at I/O 2026) — highest limits, first access to Deep Think / 3.5 Pro preview features
 - Gemini 3.5 Flash in the Gemini app gets "5x higher usage limits" than what Pro-tier plan users get for Pro models — Google is clearly steering high-volume usage toward Flash even for paying subscribers.
 - Consumer access to 3.5 Pro at GA is expected to route through these same paid plans (Pro ~$20/mo, Ultra ~$99.99-250/mo), not a separate product.
+
+### GP-lane extras: Anthropic + OSS models via Antigravity 2.0 [Certain, confirmed 2026-07-09]
+
+The Antigravity 2.0 roster is not limited to native Gemini models — it proxies select Anthropic and open-weight models too, all billed against the **GP** (Google Pro/Ultra) subscription quota, not Anthropic Max:
+
+| Model | Positioning | Quota | Notes |
+|---|---|---|---|
+| Claude Opus 4.6 | Frontier reasoning via Google sub; use when A1/A2 Anthropic quota is exhausted | Counts against Google AI Pro/Ultra Antigravity quota, NOT Anthropic Max | Served through Google Antigravity, not Anthropic direct. Confirms the GP lane can reach Opus-class without burning A1/A2. |
+| Claude Sonnet 4.6 | Bulk execution via Google sub, Sonnet-class work off the Anthropic quota | Counts against Google Antigravity quota | Served through Google Antigravity. |
+| GPT-OSS 120B | Open-weight bulk execution, cheap high-volume via Google sub | Counts against Google Antigravity quota | Open-weight 120B model in the Antigravity roster. |
+| Gemini 3.1 Pro (High/Low) | Complex problem-solving, agentic/vibe coding | Native Gemini, same as § Naming reality check above | Antigravity now exposes explicit High/Low variants. |
+| Gemini 3 Flash | Preview-tier cheap grunt work | Native Gemini | Alternate to 3.5 Flash. |
+
+Dispatch requires the `agy`/Antigravity CLI on PATH with model selection — verify selectability before routing production traffic.
 
 ---
 
@@ -82,14 +98,14 @@ See `models/README.md` § GFP Backbone for the condensed verdict. Full reasoning
 
 - Gemini 3.5 Flash is reported (by DeepMind/Appwrite/llm-stats coverage) to **beat Gemini 3.1 Pro** (the prior-gen full Pro model) on coding/agentic benchmarks — a strong quality signal, well above what you'd expect from a "Haiku-tier" cheap model. If that holds, 3.5 Flash for classification/summarization/post-processing grunt work is very likely **quality-equal-or-better than Claude Haiku**, not just an acceptable substitute.
 - Caveat: no independent third-party eval (lmarena, independent benchmark suite) was found comparing 3.5 Flash directly against Haiku 4.5 specifically — the comparison above is Flash-vs-its-own-sibling-Pro, not Flash-vs-Claude. Treat "quality good enough" as [Likely] based on strong proxy evidence, not [Certain].
-- For truly trivial grunt work (triage, classify, grep+summarize) — the exact GCI-defined GP use case — even a materially weaker-than-Haiku model would suffice; the bar for this workload is low, so quality risk here is low regardless.
+- For truly trivial grunt work (triage, classify, grep+summarize) — the exact use case GCI reserves for the free Gemini pool (GF) — even a materially weaker-than-Haiku model would suffice; the bar for this workload is low, so quality risk here is low regardless.
 
 ### Real constraints — this is where the "effectively unlimited" framing breaks down [Certain on structure, Guessing on exact thresholds]
 
 1. **Per-project daily/minute caps are real and low relative to "unlimited"** — hundreds to ~1,500 RPD, single-to-low-double-digit RPM per project. A single project alone would throttle a busy Cascade session fast. The 28-project rotation is *precisely* the workaround for this — and it's a workaround for a known, documented cap, not evidence the cap doesn't exist.
 2. **ToS risk is non-zero and directionally worsening.** Google tightened billing/tier policy twice in the last ~4 months (March 23 prepay/postpay change, April 1 Pro-model free-tier restriction). The trend line is "free tier gets stingier and more surveilled over time," not stable. A 28-project rotation built today could face new pooling rules with no notice — this already happened once this year for a different axis (billing-account consolidation).
 3. **Latency**: not measured directly in this research; no official SLA difference found between free and paid tier latency, but free tier is documented as lower-priority-queued in some third-party commentary (unverified — [Guessing]).
-4. **2.0 Flash is dead (June 1, 2026 shutdown)** — if any of the 28-key infrastructure still targets 2.0 Flash model IDs, that's a live outage waiting to surface, not a future risk. **Audit the GP proxy routing tables for this immediately.**
+4. **2.0 Flash is dead (June 1, 2026 shutdown)** — if any of the 28-key infrastructure still targets 2.0 Flash model IDs, that's a live outage waiting to surface, not a future risk. **Audit the GF proxy routing tables for this immediately.**
 5. **No official confirmation that unlinked multi-project free quotas won't eventually get pooled per-Google-account** — this is the single largest unknown threatening the whole architecture's long-term viability.
 
 ### Verdict
@@ -102,9 +118,9 @@ See `models/README.md` § GFP Backbone for the condensed verdict. Full reasoning
 
 ### Open questions
 
-1. Are any of the 28 GP projects linked to a shared Cloud Billing account (even for unrelated reasons)? Worth auditing — that would collapse their quota into one shared pool per the March 2026 billing-account-level policy.
+1. Are any of the 28 GF projects linked to a shared Cloud Billing account (even for unrelated reasons)? Worth auditing — that would collapse their quota into one shared pool per the March 2026 billing-account-level policy.
 2. Should a live `aistudio.google.com/rate-limit` check be run against one of the 28 actual projects to get real current numbers instead of relying on conflicting third-party blog tables?
-3. Should the GP proxy add a paid-Flash-Lite fallback path (cheap, ~$0.10-0.25/M) for when free-tier daily caps are hit, to reduce reliance on the multi-project rotation as sole capacity?
+3. Should the GF proxy add a paid-Flash-Lite fallback path (cheap, ~$0.10-0.25/M) for when free-tier daily caps are hit, to reduce reliance on the multi-project rotation as sole capacity?
 
 ---
 
