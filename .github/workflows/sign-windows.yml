@@ -30,13 +30,15 @@ jobs:
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
       SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-    # The `env` context is NOT available in a job-level `if`. Referencing it here
-    # made GitHub reject the workflow at parse time (0s startup_failure on every
-    # push since v1.15.1). Gate on `secrets`, which IS available at job level.
-    if: ${{ secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
+    # NO job-level `if` here. A job-level `if` may only use the github/needs/vars/
+    # inputs contexts — referencing `env` (or `secrets`) makes GitHub reject the
+    # whole workflow at parse time, which is what produced a 0s startup_failure on
+    # every push since v1.15.1. Step-level `if` DOES support `env`, so the secret
+    # gate lives on the steps below.
 
     steps:
       - name: Submit signing request to SignPath.io
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
         # signpath/github-action-submit-signing-request@v1.1
         # Authenticode-signs the MSI via the SignPath FOSS free tier.
         # The action uploads the artifact, waits for approval + signing, and

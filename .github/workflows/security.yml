@@ -96,8 +96,8 @@ jobs:
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   # ── npm-audit ──────────────────────────────────────────────────────────────
-  # Checks the Tauri frontend dependencies (apps/tauri/package.json).
-  # Skipped if there is no package.json in the apps/ directory.
+  # Checks the Tauri frontend dependencies (apps/cascade-app/package.json).
+  # Skipped if that package.json is absent.
   npm-audit:
     name: npm-audit
     runs-on: [self-hosted, cam-sentry]
@@ -107,7 +107,7 @@ jobs:
       - name: Check for package.json
         id: check-npm
         run: |
-          if [ -f "apps/tauri/package.json" ]; then
+          if [ -f "apps/cascade-app/package.json" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -125,7 +125,7 @@ jobs:
 
       - name: npm audit
         if: steps.check-npm.outputs.exists == 'true'
-        working-directory: apps/tauri
+        working-directory: apps/cascade-app
         # --audit-level high: fail only on high and critical advisories.
         run: npm audit --audit-level high
 

@@ -49,6 +49,30 @@ jobs:
       - name: Typecheck
         run: pnpm --filter @cascade/app run typecheck
 
+  # ── test ─────────────────────────────────────────────────────────────────
+  # Runs the app's vitest suite. This job did not exist, so all 43 *.test.*
+  # files in apps/cascade-app went unrun by CI until 2026-07-10.
+  test:
+    name: test
+    runs-on: [self-hosted, cam-sentry]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Test
+        run: pnpm --filter @cascade/app run test
+
   # ── lint ─────────────────────────────────────────────────────────────────
   # ESLint check on ubuntu only (not OS-sensitive).
   lint:
