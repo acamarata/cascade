@@ -45,7 +45,8 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 ///
 /// Inputs:  `access_token` — current OAuth2 bearer token (not logged).
 /// Outputs: `Some(Value)` with keys `five_hour`, `seven_day`,
-///          `seven_day_sonnet`, `seven_day_opus`, `extra_usage`; or `None`.
+///          `seven_day_sonnet`, `seven_day_opus`, `extra_usage`,
+///          `fable_available`; or `None`.
 /// Constraints: async, 10-second network timeout; never logs token values.
 pub async fn fetch_claude_usage(access_token: &str) -> Option<Value> {
     let client = reqwest::Client::builder()
@@ -88,6 +89,7 @@ pub async fn fetch_claude_usage(access_token: &str) -> Option<Value> {
 ///   "seven_day":         { ... },
 ///   "seven_day_sonnet":  { ... },
 ///   "seven_day_opus":    { ... },
+///   "limits":            [ ... ],
 ///   "extra_usage":       ...
 /// }
 /// ```
@@ -118,6 +120,7 @@ pub fn parse_usage_response(body: &Value) -> Option<Value> {
         "seven_day_sonnet": body.get("seven_day_sonnet").map(remap_window).unwrap_or(Value::Null),
         "seven_day_opus":   body.get("seven_day_opus").map(remap_window).unwrap_or(Value::Null),
         "extra_usage":      body.get("extra_usage").cloned().unwrap_or(Value::Null),
+        "fable_available":  fable_quota_available(body),
     }))
 }
 
@@ -164,6 +167,116 @@ fn remap_window(window: &Value) -> Value {
         "resets_at":   resets_at_epoch,
         "resets_in":   resets_in,
     })
+}
+
+/// Return whether this account has explicit Claude Fable quota available.
+///
+/// Observed Anthropic OAuth usage responses expose aggregate/session windows
+/// (`five_hour`, `seven_day`) and sometimes Sonnet/Opus-specific weekly caps,
+/// but no Fable-specific quota field. Do not infer Fable availability from the
+/// aggregate windows because Fable may be governed by its own allowance. This
+/// returns `None` unless the response includes an explicit Fable window/model
+/// entry, such as `seven_day_fable`, a `models["claude-fable-*"]` entry, or a
+/// `limits[]` entry whose fields mention Fable.
+fn fable_quota_available(body: &Value) -> Option<bool> {
+    for key in [
+        "seven_day_fable",
+        "fable",
+        "fable_quota",
+        "claude_fable",
+        "claude-fable-5",
+    ] {
+        if let Some(value) = body.get(key) {
+            if let Some(available) = quota_value_available(value) {
+                return Some(available);
+            }
+        }
+    }
+
+    if let Some(models) = body.get("models").and_then(|v| v.as_object()) {
+        for (model_id, model) in models {
+            if mentions_fable_str(model_id) || value_mentions_fable(model) {
+                if let Some(available) = quota_value_available(model) {
+                    return Some(available);
+                }
+            }
+        }
+    }
+
+    if let Some(limits) = body.get("limits").and_then(|v| v.as_array()) {
+        for limit in limits {
+            if value_mentions_fable(limit) {
+                if let Some(available) = quota_value_available(limit) {
+                    return Some(available);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn quota_value_available(value: &Value) -> Option<bool> {
+    if let Some(available) = value.as_bool() {
+        return Some(available);
+    }
+
+    let obj = value.as_object()?;
+
+    for key in ["available", "is_available", "quota_available"] {
+        if let Some(available) = obj.get(key).and_then(|v| v.as_bool()) {
+            return Some(available);
+        }
+    }
+
+    if obj
+        .get("disabled_reason")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
+        return Some(false);
+    }
+
+    for key in [
+        "remaining",
+        "remaining_tokens",
+        "remaining_requests",
+        "remaining_credits",
+        "left",
+    ] {
+        if let Some(remaining) = obj.get(key).and_then(|v| v.as_f64()) {
+            return Some(remaining > 0.0);
+        }
+    }
+
+    for key in ["utilization", "percent", "usage_percent", "pct_used", "used_percent"] {
+        if let Some(percent) = obj.get(key).and_then(|v| v.as_f64()) {
+            return Some(percent < 100.0);
+        }
+    }
+
+    let used = obj.get("used").and_then(|v| v.as_f64());
+    let limit = obj.get("limit").and_then(|v| v.as_f64());
+    match (used, limit) {
+        (Some(used), Some(limit)) if limit > 0.0 => Some(used < limit),
+        _ => None,
+    }
+}
+
+fn value_mentions_fable(value: &Value) -> bool {
+    match value {
+        Value::String(s) => mentions_fable_str(s),
+        Value::Array(items) => items.iter().any(value_mentions_fable),
+        Value::Object(obj) => obj.iter().any(|(key, value)| {
+            mentions_fable_str(key) || value_mentions_fable(value)
+        }),
+        _ => false,
+    }
+}
+
+fn mentions_fable_str(value: &str) -> bool {
+    value.to_ascii_lowercase().contains("fable")
 }
 
 /// Parse an ISO-8601 datetime string to Unix epoch seconds.
@@ -233,6 +346,49 @@ mod tests {
 
         // extra_usage is null but must be present.
         assert!(usage.get("extra_usage").is_some());
+        assert!(usage.get("fable_available").map(|v| v.is_null()).unwrap_or(false));
+    }
+
+    /// Current observed usage shape has no Fable-specific quota field.
+    #[test]
+    fn fable_quota_available_missing_signal_returns_none() {
+        let body = json!({
+            "five_hour": { "utilization": 0.0 },
+            "seven_day": { "utilization": 0.0 },
+            "seven_day_sonnet": { "utilization": 0.0 },
+            "seven_day_opus": { "utilization": 0.0 }
+        });
+
+        assert_eq!(fable_quota_available(&body), None);
+        let usage = parse_usage_response(&body).expect("usage parses");
+        assert!(usage.get("fable_available").map(|v| v.is_null()).unwrap_or(false));
+    }
+
+    /// If Anthropic adds an explicit Fable window, expose availability.
+    #[test]
+    fn fable_quota_available_from_fable_window() {
+        let body = json!({
+            "five_hour": { "utilization": 0.0 },
+            "seven_day_fable": { "utilization": 42.0, "resets_at": "2026-07-05T00:00:00+00:00" }
+        });
+
+        assert_eq!(fable_quota_available(&body), Some(true));
+        let usage = parse_usage_response(&body).expect("usage parses");
+        assert_eq!(usage.get("fable_available").and_then(|v| v.as_bool()), Some(true));
+    }
+
+    /// If Anthropic exposes per-model limits, saturated Fable quota is detected.
+    #[test]
+    fn fable_quota_available_from_limits_entry() {
+        let body = json!({
+            "five_hour": { "utilization": 0.0 },
+            "limits": [
+                { "type": "weekly_all", "utilization": 10.0 },
+                { "model": "claude-fable-5", "utilization": 100.0 }
+            ]
+        });
+
+        assert_eq!(fable_quota_available(&body), Some(false));
     }
 
     /// Error envelope ({"error":{...}}) must return None — never write zeros.

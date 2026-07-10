@@ -39,6 +39,9 @@ pub enum AccountFamily {
     Google,
     /// OpenCode run-based subscription.
     Opencode,
+    /// z.ai GLM Coding Plan, dispatched through Claude Code with GLM endpoint env.
+    #[serde(alias = "glm")]
+    Zai,
     /// Gemini Free Pool — key-based, no CLI.
     Gfp,
 }

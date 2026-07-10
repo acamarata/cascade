@@ -73,6 +73,8 @@ pub enum Provider {
     Gemini,
     /// OpenCode CLI (`opencode`).
     OpenCode,
+    /// z.ai GLM Coding Plan through Claude Code CLI with endpoint env.
+    Zai,
     /// GFP: Gemini Free Pool via HTTP POST to the GP proxy (localhost:3762).
     Gfp,
 }
@@ -85,6 +87,7 @@ impl Provider {
             Provider::Codex => "codex",
             Provider::Gemini => "gemini",
             Provider::OpenCode => "opencode",
+            Provider::Zai => "zai",
             Provider::Gfp => "gfp",
         }
     }
@@ -294,6 +297,7 @@ const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
     ("codex", Provider::Codex),
     ("gemini-agt", Provider::Gemini),
     ("opencode-acc1", Provider::OpenCode),
+    ("glm-acc1", Provider::Zai),
     ("opencode", Provider::OpenCode),
     ("gfp-pool", Provider::Gfp),
     ("claude2", Provider::Claude),
@@ -434,7 +438,7 @@ fn default_model_class(tier: Tier) -> ModelClass {
 /// Non-Claude model IDs:
 ///   - Codex uses `gpt-5.5` (MODEL_GPT) regardless of class.
 ///   - Gemini T1/T2 uses `gemini-3.1-pro`; T3/Haiku uses `gemini-3.5-flash`.
-///   - OpenCode uses `glm-5.2` (MODEL_GLM) regardless of class.
+///   - OpenCode and z.ai use `glm-5.2` (MODEL_GLM) regardless of class.
 ///   - GFP always uses `gemini-3.5-flash` (free pool, Flash only).
 fn model_id_for_class(class: ModelClass) -> &'static str {
     match class {
@@ -496,6 +500,11 @@ fn resolve_provider_model(
             let model = MODEL_GLM.to_string();
             let reason = format!("opencode account `{}`, model {}", qa.account, model);
             (Provider::OpenCode, model, reason)
+        }
+        "zai" | "glm" => {
+            let model = MODEL_GLM.to_string();
+            let reason = format!("zai account `{}`, model {}", qa.account, model);
+            (Provider::Zai, model, reason)
         }
         "gfp" => {
             // GFP free-pool: always Flash.

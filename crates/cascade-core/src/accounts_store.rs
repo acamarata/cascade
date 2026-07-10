@@ -154,7 +154,7 @@ pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Resu
 ///
 /// Provider mapping by family:
 ///   Claude → "claude", Openai → "codex", Google → "gemini",
-///   Opencode → "opencode", Gfp → "gfp"
+///   Opencode → "opencode", Zai → "zai", Gfp → "gfp"
 ///
 /// Inputs:  `path` — destination file (should be `quota_json_path()`);
 ///          `registry` — current accounts registry.
@@ -220,6 +220,7 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
         //   "claude-acc2"  → ~/.claude-acc2 (etc.)
         //   primary Claude → ~/.claude (the default dir, no suffix)
         //   codex accounts → ~/.codex (or ~/.codex2 etc.)
+        //   GLM/z.ai     → ~/.claude-glm when present (contains cascade-env.sh)
         //
         // If we can't map with confidence, fall back to legacy error heuristics.
         let config_dir_for_account: Option<PathBuf> = if acc.family == AccountFamily::Claude {
@@ -240,6 +241,18 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
         } else if acc.family == AccountFamily::Openai {
             let codex_dir = home.join(".codex");
             if codex_dir.is_dir() { Some(codex_dir) } else { None }
+        } else if acc.family == AccountFamily::Zai {
+            let candidates = [
+                home.join(".claude-glm"),
+                home.join(format!(".{}", acc.id)),
+                home.join(".zai"),
+                home.join(".glm"),
+            ];
+            candidates
+                .iter()
+                .find(|p| p.join("cascade-env.sh").is_file())
+                .or_else(|| candidates.iter().find(|p| p.is_dir()))
+                .cloned()
         } else {
             None
         };
@@ -385,6 +398,7 @@ fn family_to_provider(family: &AccountFamily) -> &'static str {
         AccountFamily::Openai   => "codex",
         AccountFamily::Google   => "gemini",
         AccountFamily::Opencode => "opencode",
+        AccountFamily::Zai      => "zai",
         AccountFamily::Gfp      => "gfp",
     }
 }

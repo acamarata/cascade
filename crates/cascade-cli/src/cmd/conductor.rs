@@ -19,7 +19,7 @@
 //
 // SPORT: MASTER-CLI.md — cascade conductor
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command as StdCommand, Stdio};
 use std::time::{Duration, Instant};
 
@@ -419,6 +419,7 @@ pub fn execute_target(target: &ConductorTarget, prompt: &str) -> Outcome {
         Provider::Claude => execute_claude(target, prompt),
         Provider::Codex => execute_codex(target, prompt),
         Provider::OpenCode => execute_opencode(target, prompt),
+        Provider::Zai => execute_claude(target, prompt),
         Provider::Gemini => execute_gemini(target, prompt),
         Provider::Gfp => execute_gfp(target, prompt),
     }
@@ -457,6 +458,51 @@ fn find_binary(name: &str) -> Option<PathBuf> {
     None
 }
 
+fn apply_cascade_env(cmd: &mut StdCommand, config_dir: &Path) {
+    let env_path = config_dir.join("cascade-env.sh");
+    let Ok(content) = std::fs::read_to_string(&env_path) else { return };
+    for (key, value) in parse_cascade_env(&content) {
+        cmd.env(key, value);
+    }
+}
+
+fn parse_cascade_env(content: &str) -> Vec<(String, String)> {
+    let mut vars = Vec::new();
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line).trim();
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let key = key.trim();
+        if !is_env_key(key) {
+            continue;
+        }
+        vars.push((key.to_string(), parse_env_value(value.trim())));
+    }
+    vars
+}
+
+fn is_env_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    let Some(first) = chars.next() else { return false };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+fn parse_env_value(value: &str) -> String {
+    if value.len() >= 2 {
+        if let Some(inner) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+            return inner.replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        if let Some(inner) = value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')) {
+            return inner.to_string();
+        }
+    }
+    value.to_string()
+}
+
 // ── Claude backend ────────────────────────────────────────────────────────────
 
 /// Run Claude Code non-interactively.
@@ -484,6 +530,7 @@ fn execute_claude(target: &ConductorTarget, prompt: &str) -> Outcome {
     };
 
     let mut cmd = StdCommand::new(&binary);
+    apply_cascade_env(&mut cmd, &config_dir);
     cmd.env("CLAUDE_CONFIG_DIR", &config_dir)
         .env("PATH", AUGMENTED_PATH)
         .args([
@@ -1066,6 +1113,7 @@ fn ping_claude_config(config_dir: Option<PathBuf>) -> Option<(bool, u64)> {
         return None;
     }
     let mut cmd = StdCommand::new(&binary);
+    apply_cascade_env(&mut cmd, &config_dir);
     cmd.env("CLAUDE_CONFIG_DIR", &config_dir)
         .env("PATH", AUGMENTED_PATH)
         .args([

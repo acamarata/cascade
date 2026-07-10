@@ -4,7 +4,7 @@
 //!
 //! Implements `ProviderAdapter` for Zhipu AI's z.ai using its OpenAI-compatible
 //! chat completions endpoint at `api.z.ai/api/paas/v4/chat/completions`.
-//! Serves the GLM model family (e.g. `glm-4.6`).
+//! Serves the GLM model family (e.g. `glm-5.2`).
 //!
 //! # Inputs / Outputs
 //!
@@ -17,7 +17,7 @@
 //!
 //! - API key resolution order: `ZAI_API_KEY` env var first, then the
 //!   keychain service `"cascade.zai"` (env var wins).
-//! - Default model: `"glm-4.6"`.
+//! - Default model: `"glm-5.2"`.
 //! - Default base URL: `https://api.z.ai/api/paas/v4`. z.ai's GLM
 //!   *coding-plan* subscription serves a **different** endpoint
 //!   (`https://api.z.ai/api/coding/paas/v4`) with its own model routing —
@@ -52,7 +52,7 @@ const PROVIDER_ID: &str = "zai";
 const ENV_KEY_VAR: &str = "ZAI_API_KEY";
 
 /// Default model used by `health_check()` and referenced in tests.
-const DEFAULT_MODEL: &str = "glm-4.6";
+const DEFAULT_MODEL: &str = "glm-5.2";
 
 // ── Wire types (OpenAI-compatible) ────────────────────────────────────────────
 
@@ -357,7 +357,7 @@ impl ProviderAdapter for ZaiAdapter {
             capabilities: ProviderCapabilities {
                 supports_streaming: true,
                 supports_vision: false,
-                max_context_tokens: 128_000,
+                max_context_tokens: 1_000_000,
                 supports_function_calling: true,
             },
         }
@@ -482,8 +482,8 @@ mod tests {
         let models = adapter.available_models().await.expect("should succeed");
 
         assert_eq!(models.len(), 2, "expected 2 models from fixture");
-        assert!(models.iter().any(|m| m.id == "glm-4.6"));
-        let glm = models.iter().find(|m| m.id == "glm-4.6").unwrap();
+        assert!(models.iter().any(|m| m.id == "glm-5.2"));
+        let glm = models.iter().find(|m| m.id == "glm-5.2").unwrap();
         assert_eq!(glm.context_window, 128_000);
         assert!(glm.supports_streaming);
     }

@@ -71,9 +71,12 @@ const PROVIDER_ID: &str = "opencode";
 ///
 /// | Model ID | Context |
 /// |---|---|
-/// | `kimi-k2` | 128 k |
-/// | `deepseek-v4-pro` | 128 k |
-/// | `gpt-5.5-fast` | 128 k |
+/// | `glm-5.2` | 1,000 k |
+/// | `deepseek-v4-pro` | 1,000 k |
+/// | `qwen3.7-max` | 1,000 k |
+/// | `kimi-k2.7-code` | 1,000 k |
+/// | `minimax-m3` | 1,000 k |
+/// | `deepseek-v4-flash` | 128 k |
 pub struct OpenCodeAdapter {
     http: CascadeHttpClient,
     /// Overridable base URL — tests inject a wiremock server address here.
@@ -308,20 +311,38 @@ impl ProviderAdapter for OpenCodeAdapter {
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         Ok(vec![
             ModelInfo {
-                id: "kimi-k2".into(),
-                name: "Kimi K2".into(),
-                context_window: 128_000,
+                id: "glm-5.2".into(),
+                name: "GLM 5.2".into(),
+                context_window: 1_000_000,
                 supports_streaming: true,
             },
             ModelInfo {
                 id: "deepseek-v4-pro".into(),
                 name: "DeepSeek V4 Pro".into(),
-                context_window: 128_000,
+                context_window: 1_000_000,
                 supports_streaming: true,
             },
             ModelInfo {
-                id: "gpt-5.5-fast".into(),
-                name: "GPT-5.5 Fast".into(),
+                id: "qwen3.7-max".into(),
+                name: "Qwen3.7 Max".into(),
+                context_window: 1_000_000,
+                supports_streaming: true,
+            },
+            ModelInfo {
+                id: "kimi-k2.7-code".into(),
+                name: "Kimi K2.7 Code".into(),
+                context_window: 1_000_000,
+                supports_streaming: true,
+            },
+            ModelInfo {
+                id: "minimax-m3".into(),
+                name: "MiniMax M3".into(),
+                context_window: 1_000_000,
+                supports_streaming: true,
+            },
+            ModelInfo {
+                id: "deepseek-v4-flash".into(),
+                name: "DeepSeek V4 Flash".into(),
                 context_window: 128_000,
                 supports_streaming: true,
             },
@@ -387,7 +408,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
-        let req = CompletionRequest::simple("kimi-k2", "What is the capital of France?");
+        let req = CompletionRequest::simple("glm-5.2", "What is the capital of France?");
         let resp = adapter.complete(req).await.expect("should succeed");
 
         // Contract assertions: content + model + prompt_tokens all populated.
@@ -413,7 +434,7 @@ mod tests {
         // In local dev with a real token stored this test would short-circuit
         // by succeeding against the real API; we accept that trade-off.
         let err = adapter
-            .complete(CompletionRequest::simple("kimi-k2", "ping"))
+            .complete(CompletionRequest::simple("glm-5.2", "ping"))
             .await
             .unwrap_err();
         assert!(
@@ -441,7 +462,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "expired-token");
-        let req = CompletionRequest::simple("kimi-k2", "hello");
+        let req = CompletionRequest::simple("glm-5.2", "hello");
         let err = adapter.complete(req).await.unwrap_err();
 
         assert!(
@@ -467,7 +488,7 @@ mod tests {
         .await;
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
-        let req = CompletionRequest::simple("kimi-k2", "ping");
+        let req = CompletionRequest::simple("glm-5.2", "ping");
         let mut stream = adapter
             .complete_stream(req)
             .await
@@ -502,7 +523,7 @@ mod tests {
 
         let adapter = OpenCodeAdapter::with_base_url(ctx.base_url(), "test-token");
         let resp = adapter
-            .complete(CompletionRequest::simple("kimi-k2", "test"))
+            .complete(CompletionRequest::simple("glm-5.2", "test"))
             .await
             .expect("should succeed");
 
@@ -515,18 +536,21 @@ mod tests {
 
     // ── available_models ──────────────────────────────────────────────────────
 
-    /// available_models returns exactly the three documented OpenCode models.
+    /// available_models returns the documented OpenCode Go model roster.
     #[tokio::test]
     async fn opencode_available_models() {
         let adapter = OpenCodeAdapter::new();
         let models = adapter.available_models().await.unwrap();
-        assert_eq!(models.len(), 3, "expected 3 models, got {}", models.len());
-        assert!(models.iter().any(|m| m.id == "kimi-k2"));
+        assert_eq!(models.len(), 6, "expected 6 models, got {}", models.len());
+        assert!(models.iter().any(|m| m.id == "glm-5.2"));
         assert!(models.iter().any(|m| m.id == "deepseek-v4-pro"));
-        assert!(models.iter().any(|m| m.id == "gpt-5.5-fast"));
+        assert!(models.iter().any(|m| m.id == "qwen3.7-max"));
+        assert!(models.iter().any(|m| m.id == "kimi-k2.7-code"));
+        assert!(models.iter().any(|m| m.id == "minimax-m3"));
+        assert!(models.iter().any(|m| m.id == "deepseek-v4-flash"));
         assert!(
-            models.iter().all(|m| m.context_window == 128_000),
-            "all models should have 128k context"
+            models.iter().any(|m| m.context_window == 1_000_000),
+            "roster should include long-context models"
         );
         assert!(
             models.iter().all(|m| m.supports_streaming),
@@ -631,7 +655,7 @@ mod tests {
             oauth_cfg,
         );
 
-        let req = CompletionRequest::simple("kimi-k2", "hello");
+        let req = CompletionRequest::simple("glm-5.2", "hello");
         let result = adapter.complete(req).await;
         assert!(
             result.is_ok(),
@@ -674,7 +698,7 @@ mod tests {
             OpenCodeAdapter::with_oauth_refresh(api_server.uri(), "bad-token", "bad-rt", oauth_cfg);
 
         let err = adapter
-            .complete(CompletionRequest::simple("kimi-k2", "hi"))
+            .complete(CompletionRequest::simple("glm-5.2", "hi"))
             .await
             .unwrap_err();
         assert!(
