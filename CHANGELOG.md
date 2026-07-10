@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-07-10
+
 ### Removed
 - Dead `zai.rs` and `deepinfra.rs` adapter skeletons from
   `crates/cascade-providers/src/adapters/` (plus their test fixtures).
