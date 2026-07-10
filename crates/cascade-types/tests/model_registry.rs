@@ -52,7 +52,7 @@ fn default_registry_resolves_all_tiers() {
 fn toml_override_replaces_single_tier() {
     let mut reg = ModelRegistry::default();
     reg.apply_overrides(&ModelOverrides {
-        t2: Some(ModelEntry::new("openai", "gpt-4o")),
+        t2: Some(ModelEntry::new("openai", "gpt-5.5")),
         ..Default::default()
     });
     assert_eq!(reg.resolve(Tier::T2).provider_id, "openai");

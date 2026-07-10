@@ -47,6 +47,9 @@ pub const PROVIDER_GFP: &str = "gfp";
 /// Provider identifier for OC-Go dollar-metered accounts.
 pub const PROVIDER_OC_GO: &str = "oc-go";
 
+/// Provider identifier for z.ai GLM Coding Plan accounts (dispatched via Claude Code with GLM env).
+pub const PROVIDER_ZAI: &str = "zai";
+
 // ── Structs ───────────────────────────────────────────────────────────────────
 
 /// A rate-window snapshot for one time window within an account.

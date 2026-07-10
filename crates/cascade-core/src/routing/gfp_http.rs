@@ -312,7 +312,7 @@ mod tests {
             "type": "message",
             "role": "assistant",
             "content": [{"type": "text", "text": "decision, security"}],
-            "model": "gemini-2.0-flash",
+            "model": "gemini-flash-latest",
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 10, "output_tokens": 5}
         }"#;

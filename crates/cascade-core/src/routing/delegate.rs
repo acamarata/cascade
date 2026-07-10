@@ -14,6 +14,7 @@
 //! | `CodexLane` | `codex exec -p` | `openai-codex` | OpenAI Codex headless |
 //! | `AgyLane`   | `agy -p` | `google-agy` | Google Pro / Gemini AGY headless |
 //! | `OcGoLane`  | `opencode run` | `oc-go` | OpenCode-Go headless, dollar-metered |
+//! | `ZaiLane`   | `claude -p` + GLM env | `zai` | z.ai GLM Coding Plan via Claude Code |
 //! | `GfpLane`   | HTTP → :3762 GP proxy | `gfp` | Gemini Free Pool, free Flash (E1-S6) |
 //! | `CcAccLane` | `claude -p` | `acc{N}` | Extra Claude accounts (see § Claude-PTY lane) |
 //! | `MainClaudeLane` | `claude -p` | `claude` | Main T0 Claude (interactive / final-gate) |
@@ -280,6 +281,117 @@ impl DelegateLane for OcGoLane {
         };
         let out = run_lane_subprocess(&bin, &["run"], payload, timeout)?;
         Ok(LaneResult::Output(out))
+    }
+}
+
+// ── Concrete lane: ZaiLane ───────────────────────────────────────────────────
+
+/// z.ai GLM Coding Plan lane — `claude -p` with GLM env loaded from
+/// `~/.claude-glm/cascade-env.sh`.
+///
+/// Provider ID: `zai`. External — blocked for Sensitive content.
+///
+/// z.ai GLM Coding Plan compliance: the plan permits usage only via supported
+/// products (Claude Code with ANTHROPIC_BASE_URL set to the z.ai endpoint).
+/// We do NOT call the z.ai API directly; cascade-env.sh carries the env vars
+/// that redirect `claude` to the GLM endpoint transparently.
+pub struct ZaiLane;
+
+impl DelegateLane for ZaiLane {
+    fn provider_id(&self) -> &str {
+        cascade_types::quota_store::PROVIDER_ZAI
+    }
+
+    fn check_availability(&self) -> LaneAvailability {
+        let has_claude = find_binary_opt("claude").is_some();
+        let has_env = dirs::home_dir()
+            .map(|h| h.join(".claude-glm").join("cascade-env.sh").exists())
+            .unwrap_or(false);
+        if has_claude && has_env {
+            LaneAvailability::Available
+        } else if !has_claude {
+            LaneAvailability::Unavailable {
+                reason: "`claude` binary not found on PATH; install Claude Code CLI".into(),
+            }
+        } else {
+            LaneAvailability::Unavailable {
+                reason: "`~/.claude-glm/cascade-env.sh` not found; Zai GLM env not installed".into(),
+            }
+        }
+    }
+
+    fn execute(&self, payload: &str, timeout: Duration) -> Result<LaneResult> {
+        let Some(bin) = find_binary_opt("claude") else {
+            return Ok(LaneResult::Unavailable("`claude` not on PATH".into()));
+        };
+        let env_path = match dirs::home_dir() {
+            Some(h) => h.join(".claude-glm").join("cascade-env.sh"),
+            None => {
+                return Ok(LaneResult::Unavailable(
+                    "could not determine HOME for Zai env lookup".into(),
+                ))
+            }
+        };
+        if !env_path.exists() {
+            return Ok(LaneResult::Unavailable(
+                "`~/.claude-glm/cascade-env.sh` not found; Zai GLM env not installed".into(),
+            ));
+        }
+        // Load GLM env vars from cascade-env.sh and inject into the subprocess.
+        let env_content = std::fs::read_to_string(&env_path).unwrap_or_default();
+        let env_vars: Vec<(String, String)> = env_content
+            .lines()
+            .filter_map(|raw| {
+                let line = raw.trim().strip_prefix("export ").unwrap_or(raw.trim());
+                let (k, v) = line.split_once('=')?;
+                let k = k.trim().to_string();
+                let v = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                if k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    Some((k, v))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut child = std::process::Command::new(&bin)
+            .args(["-p", payload])
+            .envs(env_vars)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| cascade_types::error::CascadeError::Io {
+                path: bin.clone(),
+                operation: "spawn",
+                source: e,
+            })?;
+
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                return Err(cascade_types::error::CascadeError::Other(format!(
+                    "ZaiLane subprocess timed out after {}s",
+                    timeout.as_secs()
+                )));
+            }
+            match child.try_wait().map_err(|e| cascade_types::error::CascadeError::Io {
+                path: bin.clone(),
+                operation: "wait",
+                source: e,
+            })? {
+                Some(_) => break,
+                None => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        let output = child.wait_with_output().unwrap_or_else(|_| std::process::Output {
+            status: std::process::ExitStatus::default(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        });
+        Ok(LaneResult::Output(
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+        ))
     }
 }
 

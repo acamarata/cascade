@@ -451,6 +451,11 @@ pub fn execute_target(target: &ConductorTarget, prompt: &str) -> Outcome {
         Provider::Claude => execute_claude(target, prompt),
         Provider::Codex => execute_codex(target, prompt),
         Provider::OpenCode => execute_opencode(target, prompt),
+        // z.ai GLM Coding Plan compliance: the plan permits usage only via supported
+        // products (Claude Code with ANTHROPIC_BASE_URL set to the z.ai endpoint).
+        // We dispatch through the same `claude -p` path as Provider::Claude, with
+        // GLM env vars loaded from ~/.claude-glm/cascade-env.sh by apply_cascade_env().
+        // Do NOT change this to a direct API call — that would violate the GLM plan.
         Provider::Zai => execute_claude(target, prompt),
         Provider::Gemini => execute_gemini(target, prompt),
         Provider::Gfp => execute_gfp(target, prompt),
@@ -463,26 +468,50 @@ pub fn execute_target(target: &ConductorTarget, prompt: &str) -> Outcome {
 const AUGMENTED_PATH: &str =
     "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/sbin:/usr/local/sbin:/usr/sbin:/sbin";
 
-/// Probe search dirs for a CLI binary name. Returns the first absolute path found.
+/// Probe for a CLI binary name. Checks the real PATH first, then falls back to
+/// well-known install dirs and ~/bin. Uses an executable-bit check rather than
+/// just `.exists()` so we don't return directories or non-executable files.
 fn find_binary(name: &str) -> Option<PathBuf> {
-    // Common absolute install dirs; `~/bin` is covered by the home-relative
-    // fallback below (no hardcoded user paths).
+    // 1. Real PATH env var — what the shell actually uses.
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(name);
+            if is_executable_file(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+    // 2. Well-known install locations not always in PATH (e.g. restricted shells).
     let extra_dirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
-    // Try PATH-based lookup via `which`-style probe.
     for dir in &extra_dirs {
         let candidate = PathBuf::from(dir).join(name);
-        if candidate.exists() {
+        if is_executable_file(&candidate) {
             return Some(candidate);
         }
     }
-    // Fallback: try home-relative ~/bin/<name>.
+    // 3. ~/bin/<name> (user-local installs).
     if let Some(home) = dirs::home_dir() {
         let candidate = home.join("bin").join(name);
-        if candidate.exists() {
+        if is_executable_file(&candidate) {
             return Some(candidate);
         }
     }
     None
+}
+
+/// Returns true only if `path` is a regular file with at least one executable bit set.
+fn is_executable_file(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
 }
 
 fn apply_cascade_env(cmd: &mut StdCommand, config_dir: &Path) {
@@ -1173,6 +1202,29 @@ fn run_selftest(json_output: bool) -> Result<()> {
                 )
             },
             ping: || None, // cascade-agy has no prompt path
+        },
+        SelftestProvider {
+            name: "zai (GLM Coding Plan / ~/.claude-glm)",
+            probe: || {
+                let has_claude = find_binary("claude").is_some();
+                let has_env = dirs::home_dir()
+                    .map(|h| h.join(".claude-glm").join("cascade-env.sh").exists())
+                    .unwrap_or(false);
+                (
+                    has_claude && has_env,
+                    find_binary("claude").map(|p| p.display().to_string()),
+                )
+            },
+            ping: || {
+                // Skipped when ~/.claude-glm/cascade-env.sh is absent (Zai not installed).
+                if !dirs::home_dir()
+                    .map(|h| h.join(".claude-glm").join("cascade-env.sh").exists())
+                    .unwrap_or(false)
+                {
+                    return None;
+                }
+                ping_claude_config(dirs::home_dir().map(|h| h.join(".claude-glm")))
+            },
         },
         SelftestProvider {
             name: "gfp (GP proxy :3762)",

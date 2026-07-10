@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use cascade_types::quota_store::{
     AccountEntry, HistoryEntry, QuotaState, QuotaStore, RateWindow, PROVIDER_CLAUDE_MAX,
-    PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO, PROVIDER_OPENAI_CODEX,
+    PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO, PROVIDER_OPENAI_CODEX, PROVIDER_ZAI,
     QUOTA_STORE_SCHEMA_VERSION,
 };
 use chrono::{DateTime, Datelike, TimeZone, Utc};
@@ -262,6 +262,31 @@ pub fn build_rate_windows(snaps: &[&QuotaState], provider: &str, ref_ts: i64) ->
                 reset_at: None,
                 cost_usd: None,
             }]
+        }
+        PROVIDER_ZAI => {
+            // GLM Coding Plan (z.ai): 5hr rolling + weekly, same semantics as
+            // PROVIDER_CLAUDE_MAX. Zai is a flat-fee subscription; usage resets
+            // on the same ~5h/7d cadence as Claude Max — no per-key daily cap.
+            let five_hr_used = sum_used_since(snaps, five_hour_start);
+            let weekly_used = sum_used_since(snaps, week_start_ts);
+            vec![
+                RateWindow {
+                    window_secs: FIVE_HOUR_SECS,
+                    label: "5hr".to_string(),
+                    used: five_hr_used,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: None,
+                },
+                RateWindow {
+                    window_secs: WEEK_SECS,
+                    label: "weekly".to_string(),
+                    used: weekly_used,
+                    limit: None,
+                    reset_at: None,
+                    cost_usd: None,
+                },
+            ]
         }
         _ => {
             // Unknown provider — return a 5hr window as a best-effort default.

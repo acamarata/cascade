@@ -213,13 +213,11 @@ impl Command for DispatchArgs {
             )));
         }
 
-        // 3. If --route was given, run the routing matrix and print the decision.
-        //    Reserved decisions (InteractiveChat, FinalGate) proceed normally
-        //    on the default harness. Lane decisions advise which provider to use
-        //    (the binary selection itself still uses --harness; the provider ID
-        //    is informational for the caller). FirewallDeny and AllExhausted
-        //    surface a warning but do not block dispatch (the user may override).
-        if let Some(task_class_arg) = self.route {
+        // 3. If --route was given, run the routing matrix and select the effective
+        //    harness. Lane decisions resolve to a concrete harness binary; Reserved
+        //    decisions use the default --harness. FirewallDeny exits with an error;
+        //    AllExhausted warns and falls back to the default --harness.
+        let effective_harness = if let Some(task_class_arg) = self.route {
             let task_class = TaskClass::from(task_class_arg);
             let router = Router::with_config(RouterConfig::default());
             let decision = router.select(task_class, &self.prompt);
@@ -236,15 +234,33 @@ impl Command for DispatchArgs {
                          proceeding with --harness override",
                         tried.join(", ")
                     );
+                    self.harness
                 }
-                RoutingDecision::Reserved { .. } | RoutingDecision::Lane { .. } => {
-                    // Continue with the subprocess dispatch below.
+                RoutingDecision::Reserved { .. } => self.harness,
+                RoutingDecision::Lane { provider_id, .. } => {
+                    harness_for_provider(provider_id).ok_or_else(|| {
+                        CascadeError::Other(format!(
+                            "route selected provider `{provider_id}` which has no subprocess \
+                             dispatch path (gfp/local/codex/agy require `cascade conductor`); \
+                             override with --harness to bypass routing"
+                        ))
+                    })?
                 }
             }
-        }
+        } else {
+            self.harness
+        };
 
-        // 4. Locate harness binary.
-        let binary = self.resolve_binary()?;
+        // 4. Locate harness binary. --binary-override wins; otherwise search PATH.
+        let binary = if let Some(ref p) = self.binary_override {
+            if p.is_file() {
+                p.clone()
+            } else {
+                return Err(CascadeError::PathNotFound { path: p.clone() });
+            }
+        } else {
+            find_binary(effective_harness.binary_name())?
+        };
 
         // 5. Optionally fetch context slice via ContextOptimizer (T-P4-E04-20).
         //    In the CLI dispatch path we do not have a live RAG index connection,
@@ -266,7 +282,7 @@ impl Command for DispatchArgs {
             .unwrap_or_else(cascade_types::paths::daemon_socket);
 
         // 8. Build argv.
-        let (bin_path, args) = self.harness.build_argv(&binary, &full_prompt);
+        let (bin_path, args) = effective_harness.build_argv(&binary, &full_prompt);
 
         // 9. Dry-run: print and exit.
         if self.dry_run {
@@ -281,7 +297,7 @@ impl Command for DispatchArgs {
             &repo,
             &mcp_socket,
             self.capture_output,
-            self.harness,
+            effective_harness,
             Duration::from_secs(self.timeout_secs),
         )?;
 
@@ -295,18 +311,6 @@ impl Command for DispatchArgs {
     }
 }
 
-impl DispatchArgs {
-    /// Locate the harness binary on PATH, or use `--binary-override` if set.
-    fn resolve_binary(&self) -> Result<PathBuf> {
-        if let Some(ref p) = self.binary_override {
-            if p.is_file() {
-                return Ok(p.clone());
-            }
-            return Err(CascadeError::PathNotFound { path: p.clone() });
-        }
-        find_binary(self.harness.binary_name())
-    }
-}
 
 // ── Core helpers (exported for unit tests) ────────────────────────────────────
 
@@ -393,6 +397,19 @@ fn fetch_context_with_optimizer(query: &str, budget_tokens: usize) -> String {
          \n[RAG index not active — run `cascaded start` to enable context retrieval]",
         result.tokens_used
     )
+}
+
+/// Map a routing `provider_id` to the subprocess [`Harness`] that can dispatch it.
+///
+/// Returns `None` for providers that require out-of-process delegation
+/// (gfp, gemini, codex, agy) — callers should redirect those to
+/// `cascade conductor` instead.
+fn harness_for_provider(provider_id: &str) -> Option<Harness> {
+    match provider_id {
+        "claude" | "claude-max" | "zai" | "acc" => Some(Harness::Cc),
+        "oc-go" | "opencode" => Some(Harness::Oc),
+        _ => None,
+    }
 }
 
 /// Print the routing decision to stderr so it is visible without mixing with

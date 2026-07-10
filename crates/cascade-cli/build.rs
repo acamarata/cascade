@@ -44,9 +44,9 @@ struct Cli {
 
 /// All top-level subcommands (mirrored from cmd/mod.rs).
 ///
-/// Hidden commands (Ping) are intentionally omitted — completion scripts
-/// should not expose internal commands.  Keep this list in sync with the
-/// Commands enum in cmd/mod.rs.
+/// Hidden commands (Ping, Harness) are intentionally omitted — completion
+/// scripts should not expose internal commands.  Keep this list in sync with
+/// the Commands enum in cmd/mod.rs.
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Scaffold a `.cascade/` directory at the detected or specified tier.
@@ -67,8 +67,14 @@ enum Commands {
     Link,
     /// Remove a tool-specific symlink.
     Unlink,
+    /// Remove cascade artifacts; optionally restore archived tools and delete ~/.cascade/.
+    Uninstall,
     /// Migrate a legacy `.claude/` or `.opencode/` directory to `.cascade/`.
     Migrate,
+    /// Move `GEMINI_API_KEY_*` secrets from vault.env into the OS keychain.
+    MigrateKeys,
+    /// Lossless migration engine — import a legacy setup.
+    Import,
     /// Diagnose cascade health and report issues.
     Doctor,
     /// Control the cascade background daemon.
@@ -77,6 +83,81 @@ enum Commands {
     Completions,
     /// Backup snapshots (list/restore).
     Backup,
+    /// Restore an archived tool's files to their original paths.
+    Restore,
+    /// List and restore pre-generation derived-file snapshots.
+    Snapshot,
+    /// Manage Cascade context templates (list, apply, diff, upgrade).
+    Template,
+    /// MCP server token and client setup.
+    Mcp,
+    /// Generate harness-native instruction files.
+    GenerateInstructions,
+    /// Configure OpenCode: MCP wiring + per-project instructions injection.
+    SetupOc,
+    /// Launch a CC or OC subprocess targeting a repo with optional context injection.
+    Dispatch,
+    /// Watch OpenCode session logs and append assistant turns to .cascade/oc-session-log.md.
+    MonitorOc,
+    /// Manage installed WASM plugins.
+    Plugin,
+    /// Inspect and clear daemon caches.
+    Cache,
+    /// Manage pre-update snapshots (list, apply).
+    Rollback,
+    /// Check for and apply daemon updates.
+    Update,
+    /// Manage context fingerprints for cross-session dedup.
+    Context,
+    /// Manage guardrail policies (eval / list / add / remove).
+    Policy,
+    /// Manage the AI folder preference (.cascade, .claude, .codex, or custom).
+    Folder,
+    /// List, download, and remove local LLM model weights.
+    Models,
+    /// Manage AI provider credentials (add / list / remove / test).
+    Provider,
+    /// Post-init healthcheck gate — verify a cascade setup is fully operational.
+    Verify,
+    /// Submit directives to the CEO/Founder AI orchestrator.
+    Ceo,
+    /// Local content checks (e.g. injection-guard hook).
+    Check,
+    /// List detected AI coding subscriptions and their auth status.
+    Subs,
+    /// Phase-Based Development engine (phases, epics, waves, sprints, tickets, steps).
+    Pbd,
+    /// Run EIE engineering-excellence health checks on a project.
+    Health,
+    /// Manage the EXPERIMENTAL CC API proxy bridge (default-off).
+    #[command(name = "ccapi")]
+    CcApi,
+    /// Write Cascade-managed values into a harness runtime config.
+    Configure,
+    /// Manage the fleet account registry (list / status / matrix / detect).
+    Accounts,
+    /// Manage the cascade-fleet-widget menu-bar LaunchAgent.
+    Widget,
+    /// Interactive first-run setup: personal_dir, projects_dir, provider key.
+    Wizard,
+    /// Autonomous Build engine — drive a phase to completion via EOx gates.
+    Build,
+    /// Manage telemetry opt-in (enable / disable / status).
+    Telemetry,
+    /// Export ~/.cascade/ to a portable `.cascade-archive.tar.gz`.
+    Export,
+    /// Security scan subcommands (secrets, client leaks, dep audit, prelaunch checklist).
+    Security,
+    /// Pull nSentry bug/CI/error reports from a remote ops server into the project inbox.
+    Sentry,
+    /// Daemon-owned multi-stream nSentry sync (status / run / pause / resume / list).
+    Nsentry,
+    /// Route a prompt to the best available worker account (quota-aware delegation).
+    Conductor,
+    /// Inspect or manually trigger the RAM Guardian (OOM-prevention subsystem).
+    Ram,
+    /// Manage Cascade Continuity intents (auto-resume sessions on quota reset).
+    Continuity,
 }
 
 // ---------------------------------------------------------------------------

@@ -98,6 +98,7 @@ impl Command for SubsListArgs {
             ("Codex", "detect+config"),
             ("Cursor", "detect+config"),
             ("Antigravity", "detect+config"),
+            ("Zai", "GLM Coding Plan"),
         ];
 
         // Build map: source_name -> DiscoveredAccount (first match wins)
@@ -190,6 +191,7 @@ fn source_name(source: &AuthSource) -> String {
         AuthSource::Codex => "Codex".into(),
         AuthSource::Cursor => "Cursor".into(),
         AuthSource::Antigravity => "Antigravity".into(),
+        AuthSource::Zai => "Zai".into(),
         AuthSource::EnvVar => "EnvVar".into(),
     }
 }
@@ -286,6 +288,7 @@ mod tests {
         assert_eq!(source_name(&AuthSource::Codex), "Codex");
         assert_eq!(source_name(&AuthSource::Cursor), "Cursor");
         assert_eq!(source_name(&AuthSource::Antigravity), "Antigravity");
+        assert_eq!(source_name(&AuthSource::Zai), "Zai");
         assert_eq!(source_name(&AuthSource::EnvVar), "EnvVar");
     }
 

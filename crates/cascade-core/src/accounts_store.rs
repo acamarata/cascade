@@ -345,7 +345,7 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
             // accounts with no data yet (those show as "ok" with dashes, not a re-auth prompt).
             let status = match acc.family {
                 AccountFamily::Gfp => "pool",
-                AccountFamily::Claude | AccountFamily::Google if auth_dead => "auth",
+                AccountFamily::Claude | AccountFamily::Google | AccountFamily::Zai if auth_dead => "auth",
                 _ => "ok",
             };
 

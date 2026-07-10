@@ -56,6 +56,14 @@ pub enum BuildSubcmd {
 pub struct BuildRunArgs {
     /// Phase ID to run (e.g. `p2`).
     pub phase: String,
+
+    /// Use the mock dispatcher (required until the real fleet dispatcher ships).
+    ///
+    /// The real agent-process harness is not yet implemented (TODO pews-02).
+    /// Passing `--mock` makes the intent explicit and prevents accidental
+    /// invocations that would silently mark tickets done without agent calls.
+    #[arg(long)]
+    pub mock: bool,
 }
 
 #[async_trait]
@@ -67,6 +75,14 @@ impl Command for BuildArgs {
 
         match &self.subcommand {
             BuildSubcmd::Run(args) => {
+                if !args.mock {
+                    return Err(cascade_types::error::CascadeError::Other(
+                        "the real fleet dispatcher is not yet implemented (TODO pews-02); \
+                         pass --mock to use MockDispatcher (marks tickets done without agent calls)"
+                            .into(),
+                    ));
+                }
+
                 let config = BuildConfig {
                     skip_externals: self.skip_externals,
                 };

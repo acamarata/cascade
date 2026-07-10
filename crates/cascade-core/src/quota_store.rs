@@ -113,7 +113,7 @@ mod tests {
     fn make_store() -> QuotaStore {
         let mut models = HashMap::new();
         models.insert(
-            "claude-sonnet-4-6".to_string(),
+            "claude-sonnet-5".to_string(),
             ModelUsage {
                 used: 1_000,
                 limit: Some(10_000),
@@ -137,9 +137,9 @@ mod tests {
             accounts_snapshot: vec![entry.clone()],
         };
         let mut week_totals = HashMap::new();
-        week_totals.insert("claude-sonnet-4-6".to_string(), 1_000u64);
+        week_totals.insert("claude-sonnet-5".to_string(), 1_000u64);
         let mut month_totals = HashMap::new();
-        month_totals.insert("claude-sonnet-4-6".to_string(), 4_000u64);
+        month_totals.insert("claude-sonnet-5".to_string(), 4_000u64);
 
         QuotaStore {
             schema_version: QUOTA_STORE_SCHEMA_VERSION,

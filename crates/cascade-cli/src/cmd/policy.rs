@@ -108,7 +108,8 @@ pub struct PolicyEvalArgs {
 
     /// Optional path to a specific policy file to evaluate instead of the
     /// active policy chain.  Supports `.rego` (parsed for patterns) and
-    /// `.wasm` (loaded as WasmPolicyEvaluator).
+    /// `.wasm` (requires the `wasm-policy` feature; returns an error when
+    /// the feature is not compiled in).
     #[arg(long, value_name = "FILE")]
     pub policy: Option<PathBuf>,
 }

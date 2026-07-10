@@ -272,10 +272,10 @@ impl Router {
                     }
                 }
 
-                // Non-sensitive only: Openai (Codex) → Opencode (OC-Go).
+                // Non-sensitive only: Openai (Codex) → Opencode (OC-Go) → Zai (GLM).
                 if sensitivity == ContentSensitivity::Public {
                     if let Some(accs) = &registry {
-                        for family in &[AccountFamily::Openai, AccountFamily::Opencode] {
+                        for family in &[AccountFamily::Openai, AccountFamily::Opencode, AccountFamily::Zai] {
                             let cands = sorted_by_priority(
                                 accs.accounts.iter().filter(|a| &a.family == family),
                             );
@@ -294,6 +294,7 @@ impl Router {
                 } else {
                     tried.push("openai-family (firewall: sensitive)".into());
                     tried.push("opencode-family (firewall: sensitive)".into());
+                    tried.push("zai-family (firewall: sensitive)".into());
                 }
 
                 RoutingDecision::AllExhausted { tried }
@@ -347,12 +348,13 @@ impl Router {
                 let mut tried: Vec<String> = Vec::new();
 
                 if let Some(accs) = &registry {
-                    // Gfp → Google → Openai → Opencode (cost-ascending order).
+                    // Gfp → Google → Openai → Opencode → Zai (cost-ascending order).
                     for family in &[
                         AccountFamily::Gfp,
                         AccountFamily::Google,
                         AccountFamily::Openai,
                         AccountFamily::Opencode,
+                        AccountFamily::Zai,
                     ] {
                         let cands = sorted_by_priority(
                             accs.accounts.iter().filter(|a| &a.family == family),

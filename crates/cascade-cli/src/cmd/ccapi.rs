@@ -133,6 +133,16 @@ fn is_cc_api_proxy_enabled() -> bool {
     config.experimental.cc_api_proxy
 }
 
+// ── Bridge TCP probe ──────────────────────────────────────────────────────────
+
+/// Returns true if a TCP connection to 127.0.0.1:7190 succeeds within 200 ms.
+fn bridge_is_running() -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::Duration;
+    let addr: SocketAddr = "127.0.0.1:7190".parse().expect("static addr");
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
 // ── Status ────────────────────────────────────────────────────────────────────
 
 #[async_trait]
@@ -140,6 +150,7 @@ impl Command for CcApiStatusArgs {
     async fn run(&self) -> Result<()> {
         let enabled = is_cc_api_proxy_enabled();
         let cc_status = auth::detect();
+        let running = bridge_is_running();
 
         if self.json {
             let json = serde_json::json!({
@@ -147,7 +158,7 @@ impl Command for CcApiStatusArgs {
                 "cc_installed": cc_status.installed,
                 "cc_authenticated": cc_status.authenticated,
                 "cc_account_hint": cc_status.account_hint,
-                "bridge_running": false,   // TODO: PID check in future iteration
+                "bridge_running": running,
                 "risk_doc": ".github/docs/cc-api-proxy-beta.md"
             });
             println!("{}", serde_json::to_string_pretty(&json).unwrap());
@@ -179,7 +190,10 @@ impl Command for CcApiStatusArgs {
             if let Some(hint) = &cc_status.account_hint {
                 println!("CC account  : {hint}");
             }
-            println!("Bridge      : not running");
+            println!(
+                "Bridge      : {}",
+                if running { "running (127.0.0.1:7190)" } else { "not running" }
+            );
             if !enabled {
                 println!();
                 println!("{DISABLED_MSG}");

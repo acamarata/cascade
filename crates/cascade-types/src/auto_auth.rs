@@ -28,6 +28,8 @@ pub enum AuthSource {
     Cursor,
     /// Antigravity (`~/.config/antigravity/` or `~/Library/Application Support/Antigravity/`)
     Antigravity,
+    /// z.ai GLM Coding Plan (`~/.claude-glm/`, detected via `cascade-env.sh` presence)
+    Zai,
     /// Environment variable (e.g. `ANTHROPIC_API_KEY`)
     EnvVar,
 }
