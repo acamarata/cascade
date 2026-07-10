@@ -56,7 +56,7 @@ jobs:
             use-cross: false
 
           # macOS Intel (native x86_64)
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             use-cross: false
 
@@ -137,7 +137,7 @@ jobs:
             target: aarch64-apple-darwin
             use-cross: false
 
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             use-cross: false
 

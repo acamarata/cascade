@@ -35,7 +35,7 @@ jobs:
   # ── Build CLI + daemon artifacts ───────────────────────────────────────────
   # Builds cascade (CLI) and cascaded (daemon) binaries with --release --locked.
   # 5 targets, all built natively (no Docker/cross-rs): macos-14 ARM64,
-  # macos-13 x86_64, ubuntu-22.04 x86_64, ubuntu-24.04-arm aarch64,
+  # macos-15-intel x86_64, ubuntu-22.04 x86_64, ubuntu-24.04-arm aarch64,
   # windows-2022 x86_64.
   build-cli:
     name: Build CLI (${{ matrix.target }})
@@ -47,7 +47,7 @@ jobs:
           - runner: macos-14
             target: aarch64-apple-darwin
             os: macos
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             os: macos
           - runner: ubuntu-22.04
@@ -158,7 +158,7 @@ jobs:
           - runner: macos-14
             platform: macos-arm64
             target: aarch64-apple-darwin
-          - runner: macos-13
+          - runner: macos-15-intel
             platform: macos-x64
             target: x86_64-apple-darwin
           - runner: windows-2022
