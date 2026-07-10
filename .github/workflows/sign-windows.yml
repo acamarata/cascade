@@ -63,7 +63,9 @@ jobs:
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
       SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-    if: env.SIGNPATH_API_TOKEN == '' || env.SIGNPATH_ORGANIZATION_ID == ''
     steps:
-      - run: |
+      # Same constraint as the signing job: a job-level `if` may not reference
+      # `env`/`secrets`, so the condition lives on the step.
+      - if: env.SIGNPATH_API_TOKEN == '' || env.SIGNPATH_ORGANIZATION_ID == ''
+        run: |
           echo "Skipping Windows code signing: SIGNPATH_API_TOKEN or SIGNPATH_ORGANIZATION_ID not configured"

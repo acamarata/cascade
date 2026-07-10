@@ -1,0 +1,9 @@
+# actionlint configuration.
+#
+# Purpose: declare the self-hosted runner labels this repo targets so actionlint
+# does not report them as unknown. CI compute for this private repo runs on the
+# `cam-sentry` box (see ASI Policy 8: private repos use a self-hosted runner on
+# the project's -sentry server; public repos use free GitHub-hosted runners).
+self-hosted-runner:
+  labels:
+    - cam-sentry
