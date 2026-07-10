@@ -1,23 +1,23 @@
 /**
  * Purpose: Settings tab for harness bridge config-file paths.
  *   Each harness (CC, OC, Codex) has a path Input, a Browse button (Tauri dialog.open),
- *   and a Detect button (invokes detect_harness_path IPC).
+ *   and a disabled Detect button until daemon support lands.
  * Inputs:  draft HarnessBridgesSettings; saveSection callback.
  * Outputs: <section> with three path rows; saves via update_settings { harnessBridges }.
  * Constraints:
  *   - Tauri file picker via @tauri-apps/plugin-dialog (dialog.open).
- *   - detect_harness_path IPC returns the default path for each harness slug.
+ *   - detect_harness_path IPC is not wired yet.
  *   - Falls back gracefully when Tauri is not available (browser/Vitest).
  *   - WCAG 2.1 AA: all inputs labelled; focus ring on all interactive elements.
  * SPORT: MASTER-COMPONENTS.md — HarnessBridgesTab — T-P3-E07-15
  */
 
-import { useState } from 'react'
 import { FolderOpen, Crosshair } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import type { HarnessBridgesSettings } from '@/types/settings'
+
+// TODO(rust-wave): implement detect_harness_path IPC in src-tauri.
 
 // ── Tauri file picker (guard for browser env) ─────────────────────────────────
 
@@ -43,23 +43,9 @@ interface HarnessRowProps {
 }
 
 function HarnessRow({ id, label, slug, value, onChange }: HarnessRowProps) {
-  const [detecting, setDetecting] = useState(false)
-
   async function handleBrowse() {
     const path = await pickFile()
     if (path) onChange(path)
-  }
-
-  async function handleDetect() {
-    setDetecting(true)
-    try {
-      const path = await invoke<string>('detect_harness_path', { harness: slug })
-      if (path) onChange(path)
-    } catch {
-      // IPC not yet wired — silently no-op
-    } finally {
-      setDetecting(false)
-    }
   }
 
   return (
@@ -89,12 +75,12 @@ function HarnessRow({ id, label, slug, value, onChange }: HarnessRowProps) {
         <button
           type="button"
           aria-label={`Auto-detect ${label}`}
-          disabled={detecting}
-          onClick={handleDetect}
+          disabled
+          title="Detection pending daemon support"
           className="flex items-center justify-center h-9 px-3 gap-1.5 rounded-md border border-input bg-transparent text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
         >
           <Crosshair className="h-4 w-4" aria-hidden="true" />
-          {detecting ? 'Detecting…' : 'Detect'}
+          Detection pending daemon support
         </button>
       </div>
     </div>
@@ -130,7 +116,7 @@ export function HarnessBridgesTab({
         Harness Bridges
       </h2>
       <p className="text-sm text-muted-foreground">
-        Point each harness at its config file. Use Detect to auto-fill the standard location.
+        Point each harness at its config file. Auto-detection is pending daemon support.
       </p>
 
       <HarnessRow

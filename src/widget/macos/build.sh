@@ -18,8 +18,11 @@ else
     echo "[1/4] xcodegen not found — using existing CascadeWidget.xcodeproj"
 fi
 
-# 2. Archive the CascadeApp target (Release, ad-hoc signed).
-echo "[2/4] Building CascadeApp (Release, ad-hoc signing)..."
+# 2. Archive the CascadeApp target (Release, unsigned).
+# Signing is disabled at archive time: without an Apple Developer team, Xcode
+# rejects the App Group entitlement under ad-hoc identity. The installed app
+# is ad-hoc signed in step 3 instead (codesign --deep --sign -).
+echo "[2/4] Building CascadeApp (Release, unsigned archive)..."
 xcodebuild archive \
   -project "$SCRIPT_DIR/CascadeWidget.xcodeproj" \
   -scheme "CascadeApp" \
@@ -39,7 +42,9 @@ mkdir -p "$INSTALL_DIR"
 # Remove old copy if present.
 rm -rf "$INSTALL_DIR/$APP_NAME"
 cp -R "$ARCHIVE/Products/Applications/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
-echo "[3/4] Installed: $INSTALL_DIR/$APP_NAME"
+# Ad-hoc sign the installed copy (unsigned binaries are killed by macOS).
+codesign --force --deep --sign - "$INSTALL_DIR/$APP_NAME"
+echo "[3/4] Installed + ad-hoc signed: $INSTALL_DIR/$APP_NAME"
 
 # 4. Launch the app.
 echo "[4/4] Launching Cascade menu-bar app..."

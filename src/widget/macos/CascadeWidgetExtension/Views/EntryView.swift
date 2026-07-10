@@ -19,3 +19,8 @@ struct CascadeEntryView: View {
         .monochromeDimWhenInactive()
     }
 }
+
+func widgetStatusColor(for cache: CascadeCache) -> Color {
+    guard cache.hasWidgetData else { return .gray }
+    return cache.isStale ? .red : .green
+}

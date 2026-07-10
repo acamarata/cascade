@@ -42,13 +42,14 @@ struct CascadeMenuBarContentView: View {
 
     private var statusColor: Color {
         guard let cache = store.cache else { return Color(hex: "#6B7280") }
-        let live = cache.accounts.filter { ($0.status ?? "live") == "live" }
-        if live.isEmpty { return Color(hex: "#6B7280") }
-        let exhausted = live.filter {
+        let rows = renderedEntries(for: cache)
+        let healthy = rows.filter(isHealthyForHeader)
+        if healthy.isEmpty { return Color(hex: "#6B7280") }
+        let exhausted = healthy.filter {
             let w = $0.usage?.seven_day_opus?.utilization ?? $0.usage?.seven_day?.utilization ?? 0
             return w >= 100
         }
-        if exhausted.count == live.count { return Color(hex: "#E5484D") }
+        if exhausted.count == healthy.count { return Color(hex: "#E5484D") }
         if !exhausted.isEmpty           { return Color(hex: "#F5A623") }
         return Color(hex: "#4ED17F")
     }
@@ -56,18 +57,19 @@ struct CascadeMenuBarContentView: View {
     private var statusLabel: some View {
         Group {
             if let cache = store.cache {
-                let all   = cache.accounts.filter { $0.key_count == nil }
-                let auth  = all.filter { $0.status == "auth" }.count
-                let live  = all.filter { ($0.status ?? "live") == "live" }
-                let exh   = live.filter {
+                let all = renderedEntries(for: cache)
+                let auth = all.filter(isAuthNeededForHeader).count
+                let healthy = all.filter(isHealthyForHeader)
+                let exh = healthy.filter {
                     let w = $0.usage?.seven_day_opus?.utilization ?? $0.usage?.seven_day?.utilization ?? 0
                     return w >= 100
                 }.count
                 let text: String = {
                     if auth > 0 && exh > 0 { return "\(auth) need re-auth · \(exh) exhausted" }
                     if auth > 0 { return "\(auth) account\(auth == 1 ? "" : "s") need re-auth" }
-                    if exh > 0  { return "\(exh) exhausted · \(live.count - exh) available" }
-                    return "\(live.count) accounts healthy"
+                    if exh > 0  { return "\(exh) exhausted · \(healthy.count - exh) available" }
+                    if healthy.count == all.count { return "\(healthy.count) accounts healthy" }
+                    return "\(healthy.count)/\(all.count) accounts healthy"
                 }()
                 Text(text)
                     .font(.system(size: 11, weight: .medium))
@@ -196,5 +198,17 @@ struct CascadeMenuBarContentView: View {
             // Cascade not installed — open the accounts folder as fallback.
             NSWorkspace.shared.open(home.appendingPathComponent(".cascade/accounts"))
         }
+    }
+
+    private func renderedEntries(for cache: UsageCache) -> [AccountEntry] {
+        labelledAccounts(from: cache.accounts.sorted { $0.account < $1.account }).map { $0.entry }
+    }
+
+    private func isHealthyForHeader(_ entry: AccountEntry) -> Bool {
+        entry.status == "ok" || entry.status == "pool" || entry.authenticated == true
+    }
+
+    private func isAuthNeededForHeader(_ entry: AccountEntry) -> Bool {
+        entry.status == "auth" || entry.authenticated == false
     }
 }

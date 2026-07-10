@@ -57,12 +57,19 @@ func labelledAccounts(from entries: [AccountEntry]) -> [(label: String, entry: A
     // Group by provider, dropping auto-hidden claude rows.
     var byProvider: [String: [AccountEntry]] = [:]
     for entry in entries where !shouldAutoHide(entry) {
-        let p = entry.provider ?? "claude"
+        let p = canonicalProvider(entry.provider ?? "claude")
         byProvider[p, default: []].append(entry)
     }
 
     var result: [(label: String, entry: AccountEntry)] = []
     for provider in providerOrder {
+        guard let group = byProvider.removeValue(forKey: provider) else { continue }
+        let label = makeLabels(provider: provider, group: group)
+        for (entry, lbl) in zip(group, label) {
+            result.append((label: lbl, entry: entry))
+        }
+    }
+    for provider in byProvider.keys.sorted() {
         guard let group = byProvider[provider] else { continue }
         let label = makeLabels(provider: provider, group: group)
         for (entry, lbl) in zip(group, label) {
@@ -83,34 +90,22 @@ private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
         if group.count == 1 {
             return ["An"]
         }
-        return group.map { entry in
-            let num = providerSuffix(entry.account) ?? "\(group.firstIndex(where: { $0.account == entry.account }).map { $0 + 1 } ?? 1)"
-            return "A\(num)"
-        }
+        return numberedLabels(prefix: "A", group: group)
     case "codex":
         if group.count == 1 {
             return ["Co"]
         }
-        return group.enumerated().map { (idx, entry) in
-            let num = providerSuffix(entry.account) ?? "\(idx + 1)"
-            return "C\(num)"
-        }
+        return numberedLabels(prefix: "C", group: group)
     case "gemini":
         if group.count == 1 {
             return ["GP"]
         }
-        return group.enumerated().map { (idx, entry) in
-            let num = providerSuffix(entry.account) ?? "\(idx + 1)"
-            return "G\(num)"
-        }
+        return numberedLabels(prefix: "G", group: group)
     case "zai", "glm":
         if group.count == 1 {
             return ["Za"]
         }
-        return group.enumerated().map { (idx, entry) in
-            let num = providerSuffix(entry.account) ?? "\(idx + 1)"
-            return "Z\(num)"
-        }
+        return numberedLabels(prefix: "Z", group: group)
     default:
         // Unknown provider: use first letter uppercased + number.
         let prefix = provider.prefix(1).uppercased()
@@ -119,6 +114,18 @@ private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
         }
         return group.enumerated().map { (idx, _) in "\(prefix)\(idx + 1)" }
     }
+}
+
+private func canonicalProvider(_ provider: String) -> String {
+    provider == "glm" ? "zai" : provider
+}
+
+private func numberedLabels(prefix: String, group: [AccountEntry]) -> [String] {
+    let suffixes = group.map { providerSuffix($0.account) }
+    if suffixes.contains(where: { $0 == nil }) {
+        return group.enumerated().map { (idx, _) in "\(prefix)\(idx + 1)" }
+    }
+    return suffixes.map { "\(prefix)\($0!)" }
 }
 
 /// Extracts the trailing numeric suffix from an account name like

@@ -1,5 +1,4 @@
 import XCTest
-@testable import CascadeWidgetExtension
 
 // MARK: - CacheModelTests
 //
@@ -141,24 +140,24 @@ class CacheModelTests: XCTestCase {
         XCTAssertFalse(cache.isStale)
     }
 
-    // MARK: - testPlaceholderNonNil
-    /// Verify CascadeCache.placeholder._widget?.cascade_tiers?.gci is non-nil.
-    /// Confirms the placeholder provides realistic test data for the widget.
-    func testPlaceholderNonNil() throws {
+    // MARK: - testPlaceholderEmptyState
+    /// Verify CascadeCache.placeholder does not fabricate widget statistics.
+    /// Confirms missing cache data renders as an honest empty state.
+    func testPlaceholderEmptyState() throws {
         let placeholder = CascadeCache.placeholder
 
-        XCTAssertNotNil(placeholder._widget)
-        XCTAssertNotNil(placeholder._widget?.cascade_tiers)
-        XCTAssertNotNil(placeholder._widget?.cascade_tiers?.gci)
+        XCTAssertNil(placeholder._widget)
+        XCTAssertNil(placeholder.generated_at)
+        XCTAssertNil(placeholder.daemon_version)
+        XCTAssertFalse(placeholder.hasWidgetData)
     }
 
-    // MARK: - testPlaceholderActiveProject
-    /// Verify CascadeCache.placeholder._widget?.active_project is non-nil.
-    /// Confirms the placeholder provides a valid active project value.
-    func testPlaceholderActiveProject() throws {
+    // MARK: - testPlaceholderAgeString
+    /// Verify CascadeCache.placeholder shows no freshness timestamp.
+    func testPlaceholderAgeString() throws {
         let placeholder = CascadeCache.placeholder
 
-        XCTAssertNotNil(placeholder._widget?.active_project)
-        XCTAssertEqual(placeholder._widget?.active_project, "cascade")
+        XCTAssertEqual(placeholder.ageString, "—")
+        XCTAssertFalse(placeholder.isStale)
     }
 }

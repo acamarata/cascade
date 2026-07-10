@@ -12,7 +12,8 @@
 
   Notes:
   - RunAtLoad = true starts the app at login automatically.
-  - KeepAlive = false lets macOS restart it only if it crashes (not after Quit).
+  - KeepAlive = false means launchd will not restart it after Quit or crash.
+  - Crash-only restart would require a KeepAlive dictionary with SuccessfulExit=false.
   - The app uses LSMultipleInstancesProhibited so a second launch just activates
     the existing instance — safe to have this agent load-at-login.
 -->

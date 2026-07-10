@@ -8,16 +8,18 @@
  */
 
 import { useSearchParams } from 'react-router-dom';
-import { Users, Plug, BarChart2 } from 'lucide-react';
+import { Users, Plug, BarChart2, Route } from 'lucide-react';
 import { TabsLayout } from '../../components/layout/TabsLayout';
 import { ProviderSettings } from '../ProviderSettings';
 import { UsagePage } from '../UsagePage';
 import { FleetTabContent } from './FleetTabContent';
+import { FleetRoutingView } from '../../components/fleet/FleetRoutingView';
 
-type TabId = 'fleet' | 'providers' | 'usage';
+type TabId = 'fleet' | 'routing' | 'providers' | 'usage';
 
 const TABS = [
   { id: 'fleet' as TabId, label: 'Fleet', icon: Users },
+  { id: 'routing' as TabId, label: 'Routing', icon: Route },
   { id: 'providers' as TabId, label: 'Providers', icon: Plug },
   { id: 'usage' as TabId, label: 'Usage', icon: BarChart2 },
 ];
@@ -45,6 +47,11 @@ export default function AccountsHub() {
         onTabChange={handleTabChange}
       >
         {activeTab === 'fleet' && <FleetTabContent />}
+        {activeTab === 'routing' && (
+          <div className="h-full overflow-y-auto p-4">
+            <FleetRoutingView />
+          </div>
+        )}
         {activeTab === 'providers' && <ProviderSettings />}
         {activeTab === 'usage' && <UsagePage />}
       </TabsLayout>

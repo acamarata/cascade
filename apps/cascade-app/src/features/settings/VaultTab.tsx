@@ -1,7 +1,7 @@
 /**
  * Purpose: Settings tab for read-only vault.env key display.
- *   Reads key names (never values) via read_vault_keys IPC; renders masked placeholders.
- *   "Open in Editor" button calls shell::open on the vault path.
+ *   Reads key names (never values) via read_vault_keys IPC when available; renders masked placeholders.
+ *   "Open in Editor" button opens the vault path when the IPC command is available.
  * Inputs:  None (calls IPC on mount for key names only).
  * Outputs: <section> list of key names; Open in Editor button.
  * Constraints:
@@ -19,23 +19,17 @@ import { Button } from '@/components/ui/button'
 
 // ── IPC helpers ───────────────────────────────────────────────────────────────
 
-/** Returns vault key names only — values are never sent to the frontend. */
-async function fetchVaultKeys(): Promise<string[]> {
-  try {
-    return await invoke<string[]>('read_vault_keys')
-  } catch {
-    return []
-  }
+// TODO(rust-wave): implement read_vault_keys + vault_path IPC in src-tauri.
+
+function isMissingCommandError(err: unknown): boolean {
+  const msg = String(err).toLowerCase()
+  return msg.includes('not found') || msg.includes('unknown command') || msg.includes('no such')
 }
 
 async function openVaultInEditor() {
-  try {
-    const { openPath } = await import('@tauri-apps/plugin-opener')
-    const path = await invoke<string>('vault_path')
-    await openPath(path)
-  } catch {
-    // Not in Tauri — no-op
-  }
+  const { openPath } = await import('@tauri-apps/plugin-opener')
+  const path = await invoke<string>('vault_path')
+  await openPath(path)
 }
 
 // ── VaultTab ──────────────────────────────────────────────────────────────────
@@ -44,12 +38,26 @@ export function VaultTab() {
   const [keys, setKeys] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isOpening, setIsOpening] = useState(false)
+  const [integrationPending, setIntegrationPending] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setIsLoading(true)
-    const result = await fetchVaultKeys()
-    setKeys(result)
-    setIsLoading(false)
+    setLoadError(null)
+    try {
+      const result = await invoke<string[]>('read_vault_keys')
+      setKeys(result)
+      setIntegrationPending(false)
+    } catch (err) {
+      setKeys([])
+      if (isMissingCommandError(err)) {
+        setIntegrationPending(true)
+      } else {
+        setLoadError(String(err))
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -58,8 +66,19 @@ export function VaultTab() {
 
   async function handleOpen() {
     setIsOpening(true)
-    await openVaultInEditor()
-    setIsOpening(false)
+    setLoadError(null)
+    try {
+      await openVaultInEditor()
+      setIntegrationPending(false)
+    } catch (err) {
+      if (isMissingCommandError(err)) {
+        setIntegrationPending(true)
+      } else {
+        setLoadError(String(err))
+      }
+    } finally {
+      setIsOpening(false)
+    }
   }
 
   return (
@@ -87,7 +106,7 @@ export function VaultTab() {
             variant="outline"
             size="sm"
             onClick={handleOpen}
-            disabled={isOpening}
+            disabled={isOpening || integrationPending}
           >
             <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
             Open in Editor
@@ -103,6 +122,14 @@ export function VaultTab() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : integrationPending ? (
+        <div className="rounded-md border border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          Vault integration not yet wired to the daemon.
+        </div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {loadError}
+        </div>
       ) : keys.length === 0 ? (
         <div className="rounded-md border border-border px-4 py-6 text-center text-sm text-muted-foreground">
           No vault keys found. Add variables to{' '}

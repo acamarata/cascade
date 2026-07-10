@@ -8,8 +8,60 @@ import Foundation
 
 struct UsageCache: Codable {
     var accounts: [AccountEntry]
-    var queried_at: Double?
+    var queried_at: CacheTimestamp?
+    var updated_at: CacheTimestamp?
     var sanity: SanityBlock?
+
+    var freshnessDate: Date? {
+        updated_at?.date ?? queried_at?.date
+    }
+}
+
+struct CacheTimestamp: Codable {
+    var date: Date?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Double.self) {
+            date = CacheTimestamp.date(fromNumeric: value)
+        } else if let value = try? container.decode(Int.self) {
+            date = CacheTimestamp.date(fromNumeric: Double(value))
+        } else if let value = try? container.decode(String.self) {
+            date = CacheTimestamp.date(fromString: value)
+        } else {
+            date = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let date = date {
+            try container.encode(date.timeIntervalSince1970)
+        } else {
+            try container.encodeNil()
+        }
+    }
+
+    private static func date(fromNumeric value: Double) -> Date? {
+        guard value.isFinite, value > 0 else { return nil }
+        let seconds = value > 1_000_000_000_000 ? value / 1000 : value
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    private static func date(fromString value: String) -> Date? {
+        if let numeric = Double(value) {
+            return date(fromNumeric: numeric)
+        }
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        let standard = ISO8601DateFormatter()
+        return standard.date(from: value)
+    }
 }
 
 struct SanityBlock: Codable {
@@ -36,6 +88,7 @@ struct AccountEntry: Codable, Identifiable {
     var quota_opaque: Bool?
     var plan_type: String?
     var status: String?
+    var authenticated: Bool?
     var key_count: Int?
     var opencode_meta: OpencodeMeta?
     /// Absolute path to the agent's config directory (e.g. ~/.claude-acc1).

@@ -64,7 +64,7 @@ function getProviderBadgeStyles(provider: string, isPool: boolean): string {
 }
 
 export function AccountsPage(): React.ReactElement {
-  const { accounts, loading, error, refetch } = useAccounts()
+  const { accounts, needsAuth, loading, error, refetch } = useAccounts()
   const [selected, setSelected] = useState<AccountQuota | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addProvider, setAddProvider] = useState<string>('claude')
@@ -163,12 +163,12 @@ export function AccountsPage(): React.ReactElement {
       )}
 
       {/* Loading */}
-      {loading && accounts.length === 0 && (
+      {loading && accounts.length === 0 && needsAuth.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">Loading accounts…</p>
       )}
 
       {/* Empty */}
-      {!loading && !error && accounts.length === 0 && (
+      {!loading && !error && accounts.length === 0 && needsAuth.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Users className="mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
@@ -178,7 +178,7 @@ export function AccountsPage(): React.ReactElement {
       )}
 
       {/* Table */}
-      {accounts.length > 0 && (
+      {(accounts.length > 0 || needsAuth.length > 0) && (
         <div className="overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-md">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -288,6 +288,56 @@ export function AccountsPage(): React.ReactElement {
                   </tr>
                 )
               })}
+              {needsAuth.map((acc) => (
+                <tr
+                  key={acc.account}
+                  className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                  onClick={() => setSelected(acc)}
+                >
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${getProviderBadgeStyles(acc.provider, false)}`}
+                    >
+                      {accountLabel(acc)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground capitalize font-medium">{acc.provider}</td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">—</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">—</td>
+                  <td className="px-4 py-3">
+                    <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border bg-amber-500/10 text-amber-500 border-amber-500/20">
+                      Needs sign-in
+                    </span>
+                  </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-2">
+                      {canReauth(acc.provider) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={actionBusy}
+                          onClick={() => handleReauth(acc.account)}
+                          className="h-7 px-2.5 text-xs font-medium hover:bg-muted/80"
+                        >
+                          Re-auth
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={actionBusy}
+                        onClick={() => handleRemove(acc.account)}
+                        className="h-7 px-2.5 text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

@@ -24,10 +24,17 @@ setup, then:
 ```bash
 xcodegen generate
 ./build.sh
-open build/Cascade.app
+open ~/Applications/CascadeApp.app
 ```
 
 Then add the widget from the macOS widget gallery (right-click Desktop, choose Edit Widgets).
+
+## Menu-Bar App
+
+`build.sh` installs the companion menu-bar app at `~/Applications/CascadeApp.app`.
+The app reads account quota data from `~/.cascade/accounts/quota.json`, falling
+back to `~/.claude/usage-cache.json` when needed. The desktop widget reads its
+WidgetKit cache from `~/Library/Group Containers/group.io.cascade/cache.json`.
 
 ## Sizes
 

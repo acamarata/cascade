@@ -3,8 +3,8 @@
  *   Scans installed AI harnesses (Claude Code, OpenCode, Codex, Cursor) and
  *   environment variables for existing authentication state. Presents discovered
  *   accounts grouped by source with import checkboxes. Importable env API keys
- *   can be copied into cascade-keychain; non-importable OAuth accounts are
- *   offered an "Connect via OAuth" link for the E-04 provider connect flow.
+ *   can be copied into cascade-keychain; non-importable OAuth accounts show an
+ *   honest pending state until the connect flow is wired.
  *
  * Inputs:
  *   - Tauri IPC: cascade_auto_auth_scan → DiscoveredAccount[]
@@ -21,7 +21,7 @@
  *   - AI-optional: this step runs entirely before any provider is connected.
  *   - Read-only scan: no harness config file is modified.
  *   - API key values are never displayed or logged.
- *   - Non-importable accounts (OAuth) show "Connect via OAuth →" not a checkbox.
+ *   - Non-importable accounts (OAuth) show a disabled "coming soon" state, not a checkbox.
  *   - Renders correctly on empty scan result.
  *
  * SPORT: MASTER-COMPONENTS.md — AutoAuthStep — T-P3-E03-41
@@ -451,24 +451,15 @@ function AccountRow({ account, isSelected, onToggle, importResult }: AccountRowP
             Error
           </span>
         )}
-        {/* Non-importable: OAuth link to E-04 connect flow */}
+        {/* Non-importable: OAuth connect waits for daemon support. */}
+        {/* TODO(rust-wave): implement auto-auth OAuth connect IPC in src-tauri. */}
         {!account.importable && !wasImported && !wasSkipped && !rowError && (
           <span
-            role="button"
-            tabIndex={0}
-            className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label={`Connect ${account.emailOrHint} via OAuth`}
-            // E-04 provider connect flow — linked when that route is scaffolded
-            onClick={() => {
-              /* TODO T-P3-E04-03: open provider connect flow for account.provider */
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                /* TODO T-P3-E04-03 */
-              }
-            }}
+            className="text-xs font-medium text-muted-foreground"
+            aria-disabled="true"
+            title="OAuth connect coming soon"
           >
-            Connect via OAuth&nbsp;&rarr;
+            OAuth connect coming soon
           </span>
         )}
       </div>

@@ -44,6 +44,13 @@ import { MessageSquare, RotateCcw, Lock } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useChat } from './useChat'
 import { loadPersonalChatSync } from './useChatHistory'
@@ -51,6 +58,7 @@ import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ProviderSelector } from './ProviderSelector'
 import { TopicSelector } from './TopicSelector'
+import { useProjectRegistry } from '../pews/useProjectRegistry'
 import { useChatScope, useAppStore } from '../../store'
 import type { ChatScope } from '../../store/chatScope.slice'
 
@@ -62,6 +70,7 @@ function newSessionId(): string {
 }
 
 const SESSION_STORAGE_KEY = 'cascade-app-chat-session-id'
+const NO_PROJECT_VALUE = '__no_project__'
 
 /** Get or create a stable session id for this browser session. */
 function getOrCreateSessionId(): string {
@@ -77,12 +86,63 @@ function getOrCreateSessionId(): string {
   }
 }
 
+interface ProjectScopeSelectorProps {
+  selectedProjectId: string | null
+  onSelect: (projectId: string) => void
+}
+
+function ProjectScopeSelector({ selectedProjectId, onSelect }: ProjectScopeSelectorProps) {
+  const { projects, loading, error } = useProjectRegistry()
+
+  useEffect(() => {
+    if (selectedProjectId == null && projects.length > 0) {
+      onSelect(projects[0].id)
+    }
+  }, [onSelect, projects, selectedProjectId])
+
+  if (error) {
+    return (
+      <span
+        className="text-[0.65rem] text-muted-foreground/60"
+        title="Could not reach the Cascade daemon projects endpoint (127.0.0.1:9761)"
+      >
+        Projects unavailable
+      </span>
+    )
+  }
+
+  if (!loading && projects.length === 0) {
+    return <span className="text-[0.65rem] text-muted-foreground/60">No projects found</span>
+  }
+
+  return (
+    <Select value={selectedProjectId ?? NO_PROJECT_VALUE} onValueChange={onSelect}>
+      <SelectTrigger
+        className="h-7 text-xs w-52 shrink-0"
+        aria-label="Scope Projects chat to a project"
+      >
+        <SelectValue placeholder="Select project" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_PROJECT_VALUE} disabled className="text-xs text-muted-foreground">
+          {loading ? 'Loading projects…' : 'Select project'}
+        </SelectItem>
+        {projects.map((project) => (
+          <SelectItem key={project.id} value={project.id} className="text-xs">
+            {project.name || project.id}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 // ── ChatPage ──────────────────────────────────────────────────────────────────
 
 export function ChatPage() {
   const headingId = useId()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { chatScope, selectedProjectId, setScope } = useChatScope()
+  const { chatScope, selectedProjectId, setScope, setSelectedProject } = useChatScope()
 
   // Personal-scope topic focus (chatScope store slice) — surfaced via
   // TopicSelector's "View all topics" control, Personal tab only.
@@ -192,6 +252,7 @@ export function ChatPage() {
     setSearchParams({ scope }, { replace: true })
     setIsPrivate(false) // leaving/entering a scope always resets private mode
     setSelectedTopic(null) // topic focus is Personal-only; reset on any scope change
+    if (scope !== 'projects') setSelectedProject(null)
     handleNewChat()
   }
 
@@ -202,6 +263,12 @@ export function ChatPage() {
 
   function handleSend(content: string) {
     sendMessage(content, selectedProvider ?? undefined)
+  }
+
+  function handleProjectSelect(projectId: string) {
+    if (projectId === NO_PROJECT_VALUE || projectId === selectedProjectId) return
+    setSelectedProject(projectId)
+    handleNewChat()
   }
 
   return (
@@ -304,6 +371,12 @@ export function ChatPage() {
               Private
             </button>
           </div>
+        )}
+        {chatScope === 'projects' && (
+          <ProjectScopeSelector
+            selectedProjectId={selectedProjectId}
+            onSelect={handleProjectSelect}
+          />
         )}
       </div>
 

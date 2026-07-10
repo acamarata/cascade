@@ -14,6 +14,7 @@
 		47D8146A831BD4D3635AD301 /* UsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0208B51D2101F403DC0C843E /* UsageCache.swift */; };
 		53907DC960C89A4D6F9997B8 /* CascadeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB538BE3C026816D9226121 /* CascadeWidget.swift */; };
 		5A53E34D50A9565DBF2DEDA1 /* Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE0C9FDFD3F57319DC51032 /* Provider.swift */; };
+		5FD8CFBF632C994ED0ED00C0 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F62E832D7B08BCA17B8ABD7 /* Formatting.swift */; };
 		669AD9FD73271C19001C1D45 /* CascadeMenuBarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DBA986C9F3A96EE826FCC3 /* CascadeMenuBarLabel.swift */; };
 		6B61B170452FF9853DC540B1 /* MonochromeDimModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087B157FAA8CD443F9533691 /* MonochromeDimModifier.swift */; };
 		6C885B361E1543A3F9828C53 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 30BEF06182F332F03679B356 /* AppIcon.icns */; };
@@ -22,9 +23,11 @@
 		863F5D56D5FFD1D2875B039D /* CascadeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32BDC7ECB66D7F993F0B31EE /* CascadeApp.swift */; };
 		969BB6A87AED736ED3B4F22D /* CascadeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9E30D5BBB872312418DD5B9B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F62E832D7B08BCA17B8ABD7 /* Formatting.swift */; };
+		B13674E0C018EEC058D7B558 /* FormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA3B102BE42D1A4649A6461 /* FormattingTests.swift */; };
 		C7C1B926FCAD3896F9092E81 /* CacheModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4743F7749BB7E4086767D953 /* CacheModel.swift */; };
 		C8BF7B6704FCF6B23EA198E2 /* EntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530BDF78D76259F7CED90C28 /* EntryView.swift */; };
 		CD42F16EC9B2C5D4F7FFBE28 /* SmallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA653CE94840F17719DE2E9 /* SmallView.swift */; };
+		CDE95CF03B0B05754BDF5D95 /* UsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0208B51D2101F403DC0C843E /* UsageCache.swift */; };
 		D999CEAD47A314CC0DF058D6 /* UsageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2204BF1DA04DF8F6985663D3 /* UsageRow.swift */; };
 		E18514BA80954D8BE94849DC /* CascadeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29897EB935C8DDA838741E2B /* CascadeWidgetBundle.swift */; };
 		E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */; };
@@ -79,6 +82,7 @@
 		50FFA755E8A1CA79EAAF14EB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		530BDF78D76259F7CED90C28 /* EntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryView.swift; sourceTree = "<group>"; };
 		763158F9C486655DE9DD932B /* DesktopWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopWindowController.swift; sourceTree = "<group>"; };
+		7AA3B102BE42D1A4649A6461 /* FormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattingTests.swift; sourceTree = "<group>"; };
 		8BF87462C69C840B22807925 /* DesktopFleetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopFleetView.swift; sourceTree = "<group>"; };
 		98C7C0C311152265D8379526 /* CascadeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CascadeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CA653CE94840F17719DE2E9 /* SmallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmallView.swift; sourceTree = "<group>"; };
@@ -105,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				DAD2D3E2C07F5CDFBE51A235 /* CacheModelTests.swift */,
+				7AA3B102BE42D1A4649A6461 /* FormattingTests.swift */,
 			);
 			path = CascadeWidgetTests;
 			sourceTree = "<group>";
@@ -309,6 +314,9 @@
 			files = (
 				7ABB8A205130B418B934BEF8 /* CacheModel.swift in Sources */,
 				E5EF160E290BBE1E71F8428C /* CacheModelTests.swift in Sources */,
+				5FD8CFBF632C994ED0ED00C0 /* Formatting.swift in Sources */,
+				B13674E0C018EEC058D7B558 /* FormattingTests.swift in Sources */,
+				CDE95CF03B0B05754BDF5D95 /* UsageCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -359,7 +367,6 @@
 		3ED8A9C99AD9D16C6759117E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = CascadeWidgetExtension/CascadeWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -383,7 +390,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = CascadeApp/CascadeApp.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -407,7 +413,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = CascadeApp/CascadeApp.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -430,7 +435,6 @@
 		56C755AF0F874C23209E6B23 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = CascadeWidgetExtension/CascadeWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -454,7 +458,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
@@ -476,7 +479,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;

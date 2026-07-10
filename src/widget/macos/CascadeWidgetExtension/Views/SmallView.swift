@@ -5,15 +5,15 @@ struct SmallView: View {
 
     var body: some View {
         let w = entry.cache._widget
-        let proj = w?.active_project ?? "No project"
-        let active = w?.totals?.active ?? 0
-        let blocked = w?.totals?.blocked ?? 0
-        let inbox = w?.inbox_unread ?? 0
+        let proj = w?.active_project ?? "no data"
+        let active = w?.totals?.active
+        let blocked = w?.totals?.blocked
+        let inbox = w?.inbox_unread
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Circle()
-                    .fill(entry.cache.isStale ? Color.red : Color.green)
+                    .fill(widgetStatusColor(for: entry.cache))
                     .frame(width: 6, height: 6)
                 Text("Cascade")
                     .font(.system(size: 10, weight: .semibold))
@@ -32,29 +32,29 @@ struct SmallView: View {
 
             HStack(spacing: 8) {
                 VStack(spacing: 2) {
-                    Text("\(active)")
+                    Text(active.map { "\($0)" } ?? "—")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(active > 0 ? .orange : .secondary)
+                        .foregroundColor((active ?? 0) > 0 ? .orange : .secondary)
                     Text("Active")
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                if blocked > 0 {
+                if (blocked ?? 0) > 0 || !entry.cache.hasWidgetData {
                     VStack(spacing: 2) {
-                        Text("\(blocked)")
+                        Text(blocked.map { "\($0)" } ?? "—")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.red)
+                            .foregroundColor((blocked ?? 0) > 0 ? .red : .secondary)
                         Text("Blocked")
                             .font(.system(size: 9))
                             .foregroundColor(.secondary)
                     }
                 }
-                if inbox > 0 {
+                if (inbox ?? 0) > 0 || !entry.cache.hasWidgetData {
                     VStack(spacing: 2) {
-                        Text("\(inbox)")
+                        Text(inbox.map { "\($0)" } ?? "—")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.red)
+                            .foregroundColor((inbox ?? 0) > 0 ? .red : .secondary)
                         Text("Inbox")
                             .font(.system(size: 9))
                             .foregroundColor(.secondary)

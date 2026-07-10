@@ -37,7 +37,7 @@ final class CascadeStore: ObservableObject {
         case .success(let c):
             cache = c
             loadError = nil
-            lastLoadedAt = Date()
+            lastLoadedAt = c.freshnessDate ?? Date()
         case .failure(let err):
             switch err {
             case .notFound:
@@ -45,7 +45,6 @@ final class CascadeStore: ObservableObject {
             case .decodeFailure(let underlying):
                 loadError = "JSON parse error: \(underlying.localizedDescription)"
             }
-            lastLoadedAt = Date()
         }
     }
 
@@ -122,10 +121,13 @@ extension CascadeStore {
         guard let accounts = cache?.accounts, !accounts.isEmpty else {
             return "CS"
         }
-        let total = accounts.count
-        let available = accounts.filter { entry in
-            guard entry.quota_opaque != true else { return false }
-            let weekPct = entry.usage?.seven_day?.utilization ?? 0
+        let metered = accounts.filter { $0.quota_opaque != true }
+        guard !metered.isEmpty else {
+            return "CS"
+        }
+        let total = metered.count
+        let available = metered.filter { entry in
+            let weekPct = entry.usage?.seven_day_opus?.utilization ?? entry.usage?.seven_day?.utilization ?? 0
             let sessPct = entry.usage?.five_hour?.utilization ?? 0
             return weekPct < 100 && sessPct < 100
         }.count

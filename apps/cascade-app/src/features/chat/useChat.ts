@@ -385,7 +385,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isStreaming, messages, sessionId, append],
+    [isStreaming, messages, namespace, sessionId, append],
   )
 
   const clearMessages = useCallback(() => {

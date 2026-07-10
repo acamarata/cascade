@@ -34,3 +34,4 @@ rustc*/
 
 # Native macOS widget build output (Xcode DerivedData / archive staging)
 src/widget/macos/build/
+/~/

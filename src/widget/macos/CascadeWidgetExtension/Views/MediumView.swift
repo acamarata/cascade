@@ -15,18 +15,18 @@ struct MediumView: View {
         let w = entry.cache._widget
         let gci = w?.cascade_tiers?.gci
         let asi = w?.cascade_tiers?.asi
-        let proj = w?.active_project ?? "No project"
+        let proj = w?.active_project ?? "no data"
         let phase = w?.active_phase
         let t = w?.totals
-        let inboxCount = w?.inbox_unread ?? 0
-        let ideasCount = w?.ideas_count ?? 0
+        let inboxCount = w?.inbox_unread
+        let ideasCount = w?.ideas_count
 
         HStack(spacing: 16) {
             // Left: project + task counts
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(entry.cache.isStale ? Color.red : Color.green)
+                        .fill(widgetStatusColor(for: entry.cache))
                         .frame(width: 5, height: 5)
                     Text("Cascade · " + entry.cache.ageString)
                         .font(.system(size: 9))
@@ -40,13 +40,17 @@ struct MediumView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
+                } else if !entry.cache.hasWidgetData {
+                    Text("—")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
                 HStack(spacing: 12) {
-                    TaskBadge(count: t?.active ?? 0, label: "ACT", color: .orange)
-                    TaskBadge(count: t?.ready ?? 0, label: "RDY", color: .blue)
-                    TaskBadge(count: t?.review ?? 0, label: "REV", color: .indigo)
-                    TaskBadge(count: t?.blocked ?? 0, label: "BLK", color: .red)
+                    TaskBadge(count: t?.active, label: "ACT", color: .orange)
+                    TaskBadge(count: t?.ready, label: "RDY", color: .blue)
+                    TaskBadge(count: t?.review, label: "REV", color: .indigo)
+                    TaskBadge(count: t?.blocked, label: "BLK", color: .red)
                 }
             }
 
@@ -71,15 +75,20 @@ struct MediumView: View {
                 )
                 Spacer()
                 HStack(spacing: 8) {
-                    if inboxCount > 0 {
+                    if let inboxCount = inboxCount, inboxCount > 0 {
                         Label("\(inboxCount)", systemImage: "envelope.fill")
                             .font(.system(size: 10))
                             .foregroundColor(.red)
                     }
-                    if ideasCount > 0 {
+                    if let ideasCount = ideasCount, ideasCount > 0 {
                         Label("\(ideasCount)", systemImage: "lightbulb.fill")
                             .font(.system(size: 10))
                             .foregroundColor(.yellow)
+                    }
+                    if !entry.cache.hasWidgetData {
+                        Text("—")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -94,12 +103,12 @@ struct MediumView: View {
 // MARK: - Helper components
 
 struct TaskBadge: View {
-    let count: Int; let label: String; let color: Color
+    let count: Int?; let label: String; let color: Color
     var body: some View {
         VStack(spacing: 1) {
-            Text("\(count)")
+            Text(count.map { "\($0)" } ?? "—")
                 .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(count > 0 ? color : .secondary)
+                .foregroundColor((count ?? 0) > 0 ? color : .secondary)
             Text(label)
                 .font(.system(size: 8, weight: .medium))
                 .foregroundColor(.secondary)

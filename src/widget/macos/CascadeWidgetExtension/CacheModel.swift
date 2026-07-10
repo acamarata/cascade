@@ -82,32 +82,17 @@ extension CascadeCache {
         return try? JSONDecoder().decode(CascadeCache.self, from: data)
     }
 
-    /// Realistic P2-shaped placeholder used when no cache.json is available.
+    /// Honest placeholder used when no cache.json is available.
     static var placeholder: CascadeCache {
         CascadeCache(
-            _widget: WidgetData(
-                cascade_tiers: CascadeTiers(
-                    gci: CascadeTierStats(rules: 14, references: 44, memory: 15, skills: 22, agents: 6),
-                    asi: CascadeTierStats(rules: 3, references: 8, memory: 4, skills: 2, agents: 1),
-                    ppi: CascadeTierStats(rules: 2, references: 5, memory: 3, skills: 1, agents: 0)
-                ),
-                projects: [
-                    ProjectData(
-                        label: "cascade",
-                        active: 3, ready: 1, planned: 12,
-                        review: 0, blocked: 0, done: 7,
-                        inbox: 2, ideas: 5, memory: 4
-                    )
-                ],
-                totals: Totals(active: 3, ready: 1, planned: 12, review: 0, blocked: 0, inbox: 2, ideas: 5),
-                active_project: "cascade",
-                active_phase: "P2",
-                inbox_unread: 2,
-                ideas_count: 5
-            ),
-            generated_at: Int(Date().timeIntervalSince1970),
-            daemon_version: "0.1.0"
+            _widget: nil,
+            generated_at: nil,
+            daemon_version: nil
         )
+    }
+
+    var hasWidgetData: Bool {
+        _widget != nil
     }
 
     /// Seconds elapsed since the daemon last wrote cache.json.
