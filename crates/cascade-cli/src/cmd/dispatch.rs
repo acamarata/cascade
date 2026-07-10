@@ -237,15 +237,14 @@ impl Command for DispatchArgs {
                     self.harness
                 }
                 RoutingDecision::Reserved { .. } => self.harness,
-                RoutingDecision::Lane { provider_id, .. } => {
-                    harness_for_provider(provider_id).ok_or_else(|| {
+                RoutingDecision::Lane { provider_id, .. } => harness_for_provider(provider_id)
+                    .ok_or_else(|| {
                         CascadeError::Other(format!(
                             "route selected provider `{provider_id}` which has no subprocess \
                              dispatch path (gfp/local/codex/agy require `cascade conductor`); \
                              override with --harness to bypass routing"
                         ))
-                    })?
-                }
+                    })?,
             }
         } else {
             self.harness
@@ -310,7 +309,6 @@ impl Command for DispatchArgs {
         Ok(())
     }
 }
-
 
 // ── Core helpers (exported for unit tests) ────────────────────────────────────
 

@@ -306,6 +306,7 @@ mod tests {
             active_agents: 200,
             inbox_unread: 999,
             daemon_status: DaemonStatus::Running,
+            fleet_summary: Vec::new(),
         };
 
         // Replicate the tooltip construction logic from `update()`.

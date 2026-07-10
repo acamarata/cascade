@@ -370,6 +370,7 @@ mod tests {
             active_agents: 1,
             inbox_unread: 0,
             daemon_status: DaemonStatus::Running,
+            fleet_summary: Vec::new(),
         };
 
         let tooltip = LinuxTrayImpl::tooltip_string(&state);
@@ -388,6 +389,7 @@ mod tests {
             active_agents: 0,
             inbox_unread: 0,
             daemon_status: DaemonStatus::Stopped,
+            fleet_summary: Vec::new(),
         };
         let tooltip = LinuxTrayImpl::tooltip_string(&state);
         assert!(
@@ -410,6 +412,7 @@ mod tests {
             active_agents: 35,
             inbox_unread: 2,
             daemon_status: DaemonStatus::Running,
+            fleet_summary: Vec::new(),
         };
 
         let tooltip = LinuxTrayImpl::tooltip_string(&state);

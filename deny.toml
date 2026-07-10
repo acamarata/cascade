@@ -23,6 +23,10 @@ allow = [
     "OpenSSL",
     "MPL-2.0",
     "Unicode-3.0",
+    # NCSA = University of Illinois/NCSA Open Source License — OSI-approved,
+    # FSF-Libre, GPL-compatible. Required by libfuzzer-sys (transitive via
+    # rav1e/ravif/image) which ships "(MIT OR Apache-2.0) AND NCSA".
+    "NCSA",
 ]
 # Note: [licenses].deny was removed in cargo-deny >=0.14 (PR#611).
 # Unlisted licenses are denied by default when an allow list is present,
@@ -69,6 +73,22 @@ ignore = [
     "RUSTSEC-2025-0098", "RUSTSEC-2025-0100",
     # ── ring: AES panic ONLY under overflow-checks (debug). Release builds unaffected.
     "RUSTSEC-2025-0009",
+    # ── lopdf 0.34 (transitive via pdf-extract → cascade-rag): stack overflow on
+    #    deeply-nested crafted PDF. No fix released; cascade-rag only parses PDFs
+    #    the user explicitly adds to the RAG index (not untrusted network input).
+    "RUSTSEC-2026-0187",
+    # ── quick-xml 0.31/0.36/0.39 (transitive via tauri/plist and pdf-extract):
+    #    quadratic-time dup-attr check + unbounded namespace-decl allocation. Plist
+    #    inputs are bundled at build time (Tauri codegen) — not untrusted runtime data.
+    "RUSTSEC-2026-0194", "RUSTSEC-2026-0195",
+    # ── serial 0.4 (transitive via portable-pty → cascade-ccapi): unmaintained
+    #    since 2017, no exploit. portable-pty is the only consumer; replacing it
+    #    upstream is the long-term fix (tracked separately).
+    "RUSTSEC-2017-0008",
+    # ── wasmtime-wasi 36.0.11 (transitive via cascade-pdk plugin host): WASI
+    #    hard-link/rename FilePerms bypass. Plugins run sandboxed with no host
+    #    filesystem preopens, so the permission-bypass path is unreachable.
+    "RUSTSEC-2026-0188",
 ]
 
 # ── Sources ─────────────────────────────────────────────────────────────────

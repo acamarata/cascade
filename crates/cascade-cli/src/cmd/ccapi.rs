@@ -192,7 +192,11 @@ impl Command for CcApiStatusArgs {
             }
             println!(
                 "Bridge      : {}",
-                if running { "running (127.0.0.1:7190)" } else { "not running" }
+                if running {
+                    "running (127.0.0.1:7190)"
+                } else {
+                    "not running"
+                }
             );
             if !enabled {
                 println!();

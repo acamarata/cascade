@@ -667,15 +667,17 @@ mod tests {
     /// A `[vars]` table with two entries parses into the expected map.
     #[test]
     fn vars_parse_key_value() {
-        let toml_str = r#"
-[vars]
-"cascade.model.t1" = "claude-opus-4-8"
-"infra.prod_ip"    = "1.2.3.4"
-"#;
-        let cfg: TierConfig = toml::from_str(toml_str).expect("[vars] must parse");
+        // Build the fixture from the canonical constant so the model-id gate
+        // has no literal to flag (the value here is incidental to what the test
+        // checks — that arbitrary `[vars]` key=value pairs round-trip).
+        let toml_str = format!(
+            "\n[vars]\n\"cascade.model.t1\" = \"{}\"\n\"infra.prod_ip\"    = \"1.2.3.4\"\n",
+            crate::model_ids::MODEL_CLAUDE_OPUS
+        );
+        let cfg: TierConfig = toml::from_str(&toml_str).expect("[vars] must parse");
         assert_eq!(
             cfg.vars.get("cascade.model.t1"),
-            Some(&"claude-opus-4-8".to_string())
+            Some(&crate::model_ids::MODEL_CLAUDE_OPUS.to_string())
         );
         assert_eq!(cfg.vars.get("infra.prod_ip"), Some(&"1.2.3.4".to_string()));
     }

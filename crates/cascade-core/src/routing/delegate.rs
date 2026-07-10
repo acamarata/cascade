@@ -315,7 +315,8 @@ impl DelegateLane for ZaiLane {
             }
         } else {
             LaneAvailability::Unavailable {
-                reason: "`~/.claude-glm/cascade-env.sh` not found; Zai GLM env not installed".into(),
+                reason: "`~/.claude-glm/cascade-env.sh` not found; Zai GLM env not installed"
+                    .into(),
             }
         }
     }
@@ -375,20 +376,24 @@ impl DelegateLane for ZaiLane {
                     timeout.as_secs()
                 )));
             }
-            match child.try_wait().map_err(|e| cascade_types::error::CascadeError::Io {
-                path: bin.clone(),
-                operation: "wait",
-                source: e,
-            })? {
+            match child
+                .try_wait()
+                .map_err(|e| cascade_types::error::CascadeError::Io {
+                    path: bin.clone(),
+                    operation: "wait",
+                    source: e,
+                })? {
                 Some(_) => break,
                 None => std::thread::sleep(Duration::from_millis(100)),
             }
         }
-        let output = child.wait_with_output().unwrap_or_else(|_| std::process::Output {
-            status: std::process::ExitStatus::default(),
-            stdout: Vec::new(),
-            stderr: Vec::new(),
-        });
+        let output = child
+            .wait_with_output()
+            .unwrap_or_else(|_| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
         Ok(LaneResult::Output(
             String::from_utf8_lossy(&output.stdout).into_owned(),
         ))

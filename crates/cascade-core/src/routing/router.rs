@@ -275,7 +275,11 @@ impl Router {
                 // Non-sensitive only: Openai (Codex) → Opencode (OC-Go) → Zai (GLM).
                 if sensitivity == ContentSensitivity::Public {
                     if let Some(accs) = &registry {
-                        for family in &[AccountFamily::Openai, AccountFamily::Opencode, AccountFamily::Zai] {
+                        for family in &[
+                            AccountFamily::Openai,
+                            AccountFamily::Opencode,
+                            AccountFamily::Zai,
+                        ] {
                             let cands = sorted_by_priority(
                                 accs.accounts.iter().filter(|a| &a.family == family),
                             );
