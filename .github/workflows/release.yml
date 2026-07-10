@@ -401,7 +401,7 @@ jobs:
       - name: Generate SHA256SUMS
         working-directory: upload
         run: |
-          sha256sum * > SHA256SUMS
+          sha256sum ./* > SHA256SUMS
           cat SHA256SUMS
 
       - name: Sign SHA256SUMS with GPG

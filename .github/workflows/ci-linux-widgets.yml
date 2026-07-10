@@ -71,7 +71,7 @@ jobs:
           sudo apt-get install -y qml-qt6 qt6-base-dev qt6-declarative-dev unzip
 
       - name: Add qmllint to PATH
-        run: echo "/usr/lib/qt6/bin" >> $GITHUB_PATH
+        run: echo "/usr/lib/qt6/bin" >> "$GITHUB_PATH"
 
       - name: Lint QML files
         run: |

@@ -104,11 +104,13 @@ jobs:
       - name: Write job summary
         if: always()
         run: |
-          echo "## Template CI Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           TMPL_COUNT=$(find data/templates -name '*.md' | wc -l | tr -d ' ')
           INDEX_COUNT=$(node -e "const i=JSON.parse(require('fs').readFileSync('data/templates/index.json','utf8')); console.log((i.templates||[]).length)")
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| .md files in data/templates/ | \`${TMPL_COUNT}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| index.json entries | \`${INDEX_COUNT}\` |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Template CI Results"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| .md files in data/templates/ | \`${TMPL_COUNT}\` |"
+            echo "| index.json entries | \`${INDEX_COUNT}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

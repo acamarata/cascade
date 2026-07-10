@@ -21,9 +21,11 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           DMG_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/Cascade_${VERSION}_macos_universal.dmg"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "dmg_url=${DMG_URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "dmg_url=${DMG_URL}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download DMG and compute SHA256
         id: sha256

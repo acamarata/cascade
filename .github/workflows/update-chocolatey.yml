@@ -19,9 +19,11 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           MSI_URL="https://github.com/acamarata/cascade/releases/download/${TAG}/cascade_${VERSION}_windows_x64.msi"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "msi_url=${MSI_URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "msi_url=${MSI_URL}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download MSI and compute SHA256
         id: sha256

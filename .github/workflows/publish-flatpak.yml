@@ -33,7 +33,6 @@ jobs:
 
       - name: Update Flatpak manifest
         run: |
-          VERSION="${{ steps.release.outputs.version }}"
           SHA256="${{ steps.sha256.outputs.sha256 }}"
           TAR_URL="${{ steps.release.outputs.tar_url }}"
           sed -i "s|url: https://github.com/acamarata/cascade/releases/download/.*|url: ${TAR_URL}|" flatpak/io.github.acamarata.Cascade.yml
