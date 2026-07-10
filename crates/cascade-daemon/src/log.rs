@@ -29,10 +29,20 @@ const KEEP_FILES: usize = 5;
 
 /// Initialize the global tracing subscriber. Call once at process start.
 ///
-/// Inputs: none (reads `CASCADE_LOG_LEVEL` env; defaults to INFO).
+/// Inputs:
+///   `config_log_level`  — optional `[daemon] log_level` from config.toml
+///                         (e.g. `"debug"`).  `CASCADE_LOG_LEVEL` env wins when
+///                         set, so this acts as the config-tier default only.
+///   `config_log_format` — optional `[daemon] log_format` from config.toml
+///                         (`"json"` or `"pretty"`; default `"json"`).
+///                         The file sink always uses JSON; the format flag affects
+///                         the stderr console layer.
 /// Outputs: side effect — installs global subscriber.
 /// Constraints: must be called before any `tracing::info!` / `error!` macro.
-pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn init_with_config(
+    config_log_level: Option<&str>,
+    config_log_format: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_dir = log_dir()?;
     std::fs::create_dir_all(&log_dir)?;
 
@@ -46,8 +56,21 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .append(true)
         .open(&log_path)?;
 
-    let env_filter =
-        EnvFilter::try_from_env("CASCADE_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("info"));
+    // ENV wins; config-file level is the fallback; hard default is "info".
+    let level_str = if std::env::var("CASCADE_LOG_LEVEL").is_ok() {
+        "cascade_log_level_from_env".to_string() // sentinel — use try_from_env below
+    } else {
+        config_log_level
+            .filter(|s| !s.is_empty())
+            .unwrap_or("info")
+            .to_string()
+    };
+
+    let env_filter = if std::env::var("CASCADE_LOG_LEVEL").is_ok() {
+        EnvFilter::try_from_env("CASCADE_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("info"))
+    } else {
+        EnvFilter::new(level_str)
+    };
 
     let file_layer = fmt::layer()
         .json()
@@ -60,13 +83,40 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_writer(std::io::stderr)
         .with_filter(EnvFilter::new("warn"));
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(file_layer)
-        .with(stderr_layer)
-        .init();
+    let use_pretty = config_log_format
+        .map(|f| f == "pretty")
+        .unwrap_or(false)
+        && std::env::var("CASCADE_LOG_LEVEL").is_err(); // env override disables pretty too
+
+    if use_pretty {
+        // Pretty console layer for development/debug mode.
+        let pretty_stderr = fmt::layer()
+            .pretty()
+            .with_target(true)
+            .with_writer(std::io::stderr)
+            .with_filter(EnvFilter::new("debug"));
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(file_layer)
+            .with(pretty_stderr)
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(file_layer)
+            .with(stderr_layer)
+            .init();
+    }
 
     Ok(())
+}
+
+/// Initialize the global tracing subscriber with defaults.
+///
+/// Equivalent to `init_with_config(None, None)`.  Kept for callers that don't
+/// have a config available yet (e.g. unit tests, early boot before config load).
+pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    init_with_config(None, None)
 }
 
 /// Rotate `log_path` if it exceeds `ROTATE_BYTES` or `ROTATE_AGE_SECS`.

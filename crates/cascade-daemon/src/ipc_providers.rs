@@ -61,6 +61,7 @@ use crate::usage::{ProviderUsageItem, UsageAccumulator};
 const KEYCHAIN_SERVICE: &str = "dev.cascade";
 
 /// OAuth pending states older than this are treated as expired / failed.
+#[allow(dead_code)]
 const OAUTH_TIMEOUT_SECS: u64 = 600; // 10 minutes
 
 // ── Wire types ────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ pub struct ProviderListItem {
 }
 
 /// OAuth flow status returned by `cascade_providers_oauth_status`.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OAuthStatus {
@@ -108,10 +110,13 @@ struct OAuthPending {
     #[allow(dead_code)]
     provider_id: String,
     /// Wall-clock instant when the flow was started (for 10-minute timeout).
+    #[allow(dead_code)]
     started_at: Instant,
     /// Set to `true` when the background callback task completes successfully.
+    #[allow(dead_code)]
     connected: bool,
     /// Set to a non-empty string when the flow fails.
+    #[allow(dead_code)]
     error: Option<String>,
 }
 
@@ -125,6 +130,7 @@ pub struct ProviderIpcHandler {
     registry: Arc<ProviderRegistry>,
     health: HealthState,
     usage: Arc<UsageAccumulator>,
+    #[allow(dead_code)]
     oauth_pending: Arc<Mutex<HashMap<String, OAuthPending>>>,
 }
 
@@ -313,6 +319,7 @@ impl ProviderIpcHandler {
     /// and stores the pending state.
     ///
     /// Returns the auth URL string that the caller should open in a browser.
+    #[allow(dead_code)]
     pub async fn providers_oauth_start(
         &self,
         provider_id: String,
@@ -434,6 +441,7 @@ impl ProviderIpcHandler {
     ///
     /// Returns `Pending` while the user is completing the browser flow,
     /// `Connected` after a successful callback, or `Failed` on error/timeout.
+    #[allow(dead_code)]
     pub async fn providers_oauth_status(&self, id: &str) -> Result<OAuthStatus, String> {
         // Expire timed-out entries first.
         {

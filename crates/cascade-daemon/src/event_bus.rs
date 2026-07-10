@@ -76,6 +76,13 @@ impl EventBus {
                 path     TEXT    NOT NULL,
                 summary  TEXT    NOT NULL DEFAULT '',
                 ts       INTEGER NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS quota_snapshots (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                account        TEXT    NOT NULL,
+                five_hour_pct  REAL,
+                seven_day_pct  REAL,
+                captured_at    INTEGER NOT NULL
              );",
         )
         .map_err(|e| DaemonError::EventBus(e.to_string()))?;
@@ -252,22 +259,58 @@ impl EventBus {
         }
     }
 
-    /// Record a quota snapshot in the persistent store (no-op stub — full
-    // Quota IPC surface — called by the quota poller after each successful poll.
+    /// Record a quota snapshot into the `quota_snapshots` table.
+    ///
+    /// Extracts `account`, `five_hour_pct`, and `seven_day_pct` from `snapshot`
+    /// (the shaped value produced by `fetch_claude_usage`) and inserts a row with
+    /// `captured_at = now`.  Old rows beyond `retention_days` (default 30) are
+    /// pruned in the same lock window so the table stays bounded.
+    ///
+    /// Returns the assigned row id on success.
+    ///
+    /// SPORT: .claude/docs/MASTER-DAEMON.md — quota_snapshots table (D8)
     #[allow(dead_code)]
-    /// implementation lives in P3 EventBus quota_snapshots table).
-    ///
-    /// The quota poller calls this after each successful poll so that quota
-    /// history is durable across restarts. Returns the assigned row id (0 for
-    /// this stub implementation).
-    ///
-    /// SPORT: .claude/docs/MASTER-DAEMON.md — quota_snapshots table (T-P2-E02-09)
     pub async fn record_quota_snapshot(
         &self,
-        _snapshot: &serde_json::Value,
+        snapshot: &serde_json::Value,
     ) -> Result<i64, DaemonError> {
-        // Stub: returns 0 until the quota_snapshots table is added in P3.
-        Ok(0)
+        let account = snapshot
+            .get("account")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let five_hour_pct: Option<f64> = snapshot
+            .get("usage")
+            .and_then(|u| u.get("five_hour"))
+            .and_then(|fh| fh.get("utilization"))
+            .and_then(|v| v.as_f64());
+
+        let seven_day_pct: Option<f64> = snapshot
+            .get("usage")
+            .and_then(|u| u.get("seven_day"))
+            .and_then(|sd| sd.get("utilization"))
+            .and_then(|v| v.as_f64());
+
+        let now = now_secs();
+        // Prune rows older than 30 days in the same lock window.
+        let retention_cutoff = now - 30 * 24 * 3600;
+
+        let conn = self.db.lock().await;
+        conn.execute(
+            "DELETE FROM quota_snapshots WHERE captured_at < ?1",
+            params![retention_cutoff],
+        )
+        .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+
+        conn.execute(
+            "INSERT INTO quota_snapshots (account, five_hour_pct, seven_day_pct, captured_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![account, five_hour_pct, seven_day_pct, now],
+        )
+        .map_err(|e| DaemonError::EventBus(e.to_string()))?;
+
+        Ok(conn.last_insert_rowid())
     }
 
     /// Return provider quota summary from `~/.cascade/provider-quota.yaml`.
@@ -323,5 +366,87 @@ mod tests {
         let bus = EventBus::new(dir.path().to_path_buf()).await.unwrap();
         let result = bus.hotword_lookup("nonexistent").await.unwrap();
         assert!(result.is_none());
+    }
+
+    // ── D8: quota_snapshots ──────────────────────────────────────────────────
+
+    /// Inserting a quota snapshot returns a positive row id.
+    #[tokio::test]
+    async fn quota_snapshot_insert_returns_row_id() {
+        let dir = tempdir().unwrap();
+        let bus = EventBus::new(dir.path().to_path_buf()).await.unwrap();
+        let snap = serde_json::json!({
+            "account": "claude-acc2",
+            "usage": {
+                "five_hour":  { "utilization": 42.0 },
+                "seven_day":  { "utilization": 15.0 }
+            }
+        });
+        let id = bus.record_quota_snapshot(&snap).await.unwrap();
+        assert!(id > 0, "row id must be positive");
+    }
+
+    /// Inserting two snapshots for the same account and reading back via raw
+    /// SQLite confirms both rows are stored.
+    #[tokio::test]
+    async fn quota_snapshot_multiple_inserts_stored() {
+        let dir = tempdir().unwrap();
+        let bus = EventBus::new(dir.path().to_path_buf()).await.unwrap();
+        let snap = serde_json::json!({
+            "account": "claude-acc1",
+            "usage": {
+                "five_hour": { "utilization": 10.0 },
+                "seven_day": { "utilization": 5.0 }
+            }
+        });
+        bus.record_quota_snapshot(&snap).await.unwrap();
+        bus.record_quota_snapshot(&snap).await.unwrap();
+
+        // Verify via raw query.
+        let conn = bus.db.lock().await;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM quota_snapshots WHERE account = 'claude-acc1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 2, "two snapshots must be stored");
+    }
+
+    /// Rows older than 30 days must be pruned on the next insert.
+    #[tokio::test]
+    async fn quota_snapshot_prunes_old_rows() {
+        let dir = tempdir().unwrap();
+        let bus = EventBus::new(dir.path().to_path_buf()).await.unwrap();
+
+        // Manually insert a stale row (31 days ago).
+        let stale_ts = now_secs() - 31 * 24 * 3600;
+        {
+            let conn = bus.db.lock().await;
+            conn.execute(
+                "INSERT INTO quota_snapshots (account, five_hour_pct, seven_day_pct, captured_at)
+                 VALUES ('stale-account', 99.0, 99.0, ?1)",
+                params![stale_ts],
+            )
+            .unwrap();
+        }
+
+        // Insert a fresh snapshot — should trigger pruning.
+        let snap = serde_json::json!({
+            "account": "fresh-account",
+            "usage": { "five_hour": { "utilization": 1.0 } }
+        });
+        bus.record_quota_snapshot(&snap).await.unwrap();
+
+        let conn = bus.db.lock().await;
+        let stale_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM quota_snapshots WHERE account = 'stale-account'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stale_count, 0, "stale row must be pruned after next insert");
     }
 }

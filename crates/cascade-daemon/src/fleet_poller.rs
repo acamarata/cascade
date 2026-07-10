@@ -524,7 +524,7 @@ impl FleetPoller {
             };
 
             // Fetch live usage.
-            match fetch_claude_usage(&access_token).await {
+            match fetch_claude_usage(account_id, access_token.as_str()).await {
                 Some(usage) => {
                     info!(account = %account_id, "fleet: live Claude usage fetched successfully");
                     // Upsert into existing cache: replace matching entry or append.

@@ -27,7 +27,7 @@ use std::time::Duration;
 
 use cascade_tray::TrayState;
 use tokio::time;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::tray::TrayStateUpdate;
 
@@ -74,9 +74,8 @@ pub fn spawn_status_cache_poller(
             // (the initial update); every later iteration waits 10 seconds.
             interval.tick().await;
 
-            // Fetch the current cache state (stub until E-03 is done).
-            // Future: call status_cache::fetch() here when E-03 lands.
-            let state = fetch_tray_state_stub();
+            // Fetch the current tray state from live quota.json.
+            let state = fetch_tray_state();
 
             // Send the TrayStateUpdate to the tray thread.
             if let Err(e) = tray_tx.send(TrayStateUpdate::UpdateState(state)) {
@@ -89,27 +88,81 @@ pub fn spawn_status_cache_poller(
     })
 }
 
-/// Fetch a TrayState snapshot from the cache (stub until E-03 StatusCache lands).
+/// Fetch a TrayState snapshot from live data.
 ///
-/// Purpose: compute a TrayState from the current daemon state. During P2
-///   (before E-03 is integrated) this returns a sensible default so polling
-///   infrastructure can be tested. When E-03 StatusCache lands, this function
-///   will be replaced with calls to status_cache::get_state() or similar.
+/// Purpose: compute a TrayState from `~/.cascade/accounts/quota.json` so the
+///   tray tooltip and icon reflect real account state (auth status, active
+///   account count) rather than hardcoded zeros.
 ///
-/// Outputs: `TrayState` with sane defaults (all zeros except daemon_status = Running).
+/// Inputs:  `~/.cascade/accounts/quota.json` (written by the fleet poller).
+/// Outputs: `TrayState` populated from live quota data; falls back to
+///   `daemon_status = Running` + zeros if the file is absent or malformed.
 ///
-/// WHY stub: E-03 (StatusCache persistent state) is a separate epic.
-///   This task polls every 10 seconds per spec; the actual cache integration
-///   is completed when E-03 lands (T-P2-E03-*).
-///
-/// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-daemon
-fn fetch_tray_state_stub() -> TrayState {
+/// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-daemon, cache polling
+fn fetch_tray_state() -> TrayState {
+    use cascade_core::accounts_store::quota_json_path;
     use cascade_tray::DaemonStatus;
 
-    TrayState {
+    // Baseline: daemon is running (we are the daemon); counts start at 0.
+    let mut state = TrayState {
         daemon_status: DaemonStatus::Running,
         ..TrayState::default()
+    };
+
+    let path = quota_json_path();
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) => {
+            // File absent on first boot — not an error worth logging every 10s.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!(path = %path.display(), error = %e, "cache: failed to read quota.json");
+            }
+            return state;
+        }
+    };
+
+    let v: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, "cache: quota.json is malformed — using defaults");
+            return state;
+        }
+    };
+
+    // Build fleet_summary lines from the accounts array in quota.json.
+    // Each line: "<account>: <5h_pct>% (5h)" — or "needs-auth" when auth_dead.
+    // WHY fleet_summary: this is the TrayState field the menu-bar icon renders;
+    // total/active counts don't have a dedicated field in TrayState today.
+    if let Some(accounts) = v.get("accounts").and_then(|a| a.as_array()) {
+        let mut summary: Vec<String> = Vec::new();
+        for entry in accounts {
+            let account_id = entry
+                .get("account")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let auth_dead = entry
+                .get("auth_dead")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if auth_dead {
+                summary.push(format!("{account_id}: needs-auth"));
+                continue;
+            }
+            // Extract five-hour utilisation percentage if present.
+            let five_h_pct = entry
+                .get("usage")
+                .and_then(|u| u.get("five_hour"))
+                .and_then(|fh| fh.get("utilization"))
+                .and_then(|p| p.as_f64());
+            match five_h_pct {
+                Some(pct) => summary.push(format!("{account_id}: {:.0}% (5h)", pct * 100.0)),
+                None => summary.push(format!("{account_id}: ok")),
+            }
+        }
+        state.fleet_summary = summary;
     }
+
+    state
 }
 
 #[cfg(test)]

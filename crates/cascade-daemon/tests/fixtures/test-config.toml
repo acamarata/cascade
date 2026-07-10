@@ -4,7 +4,6 @@
 [daemon]
 log_level = "debug"
 log_format = "pretty"
-health_sample_interval_secs = 5
 
 [watcher]
 debounce_ms = 50

@@ -594,19 +594,25 @@ pub fn detect_cli(name: &str) -> bool {
 
 // ── GFP key counting ──────────────────────────────────────────────────────────
 
-/// Count GFP API keys in `~/.claude/vault.env` and `~/.cascade/vault.env`.
+/// Count GFP API keys across all three key sources.
 ///
-/// Counts **unique key values** across both files — the same key duplicated
-/// between vaults (or aliased under two var names) is one usable key, not two.
-/// Only values that look like real Google API keys (`AIza…`) are counted, so a
-/// placeholder or empty assignment can't inflate the pool size the widget
-/// reports. NEVER logs key values — only the count.
+/// Sources (in order):
+///   1. `~/.claude/vault.env`       — primary Claude vault
+///   2. `~/.cascade/vault.env`      — Cascade daemon vault
+///   3. `~/.cascade/gfp-keys.env`   — dedicated GFP key file (D11)
+///
+/// Counts **unique key values** across all three files — the same key
+/// duplicated between files (or aliased under two var names) is one usable
+/// key, not two. Only values that look like real Google API keys (`AIza…`)
+/// are counted, so a placeholder or empty assignment can't inflate the pool
+/// size the widget reports. NEVER logs key values — only the count.
 pub fn count_gfp_keys() -> u32 {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for p in [
         home.join(".claude").join("vault.env"),
         home.join(".cascade").join("vault.env"),
+        home.join(".cascade").join("gfp-keys.env"),
     ] {
         collect_gfp_keys_from_path(&p, &mut seen);
     }
@@ -1048,6 +1054,34 @@ mod tests {
             got.and_then(|e| e.get("account")).and_then(|v| v.as_str()),
             Some("codex"),
             "single same-provider entry must still fall back by provider"
+        );
+    }
+
+    /// D11: gfp-keys.env is counted as a third source in count_gfp_keys.
+    /// Verify via collect_gfp_keys_from_path: keys in a gfp-keys.env style
+    /// file with GEMINI_FREE_KEY_* vars are picked up and deduped globally.
+    #[test]
+    fn gfp_keys_env_counted_as_third_source() {
+        let dir = TempDir::new().unwrap();
+        // vault.env has 1 key.
+        let vault = dir.path().join("vault.env");
+        std::fs::write(&vault, "GEMINI_FREE_KEY_1=AIzaFixtureCCCCCCCCCCCCCCCCCCCCCC1\n").unwrap();
+        // gfp-keys.env has 2 unique keys (1 duplicates vault.env, 1 is new).
+        let gfp_keys = dir.path().join("gfp-keys.env");
+        std::fs::write(
+            &gfp_keys,
+            "GEMINI_FREE_KEY_1=AIzaFixtureCCCCCCCCCCCCCCCCCCCCCC1\n\
+             GEMINI_FREE_KEY_2=AIzaFixtureCCCCCCCCCCCCCCCCCCCCCC2\n",
+        )
+        .unwrap();
+
+        let mut seen = std::collections::HashSet::new();
+        collect_gfp_keys_from_path(&vault, &mut seen);
+        collect_gfp_keys_from_path(&gfp_keys, &mut seen);
+        assert_eq!(
+            seen.len(),
+            2,
+            "vault.env + gfp-keys.env should yield 2 unique keys (1 shared, 1 new)"
         );
     }
 }

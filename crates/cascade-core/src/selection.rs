@@ -363,7 +363,15 @@ pub fn select_account(
         resolved.iter().copied(),
         |qa| {
             if qa.provider == "gfp" && model_class != ModelClass::Haiku {
+                // T1/T2 requests: Flash is inadequate for code-gen and hard reasoning.
                 Gate::Skip("not-haiku-class".into())
+            } else if qa.provider == "gfp" && gp.is_exhausted() {
+                // T3 + exhausted GP pool (keys configured but all in cooldown): skip gfp.
+                // Default snapshot (total_slots==0) means "no probe done" — GFP is usable
+                // in the spill order but not preferred. is_healthy() would also block
+                // no-probe callers, which is wrong; is_exhausted() only fires when we
+                // KNOW total_slots>0 yet healthy_slots==0 (all keys rate-limited).
+                Gate::Skip("gp-pool-unhealthy".into())
             } else if is_saturated(qa) || !is_alive(qa) {
                 Gate::Skip("saturated/dead".into())
             } else {
@@ -734,15 +742,24 @@ mod tests {
         assert!(target.reason.starts_with("t3-gp-preferred:"), "reason: {}", target.reason);
     }
 
+    /// D14(b): T3 + unhealthy GP pool must fall through to glm-acc1, not gfp.
+    ///
+    /// WHY: Flash is free but an unhealthy pool (0 slots) means all keys are
+    /// rate-limited or unregistered.  Routing to it would produce 429s or
+    /// ECONNREFUSED.  The gate must skip gfp-pool and fall to the next candidate.
     #[test]
-    fn t3_haiku_allows_gfp_in_spill_order() {
-        // GP pool is Haiku/T3-only; once the request is T3, the fixed order can
-        // choose it even without an injected healthy-pool promotion signal.
-        let gp = GpHealthSnapshot { healthy_slots: 0, ..Default::default() };
+    fn t3_unhealthy_gp_falls_through_to_glm() {
+        // total_slots > 0 represents "keys are configured but all rate-limited"
+        // (is_exhausted() == true). The default snapshot (total_slots==0) means
+        // "no probe done" and must NOT block GFP — see gate comment in select_account.
+        let gp = GpHealthSnapshot { healthy_slots: 0, total_slots: 6, ..Default::default() };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.provider, Provider::Gfp);
-        assert_eq!(target.account_id, "gfp-pool");
-        assert_eq!(target.model, MODEL_GEMINI_FLASH);
+        assert_eq!(target.account_id, "glm-acc1",
+            "unhealthy GP pool must not be selected for T3 — reason: {}", target.reason);
+        assert_eq!(target.provider, Provider::Zai);
+        assert_eq!(target.model, MODEL_GLM);
+        // The reason should indicate that gfp-pool was skipped.
+        assert!(target.reason.contains("gfp-pool"), "reason must mention skipped gfp-pool: {}", target.reason);
     }
 
     #[test]

@@ -90,9 +90,11 @@ pub enum AccountRole {
 ///
 /// Purpose: allows the routing layer to prefer specific account+model
 /// combinations for different workload types (interactive vs bulk vs sensitive).
-/// Constraints: serialised as kebab-case strings in JSON.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case")]
+/// Constraints: serialised as kebab-case strings in JSON for known variants.
+///   Unknown strings deserialise to `Other(String)` rather than failing the
+///   whole registry parse — forward-compatibility for values added in future
+///   schema versions or by external tooling.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TaskClass {
     /// Real-time interactive chat sessions.
     InteractiveChat,
@@ -112,6 +114,47 @@ pub enum TaskClass {
     Background,
     /// Post-prompt processing hooks.
     PostPrompt,
+    /// Catch-all: an unknown string from a newer schema version or external
+    /// tool.  Preserved as-is in round-trip serialisation.
+    Other(String),
+}
+
+impl Serialize for TaskClass {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        // Known variants serialise as their canonical kebab-case string.
+        // `Other` passes through unchanged so round-trips are lossless.
+        let label = match self {
+            TaskClass::InteractiveChat => "interactive-chat",
+            TaskClass::BulkExecution   => "bulk-execution",
+            TaskClass::Grunt           => "grunt",
+            TaskClass::Taxonomy        => "taxonomy",
+            TaskClass::AdversarialCr   => "adversarial-cr",
+            TaskClass::FinalGate       => "final-gate",
+            TaskClass::Sensitive       => "sensitive",
+            TaskClass::Background      => "background",
+            TaskClass::PostPrompt      => "post-prompt",
+            TaskClass::Other(v)        => v.as_str(),
+        };
+        s.serialize_str(label)
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskClass {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        Ok(match s.as_str() {
+            "interactive-chat" => TaskClass::InteractiveChat,
+            "bulk-execution"   => TaskClass::BulkExecution,
+            "grunt"            => TaskClass::Grunt,
+            "taxonomy"         => TaskClass::Taxonomy,
+            "adversarial-cr"   => TaskClass::AdversarialCr,
+            "final-gate"       => TaskClass::FinalGate,
+            "sensitive"        => TaskClass::Sensitive,
+            "background"       => TaskClass::Background,
+            "post-prompt"      => TaskClass::PostPrompt,
+            other              => TaskClass::Other(other.to_string()),
+        })
+    }
 }
 
 // ── Structs ───────────────────────────────────────────────────────────────────
@@ -212,4 +255,71 @@ pub struct AccountsRegistry {
     pub accounts: Vec<Account>,
     /// Model → route routing matrix.
     pub model_matrix: Vec<ModelMatrixEntry>,
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Known TaskClass variants round-trip through JSON without loss.
+    #[test]
+    fn task_class_known_variants_round_trip() {
+        let cases = [
+            (TaskClass::InteractiveChat, "interactive-chat"),
+            (TaskClass::BulkExecution,   "bulk-execution"),
+            (TaskClass::Grunt,           "grunt"),
+            (TaskClass::Taxonomy,        "taxonomy"),
+            (TaskClass::AdversarialCr,   "adversarial-cr"),
+            (TaskClass::FinalGate,       "final-gate"),
+            (TaskClass::Sensitive,       "sensitive"),
+            (TaskClass::Background,      "background"),
+            (TaskClass::PostPrompt,      "post-prompt"),
+        ];
+        for (variant, expected_str) in &cases {
+            // Serialise to JSON string.
+            let json = serde_json::to_string(variant).expect("serialise");
+            assert_eq!(json, format!("\"{}\"", expected_str), "serialize {expected_str}");
+            // Deserialise back.
+            let decoded: TaskClass = serde_json::from_str(&json).expect("deserialise");
+            assert_eq!(&decoded, variant, "round-trip {expected_str}");
+        }
+    }
+
+    /// Unknown TaskClass string → Other(String) instead of a parse error.
+    ///
+    /// Regression for: a single unknown `best_for` value previously caused the
+    /// whole `ModelMatrixEntry` (and thus the full registry) to fail to
+    /// deserialise.
+    #[test]
+    fn task_class_unknown_string_becomes_other() {
+        let json = "\"future-unknown-class\"";
+        let decoded: TaskClass = serde_json::from_str(json).expect("must not fail on unknown value");
+        assert_eq!(
+            decoded,
+            TaskClass::Other("future-unknown-class".to_string()),
+            "unknown value must become Other(_)"
+        );
+    }
+
+    /// A ModelMatrixEntry whose best_for contains one unknown value still parses.
+    #[test]
+    fn model_matrix_entry_with_unknown_best_for_parses() {
+        let json = r#"{
+            "model_id": "some-future-model",
+            "available_via": [],
+            "best_for": ["interactive-chat", "future-workload-type"],
+            "tier": "T2",
+            "family": "claude"
+        }"#;
+        let entry: ModelMatrixEntry = serde_json::from_str(json)
+            .expect("entry with unknown best_for must parse without error");
+        assert_eq!(entry.best_for.len(), 2);
+        assert_eq!(entry.best_for[0], TaskClass::InteractiveChat);
+        assert_eq!(
+            entry.best_for[1],
+            TaskClass::Other("future-workload-type".to_string())
+        );
+    }
 }

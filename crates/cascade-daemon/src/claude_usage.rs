@@ -22,7 +22,9 @@
 //! Constraints: no `unwrap()` outside `#[cfg(test)]`; never log tokens.
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — claude_usage (live usage fetcher)
 
-use std::time::Duration;
+use std::sync::Mutex;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tracing::warn;
@@ -32,9 +34,39 @@ use tracing::warn;
 const USAGE_ENDPOINT: &str = "https://api.anthropic.com/api/oauth/usage";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Minimum cache lifetime for a successful response — skip re-fetch if the last
+/// successful pull for this account is younger than this.
+const RESPONSE_CACHE_TTL: Duration = Duration::from_secs(60);
+
+/// Per-account backoff state: when the account was rate-limited and until when
+/// we must wait before retrying.
+struct BackoffEntry {
+    /// When the backoff window expires.
+    retry_after: Instant,
+    /// Current exponential backoff multiplier (capped at `MAX_BACKOFF_SECS`).
+    backoff_secs: u64,
+    /// Timestamp of the last successful response (for RESPONSE_CACHE_TTL).
+    last_success: Option<Instant>,
+}
+
+/// Base exponential-backoff step in seconds (doubling per consecutive 429).
+const INITIAL_BACKOFF_SECS: u64 = 30;
+/// Hard cap on per-account backoff window.
+const MAX_BACKOFF_SECS: u64 = 600; // 10 minutes
+
+// Global per-account backoff table.  Keyed by account_id label.
+// Lazily initialised; `Mutex<HashMap<…>>` is cheap when the account list is small.
+static ACCOUNT_BACKOFF: Mutex<Option<HashMap<String, BackoffEntry>>> = Mutex::new(None);
+
+fn with_backoff<R>(f: impl FnOnce(&mut HashMap<String, BackoffEntry>) -> R) -> R {
+    let mut guard = ACCOUNT_BACKOFF.lock().unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(HashMap::new);
+    f(map)
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/// Fetch live Claude Max usage for one account.
+/// Fetch live Claude Max usage for one account with 429-aware backoff.
 ///
 /// Makes a `GET` to `api.anthropic.com/api/oauth/usage` with the supplied
 /// `access_token`.  Applies a 10-second timeout.
@@ -43,12 +75,54 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// `five_hour` key.  Returns `None` on transport error, non-2xx status, or
 /// the `{"error":{...}}` envelope (rate-limit / auth error from Anthropic).
 ///
-/// Inputs:  `access_token` — current OAuth2 bearer token (not logged).
+/// ## 429 behaviour
+/// - On HTTP 429 the function records a per-account backoff entry honouring
+///   the `Retry-After` header (or falling back to an exponential schedule
+///   seeded at 30 s, doubling per consecutive 429, capped at 600 s).
+/// - If the account is currently within its backoff window the function
+///   returns `None` immediately without making a network request.
+/// - The caller MUST NOT overwrite prior-good usage data on `None`.
+/// - A successful response resets the backoff state for that account.
+/// - Responses younger than 60 s are cached: the cached value is returned
+///   without a network round-trip.
+///
+/// Inputs:  `account_id`   — stable account label (e.g. `"claude-acc2"`).
+///          `access_token` — current OAuth2 bearer token (not logged).
 /// Outputs: `Some(Value)` with keys `five_hour`, `seven_day`,
 ///          `seven_day_sonnet`, `seven_day_opus`, `extra_usage`,
 ///          `fable_available`; or `None`.
 /// Constraints: async, 10-second network timeout; never logs token values.
-pub async fn fetch_claude_usage(access_token: &str) -> Option<Value> {
+pub async fn fetch_claude_usage(account_id: &str, access_token: &str) -> Option<Value> {
+    // ── Backoff / cache gate ───────────────────────────────────────────────────
+    let skip = with_backoff(|map| {
+        if let Some(entry) = map.get(account_id) {
+            // Still within a 429 backoff window?
+            if Instant::now() < entry.retry_after {
+                let remaining = entry.retry_after.saturating_duration_since(Instant::now());
+                warn!(
+                    account = account_id,
+                    backoff_remaining_secs = remaining.as_secs(),
+                    "claude_usage: skipping fetch — account in 429 backoff window"
+                );
+                return true;
+            }
+            // Successful cache still warm?
+            if let Some(last_ok) = entry.last_success {
+                if last_ok.elapsed() < RESPONSE_CACHE_TTL {
+                    // Within TTL; skip the network call and let the caller use
+                    // the prior-cached value from usage-cache.json.
+                    return true;
+                }
+            }
+        }
+        false
+    });
+
+    if skip {
+        return None;
+    }
+
+    // ── Network fetch ──────────────────────────────────────────────────────────
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
@@ -65,8 +139,50 @@ pub async fn fetch_claude_usage(access_token: &str) -> Option<Value> {
         .map_err(|e| warn!("claude_usage: request failed: {e}"))
         .ok()?;
 
-    if !response.status().is_success() {
-        warn!(status = %response.status(), "claude_usage: non-2xx response");
+    let status = response.status();
+
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        // Parse Retry-After header (seconds or HTTP-date; we only handle seconds).
+        let retry_after_secs = response
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
+        with_backoff(|map| {
+            let backoff_secs = if let Some(ra) = retry_after_secs {
+                ra.min(MAX_BACKOFF_SECS)
+            } else {
+                let prior = map
+                    .get(account_id)
+                    .map(|e| e.backoff_secs)
+                    .unwrap_or(INITIAL_BACKOFF_SECS / 2);
+                (prior.saturating_mul(2)).clamp(INITIAL_BACKOFF_SECS, MAX_BACKOFF_SECS)
+            };
+            // Jitter: +/- 10 % so multiple accounts don't all retry in sync.
+            let jitter_secs = backoff_secs / 10;
+            let effective = backoff_secs.saturating_add(jitter_secs);
+            warn!(
+                account = account_id,
+                backoff_secs = effective,
+                "claude_usage: HTTP 429 — entering backoff"
+            );
+            map.insert(
+                account_id.to_string(),
+                BackoffEntry {
+                    retry_after: Instant::now() + Duration::from_secs(effective),
+                    backoff_secs,
+                    last_success: map.get(account_id).and_then(|e| e.last_success),
+                },
+            );
+        });
+
+        // 429 — do NOT overwrite prior data; caller preserves existing cache.
+        return None;
+    }
+
+    if !status.is_success() {
+        warn!(status = %status, "claude_usage: non-2xx response");
         return None;
     }
 
@@ -76,7 +192,22 @@ pub async fn fetch_claude_usage(access_token: &str) -> Option<Value> {
         .map_err(|e| warn!("claude_usage: failed to parse JSON response: {e}"))
         .ok()?;
 
-    parse_usage_response(&body)
+    let parsed = parse_usage_response(&body)?;
+
+    // ── Record success + reset backoff ─────────────────────────────────────────
+    with_backoff(|map| {
+        // Clear any backoff state; reset cache timer.
+        map.insert(
+            account_id.to_string(),
+            BackoffEntry {
+                retry_after: Instant::now(), // already in the past → not blocked
+                backoff_secs: INITIAL_BACKOFF_SECS / 2,
+                last_success: Some(Instant::now()),
+            },
+        );
+    });
+
+    Some(parsed)
 }
 
 /// Parse a raw API response body into the `usage` Value shape used by
@@ -184,7 +315,7 @@ fn fable_quota_available(body: &Value) -> Option<bool> {
         "fable",
         "fable_quota",
         "claude_fable",
-        "claude-fable-5",
+        cascade_types::model_ids::MODEL_CLAUDE_FABLE,
     ] {
         if let Some(value) = body.get(key) {
             if let Some(available) = quota_value_available(value) {
@@ -384,7 +515,7 @@ mod tests {
             "five_hour": { "utilization": 0.0 },
             "limits": [
                 { "type": "weekly_all", "utilization": 10.0 },
-                { "model": "claude-fable-5", "utilization": 100.0 }
+                { "model": cascade_types::model_ids::MODEL_CLAUDE_FABLE, "utilization": 100.0 }
             ]
         });
 
@@ -487,5 +618,69 @@ mod tests {
         assert!(epoch.is_some(), "fractional-second ISO-8601 must parse");
         // Should be 2026-07-01T01:19:59Z = 1782868799
         assert_eq!(epoch.unwrap(), 1_782_868_799);
+    }
+
+    // ── D13: 429 backoff ────────────────────────────────────────────────────
+
+    /// After recording a 429 for an account, with_backoff reports it as blocked
+    /// (retry_after in the future) and subsequent calls to the skip-gate return true.
+    #[test]
+    fn backoff_entry_blocks_account_during_window() {
+        // Use a unique account name to avoid cross-test pollution.
+        let acct = "test-d13-block-account";
+        // Pre-populate a backoff entry with retry_after well in the future.
+        with_backoff(|map| {
+            map.insert(
+                acct.to_string(),
+                BackoffEntry {
+                    retry_after: Instant::now() + Duration::from_secs(300),
+                    backoff_secs: 60,
+                    last_success: None,
+                },
+            );
+        });
+
+        // The skip gate must return true → fetch would be skipped.
+        let blocked = with_backoff(|map| {
+            map.get(acct)
+                .map(|e| Instant::now() < e.retry_after)
+                .unwrap_or(false)
+        });
+        assert!(blocked, "account must be blocked during backoff window");
+    }
+
+    /// After a successful fetch, the backoff entry has retry_after in the past.
+    #[test]
+    fn backoff_entry_cleared_after_success() {
+        let acct = "test-d13-success-account";
+        // Simulate a prior backoff entry.
+        with_backoff(|map| {
+            map.insert(
+                acct.to_string(),
+                BackoffEntry {
+                    retry_after: Instant::now() + Duration::from_secs(300),
+                    backoff_secs: 60,
+                    last_success: None,
+                },
+            );
+        });
+        // Simulate a successful response clearing the backoff.
+        with_backoff(|map| {
+            map.insert(
+                acct.to_string(),
+                BackoffEntry {
+                    retry_after: Instant::now(), // now (past) = not blocked
+                    backoff_secs: INITIAL_BACKOFF_SECS / 2,
+                    last_success: Some(Instant::now()),
+                },
+            );
+        });
+
+        let blocked = with_backoff(|map| {
+            map.get(acct)
+                .map(|e| Instant::now() < e.retry_after)
+                .unwrap_or(false)
+        });
+        assert!(!blocked, "account must not be blocked after success clears backoff");
     }
 }

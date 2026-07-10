@@ -22,6 +22,10 @@ mod ipc;
 mod ipc_handlers;
 // E-P6-04: CEO orchestrator IPC methods
 mod ipc_ceo;
+// T-P3-E04-26: provider IPC command handlers
+mod ipc_providers;
+// T-P3-E04-27: token usage accumulator
+mod usage;
 // T-P3-E04-29: usage analytics IPC handlers (wired in ipc.rs try_typed_dispatch)
 mod ipc_usage_analytics;
 // E-P8-01: kanban Task IPC handlers
@@ -118,6 +122,8 @@ use tracing::{error, info, warn};
 async fn main() {
     // Initialize structured JSON logging before anything else so early errors
     // are captured. Rotation and file sink are configured inside log::init.
+    // Config is not yet loaded here; pass None for both — the config-level
+    // wiring happens in the second call below once we know the config_dir.
     if let Err(e) = log::init() {
         eprintln!("failed to initialize logging: {e}");
         process::exit(1);
@@ -408,10 +414,41 @@ async fn main() {
         for action in tray_action_rx {
             match action {
                 cascade_tray::TrayAction::OpenApp => {
-                    // Open the Cascade application.
-                    // macOS: "open -a Cascade.app" — Linux: "xdg-open cascade://"
-                    // Windows: ShellExecuteW. Stubbed: app not yet built (P3 scope).
-                    info!("tray action: OpenApp (stub — app not yet built)");
+                    // Open the Cascade application: try ~/Applications/Cascade.app
+                    // first (the installed product location), then fall back to
+                    // opening ~/.cascade/accounts/ in Finder so the user sees their
+                    // account data even when the app is not yet installed.
+                    #[cfg(target_os = "macos")]
+                    {
+                        let home = dirs::home_dir().unwrap_or_default();
+                        let app_path = home.join("Applications").join("Cascade.app");
+                        if app_path.exists() {
+                            if let Err(e) = std::process::Command::new("open")
+                                .arg("-a")
+                                .arg(&app_path)
+                                .spawn()
+                            {
+                                warn!(%e, app = %app_path.display(), "tray: OpenApp: failed to open Cascade.app");
+                            } else {
+                                info!(app = %app_path.display(), "tray: OpenApp: opened Cascade.app");
+                            }
+                        } else {
+                            // App not installed — open accounts dir as fallback.
+                            let fallback = home.join(".cascade").join("accounts");
+                            if let Err(e) = std::process::Command::new("open")
+                                .arg(&fallback)
+                                .spawn()
+                            {
+                                warn!(%e, path = %fallback.display(), "tray: OpenApp: fallback open failed");
+                            } else {
+                                info!(path = %fallback.display(), "tray: OpenApp: opened accounts dir (app not installed)");
+                            }
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        warn!("tray: OpenApp: not implemented on this platform");
+                    }
                 }
                 cascade_tray::TrayAction::OpenDashboard => {
                     // Open the local dashboard in the default browser.
@@ -421,12 +458,10 @@ async fn main() {
                     }
                 }
                 cascade_tray::TrayAction::PauseDaemon => {
-                    // Forward the "pause" intent so the supervisor can enter
-                    // a paused state. Full IPC dispatch (sending the "pause"
-                    // command to the daemon's own socket) is completed when
-                    // T-P2-E03 lands and the IPC server exposes a Pause method.
-                    // For now, log the intent so the action loop is correct.
-                    info!("tray action: PauseDaemon — sending pause IPC command");
+                    // Pause is not yet implemented — the daemon has no pause
+                    // primitive and the IPC server has no Pause method.
+                    // Log honestly rather than claiming success.
+                    warn!("tray action: PauseDaemon — pause not implemented; request ignored");
                 }
                 cascade_tray::TrayAction::Quit => {
                     // Graceful shutdown: cancel the shared CancellationToken so

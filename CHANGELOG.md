@@ -16,6 +16,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   Coding Plan compliance requirement), not a direct API adapter — the
   `opencode` adapter already covers that path. DeepInfra was never
   provisioned.
+- `cascade-daemon`: deleted dead `backup.rs` module and its `BackupConfig`
+  struct. Backup functionality was never wired into the supervisor or any
+  startup path; git history preserves the implementation for reference.
+- `cascade-daemon`: deleted dead `backoff.rs` module and its `BackoffEntry`
+  / `ACCOUNT_BACKOFF` static. Per-account exponential backoff has been
+  superseded by the fleet routing layer in `cascade-core`; no call sites
+  remained.
+- `DaemonConfig::health_sample_interval_secs` and
+  `DaemonConfig::event_bus_flush_interval_secs` fields removed.
+  Both were parsed from config but never read by any runtime path; the
+  health poller and event bus each use hard-coded intervals that reflect
+  the actual validated behavior.
+- `mcp_registration::register()` removed. MCP server self-registration
+  was feature-flagged dead code; cascade no longer self-registers as an
+  MCP server (the MCP server feature lives in the separate `cascade-mcp`
+  crate).
 
 ### Changed
 - `gemini::config::DEFAULT_MODEL` now references

@@ -52,8 +52,7 @@ use cascade_types::error::Result;
 /// - Errors are logged but the watcher loop is NOT killed.
 /// - The caller publishes `cascade.regen.complete` or `cascade.regen.error`
 ///   on the event bus.
-// Wired to the file watcher in T-P4-E01-26; called on .cascade/ change events.
-#[allow(dead_code)]
+// Wired to the file watcher in supervisor.rs; called on .cascade/ change events (D3).
 pub async fn handle_cascade_change(changed_path: &Path) -> Result<()> {
     let start = Instant::now();
 

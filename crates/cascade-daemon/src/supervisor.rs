@@ -58,7 +58,23 @@ pub async fn run(
 
     let health = HealthState::new(start_time);
     let bus = EventBus::new(config_dir.clone()).await?;
-    let ipc = IpcServer::new(config_dir.clone(), health.clone(), bus.clone(), Arc::clone(&provider_registry)).await?;
+
+    // Honour daemon.socket_path from config (empty = use default daemon.sock).
+    let socket_override: Option<PathBuf> = if config.daemon.socket_path.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(config.daemon.socket_path.as_str()))
+    };
+    let mut ipc = IpcServer::new_with_socket(
+        config_dir.clone(),
+        health.clone(),
+        bus.clone(),
+        Arc::clone(&provider_registry),
+        socket_override,
+    ).await?;
+    // D10: wire the daemon-level shutdown token so DaemonStop IPC requests actually
+    // cancel the running process rather than just acknowledging the request.
+    ipc.set_daemon_shutdown(shutdown.clone());
 
     // ── HookStore + HookRunner: seed hooks from config.toml [[hooks]] ────────
     // Create an in-memory SQLite HookStore, seed it from the config's [[hooks]]
@@ -243,6 +259,15 @@ pub async fn run(
                                 warn!(%e, "failed to publish cascade.changed event");
                             } else {
                                 info!(path = %watch_path.display(), "cascade.changed event published");
+                                // D3: trigger compat-file regeneration on any .cascade/
+                                // directory change. Spawned as a non-blocking task so the
+                                // watcher loop is never stalled by the compat_gen I/O.
+                                let regen_path = watch_path.clone();
+                                tokio::spawn(async move {
+                                    if let Err(e) = crate::regen::handle_cascade_change(&regen_path).await {
+                                        warn!(error = %e, "regen: compat-file regeneration failed");
+                                    }
+                                });
                             }
                         }
                         last_mtime = mtime;
@@ -458,22 +483,18 @@ pub async fn run(
         }
     }
 
-    // ── MCP self-registration ─────────────────────────────────────────────────────
-    // Gated on cascade_types::CascadeConfig::mcp.enabled (default: true since rag-11).
-    // Calls mcp_registration::register() which is a stub until frame-01 implements
-    // the settings.json write.
+    // ── CC lifecycle hooks ────────────────────────────────────────────────────────
+    // Install the Stop harvest hook and PostToolUse security scan hook into
+    // ~/.claude/settings.json.  Both writes are idempotent and fire-and-forget.
+    // The former mcp_registration::register() (MCP server self-registration) has
+    // been removed — it required mcp.sock which nothing creates (D5).
     {
-        use cascade_types::config::CascadeConfig;
-        let cascade_cfg = CascadeConfig::default();
-
-        if cascade_cfg.mcp.enabled {
-            use crate::mcp_registration;
-            let reg_dir = config_dir.clone();
-            tokio::spawn(async move {
-                mcp_registration::register(&reg_dir).await;
-            });
-            info!("mcp: registration trigger spawned (frame-01 stub)");
-        }
+        use crate::mcp_registration;
+        tokio::spawn(async move {
+            mcp_registration::register_cc_stop_hook().await;
+            mcp_registration::register_security_hook().await;
+        });
+        info!("cc_hooks: stop-harvest and security-scan hooks scheduled");
     }
 
     // ── AutomationRunner ─────────────────────────────────────────────────────────

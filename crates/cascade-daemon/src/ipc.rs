@@ -41,6 +41,7 @@ use cascade_core::tasks::{open_tasks_db, KanbanTaskStore};
 use crate::chunk_cache::ChunkCache;
 use crate::event_bus::EventBus;
 use crate::healthcheck::HealthState;
+use crate::ipc_providers::ProviderIpcHandler;
 use crate::ipc_tasks::{
     handle_task_create, handle_task_delete, handle_task_get, handle_task_list, handle_task_move,
     handle_task_update,
@@ -107,6 +108,10 @@ pub struct IpcServer {
     auth_token: String,
     health: Arc<HealthState>,
     bus: Arc<EventBus>,
+    /// Cancellation token for the whole daemon.  Cancelled when
+    /// `Request::DaemonStop` is received so the supervisor exits cleanly
+    /// (D10 — DaemonStop previously acknowledged the request but did nothing).
+    daemon_shutdown: Option<CancellationToken>,
     /// In-memory 60-second summary cache for cascade_usage_summary (T-P3-E04-29).
     usage_summary_cache: SummaryCache,
     /// RAG IPC method handlers (rag.search / rag.ingest_file / rag.list_sources /
@@ -128,16 +133,39 @@ pub struct IpcServer {
     /// Kanban Task store (E-P8-01).
     /// SQLite-backed; opened at daemon start from config_dir/tasks.db.
     task_store: Arc<KanbanTaskStore>,
+    /// Provider IPC handler (D2): routes cascade_providers_* commands.
+    /// Shared via Arc so connection tasks can call provider commands concurrently.
+    provider_handler: Arc<ProviderIpcHandler>,
 }
 
 impl IpcServer {
+    #[allow(dead_code)]
     pub async fn new(
         config_dir: PathBuf,
         health: Arc<HealthState>,
         bus: Arc<EventBus>,
         provider_registry: Arc<cascade_providers::ProviderRegistry>,
     ) -> Result<Self, DaemonError> {
-        let socket_path = config_dir.join(SOCKET_NAME);
+        Self::new_with_socket(config_dir, health, bus, provider_registry, None).await
+    }
+
+    /// Construct an IpcServer with an optional socket path override.
+    ///
+    /// When `socket_override` is `Some(path)` and non-empty, that path is used
+    /// instead of `config_dir/daemon.sock`.  Called from supervisor.rs to honour
+    /// `[daemon] socket_path` from config.toml.
+    pub async fn new_with_socket(
+        config_dir: PathBuf,
+        health: Arc<HealthState>,
+        bus: Arc<EventBus>,
+        provider_registry: Arc<cascade_providers::ProviderRegistry>,
+        socket_override: Option<PathBuf>,
+    ) -> Result<Self, DaemonError> {
+        let socket_path = match socket_override {
+            Some(p) if p.as_os_str().is_empty() => config_dir.join(SOCKET_NAME),
+            Some(p) => p,
+            None => config_dir.join(SOCKET_NAME),
+        };
 
         // Provision the IPC auth token the CLI reads from ~/.cascade/ipc_token to
         // sign requests. Previously this file was never written, so every IPC
@@ -186,6 +214,9 @@ impl IpcServer {
         // Wired to the real ProviderRegistry so directives use live LLM completions
         // via RegistryRouter + SafeToolInvoker (same pair as AutomationRunner).
         let ceo_session_dir = config_dir.join("agents").join("sessions");
+        // Clone before moving into CeoRuntime so provider_handler below can
+        // still take a clone of the same Arc.
+        let registry_for_provider_handler = Arc::clone(&provider_registry);
         let ceo_runtime = Arc::new(crate::ipc_ceo::CeoRuntime::with_registry(
             Some(ceo_session_dir),
             provider_registry,
@@ -201,11 +232,37 @@ impl IpcServer {
         });
         let task_store = Arc::new(KanbanTaskStore::new(task_conn));
 
+        // Provider IPC handler (D2): opened once and shared via Arc.
+        // Usage DB lives next to the tasks DB (provider-usage.db).
+        let provider_usage_path = config_dir.join("provider-usage.db");
+        let usage_acc = Arc::new(
+            crate::usage::UsageAccumulator::new(&provider_usage_path).unwrap_or_else(|e| {
+                tracing::warn!(%e, "provider usage DB open failed; usage tracking disabled");
+                // Fallback to in-memory accumulator so the daemon still starts.
+                crate::usage::UsageAccumulator::new(":memory:")
+                    .expect("in-memory accumulator must open")
+            }),
+        );
+        // WHY fresh empty health state here: the daemon's live provider health
+        // state lives in main.rs and is populated by the background health-check
+        // task (spawn_health_check_task). Passing it through the IPC constructor
+        // chain is a larger refactor than D2 scope.  An empty health state means
+        // cascade_providers_list returns status="unknown" for all providers until
+        // a full health-state injection is wired (tracked separately).
+        let provider_health_state: crate::provider_health::HealthState =
+            Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+        let provider_handler = Arc::new(ProviderIpcHandler::new(
+            registry_for_provider_handler,
+            provider_health_state,
+            usage_acc,
+        ));
+
         Ok(Self {
             socket_path,
             auth_token: token,
             health,
             bus,
+            daemon_shutdown: None,
             usage_summary_cache: new_summary_cache(),
             rag_handler,
             file_chunk_cache,
@@ -213,7 +270,16 @@ impl IpcServer {
             embed_cache,
             ceo_runtime,
             task_store,
+            provider_handler,
         })
+    }
+
+    /// Attach the daemon-level shutdown token so that `DaemonStop` IPC requests
+    /// actually cancel the running daemon (D10).
+    ///
+    /// Call this immediately after `IpcServer::new_with_socket` and before `serve`.
+    pub fn set_daemon_shutdown(&mut self, token: CancellationToken) {
+        self.daemon_shutdown = Some(token);
     }
 
     /// Bind the Unix socket and serve connections until `shutdown` fires.
@@ -481,9 +547,14 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
             Err(e) => Response::err(-32004, e.to_string()),
         },
         Request::DaemonStop => {
-            // Actual cancellation is handled by the signal handler; here we
-            // just acknowledge and let the supervisor wind down naturally.
             info!("stop requested via IPC");
+            // Cancel the daemon-level token so the supervisor exits cleanly (D10).
+            if let Some(token) = &server.daemon_shutdown {
+                token.cancel();
+                info!("daemon shutdown token cancelled");
+            } else {
+                warn!("DaemonStop: no shutdown token wired — daemon will not exit via IPC");
+            }
             Response::ok(serde_json::json!({ "status": "stopping" }))
         }
     }
@@ -1002,6 +1073,110 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 }
                 _ => {}
             }
+            // ── cascade_providers_* commands (D2 — ipc_providers.rs wired) ───
+            // Dispatch all provider management commands to ProviderIpcHandler.
+            if typed_req.method.starts_with("cascade_providers_")
+                || typed_req.method == "cascade_check_gfp_proxy"
+            {
+                let handler = Arc::clone(&server.provider_handler);
+                let params = typed_req.params.unwrap_or(serde_json::Value::Null);
+                return match typed_req.method.as_str() {
+                    "cascade_providers_list" => {
+                        let items = handler.providers_list().await;
+                        Response::ok(items)
+                    }
+                    "cascade_providers_test" => {
+                        let id = params
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if id.is_empty() {
+                            Response::err(-32602, "missing required param: id")
+                        } else {
+                            match handler.providers_test(&id).await {
+                                Ok(()) => Response::ok(serde_json::json!({ "ok": true })),
+                                Err(e) => Response::err(-32001, e),
+                            }
+                        }
+                    }
+                    "cascade_providers_remove" => {
+                        let id = params
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if id.is_empty() {
+                            Response::err(-32602, "missing required param: id")
+                        } else {
+                            match handler.providers_remove(&id).await {
+                                Ok(()) => Response::ok(serde_json::json!({ "ok": true })),
+                                Err(e) => Response::err(-32001, e),
+                            }
+                        }
+                    }
+                    "cascade_providers_add_apikey" => {
+                        let id = params
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let key = params
+                            .get("key")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if id.is_empty() || key.is_empty() {
+                            Response::err(-32602, "missing required params: id, key")
+                        } else {
+                            match handler.providers_add_apikey(id, key).await {
+                                Ok(()) => Response::ok(serde_json::json!({ "ok": true })),
+                                Err(e) => Response::err(-32001, e),
+                            }
+                        }
+                    }
+                    "cascade_providers_add_generic" => {
+                        let base_url = params
+                            .get("base_url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if base_url.is_empty() {
+                            return Response::err(-32602, "missing required param: base_url");
+                        }
+                        let api_key = params
+                            .get("api_key")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        let model_id = params
+                            .get("model_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let display_name = params
+                            .get("display_name")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        match handler
+                            .providers_add_generic(base_url, api_key, model_id, display_name)
+                            .await
+                        {
+                            Ok(()) => Response::ok(serde_json::json!({ "ok": true })),
+                            Err(e) => Response::err(-32001, e),
+                        }
+                    }
+                    "cascade_providers_usage_today" => {
+                        let items = handler.providers_usage_today().await;
+                        Response::ok(items)
+                    }
+                    "cascade_check_gfp_proxy" => {
+                        let ok = handler.check_gfp_proxy().await;
+                        Response::ok(serde_json::json!({ "running": ok }))
+                    }
+                    other => Response::err(-32601, format!("method not found: {other}")),
+                };
+            }
+
             // ── turn.complete (auto-01) ───────────────────────────────────
             if typed_req.method == "turn.complete" {
                 let session_id = typed_req
@@ -1277,5 +1452,58 @@ mod tests {
         assert!(constant_time_token_eq("abcdef", "abcdef"));
         assert!(!constant_time_token_eq("abcdef", "abc"));
         assert!(!constant_time_token_eq("abcdef", "abcdeg"));
+    }
+
+    /// D2: providers_list round-trip through the IPC stack.
+    ///
+    /// Sends a `cascade_providers_list` typed request via the real IPC frame
+    /// protocol and asserts the response contains a JSON array (empty when
+    /// the registry has no providers registered at startup).
+    // Multi-thread flavor: the RAG reranker uses block_in_place which panics
+    // on single-thread runtime.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn providers_list_round_trip_via_ipc() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+        let token = server.auth_token.clone();
+        let (mut client, server_io) = duplex(4096);
+        let (server_read, server_write) = tokio::io::split(server_io);
+
+        let task = tokio::spawn(handle_connection(server, server_read, server_write));
+        write_json_frame(
+            &mut client,
+            serde_json::json!({
+                "auth": token,
+                "rpc": {
+                    "jsonrpc": "2.0",
+                    "id": 42,
+                    "method": "cascade_providers_list",
+                    "protocol_version": PROTOCOL_VERSION,
+                    "params": {}
+                }
+            }),
+        )
+        .await;
+
+        let response = read_json_frame(&mut client).await;
+        assert_eq!(response["id"].as_i64(), Some(42), "id echo must match");
+        assert!(
+            response.get("error").is_none(),
+            "providers_list must not return an error; got: {response}"
+        );
+        // Empty registry → empty array.
+        let result = &response["result"];
+        assert!(
+            result.is_array(),
+            "providers_list result must be a JSON array; got: {result}"
+        );
+        assert_eq!(
+            result.as_array().map(|a| a.len()),
+            Some(0),
+            "empty registry must return empty array via IPC"
+        );
+
+        drop(client);
+        task.await.unwrap().unwrap();
     }
 }

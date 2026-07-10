@@ -25,8 +25,10 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
-use axum::{extract::State, routing::get, Json, Router};
+use axum::http::{header::AUTHORIZATION, StatusCode};
+use axum::{extract::State, routing::{get, post}, Json, Router};
 use cascade_core::routing::RoutingEvent;
+use subtle::ConstantTimeEq;
 
 use crate::dashboard::DashboardState;
 
@@ -67,11 +69,17 @@ pub fn make_observer(ring: RoutingRing) -> cascade_core::routing::RoutingObserve
 // ── Axum router ───────────────────────────────────────────────────────────────
 
 /// Builds the fleet-routing sub-router, nested at `/api/fleet` by the parent.
+///
+/// Routes:
+///   GET  /routing — read ring (no auth required; read-only)
+///   POST /routing — append one event from conductor (bearer token required)
 pub fn router() -> Router<DashboardState> {
-    Router::new().route("/routing", get(fleet_routing_handler))
+    Router::new()
+        .route("/routing", get(fleet_routing_handler))
+        .route("/routing", post(fleet_routing_post_handler))
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── Handlers ──────────────────────────────────────────────────────────────────
 
 /// GET /api/fleet/routing
 ///
@@ -90,6 +98,60 @@ async fn fleet_routing_handler(State(state): State<DashboardState>) -> Json<Vec<
         }
         Err(_) => Json(vec![]),
     }
+}
+
+/// POST /api/fleet/routing
+///
+/// Append a conductor dispatch decision to the in-memory ring.
+/// Requires `Authorization: Bearer <dashboard-token>`.
+///
+/// # Inputs
+/// Authorization header: Bearer token (same as /api/gci routes).
+/// Body: JSON RoutingEvent with fields task_class, account_id, model, reason.
+///
+/// # Outputs
+/// 202 Accepted + `{"ok":true}` on success.
+/// 400 Bad Request on JSON parse failure.
+/// 401 Unauthorized on missing or wrong bearer token.
+///
+/// # WHY bearer auth on writes
+/// The ring is append-only from conductor; a rogue caller could poison the
+/// Fleet UI with fake routing events. Auth gates that to the local token holder.
+async fn fleet_routing_post_handler(
+    State(state): State<DashboardState>,
+    headers: axum::http::HeaderMap,
+    Json(event): Json<RoutingEvent>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    // Extract and validate Authorization: Bearer <token>.
+    let auth_ok = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|supplied| {
+            let expected = state.token.as_bytes();
+            let supplied_bytes = supplied.as_bytes();
+            expected.len() == supplied_bytes.len()
+                && expected.ct_eq(supplied_bytes).unwrap_u8() != 0
+        })
+        .unwrap_or(false);
+
+    if !auth_ok {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "unauthorized"})),
+        );
+    }
+
+    if let Some(ring) = &state.routing_ring {
+        if let Ok(mut guard) = ring.write() {
+            if guard.len() >= ROUTING_RING_CAP {
+                guard.pop_front();
+            }
+            guard.push_back(event);
+        }
+    }
+
+    (StatusCode::ACCEPTED, Json(serde_json::json!({"ok": true})))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

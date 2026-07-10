@@ -66,6 +66,7 @@ pub struct ProviderUsageItem {
 /// points.
 pub struct UsageAccumulator {
     conn: Arc<Mutex<Connection>>,
+    #[allow(dead_code)]
     db_path: PathBuf,
 }
 
@@ -110,6 +111,7 @@ impl UsageAccumulator {
     /// today + provider_id, one is inserted with the initial values.
     ///
     /// `cost_usd = None` → stored as `0.0`.
+    #[allow(dead_code)]
     pub async fn record(&self, provider_id: &str, usage: &TokenUsage, cost_usd: Option<f64>) {
         let cost = cost_usd.unwrap_or(0.0);
         let conn = self.conn.lock().await;
@@ -149,6 +151,7 @@ impl UsageAccumulator {
     /// Return today's usage for a single provider (UTC date).
     ///
     /// Returns `None` if the provider has no recorded usage today.
+    #[allow(dead_code)]
     pub async fn today(&self, provider_id: &str) -> Option<ProviderUsageItem> {
         let conn = self.conn.lock().await;
         let result = conn.query_row(
@@ -219,6 +222,7 @@ impl UsageAccumulator {
     /// Return per-provider totals summed over the last 7 days (UTC).
     ///
     /// Used by the settings page weekly summary.
+    #[allow(dead_code)]
     pub async fn weekly_totals(&self) -> Vec<ProviderUsageItem> {
         let conn = self.conn.lock().await;
         let mut stmt = match conn.prepare(
@@ -262,6 +266,7 @@ impl UsageAccumulator {
     }
 
     /// Return the path to the SQLite database file.
+    #[allow(dead_code)]
     pub fn db_path(&self) -> &Path {
         &self.db_path
     }

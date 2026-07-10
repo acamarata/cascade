@@ -51,10 +51,6 @@ pub struct DaemonConfig {
     pub log_format: String,
     /// Override for `~/.cascade/daemon.sock`; empty = use default.
     pub socket_path: String,
-    /// How often the health-check sampler fires (seconds); default 30.
-    pub health_sample_interval_secs: u64,
-    /// How often the event bus is flushed (seconds); default 60.
-    pub event_bus_flush_interval_secs: u64,
     /// Maximum number of entries in the in-memory chunk cache (T-P4-E04-10).
     /// Each entry holds the parsed + chunked content for one cascade file.
     /// Default 256 (one entry per file; typical cascade trees have < 100 files).
@@ -68,8 +64,6 @@ impl Default for DaemonConfig {
             log_level: "info".into(),
             log_format: "json".into(),
             socket_path: String::new(),
-            health_sample_interval_secs: 30,
-            event_bus_flush_interval_secs: 60,
             chunk_cache_capacity: 256,
         }
     }
@@ -423,59 +417,6 @@ impl Default for FleetConfig {
     }
 }
 
-/// `[backup]` section of config.toml.
-///
-/// Controls the [`crate::backup::BackupSync`] daemon task that mirrors tier
-/// `.cascade/` directories to a local backup location after each regen cycle.
-///
-/// # TOML example
-///
-/// ```toml
-/// [backup]
-/// enabled = true
-/// backup_root = "~/.cascade/backups"
-/// sync_interval_secs = 60
-/// max_versions = 7
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct BackupConfig {
-    /// Enable backup sync; default `true`.
-    ///
-    /// Set to `false` to disable all backup operations (e.g. in CI or
-    /// resource-constrained environments).
-    pub enabled: bool,
-
-    /// Root directory for backups; `~` is expanded at runtime.
-    ///
-    /// Each tier gets a subdirectory: `{backup_root}/{tier_name}/`.
-    /// Default: `"~/.cascade/backups"`.
-    pub backup_root: String,
-
-    /// Minimum seconds between successive backups of the same tier.
-    ///
-    /// Prevents backup storms when many regen events fire in quick succession.
-    /// Default: `60`. A value of `0` means no per-tier throttling.
-    pub sync_interval_secs: u64,
-
-    /// Maximum number of versioned snapshots to keep per tier.
-    ///
-    /// After each backup, older snapshots are pruned, keeping only the
-    /// `max_versions` most recent. Default: `7`. Must be ≥ 1.
-    pub max_versions: usize,
-}
-
-impl Default for BackupConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            backup_root: "~/.cascade/backups".into(),
-            sync_interval_secs: 60,
-            max_versions: 7,
-        }
-    }
-}
-
 /// `[middleware]` section of config.toml (E2-S2 pre-processing middleware).
 ///
 /// GP-powered request pre-processing on the daemon chat path. Every feature
@@ -544,8 +485,6 @@ pub struct Config {
     pub scheduler: SchedulerConfig,
     /// `[proxy]` section.
     pub proxy: ProxyConfig,
-    /// `[backup]` section.
-    pub backup: BackupConfig,
     /// `[quota]` section — per-provider quota window limits (E-P6-02 T-03).
     #[serde(default)]
     pub quota: QuotaConfig,
@@ -604,7 +543,6 @@ impl Default for Config {
             history: HistoryConfig::default(),
             scheduler: SchedulerConfig::default(),
             proxy: ProxyConfig::default(),
-            backup: BackupConfig::default(),
             quota: QuotaConfig::default(),
             budget: BudgetConfig::default(),
             fleet: FleetConfig::default(),
@@ -649,14 +587,6 @@ impl Config {
             return Err(ConfigError::InvalidValue {
                 field: "watcher.debounce_ms".into(),
                 constraint: "must be in range 10..=5000".into(),
-            });
-        }
-
-        // daemon.health_sample_interval_secs: 5..=3600
-        if !(5..=3600).contains(&self.daemon.health_sample_interval_secs) {
-            return Err(ConfigError::InvalidValue {
-                field: "daemon.health_sample_interval_secs".into(),
-                constraint: "must be in range 5..=3600".into(),
             });
         }
 

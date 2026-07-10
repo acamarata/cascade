@@ -341,6 +341,16 @@ fn execute_with_fallback(
                 } else {
                     print!("{output}");
                 }
+                // D9: fire-and-forget POST to daemon fleet-routing ring.
+                // Non-blocking: spawned thread; failure is silently ignored
+                // (the daemon may not be running; routing ring is best-effort).
+                let task_class = tier_to_task_class(req.tier).to_string();
+                let account_id = current.account_id.clone();
+                let model = current.model.clone();
+                let reason = current.reason.clone();
+                std::thread::spawn(move || {
+                    post_routing_event(&task_class, &account_id, &model, &reason);
+                });
                 return Ok(());
             }
             Outcome::Unavailable { reason } => {
@@ -943,6 +953,74 @@ fn execute_gfp(_target: &ConductorTarget, prompt: &str) -> Outcome {
             reason: format!("curl exec failed: {e}"),
         },
     }
+}
+
+// ── Fleet routing event (D9) ──────────────────────────────────────────────────
+
+/// Map a conductor tier to the canonical task_class string expected by the
+/// daemon's fleet-routing ring (matches RoutingEvent.task_class conventions).
+fn tier_to_task_class(tier: Tier) -> &'static str {
+    match tier {
+        Tier::T1 => "final-gate",
+        Tier::T2 => "bulk-execution",
+        Tier::T3 => "grunt",
+    }
+}
+
+/// Read `~/.cascade/dashboard.token` (the daemon bearer token).
+/// Returns `None` when the file is absent or unreadable (daemon not running).
+fn read_dashboard_token() -> Option<String> {
+    let path = dirs::home_dir()?.join(".cascade").join("dashboard.token");
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Fire-and-forget: POST one RoutingEvent to the daemon's fleet routing ring.
+///
+/// Called from a background thread after a successful conductor dispatch so
+/// the Fleet UI ring buffer reflects real conductor routing decisions.
+///
+/// Silently exits on any failure — the daemon ring is best-effort telemetry.
+fn post_routing_event(task_class: &str, account_id: &str, model: &str, reason: &str) {
+    let Some(token) = read_dashboard_token() else { return };
+    let Some(curl) = find_binary("curl") else { return };
+
+    let body = serde_json::json!({
+        "task_class": task_class,
+        "account_id": account_id,
+        "model": model,
+        "reason": reason,
+    });
+    let body_str = match serde_json::to_string(&body) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let mut cmd = StdCommand::new(&curl);
+    cmd.env("PATH", AUGMENTED_PATH)
+        .args([
+            "-s",
+            "-o",
+            "/dev/null",
+            "--max-time",
+            "2",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "-H",
+            &format!("Authorization: Bearer {token}"),
+            "-d",
+            &body_str,
+            "http://127.0.0.1:9761/api/fleet/routing",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    // We don't care about the exit status — best-effort telemetry.
+    let _ = cmd.output();
 }
 
 // ── Shared run helper ─────────────────────────────────────────────────────────
