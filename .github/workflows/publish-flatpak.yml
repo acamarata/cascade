@@ -7,6 +7,8 @@ on:
 jobs:
   build-and-submit:
     runs-on: [self-hosted, cam-sentry]
+    # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
+    if: ${{ vars.PUBLIC_RELEASES == 'true' }}
     container:
       image: bilelmoussaoui/flatpak-github-actions:gnome-46
       options: --privileged

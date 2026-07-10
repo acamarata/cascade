@@ -7,6 +7,8 @@ on:
 jobs:
   update-package:
     runs-on: windows-latest
+    # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
+    if: ${{ vars.PUBLIC_RELEASES == 'true' }}
     steps:
       - uses: actions/checkout@v4
 

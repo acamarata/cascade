@@ -7,6 +7,8 @@ on:
 jobs:
   publish:
     runs-on: [self-hosted, cam-sentry]
+    # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
+    if: ${{ vars.PUBLIC_RELEASES == 'true' }}
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:

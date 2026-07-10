@@ -30,7 +30,10 @@ jobs:
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
       SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-    if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
+    # The `env` context is NOT available in a job-level `if`. Referencing it here
+    # made GitHub reject the workflow at parse time (0s startup_failure on every
+    # push since v1.15.1). Gate on `secrets`, which IS available at job level.
+    if: ${{ secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
 
     steps:
       - name: Submit signing request to SignPath.io
