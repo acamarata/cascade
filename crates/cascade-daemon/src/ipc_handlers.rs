@@ -329,7 +329,11 @@ pub fn handle_budget_check(
         crate::budget_guard::BudgetResult::Allow => {
             serde_json::json!({ "allow": true, "reason": null })
         }
-        crate::budget_guard::BudgetResult::DenyLimit { window, used, limit } => {
+        crate::budget_guard::BudgetResult::DenyLimit {
+            window,
+            used,
+            limit,
+        } => {
             serde_json::json!({
                 "allow": false,
                 "reason": format!(
@@ -338,7 +342,10 @@ pub fn handle_budget_check(
                 )
             })
         }
-        crate::budget_guard::BudgetResult::DenyCost { spent_usd, limit_usd } => {
+        crate::budget_guard::BudgetResult::DenyCost {
+            spent_usd,
+            limit_usd,
+        } => {
             serde_json::json!({
                 "allow": false,
                 "reason": format!(
@@ -370,12 +377,11 @@ pub async fn handle_update_quota_state(
 ) -> Result<(), IpcHandlerError> {
     use cascade_types::quota_store::QuotaState as TypedQuotaState;
 
-    let snap: TypedQuotaState =
-        serde_json::from_value(state_json).map_err(|e| {
-            IpcHandlerError::StoreIo(std::io::Error::other(format!(
-                "invalid QuotaState JSON: {e}"
-            )))
-        })?;
+    let snap: TypedQuotaState = serde_json::from_value(state_json).map_err(|e| {
+        IpcHandlerError::StoreIo(std::io::Error::other(format!(
+            "invalid QuotaState JSON: {e}"
+        )))
+    })?;
 
     // Push into the typed buffer and collect a clone for aggregation.
     // Recover from a poisoned lock so a panicked task doesn't permanently
@@ -406,10 +412,7 @@ pub async fn handle_update_quota_state(
 ///          `store`    — current `QuotaStore`.
 ///
 /// Outputs: JSON `{ "account_id": string | null, "exhausted": bool }`.
-pub fn handle_get_rotation_advice(
-    provider: &str,
-    store: &QuotaStore,
-) -> serde_json::Value {
+pub fn handle_get_rotation_advice(provider: &str, store: &QuotaStore) -> serde_json::Value {
     let account_id = crate::rotation_selector::RotationSelector::select_account(provider, store);
     let exhausted = account_id.is_none();
     serde_json::json!({

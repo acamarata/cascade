@@ -32,9 +32,8 @@ pub mod gate;
 pub mod migrate;
 pub mod vault;
 
-pub use gate::{CascadeMode, Collection, can_expose};
+pub use gate::{can_expose, CascadeMode, Collection};
 pub use vault::{
-    PersonalVault, VaultError, VaultRecord, ExposureEntry,
-    open_vault, list_collections, query_records, upsert_record,
-    request_consent, exposure_log,
+    exposure_log, list_collections, open_vault, query_records, request_consent, upsert_record,
+    ExposureEntry, PersonalVault, VaultError, VaultRecord,
 };

@@ -16,9 +16,7 @@ use crate::server::JsonRpcError;
 /// `cascade.get_current` — return current.yaml active pointers.
 ///
 /// Returns a compact JSON object bounded to <=200 tokens for session-boot use.
-pub(super) async fn handle_get_current(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_get_current(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let root = resolve_phases_root(pbd_root_from_args(args).as_deref());
 
     let current = tokio::task::spawn_blocking(move || {
@@ -135,9 +133,7 @@ pub(super) async fn handle_update_ticket_status(
 }
 
 /// `cascade.append_event` — append a raw event to events.jsonl.
-pub(super) async fn handle_append_event(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_append_event(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let event_val = args
         .get("event")
         .cloned()
@@ -301,9 +297,7 @@ pub(super) async fn handle_read_phase_status(
 }
 
 /// `cascade.list_tickets` — list tickets with optional filters.
-pub(super) async fn handle_list_tickets(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_list_tickets(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let status_filter = args
         .get("status")
         .and_then(|v| v.as_str())
@@ -375,9 +369,7 @@ pub(super) async fn handle_list_tickets(
 /// ```
 /// and issues HTTP checks. `base_url` overrides the host. In tests, callers
 /// can point `routes_file` at a seeded temp file and `base_url` at a mock server.
-pub(super) async fn handle_check_routes(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_check_routes(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let routes_file = args
         .get("routes_file")
         .and_then(|v| v.as_str())

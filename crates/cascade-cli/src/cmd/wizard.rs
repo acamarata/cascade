@@ -61,19 +61,13 @@ impl Command for WizardArgs {
         )?;
 
         // ── provider key ──────────────────────────────────────────────────────
-        let provider_key = prompt(
-            "Provider API key (leave blank to skip): ",
-            "",
-        )?;
+        let provider_key = prompt("Provider API key (leave blank to skip): ", "")?;
 
         // ── telemetry consent ─────────────────────────────────────────────────
         println!("\nCascade can optionally export tracing spans to a local OTLP collector.");
         println!("This is local-only by default; nothing is transmitted externally without");
         println!("additional configuration. See PRIVACY.md for details.");
-        let telemetry_raw = prompt(
-            "Enable telemetry? [y/N]: ",
-            "n",
-        )?;
+        let telemetry_raw = prompt("Enable telemetry? [y/N]: ", "n")?;
         let telemetry_enabled = matches!(telemetry_raw.to_lowercase().as_str(), "y" | "yes");
 
         // ── Write to config ───────────────────────────────────────────────────
@@ -132,13 +126,13 @@ fn prompt(text: &str, default: &str) -> Result<String> {
     io::stdout().flush().ok();
 
     let mut line = String::new();
-    io::stdin().read_line(&mut line).map_err(|e| {
-        cascade_types::error::CascadeError::Io {
+    io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| cascade_types::error::CascadeError::Io {
             path: PathBuf::from("<stdin>"),
             operation: "wizard prompt",
             source: e,
-        }
-    })?;
+        })?;
 
     let trimmed = line.trim().to_owned();
     if trimmed.is_empty() {

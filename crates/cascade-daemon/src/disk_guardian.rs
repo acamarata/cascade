@@ -71,11 +71,7 @@ pub const MIN_STRAY_AGE: Duration = Duration::from_secs(30 * 60);
 /// Directory name / path-fragment patterns the reaper is allowed to ever
 /// consider. Substring-matched against the directory's basename or full
 /// path. Anything else is never a reap candidate regardless of age/location.
-pub const REAPABLE_PATTERNS: &[&str] = &[
-    "claude-worktrees",
-    "-test-target",
-    "cargo-target",
-];
+pub const REAPABLE_PATTERNS: &[&str] = &["claude-worktrees", "-test-target", "cargo-target"];
 
 /// Bare directory basenames that are reapable ONLY when nested under a known
 /// ephemeral parent (never at the scratch root itself, to avoid ever
@@ -246,7 +242,8 @@ fn is_reapable_path(path: &Path, scratch_root: &Path) -> bool {
         if REAPABLE_BASENAMES.contains(&name) {
             // Require strictly-nested (path != scratch_root and has a
             // parent that is still within/under scratch_root).
-            return path != scratch_root && path.parent().is_some_and(|p| p.starts_with(scratch_root));
+            return path != scratch_root
+                && path.parent().is_some_and(|p| p.starts_with(scratch_root));
         }
     }
     false

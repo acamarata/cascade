@@ -220,7 +220,10 @@ mod tests {
 
     #[test]
     fn diff_returns_empty_when_sets_match() {
-        let canonical: BTreeSet<String> = ["anthropic", "google"].iter().map(|s| s.to_string()).collect();
+        let canonical: BTreeSet<String> = ["anthropic", "google"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let live = canonical.clone();
         let report = diff_provider_families(&canonical, &live);
         assert!(report.is_empty());
@@ -232,7 +235,10 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let live: BTreeSet<String> = ["anthropic", "google"].iter().map(|s| s.to_string()).collect();
+        let live: BTreeSet<String> = ["anthropic", "google"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let report = diff_provider_families(&canonical, &live);
         assert_eq!(report.only_in_canonical, vec!["openai".to_string()]);
         assert!(report.only_in_live.is_empty());
@@ -241,7 +247,10 @@ mod tests {
     #[test]
     fn diff_detects_family_missing_from_canonical() {
         let canonical: BTreeSet<String> = ["anthropic"].iter().map(|s| s.to_string()).collect();
-        let live: BTreeSet<String> = ["anthropic", "google"].iter().map(|s| s.to_string()).collect();
+        let live: BTreeSet<String> = ["anthropic", "google"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let report = diff_provider_families(&canonical, &live);
         assert!(report.only_in_canonical.is_empty());
         assert_eq!(report.only_in_live, vec!["google".to_string()]);
@@ -249,8 +258,14 @@ mod tests {
 
     #[test]
     fn diff_detects_both_directions_simultaneously() {
-        let canonical: BTreeSet<String> = ["anthropic", "openai"].iter().map(|s| s.to_string()).collect();
-        let live: BTreeSet<String> = ["anthropic", "google"].iter().map(|s| s.to_string()).collect();
+        let canonical: BTreeSet<String> = ["anthropic", "openai"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let live: BTreeSet<String> = ["anthropic", "google"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let report = diff_provider_families(&canonical, &live);
         assert_eq!(report.only_in_canonical, vec!["openai".to_string()]);
         assert_eq!(report.only_in_live, vec!["google".to_string()]);

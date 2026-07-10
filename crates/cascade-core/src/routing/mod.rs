@@ -29,5 +29,5 @@ pub mod router;
 pub mod task_class;
 
 pub use delegate::{DelegateLane, DelegateTarget, LaneAvailability};
-pub use router::{RoutingDecision, RoutingEvent, RoutingObserver, Router, RouterConfig};
+pub use router::{Router, RouterConfig, RoutingDecision, RoutingEvent, RoutingObserver};
 pub use task_class::TaskClass;

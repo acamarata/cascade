@@ -209,7 +209,9 @@ pub async fn chat_handler(
         let mut classified_complexity = None;
         if flags.classify_requests
             && !explicit_choice
-            && candidates.iter().any(|c| provider_can_downgrade(&c.provider_id))
+            && candidates
+                .iter()
+                .any(|c| provider_can_downgrade(&c.provider_id))
         {
             let last_user = chat_messages
                 .iter()
@@ -307,7 +309,8 @@ pub async fn chat_handler(
         // timeout, emit a typed error and stop rather than hang.
         const CHUNK_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
         loop {
-            let chunk_result = match tokio::time::timeout(CHUNK_STALL_TIMEOUT, stream.next()).await {
+            let chunk_result = match tokio::time::timeout(CHUNK_STALL_TIMEOUT, stream.next()).await
+            {
                 Ok(Some(cr)) => cr,
                 Ok(None) => break, // stream ended cleanly
                 Err(_) => {
@@ -524,7 +527,10 @@ fn provider_fallback_candidates(
         &["opencode", "oc-go"],
         |id| {
             let id = id.to_ascii_lowercase();
-            id == "opencode" || id == "oc-go" || id.starts_with("opencode-") || id.starts_with("oc-")
+            id == "opencode"
+                || id == "oc-go"
+                || id.starts_with("opencode-")
+                || id.starts_with("oc-")
         },
         requires_trusted,
         quota,
@@ -555,10 +561,16 @@ fn quota_keys_for_provider_id(id: &str) -> &'static [&'static str] {
         &["gfp", "gp-pool"]
     } else if id == "gemini" || id.starts_with("gemini-") {
         &["gemini", "google-agy"]
-    } else if id == "openai" || id == "codex" || id.starts_with("openai-") || id.starts_with("codex-")
+    } else if id == "openai"
+        || id == "codex"
+        || id.starts_with("openai-")
+        || id.starts_with("codex-")
     {
         &["codex", "openai-codex", "openai"]
-    } else if id == "opencode" || id == "oc-go" || id.starts_with("opencode-") || id.starts_with("oc-")
+    } else if id == "opencode"
+        || id == "oc-go"
+        || id.starts_with("opencode-")
+        || id.starts_with("oc-")
     {
         &["opencode", "oc-go"]
     } else {
@@ -662,10 +674,7 @@ async fn load_quota_saturation() -> QuotaSaturation {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
         return QuotaSaturation::default();
     };
-    let path = home
-        .join(".cascade")
-        .join("accounts")
-        .join("quota.json");
+    let path = home.join(".cascade").join("accounts").join("quota.json");
     let Ok(raw) = tokio::fs::read_to_string(path).await else {
         return QuotaSaturation::default();
     };
@@ -967,7 +976,10 @@ async fn read_personal_text_prefix(path: &Path, max_chars: usize) -> Option<Stri
     let mut limited = file.take(PERSONAL_READ_MAX_BYTES);
     let mut bytes = Vec::new();
     limited.read_to_end(&mut bytes).await.ok()?;
-    let text: String = String::from_utf8_lossy(&bytes).chars().take(max_chars).collect();
+    let text: String = String::from_utf8_lossy(&bytes)
+        .chars()
+        .take(max_chars)
+        .collect();
     let text = text.trim();
     if text.is_empty() {
         None
@@ -984,7 +996,9 @@ fn title_from_personal_text(text: &str) -> Option<String> {
         }
         let lower = line.to_ascii_lowercase();
         let candidate = if lower.starts_with("title:") {
-            line.split_once(':').map(|(_, rest)| rest.trim()).unwrap_or(line)
+            line.split_once(':')
+                .map(|(_, rest)| rest.trim())
+                .unwrap_or(line)
         } else if line.starts_with('#') {
             line.trim_start_matches('#').trim()
         } else {
@@ -1060,7 +1074,10 @@ async fn compress_chat_messages(messages: Vec<ChatMessage>) -> Vec<ChatMessage> 
     match tokio::task::spawn_blocking(move || compress_context_via_gp(&turns)).await {
         Ok(compressed) => compressed
             .into_iter()
-            .map(|t| ChatMessage { role: t.role, content: t.content })
+            .map(|t| ChatMessage {
+                role: t.role,
+                content: t.content,
+            })
             .collect(),
         Err(_) => messages,
     }
@@ -1407,7 +1424,11 @@ mod tests {
         registry
             .register(
                 "local:ollama".into(),
-                Arc::new(StreamingMockProvider::new("local:ollama", vec!["safe"], true)),
+                Arc::new(StreamingMockProvider::new(
+                    "local:ollama",
+                    vec!["safe"],
+                    true,
+                )),
             )
             .unwrap();
 
@@ -1890,7 +1911,10 @@ mod tests {
         assert!(gp_preference_allowed(None, Some("projects:cascade")));
         assert!(gp_preference_allowed(None, Some("meta")));
         assert!(gp_preference_allowed(None, Some("personal")));
-        assert!(gp_preference_allowed(None, Some("personal:topic:road-trip")));
+        assert!(gp_preference_allowed(
+            None,
+            Some("personal:topic:road-trip")
+        ));
 
         // Trusted-only namespaces: never steered to the pool.
         for ns in ["personal:private", "private", "vault"] {
@@ -1899,7 +1923,10 @@ mod tests {
 
         // Explicit provider always wins, protected or not.
         assert!(!gp_preference_allowed(Some("anthropic"), None));
-        assert!(!gp_preference_allowed(Some("local:ollama"), Some("personal")));
+        assert!(!gp_preference_allowed(
+            Some("local:ollama"),
+            Some("personal")
+        ));
     }
 
     /// Protected namespaces neutralise every content-capturing / GP-touching

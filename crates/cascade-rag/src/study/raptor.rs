@@ -159,9 +159,7 @@ pub async fn build_raptor_tree(
 /// - If `symbol_name` contains `::` (Rust/Go path) → first segment.
 /// - If it contains `/` (file path) → first directory component.
 /// - Otherwise → `"(root)"`.
-fn cluster_by_dir<'a>(
-    chunks: &[(&'a str, &'a str)],
-) -> Vec<(String, Vec<(&'a str, &'a str)>)> {
+fn cluster_by_dir<'a>(chunks: &[(&'a str, &'a str)]) -> Vec<(String, Vec<(&'a str, &'a str)>)> {
     let mut map: HashMap<String, Vec<(&str, &str)>> = HashMap::new();
     let mut order: Vec<String> = Vec::new();
 
@@ -454,7 +452,10 @@ mod tests {
             ("router::get", "fn get() -> Response { ... }"),
             ("router::post", "fn post(body: Json) -> Result<()> { ... }"),
             ("db::connect", "fn connect(url: &str) -> Pool { ... }"),
-            ("db::query", "fn query(pool: &Pool, sql: &str) -> Rows { ... }"),
+            (
+                "db::query",
+                "fn query(pool: &Pool, sql: &str) -> Rows { ... }",
+            ),
         ];
         let tree = build_raptor_tree(&chunks, None, &conn).await.unwrap();
 
@@ -470,7 +471,10 @@ mod tests {
                 node.label
             );
         }
-        assert!(!tree.root_summary.is_empty(), "root summary should be non-empty");
+        assert!(
+            !tree.root_summary.is_empty(),
+            "root summary should be non-empty"
+        );
     }
 
     #[tokio::test]

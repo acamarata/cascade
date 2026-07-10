@@ -56,11 +56,7 @@
 //!
 //! MASTER-CRATES.md — cascade-core: routing::router
 
-use std::{
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use cascade_types::accounts::{Account, AccountFamily, AccountRole, AccountsRegistry};
 use cascade_types::quota_store::QuotaStore;
@@ -251,7 +247,8 @@ impl Router {
             // ── FinalGate: PrimaryT0 Claude (Opus tier) ───────────────────────
             TaskClass::FinalGate => RoutingDecision::Reserved {
                 provider_id: primary_t0_id(&registry),
-                reason: "FinalGate requires PrimaryT0 Claude for highest-quality correctness".into(),
+                reason: "FinalGate requires PrimaryT0 Claude for highest-quality correctness"
+                    .into(),
             },
 
             // ── BulkExec: Pooled Claude → Openai → Opencode ──────────────────
@@ -269,9 +266,7 @@ impl Router {
                         |a| a.id.clone(),
                         &mut tried,
                     ) {
-                        let d = lane_decision(
-                            acc, tier, "BulkExec → Pooled Claude (drain first)",
-                        );
+                        let d = lane_decision(acc, tier, "BulkExec → Pooled Claude (drain first)");
                         self.emit_event(task_class, &d);
                         return d;
                     }
@@ -290,9 +285,7 @@ impl Router {
                                 |a| a.id.clone(),
                                 &mut tried,
                             ) {
-                                let d = lane_decision(
-                                    acc, tier, "BulkExec → external overflow",
-                                );
+                                let d = lane_decision(acc, tier, "BulkExec → external overflow");
                                 self.emit_event(task_class, &d);
                                 return d;
                             }
@@ -313,7 +306,9 @@ impl Router {
                 if sensitivity == ContentSensitivity::Public {
                     if let Some(accs) = &registry {
                         let cands = sorted_by_priority(
-                            accs.accounts.iter().filter(|a| a.family == AccountFamily::Gfp),
+                            accs.accounts
+                                .iter()
+                                .filter(|a| a.family == AccountFamily::Gfp),
                         );
                         if let Some(acc) = selection::spill_select(
                             cands.iter().copied(),
@@ -388,13 +383,21 @@ impl Router {
                     // groups are gated with forced Sensitive classification —
                     // the firewall applies BEFORE the shared spill logic.
                     let groups: [(AccountRole, &str); 2] = [
-                        (AccountRole::Pooled, "Sensitive → Pooled Claude (trusted, drain first)"),
-                        (AccountRole::PrimaryT0, "Sensitive → PrimaryT0 Claude (trusted)"),
+                        (
+                            AccountRole::Pooled,
+                            "Sensitive → Pooled Claude (trusted, drain first)",
+                        ),
+                        (
+                            AccountRole::PrimaryT0,
+                            "Sensitive → PrimaryT0 Claude (trusted)",
+                        ),
                     ];
                     for (role, prefix) in groups {
-                        let cands = sorted_by_priority(accs.accounts.iter().filter(|a| {
-                            a.family == AccountFamily::Claude && a.role == role
-                        }));
+                        let cands = sorted_by_priority(
+                            accs.accounts
+                                .iter()
+                                .filter(|a| a.family == AccountFamily::Claude && a.role == role),
+                        );
                         if let Some(acc) = selection::spill_select(
                             cands.iter().copied(),
                             |a| self.gate_account(a, ContentSensitivity::Sensitive, &quota),
@@ -429,13 +432,18 @@ impl Router {
     fn emit_event(&self, task_class: TaskClass, decision: &RoutingDecision) {
         let Some(obs) = &self.observer else { return };
         let (account_id, reason) = match decision {
-            RoutingDecision::Lane { provider_id, reason } => (provider_id.clone(), reason.clone()),
-            RoutingDecision::Reserved { provider_id, reason } => {
-                (provider_id.clone(), reason.clone())
-            }
-            RoutingDecision::AllExhausted { tried } => {
-                ("AllExhausted".into(), format!("tried: {}", tried.join(", ")))
-            }
+            RoutingDecision::Lane {
+                provider_id,
+                reason,
+            } => (provider_id.clone(), reason.clone()),
+            RoutingDecision::Reserved {
+                provider_id,
+                reason,
+            } => (provider_id.clone(), reason.clone()),
+            RoutingDecision::AllExhausted { tried } => (
+                "AllExhausted".into(),
+                format!("tried: {}", tried.join(", ")),
+            ),
             RoutingDecision::FirewallDeny { reason } => ("FirewallDeny".into(), reason.clone()),
         };
         obs(RoutingEvent {
@@ -458,7 +466,11 @@ impl Router {
         sensitivity: ContentSensitivity,
         quota: &Option<QuotaStore>,
     ) -> Gate {
-        if self.sensitivity_policy.check(sensitivity, &acc.id).is_deny() {
+        if self
+            .sensitivity_policy
+            .check(sensitivity, &acc.id)
+            .is_deny()
+        {
             return Gate::Skip("firewall: sensitive".into());
         }
         if account_is_exhausted(quota, &acc.id) {
@@ -537,7 +549,10 @@ fn account_is_exhausted(quota: &Option<QuotaStore>, account_id: &str) -> bool {
     };
     for entry in &qs.accounts {
         if entry.account_id == account_id || entry.provider == account_id {
-            let pcts = entry.models.values().filter_map(|m| m.pct_used.map(f64::from));
+            let pcts = entry
+                .models
+                .values()
+                .filter_map(|m| m.pct_used.map(f64::from));
             if selection::pcts_saturated(pcts) {
                 return true;
             }
@@ -588,13 +603,49 @@ mod tests {
             schema_version: ACCOUNTS_SCHEMA_VERSION,
             updated_at: "2026-06-27T00:00:00Z".into(),
             accounts: vec![
-                make_account("claude-primary", AccountFamily::Claude, AccountRole::PrimaryT0, 255, true),
-                make_account("claude-pooled-1", AccountFamily::Claude, AccountRole::Pooled, 10, true),
-                make_account("claude-pooled-2", AccountFamily::Claude, AccountRole::Pooled, 20, true),
-                make_account("openai-codex", AccountFamily::Openai, AccountRole::Pooled, 50, true),
+                make_account(
+                    "claude-primary",
+                    AccountFamily::Claude,
+                    AccountRole::PrimaryT0,
+                    255,
+                    true,
+                ),
+                make_account(
+                    "claude-pooled-1",
+                    AccountFamily::Claude,
+                    AccountRole::Pooled,
+                    10,
+                    true,
+                ),
+                make_account(
+                    "claude-pooled-2",
+                    AccountFamily::Claude,
+                    AccountRole::Pooled,
+                    20,
+                    true,
+                ),
+                make_account(
+                    "openai-codex",
+                    AccountFamily::Openai,
+                    AccountRole::Pooled,
+                    50,
+                    true,
+                ),
                 make_account("gfp-pool", AccountFamily::Gfp, AccountRole::Free, 1, true),
-                make_account("google-agy", AccountFamily::Google, AccountRole::Pooled, 30, true),
-                make_account("oc-go", AccountFamily::Opencode, AccountRole::Pooled, 60, true),
+                make_account(
+                    "google-agy",
+                    AccountFamily::Google,
+                    AccountRole::Pooled,
+                    30,
+                    true,
+                ),
+                make_account(
+                    "oc-go",
+                    AccountFamily::Opencode,
+                    AccountRole::Pooled,
+                    60,
+                    true,
+                ),
             ],
             model_matrix: vec![],
         }
@@ -771,7 +822,10 @@ mod tests {
     #[test]
     fn adversarial_review_sensitive_payload_returns_firewall_deny() {
         let (r, _dir) = router_with_registry(small_registry());
-        let d = r.select(TaskClass::AdversarialReview, "my custody arrangement details");
+        let d = r.select(
+            TaskClass::AdversarialReview,
+            "my custody arrangement details",
+        );
         assert!(
             matches!(d, RoutingDecision::FirewallDeny { .. }),
             "AdversarialReview/sensitive must return FirewallDeny, got: {d:?}"
@@ -791,8 +845,11 @@ mod tests {
         models.insert(
             "claude-sonnet".into(),
             ModelUsage {
-                used: 100, limit: Some(100), reset_at: None,
-                pct_used: Some(100.0), cost_usd: None,
+                used: 100,
+                limit: Some(100),
+                reset_at: None,
+                pct_used: Some(100.0),
+                cost_usd: None,
             },
         );
         let qs = QuotaStore {
@@ -882,9 +939,16 @@ mod tests {
         let _ = r.select(TaskClass::BulkExec, "draft a doc");
 
         let events = captured.lock().unwrap();
-        assert_eq!(events.len(), 1, "observer must receive exactly one event per select()");
+        assert_eq!(
+            events.len(),
+            1,
+            "observer must receive exactly one event per select()"
+        );
         assert_eq!(events[0].task_class, "BulkExec");
-        assert!(!events[0].account_id.is_empty(), "account_id must be populated");
+        assert!(
+            !events[0].account_id.is_empty(),
+            "account_id must be populated"
+        );
     }
 
     #[test]
@@ -924,7 +988,10 @@ mod tests {
         let r = r.with_observer(observer);
 
         // Sensitive payload + AdversarialReview → FirewallDeny.
-        let _ = r.select(TaskClass::AdversarialReview, "my custody arrangement details");
+        let _ = r.select(
+            TaskClass::AdversarialReview,
+            "my custody arrangement details",
+        );
 
         let events = captured.lock().unwrap();
         assert_eq!(events.len(), 1);

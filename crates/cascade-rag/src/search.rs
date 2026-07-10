@@ -935,9 +935,8 @@ pub fn route_query(query: &str) -> QueryKind {
     // Check for question-word prefix (case-insensitive).
     let lower = q.to_ascii_lowercase();
     let question_words = [
-        "what ", "when ", "where ", "who ", "how ", "why ", "which ",
-        "is ", "are ", "can ", "does ", "do ", "should ", "would ",
-        "what's", "how's", "why's",
+        "what ", "when ", "where ", "who ", "how ", "why ", "which ", "is ", "are ", "can ",
+        "does ", "do ", "should ", "would ", "what's", "how's", "why's",
     ];
     for qw in &question_words {
         if lower.starts_with(qw) {
@@ -1228,7 +1227,10 @@ mod tests {
 
     #[test]
     fn route_four_tokens_stays_keyword_short() {
-        assert_eq!(route_query("cascade rag rrf sparse"), QueryKind::KeywordShort);
+        assert_eq!(
+            route_query("cascade rag rrf sparse"),
+            QueryKind::KeywordShort
+        );
     }
 
     #[test]
@@ -1272,7 +1274,10 @@ mod tests {
 
     #[async_trait::async_trait]
     impl HydeLlm for MockHydeLlm {
-        async fn generate_hypothetical(&self, _query: &str) -> cascade_types::error::Result<String> {
+        async fn generate_hypothetical(
+            &self,
+            _query: &str,
+        ) -> cascade_types::error::Result<String> {
             Ok(self.response.clone())
         }
     }

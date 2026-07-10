@@ -146,14 +146,15 @@ fn run_status() -> Result<()> {
             println!("RAM Guardian status");
             println!("  free:              {:.1}%", state.free_pct);
             println!("  status:            {}", state.status.label());
-            println!(
-                "  last sweep:        {}",
-                format_relative(state.last_swept)
-            );
+            println!("  last sweep:        {}", format_relative(state.last_swept));
             println!("  strays reaped:     {}", state.strays_killed_total);
             println!(
                 "  pause flag:        {}",
-                if state.pause { "SET (critical)" } else { "clear" }
+                if state.pause {
+                    "SET (critical)"
+                } else {
+                    "clear"
+                }
             );
         }
         None => {
@@ -186,7 +187,9 @@ fn format_relative(ts: u64) -> String {
 fn run_sweep_cmd() -> Result<()> {
     let dry_run = std::env::var_os(DISABLE_ENV).is_some();
     if dry_run {
-        println!("(RAM_GUARDIAN_DISABLE set — running in log-only mode, no processes will be killed)");
+        println!(
+            "(RAM_GUARDIAN_DISABLE set — running in log-only mode, no processes will be killed)"
+        );
     }
 
     let cascade_dir = global_cascade_dir();
@@ -518,10 +521,7 @@ mod tests {
     #[test]
     fn parse_etime_variants() {
         assert_eq!(parse_etime("05:12"), Some(Duration::from_secs(312)));
-        assert_eq!(
-            parse_etime("01:02:26"),
-            Some(Duration::from_secs(3746))
-        );
+        assert_eq!(parse_etime("01:02:26"), Some(Duration::from_secs(3746)));
         assert_eq!(
             parse_etime("2-03:04:05"),
             Some(Duration::from_secs(2 * 86_400 + 3 * 3600 + 4 * 60 + 5))

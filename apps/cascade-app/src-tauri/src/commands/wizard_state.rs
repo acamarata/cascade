@@ -106,7 +106,11 @@ pub async fn wizard_state_write(
     let dest = wizard_state_path();
     let tmp = dest.with_extension("json.tmp");
 
-    debug!("wizard_state_write: writing {} bytes to {:?}", content.len(), dest);
+    debug!(
+        "wizard_state_write: writing {} bytes to {:?}",
+        content.len(),
+        dest
+    );
 
     fs::create_dir_all(&dir).map_err(|e| {
         CascadeError::Custom(format!(
@@ -115,9 +119,7 @@ pub async fn wizard_state_write(
     })?;
 
     fs::write(&tmp, &content).map_err(|e| {
-        CascadeError::Custom(format!(
-            "wizard_state_write: cannot write tmp {tmp:?}: {e}"
-        ))
+        CascadeError::Custom(format!("wizard_state_write: cannot write tmp {tmp:?}: {e}"))
     })?;
 
     fs::rename(&tmp, &dest).map_err(|e| {
@@ -180,9 +182,7 @@ pub async fn wizard_dry_run_log(
         .append(true)
         .open(&log_path)
         .map_err(|e| {
-            CascadeError::Custom(format!(
-                "wizard_dry_run_log: cannot open {log_path:?}: {e}"
-            ))
+            CascadeError::Custom(format!("wizard_dry_run_log: cannot open {log_path:?}: {e}"))
         })?;
 
     file.write_all(line.as_bytes()).map_err(|e| {

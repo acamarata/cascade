@@ -107,11 +107,7 @@ pub fn discover_source_tree(source_root: &Path) -> Result<Vec<DiscoveredFile>> {
 }
 
 /// Recursive directory walker (skips symlinks that escape the root).
-fn walk_dir(
-    root: &Path,
-    dir: &Path,
-    files: &mut Vec<DiscoveredFile>,
-) -> Result<()> {
+fn walk_dir(root: &Path, dir: &Path, files: &mut Vec<DiscoveredFile>) -> Result<()> {
     let entries = std::fs::read_dir(dir).map_err(|e| CascadeError::Io {
         path: dir.to_path_buf(),
         operation: "read directory",
@@ -130,14 +126,23 @@ fn walk_dir(
         // session transcripts + per-project data under `projects/` (and other
         // runtime dirs) that are NOT importable global instruction content;
         // recursing into them makes import hang on tens of thousands of files.
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         const SKIP_DIRS: &[&str] = &[
-            ".git", ".DS_Store", "node_modules", "target",
-            "projects", "todos", "shell-snapshots", "statsig", "ide",
-            ".cache", "temp", "tmp", "logs", "backups", "downloads",
+            ".git",
+            ".DS_Store",
+            "node_modules",
+            "target",
+            "projects",
+            "todos",
+            "shell-snapshots",
+            "statsig",
+            "ide",
+            ".cache",
+            "temp",
+            "tmp",
+            "logs",
+            "backups",
+            "downloads",
         ];
         if SKIP_DIRS.contains(&name) {
             continue;
@@ -167,10 +172,7 @@ fn walk_dir(
             if is_noise_file(&path, name) {
                 continue;
             }
-            let relative_path = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_path_buf();
+            let relative_path = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
             let discovered = classify_file(root, &path, &relative_path);
             files.push(discovered);
         }
@@ -186,9 +188,9 @@ fn walk_dir(
 /// instruction content (CLAUDE.md, rules, references, memory, etc.).
 fn is_noise_file(path: &Path, name: &str) -> bool {
     const SKIP_EXT: &[&str] = &[
-        "jsonl", "log", "lock", "tmp", "bak", "zip", "gz", "tgz", "tar", "png",
-        "jpg", "jpeg", "gif", "webp", "ico", "icns", "pdf", "wasm", "bin", "db",
-        "sqlite", "sqlite3", "so", "dylib", "node",
+        "jsonl", "log", "lock", "tmp", "bak", "zip", "gz", "tgz", "tar", "png", "jpg", "jpeg",
+        "gif", "webp", "ico", "icns", "pdf", "wasm", "bin", "db", "sqlite", "sqlite3", "so",
+        "dylib", "node",
     ];
     if let Some(ext) = name.rsplit('.').next() {
         if SKIP_EXT.contains(&ext.to_ascii_lowercase().as_str()) {
@@ -232,10 +234,7 @@ fn classify_kind(relative: &Path, content: &str) -> SourceKind {
         .filter_map(|c| c.as_os_str().to_str())
         .collect();
 
-    let file_name = relative
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // Root-level instruction files.
     if parts.len() == 1 {
@@ -314,11 +313,7 @@ fn classify_by_content(file_name: &str, content: &str) -> SourceKind {
 }
 
 /// Parse `@import` directives and `-> ref` pointer lines from file content.
-fn parse_references(
-    root: &Path,
-    file_path: &Path,
-    content: &str,
-) -> (Vec<PathBuf>, Vec<String>) {
+fn parse_references(root: &Path, file_path: &Path, content: &str) -> (Vec<PathBuf>, Vec<String>) {
     let base = file_path.parent().unwrap_or(root);
     let mut imports = Vec::new();
     let mut pointers = Vec::new();
@@ -340,11 +335,7 @@ fn parse_references(
         // Pointer references: `-> path` or `-> path (...)`.
         if let Some(rest) = trimmed.strip_prefix("-> ") {
             // Extract the path portion (up to first space or parenthesis).
-            let path_part = rest
-                .split([' ', '(', '\n'])
-                .next()
-                .unwrap_or("")
-                .trim();
+            let path_part = rest.split([' ', '(', '\n']).next().unwrap_or("").trim();
             if !path_part.is_empty() {
                 pointers.push(path_part.to_string());
             }
@@ -377,7 +368,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         make_file(tmp.path(), "CLAUDE.md", "# Global Instructions\n");
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path == *"CLAUDE.md").unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path == *"CLAUDE.md")
+            .unwrap();
         assert_eq!(f.kind, SourceKind::InstructionRoot);
     }
 
@@ -385,9 +379,16 @@ mod tests {
     fn classifies_rules_dir() {
         let tmp = TempDir::new().unwrap();
         let rules_dir = make_dir(tmp.path(), "rules");
-        make_file(&rules_dir, "destructive-deny-list.md", "# Hard Rule\n## Deny patterns\n");
+        make_file(
+            &rules_dir,
+            "destructive-deny-list.md",
+            "# Hard Rule\n## Deny patterns\n",
+        );
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path.starts_with("rules")).unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path.starts_with("rules"))
+            .unwrap();
         assert_eq!(f.kind, SourceKind::AlwaysLoadedRule);
     }
 
@@ -397,7 +398,10 @@ mod tests {
         let std_dir = make_dir(tmp.path(), "standards");
         make_file(&std_dir, "rust.md", "# Rust Standard\n");
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path.starts_with("standards")).unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path.starts_with("standards"))
+            .unwrap();
         assert_eq!(f.kind, SourceKind::Standard);
     }
 
@@ -407,7 +411,10 @@ mod tests {
         let t_dir = make_dir(tmp.path(), "templates");
         make_file(&t_dir, "PPI-template.md", "# PPI Template\n");
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path.starts_with("templates")).unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path.starts_with("templates"))
+            .unwrap();
         assert_eq!(f.kind, SourceKind::Template);
     }
 
@@ -417,7 +424,10 @@ mod tests {
         let s_dir = make_dir(tmp.path(), "scripts");
         make_file(&s_dir, "claude-recall", "#!/usr/bin/env python3\n");
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path.starts_with("scripts")).unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path.starts_with("scripts"))
+            .unwrap();
         assert_eq!(f.kind, SourceKind::Script);
     }
 
@@ -425,9 +435,16 @@ mod tests {
     fn detects_at_imports() {
         let tmp = TempDir::new().unwrap();
         make_file(tmp.path(), "RTK.md", "# RTK\n");
-        make_file(tmp.path(), "CLAUDE.md", "# Global\n@RTK.md\n-> some/path.md\n");
+        make_file(
+            tmp.path(),
+            "CLAUDE.md",
+            "# Global\n@RTK.md\n-> some/path.md\n",
+        );
         let files = discover_source_tree(tmp.path()).unwrap();
-        let f = files.iter().find(|f| f.relative_path == *"CLAUDE.md").unwrap();
+        let f = files
+            .iter()
+            .find(|f| f.relative_path == *"CLAUDE.md")
+            .unwrap();
         assert!(!f.imports.is_empty(), "should detect @RTK.md import");
         assert!(!f.pointers.is_empty(), "should detect -> pointer");
     }

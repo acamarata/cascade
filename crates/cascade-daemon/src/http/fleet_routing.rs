@@ -26,7 +26,11 @@ use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
 use axum::http::{header::AUTHORIZATION, StatusCode};
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use cascade_core::routing::RoutingEvent;
 use subtle::ConstantTimeEq;
 
@@ -181,7 +185,11 @@ mod tests {
         }
 
         let guard = ring.read().unwrap();
-        assert_eq!(guard.len(), ROUTING_RING_CAP, "ring must cap at {ROUTING_RING_CAP}");
+        assert_eq!(
+            guard.len(),
+            ROUTING_RING_CAP,
+            "ring must cap at {ROUTING_RING_CAP}"
+        );
 
         // Oldest should be evicted; first entry should be acct-10.
         assert_eq!(guard.front().unwrap().account_id, "acct-10");

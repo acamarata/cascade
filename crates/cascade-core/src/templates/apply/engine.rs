@@ -1,12 +1,12 @@
 //! [`TemplateEngine`] — stateless engine for applying templates to `CASCADE.md`.
 
+use super::super::registry::TemplateRegistry;
+use super::super::section_parser::{parse_sections, Section};
 use super::merge::{atomic_write, build_merged_content, replace_section_in_content};
 use super::options::ApplyOptions;
 use super::path::canonical_path;
 use super::stamp::{extract_stamps, is_stamped};
 use super::upgrade_helpers::{add_deprecation_comment, replace_or_append_stamp};
-use super::super::registry::TemplateRegistry;
-use super::super::section_parser::{parse_sections, Section};
 use cascade_types::{
     error::{CascadeError, Result},
     ApplyResult, DiffResult, TemplateRecord, UpgradeResult,

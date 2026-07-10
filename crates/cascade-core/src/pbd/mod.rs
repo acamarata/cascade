@@ -35,12 +35,11 @@ pub use active_work::{
     build_active_work, build_active_work_with_tasks, ActiveTaskEntry, ActiveTicketEntry,
     ActiveWorkBlock,
 };
+pub use external_checks::{BuildCheck, CheckResult, HealthCheck, RealExternalChecks};
 pub use masters::{
     index_pbd, index_repo, MasterEntity, MasterList, MasterPhaseEntry, MasterPhases,
     MasterTicketEntry, MasterTickets,
 };
-pub use external_checks::{BuildCheck, CheckResult, HealthCheck, RealExternalChecks};
-pub use security_checks::{SecurityChecks, WithSecurity};
 pub use protocol::{
     run_eoe, run_eop, run_eos, run_eost, run_eot, run_eow, ExternalChecks, NoExternalChecks,
     ProtocolResult,
@@ -49,5 +48,6 @@ pub use schema::{
     CurrentPointers, Epic, EpicStatus, EventLevel, IndexEntry, PbdEvent, PbdIndex, Phase,
     PhaseStatus, Sprint, SprintStatus, Step, StepStatus, Ticket, TicketStatus, Wave, WaveStatus,
 };
+pub use security_checks::{SecurityChecks, WithSecurity};
 pub use store::{locate_phases_root, resolve_phases_root, PbdStore};
 pub use validate::{validate, Issue, IssueLevel, ValidationResult};

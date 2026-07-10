@@ -130,26 +130,70 @@ pub fn classify_topic_rule_based(text: &str) -> Vec<Tag> {
 fn detect_primary(lower: &str) -> Tag {
     // Decision signals
     let decision_signals = [
-        "decided", "chose", "decision", "picked", "selected", "opted",
-        "rationale", "trade-off", "tradeoff", "we will", "we won't",
-        "going with", "replaced", "switched",
+        "decided",
+        "chose",
+        "decision",
+        "picked",
+        "selected",
+        "opted",
+        "rationale",
+        "trade-off",
+        "tradeoff",
+        "we will",
+        "we won't",
+        "going with",
+        "replaced",
+        "switched",
     ];
     // Lesson signals
     let lesson_signals = [
-        "learned", "lesson", "gotcha", "pitfall", "mistake", "bug",
-        "never", "avoid", "don't", "watch out", "warning", "issue",
-        "discovered", "found that", "turns out", "broke", "failed",
+        "learned",
+        "lesson",
+        "gotcha",
+        "pitfall",
+        "mistake",
+        "bug",
+        "never",
+        "avoid",
+        "don't",
+        "watch out",
+        "warning",
+        "issue",
+        "discovered",
+        "found that",
+        "turns out",
+        "broke",
+        "failed",
     ];
     // Pattern signals
     let pattern_signals = [
-        "pattern", "convention", "always", "standard", "idiom",
-        "approach", "best practice", "prefer", "use the", "whenever",
-        "every time", "template", "boilerplate",
+        "pattern",
+        "convention",
+        "always",
+        "standard",
+        "idiom",
+        "approach",
+        "best practice",
+        "prefer",
+        "use the",
+        "whenever",
+        "every time",
+        "template",
+        "boilerplate",
     ];
 
-    let decision_score = decision_signals.iter().filter(|&&kw| lower.contains(kw)).count();
-    let lesson_score = lesson_signals.iter().filter(|&&kw| lower.contains(kw)).count();
-    let pattern_score = pattern_signals.iter().filter(|&&kw| lower.contains(kw)).count();
+    let decision_score = decision_signals
+        .iter()
+        .filter(|&&kw| lower.contains(kw))
+        .count();
+    let lesson_score = lesson_signals
+        .iter()
+        .filter(|&&kw| lower.contains(kw))
+        .count();
+    let pattern_score = pattern_signals
+        .iter()
+        .filter(|&&kw| lower.contains(kw))
+        .count();
 
     if decision_score >= lesson_score && decision_score >= pattern_score {
         Tag::Decision
@@ -165,39 +209,109 @@ fn detect_domain(lower: &str) -> Vec<Tag> {
 
     let checks: &[(&[&str], Tag)] = &[
         (
-            &["security", "credential", "secret", "auth", "token", "keychain", "permission", "firewall"],
+            &[
+                "security",
+                "credential",
+                "secret",
+                "auth",
+                "token",
+                "keychain",
+                "permission",
+                "firewall",
+            ],
             Tag::Security,
         ),
         (
-            &["performance", "latency", "throughput", "slow", "fast", "bench", "memory usage", "allocation"],
+            &[
+                "performance",
+                "latency",
+                "throughput",
+                "slow",
+                "fast",
+                "bench",
+                "memory usage",
+                "allocation",
+            ],
             Tag::Performance,
         ),
         (
-            &["api", "endpoint", "route", "http", "rest", "graphql", "request", "response", "payload"],
+            &[
+                "api", "endpoint", "route", "http", "rest", "graphql", "request", "response",
+                "payload",
+            ],
             Tag::Api,
         ),
         (
-            &["test", "ci", "coverage", "unit test", "integration test", "assert", "mock", "stub", "fixture"],
+            &[
+                "test",
+                "ci",
+                "coverage",
+                "unit test",
+                "integration test",
+                "assert",
+                "mock",
+                "stub",
+                "fixture",
+            ],
             Tag::Testing,
         ),
         (
-            &["docs", "documentation", "readme", "wiki", "comment", "docstring", "spec", "changelog"],
+            &[
+                "docs",
+                "documentation",
+                "readme",
+                "wiki",
+                "comment",
+                "docstring",
+                "spec",
+                "changelog",
+            ],
             Tag::Docs,
         ),
         (
-            &["dependency", "dependencies", "crate", "package", "semver", "lockfile", "cargo.toml"],
+            &[
+                "dependency",
+                "dependencies",
+                "crate",
+                "package",
+                "semver",
+                "lockfile",
+                "cargo.toml",
+            ],
             Tag::Dependencies,
         ),
         (
-            &["config", "configuration", "setting", "env", "environment", "flag", "option", ".env"],
+            &[
+                "config",
+                "configuration",
+                "setting",
+                "env",
+                "environment",
+                "flag",
+                "option",
+                ".env",
+            ],
             Tag::Config,
         ),
         (
-            &["error", "errors", "result", "unwrap", "panic", "recover", "fault", "retry", "fallback"],
+            &[
+                "error", "errors", "result", "unwrap", "panic", "recover", "fault", "retry",
+                "fallback",
+            ],
             Tag::Errors,
         ),
         (
-            &["schema", "model", "migration", "table", "column", "database", "db", "sqlite", "relation"],
+            &[
+                "schema",
+                "model",
+                "migration",
+                "table",
+                "column",
+                "database",
+                "db",
+                "sqlite",
+                "relation",
+            ],
             Tag::DataModel,
         ),
     ];
@@ -346,25 +460,40 @@ mod tests {
     #[test]
     fn rule_based_decision() {
         let tags = classify_topic_rule_based("decided to use sqlite instead of postgres");
-        assert!(tags.contains(&Tag::Decision), "expected Decision, got {:?}", tags);
+        assert!(
+            tags.contains(&Tag::Decision),
+            "expected Decision, got {:?}",
+            tags
+        );
     }
 
     #[test]
     fn rule_based_lesson() {
         let tags = classify_topic_rule_based("learned that unwrap in lib code causes panics");
-        assert!(tags.contains(&Tag::Lesson), "expected Lesson, got {:?}", tags);
+        assert!(
+            tags.contains(&Tag::Lesson),
+            "expected Lesson, got {:?}",
+            tags
+        );
     }
 
     #[test]
     fn rule_based_pattern() {
         let tags = classify_topic_rule_based("always use the builder pattern for config structs");
-        assert!(tags.contains(&Tag::Pattern), "expected Pattern, got {:?}", tags);
+        assert!(
+            tags.contains(&Tag::Pattern),
+            "expected Pattern, got {:?}",
+            tags
+        );
     }
 
     #[test]
     fn rule_based_security_domain() {
         let tags = classify_topic_rule_based("decided to store tokens in the OS keychain");
-        assert!(tags.contains(&Tag::Security), "expected Security domain tag");
+        assert!(
+            tags.contains(&Tag::Security),
+            "expected Security domain tag"
+        );
     }
 
     #[test]
@@ -470,7 +599,10 @@ mod tests {
 
     #[test]
     fn gfp_gate_allows_public_text() {
-        assert!(gfp_may_process("always use the builder idiom for structs", "gfp"));
+        assert!(gfp_may_process(
+            "always use the builder idiom for structs",
+            "gfp"
+        ));
     }
 
     /// End-to-end: gfp_classify must return None for sensitive text without

@@ -31,16 +31,16 @@ pub mod core;
 pub mod daemon;
 /// RAG search commands wired to the daemon rag.search endpoint.
 pub mod rag;
-/// Wizard state types and checkpoint persistence / audit-log commands.
-pub mod wizard;
 /// AI provider connection, local model download, daemon install.
 pub mod setup;
+/// Wizard state types and checkpoint persistence / audit-log commands.
+pub mod wizard;
 
 // Sub-modules added by W-02 (T-P3-E03-09 scaffold):
-pub mod scanner;
-pub mod symlinks;
 /// Encrypted personal vault commands (rag-16-ui).
 pub mod personal_vault;
+pub mod scanner;
+pub mod symlinks;
 // Sub-module added by W-03 (T-P3-E03-15 scaffold):
 pub mod archive;
 // Sub-module added by W-04 (T-P3-E03-23 scaffold):
@@ -78,20 +78,43 @@ pub mod wizard_state;
 
 // core
 pub use core::{
-    cascade_config_get, cascade_config_set, cascade_inbox_list, cascade_inbox_send,
-    cascade_memory_read, cascade_memory_write, cascade_resolve, cascade_search, cascade_status,
+    cascade_config_get,
+    cascade_config_set,
+    cascade_inbox_list,
+    cascade_inbox_send,
+    cascade_memory_read,
+    cascade_memory_write,
+    cascade_resolve,
+    cascade_search,
+    cascade_status,
     // type re-exports
-    CascadeConfigGetResult, CascadeConfigSetResult, CascadeInboxSummaryResult,
-    CascadeMemoryReadResult, CascadeMemoryWriteResult, CascadeResolveResult, CascadeSearchResult,
-    CascadeStatusResult, InboxSendAck, RagResult,
+    CascadeConfigGetResult,
+    CascadeConfigSetResult,
+    CascadeInboxSummaryResult,
+    CascadeMemoryReadResult,
+    CascadeMemoryWriteResult,
+    CascadeResolveResult,
+    CascadeSearchResult,
+    CascadeStatusResult,
+    InboxSendAck,
+    RagResult,
 };
 
 // daemon
 pub use daemon::{
-    cascade_close_window, cascade_focus_window, cascade_open_window, get_daemon_status,
-    load_cascade_doc, save_cascade_doc, start_daemon, stop_daemon, validate_cascade_doc,
+    cascade_close_window,
+    cascade_focus_window,
+    cascade_open_window,
+    get_daemon_status,
+    load_cascade_doc,
+    save_cascade_doc,
+    start_daemon,
+    stop_daemon,
+    validate_cascade_doc,
     // types
-    CascadeDocument, DaemonStatus, ValidationResult,
+    CascadeDocument,
+    DaemonStatus,
+    ValidationResult,
 };
 
 // rag
@@ -99,15 +122,30 @@ pub use rag::rag_query;
 
 // wizard
 pub use wizard::{
-    check_wizard_status, wizard_check_audit_format, wizard_clear_checkpoint,
-    wizard_load_checkpoint, wizard_rotate_audit_log, wizard_save_checkpoint,
+    check_wizard_status,
+    wizard_check_audit_format,
+    wizard_clear_checkpoint,
+    wizard_load_checkpoint,
+    wizard_rotate_audit_log,
+    wizard_save_checkpoint,
     // types
-    AuditCheckResult, MergeResult, ScanResult, WizardCheckpoint, WizardStatus,
+    AuditCheckResult,
+    MergeResult,
+    ScanResult,
+    WizardCheckpoint,
+    WizardStatus,
 };
 
 // setup
 pub use setup::{
-    detect_gemini_pool, download_local_model, install_daemon, provider_connect, wizard_mark_complete,
+    detect_gemini_pool,
+    download_local_model,
+    install_daemon,
+    provider_connect,
+    wizard_mark_complete,
     // types
-    DaemonInstallResult, GeminiPoolDetectResult, LocalModelDownloadResult, ProviderConnectResult,
+    DaemonInstallResult,
+    GeminiPoolDetectResult,
+    LocalModelDownloadResult,
+    ProviderConnectResult,
 };

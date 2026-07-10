@@ -471,8 +471,7 @@ pub(crate) fn redact_gemini_key(message: impl AsRef<str>) -> String {
 
     while let Some(relative_start) = message[cursor..].find("key=") {
         let start = cursor + relative_start;
-        let key_is_query_param =
-            start == 0 || matches!(message.as_bytes()[start - 1], b'?' | b'&');
+        let key_is_query_param = start == 0 || matches!(message.as_bytes()[start - 1], b'?' | b'&');
         if !key_is_query_param {
             redacted.push_str(&message[cursor..start + 4]);
             cursor = start + 4;
@@ -486,17 +485,7 @@ pub(crate) fn redact_gemini_key(message: impl AsRef<str>) -> String {
         for (offset, ch) in message[end..].char_indices() {
             if matches!(
                 ch,
-                '&' | '#'
-                    | ' '
-                    | '\t'
-                    | '\n'
-                    | '\r'
-                    | '"'
-                    | '\''
-                    | ')'
-                    | ']'
-                    | '}'
-                    | '>'
+                '&' | '#' | ' ' | '\t' | '\n' | '\r' | '"' | '\'' | ')' | ']' | '}' | '>'
             ) {
                 break;
             }

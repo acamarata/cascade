@@ -85,10 +85,7 @@ pub fn extract_source_facts(source_files: &[(&str, &str)]) -> Vec<AtomicFact> {
 ///
 /// Normalizes both sides: trim whitespace, lowercase headings for comparison.
 /// Returns a [`RoundTripResult`] with the verdict and missing fact list.
-pub fn verify_round_trip(
-    source_facts: &[AtomicFact],
-    resolved_text: &str,
-) -> RoundTripResult {
+pub fn verify_round_trip(source_facts: &[AtomicFact], resolved_text: &str) -> RoundTripResult {
     if source_facts.is_empty() {
         return RoundTripResult {
             passed: true,
@@ -188,9 +185,7 @@ mod tests {
 
     #[test]
     fn round_trip_passes_when_all_facts_present() {
-        let source = vec![
-            ("CLAUDE.md", "## Operating Posture\n## Delegation\n"),
-        ];
+        let source = vec![("CLAUDE.md", "## Operating Posture\n## Delegation\n")];
         let facts = extract_source_facts(&source);
         let resolved = "## Operating Posture\n## Delegation\n";
         let result = verify_round_trip(&facts, resolved);
@@ -200,15 +195,19 @@ mod tests {
 
     #[test]
     fn round_trip_fails_when_fact_missing() {
-        let source = vec![
-            ("CLAUDE.md", "## Operating Posture\n## Delegation\n## Missing Section\n"),
-        ];
+        let source = vec![(
+            "CLAUDE.md",
+            "## Operating Posture\n## Delegation\n## Missing Section\n",
+        )];
         let facts = extract_source_facts(&source);
         // Resolved text lacks "Missing Section".
         let resolved = "## Operating Posture\n## Delegation\n";
         let result = verify_round_trip(&facts, resolved);
         assert!(!result.passed);
-        assert!(result.missing.iter().any(|f| f.id.contains("Missing Section")));
+        assert!(result
+            .missing
+            .iter()
+            .any(|f| f.id.contains("Missing Section")));
     }
 
     #[test]
@@ -234,7 +233,9 @@ mod tests {
         ];
         let facts = extract_source_facts(&source);
         assert!(
-            !facts.iter().any(|f| f.source_file == "scripts/claude-recall"),
+            !facts
+                .iter()
+                .any(|f| f.source_file == "scripts/claude-recall"),
             "script files must not contribute facts"
         );
         assert!(facts.iter().any(|f| f.source_file == "CLAUDE.md"));

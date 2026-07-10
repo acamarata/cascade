@@ -160,12 +160,22 @@ enum Action {
     // LaunchAgent actions are constructed only on macOS; other targets never build
     // them but still reference them in the `describe`/`apply` match arms.
     #[allow(dead_code)]
-    UnloadLaunchAgent { plist: PathBuf },
+    UnloadLaunchAgent {
+        plist: PathBuf,
+    },
     #[allow(dead_code)]
-    RemoveLaunchAgentPlist { plist: PathBuf },
-    RemoveSymlink { path: PathBuf },
-    RestoreArchive { tool_id: String },
-    RemoveCascadeDir { dir: PathBuf },
+    RemoveLaunchAgentPlist {
+        plist: PathBuf,
+    },
+    RemoveSymlink {
+        path: PathBuf,
+    },
+    RestoreArchive {
+        tool_id: String,
+    },
+    RemoveCascadeDir {
+        dir: PathBuf,
+    },
 }
 
 impl Action {
@@ -596,7 +606,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn keep_cascade_retains_dir() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home_tmp = fake_home();
         let home = home_tmp.path();
         unsafe { std::env::set_var("HOME", home) };
@@ -627,7 +639,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn full_restores_then_removes() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home_tmp = fake_home();
         let home = home_tmp.path();
         unsafe { std::env::set_var("HOME", home) };
@@ -662,7 +676,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn foreign_symlink_untouched() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home_tmp = fake_home();
         let home = home_tmp.path();
         unsafe { std::env::set_var("HOME", home) };
@@ -687,7 +703,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn dry_run_makes_no_changes() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home_tmp = fake_home();
         let home = home_tmp.path();
         unsafe { std::env::set_var("HOME", home) };
@@ -723,7 +741,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn full_partial_failure_keeps_cascade_dir() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home_tmp = fake_home();
         let home = home_tmp.path();
         unsafe { std::env::set_var("HOME", home) };

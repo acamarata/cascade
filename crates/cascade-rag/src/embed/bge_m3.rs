@@ -355,10 +355,13 @@ impl EmbedModel for BgeM3Embedder {
             let mut miss_texts: Vec<String> = Vec::new();
 
             {
-                let cache = self.embed_cache.lock().map_err(|_| EmbedError::InferenceFailed {
-                    model_id: MODEL_ID.into(),
-                    detail: "embed_cache mutex poisoned".into(),
-                })?;
+                let cache = self
+                    .embed_cache
+                    .lock()
+                    .map_err(|_| EmbedError::InferenceFailed {
+                        model_id: MODEL_ID.into(),
+                        detail: "embed_cache mutex poisoned".into(),
+                    })?;
                 for (i, t) in texts.iter().enumerate() {
                     let key = blake3_hex(t);
                     if let Some(cached) = cache.get(&key) {
@@ -380,10 +383,13 @@ impl EmbedModel for BgeM3Embedder {
                         detail: format!("{e}"),
                     })?;
 
-                let mut cache = self.embed_cache.lock().map_err(|_| EmbedError::InferenceFailed {
-                    model_id: MODEL_ID.into(),
-                    detail: "embed_cache mutex poisoned on write".into(),
-                })?;
+                let mut cache =
+                    self.embed_cache
+                        .lock()
+                        .map_err(|_| EmbedError::InferenceFailed {
+                            model_id: MODEL_ID.into(),
+                            detail: "embed_cache mutex poisoned on write".into(),
+                        })?;
 
                 for (offset, &orig_idx) in miss_indices.iter().enumerate() {
                     let v = &inferred[offset];
@@ -486,7 +492,10 @@ impl EmbeddingProvider for BgeM3Embedder {
                         if let Some(dim) = truncate {
                             values = truncate_and_normalize(values, dim);
                         }
-                        Embedding { values, token_count: None }
+                        Embedding {
+                            values,
+                            token_count: None,
+                        }
                     })
                     .collect());
             }
@@ -501,7 +510,10 @@ impl EmbeddingProvider for BgeM3Embedder {
                     if let Some(dim) = truncate {
                         values = truncate_and_normalize(values, dim);
                     }
-                    Embedding { values, token_count: None }
+                    Embedding {
+                        values,
+                        token_count: None,
+                    }
                 })
                 .collect());
         }
@@ -632,7 +644,10 @@ mod tests {
         let mut v = vec![3.0_f32, 4.0, 0.0];
         l2_normalize(&mut v);
         let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-6, "must produce unit-norm, got {norm}");
+        assert!(
+            (norm - 1.0).abs() < 1e-6,
+            "must produce unit-norm, got {norm}"
+        );
     }
 
     /// l2_normalize of zero vector must leave it unchanged (no NaN/inf).
@@ -640,7 +655,10 @@ mod tests {
     fn l2_normalize_zero_vector_is_safe() {
         let mut v = vec![0.0_f32, 0.0, 0.0];
         l2_normalize(&mut v);
-        assert!(v.iter().all(|x| x.is_finite()), "zero vector must remain finite");
+        assert!(
+            v.iter().all(|x| x.is_finite()),
+            "zero vector must remain finite"
+        );
     }
 
     /// truncate_and_normalize must shorten the vector and produce a unit-norm result.
@@ -652,7 +670,10 @@ mod tests {
         let out = truncate_and_normalize(input, 256);
         assert_eq!(out.len(), 256, "truncated to 256 dims");
         let norm: f32 = out.iter().map(|x| x * x).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-5, "truncated vector must be unit-norm, got {norm}");
+        assert!(
+            (norm - 1.0).abs() < 1e-5,
+            "truncated vector must be unit-norm, got {norm}"
+        );
     }
 
     /// truncate_and_normalize with dim >= len must not shrink the vector.
@@ -660,7 +681,11 @@ mod tests {
     fn truncate_dim_no_op_when_dim_ge_len() {
         let input = vec![1.0_f32, 0.0, 0.0];
         let out = truncate_and_normalize(input, 10);
-        assert_eq!(out.len(), 3, "must not grow vector beyond its original length");
+        assert_eq!(
+            out.len(),
+            3,
+            "must not grow vector beyond its original length"
+        );
     }
 
     /// Query instruction prefix must differ from document instruction prefix.
@@ -712,10 +737,19 @@ mod tests {
             .await
             .expect("model init");
         let text = &["cascade semantic retrieval"];
-        let doc_opts = EmbedOpts { usage: EmbedUsage::Document, ..Default::default() };
-        let query_opts = EmbedOpts { usage: EmbedUsage::Query, ..Default::default() };
+        let doc_opts = EmbedOpts {
+            usage: EmbedUsage::Document,
+            ..Default::default()
+        };
+        let query_opts = EmbedOpts {
+            usage: EmbedUsage::Query,
+            ..Default::default()
+        };
         let doc_emb = embedder.embed(text, &doc_opts).await.expect("doc embed");
-        let query_emb = embedder.embed(text, &query_opts).await.expect("query embed");
+        let query_emb = embedder
+            .embed(text, &query_opts)
+            .await
+            .expect("query embed");
         assert_ne!(
             doc_emb[0].values, query_emb[0].values,
             "query and document embeddings must differ due to instruction prefix"
@@ -733,7 +767,9 @@ mod tests {
             .expect("model init");
         let text = "cache hit test sentence";
         let v1 = embedder.embed_dense(&[text]).expect("first embed");
-        let v2 = embedder.embed_dense(&[text]).expect("second embed (cache hit)");
+        let v2 = embedder
+            .embed_dense(&[text])
+            .expect("second embed (cache hit)");
         assert_eq!(v1, v2, "cache hit must produce identical vectors");
     }
 
@@ -758,7 +794,10 @@ mod tests {
             .expect("truncated embed");
         assert_eq!(emb[0].values.len(), 256, "must be 256-d after truncation");
         let norm: f32 = emb[0].values.iter().map(|x| x * x).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-4, "truncated vector must be unit-norm, got {norm}");
+        assert!(
+            (norm - 1.0).abs() < 1e-4,
+            "truncated vector must be unit-norm, got {norm}"
+        );
     }
 
     /// Cosine similarity between identical texts is > 0.99.
@@ -779,7 +818,10 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(cosine > 0.99, "identical text cosine must be > 0.99, got {cosine}");
+        assert!(
+            cosine > 0.99,
+            "identical text cosine must be > 0.99, got {cosine}"
+        );
     }
 
     /// Cosine similarity between semantically dissimilar texts is < 0.9.
@@ -803,6 +845,9 @@ mod tests {
         let na: f32 = a.iter().map(|v| v * v).sum::<f32>().sqrt();
         let nb: f32 = b.iter().map(|v| v * v).sum::<f32>().sqrt();
         let cosine = dot / (na * nb);
-        assert!(cosine < 0.9, "dissimilar texts cosine must be < 0.9, got {cosine}");
+        assert!(
+            cosine < 0.9,
+            "dissimilar texts cosine must be < 0.9, got {cosine}"
+        );
     }
 }

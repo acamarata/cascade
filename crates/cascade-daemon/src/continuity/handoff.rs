@@ -152,7 +152,9 @@ pub enum HandoffOutcome {
 /// Mirrors `is_eligible_to_fire`'s "never guess" posture: an unknown target
 /// snapshot is treated as not-yet-healthy, never as an implicit go-ahead.
 pub fn should_handoff(current_util: Option<f64>, target: Option<QuotaSnapshot>) -> bool {
-    let Some(cur) = current_util else { return false };
+    let Some(cur) = current_util else {
+        return false;
+    };
     if cur < FAILOVER_UTILIZATION_THRESHOLD {
         return false;
     }
@@ -188,7 +190,10 @@ pub async fn check_current_session(
     let current_snap = snapshot_for_account(doc, &pointer.account_id);
     let target_snap = snapshot_for_account(doc, &pointer.target_account_id);
 
-    if should_handoff(current_snap.and_then(|s| s.five_hour_utilization), target_snap) {
+    if should_handoff(
+        current_snap.and_then(|s| s.five_hour_utilization),
+        target_snap,
+    ) {
         return prepare_handoff(continuity_dir, &path, &mut pointer);
     }
 
@@ -199,7 +204,10 @@ pub async fn check_current_session(
         && pointer.backstop_notified_at.is_none()
         && super::backstop::all_accounts_capped(
             doc,
-            &[pointer.account_id.as_str(), pointer.target_account_id.as_str()],
+            &[
+                pointer.account_id.as_str(),
+                pointer.target_account_id.as_str(),
+            ],
         )
     {
         return notify_backstop(&path, &mut pointer);
@@ -407,11 +415,7 @@ mod tests {
         // exist, as it does in a real Claude config dir. The tempdir starts empty, so
         // create it here rather than weakening the guard.
         std::fs::create_dir_all(dst_home.path().join("projects")).unwrap();
-        std::fs::write(
-            src_projects.join("sess-handoff.jsonl"),
-            "{\"turn\":1}\n",
-        )
-        .unwrap();
+        std::fs::write(src_projects.join("sess-handoff.jsonl"), "{\"turn\":1}\n").unwrap();
         write_pointer(&pointer_path(continuity_root.path()), &pointer).unwrap();
 
         let quota_doc = serde_json::json!({

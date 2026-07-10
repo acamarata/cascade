@@ -71,8 +71,12 @@ fn run_migrations(conn: &mut Connection, db_path: &Path) -> Result<()> {
         let tx = conn
             .transaction()
             .map_err(|e| CascadeError::Other(format!("tasks db: begin tx: {e}")))?;
-        (step.up)(&tx)
-            .map_err(|e| CascadeError::Other(format!("tasks db: migration v{} '{}' failed: {e}", step.version, step.name)))?;
+        (step.up)(&tx).map_err(|e| {
+            CascadeError::Other(format!(
+                "tasks db: migration v{} '{}' failed: {e}",
+                step.version, step.name
+            ))
+        })?;
         tx.pragma_update(None, "user_version", step.version)
             .map_err(|e| CascadeError::Other(format!("tasks db: bump user_version: {e}")))?;
         tx.commit()
@@ -221,7 +225,10 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .expect("user_version");
-        assert_eq!(v, TASKS_DB_SCHEMA_VERSION, "PRAGMA user_version must equal head after migration");
+        assert_eq!(
+            v, TASKS_DB_SCHEMA_VERSION,
+            "PRAGMA user_version must equal head after migration"
+        );
     }
 
     /// Fixture-migration test: simulate a pre-existing DB at version 0 (empty,

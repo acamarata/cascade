@@ -25,13 +25,12 @@
 use std::path::{Path, PathBuf};
 
 use cascade_types::accounts::{
-    AccountFamily, AccountRole, AccountsRegistry, ModelMatrixEntry,
-    ACCOUNTS_SCHEMA_VERSION,
+    AccountFamily, AccountRole, AccountsRegistry, ModelMatrixEntry, ACCOUNTS_SCHEMA_VERSION,
 };
 use cascade_types::error::{CascadeError, Result};
 use serde_json::Value;
 
-use crate::external_accounts::{AuthStatus, discover as discover_external};
+use crate::external_accounts::{discover as discover_external, AuthStatus};
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
@@ -81,12 +80,11 @@ pub fn migrate_accounts_if_needed() -> Result<bool> {
         .map_err(|e| CascadeError::io(dir.clone(), "create_dir_all", e))?;
 
     // Copy then remove (cross-device rename may fail).
-    let bytes = std::fs::read(&old_path)
-        .map_err(|e| CascadeError::io(old_path.clone(), "read", e))?;
+    let bytes =
+        std::fs::read(&old_path).map_err(|e| CascadeError::io(old_path.clone(), "read", e))?;
     std::fs::write(&new_path, &bytes)
         .map_err(|e| CascadeError::io(new_path.clone(), "write", e))?;
-    std::fs::remove_file(&old_path)
-        .map_err(|e| CascadeError::io(old_path.clone(), "remove", e))?;
+    std::fs::remove_file(&old_path).map_err(|e| CascadeError::io(old_path.clone(), "remove", e))?;
 
     Ok(true)
 }
@@ -99,7 +97,9 @@ pub fn migrate_accounts_if_needed() -> Result<bool> {
 /// `Io` on other I/O failures; `ConfigParse` when JSON is malformed.
 pub fn read_accounts_registry(path: &Path) -> Result<AccountsRegistry> {
     if !path.exists() {
-        return Err(CascadeError::PathNotFound { path: path.to_path_buf() });
+        return Err(CascadeError::PathNotFound {
+            path: path.to_path_buf(),
+        });
     }
     let bytes = std::fs::read(path).map_err(|e| CascadeError::io(path.to_path_buf(), "read", e))?;
     let registry: AccountsRegistry =
@@ -122,7 +122,8 @@ pub fn read_accounts_registry(path: &Path) -> Result<AccountsRegistry> {
 ///
 /// Constraints: POSIX-atomic when tmp and dst share a filesystem (same dir).
 pub fn write_accounts_registry(path: &Path, registry: &AccountsRegistry) -> Result<()> {
-    let bytes = serde_json::to_vec_pretty(registry).map_err(|e| CascadeError::Other(e.to_string()))?;
+    let bytes =
+        serde_json::to_vec_pretty(registry).map_err(|e| CascadeError::Other(e.to_string()))?;
     atomic_write(path, &bytes)
 }
 
@@ -172,234 +173,263 @@ pub fn write_quota_json(path: &Path, registry: &AccountsRegistry) -> Result<()> 
     let live_accounts = discover_external();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
 
-    let accounts: Vec<Value> = registry.accounts.iter().map(|acc| {
-        let provider = family_to_provider(&acc.family);
+    let accounts: Vec<Value> = registry
+        .accounts
+        .iter()
+        .map(|acc| {
+            let provider = family_to_provider(&acc.family);
 
-        // Email: prefer subscription note, fall back to account id.
-        let email: Option<&str> = acc.notes.as_deref()
-            .or(Some(acc.subscription.as_str()));
+            // Email: prefer subscription note, fall back to account id.
+            let email: Option<&str> = acc.notes.as_deref().or(Some(acc.subscription.as_str()));
 
-        // Try to find a matching entry in the legacy cache.
-        let legacy_entry = legacy.as_ref().and_then(|entries| {
-            find_legacy_entry(entries, &acc.id, provider)
-        });
+            // Try to find a matching entry in the legacy cache.
+            let legacy_entry = legacy
+                .as_ref()
+                .and_then(|entries| find_legacy_entry(entries, &acc.id, provider));
 
-        let (usage, last_pull_at, quota_opaque, opencode_meta) = if let Some(leg) = legacy_entry {
-            // Merge: copy usage block + last_pull_at + quota_opaque + opencode_meta verbatim.
-            let usage = leg.get("usage").cloned().unwrap_or(Value::Null);
-            // Fall back to `now` when the legacy entry has no successful pull (e.g. an
-            // account whose poll errored): a configured account must still render in the
-            // widget rather than being auto-hidden. It will just show "—" until data lands.
-            let last_pull = leg.get("last_pull_at").cloned()
-                .filter(|v| !v.is_null())
-                .or_else(|| Some(json!(now_epoch)));
-            let opaque = leg.get("quota_opaque").cloned()
-                .and_then(|v| v.as_bool());
-            let oc_meta = leg.get("opencode_meta").cloned();
-            (usage, last_pull, opaque, oc_meta)
-        } else {
-            // No live data — emit null slots but set last_pull_at to now so
-            // the widget still renders the row.
-            let null_usage = json!({
-                "five_hour": null,
-                "seven_day": null,
-                "seven_day_sonnet": null,
-                "seven_day_opus": null,
-                "extra_usage": null
-            });
-            let opaque = matches!(acc.family, AccountFamily::Gfp | AccountFamily::Google);
-            (null_usage, Some(json!(now_epoch)), Some(opaque), None)
-        };
-
-        // ── Live credential bridge ────────────────────────────────────────────
-        // Map the account id to its external config directory, then check the
-        // LIVE auth status from the CLI's own keychain/file storage.
-        //
-        // Mapping strategy:
-        //   "claude-acc1"  → ~/.claude-acc1
-        //   "claude-acc2"  → ~/.claude-acc2 (etc.)
-        //   primary Claude → ~/.claude (the default dir, no suffix)
-        //   codex accounts → ~/.codex (or ~/.codex2 etc.)
-        //   GLM/z.ai     → ~/.claude-glm when present (contains cascade-env.sh)
-        //
-        // If we can't map with confidence, fall back to legacy error heuristics.
-        let config_dir_for_account: Option<PathBuf> = if acc.family == AccountFamily::Claude {
-            // Try canonical name first: "claude-acc1" → ~/.claude-acc1
-            let candidate = home.join(format!(".{}", acc.id));
-            if candidate.is_dir() {
-                Some(candidate)
-            } else if acc.id.starts_with("claude-acc") {
-                // Normalise: "claude-acc1" → ".claude-acc1"
-                let suffix = acc.id.trim_start_matches("claude-acc");
-                let n_dir = home.join(format!(".claude-acc{suffix}"));
-                if n_dir.is_dir() { Some(n_dir) } else { None }
+            let (usage, last_pull_at, quota_opaque, opencode_meta) = if let Some(leg) = legacy_entry
+            {
+                // Merge: copy usage block + last_pull_at + quota_opaque + opencode_meta verbatim.
+                let usage = leg.get("usage").cloned().unwrap_or(Value::Null);
+                // Fall back to `now` when the legacy entry has no successful pull (e.g. an
+                // account whose poll errored): a configured account must still render in the
+                // widget rather than being auto-hidden. It will just show "—" until data lands.
+                let last_pull = leg
+                    .get("last_pull_at")
+                    .cloned()
+                    .filter(|v| !v.is_null())
+                    .or_else(|| Some(json!(now_epoch)));
+                let opaque = leg.get("quota_opaque").cloned().and_then(|v| v.as_bool());
+                let oc_meta = leg.get("opencode_meta").cloned();
+                (usage, last_pull, opaque, oc_meta)
             } else {
-                // Primary / default claude account maps to ~/.claude.
-                let default_dir = home.join(".claude");
-                if default_dir.is_dir() { Some(default_dir) } else { None }
+                // No live data — emit null slots but set last_pull_at to now so
+                // the widget still renders the row.
+                let null_usage = json!({
+                    "five_hour": null,
+                    "seven_day": null,
+                    "seven_day_sonnet": null,
+                    "seven_day_opus": null,
+                    "extra_usage": null
+                });
+                let opaque = matches!(acc.family, AccountFamily::Gfp | AccountFamily::Google);
+                (null_usage, Some(json!(now_epoch)), Some(opaque), None)
+            };
+
+            // ── Live credential bridge ────────────────────────────────────────────
+            // Map the account id to its external config directory, then check the
+            // LIVE auth status from the CLI's own keychain/file storage.
+            //
+            // Mapping strategy:
+            //   "claude-acc1"  → ~/.claude-acc1
+            //   "claude-acc2"  → ~/.claude-acc2 (etc.)
+            //   primary Claude → ~/.claude (the default dir, no suffix)
+            //   codex accounts → ~/.codex (or ~/.codex2 etc.)
+            //   GLM/z.ai     → ~/.claude-glm when present (contains cascade-env.sh)
+            //
+            // If we can't map with confidence, fall back to legacy error heuristics.
+            let config_dir_for_account: Option<PathBuf> = if acc.family == AccountFamily::Claude {
+                // Try canonical name first: "claude-acc1" → ~/.claude-acc1
+                let candidate = home.join(format!(".{}", acc.id));
+                if candidate.is_dir() {
+                    Some(candidate)
+                } else if acc.id.starts_with("claude-acc") {
+                    // Normalise: "claude-acc1" → ".claude-acc1"
+                    let suffix = acc.id.trim_start_matches("claude-acc");
+                    let n_dir = home.join(format!(".claude-acc{suffix}"));
+                    if n_dir.is_dir() {
+                        Some(n_dir)
+                    } else {
+                        None
+                    }
+                } else {
+                    // Primary / default claude account maps to ~/.claude.
+                    let default_dir = home.join(".claude");
+                    if default_dir.is_dir() {
+                        Some(default_dir)
+                    } else {
+                        None
+                    }
+                }
+            } else if acc.family == AccountFamily::Openai {
+                let codex_dir = home.join(".codex");
+                if codex_dir.is_dir() {
+                    Some(codex_dir)
+                } else {
+                    None
+                }
+            } else if acc.family == AccountFamily::Zai {
+                let candidates = [
+                    home.join(".claude-glm"),
+                    home.join(format!(".{}", acc.id)),
+                    home.join(".zai"),
+                    home.join(".glm"),
+                ];
+                candidates
+                    .iter()
+                    .find(|p| p.join("cascade-env.sh").is_file())
+                    .or_else(|| candidates.iter().find(|p| p.is_dir()))
+                    .cloned()
+            } else {
+                None
+            };
+
+            // Look up the live auth status from discovered accounts.
+            let live_auth: Option<&AuthStatus> = config_dir_for_account.as_ref().and_then(|cd| {
+                live_accounts
+                    .iter()
+                    .find(|la| &la.config_dir == cd)
+                    .map(|la| &la.auth)
+            });
+
+            // A definitive live-fetch auth error is GROUND TRUTH and overrides the
+            // optimistic keychain bridge. The bridge reports Ok merely because a
+            // refreshToken STRING exists in the keychain — but an actual API 401
+            // (observed AFTER a `claude -p` refresh attempt) means the token is truly
+            // dead. So a definitive `last_error` forces auth_dead = true regardless of
+            // the bridge status.
+            //
+            // Definitive auth failures: http_401, http_403, invalid_grant,
+            //   authentication_error, refresh_failed, keychain_failed, auth_invalid.
+            // Transient (NON-auth-dead, no nag): api_failed (network/timeout),
+            //   parse_failed (503 HTML page), rate_limit_error, http_429.
+            let legacy_definitive_auth_failure = legacy_entry
+                .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
+                .map(|e| {
+                    matches!(
+                        e,
+                        "keychain_failed"
+                            | "refresh_failed"
+                            | "auth_invalid"
+                            | "invalid_grant"
+                            | "authentication_error"
+                            | "http_401"
+                            | "http_403"
+                    )
+                })
+                .unwrap_or(false);
+
+            // Determine auth_dead.
+            //   1. A definitive live-fetch auth error wins over everything (incl. bridge Ok).
+            //   2. Otherwise the live bridge decides: Ok → not dead, NeedsReauth → dead.
+            //   3. Otherwise (bridge Unknown / unmapped) fall back to legacy heuristics.
+            let auth_dead = if legacy_definitive_auth_failure {
+                true
+            } else {
+                match live_auth {
+                    Some(AuthStatus::Ok { .. }) => false, // bridge Ok + no definitive error → never nag
+                    Some(AuthStatus::NeedsReauth) => true,
+                    _ => false, // bridge Unknown/unmapped + no definitive error → not dead
+                }
+            };
+
+            // Never show stale numbers for a credential-dead account — blank them so the
+            // widget renders the "Click here to re-auth" call-to-action instead.
+            let usage = if auth_dead { Value::Null } else { usage };
+
+            let _has_data = usage
+                .get("five_hour")
+                .map(|v| !v.is_null())
+                .unwrap_or(false)
+                || usage
+                    .get("seven_day")
+                    .map(|v| !v.is_null())
+                    .unwrap_or(false)
+                || usage
+                    .get("seven_day_sonnet")
+                    .map(|v| !v.is_null())
+                    .unwrap_or(false);
+
+            // Status drives the widget's per-row hint.
+            // Only show "auth" on a genuine credential failure — not on transient errors or
+            // accounts with no data yet (those show as "ok" with dashes, not a re-auth prompt).
+            let status = match acc.family {
+                AccountFamily::Gfp => "pool",
+                AccountFamily::Claude | AccountFamily::Google if auth_dead => "auth",
+                _ => "ok",
+            };
+
+            // ── `authenticated` — conservative, evidence-based credential state ──
+            // `auth_dead` (above) answers "do we have positive evidence this
+            // credential is broken?" (defaults to false/not-dead when unknown).
+            // `authenticated` answers the stricter question "do we have positive
+            // evidence this credential is GOOD?" and defaults to false when we
+            // simply don't know — never guessed, never optimistic.
+            //
+            // Precedence: a definitive live-fetch auth failure or a live
+            // NeedsReauth verdict → false. A live bridge `Ok` → true. No bridge
+            // for this family/dir (Google/Opencode, or an unmapped Claude/Codex
+            // dir) → fall back to genuine evidence of a successful legacy pull
+            // (usage present, no last_error). GFP is a key pool, not OAuth: a
+            // present, non-empty key pool is its "authenticated" signal.
+            let authenticated = if acc.family == AccountFamily::Gfp {
+                acc.key_count > 0
+            } else if legacy_definitive_auth_failure {
+                false
+            } else {
+                match live_auth {
+                    Some(AuthStatus::Ok { .. }) => true,
+                    Some(AuthStatus::NeedsReauth) => false,
+                    _ => legacy_entry
+                        .map(|leg| {
+                            let no_error =
+                                leg.get("last_error").map(|v| v.is_null()).unwrap_or(true);
+                            let has_usage = leg.get("usage").map(|v| !v.is_null()).unwrap_or(false);
+                            no_error && has_usage
+                        })
+                        .unwrap_or(false),
+                }
+            };
+
+            let mut entry = json!({
+                "account": acc.id,
+                "provider": provider,
+                "email": email,
+                "usage": usage,
+                "last_pull_at": last_pull_at,
+                "quota_opaque": quota_opaque.unwrap_or(false),
+                "status": status,
+                "authenticated": authenticated
+            });
+
+            // Surface the config_dir so the Swift widget can pass the correct
+            // CLAUDE_CONFIG_DIR env var when launching the re-auth flow.
+            if let Some(dir) = &config_dir_for_account {
+                entry["config_dir"] = json!(dir.to_string_lossy().as_ref());
             }
-        } else if acc.family == AccountFamily::Openai {
-            let codex_dir = home.join(".codex");
-            if codex_dir.is_dir() { Some(codex_dir) } else { None }
-        } else if acc.family == AccountFamily::Zai {
-            let candidates = [
-                home.join(".claude-glm"),
-                home.join(format!(".{}", acc.id)),
-                home.join(".zai"),
-                home.join(".glm"),
-            ];
-            candidates
-                .iter()
-                .find(|p| p.join("cascade-env.sh").is_file())
-                .or_else(|| candidates.iter().find(|p| p.is_dir()))
-                .cloned()
-        } else {
-            None
-        };
 
-        // Look up the live auth status from discovered accounts.
-        let live_auth: Option<&AuthStatus> = config_dir_for_account.as_ref().and_then(|cd| {
-            live_accounts.iter().find(|la| &la.config_dir == cd).map(|la| &la.auth)
-        });
-
-        // A definitive live-fetch auth error is GROUND TRUTH and overrides the
-        // optimistic keychain bridge. The bridge reports Ok merely because a
-        // refreshToken STRING exists in the keychain — but an actual API 401
-        // (observed AFTER a `claude -p` refresh attempt) means the token is truly
-        // dead. So a definitive `last_error` forces auth_dead = true regardless of
-        // the bridge status.
-        //
-        // Definitive auth failures: http_401, http_403, invalid_grant,
-        //   authentication_error, refresh_failed, keychain_failed, auth_invalid.
-        // Transient (NON-auth-dead, no nag): api_failed (network/timeout),
-        //   parse_failed (503 HTML page), rate_limit_error, http_429.
-        let legacy_definitive_auth_failure = legacy_entry
-            .and_then(|leg| leg.get("last_error").and_then(|v| v.as_str()))
-            .map(|e| {
-                matches!(
-                    e,
-                    "keychain_failed" | "refresh_failed" | "auth_invalid"
-                        | "invalid_grant" | "authentication_error" | "http_401" | "http_403"
-                )
-            })
-            .unwrap_or(false);
-
-        // Determine auth_dead.
-        //   1. A definitive live-fetch auth error wins over everything (incl. bridge Ok).
-        //   2. Otherwise the live bridge decides: Ok → not dead, NeedsReauth → dead.
-        //   3. Otherwise (bridge Unknown / unmapped) fall back to legacy heuristics.
-        let auth_dead = if legacy_definitive_auth_failure {
-            true
-        } else {
-            match live_auth {
-                Some(AuthStatus::Ok { .. }) => false, // bridge Ok + no definitive error → never nag
-                Some(AuthStatus::NeedsReauth) => true,
-                _ => false, // bridge Unknown/unmapped + no definitive error → not dead
+            // GFP free-Flash pool: surface the round-robin key count so the row shows
+            // capacity ("28 keys") rather than dashes.
+            if acc.family == AccountFamily::Gfp {
+                entry["key_count"] = json!(acc.key_count);
             }
-        };
-
-        // Never show stale numbers for a credential-dead account — blank them so the
-        // widget renders the "Click here to re-auth" call-to-action instead.
-        let usage = if auth_dead { Value::Null } else { usage };
-
-        let _has_data = usage.get("five_hour").map(|v| !v.is_null()).unwrap_or(false)
-            || usage.get("seven_day").map(|v| !v.is_null()).unwrap_or(false)
-            || usage.get("seven_day_sonnet").map(|v| !v.is_null()).unwrap_or(false);
-
-        // Status drives the widget's per-row hint.
-        // Only show "auth" on a genuine credential failure — not on transient errors or
-        // accounts with no data yet (those show as "ok" with dashes, not a re-auth prompt).
-        let status = match acc.family {
-            AccountFamily::Gfp => "pool",
-            AccountFamily::Claude | AccountFamily::Google if auth_dead => "auth",
-            _ => "ok",
-        };
-
-        // ── `authenticated` — conservative, evidence-based credential state ──
-        // `auth_dead` (above) answers "do we have positive evidence this
-        // credential is broken?" (defaults to false/not-dead when unknown).
-        // `authenticated` answers the stricter question "do we have positive
-        // evidence this credential is GOOD?" and defaults to false when we
-        // simply don't know — never guessed, never optimistic.
-        //
-        // Precedence: a definitive live-fetch auth failure or a live
-        // NeedsReauth verdict → false. A live bridge `Ok` → true. No bridge
-        // for this family/dir (Google/Opencode, or an unmapped Claude/Codex
-        // dir) → fall back to genuine evidence of a successful legacy pull
-        // (usage present, no last_error). GFP is a key pool, not OAuth: a
-        // present, non-empty key pool is its "authenticated" signal.
-        let authenticated = if acc.family == AccountFamily::Gfp {
-            acc.key_count > 0
-        } else if legacy_definitive_auth_failure {
-            false
-        } else {
-            match live_auth {
-                Some(AuthStatus::Ok { .. }) => true,
-                Some(AuthStatus::NeedsReauth) => false,
-                _ => legacy_entry
-                    .map(|leg| {
-                        let no_error = leg
-                            .get("last_error")
-                            .map(|v| v.is_null())
-                            .unwrap_or(true);
-                        let has_usage = leg
-                            .get("usage")
-                            .map(|v| !v.is_null())
-                            .unwrap_or(false);
-                        no_error && has_usage
-                    })
-                    .unwrap_or(false),
+            if let Some(meta) = opencode_meta {
+                entry["opencode_meta"] = meta;
             }
-        };
 
-        let mut entry = json!({
-            "account": acc.id,
-            "provider": provider,
-            "email": email,
-            "usage": usage,
-            "last_pull_at": last_pull_at,
-            "quota_opaque": quota_opaque.unwrap_or(false),
-            "status": status,
-            "authenticated": authenticated
-        });
-
-        // Surface the config_dir so the Swift widget can pass the correct
-        // CLAUDE_CONFIG_DIR env var when launching the re-auth flow.
-        if let Some(dir) = &config_dir_for_account {
-            entry["config_dir"] = json!(dir.to_string_lossy().as_ref());
-        }
-
-        // GFP free-Flash pool: surface the round-robin key count so the row shows
-        // capacity ("28 keys") rather than dashes.
-        if acc.family == AccountFamily::Gfp {
-            entry["key_count"] = json!(acc.key_count);
-        }
-        if let Some(meta) = opencode_meta {
-            entry["opencode_meta"] = meta;
-        }
-
-        entry
-    }).collect();
+            entry
+        })
+        .collect();
 
     let payload = json!({
         "accounts": accounts,
         "queried_at": now_epoch
     });
 
-    let bytes = serde_json::to_vec_pretty(&payload)
-        .map_err(|e| CascadeError::Other(e.to_string()))?;
+    let bytes =
+        serde_json::to_vec_pretty(&payload).map_err(|e| CascadeError::Other(e.to_string()))?;
     atomic_write(path, &bytes)
 }
 
 /// Map an `AccountFamily` to the provider string the widget expects.
 fn family_to_provider(family: &AccountFamily) -> &'static str {
     match family {
-        AccountFamily::Claude   => "claude",
-        AccountFamily::Openai   => "codex",
-        AccountFamily::Google   => "gemini",
+        AccountFamily::Claude => "claude",
+        AccountFamily::Openai => "codex",
+        AccountFamily::Google => "gemini",
         AccountFamily::Opencode => "opencode",
-        AccountFamily::Zai      => "zai",
-        AccountFamily::Gfp      => "gfp",
+        AccountFamily::Zai => "zai",
+        AccountFamily::Gfp => "gfp",
     }
 }
 
@@ -423,15 +453,18 @@ fn load_legacy_usage_cache() -> Option<Vec<Value>> {
 ///      another account's usage numbers.
 fn find_legacy_entry<'a>(entries: &'a [Value], acc_id: &str, provider: &str) -> Option<&'a Value> {
     // 1. Exact account id match.
-    if let Some(e) = entries.iter().find(|e| e.get("account").and_then(|v| v.as_str()) == Some(acc_id)) {
+    if let Some(e) = entries
+        .iter()
+        .find(|e| e.get("account").and_then(|v| v.as_str()) == Some(acc_id))
+    {
         return Some(e);
     }
     // 2. Provider-level fallback — only safe when exactly one entry shares the
     //    provider. With multiple same-provider accounts, no exact id match means
     //    we must NOT guess (return None) to avoid cross-assigning usage.
-    let mut provider_matches = entries.iter().filter(|e| {
-        e.get("provider").and_then(|v| v.as_str()) == Some(provider)
-    });
+    let mut provider_matches = entries
+        .iter()
+        .filter(|e| e.get("provider").and_then(|v| v.as_str()) == Some(provider));
     match (provider_matches.next(), provider_matches.next()) {
         (Some(only), None) => Some(only), // exactly one → safe fallback
         _ => None,                        // zero or 2+ → require exact id match
@@ -505,43 +538,91 @@ pub fn write_matrix_md(path: &Path, registry: &AccountsRegistry) -> Result<()> {
 
     let mut out = String::new();
     writeln!(out, "# Model Matrix — Cascade Fleet\n").ok();
-    writeln!(out, "Generated from `~/.cascade/accounts/accounts.json`. Do not edit by hand.\n").ok();
+    writeln!(
+        out,
+        "Generated from `~/.cascade/accounts/accounts.json`. Do not edit by hand.\n"
+    )
+    .ok();
     writeln!(out, "## Routing Table\n").ok();
-    writeln!(out, "| Model | Family | Tier | Primary Account | Best For | Notes |").ok();
-    writeln!(out, "|-------|--------|------|-----------------|----------|-------|").ok();
+    writeln!(
+        out,
+        "| Model | Family | Tier | Primary Account | Best For | Notes |"
+    )
+    .ok();
+    writeln!(
+        out,
+        "|-------|--------|------|-----------------|----------|-------|"
+    )
+    .ok();
 
     for entry in &registry.model_matrix {
         let family = format!("{:?}", entry.family);
-        let primary = entry.available_via.first()
+        let primary = entry
+            .available_via
+            .first()
             .map(|r| format!("{}:{:?}", r.account_id, r.method))
             .unwrap_or_else(|| "-".into());
-        let best = entry.best_for.iter()
+        let best = entry
+            .best_for
+            .iter()
             .map(|t| format!("{:?}", t))
             .collect::<Vec<_>>()
             .join(", ");
         let notes = entry.notes.as_deref().unwrap_or("-");
-        writeln!(out, "| {} | {} | {} | {} | {} | {} |",
-            entry.model_id, family, entry.tier, primary, best, notes).ok();
+        writeln!(
+            out,
+            "| {} | {} | {} | {} | {} | {} |",
+            entry.model_id, family, entry.tier, primary, best, notes
+        )
+        .ok();
     }
 
     writeln!(out, "\n## Routing Strategy\n").ok();
-    writeln!(out, "**Exhaustion order** (lower priority number = drained first):\n").ok();
+    writeln!(
+        out,
+        "**Exhaustion order** (lower priority number = drained first):\n"
+    )
+    .ok();
 
     // Sort accounts by priority for the summary.
     let mut sorted = registry.accounts.clone();
     sorted.sort_by_key(|a| a.exhaustion_priority);
     for acc in &sorted {
-        let reserved = if matches!(acc.role, AccountRole::PrimaryT0) { " (**reserved last**)" } else { "" };
-        writeln!(out, "- `{}` ({:?}, priority {}){}",
-            acc.id, acc.family, acc.exhaustion_priority, reserved).ok();
+        let reserved = if matches!(acc.role, AccountRole::PrimaryT0) {
+            " (**reserved last**)"
+        } else {
+            ""
+        };
+        writeln!(
+            out,
+            "- `{}` ({:?}, priority {}){}",
+            acc.id, acc.family, acc.exhaustion_priority, reserved
+        )
+        .ok();
     }
 
     writeln!(out, "\n### Key rules\n").ok();
     writeln!(out, "- **Sensitive tasks** (PII / VA / health / custody): Claude-only. All external models hard-blocked.").ok();
-    writeln!(out, "- **Adversarial CR/QA**: prefer cross-family (GPT-5.5, Gemini-3.1-Pro) for independence.").ok();
-    writeln!(out, "- **Pooled (acc2)** is drained before primary (acc1, priority 255).").ok();
-    writeln!(out, "- **GFP pool** (priority 1) is always drained first for grunt/classify/taxonomy work.").ok();
-    writeln!(out, "- **Primary acc1** is reserved for T0 interactive use; background agents use acc2+.").ok();
+    writeln!(
+        out,
+        "- **Adversarial CR/QA**: prefer cross-family (GPT-5.5, Gemini-3.1-Pro) for independence."
+    )
+    .ok();
+    writeln!(
+        out,
+        "- **Pooled (acc2)** is drained before primary (acc1, priority 255)."
+    )
+    .ok();
+    writeln!(
+        out,
+        "- **GFP pool** (priority 1) is always drained first for grunt/classify/taxonomy work."
+    )
+    .ok();
+    writeln!(
+        out,
+        "- **Primary acc1** is reserved for T0 interactive use; background agents use acc2+."
+    )
+    .ok();
 
     atomic_write(path, out.as_bytes())
 }
@@ -622,7 +703,9 @@ pub fn count_gfp_keys() -> u32 {
 /// Collect unique GFP key values from one vault file into `seen`.
 /// No-op if the file is absent or unreadable (testable inner implementation).
 pub fn collect_gfp_keys_from_path(vault_path: &Path, seen: &mut std::collections::HashSet<String>) {
-    let Ok(content) = std::fs::read_to_string(vault_path) else { return };
+    let Ok(content) = std::fs::read_to_string(vault_path) else {
+        return;
+    };
     for line in content.lines() {
         let t = line.trim();
         if t.is_empty() || t.starts_with('#') {
@@ -693,7 +776,11 @@ mod tests {
         let json = serde_json::to_vec_pretty(&registry).unwrap();
         let decoded: AccountsRegistry = serde_json::from_slice(&json).unwrap();
         assert_eq!(decoded.schema_version, ACCOUNTS_SCHEMA_VERSION);
-        assert_eq!(decoded.accounts.len(), 0, "default registry has no seeded accounts");
+        assert_eq!(
+            decoded.accounts.len(),
+            0,
+            "default registry has no seeded accounts"
+        );
     }
 
     /// Unique-value key counting: valid AIza keys count once each; duplicates
@@ -707,7 +794,11 @@ mod tests {
         writeln!(f, "# Vault file").unwrap();
         writeln!(f, "GEMINI_FREE_KEY_1=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA1").unwrap();
         writeln!(f, "GEMINI_FREE_KEY_2=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA2").unwrap();
-        writeln!(f, "export GEMINI_KEY_3=\"AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA3\"").unwrap();
+        writeln!(
+            f,
+            "export GEMINI_KEY_3=\"AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA3\""
+        )
+        .unwrap();
         // Duplicate value under another name — still one usable key.
         writeln!(f, "GEMINI_API_KEY_DUP=AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA1").unwrap();
         // Placeholder / non-AIza values must not count.
@@ -728,7 +819,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let v1 = dir.path().join("vault1.env");
         let v2 = dir.path().join("vault2.env");
-        std::fs::write(&v1, "GEMINI_FREE_KEY_1=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB1\n").unwrap();
+        std::fs::write(
+            &v1,
+            "GEMINI_FREE_KEY_1=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB1\n",
+        )
+        .unwrap();
         std::fs::write(&v2, "GEMINI_KEY_A=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB1\nGEMINI_KEY_B=AIzaFixtureBBBBBBBBBBBBBBBBBBBBBB2\n").unwrap();
         let mut seen = std::collections::HashSet::new();
         collect_gfp_keys_from_path(&v1, &mut seen);
@@ -747,13 +842,18 @@ mod tests {
     #[test]
     fn matrix_lookup_all_models_covered() {
         let registry = default_registry();
-        let matrix: std::collections::HashSet<&str> =
-            registry.model_matrix.iter().map(|e| e.model_id.as_str()).collect();
+        let matrix: std::collections::HashSet<&str> = registry
+            .model_matrix
+            .iter()
+            .map(|e| e.model_id.as_str())
+            .collect();
         for acc in &registry.accounts {
             for model in &acc.models {
                 assert!(
                     matrix.contains(model.as_str()),
-                    "model '{}' from '{}' missing from model_matrix", model, acc.id
+                    "model '{}' from '{}' missing from model_matrix",
+                    model,
+                    acc.id
                 );
             }
         }
@@ -773,7 +873,10 @@ mod tests {
         write_accounts_readme(&dir.join("README.md")).unwrap();
         write_matrix_md(&dir.join("matrix.md"), &registry).unwrap();
 
-        assert!(dir.join("accounts.json").exists(), "accounts.json must exist");
+        assert!(
+            dir.join("accounts.json").exists(),
+            "accounts.json must exist"
+        );
         assert!(dir.join("quota.json").exists(), "quota.json must exist");
         assert!(dir.join("README.md").exists(), "README.md must exist");
         assert!(dir.join("matrix.md").exists(), "matrix.md must exist");
@@ -791,30 +894,42 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
         // Top-level: queried_at + accounts (no legacy "updated_at").
-        assert!(v.get("queried_at").is_some(), "quota.json must have queried_at");
+        assert!(
+            v.get("queried_at").is_some(),
+            "quota.json must have queried_at"
+        );
         assert!(v.get("accounts").is_some(), "quota.json must have accounts");
 
         let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
         // Default registry has no accounts; verify the array exists and is empty.
-        assert_eq!(accts.len(), 0, "default registry must produce 0 account entries");
+        assert_eq!(
+            accts.len(),
+            0,
+            "default registry must produce 0 account entries"
+        );
 
         // Schema-shape assertions run only when entries are present.
         for entry in accts {
-            assert!(entry.get("account").is_some(),
-                "must have 'account' field (not 'id')");
-            assert!(entry.get("provider").is_some(),
-                "must have 'provider' field (not 'family')");
-            assert!(entry.get("usage").is_some(),
-                "must have 'usage' field");
-            assert!(entry.get("status").is_some(),
-                "must have 'status' field");
+            assert!(
+                entry.get("account").is_some(),
+                "must have 'account' field (not 'id')"
+            );
+            assert!(
+                entry.get("provider").is_some(),
+                "must have 'provider' field (not 'family')"
+            );
+            assert!(entry.get("usage").is_some(), "must have 'usage' field");
+            assert!(entry.get("status").is_some(), "must have 'status' field");
             // Must NOT have old schema fields.
-            assert!(entry.get("id").is_none(),
-                "must NOT have legacy 'id' field");
-            assert!(entry.get("family").is_none(),
-                "must NOT have legacy 'family' field");
-            assert!(entry.get("windows").is_none(),
-                "must NOT have legacy 'windows' field");
+            assert!(entry.get("id").is_none(), "must NOT have legacy 'id' field");
+            assert!(
+                entry.get("family").is_none(),
+                "must NOT have legacy 'family' field"
+            );
+            assert!(
+                entry.get("windows").is_none(),
+                "must NOT have legacy 'windows' field"
+            );
         }
     }
 
@@ -891,7 +1006,11 @@ mod tests {
         let accts = v.get("accounts").and_then(|a| a.as_array()).unwrap();
 
         // Default registry is empty — no accounts to map.
-        assert_eq!(accts.len(), 0, "default registry must produce an empty accounts array");
+        assert_eq!(
+            accts.len(),
+            0,
+            "default registry must produce an empty accounts array"
+        );
     }
 
     /// migration: old ~/.cascade/accounts.json → ~/.cascade/accounts/accounts.json.
@@ -928,8 +1047,14 @@ mod tests {
 
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("# Model Matrix"), "must have H1 heading");
-        assert!(content.contains("## Routing Table"), "must have Routing Table section");
-        assert!(content.contains("## Routing Strategy"), "must have Routing Strategy section");
+        assert!(
+            content.contains("## Routing Table"),
+            "must have Routing Table section"
+        );
+        assert!(
+            content.contains("## Routing Strategy"),
+            "must have Routing Strategy section"
+        );
         // Default registry has no models — matrix table is empty but headings are present.
     }
 
@@ -945,8 +1070,13 @@ mod tests {
             .map(|e| {
                 matches!(
                     e,
-                    "keychain_failed" | "refresh_failed" | "auth_invalid"
-                        | "invalid_grant" | "authentication_error" | "http_401" | "http_403"
+                    "keychain_failed"
+                        | "refresh_failed"
+                        | "auth_invalid"
+                        | "invalid_grant"
+                        | "authentication_error"
+                        | "http_401"
+                        | "http_403"
                 )
             })
             .unwrap_or(false);
@@ -987,7 +1117,10 @@ mod tests {
 
         // Transient errors must NOT mark auth-dead when the bridge is Ok.
         assert!(!decide_auth_dead(Some(&live_auth), Some("api_failed")));
-        assert!(!decide_auth_dead(Some(&live_auth), Some("rate_limit_error")));
+        assert!(!decide_auth_dead(
+            Some(&live_auth),
+            Some("rate_limit_error")
+        ));
         assert!(!decide_auth_dead(Some(&live_auth), Some("http_429")));
         assert!(!decide_auth_dead(Some(&live_auth), None));
     }
@@ -998,7 +1131,8 @@ mod tests {
         use crate::external_accounts::{parse_claude_blob, AuthStatus};
 
         // Simulate: live keychain entry has empty tokens (truly revoked).
-        let live_blob = r#"{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":9999}}"#;
+        let live_blob =
+            r#"{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":9999}}"#;
         let live_auth = parse_claude_blob(live_blob);
         assert_eq!(live_auth, AuthStatus::NeedsReauth);
 
@@ -1008,7 +1142,10 @@ mod tests {
             AuthStatus::Unknown => false,
         };
 
-        assert!(auth_dead, "live NeedsReauth must result in auth_dead = true");
+        assert!(
+            auth_dead,
+            "live NeedsReauth must result in auth_dead = true"
+        );
     }
 
     /// FIX 1: with 2+ entries sharing a provider, a lookup with no exact id match
@@ -1025,7 +1162,9 @@ mod tests {
         // Exact match present → returns that exact entry.
         let exact = find_legacy_entry(&entries, "claude2", "claude");
         assert_eq!(
-            exact.and_then(|e| e.get("account")).and_then(|v| v.as_str()),
+            exact
+                .and_then(|e| e.get("account"))
+                .and_then(|v| v.as_str()),
             Some("claude2"),
             "exact id match must win"
         );
@@ -1065,7 +1204,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         // vault.env has 1 key.
         let vault = dir.path().join("vault.env");
-        std::fs::write(&vault, "GEMINI_FREE_KEY_1=AIzaFixtureCCCCCCCCCCCCCCCCCCCCCC1\n").unwrap();
+        std::fs::write(
+            &vault,
+            "GEMINI_FREE_KEY_1=AIzaFixtureCCCCCCCCCCCCCCCCCCCCCC1\n",
+        )
+        .unwrap();
         // gfp-keys.env has 2 unique keys (1 duplicates vault.env, 1 is new).
         let gfp_keys = dir.path().join("gfp-keys.env");
         std::fs::write(

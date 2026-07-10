@@ -112,8 +112,8 @@ async fn start_test_server_with_audit(
         bus,
         std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
     )
-        .await
-        .expect("IpcServer::new");
+    .await
+    .expect("IpcServer::new");
 
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -268,8 +268,8 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
         bus,
         std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
     )
-        .await
-        .expect("IpcServer::new");
+    .await
+    .expect("IpcServer::new");
     let socket_path = config_dir.join("daemon.sock");
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();

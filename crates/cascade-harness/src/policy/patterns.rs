@@ -27,13 +27,22 @@
 /// Root-level recursive delete patterns.
 pub const FS_PATTERNS: &[(&str, &str)] = &[
     // `rm -rf /` — recursive delete from filesystem root.
-    ("rm -rf /", "recursive delete from filesystem root is forbidden"),
+    (
+        "rm -rf /",
+        "recursive delete from filesystem root is forbidden",
+    ),
     // `rm -rf ~` — recursive delete of home directory.
-    ("rm -rf ~", "recursive delete of home directory is forbidden"),
+    (
+        "rm -rf ~",
+        "recursive delete of home directory is forbidden",
+    ),
     // `rm -rf $HOME` — same via env variable.
     ("rm -rf $HOME", "recursive delete of $HOME is forbidden"),
     // `/Volumes` as a deletion target covers external drives (rm -rf /Volumes/*).
-    ("rm -rf /Volumes", "recursive delete of /Volumes is forbidden"),
+    (
+        "rm -rf /Volumes",
+        "recursive delete of /Volumes is forbidden",
+    ),
     // `rm -rf .git` at repo root — destroys version-control history.
     // The pattern `rm -rf .git` is specific: safe .git-adjacent ops
     // (e.g. `rm -rf .git/hooks`) don't match because they contain `.git/`.
@@ -95,7 +104,10 @@ pub const GIT_PATTERNS: &[(&str, &str)] = &[
     ),
     // `git branch -D main` — delete local protected branch.
     ("branch -D main", "deleting local main branch is forbidden"),
-    ("branch -D master", "deleting local master branch is forbidden"),
+    (
+        "branch -D master",
+        "deleting local master branch is forbidden",
+    ),
     // `git filter-branch` — rewrites published history.
     (
         "filter-branch",
@@ -172,12 +184,21 @@ pub const INFRA_PATTERNS: &[(&str, &str)] = &[
 pub const PUBLISH_PATTERNS: &[(&str, &str)] = &[
     // npm / pnpm publish.
     ("npm publish", "npm publish requires explicit user approval"),
-    ("pnpm publish", "pnpm publish requires explicit user approval"),
+    (
+        "pnpm publish",
+        "pnpm publish requires explicit user approval",
+    ),
     // Cargo publish.
-    ("cargo publish", "cargo publish requires explicit user approval"),
+    (
+        "cargo publish",
+        "cargo publish requires explicit user approval",
+    ),
     // pip / PyPI.
     ("pip publish", "pip publish requires explicit user approval"),
-    ("twine upload", "twine upload to PyPI requires explicit user approval"),
+    (
+        "twine upload",
+        "twine upload to PyPI requires explicit user approval",
+    ),
     // GitHub release creation.
     (
         "gh release create",
@@ -198,10 +219,16 @@ pub const SECRET_PATTERNS: &[(&str, &str)] = &[
     ("cat vault.env", "printing vault.env is forbidden"),
     // Committing credential files.
     ("git add .env", "staging .env files for commit is forbidden"),
-    ("git add vault.env", "staging vault.env for commit is forbidden"),
+    (
+        "git add vault.env",
+        "staging vault.env for commit is forbidden",
+    ),
     // Grep/find for private keys in common output-to-stdout invocations.
     // Match `-----BEGIN` which is the PEM header present in all private key types.
-    ("-----BEGIN", "PEM private key material in output is forbidden"),
+    (
+        "-----BEGIN",
+        "PEM private key material in output is forbidden",
+    ),
 ];
 
 // ── Aggregated slice ──────────────────────────────────────────────────────────

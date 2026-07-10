@@ -95,10 +95,7 @@ pub fn top_sections(text: &str, n: usize) -> Vec<PromptSection> {
         // Check for double-newline boundary: \n\n
         let is_double_nl = i + 1 < len && bytes[i] == b'\n' && bytes[i + 1] == b'\n';
         // Check for markdown heading: line starts with '#'
-        let is_heading = i == 0
-            || (bytes[i] == b'\n'
-                && i + 1 < len
-                && bytes[i + 1] == b'#');
+        let is_heading = i == 0 || (bytes[i] == b'\n' && i + 1 < len && bytes[i + 1] == b'#');
 
         if (is_double_nl || is_heading) && i > current_start {
             let slice = &text[current_start..i];
@@ -418,9 +415,7 @@ mod tests {
         let long = "word ".repeat(200);
         let medium = "word ".repeat(50);
         let short = "word ".repeat(10);
-        let prompt = format!(
-            "# Short\n\n{short}\n\n# Medium\n\n{medium}\n\n# Long\n\n{long}"
-        );
+        let prompt = format!("# Short\n\n{short}\n\n# Medium\n\n{medium}\n\n# Long\n\n{long}");
         let sections = top_sections(&prompt, 3);
         // All three sections present and in descending order
         assert_eq!(sections.len(), 3);

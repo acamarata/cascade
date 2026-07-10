@@ -181,8 +181,7 @@ impl Command for MemoryCaptureArgs {
 
         // 5. Append to the memory file.
         let cascade_dir = resolve_cascade_dir(self.dir.as_deref())?;
-        let path =
-            cascade_core::memory::write(&cascade_dir, &target_file, &entry, true).await?;
+        let path = cascade_core::memory::write(&cascade_dir, &target_file, &entry, true).await?;
 
         println!("Captured → {}", path.display());
         println!("Tags: {}", tag_str.join(", "));
@@ -199,7 +198,11 @@ fn secs_to_date(secs: u64) -> String {
     let mut y = 1970u32;
     let mut d = days as u32;
     loop {
-        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 366 } else { 365 };
+        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
+            366
+        } else {
+            365
+        };
         if d < days_in_year {
             break;
         }
@@ -207,7 +210,20 @@ fn secs_to_date(secs: u64) -> String {
         y += 1;
     }
     let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let month_days: [u32; 12] = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let month_days: [u32; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut m = 0u32;
     for (i, &md) in month_days.iter().enumerate() {
         if d < md {
@@ -267,7 +283,10 @@ mod tests {
 
         let text = "decided to use sqlite over postgres for the local-first constraint";
         let tags = cascade_core::taxonomy::classify_topic(text);
-        let target = tags.iter().find_map(|t| t.memory_file()).unwrap_or("lessons");
+        let target = tags
+            .iter()
+            .find_map(|t| t.memory_file())
+            .unwrap_or("lessons");
         assert_eq!(target, "decisions");
 
         let tag_str: Vec<String> = tags.iter().map(|t| format!("#{}", t)).collect();
@@ -294,7 +313,10 @@ mod tests {
 
         let text = "learned that blocking the tokio runtime in tests causes flaky CI";
         let tags = cascade_core::taxonomy::classify_topic(text);
-        let target = tags.iter().find_map(|t| t.memory_file()).unwrap_or("lessons");
+        let target = tags
+            .iter()
+            .find_map(|t| t.memory_file())
+            .unwrap_or("lessons");
         assert_eq!(target, "lessons");
 
         let entry = format!("\n## 2026-01-01\n\n{}\n", text);

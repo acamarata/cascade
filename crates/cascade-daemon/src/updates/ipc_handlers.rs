@@ -162,11 +162,7 @@ pub async fn check_for_update() -> Result<UpdateCheckResult, DownloadError> {
     Ok(UpdateCheckResult {
         update_available,
         current_version,
-        latest_version: if update_available {
-            Some(latest)
-        } else {
-            None
-        },
+        latest_version: if update_available { Some(latest) } else { None },
     })
 }
 
@@ -310,11 +306,7 @@ async fn apply_full_bundle(
     if let Some(tok) = &auth_token {
         rel_req = rel_req.header("Authorization", format!("Bearer {tok}"));
     }
-    let release: GhRelease = match rel_req
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-    {
+    let release: GhRelease = match rel_req.send().await.and_then(|r| r.error_for_status()) {
         Ok(resp) => match resp.json().await {
             Ok(r) => r,
             Err(e) => {
@@ -349,9 +341,8 @@ async fn apply_full_bundle(
     };
     // Private repos: browser_download_url 404s for API-token callers — the
     // asset must be fetched via its API url with Accept: application/octet-stream.
-    let use_api_urls = auth_token.is_some()
-        && !bundle_asset.url.is_empty()
-        && !checksums_asset.url.is_empty();
+    let use_api_urls =
+        auth_token.is_some() && !bundle_asset.url.is_empty() && !checksums_asset.url.is_empty();
     let (bundle_url, checksums_url) = if use_api_urls {
         (bundle_asset.url.clone(), checksums_asset.url.clone())
     } else {
@@ -371,11 +362,7 @@ async fn apply_full_bundle(
     if let Some(tok) = &auth_token {
         sums_req = sums_req.header("Authorization", format!("Bearer {tok}"));
     }
-    let checksums_raw = match sums_req
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-    {
+    let checksums_raw = match sums_req.send().await.and_then(|r| r.error_for_status()) {
         Ok(resp) => match resp.text().await {
             Ok(t) => t,
             Err(e) => {
@@ -468,11 +455,11 @@ async fn apply_full_bundle(
         }
         Err(e) => {
             // Attempt rollback to the snapshot we just took.
-            if let Err(restore_err) =
-                Snapshot::restore(snapshot_root, &snapshot_id, cascaded_path.parent().unwrap_or(
-                    std::path::Path::new("/"),
-                ))
-            {
+            if let Err(restore_err) = Snapshot::restore(
+                snapshot_root,
+                &snapshot_id,
+                cascaded_path.parent().unwrap_or(std::path::Path::new("/")),
+            ) {
                 warn!(
                     apply_error = %e,
                     restore_error = %restore_err,
@@ -568,7 +555,11 @@ fn is_supervised() -> bool {
 /// duplicate rather than a harmless double-start.
 fn schedule_self_restart() {
     let supervised = is_supervised();
-    let exe = if supervised { None } else { std::env::current_exe().ok() };
+    let exe = if supervised {
+        None
+    } else {
+        std::env::current_exe().ok()
+    };
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         if supervised {
@@ -619,7 +610,9 @@ pub fn set_auto_update(enable: bool) -> Result<UpdateAutoResult, std::io::Error>
 
     std::fs::write(&config_path, doc.to_string())?;
 
-    Ok(UpdateAutoResult { auto_update: enable })
+    Ok(UpdateAutoResult {
+        auto_update: enable,
+    })
 }
 
 /// Read the current `[updates] auto` value (defaults to `false` if unset).
@@ -671,17 +664,16 @@ mod tests {
         let server = wiremock::MockServer::start().await;
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/releases/latest"))
-            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "tag_name": "v99.0.0",
-                "assets": []
-            })))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "tag_name": "v99.0.0",
+                    "assets": []
+                })),
+            )
             .mount(&server)
             .await;
 
-        std::env::set_var(
-            "CASCADE_UPDATE_API_BASE",
-            server.uri(),
-        );
+        std::env::set_var("CASCADE_UPDATE_API_BASE", server.uri());
         let result = check_for_update().await.expect("check succeeds");
         std::env::remove_var("CASCADE_UPDATE_API_BASE");
 
@@ -696,10 +688,12 @@ mod tests {
         let server = wiremock::MockServer::start().await;
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/releases/latest"))
-            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")),
-                "assets": []
-            })))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")),
+                    "assets": []
+                })),
+            )
             .mount(&server)
             .await;
 
@@ -824,5 +818,4 @@ mod tests {
         // doesn't panic and returns a coherent Option.
         let _ = resolve_cascade_cli_path(&cascaded);
     }
-
 }

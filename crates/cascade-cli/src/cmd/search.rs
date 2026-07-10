@@ -144,17 +144,16 @@ async fn search_memory(query: &str, top: usize, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    let terms: Vec<String> = query
-        .split_whitespace()
-        .map(|s| s.to_lowercase())
-        .collect();
+    let terms: Vec<String> = query.split_whitespace().map(|s| s.to_lowercase()).collect();
 
     let mut hits: Vec<(usize, String)> = Vec::new();
 
     let mut rd = match tokio::fs::read_dir(&memory_dir).await {
         Ok(rd) => rd,
         Err(_) => {
-            if json { println!("[]"); }
+            if json {
+                println!("[]");
+            }
             return Ok(());
         }
     };
@@ -216,7 +215,10 @@ fn print_hits(hits: &[(usize, String)], json: bool) {
             .iter()
             .map(|(score, text)| serde_json::json!({ "score": score, "text": text }))
             .collect();
-        println!("{}", serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".into()));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".into())
+        );
     } else {
         for (score, text) in hits {
             println!("[{}] {}", score, text.lines().next().unwrap_or(""));

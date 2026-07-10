@@ -79,9 +79,21 @@ pub enum ContinuityCommands {
 impl Command for ContinuityArgs {
     async fn run(&self) -> Result<()> {
         match &self.subcommand {
-            ContinuityCommands::Add { session, prompt, account, config_dir, mode, note } => {
-                run_add(session, prompt, account, config_dir.as_deref(), mode, note.as_deref())
-            }
+            ContinuityCommands::Add {
+                session,
+                prompt,
+                account,
+                config_dir,
+                mode,
+                note,
+            } => run_add(
+                session,
+                prompt,
+                account,
+                config_dir.as_deref(),
+                mode,
+                note.as_deref(),
+            ),
             ContinuityCommands::List => run_list(),
             ContinuityCommands::Rm { id } => run_rm(id),
             ContinuityCommands::Status => run_status(),
@@ -256,7 +268,10 @@ fn run_add(
 fn run_list() -> Result<()> {
     let intents = list_intents(&continuity_dir());
     if intents.is_empty() {
-        println!("No continuity intents found ({})", continuity_dir().display());
+        println!(
+            "No continuity intents found ({})",
+            continuity_dir().display()
+        );
         return Ok(());
     }
 
@@ -272,7 +287,11 @@ fn run_list() -> Result<()> {
             intent.account_id,
             intent.mode.to_string(),
             format_ts(intent.created_at),
-            if intent.fired_at.is_some() { "yes" } else { "no" },
+            if intent.fired_at.is_some() {
+                "yes"
+            } else {
+                "no"
+            },
             intent.note.as_deref().unwrap_or("-"),
         );
     }

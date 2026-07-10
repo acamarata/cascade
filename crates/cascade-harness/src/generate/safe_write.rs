@@ -730,7 +730,11 @@ mod tests {
     fn restore_dry_run_no_writes() {
         let tmp = TempDir::new().unwrap();
         // Create a fake snapshot dir with one file.
-        let snap_dir = tmp.path().join(".cascade").join("snapshots").join("20260101-000000-001");
+        let snap_dir = tmp
+            .path()
+            .join(".cascade")
+            .join("snapshots")
+            .join("20260101-000000-001");
         fs::create_dir_all(&snap_dir).unwrap();
         fs::write(snap_dir.join("CLAUDE.md"), "snapshot content").unwrap();
 
@@ -748,7 +752,11 @@ mod tests {
     #[test]
     fn restore_apply_restores_files() {
         let tmp = TempDir::new().unwrap();
-        let snap_dir = tmp.path().join(".cascade").join("snapshots").join("20260101-000000-001");
+        let snap_dir = tmp
+            .path()
+            .join(".cascade")
+            .join("snapshots")
+            .join("20260101-000000-001");
         fs::create_dir_all(&snap_dir).unwrap();
         fs::write(snap_dir.join("CLAUDE.md"), "restored content").unwrap();
 

@@ -29,7 +29,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_cc_detects_email_in_settings_json() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(
             &tmp,
@@ -63,7 +65,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_cc_skips_when_no_settings_file() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", tmp.path());
@@ -81,7 +85,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_cc_skips_malformed_credentials() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         // settings.json exists (so CC is "installed") but .credentials is garbage
         write_file(
@@ -112,7 +118,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_opencode_detects_providers() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(
             &tmp,
@@ -140,7 +148,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_opencode_skips_malformed_json() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(&tmp, ".config/opencode/config.json", "{NOT JSON}}}");
 
@@ -162,7 +172,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_codex_detects_email() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(&tmp, ".codex/auth.json", r#"{"email":"codex@example.com"}"#);
 
@@ -186,7 +198,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_codex_skips_when_absent() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", tmp.path());
@@ -206,7 +220,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_env_vars_detects_anthropic_key() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OPENAI_API_KEY");
         std::env::remove_var("GOOGLE_API_KEY");
         std::env::remove_var("GEMINI_API_KEY");
@@ -230,7 +246,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_env_vars_empty_when_none_set() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("ANTHROPIC_API_KEY");
         std::env::remove_var("OPENAI_API_KEY");
         std::env::remove_var("GOOGLE_API_KEY");
@@ -249,7 +267,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_env_vars_detects_multiple_keys() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-1");
         std::env::set_var("OPENAI_API_KEY", "sk-openai-1");
         std::env::remove_var("GOOGLE_API_KEY");
@@ -269,7 +289,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_all_returns_vec_no_panic() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // With no env vars and empty HOME-equivalent, should return empty without panic.
         let tmp = TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
@@ -321,7 +343,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn import_env_api_key_stores_in_keychain() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // This test uses the in-memory keychain via platform_keychain() in CI.
         // We verify that the function path runs without panic when the env var is present.
         std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-test-import");
@@ -402,7 +426,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_antigravity_detects_email_in_config_json() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(
             &tmp,
@@ -430,7 +456,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_antigravity_returns_empty_when_not_installed() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", tmp.path());
@@ -448,7 +476,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_antigravity_fallback_dot_antigravity() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(
             &tmp,
@@ -476,7 +506,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn scan_all_includes_antigravity() {
-        let _env_guard = crate::test_helpers::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_helpers::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         write_file(
             &tmp,

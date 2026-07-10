@@ -70,8 +70,8 @@ async fn start_test_server(
         bus,
         std::sync::Arc::new(cascade_providers::ProviderRegistry::new()),
     )
-        .await
-        .expect("IpcServer::new");
+    .await
+    .expect("IpcServer::new");
 
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();

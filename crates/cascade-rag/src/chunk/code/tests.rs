@@ -4,8 +4,8 @@
 mod tests {
     use std::path::PathBuf;
 
-    use super::super::chunker::CodeChunker;
     use super::super::super::{Chunker, ChunkerConfig};
+    use super::super::chunker::CodeChunker;
 
     fn chunker() -> CodeChunker {
         CodeChunker::new(ChunkerConfig {

@@ -69,11 +69,11 @@ pub enum NsentrySubcmd {
 impl Command for NsentryArgs {
     async fn run(&self) -> Result<()> {
         match &self.subcommand {
-            NsentrySubcmd::Status(a)  => a.run().await,
-            NsentrySubcmd::Run(a)     => a.run().await,
-            NsentrySubcmd::Pause(a)   => a.run_toggle(false).await,
-            NsentrySubcmd::Resume(a)  => a.run_toggle(true).await,
-            NsentrySubcmd::List(a)    => a.run().await,
+            NsentrySubcmd::Status(a) => a.run().await,
+            NsentrySubcmd::Run(a) => a.run().await,
+            NsentrySubcmd::Pause(a) => a.run_toggle(false).await,
+            NsentrySubcmd::Resume(a) => a.run_toggle(true).await,
+            NsentrySubcmd::List(a) => a.run().await,
         }
     }
 }
@@ -123,8 +123,8 @@ impl Command for NsentryStatusArgs {
         for proj in &cfg.projects {
             for stream_name in ["rsync", "ci", "dependabot"] {
                 let stream_enabled = match stream_name {
-                    "rsync"      => proj.streams.rsync.enabled,
-                    "ci"         => proj.streams.ci.enabled,
+                    "rsync" => proj.streams.rsync.enabled,
+                    "ci" => proj.streams.ci.enabled,
                     "dependabot" => proj.streams.dependabot.enabled,
                     _ => false,
                 } && proj.enabled;
@@ -143,21 +143,22 @@ impl Command for NsentryStatusArgs {
                     .map(|s| format!("{}/{}", s.last_delivered, s.total_delivered))
                     .unwrap_or_else(|| "0/0".to_string());
 
-                let error = ss
-                    .and_then(|s| s.last_error.as_deref())
-                    .unwrap_or("");
+                let error = ss.and_then(|s| s.last_error.as_deref()).unwrap_or("");
 
                 // Flag stalled streams: last run > 2× interval with no success.
                 let stalled = if let Some(s) = ss {
                     let interval_secs = match stream_name {
-                        "rsync"      => proj.streams.rsync.interval_secs,
-                        "ci"         => proj.streams.ci.interval_secs,
+                        "rsync" => proj.streams.rsync.interval_secs,
+                        "ci" => proj.streams.ci.interval_secs,
                         "dependabot" => proj.streams.dependabot.interval_secs,
                         _ => 3600,
                     };
                     let now = unix_now();
                     let stale_threshold = interval_secs * 2;
-                    let since_last = s.last_run_at.map(|t| now.saturating_sub(t)).unwrap_or(u64::MAX);
+                    let since_last = s
+                        .last_run_at
+                        .map(|t| now.saturating_sub(t))
+                        .unwrap_or(u64::MAX);
                     (s.last_error.is_some() || since_last > stale_threshold) && stream_enabled
                 } else {
                     false
@@ -247,8 +248,8 @@ impl Command for NsentryRunArgs {
                 }
 
                 let enabled = match stream_name {
-                    "rsync"      => proj.streams.rsync.enabled,
-                    "ci"         => proj.streams.ci.enabled,
+                    "rsync" => proj.streams.rsync.enabled,
+                    "ci" => proj.streams.ci.enabled,
                     "dependabot" => proj.streams.dependabot.enabled,
                     _ => false,
                 };
@@ -259,8 +260,8 @@ impl Command for NsentryRunArgs {
                 print!("  {} / {} ... ", proj.name, stream_name);
 
                 let result = match stream_name {
-                    "rsync"      => run_rsync_stream(proj),
-                    "ci"         => run_ci_stream(proj, &sdir),
+                    "rsync" => run_rsync_stream(proj),
+                    "ci" => run_ci_stream(proj, &sdir),
                     "dependabot" => run_dependabot_stream(proj, &sdir),
                     _ => continue,
                 };
@@ -345,7 +346,10 @@ impl Command for NsentryListArgs {
             println!("  per_run_cap: {}", proj.per_run_cap);
             println!("  inbox:       {}", proj.resolved_inbox().display());
             if let Some(ref s) = proj.sentry_server {
-                println!("  rsync:       {} → {} ({}s)", s, proj.remote_dir, proj.streams.rsync.interval_secs);
+                println!(
+                    "  rsync:       {} → {} ({}s)",
+                    s, proj.remote_dir, proj.streams.rsync.interval_secs
+                );
             }
             println!(
                 "  ci:          org={} per_repo={} ({}s)",

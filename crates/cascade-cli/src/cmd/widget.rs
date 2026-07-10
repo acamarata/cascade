@@ -47,9 +47,9 @@ pub struct WidgetStatusArgs;
 impl Command for WidgetArgs {
     async fn run(&self) -> Result<()> {
         match &self.subcommand {
-            WidgetSubcmd::Install(a)   => a.run().await,
+            WidgetSubcmd::Install(a) => a.run().await,
             WidgetSubcmd::Uninstall(a) => a.run().await,
-            WidgetSubcmd::Status(a)    => a.run().await,
+            WidgetSubcmd::Status(a) => a.run().await,
         }
     }
 }
@@ -125,14 +125,20 @@ fn widget_install() -> Result<()> {
     let home = cascade_types::paths::home_dir();
     let agents_dir = home.join("Library").join("LaunchAgents");
     std::fs::create_dir_all(&agents_dir).map_err(|e| CascadeError::Io {
-        path:      agents_dir.clone(),
+        path: agents_dir.clone(),
         operation: "create LaunchAgents dir",
-        source:    e,
+        source: e,
     })?;
 
     let plist_path = agents_dir.join(format!("{WIDGET_LABEL}.plist"));
-    let log_out = home.join("Library").join("Logs").join("cascade-fleet-widget.log");
-    let log_err = home.join("Library").join("Logs").join("cascade-fleet-widget-err.log");
+    let log_out = home
+        .join("Library")
+        .join("Logs")
+        .join("cascade-fleet-widget.log");
+    let log_err = home
+        .join("Library")
+        .join("Logs")
+        .join("cascade-fleet-widget-err.log");
 
     let plist = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -157,8 +163,8 @@ fn widget_install() -> Result<()> {
 </dict>
 </plist>
 "#,
-        label   = WIDGET_LABEL,
-        binary  = binary.display(),
+        label = WIDGET_LABEL,
+        binary = binary.display(),
         log_out = log_out.display(),
         log_err = log_err.display(),
     );
@@ -210,9 +216,9 @@ fn widget_uninstall() -> Result<()> {
             .arg(&plist_path)
             .output();
         std::fs::remove_file(&plist_path).map_err(|e| CascadeError::Io {
-            path:      plist_path,
+            path: plist_path,
             operation: "remove widget plist",
-            source:    e,
+            source: e,
         })?;
         println!("cascade-fleet-widget LaunchAgent removed");
     } else {
@@ -236,7 +242,10 @@ fn widget_status() -> Result<()> {
         .join(format!("{WIDGET_LABEL}.plist"));
 
     let installed = plist_path.exists();
-    println!("service file: {}", if installed { "present" } else { "not found" });
+    println!(
+        "service file: {}",
+        if installed { "present" } else { "not found" }
+    );
     if installed {
         println!("plist: {}", plist_path.display());
     }
@@ -269,13 +278,13 @@ fn atomic_write_str(path: &std::path::Path, content: &str) -> Result<()> {
     let tmp = std::path::PathBuf::from(tmp_name);
 
     std::fs::write(&tmp, content).map_err(|e| CascadeError::Io {
-        path:      tmp.clone(),
+        path: tmp.clone(),
         operation: "atomic write (tmp)",
-        source:    e,
+        source: e,
     })?;
     std::fs::rename(&tmp, path).map_err(|e| CascadeError::Io {
-        path:      path.to_path_buf(),
+        path: path.to_path_buf(),
         operation: "atomic rename",
-        source:    e,
+        source: e,
     })
 }

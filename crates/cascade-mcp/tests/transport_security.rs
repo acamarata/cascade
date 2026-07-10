@@ -24,8 +24,8 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use cascade_mcp::auth::McpAuth;
 use cascade_mcp::notification::NotificationBus;
+use cascade_mcp::security::{validate_local_origin, CapabilitySet};
 use cascade_mcp::server::McpServerConfig;
-use cascade_mcp::security::{CapabilitySet, validate_local_origin};
 
 // Re-export transport internals needed for app construction.
 use cascade_mcp::transport::http::BODY_LIMIT;
@@ -67,7 +67,9 @@ async fn foreign_origin_post_returns_403() {
         .uri("/mcp")
         .header("origin", "https://evil.com")
         .header("content-type", "application/json")
-        .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#))
+        .body(Body::from(
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        ))
         .unwrap();
 
     let resp = app.oneshot(req).await.unwrap();
@@ -88,7 +90,9 @@ async fn local_origin_post_returns_not_403() {
         .uri("/mcp")
         .header("origin", "http://localhost:7722")
         .header("content-type", "application/json")
-        .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#))
+        .body(Body::from(
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        ))
         .unwrap();
 
     let resp = app.oneshot(req).await.unwrap();

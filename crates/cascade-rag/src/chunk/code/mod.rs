@@ -23,8 +23,8 @@
 mod async_impl;
 mod chunker;
 mod language;
-mod ts_impl;
 mod tests;
+mod ts_impl;
 
 // ── Public re-exports (preserve original paths) ───────────────────────────────
 

@@ -61,7 +61,9 @@ impl SqliteJobQueue {
             );
             CREATE INDEX IF NOT EXISTS idx_jobs_ready ON jobs(leased_until, id);",
         )?;
-        Ok(Self { conn: std::sync::Mutex::new(conn) })
+        Ok(Self {
+            conn: std::sync::Mutex::new(conn),
+        })
     }
 
     fn now() -> i64 {

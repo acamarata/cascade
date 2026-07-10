@@ -166,11 +166,18 @@ where
 
         // 2. Retrieve context.
         context = retrieve_fn(expanded.queries).await;
-        debug!(iteration = i, snippets = context.len(), "agentic_retrieve: context retrieved");
+        debug!(
+            iteration = i,
+            snippets = context.len(),
+            "agentic_retrieve: context retrieved"
+        );
 
         // 3. Assess adequacy.
         if assessor.is_adequate(question, &context).await {
-            debug!(iteration = i, "agentic_retrieve: context adequate; converged");
+            debug!(
+                iteration = i,
+                "agentic_retrieve: context adequate; converged"
+            );
             return Ok(AgenticResult {
                 context,
                 iterations: i,
@@ -192,7 +199,10 @@ where
         }
     }
 
-    debug!(max_iterations = max, "agentic_retrieve: bound reached without convergence");
+    debug!(
+        max_iterations = max,
+        "agentic_retrieve: bound reached without convergence"
+    );
     Ok(AgenticResult {
         context,
         iterations: max,
@@ -297,15 +307,9 @@ mod tests {
         let assessor: Arc<dyn AdequacyAssessor> = Arc::new(AlwaysAdequate);
         let config = AgenticConfig { max_iterations: 5 };
 
-        let result = agentic_retrieve(
-            "explain RRF",
-            strategy,
-            assessor,
-            mock_retrieve,
-            &config,
-        )
-        .await
-        .unwrap();
+        let result = agentic_retrieve("explain RRF", strategy, assessor, mock_retrieve, &config)
+            .await
+            .unwrap();
 
         assert!(result.converged);
         assert_eq!(result.iterations, 1);
@@ -360,15 +364,9 @@ mod tests {
         let assessor: Arc<dyn AdequacyAssessor> = Arc::new(NeverAdequate);
         let config = AgenticConfig { max_iterations: 3 };
 
-        let result = agentic_retrieve(
-            "sparse vectors",
-            strategy,
-            assessor,
-            mock_retrieve,
-            &config,
-        )
-        .await
-        .unwrap();
+        let result = agentic_retrieve("sparse vectors", strategy, assessor, mock_retrieve, &config)
+            .await
+            .unwrap();
 
         // NeverAdequate appends "+" each reformulation
         assert!(result.final_query.contains("sparse vectors+"));
@@ -380,15 +378,9 @@ mod tests {
         let assessor: Arc<dyn AdequacyAssessor> = Arc::new(NeverAdequate);
         let config = AgenticConfig { max_iterations: 0 };
 
-        let result = agentic_retrieve(
-            "test",
-            strategy,
-            assessor,
-            mock_retrieve,
-            &config,
-        )
-        .await
-        .unwrap();
+        let result = agentic_retrieve("test", strategy, assessor, mock_retrieve, &config)
+            .await
+            .unwrap();
 
         // clamped to 1
         assert_eq!(result.iterations, 1);

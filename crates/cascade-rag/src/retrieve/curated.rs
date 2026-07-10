@@ -76,11 +76,7 @@ pub fn upsert_chunk_meta(
 ///
 /// `Ok(Vec<(source_id, normalised_score)>)` sorted descending by score.
 /// Returns `Ok(vec![])` on FTS parse errors rather than propagating.
-pub fn query_curated_fts(
-    conn: &Connection,
-    query: &str,
-    k: usize,
-) -> SqlResult<Vec<(i64, f64)>> {
+pub fn query_curated_fts(conn: &Connection, query: &str, k: usize) -> SqlResult<Vec<(i64, f64)>> {
     let sanitised = sanitise_fts5_query(query);
 
     let mut stmt = match conn.prepare(
@@ -262,14 +258,26 @@ pub mod tests {
         let s2 = insert_source(&conn, "/docs/other.md");
 
         // Only s1 has curated metadata matching "prayer times".
-        upsert_chunk_meta(&conn, s1, Some("Islamic prayer times calculation"), None, None)
-            .unwrap();
+        upsert_chunk_meta(
+            &conn,
+            s1,
+            Some("Islamic prayer times calculation"),
+            None,
+            None,
+        )
+        .unwrap();
         // s2 has no curated metadata.
 
         let results = query_curated_fts(&conn, "prayer times", 10).unwrap();
         let ids: Vec<i64> = results.iter().map(|(id, _)| *id).collect();
-        assert!(ids.contains(&s1), "source with matching description must appear");
-        assert!(!ids.contains(&s2), "source without description must not appear");
+        assert!(
+            ids.contains(&s1),
+            "source with matching description must appear"
+        );
+        assert!(
+            !ids.contains(&s2),
+            "source without description must not appear"
+        );
     }
 
     // ── retrieve::curated::title_tag_match ───────────────────────────────────
@@ -324,7 +332,10 @@ pub mod tests {
     fn no_metadata_returns_empty() {
         let conn = migrated_conn();
         let results = query_curated_fts(&conn, "anything", 10).unwrap();
-        assert!(results.is_empty(), "empty meta table must produce empty results");
+        assert!(
+            results.is_empty(),
+            "empty meta table must produce empty results"
+        );
     }
 
     // ── retrieve::curated::idempotent_upsert ─────────────────────────────────

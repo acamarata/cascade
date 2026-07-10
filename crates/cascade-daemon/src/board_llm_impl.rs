@@ -55,16 +55,12 @@ impl BoardLlm for ProviderBoardLlm {
     /// Assembles a two-message conversation (system prompt + user ask) and
     /// sends it to the registry's best available provider.
     async fn opine(&self, role: &AgentRole, topic: &str, system: &str) -> Result<String, String> {
-        let (adapter, provider_id) = self
-            .registry
-            .pick_for_chat(None)
-            .await
-            .ok_or_else(|| {
-                format!(
-                    "board_debate({:?}): no provider available — registry empty or all unhealthy",
-                    role
-                )
-            })?;
+        let (adapter, provider_id) = self.registry.pick_for_chat(None).await.ok_or_else(|| {
+            format!(
+                "board_debate({:?}): no provider available — registry empty or all unhealthy",
+                role
+            )
+        })?;
 
         let messages = vec![
             Message {

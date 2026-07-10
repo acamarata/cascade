@@ -336,9 +336,7 @@ pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
         use bge_m3::{BgeM3Embedder, BgeM3Options};
         match BgeM3Embedder::new(BgeM3Options::default()).await {
             Ok(embedder) => {
-                tracing::info!(
-                    "RAG: real BgeM3Embedder initialised (MultilingualE5Large, 1024-d)"
-                );
+                tracing::info!("RAG: real BgeM3Embedder initialised (MultilingualE5Large, 1024-d)");
                 return std::sync::Arc::new(embedder);
             }
             Err(e) => {
@@ -720,7 +718,11 @@ mod tests {
         assert_eq!(model.dim(), 1024, "default model must be 1024-dim");
         // Must embed without panicking.
         let result = model.embed_dense(&["hello cascade"]);
-        assert!(result.is_ok(), "embed_dense must not error: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "embed_dense must not error: {:?}",
+            result.err()
+        );
         let vecs = result.unwrap();
         assert_eq!(vecs.len(), 1);
         assert_eq!(vecs[0].len(), 1024);

@@ -110,10 +110,7 @@ pub fn append_digest(
         use std::os::unix::fs::PermissionsExt;
         if let Ok(meta) = file.metadata() {
             if meta.permissions().mode() & 0o777 != 0o600 {
-                let _ = std::fs::set_permissions(
-                    &path,
-                    std::fs::Permissions::from_mode(0o600),
-                );
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
             }
         }
     }

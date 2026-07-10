@@ -95,12 +95,7 @@ pub fn expand_imports(text: &str, base_dir: &Path) -> String {
 ///   (cycle guard — NOT a global "seen" cache; identical imports in distinct
 ///   branches are each expanded independently).
 /// * `depth`   — current recursion depth (starts at 0).
-fn expand_inner(
-    text: &str,
-    base: &Path,
-    visited: &mut HashSet<PathBuf>,
-    depth: usize,
-) -> String {
+fn expand_inner(text: &str, base: &Path, visited: &mut HashSet<PathBuf>, depth: usize) -> String {
     let mut out = String::with_capacity(text.len());
     let mut first = true;
 
@@ -274,7 +269,11 @@ mod tests {
     #[test]
     fn simple_import_expands() {
         let tmp = TempDir::new().unwrap();
-        write(tmp.path(), "rules.md", "# Imported rules\n\nDo the right thing.");
+        write(
+            tmp.path(),
+            "rules.md",
+            "# Imported rules\n\nDo the right thing.",
+        );
 
         let text = "@rules.md\n\nOther text.";
         let result = expand_imports(text, tmp.path());
@@ -329,9 +328,15 @@ mod tests {
         let result = expand_imports(text, tmp.path());
 
         // a.md's body must be inlined.
-        assert!(result.contains("A start"), "A content must appear: {result}");
+        assert!(
+            result.contains("A start"),
+            "A content must appear: {result}"
+        );
         // b.md's body must be inlined (first expansion of b succeeds).
-        assert!(result.contains("B start"), "B content must appear: {result}");
+        assert!(
+            result.contains("B start"),
+            "B content must appear: {result}"
+        );
         // The cyclic `@a.md` inside b.md must be left verbatim.
         assert!(
             result.contains("@a.md"),
@@ -429,7 +434,10 @@ mod tests {
     fn leading_import_token_edge_cases() {
         // Valid
         assert_eq!(leading_import_token("@rules.md"), Some("rules.md"));
-        assert_eq!(leading_import_token("@sub/dir/file.md"), Some("sub/dir/file.md"));
+        assert_eq!(
+            leading_import_token("@sub/dir/file.md"),
+            Some("sub/dir/file.md")
+        );
         assert_eq!(leading_import_token("@RTK.md rest"), Some("RTK.md"));
 
         // Invalid — email

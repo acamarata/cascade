@@ -62,8 +62,8 @@ pub mod resolve;
 pub mod restore;
 pub mod search;
 // P12: snapshot list/restore for pre-generation file capture
-pub mod snapshot;
 pub mod setup_oc;
+pub mod snapshot;
 pub mod status;
 pub mod template;
 pub mod uninstall;
@@ -280,16 +280,16 @@ impl Commands {
             Commands::CcApi(args) => args.run().await,
             Commands::Configure(args) => args.run().await,
             Commands::Accounts(args) => args.run().await,
-            Commands::Widget(args)   => args.run().await,
-            Commands::Wizard(args)   => args.run().await,
-            Commands::Build(args)    => args.run().await,
+            Commands::Widget(args) => args.run().await,
+            Commands::Wizard(args) => args.run().await,
+            Commands::Build(args) => args.run().await,
             Commands::Telemetry(args) => args.run().await,
-            Commands::Export(args)    => args.run().await,
-            Commands::Security(args)  => args.run().await,
-            Commands::Sentry(args)    => args.run().await,
-            Commands::Nsentry(args)   => args.run().await,
-            Commands::Conductor(args)  => args.run().await,
-            Commands::Ram(args)       => args.run().await,
+            Commands::Export(args) => args.run().await,
+            Commands::Security(args) => args.run().await,
+            Commands::Sentry(args) => args.run().await,
+            Commands::Nsentry(args) => args.run().await,
+            Commands::Conductor(args) => args.run().await,
+            Commands::Ram(args) => args.run().await,
             Commands::Continuity(args) => args.run().await,
         }
     }

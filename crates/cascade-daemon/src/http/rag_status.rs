@@ -134,10 +134,7 @@ fn read_index_stats_at(index_root: &std::path::Path) -> RagStatusResponse {
 /// chrono is already a workspace dependency of cascade-daemon.
 fn unix_secs_to_iso8601(secs: i64) -> String {
     use chrono::{TimeZone, Utc};
-    let dt = Utc
-        .timestamp_opt(secs, 0)
-        .single()
-        .unwrap_or_else(Utc::now);
+    let dt = Utc.timestamp_opt(secs, 0).single().unwrap_or_else(Utc::now);
     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
@@ -222,8 +219,14 @@ mod tests {
 
         assert!(!stats.serving, "serving must be false with no index");
         assert_eq!(stats.index_count, 0, "index_count must be 0 with no index");
-        assert!(stats.last_indexed.is_none(), "last_indexed must be None with no index");
-        assert_eq!(stats.index_size_bytes, 0, "index_size_bytes must be 0 with no index");
+        assert!(
+            stats.last_indexed.is_none(),
+            "last_indexed must be None with no index"
+        );
+        assert_eq!(
+            stats.index_size_bytes, 0,
+            "index_size_bytes must be 0 with no index"
+        );
     }
 
     // ── rag_status::real_count_and_serving ───────────────────────────────────
@@ -260,7 +263,10 @@ mod tests {
             "last_indexed must be Some after indexing"
         );
         let ts = stats.last_indexed.as_deref().unwrap();
-        assert!(ts.contains('T') && ts.ends_with('Z'), "last_indexed ISO 8601 format: {ts}");
+        assert!(
+            ts.contains('T') && ts.ends_with('Z'),
+            "last_indexed ISO 8601 format: {ts}"
+        );
         assert!(
             stats.index_size_bytes > 0,
             "index_size_bytes must be > 0 when DB file exists"
@@ -295,11 +301,9 @@ mod tests {
     fn dir_size_bytes_sums_known_files() {
         use std::io::Write;
         let tmp = tempfile::tempdir().expect("tmpdir");
-        let mut f1 =
-            std::fs::File::create(tmp.path().join("a.txt")).expect("create a");
+        let mut f1 = std::fs::File::create(tmp.path().join("a.txt")).expect("create a");
         f1.write_all(b"hello").expect("write a");
-        let mut f2 =
-            std::fs::File::create(tmp.path().join("b.txt")).expect("create b");
+        let mut f2 = std::fs::File::create(tmp.path().join("b.txt")).expect("create b");
         f2.write_all(b"world!").expect("write b");
         assert_eq!(dir_size_bytes(tmp.path()), 11, "5 + 6 = 11 bytes");
     }

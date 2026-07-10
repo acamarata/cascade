@@ -91,7 +91,10 @@ impl VectorStore for SqliteVecStore {
             [id],
         )?;
         conn.execute(
-            &format!("INSERT INTO {}(rowid, embedding) VALUES(?1, ?2)", self.table),
+            &format!(
+                "INSERT INTO {}(rowid, embedding) VALUES(?1, ?2)",
+                self.table
+            ),
             rusqlite::params![id, bytes],
         )?;
         Ok(())
@@ -99,7 +102,10 @@ impl VectorStore for SqliteVecStore {
 
     fn delete(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().expect("vector mutex poisoned");
-        conn.execute(&format!("DELETE FROM {} WHERE rowid = ?1", self.table), [id])?;
+        conn.execute(
+            &format!("DELETE FROM {} WHERE rowid = ?1", self.table),
+            [id],
+        )?;
         Ok(())
     }
 
@@ -127,7 +133,9 @@ impl VectorStore for SqliteVecStore {
 
     fn len(&self) -> Result<u64> {
         let conn = self.conn.lock().expect("vector mutex poisoned");
-        let n: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {}", self.table), [], |r| r.get(0))?;
+        let n: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {}", self.table), [], |r| {
+            r.get(0)
+        })?;
         Ok(n as u64)
     }
 }

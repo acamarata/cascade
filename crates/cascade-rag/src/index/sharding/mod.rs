@@ -270,14 +270,12 @@ impl ShardedIndex {
         let mut shards = Vec::with_capacity(shard_count);
         for i in 0..shard_count {
             let path = root.join(format!("cascade_vec_shard_{i}.db"));
-            let conn = cascade_db::open_configured(&path).map_err(|e| {
-                ShardError::Sqlite {
-                    shard: i,
-                    source: rusqlite::Error::SqliteFailure(
-                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
-                        Some(e.to_string()),
-                    ),
-                }
+            let conn = cascade_db::open_configured(&path).map_err(|e| ShardError::Sqlite {
+                shard: i,
+                source: rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
+                    Some(e.to_string()),
+                ),
             })?;
             apply_shard_schema(&conn, embed_dim).map_err(|e| ShardError::Sqlite {
                 shard: i,
@@ -349,9 +347,15 @@ impl ShardedIndex {
                         rusqlite::params![REBALANCE_BATCH_SIZE as i64, offset],
                         |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)),
                     )
-                    .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+                    .map_err(|e| ShardError::Sqlite {
+                        shard: 0,
+                        source: e,
+                    })?
                     .collect();
-                result.map_err(|e| ShardError::Sqlite { shard: 0, source: e })?
+                result.map_err(|e| ShardError::Sqlite {
+                    shard: 0,
+                    source: e,
+                })?
             };
 
             if batch.is_empty() {
@@ -379,11 +383,15 @@ impl ShardedIndex {
 
                 // Insert into target shard.
                 {
-                    let conn_t =
-                        self.shards[target_shard].lock().expect("target shard mutex poisoned");
+                    let conn_t = self.shards[target_shard]
+                        .lock()
+                        .expect("target shard mutex poisoned");
                     conn_t
                         .execute_batch("BEGIN")
-                        .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+                        .map_err(|e| ShardError::Sqlite {
+                            shard: target_shard,
+                            source: e,
+                        })?;
                     for (doc_id, embedding) in rows_for_shard {
                         conn_t
                             .execute(
@@ -397,7 +405,10 @@ impl ShardedIndex {
                     }
                     conn_t
                         .execute_batch("COMMIT")
-                        .map_err(|e| ShardError::Sqlite { shard: target_shard, source: e })?;
+                        .map_err(|e| ShardError::Sqlite {
+                            shard: target_shard,
+                            source: e,
+                        })?;
                 }
 
                 // Delete moved rows from shard_0.
@@ -405,18 +416,27 @@ impl ShardedIndex {
                     let conn_0 = self.shards[0].lock().expect("shard 0 mutex poisoned");
                     conn_0
                         .execute_batch("BEGIN")
-                        .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                        .map_err(|e| ShardError::Sqlite {
+                            shard: 0,
+                            source: e,
+                        })?;
                     for (doc_id, _) in rows_for_shard {
                         conn_0
                             .execute(
                                 "DELETE FROM shard_embeddings WHERE doc_id = ?1",
                                 rusqlite::params![doc_id],
                             )
-                            .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                            .map_err(|e| ShardError::Sqlite {
+                                shard: 0,
+                                source: e,
+                            })?;
                     }
                     conn_0
                         .execute_batch("COMMIT")
-                        .map_err(|e| ShardError::Sqlite { shard: 0, source: e })?;
+                        .map_err(|e| ShardError::Sqlite {
+                            shard: 0,
+                            source: e,
+                        })?;
                 }
 
                 moved_this_batch += rows_for_shard.len();
@@ -1242,7 +1262,10 @@ mod tests {
 
         // All N rows must survive (no losses, no duplicates).
         let total = idx.total_count();
-        assert_eq!(total, n, "total rows after batched rebalance must equal N={n}");
+        assert_eq!(
+            total, n,
+            "total rows after batched rebalance must equal N={n}"
+        );
 
         // Each doc must be in its correct shard per shard_for.
         for i in 0..n {

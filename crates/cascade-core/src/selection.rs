@@ -319,7 +319,9 @@ pub fn select_account(
     gp: &GpHealthSnapshot,
 ) -> Option<SelectionTarget> {
     // Resolve the model-ID string to pass to the backend.
-    let model_class = req.model_class.unwrap_or_else(|| default_model_class(req.tier));
+    let model_class = req
+        .model_class
+        .unwrap_or_else(|| default_model_class(req.tier));
     let base_model = model_id_for_class(model_class);
 
     // Account override: try exactly that account; fail if saturated.
@@ -345,7 +347,11 @@ pub fn select_account(
         ACCOUNT_SPILL_ORDER
             .iter()
             .filter(|(_, p)| *p == Provider::Gfp)
-            .chain(ACCOUNT_SPILL_ORDER.iter().filter(|(_, p)| *p != Provider::Gfp))
+            .chain(
+                ACCOUNT_SPILL_ORDER
+                    .iter()
+                    .filter(|(_, p)| *p != Provider::Gfp),
+            )
             .collect()
     } else {
         ACCOUNT_SPILL_ORDER.iter().collect()
@@ -519,8 +525,10 @@ fn resolve_provider_model(
         other => {
             // Unknown provider: treat as Codex-family for lack of better option.
             let model = MODEL_GPT.to_string();
-            let reason =
-                format!("unknown provider `{other}` on `{}`, defaulting to gpt", qa.account);
+            let reason = format!(
+                "unknown provider `{other}` on `{}`, defaulting to gpt",
+                qa.account
+            );
             (Provider::Codex, model, reason)
         }
     }
@@ -581,7 +589,11 @@ mod tests {
     }
 
     fn req(tier: Tier) -> SelectionRequest {
-        SelectionRequest { tier, model_class: None, account_override: None }
+        SelectionRequest {
+            tier,
+            model_class: None,
+            account_override: None,
+        }
     }
 
     fn set_status(snap: &mut QuotaSnapshot, account: &str, status: &str) {
@@ -618,8 +630,12 @@ mod tests {
 
     #[test]
     fn t2_healthy_selects_glm_first() {
-        let target = select_account(&req(Tier::T2), &full_snapshot(), &GpHealthSnapshot::default())
-            .expect("target");
+        let target = select_account(
+            &req(Tier::T2),
+            &full_snapshot(),
+            &GpHealthSnapshot::default(),
+        )
+        .expect("target");
         assert_eq!(target.account_id, "glm-acc1");
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);
@@ -644,15 +660,47 @@ mod tests {
         assert_eq!(target.account_id, "claude");
         assert_eq!(target.provider, Provider::Claude);
         assert_eq!(target.model, MODEL_CLAUDE_SONNET);
-        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
-        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
-        assert!(target.reason.contains("glm-acc1"), "reason: {}", target.reason);
-        assert!(target.reason.contains("opencode-acc1"), "reason: {}", target.reason);
-        assert!(target.reason.contains("opencode"), "reason: {}", target.reason);
-        assert!(target.reason.contains("gemini-agt"), "reason: {}", target.reason);
-        assert!(target.reason.contains("codex-acc1"), "reason: {}", target.reason);
+        assert!(
+            target.reason.contains("spill after"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("gfp-pool"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("glm-acc1"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("opencode-acc1"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("opencode"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("gemini-agt"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("codex-acc1"),
+            "reason: {}",
+            target.reason
+        );
         assert!(target.reason.contains("codex"), "reason: {}", target.reason);
-        assert!(target.reason.contains("claude2"), "reason: {}", target.reason);
+        assert!(
+            target.reason.contains("claude2"),
+            "reason: {}",
+            target.reason
+        );
     }
 
     #[test]
@@ -673,8 +721,16 @@ mod tests {
         assert_eq!(target.account_id, "claude2");
         assert_eq!(target.provider, Provider::Claude);
         assert_eq!(target.model, MODEL_CLAUDE_SONNET);
-        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
-        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
+        assert!(
+            target.reason.contains("spill after"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("gfp-pool"),
+            "reason: {}",
+            target.reason
+        );
     }
 
     #[test]
@@ -734,12 +790,19 @@ mod tests {
 
     #[test]
     fn t3_with_healthy_gp_prefers_gfp_first() {
-        let gp = GpHealthSnapshot { healthy_slots: 3, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 3,
+            ..Default::default()
+        };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
         assert_eq!(target.provider, Provider::Gfp);
         assert_eq!(target.account_id, "gfp-pool");
         assert_eq!(target.model, MODEL_GEMINI_FLASH);
-        assert!(target.reason.starts_with("t3-gp-preferred:"), "reason: {}", target.reason);
+        assert!(
+            target.reason.starts_with("t3-gp-preferred:"),
+            "reason: {}",
+            target.reason
+        );
     }
 
     /// D14(b): T3 + unhealthy GP pool must fall through to glm-acc1, not gfp.
@@ -752,36 +815,64 @@ mod tests {
         // total_slots > 0 represents "keys are configured but all rate-limited"
         // (is_exhausted() == true). The default snapshot (total_slots==0) means
         // "no probe done" and must NOT block GFP — see gate comment in select_account.
-        let gp = GpHealthSnapshot { healthy_slots: 0, total_slots: 6, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 0,
+            total_slots: 6,
+            ..Default::default()
+        };
         let target = select_account(&req(Tier::T3), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.account_id, "glm-acc1",
-            "unhealthy GP pool must not be selected for T3 — reason: {}", target.reason);
+        assert_eq!(
+            target.account_id, "glm-acc1",
+            "unhealthy GP pool must not be selected for T3 — reason: {}",
+            target.reason
+        );
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);
         // The reason should indicate that gfp-pool was skipped.
-        assert!(target.reason.contains("gfp-pool"), "reason must mention skipped gfp-pool: {}", target.reason);
+        assert!(
+            target.reason.contains("gfp-pool"),
+            "reason must mention skipped gfp-pool: {}",
+            target.reason
+        );
     }
 
     #[test]
     fn t2_ignores_gp_preference_even_when_healthy() {
-        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 5,
+            ..Default::default()
+        };
         let target = select_account(&req(Tier::T2), &full_snapshot(), &gp).expect("target");
-        assert_eq!(target.account_id, "glm-acc1", "GP preference must be T3-only");
+        assert_eq!(
+            target.account_id, "glm-acc1",
+            "GP preference must be T3-only"
+        );
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);
     }
 
     #[test]
     fn t3_gp_preferred_but_pool_account_dead_falls_back() {
-        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 1,
+            ..Default::default()
+        };
         let mut snap = full_snapshot();
         set_status(&mut snap, "gfp-pool", "error"); // gfp-pool dead in quota.json
         let target = select_account(&req(Tier::T3), &snap, &gp).expect("target");
         assert_eq!(target.account_id, "glm-acc1");
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);
-        assert!(target.reason.contains("spill after"), "reason: {}", target.reason);
-        assert!(target.reason.contains("gfp-pool"), "reason: {}", target.reason);
+        assert!(
+            target.reason.contains("spill after"),
+            "reason: {}",
+            target.reason
+        );
+        assert!(
+            target.reason.contains("gfp-pool"),
+            "reason: {}",
+            target.reason
+        );
     }
 
     // ── GP health snapshot from RoutingTable slots ────────────────────────────
@@ -809,7 +900,10 @@ mod tests {
         let now = Instant::now();
         let slots = vec![slot(false, Some(now - Duration::from_secs(1)))];
         let gp = gp_health_from_slots_at(&slots, now);
-        assert_eq!(gp.healthy_slots, 1, "elapsed cooldown must count as healthy");
+        assert_eq!(
+            gp.healthy_slots, 1,
+            "elapsed cooldown must count as healthy"
+        );
     }
 
     #[test]
@@ -833,7 +927,10 @@ mod tests {
         let gp = gp_health_from_slots_at(&slots, now);
         assert_eq!(gp.healthy_slots, 0);
         assert_eq!(gp.total_slots, 3);
-        assert!(gp.is_exhausted(), "3 configured slots, all in cooldown, must be exhausted");
+        assert!(
+            gp.is_exhausted(),
+            "3 configured slots, all in cooldown, must be exhausted"
+        );
         // Earliest reset must be the minimum across all cooldowns (30s), not
         // the max or an arbitrary slot — this value is surfaced to the caller
         // in the fail-loud error message.
@@ -848,7 +945,10 @@ mod tests {
     fn empty_table_is_not_exhausted() {
         let gp = gp_health_from_slots_at(&[], Instant::now());
         assert_eq!(gp.total_slots, 0);
-        assert!(!gp.is_exhausted(), "empty table is a config gap, not exhaustion");
+        assert!(
+            !gp.is_exhausted(),
+            "empty table is a config gap, not exhaustion"
+        );
         assert_eq!(gp.earliest_reset_secs, None);
     }
 
@@ -857,7 +957,10 @@ mod tests {
     #[test]
     fn partial_health_is_not_exhausted() {
         let now = Instant::now();
-        let slots = vec![slot(true, None), slot(false, Some(now + Duration::from_secs(60)))];
+        let slots = vec![
+            slot(true, None),
+            slot(false, Some(now + Duration::from_secs(60))),
+        ];
         let gp = gp_health_from_slots_at(&slots, now);
         assert!(!gp.is_exhausted());
         assert_eq!(gp.earliest_reset_secs, None);
@@ -893,12 +996,21 @@ mod tests {
         let mut tried = Vec::new();
         let picked = spill_select(
             items.iter().copied(),
-            |s| if s == "c" { Gate::Pass } else { Gate::Skip("gated".into()) },
+            |s| {
+                if s == "c" {
+                    Gate::Pass
+                } else {
+                    Gate::Skip("gated".into())
+                }
+            },
             |s| s.to_string(),
             &mut tried,
         );
         assert_eq!(picked, Some("c"));
-        assert_eq!(tried, vec!["a (gated)".to_string(), "b (gated)".to_string()]);
+        assert_eq!(
+            tried,
+            vec!["a (gated)".to_string(), "b (gated)".to_string()]
+        );
     }
 
     #[test]
@@ -919,7 +1031,10 @@ mod tests {
 
     #[test]
     fn chat_prefers_gp_when_healthy() {
-        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 1,
+            ..Default::default()
+        };
         assert_eq!(preferred_chat_provider(&gp), Some(GP_CHAT_PROVIDER_ID));
     }
 
@@ -942,7 +1057,10 @@ mod tests {
 
     #[test]
     fn override_bypasses_gp_preference() {
-        let gp = GpHealthSnapshot { healthy_slots: 1, ..Default::default() };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 1,
+            ..Default::default()
+        };
         let r = SelectionRequest {
             tier: Tier::T3,
             model_class: None,
@@ -955,8 +1073,12 @@ mod tests {
 
     #[test]
     fn t1_fleet_first_selects_glm() {
-        let target = select_account(&req(Tier::T1), &full_snapshot(), &GpHealthSnapshot::default())
-            .expect("target");
+        let target = select_account(
+            &req(Tier::T1),
+            &full_snapshot(),
+            &GpHealthSnapshot::default(),
+        )
+        .expect("target");
         assert_eq!(target.account_id, "glm-acc1");
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);

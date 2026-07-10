@@ -155,7 +155,10 @@ fn eligible_blocks(text: &str) -> Vec<Block> {
 
             if normalised.len() >= MIN_BLOCK_LEN && non_empty_lines >= MIN_BLOCK_LINES {
                 let snippet = make_snippet(&para);
-                Some(Block { normalised, snippet })
+                Some(Block {
+                    normalised,
+                    snippet,
+                })
             } else {
                 None
             }
@@ -306,10 +309,8 @@ mod tests {
         let gci_text = format!("# Global Config\n\n{shared_block}\n\nSome other GCI content.");
         let ppc_text = format!("# Project Config\n\n{shared_block}\n\nProject-specific note.");
 
-        let resolved = make_resolved(&[
-            (CascadeTier::Gci, &gci_text),
-            (CascadeTier::Ppc, &ppc_text),
-        ]);
+        let resolved =
+            make_resolved(&[(CascadeTier::Gci, &gci_text), (CascadeTier::Ppc, &ppc_text)]);
 
         let findings = lint_duplication(&resolved);
         assert!(
@@ -339,10 +340,7 @@ mod tests {
             covering project-level overrides and team conventions.\n\
             It references the GCI via pointer rather than duplicating content.";
 
-        let resolved = make_resolved(&[
-            (CascadeTier::Gci, gci_text),
-            (CascadeTier::Ppc, ppc_text),
-        ]);
+        let resolved = make_resolved(&[(CascadeTier::Gci, gci_text), (CascadeTier::Ppc, ppc_text)]);
 
         let findings = lint_duplication(&resolved);
         assert!(
@@ -365,10 +363,8 @@ mod tests {
         let gci_text = format!("{header}\n\nUnique GCI policy that is not shared.");
         let ppc_text = format!("{header}\n\nUnique PPC policy that is not shared.");
 
-        let resolved = make_resolved(&[
-            (CascadeTier::Gci, &gci_text),
-            (CascadeTier::Ppc, &ppc_text),
-        ]);
+        let resolved =
+            make_resolved(&[(CascadeTier::Gci, &gci_text), (CascadeTier::Ppc, &ppc_text)]);
 
         let findings = lint_duplication(&resolved);
         assert!(
@@ -398,10 +394,8 @@ mod tests {
         let gci_text = format!("# GCI Header\n\n{canonical}\n\nGCI footer text only.");
         let ppc_text = format!("# PPC Header\n\n{reformatted}\n\nPPC footer text only.");
 
-        let resolved = make_resolved(&[
-            (CascadeTier::Gci, &gci_text),
-            (CascadeTier::Ppc, &ppc_text),
-        ]);
+        let resolved =
+            make_resolved(&[(CascadeTier::Gci, &gci_text), (CascadeTier::Ppc, &ppc_text)]);
 
         let findings = lint_duplication(&resolved);
         assert!(

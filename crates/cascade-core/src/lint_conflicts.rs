@@ -115,9 +115,7 @@ pub fn lint_conflicts(resolved: &ResolvedCascade) -> Vec<ConflictFinding> {
 /// Builds a map of `key → (tier, value)` using the first occurrence per key
 /// (higher-authority tier), then for each subsequent tier checks whether
 /// the same key appears with a different value.
-fn check_kv_conflicts(
-    found: &[&crate::cascade_resolution::TierResult],
-) -> Vec<ConflictFinding> {
+fn check_kv_conflicts(found: &[&crate::cascade_resolution::TierResult]) -> Vec<ConflictFinding> {
     // Map: normalised key → (tier, normalised value) from the first tier that
     // defines it (highest authority).
     let mut canonical: HashMap<String, (CascadeTier, String)> = HashMap::new();
@@ -150,7 +148,10 @@ fn check_kv_conflicts(
 /// Keys must match `[A-Za-z0-9_-]{3,}`.  Both key and value are normalised
 /// (trimmed, collapsed whitespace, lowercased key).  Stop-words are rejected.
 fn extract_kv_pairs(text: &str) -> Vec<(String, String)> {
-    let kv_re = Regex::new(r"(?m)^[[:blank:]]*([A-Za-z][A-Za-z0-9_-]{2,})[[:blank:]]*[=:][[:blank:]]*(.+)$").unwrap();
+    let kv_re = Regex::new(
+        r"(?m)^[[:blank:]]*([A-Za-z][A-Za-z0-9_-]{2,})[[:blank:]]*[=:][[:blank:]]*(.+)$",
+    )
+    .unwrap();
 
     let mut pairs = Vec::new();
     for cap in kv_re.captures_iter(text) {
@@ -263,14 +264,12 @@ fn collapse_ws(s: &str) -> String {
 /// Words that look like keys in regex but are common prose headings or YAML
 /// boilerplate; reject them to avoid false positives.
 const STOP_WORDS: &[&str] = &[
-    "note", "see", "ref", "via", "and", "the", "for", "are", "not", "use",
-    "all", "any", "how", "why", "who", "can", "will", "may", "run", "get",
-    "set", "put", "add", "new", "old", "yes", "no", "ok", "or", "if", "is",
-    "id", "in", "on", "at", "of", "to", "by", "as", "do", "be", "from",
-    "with", "that", "this", "each", "per", "step", "list", "item", "name",
-    "type", "kind", "mode", "path", "file", "dir", "tag", "key", "val",
-    "value", "label", "title", "text", "body", "true", "false", "null",
-    "none", "off", "on", "yes", "no", "auto", "default",
+    "note", "see", "ref", "via", "and", "the", "for", "are", "not", "use", "all", "any", "how",
+    "why", "who", "can", "will", "may", "run", "get", "set", "put", "add", "new", "old", "yes",
+    "no", "ok", "or", "if", "is", "id", "in", "on", "at", "of", "to", "by", "as", "do", "be",
+    "from", "with", "that", "this", "each", "per", "step", "list", "item", "name", "type", "kind",
+    "mode", "path", "file", "dir", "tag", "key", "val", "value", "label", "title", "text", "body",
+    "true", "false", "null", "none", "off", "on", "yes", "no", "auto", "default",
 ];
 
 fn is_stop_word(key: &str) -> bool {
@@ -413,7 +412,10 @@ mod tests {
         let gci = "log_level: info\nGlobal policy.";
         let resolved = make_resolved(&[(CascadeTier::Gci, gci)]);
         let findings = lint_conflicts(&resolved);
-        assert!(findings.is_empty(), "single tier cannot conflict with itself");
+        assert!(
+            findings.is_empty(),
+            "single tier cannot conflict with itself"
+        );
     }
 
     // ── Test 6: stop-words ignored ────────────────────────────────────────────

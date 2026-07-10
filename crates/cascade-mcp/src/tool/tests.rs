@@ -328,8 +328,7 @@ async fn call_memory_write_authenticated_succeeds() {
         );
     }
     // Clean up any created dirs.
-    let _ =
-        std::fs::remove_dir_all(dirs_next_home().join("Sites").join("__auth_test_project__"));
+    let _ = std::fs::remove_dir_all(dirs_next_home().join("Sites").join("__auth_test_project__"));
 }
 
 // ── tools/call — unknown tool ─────────────────────────────────────────────────
@@ -1615,7 +1614,9 @@ async fn secret_scan_finds_fake_aws_key() {
         result.get("isError").is_none() || result["isError"] == Value::Bool(false),
         "secret_scan must not be is_error: {result}"
     );
-    let findings = result["findings"].as_array().expect("findings must be array");
+    let findings = result["findings"]
+        .as_array()
+        .expect("findings must be array");
     assert!(
         !findings.is_empty(),
         "must detect fake AWS key; got 0 findings"
@@ -1681,7 +1682,10 @@ async fn security_audit_returns_well_formed_result() {
     );
     // tool_available must be a bool.
     assert!(
-        result.get("tool_available").and_then(|v| v.as_bool()).is_some(),
+        result
+            .get("tool_available")
+            .and_then(|v| v.as_bool())
+            .is_some(),
         "tool_available must be a bool: {result}"
     );
     // ecosystem must be present.
@@ -1691,12 +1695,18 @@ async fn security_audit_returns_well_formed_result() {
     );
     // advisories must be an array.
     assert!(
-        result.get("advisories").and_then(|v| v.as_array()).is_some(),
+        result
+            .get("advisories")
+            .and_then(|v| v.as_array())
+            .is_some(),
         "advisories must be an array: {result}"
     );
     // high_or_critical_count must be a number.
     assert!(
-        result.get("high_or_critical_count").and_then(|v| v.as_u64()).is_some(),
+        result
+            .get("high_or_critical_count")
+            .and_then(|v| v.as_u64())
+            .is_some(),
         "high_or_critical_count must be a number: {result}"
     );
 }

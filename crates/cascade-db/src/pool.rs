@@ -26,11 +26,14 @@ pub fn build_pool(path: impl AsRef<Path>, max_size: u32) -> Result<DbPool> {
             })?;
         }
     }
-    let manager = SqliteConnectionManager::file(path)
-        .with_init(|c| configure_connection(c).map_err(|e| rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
-            Some(e.to_string()),
-        )));
+    let manager = SqliteConnectionManager::file(path).with_init(|c| {
+        configure_connection(c).map_err(|e| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
+                Some(e.to_string()),
+            )
+        })
+    });
     r2d2::Pool::builder()
         .max_size(max_size)
         .build(manager)

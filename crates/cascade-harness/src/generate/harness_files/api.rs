@@ -7,12 +7,12 @@ use cascade_core::cascade_resolution::ResolvedCascade;
 use cascade_core::pbd::active_work::ActiveWorkBlock;
 use cascade_types::error::{CascadeError, Result};
 
+use super::super::safe_write::{atomic_write_content, snapshot_files};
 use super::constants::{
     ACTIVE_WORK_BEGIN, ACTIVE_WORK_END, UNIFIED_HARNESS_MARKER, UNIFIED_HARNESS_MARKER_BASE,
 };
 use super::kind::HarnessKind;
 use super::render::render_harness_file;
-use super::super::safe_write::{atomic_write_content, snapshot_files};
 
 /// Generate harness-native instruction files from a resolved cascade.
 ///

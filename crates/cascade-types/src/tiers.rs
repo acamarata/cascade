@@ -673,7 +673,10 @@ mod tests {
 "infra.prod_ip"    = "1.2.3.4"
 "#;
         let cfg: TierConfig = toml::from_str(toml_str).expect("[vars] must parse");
-        assert_eq!(cfg.vars.get("cascade.model.t1"), Some(&"claude-opus-4-5".to_string()));
+        assert_eq!(
+            cfg.vars.get("cascade.model.t1"),
+            Some(&"claude-opus-4-5".to_string())
+        );
         assert_eq!(cfg.vars.get("infra.prod_ip"), Some(&"1.2.3.4".to_string()));
     }
 

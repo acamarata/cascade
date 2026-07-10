@@ -25,10 +25,10 @@ use clap::{Args, Subcommand};
 use std::path::{Path, PathBuf};
 
 use cascade_security::{
-    secret_scan::{scan_file, scan_text},
     client_leak::scan_client_leak,
     dep_audit::audit,
     report::prelaunch_scan,
+    secret_scan::{scan_file, scan_text},
 };
 
 use super::Command;
@@ -165,7 +165,14 @@ impl Command for ScanFileArgs {
             } else {
                 println!("Secrets found in {}:", path.display());
                 for f in &findings {
-                    println!("  [{}] line {} col {} — {} ({})", f.severity_str(), f.line, f.column, f.kind, f.redacted_preview);
+                    println!(
+                        "  [{}] line {} col {} — {} ({})",
+                        f.severity_str(),
+                        f.line,
+                        f.column,
+                        f.kind,
+                        f.redacted_preview
+                    );
                 }
             }
             if !client_findings.is_empty() {
@@ -226,7 +233,10 @@ impl Command for ScanHookArgs {
             for f in &findings {
                 eprintln!(
                     "  [{}] line {} — {} ({})",
-                    f.severity_str(), f.line, f.kind, f.redacted_preview
+                    f.severity_str(),
+                    f.line,
+                    f.kind,
+                    f.redacted_preview
                 );
             }
             for f in &client_findings {
@@ -262,7 +272,10 @@ impl Command for SecretScanArgs {
             } else {
                 println!("{} secret(s) found:", all_findings.len());
                 for f in &all_findings {
-                    println!("  {} line {} — {} ({})", f.path, f.line, f.kind, f.redacted_preview);
+                    println!(
+                        "  {} line {} — {} ({})",
+                        f.path, f.line, f.kind, f.redacted_preview
+                    );
                 }
             }
         }
@@ -279,14 +292,20 @@ impl Command for AuditArgs {
             println!("{}", serde_json::to_string_pretty(&report).unwrap());
         } else {
             if !report.tool_available {
-                println!("⚠ Audit tool not available for {:?} ecosystem", report.ecosystem);
+                println!(
+                    "⚠ Audit tool not available for {:?} ecosystem",
+                    report.ecosystem
+                );
                 return Ok(());
             }
             if report.advisories.is_empty() {
                 println!("✓ No advisories found");
             } else {
-                println!("{} advisory/advisories ({} high/critical):",
-                    report.advisories.len(), report.high_or_critical_count);
+                println!(
+                    "{} advisory/advisories ({} high/critical):",
+                    report.advisories.len(),
+                    report.high_or_critical_count
+                );
                 for a in &report.advisories {
                     println!("  [{}] {} — {} — {}", a.severity, a.id, a.package, a.title);
                 }
@@ -322,7 +341,10 @@ impl Command for PrelaunchArgs {
             if report.client_leaks.is_empty() {
                 println!("✓ PASS  Client leaks: no secrets in client-side paths");
             } else {
-                println!("✗ FAIL  Client leaks: {} HIGH-SEVERITY finding(s)", report.client_leaks.len());
+                println!(
+                    "✗ FAIL  Client leaks: {} HIGH-SEVERITY finding(s)",
+                    report.client_leaks.len()
+                );
                 for s in &report.client_leaks {
                     println!("        {} line {} — {}", s.path, s.line, s.kind);
                 }
@@ -333,13 +355,19 @@ impl Command for PrelaunchArgs {
             } else if report.deps.high_or_critical_count == 0 {
                 println!("✓ PASS  Deps: no high/critical advisories");
             } else {
-                println!("✗ FAIL  Deps: {} high/critical advisory/advisories", report.deps.high_or_critical_count);
+                println!(
+                    "✗ FAIL  Deps: {} high/critical advisory/advisories",
+                    report.deps.high_or_critical_count
+                );
             }
 
             if report.error_leaks.is_empty() {
                 println!("✓ PASS  Error leaks: no debug strings detected");
             } else {
-                println!("- WARN  Error leaks: {} potential leak(s) (low severity)", report.error_leaks.len());
+                println!(
+                    "- WARN  Error leaks: {} potential leak(s) (low severity)",
+                    report.error_leaks.len()
+                );
             }
 
             if report.has_privacy_policy {
@@ -372,12 +400,10 @@ fn git_tracked_files(dir: &Path) -> Vec<PathBuf> {
         .output();
 
     match output {
-        Ok(out) if out.status.success() => {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(|l| dir.join(l))
-                .collect()
-        }
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| dir.join(l))
+            .collect(),
         _ => vec![],
     }
 }
@@ -401,13 +427,14 @@ impl SeverityStr for cascade_security::secret_scan::SecretFinding {
 
 #[cfg(test)]
 mod tests {
-    use clap::Parser;
     use super::*;
     use crate::cmd::{Cli, Commands};
+    use clap::Parser;
 
     #[test]
     fn parse_security_scan_file() {
-        let cli = Cli::try_parse_from(["cascade", "security", "scan-file", "/tmp/test.txt"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["cascade", "security", "scan-file", "/tmp/test.txt"]).unwrap();
         assert!(matches!(cli.command, Commands::Security(_)));
     }
 
@@ -439,7 +466,8 @@ mod tests {
 
     #[test]
     fn hook_json_extracts_file_path() {
-        let json = r#"{"tool_name":"Write","tool_input":{"file_path":"/tmp/foo.rs","content":"x"}}"#;
+        let json =
+            r#"{"tool_name":"Write","tool_input":{"file_path":"/tmp/foo.rs","content":"x"}}"#;
         let result = extract_file_path_from_hook_json(json);
         assert_eq!(result, Some(PathBuf::from("/tmp/foo.rs")));
     }

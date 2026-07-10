@@ -40,7 +40,9 @@ impl SqliteCache {
             );
             CREATE INDEX IF NOT EXISTS idx_cache_expiry ON cache_entries(expires_at);",
         )?;
-        Ok(Self { conn: std::sync::Mutex::new(conn) })
+        Ok(Self {
+            conn: std::sync::Mutex::new(conn),
+        })
     }
 
     fn now() -> i64 {
@@ -109,7 +111,9 @@ pub struct MemoryCache {
 impl MemoryCache {
     /// Build a cache holding up to `max_entries`.
     pub fn new(max_entries: u64) -> Self {
-        Self { inner: moka::sync::Cache::new(max_entries) }
+        Self {
+            inner: moka::sync::Cache::new(max_entries),
+        }
     }
 }
 

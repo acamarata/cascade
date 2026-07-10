@@ -29,9 +29,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use cascade_db::open_configured;
-use cascade_keychain::Keychain;
 #[cfg(test)]
 use cascade_keychain::InMemoryKeychain;
+use cascade_keychain::Keychain;
 
 use crate::crypto::{open as crypto_open, seal as crypto_seal};
 use crate::gate::{can_expose, CascadeMode, Collection};
@@ -184,8 +184,8 @@ fn hex_decode_dek(hex: &str) -> Result<[u8; 32], VaultError> {
     }
     let mut out = [0u8; 32];
     for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-        let s = std::str::from_utf8(chunk)
-            .map_err(|_| VaultError::Crypto("invalid DEK hex".into()))?;
+        let s =
+            std::str::from_utf8(chunk).map_err(|_| VaultError::Crypto("invalid DEK hex".into()))?;
         out[i] = u8::from_str_radix(s, 16)
             .map_err(|_| VaultError::Crypto("invalid DEK hex digit".into()))?;
     }
@@ -250,7 +250,9 @@ pub fn open_vault(
 ///
 /// # SPORT
 /// MASTER-COMPONENTS.md: cascade-personal / list_collections
-pub fn list_collections(vault: &PersonalVault) -> Result<Vec<(String, String, String)>, VaultError> {
+pub fn list_collections(
+    vault: &PersonalVault,
+) -> Result<Vec<(String, String, String)>, VaultError> {
     let conn = vault.conn.lock().unwrap();
     let mut stmt =
         conn.prepare("SELECT name, label, sensitivity FROM collections ORDER BY name")?;
@@ -469,12 +471,8 @@ mod tests {
     fn test_vault(dir: &tempfile::TempDir) -> PersonalVault {
         let kc = InMemoryKeychain::new();
         // Pre-seed the keychain with the test DEK so load_or_create_dek uses it.
-        kc.set_key(
-            KEYCHAIN_SERVICE,
-            KEYCHAIN_ACCOUNT,
-            &hex_encode(&TEST_DEK),
-        )
-        .unwrap();
+        kc.set_key(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, &hex_encode(&TEST_DEK))
+            .unwrap();
         open_vault(dir.path().join("personal.db"), &kc).unwrap()
     }
 
@@ -494,7 +492,9 @@ mod tests {
             .unwrap();
         let plaintext = serde_json::to_vec(&ssn_payload).unwrap();
         assert!(
-            !blob.windows(plaintext.len()).any(|w| w == plaintext.as_slice()),
+            !blob
+                .windows(plaintext.len())
+                .any(|w| w == plaintext.as_slice()),
             "plaintext SSN must not appear in stored ciphertext blob"
         );
     }
@@ -577,13 +577,7 @@ mod tests {
         let kc = InMemoryKeychain::new();
         let vault = open_vault(dir.path().join("personal.db"), &kc).unwrap();
         // Insert and retrieve to confirm the DEK round-trips correctly.
-        let id = upsert_record(
-            &vault,
-            "people",
-            None,
-            &serde_json::json!({"test": true}),
-        )
-        .unwrap();
+        let id = upsert_record(&vault, "people", None, &serde_json::json!({"test": true})).unwrap();
         let rows = query_records(&vault, "people", CascadeMode::Normal).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, id);
@@ -639,13 +633,8 @@ mod tests {
     fn unknown_collection_returns_error() {
         let dir = tempdir().unwrap();
         let vault = test_vault(&dir);
-        let err = upsert_record(
-            &vault,
-            "does_not_exist",
-            None,
-            &serde_json::json!({}),
-        )
-        .unwrap_err();
+        let err =
+            upsert_record(&vault, "does_not_exist", None, &serde_json::json!({})).unwrap_err();
         assert!(matches!(err, VaultError::UnknownCollection(_)));
     }
 }

@@ -815,7 +815,9 @@ mod tests {
     #[serial(global_env)]
     #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn dispatch_list_projects_returns_tool_result() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = fake_home();
         let h = tmp.path();
         let old = std::env::var_os("HOME");

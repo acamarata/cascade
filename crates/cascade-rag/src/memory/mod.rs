@@ -28,6 +28,8 @@ pub mod recall;
 
 pub use chat::{clear_chat, insert_chat, list_chat, ChatMessage};
 pub use episode::{count_episodes, delete_episode, insert_episode};
-pub use fact::{archive_fact, consolidate_namespace, decay_namespace, upsert_fact, CONSOLIDATION_THRESHOLD};
+pub use fact::{
+    archive_fact, consolidate_namespace, decay_namespace, upsert_fact, CONSOLIDATION_THRESHOLD,
+};
 pub use namespace::{validate, validate_with_firewall, NamespaceError, ValidatedNamespace};
 pub use recall::{recall, RecallHit};

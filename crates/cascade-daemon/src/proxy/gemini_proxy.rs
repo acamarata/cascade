@@ -70,7 +70,7 @@ mod tests {
     use super::dispatch::dispatch_request;
     use super::server::rebuild_task;
     use super::state::{build_routing_state, resolve_api_key};
-    use super::types::{MAX_REQUEST_BODY_SIZE, ProxyError, ProxyState};
+    use super::types::{ProxyError, ProxyState, MAX_REQUEST_BODY_SIZE};
     use super::upstream::{build_upstream_url, extract_header, parse_request_line};
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -208,7 +208,10 @@ mod tests {
             .expect("health must answer locally");
         assert_eq!(status, "200 OK");
         let v: serde_json::Value = serde_json::from_slice(&body).expect("json body");
-        assert_eq!(v["healthy_slots"], 0, "cooldown slots must not count as healthy");
+        assert_eq!(
+            v["healthy_slots"], 0,
+            "cooldown slots must not count as healthy"
+        );
         assert_eq!(v["total_slots"], 2);
     }
 

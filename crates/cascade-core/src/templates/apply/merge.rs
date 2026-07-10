@@ -57,7 +57,11 @@ pub(super) fn build_merged_content(
 ///
 /// Finds the heading line, then replaces everything up to (but not including)
 /// the next heading of the same or higher level with `new_sec.body`.
-pub(super) fn replace_section_in_content(content: &str, heading: &str, new_sec: &Section) -> String {
+pub(super) fn replace_section_in_content(
+    content: &str,
+    heading: &str,
+    new_sec: &Section,
+) -> String {
     let lines: Vec<&str> = content.lines().collect();
     let mut result = String::new();
     let mut i = 0;

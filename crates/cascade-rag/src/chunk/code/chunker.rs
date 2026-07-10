@@ -94,8 +94,7 @@ impl Chunker for CodeChunker {
         }
 
         // Fallback to SemanticChunker.
-        let semantic =
-            super::super::semantic::SemanticChunker::with_config(self.config.clone());
+        let semantic = super::super::semantic::SemanticChunker::with_config(self.config.clone());
         Chunker::chunk(&semantic, source_path, text)
     }
 

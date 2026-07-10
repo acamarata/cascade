@@ -10,14 +10,14 @@
 //! # Outputs
 //! - `Report` — secrets, client_leaks, dep audit, error leaks, privacy check
 
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command as StdCommand;
-use serde::{Deserialize, Serialize};
 
-use crate::secret_scan::{scan_text, SecretFinding};
-use crate::client_leak::{scan_client_leak, is_client_side_path};
+use crate::client_leak::{is_client_side_path, scan_client_leak};
 use crate::dep_audit::{audit, AuditReport};
 use crate::error_leak::{scan_error_leak, ErrorLeakFinding};
+use crate::secret_scan::{scan_text, SecretFinding};
 
 /// Full security report for a project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,12 +49,10 @@ fn git_tracked_files(dir: &Path) -> Vec<std::path::PathBuf> {
         .output();
 
     match output {
-        Ok(out) if out.status.success() => {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(|l| dir.join(l))
-                .collect()
-        }
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| dir.join(l))
+            .collect(),
         _ => vec![],
     }
 }
@@ -62,9 +60,14 @@ fn git_tracked_files(dir: &Path) -> Vec<std::path::PathBuf> {
 /// Check whether `dir` has a privacy policy document.
 fn has_privacy_policy(dir: &Path) -> bool {
     let candidates = [
-        "PRIVACY.md", "privacy.md", "PRIVACY_POLICY.md",
-        "privacy-policy.md", "docs/privacy.md", "public/privacy",
-        "src/pages/privacy", "pages/privacy",
+        "PRIVACY.md",
+        "privacy.md",
+        "PRIVACY_POLICY.md",
+        "privacy-policy.md",
+        "docs/privacy.md",
+        "public/privacy",
+        "src/pages/privacy",
+        "pages/privacy",
     ];
     candidates.iter().any(|c| dir.join(c).exists())
 }
@@ -80,8 +83,24 @@ pub async fn prelaunch_scan(dir: &Path) -> Report {
     for file_path in &files {
         // Skip binary-ish extensions
         if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
-            if matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "ico" | "woff" | "woff2"
-                | "ttf" | "eot" | "svg" | "pdf" | "zip" | "gz" | "tar" | "lock") {
+            if matches!(
+                ext,
+                "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "ico"
+                    | "woff"
+                    | "woff2"
+                    | "ttf"
+                    | "eot"
+                    | "svg"
+                    | "pdf"
+                    | "zip"
+                    | "gz"
+                    | "tar"
+                    | "lock"
+            ) {
                 continue;
             }
         }
@@ -121,8 +140,8 @@ mod tests {
 
     #[test]
     fn has_high_severity_with_client_leak() {
-        use crate::secret_scan::{SecretFinding, Severity};
         use crate::dep_audit::{AuditReport, Ecosystem};
+        use crate::secret_scan::{SecretFinding, Severity};
 
         let finding = SecretFinding {
             kind: "aws_access_key".to_string(),

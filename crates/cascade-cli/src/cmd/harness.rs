@@ -180,8 +180,7 @@ impl Command for HarnessArgs {
 #[async_trait]
 impl Command for HarnessStatusArgs {
     async fn run(&self) -> Result<()> {
-        let workspace =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let harnesses = detect_all_harnesses(&workspace);
 
         if self.json {
@@ -204,8 +203,7 @@ impl Command for HarnessStatusArgs {
 #[async_trait]
 impl Command for HarnessDetectArgs {
     async fn run(&self) -> Result<()> {
-        let workspace =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let harnesses = detect_all_harnesses(&workspace);
         let json = serde_json::to_string_pretty(&harnesses)
             .map_err(|e| CascadeError::Other(format!("json serialize failed: {e}")))?;
@@ -505,8 +503,14 @@ mod tests {
         let workspace = std::env::temp_dir();
         let results = detect_all_harnesses(&workspace);
         let json = serde_json::to_string_pretty(&results).expect("must serialise to JSON");
-        assert!(json.contains("installed"), "JSON must contain 'installed' field");
-        assert!(json.contains("claude-code"), "JSON must contain 'claude-code' id");
+        assert!(
+            json.contains("installed"),
+            "JSON must contain 'installed' field"
+        );
+        assert!(
+            json.contains("claude-code"),
+            "JSON must contain 'claude-code' id"
+        );
     }
 
     /// `harness_display_name` must map all known ids to human-readable names.

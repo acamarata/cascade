@@ -75,10 +75,7 @@ impl EchoInvoker {
 }
 #[async_trait::async_trait]
 impl ToolInvoker for EchoInvoker {
-    async fn invoke(
-        &self,
-        call: &crate::context::ToolCall,
-    ) -> Result<String, ExecutorError> {
+    async fn invoke(&self, call: &crate::context::ToolCall) -> Result<String, ExecutorError> {
         self.count.fetch_add(1, Ordering::SeqCst);
         Ok(format!("echo:{}", call.tool_id))
     }

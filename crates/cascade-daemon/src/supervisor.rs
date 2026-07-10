@@ -14,9 +14,9 @@
 //!   - Install is idempotent: state-check first, skip if already installed.
 //!     This prevents the OS admin prompt hygiene violation described in GCI.
 
-use std::path::{Path, PathBuf};
 #[cfg(feature = "gemini-proxy")]
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -71,7 +71,8 @@ pub async fn run(
         bus.clone(),
         Arc::clone(&provider_registry),
         socket_override,
-    ).await?;
+    )
+    .await?;
     // D10: wire the daemon-level shutdown token so DaemonStop IPC requests actually
     // cancel the running process rather than just acknowledging the request.
     ipc.set_daemon_shutdown(shutdown.clone());
@@ -264,7 +265,9 @@ pub async fn run(
                                 // watcher loop is never stalled by the compat_gen I/O.
                                 let regen_path = watch_path.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = crate::regen::handle_cascade_change(&regen_path).await {
+                                    if let Err(e) =
+                                        crate::regen::handle_cascade_change(&regen_path).await
+                                    {
                                         warn!(error = %e, "regen: compat-file regeneration failed");
                                     }
                                 });
@@ -313,11 +316,8 @@ pub async fn run(
         // AnthropicCompatServer (port 3762) — forwards to GP proxy on 3761.
         let ac_bind: SocketAddr = "127.0.0.1:3762".parse().expect("valid addr");
         let ac_shutdown = shutdown.clone();
-        let ac_server = AnthropicCompatServer::new(
-            ac_bind,
-            "http://127.0.0.1:3761".to_string(),
-            ac_shutdown,
-        );
+        let ac_server =
+            AnthropicCompatServer::new(ac_bind, "http://127.0.0.1:3761".to_string(), ac_shutdown);
         tokio::spawn(async move {
             if let Err(e) = ac_server.run().await {
                 warn!(error = %e, "anthropic_compat exited with error");
@@ -436,14 +436,16 @@ pub async fn run(
                     let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
 
                     // ── WorkerPool ────────────────────────────────────────────
-                    let pool = Arc::new(WorkerPool::new(WorkerPoolConfig::default(), embed.clone()));
+                    let pool =
+                        Arc::new(WorkerPool::new(WorkerPoolConfig::default(), embed.clone()));
 
                     // ── VolumeWatcher + VolumeIndexGuard ─────────────────────
                     let (vol_watcher, vol_rx) = VolumeWatcher::new(
                         project_roots.clone(),
                         VolumeWatcher::DEFAULT_POLL_INTERVAL,
                     );
-                    let vol_guard = VolumeIndexGuard::new(project_roots.clone(), Arc::clone(&index_mgr));
+                    let vol_guard =
+                        VolumeIndexGuard::new(project_roots.clone(), Arc::clone(&index_mgr));
                     let vol_shutdown = shutdown.clone();
                     vol_watcher.spawn(vol_shutdown.clone());
                     vol_guard.spawn(vol_rx, vol_shutdown);
@@ -516,14 +518,22 @@ pub async fn run(
 
         let agent_exec = Arc::new(
             AgentExecutor::builder()
-                .provider_router(Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>)
-                .tool_invoker(Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>)
+                .provider_router(
+                    Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>
+                )
+                .tool_invoker(
+                    Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>
+                )
                 .build(),
         );
         let chain_exec = Arc::new(
             ChainExecutor::builder()
-                .provider_router(Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>)
-                .tool_invoker(Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>)
+                .provider_router(
+                    Arc::clone(&real_router) as Arc<dyn cascade_agents::executor::ProviderRouter>
+                )
+                .tool_invoker(
+                    Arc::clone(&safe_invoker) as Arc<dyn cascade_agents::executor::ToolInvoker>
+                )
                 .agent_executor(Arc::clone(&agent_exec))
                 .build(),
         );
@@ -535,9 +545,7 @@ pub async fn run(
                 .sink(Arc::new(NoopSink))
                 .build(),
         );
-        info!(
-            "automation_runner: instantiated with RegistryRouter (real provider path — auto-02)"
-        );
+        info!("automation_runner: instantiated with RegistryRouter (real provider path — auto-02)");
     }
 
     // ── Main event loop ───────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ use super::{
     config::GeminiConfig,
     stream::parse_gemini_stream_event,
     wire_types::{
-        GenerationConfig, GeminiContent, GeminiPart, GeminiRequest, GeminiSystemInstruction,
+        GeminiContent, GeminiPart, GeminiRequest, GeminiSystemInstruction, GenerationConfig,
     },
 };
 
@@ -390,8 +390,7 @@ impl ProviderAdapter for GeminiAdapter {
                 // endpoint is congested — emit the whole reply as one chunk.
                 debug!(%e, "gemini stream open failed — falling back to non-streaming complete()");
                 let full = self.complete(req).await?;
-                let (tx, rx) =
-                    tokio::sync::mpsc::channel::<Result<StreamChunk, ProviderError>>(1);
+                let (tx, rx) = tokio::sync::mpsc::channel::<Result<StreamChunk, ProviderError>>(1);
                 let _ = tx
                     .send(Ok(StreamChunk {
                         delta: full.content,

@@ -4,7 +4,10 @@
 
 use std::path::PathBuf;
 
-use cascade_types::{error::{CascadeError, Result}, paths::home_dir};
+use cascade_types::{
+    error::{CascadeError, Result},
+    paths::home_dir,
+};
 use serde_json::json;
 
 use super::helpers::{read_json_or_empty, remove_cascade, upsert_key, write_json_atomic};

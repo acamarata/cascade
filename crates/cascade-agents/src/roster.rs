@@ -131,11 +131,10 @@ pub fn load_roster(roster_dir: &Path) -> Result<Vec<AgentSpec>, RosterError> {
             source,
         })?;
 
-        let entry: RawRosterEntry =
-            toml::from_str(&raw).map_err(|e| RosterError::Parse {
-                file: path.clone(),
-                detail: e.to_string(),
-            })?;
+        let entry: RawRosterEntry = toml::from_str(&raw).map_err(|e| RosterError::Parse {
+            file: path.clone(),
+            detail: e.to_string(),
+        })?;
 
         specs.push(AgentSpec::from(entry));
     }
@@ -416,7 +415,11 @@ mod tests {
             );
         }
 
-        let ceo_op = result.opinions.iter().find(|o| o.role == AgentRole::Ceo).unwrap();
+        let ceo_op = result
+            .opinions
+            .iter()
+            .find(|o| o.role == AgentRole::Ceo)
+            .unwrap();
         assert_eq!(ceo_op.stance, "approve");
 
         let arch_op = result

@@ -36,7 +36,6 @@ pub mod capability;
 pub mod consent;
 pub mod discovery;
 pub mod grants;
-pub mod signing;
 pub mod hot_reload;
 pub mod ipc;
 pub mod lifecycle;
@@ -45,16 +44,18 @@ pub mod manifest;
 pub mod plugin_registry;
 pub mod runtime;
 pub mod sandbox;
+pub mod signing;
 pub mod traits;
 pub mod types;
 pub mod wit_bindings;
 
 pub use audit::{log_capability_event, AuditEntry, AuditOutcome};
 pub use capability::{CapabilityError, CapabilitySet, DeclaredCapabilities};
-pub use consent::{check_capability_granted, check_fs_read_allowed, is_personal_path, ConsentError};
-pub use grants::{GrantError, GrantStore};
-pub use signing::{verify_plugin, SigningError, TrustedPublisher, TrustedPublishers, VerifyResult};
+pub use consent::{
+    check_capability_granted, check_fs_read_allowed, is_personal_path, ConsentError,
+};
 pub use discovery::{discover_all, DiscoveredPlugin, DiscoveryError, PluginOrigin};
+pub use grants::{GrantError, GrantStore};
 pub use hot_reload::{drain_arc, drain_arc_default, PluginWatcher, ReloadEvent};
 pub use ipc::{
     dispatch, InputValidator, NoopValidator, PluginError, PluginRequest, PluginResponse,
@@ -65,6 +66,7 @@ pub use manifest::{ManifestError, PluginManifest, PluginType};
 pub use plugin_registry::PluginRegistry as PluginDispatchRegistry;
 pub use plugin_registry::{PluginDispatchError, PluginInfo, PluginStatus};
 pub use sandbox::{ResourceLimits, SandboxError, WasmPlugin};
+pub use signing::{verify_plugin, SigningError, TrustedPublisher, TrustedPublishers, VerifyResult};
 pub use types::{
     WasmAgent, WasmChunker, WasmEmbeddingProvider, WasmParser, WasmQueryStrategy, WasmReranker,
     WasmRetriever,

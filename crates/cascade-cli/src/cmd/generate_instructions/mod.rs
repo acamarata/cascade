@@ -98,7 +98,11 @@ impl Command for GenerateInstructionsArgs {
         // Filter tiers by --tier flag
         let tiers_to_process = if let Some(tier_str) = &self.tier {
             if tier_str == "all" {
-                resolved.tiers_found.iter().filter(|t| t.found).collect::<Vec<_>>()
+                resolved
+                    .tiers_found
+                    .iter()
+                    .filter(|t| t.found)
+                    .collect::<Vec<_>>()
             } else {
                 let target: CascadeTier = tier_str.parse().map_err(|_| CascadeError::Io {
                     path: cwd.clone(),
@@ -115,7 +119,11 @@ impl Command for GenerateInstructionsArgs {
                     .collect::<Vec<_>>()
             }
         } else {
-            resolved.tiers_found.iter().filter(|t| t.found).collect::<Vec<_>>()
+            resolved
+                .tiers_found
+                .iter()
+                .filter(|t| t.found)
+                .collect::<Vec<_>>()
         };
 
         if tiers_to_process.is_empty() {

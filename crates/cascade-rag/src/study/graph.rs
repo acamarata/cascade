@@ -131,9 +131,7 @@ pub fn callers_of(conn: &Connection, symbol: &str) -> Result<Vec<String>> {
 /// `Ok(Vec<(symbol, kind)>)`.
 pub fn symbols_in(conn: &Connection, file_path: &str) -> Result<Vec<(String, String)>> {
     let mut stmt = conn
-        .prepare(
-            "SELECT symbol, kind FROM code_graph WHERE file_path = ?1 ORDER BY id",
-        )
+        .prepare("SELECT symbol, kind FROM code_graph WHERE file_path = ?1 ORDER BY id")
         .map_err(|e| CascadeError::Other(format!("symbols_in prepare: {e}")))?;
 
     let rows = stmt

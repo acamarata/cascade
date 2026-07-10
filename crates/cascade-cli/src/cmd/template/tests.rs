@@ -2,16 +2,14 @@
 #![cfg(test)]
 
 use crate::cmd::template::{
-    helpers::{
-        load_registry, parse_tier, parse_vars, read_stamps_from_content, substitute_vars,
-    },
+    helpers::{load_registry, parse_tier, parse_vars, read_stamps_from_content, substitute_vars},
     list::{truncate, ListArgs},
     manage::{is_valid_semver, validate_template_file, CreateArgs, ExportArgs},
     ApplyArgs, DiffArgs, UpgradeArgs,
 };
 use crate::cmd::Command;
 use cascade_core::templates::registry::TemplateFilter;
-use cascade_types::{TemplateManifest, TemplateTier, TemplateRecord};
+use cascade_types::{TemplateManifest, TemplateRecord, TemplateTier};
 use serial_test::serial;
 use std::fs;
 use std::io::Write;
@@ -191,7 +189,9 @@ fn parse_list_args_upgradeable_flag() {
 #[test]
 #[serial(global_env)]
 fn list_against_fixture_registry() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     write_template_file(&tmp, "gci.md", "gci-default", "gci", "## Overview\nBody.\n");
     write_template_file(
@@ -224,7 +224,9 @@ fn list_against_fixture_registry() {
 #[test]
 #[serial(global_env)]
 fn list_upgradeable_returns_only_templates_with_newer_registry_version() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("gci.md");
     fs::write(&path, "---\nid = \"gci-default\"\nversion = \"1.1.0\"\ntier = \"gci\"\nstacks = []\nproject_shapes = []\ndescription = \"GCI default\"\n---\n## Overview\nNew body.\n").unwrap();
@@ -262,7 +264,9 @@ fn list_upgradeable_returns_only_templates_with_newer_registry_version() {
 #[test]
 #[serial(global_env)]
 fn list_upgradeable_returns_empty_when_already_up_to_date() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("gci.md");
     fs::write(&path, "---\nid = \"gci-default\"\nversion = \"1.0.0\"\ntier = \"gci\"\nstacks = []\nproject_shapes = []\ndescription = \"GCI default\"\n---\n## Overview\nBody.\n").unwrap();
@@ -302,7 +306,9 @@ fn list_upgradeable_returns_empty_when_already_up_to_date() {
 fn upgrade_wires_to_upgrade_by_id_stamp_updated() {
     use cascade_core::templates::apply::TemplateEngine;
 
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     unsafe { std::env::set_var("HOME", tmp.path()) };
 
@@ -349,7 +355,9 @@ fn upgrade_wires_to_upgrade_by_id_stamp_updated() {
 fn upgrade_force_overwrites_all_conflicting_sections() {
     use cascade_core::templates::apply::{ApplyOptions, TemplateEngine};
 
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     unsafe { std::env::set_var("HOME", tmp.path()) };
 
@@ -419,7 +427,9 @@ fn read_stamps_from_content_empty_file() {
 fn apply_dry_run_does_not_write() {
     use cascade_core::templates::apply::{ApplyOptions, TemplateEngine};
 
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     unsafe { std::env::set_var("HOME", tmp.path()) };
 

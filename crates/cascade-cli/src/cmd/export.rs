@@ -46,11 +46,7 @@ const MANIFEST_FILENAME: &str = "manifest.json";
 
 /// Secret-adjacent file name patterns excluded unless --include-secrets is set.
 /// TODO(rag-16): replace this static list with the rag-16 sensitive-data hook.
-const SECRET_PATTERNS: &[&str] = &[
-    "vault.env",
-    ".env",
-    "credentials",
-];
+const SECRET_PATTERNS: &[&str] = &["vault.env", ".env", "credentials"];
 
 /// Secret-adjacent file extensions excluded unless --include-secrets is set.
 const SECRET_EXTENSIONS: &[&str] = &["key", "pem", "p12", "pfx", "crt", "cer"];
@@ -197,7 +193,9 @@ impl Command for ExportArgs {
         println!("Sidecar: {}", sidecar_path.display());
 
         if !self.include_secrets {
-            println!("Note: credential/key files were excluded. Use --include-secrets to include them.");
+            println!(
+                "Note: credential/key files were excluded. Use --include-secrets to include them."
+            );
         }
 
         Ok(())
@@ -209,10 +207,7 @@ impl Command for ExportArgs {
 /// Entry point for `cascade import --from-export <archive>`.
 pub async fn run_import_from_export(args: &ImportFromExportArgs) -> Result<()> {
     let home = home_dir()?;
-    let dest = args
-        .dest
-        .clone()
-        .unwrap_or_else(|| home.join(".cascade"));
+    let dest = args.dest.clone().unwrap_or_else(|| home.join(".cascade"));
 
     println!(
         "Restoring {} → {}",
@@ -272,11 +267,7 @@ pub async fn run_import_from_export(args: &ImportFromExportArgs) -> Result<()> {
     // Extract all files.
     let extracted = extract_archive(&archive_bytes, &dest, args.force)?;
 
-    println!(
-        "Restored {} file(s) to {}",
-        extracted,
-        dest.display()
-    );
+    println!("Restored {} file(s) to {}", extracted, dest.display());
 
     Ok(())
 }
@@ -290,10 +281,7 @@ pub async fn run_import_from_export(args: &ImportFromExportArgs) -> Result<()> {
 fn build_archive(source: &Path, include_secrets: bool) -> Result<Vec<u8>> {
     // Collect files first (to build manifest).
     let files = collect_files(source, include_secrets)?;
-    let rel_paths: Vec<String> = files
-        .iter()
-        .map(|(rel, _)| rel.clone())
-        .collect();
+    let rel_paths: Vec<String> = files.iter().map(|(rel, _)| rel.clone()).collect();
 
     let mut manifest = ArchiveManifest::new(rel_paths, include_secrets);
 
@@ -503,9 +491,9 @@ fn extract_archive(archive_bytes: &[u8], dest: &Path, force: bool) -> Result<usi
         }
 
         let mut buf = Vec::new();
-        entry
-            .read_to_end(&mut buf)
-            .map_err(|e| CascadeError::Other(format!("read entry {}: {e}", entry_path.display())))?;
+        entry.read_to_end(&mut buf).map_err(|e| {
+            CascadeError::Other(format!("read entry {}: {e}", entry_path.display()))
+        })?;
 
         fs::write(&out_path, &buf).map_err(|e| CascadeError::Io {
             path: out_path.clone(),
@@ -550,8 +538,16 @@ mod tests {
     // Helper: create a minimal ~/.cascade/ tree in a temp dir.
     fn make_fake_cascade(dir: &Path) {
         fs::create_dir_all(dir.join("memory")).unwrap();
-        fs::write(dir.join("memory").join("decisions.md"), "# Decisions\n## D-01\nUse BLAKE3.").unwrap();
-        fs::write(dir.join("memory").join("lessons.md"), "# Lessons\nLesson 1.").unwrap();
+        fs::write(
+            dir.join("memory").join("decisions.md"),
+            "# Decisions\n## D-01\nUse BLAKE3.",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("memory").join("lessons.md"),
+            "# Lessons\nLesson 1.",
+        )
+        .unwrap();
         fs::create_dir_all(dir.join("inbox")).unwrap();
         fs::write(dir.join("inbox").join("msg-001.md"), "hello").unwrap();
         // A secret file that should be excluded by default.
@@ -572,7 +568,10 @@ mod tests {
         let manifest = extract_manifest(&archive_bytes).unwrap();
         assert!(!manifest.secrets_included);
         let has_vault = manifest.files.iter().any(|f| f.contains("vault.env"));
-        assert!(!has_vault, "vault.env should be excluded without --include-secrets");
+        assert!(
+            !has_vault,
+            "vault.env should be excluded without --include-secrets"
+        );
     }
 
     #[test]
@@ -585,7 +584,10 @@ mod tests {
         let manifest = extract_manifest(&archive_bytes).unwrap();
         assert!(manifest.secrets_included);
         let has_vault = manifest.files.iter().any(|f| f.contains("vault.env"));
-        assert!(has_vault, "vault.env should be included with --include-secrets");
+        assert!(
+            has_vault,
+            "vault.env should be included with --include-secrets"
+        );
     }
 
     #[test]
@@ -622,9 +624,15 @@ mod tests {
 
         // Check a restored file.
         let restored_decisions = dest.join("memory").join("decisions.md");
-        assert!(restored_decisions.exists(), "decisions.md should be restored");
+        assert!(
+            restored_decisions.exists(),
+            "decisions.md should be restored"
+        );
         let content = fs::read_to_string(&restored_decisions).unwrap();
-        assert!(content.contains("BLAKE3"), "content should round-trip intact");
+        assert!(
+            content.contains("BLAKE3"),
+            "content should round-trip intact"
+        );
 
         // vault.env must NOT be restored (was not in archive).
         assert!(
@@ -642,7 +650,11 @@ mod tests {
 
         // Write a wrong hash to the sidecar so integrity fails.
         let sidecar = sidecar_path(&archive_path);
-        fs::write(&sidecar, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+        fs::write(
+            &sidecar,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
 
         let args = ImportFromExportArgs {
             from_export: archive_path,

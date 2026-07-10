@@ -71,10 +71,7 @@ impl Default for CapabilitySet {
 ///
 /// Used in HTTP/SSE handlers to gate `cascade.memory.write` before dispatch.
 pub fn tool_requires_personal_data(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "cascade.memory.write" | "cascade.inbox.send"
-    )
+    matches!(tool_name, "cascade.memory.write" | "cascade.inbox.send")
 }
 
 // ── Origin / Host validation ───────────────────────────────────────────────────

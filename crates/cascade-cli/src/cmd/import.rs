@@ -30,7 +30,7 @@ use cascade_core::import_engine::ImportEngine;
 use cascade_types::error::{CascadeError, Result};
 use clap::Args;
 
-use super::export::{ImportFromExportArgs, run_import_from_export};
+use super::export::{run_import_from_export, ImportFromExportArgs};
 use super::Command;
 
 // ── Args ──────────────────────────────────────────────────────────────────────
@@ -187,7 +187,11 @@ fn auto_detect_source(home: &Path, harness: &str) -> PathBuf {
     match harness {
         "opencode" => {
             let p = home.join(".opencode");
-            if p.exists() { p } else { home.join(".claude") }
+            if p.exists() {
+                p
+            } else {
+                home.join(".claude")
+            }
         }
         "codex" => home.join(".codex"),
         _ => home.join(".claude"),
@@ -207,7 +211,11 @@ fn print_dry_run_report(plan: &cascade_core::import_engine::ImportPlan) {
     for entry in &plan.entries {
         let rel = entry.source_relative.display().to_string();
         let tier = format!("{:?}", entry.mapping.tier);
-        let status = if entry.conflict { "SKIP (conflict)" } else { "COPY" };
+        let status = if entry.conflict {
+            "SKIP (conflict)"
+        } else {
+            "COPY"
+        };
         println!("{:<55} {:<15} {}", rel, tier, status);
     }
 
@@ -221,7 +229,11 @@ fn print_dry_run_report(plan: &cascade_core::import_engine::ImportPlan) {
     println!(
         "  Coverage: {:.1}% [{}]",
         cov.coverage_pct,
-        if cov.is_lossless { "LOSSLESS ✓" } else { "GAPS FOUND ✗" }
+        if cov.is_lossless {
+            "LOSSLESS ✓"
+        } else {
+            "GAPS FOUND ✗"
+        }
     );
     if !cov.gaps.is_empty() {
         println!("\n  Gaps (unmapped atomics):");
@@ -281,7 +293,11 @@ fn print_apply_report(report: &cascade_core::import_engine::ImportReport) {
     println!(
         "\n  Coverage: {:.1}% | Round-trip: {}",
         report.coverage.coverage_pct,
-        if report.round_trip.passed { "PASS" } else { "FAIL" }
+        if report.round_trip.passed {
+            "PASS"
+        } else {
+            "FAIL"
+        }
     );
 }
 
@@ -326,14 +342,8 @@ mod tests {
 
     #[test]
     fn parse_import_report_json() {
-        let cli = Cli::try_parse_from([
-            "cascade",
-            "import",
-            "--from",
-            "/tmp/src",
-            "--report-json",
-        ])
-        .unwrap();
+        let cli = Cli::try_parse_from(["cascade", "import", "--from", "/tmp/src", "--report-json"])
+            .unwrap();
         let Commands::Import(args) = cli.command else {
             panic!("expected Import command");
         };

@@ -58,8 +58,8 @@
 
 pub mod accounts;
 pub mod agent;
-pub mod background_task;
 pub mod auto_auth;
+pub mod background_task;
 pub mod cascade_tier;
 pub mod chunker;
 pub mod codec;
@@ -78,13 +78,13 @@ pub mod parser;
 pub mod paths;
 pub mod policy;
 pub mod pool;
+pub mod project;
 pub mod provision;
 pub mod query_strategy;
 pub mod quota_store;
 pub mod rag;
 pub mod reranker;
 pub mod retriever;
-pub mod project;
 pub mod scheduled_task;
 pub mod task;
 pub mod template;
@@ -98,15 +98,15 @@ pub mod usage_analytics;
 // `use cascade_types::{CascadeError, CascadeTier}` without navigating sub-modules.
 
 pub use accounts::{
-    Account, AccountFamily, AccountRole, AccountsRegistry, AccessMethod, ModelMatrixEntry,
+    AccessMethod, Account, AccountFamily, AccountRole, AccountsRegistry, ModelMatrixEntry,
     ModelRoute, TaskClass, ACCOUNTS_SCHEMA_VERSION,
 };
 pub use agent::{Agent, AgentMeta, AgentResponse, Context, NoopAgent, Tier};
 pub use cascade_tier::{CascadeTier, InboxTier};
 pub use chunker::{Chunk, ChunkMetadata, ChunkOpts, Chunker, Document, NoopChunker};
 pub use config::{
-    AiFolder, CascadeConfig, CONFIG_SCHEMA_VERSION, DaemonConfig, GfpConfig, HarnessConfig,
-    HarnessMcpConfig, McpConfig, PluginConfig, ProviderConfig, RagConfig,
+    AiFolder, CascadeConfig, DaemonConfig, GfpConfig, HarnessConfig, HarnessMcpConfig, McpConfig,
+    PluginConfig, ProviderConfig, RagConfig, CONFIG_SCHEMA_VERSION,
 };
 pub use embedding_provider::{
     EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, NoopEmbeddingProvider, ProviderKind,
@@ -124,13 +124,14 @@ pub use policy::{
     Decision, PolicyAction, PolicyResult, PolicyRule, PolicyScope, PolicySet, PolicySetEntry,
     PolicyTableConfig,
 };
+pub use project::{IndexStatus, ProjectRecord, ProjectType};
 pub use query_strategy::{
     ExpandedQuery, PureVectorStrategy, QueryFilters, QueryStrategy, StrategyKind,
 };
 pub use quota_store::{
     AccountEntry, HistoryEntry, ModelUsage, QuotaState, QuotaStore, RateWindow,
-    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO,
-    PROVIDER_OPENAI_CODEX, QUOTA_STORE_SCHEMA_VERSION,
+    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO, PROVIDER_OPENAI_CODEX,
+    QUOTA_STORE_SCHEMA_VERSION,
 };
 pub use reranker::{NoopReranker, RerankOpts, RerankResult, Reranker};
 pub use retriever::{NoopRetriever, RetrievalHit, RetrieveOpts, Retriever};
@@ -142,4 +143,3 @@ pub use task::{
 pub use template::{
     ApplyResult, DiffResult, TemplateManifest, TemplateRecord, TemplateTier, UpgradeResult,
 };
-pub use project::{IndexStatus, ProjectRecord, ProjectType};

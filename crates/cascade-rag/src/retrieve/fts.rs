@@ -472,26 +472,18 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let tmp = NamedTempFile::new().expect("tempfile");
-        let idx = Arc::new(
-            RagIndex::open(tmp.path())
-                .await
-                .expect("RagIndex::open"),
-        );
+        let idx = Arc::new(RagIndex::open(tmp.path()).await.expect("RagIndex::open"));
 
         let expected_text = "the quick brown fox jumps over the lazy dog";
-        idx.upsert_chunk(
-            "chunk-fox",
-            None,
-            Some(10),
-            Some(20),
-            expected_text,
-            None,
-        )
-        .await
-        .expect("upsert_chunk");
+        idx.upsert_chunk("chunk-fox", None, Some(10), Some(20), expected_text, None)
+            .await
+            .expect("upsert_chunk");
 
         let retriever = FtsRetriever::new(Arc::clone(&idx));
-        let opts = RetrieveOpts { k: 5, ..Default::default() };
+        let opts = RetrieveOpts {
+            k: 5,
+            ..Default::default()
+        };
         let hits = retriever
             .retrieve("quick brown fox", &opts)
             .await

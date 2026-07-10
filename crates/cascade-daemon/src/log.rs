@@ -83,9 +83,7 @@ pub fn init_with_config(
         .with_writer(std::io::stderr)
         .with_filter(EnvFilter::new("warn"));
 
-    let use_pretty = config_log_format
-        .map(|f| f == "pretty")
-        .unwrap_or(false)
+    let use_pretty = config_log_format.map(|f| f == "pretty").unwrap_or(false)
         && std::env::var("CASCADE_LOG_LEVEL").is_err(); // env override disables pretty too
 
     if use_pretty {

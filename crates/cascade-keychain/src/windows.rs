@@ -164,7 +164,7 @@ impl Keychain for WindowsKeychain {
         // Windows Credential Manager's CredEnumerateW supports a filter prefix.
         // We filter by "cascade/<service>/" and strip the prefix to return account names.
         use windows::Win32::Security::Credentials::{
-            CredEnumerateW, CRED_ENUMERATE_FLAGS, CREDENTIALW as CW,
+            CredEnumerateW, CREDENTIALW as CW, CRED_ENUMERATE_FLAGS,
         };
         let prefix = Self::service_prefix(service);
         let prefix_wide: Vec<u16> = OsStr::new(&prefix)

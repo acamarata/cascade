@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 
 use super::state::resolve_api_key;
-use super::types::{MAX_REQUEST_BODY_SIZE, ProxyError, ProxyState};
+use super::types::{ProxyError, ProxyState, MAX_REQUEST_BODY_SIZE};
 use super::upstream::{
     build_upstream_url, find_header_end, forward_upstream_with_headers, parse_request_line,
     read_exact, status_text, write_error,

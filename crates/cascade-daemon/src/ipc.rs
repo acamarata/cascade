@@ -181,10 +181,8 @@ impl IpcServer {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(
-                    &token_path,
-                    std::fs::Permissions::from_mode(0o600),
-                );
+                let _ =
+                    std::fs::set_permissions(&token_path, std::fs::Permissions::from_mode(0o600));
             }
         }
 
@@ -818,10 +816,7 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                         if !p.is_dir() {
                             return Response::err(
                                 -32602,
-                                format!(
-                                    "cwd `{}` is not an existing directory",
-                                    p.display()
-                                ),
+                                format!("cwd `{}` is not an existing directory", p.display()),
                             );
                         }
                         p.clone()
@@ -829,20 +824,19 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                     None => match std::env::current_dir() {
                         Ok(d) => d,
                         Err(e) => {
-                            return Response::err(
-                                -32603,
-                                format!("cannot determine cwd: {e}"),
-                            )
+                            return Response::err(-32603, format!("cannot determine cwd: {e}"))
                         }
                     },
                 };
 
                 // Run the resolver.
-                let resolved =
-                    match cascade_core::resolution::Resolver::new().resolve(&cwd).await {
-                        Ok(r) => r,
-                        Err(e) => return Response::err(-32603, format!("resolve failed: {e}")),
-                    };
+                let resolved = match cascade_core::resolution::Resolver::new()
+                    .resolve(&cwd)
+                    .await
+                {
+                    Ok(r) => r,
+                    Err(e) => return Response::err(-32603, format!("resolve failed: {e}")),
+                };
 
                 // Audit after successful resolve.
                 crate::audit::record(
@@ -918,7 +912,9 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                             let path = config_dir.join("quota-store.json");
                             match cascade_core::quota_store::write_quota_store(&path, &store) {
                                 Ok(()) => {
-                                    return Response::ok(serde_json::json!({ "status": "updated" }));
+                                    return Response::ok(
+                                        serde_json::json!({ "status": "updated" }),
+                                    );
                                 }
                                 Err(e) => {
                                     return Response::err(
@@ -938,7 +934,10 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                         .unwrap_or("")
                         .to_string();
                     if provider.is_empty() {
-                        return Response::err(-32602, "missing required param: provider".to_string());
+                        return Response::err(
+                            -32602,
+                            "missing required param: provider".to_string(),
+                        );
                     }
                     // Read the current quota store.
                     let home_dir = std::env::var_os("HOME")
@@ -955,9 +954,8 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                             }));
                         }
                         Ok(store) => {
-                            let advice = crate::ipc_handlers::handle_get_rotation_advice(
-                                &provider, &store,
-                            );
+                            let advice =
+                                crate::ipc_handlers::handle_get_rotation_advice(&provider, &store);
                             return Response::ok(advice);
                         }
                     }
@@ -977,14 +975,17 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                         .or_else(dirs::home_dir)
                         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
                     let path = home_dir.join(".cascade/quota-store.json");
-                    let store = cascade_core::quota_store::read_quota_store(&path)
-                        .unwrap_or_else(|_| cascade_core::quota_store::QuotaStore {
-                            schema_version: cascade_core::quota_store::QUOTA_STORE_SCHEMA_VERSION,
-                            updated_at: String::new(),
-                            accounts: vec![],
-                            week_totals: std::collections::HashMap::new(),
-                            month_totals: std::collections::HashMap::new(),
-                            rolling_history: vec![],
+                    let store =
+                        cascade_core::quota_store::read_quota_store(&path).unwrap_or_else(|_| {
+                            cascade_core::quota_store::QuotaStore {
+                                schema_version:
+                                    cascade_core::quota_store::QUOTA_STORE_SCHEMA_VERSION,
+                                updated_at: String::new(),
+                                accounts: vec![],
+                                week_totals: std::collections::HashMap::new(),
+                                month_totals: std::collections::HashMap::new(),
+                                rolling_history: vec![],
+                            }
                         });
                     // Use default BudgetConfig (limits disabled) since we don't have
                     // the config in IpcServer currently. Full config wiring in E-P6-03.
@@ -1015,9 +1016,7 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                     let params: cascade_types::ipc::UpdateAutoParams =
                         match serde_json::from_value(params_val) {
                             Ok(p) => p,
-                            Err(e) => {
-                                return Response::err(-32602, format!("invalid params: {e}"))
-                            }
+                            Err(e) => return Response::err(-32602, format!("invalid params: {e}")),
                         };
                     return match crate::updates::set_auto_update(params.enable) {
                         Ok(result) => Response::ok(result),
@@ -1356,10 +1355,7 @@ mod tests {
         )
     }
 
-    async fn write_json_frame<W: AsyncWriteExt + Unpin>(
-        writer: &mut W,
-        value: serde_json::Value,
-    ) {
+    async fn write_json_frame<W: AsyncWriteExt + Unpin>(writer: &mut W, value: serde_json::Value) {
         let bytes = serde_json::to_vec(&value).unwrap();
         writer
             .write_all(&(bytes.len() as u32).to_be_bytes())

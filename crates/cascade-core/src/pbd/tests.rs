@@ -312,7 +312,8 @@ mod tests {
             .unwrap();
 
         // EOT should fail because step1 is still pending
-        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
+        let result =
+            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
         assert!(!result.success, "eot should fail with pending step");
         assert!(
             result.errors.iter().any(|e| e.contains("step1")),
@@ -345,7 +346,8 @@ mod tests {
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
             .unwrap();
 
-        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
+        let result =
+            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).expect("run eot");
         assert!(result.success, "eot should succeed: {:?}", result.errors);
 
         let t = store.load_ticket("p1", "e01", "w01", "s01", "t01").unwrap();
@@ -360,7 +362,8 @@ mod tests {
         build_hierarchy(&store);
 
         // Sprint has ticket t01 still in planned state
-        let result = run_eos(&store, "p1", "e01", "w01", "s01", &NoExternalChecks).expect("run eos");
+        let result =
+            run_eos(&store, "p1", "e01", "w01", "s01", &NoExternalChecks).expect("run eos");
         assert!(!result.success, "eos should fail with undone ticket");
     }
 
@@ -522,9 +525,10 @@ mod tests {
             .transition_ticket("p1", "e01", "w01", "s01", "t01", TicketStatus::Active, None)
             .unwrap();
 
-        let bad = AlwaysFailChecks { msg: "build failed" };
-        let result =
-            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &bad).expect("run eot");
+        let bad = AlwaysFailChecks {
+            msg: "build failed",
+        };
+        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &bad).expect("run eot");
         assert!(!result.success, "external failure should block EOT");
         assert!(
             result.errors.iter().any(|e| e.contains("build failed")),
@@ -553,12 +557,16 @@ mod tests {
             .unwrap();
         run_eot(&store, "p1", "e01", "w01", "s01", "t01", &NoExternalChecks).unwrap();
 
-        let bad = AlwaysFailChecks { msg: "sprint check fail" };
-        let result =
-            run_eos(&store, "p1", "e01", "w01", "s01", &bad).expect("run eos");
+        let bad = AlwaysFailChecks {
+            msg: "sprint check fail",
+        };
+        let result = run_eos(&store, "p1", "e01", "w01", "s01", &bad).expect("run eos");
         assert!(!result.success, "external failure should block EOS");
         assert!(
-            result.errors.iter().any(|e| e.contains("sprint check fail")),
+            result
+                .errors
+                .iter()
+                .any(|e| e.contains("sprint check fail")),
             "error should propagate: {:?}",
             result.errors
         );
@@ -596,7 +604,9 @@ mod tests {
         run_eow(&store, "p1", "e01", "w01").unwrap();
         run_eoe(&store, "p1", "e01").unwrap();
 
-        let bad = AlwaysFailChecks { msg: "phase check fail" };
+        let bad = AlwaysFailChecks {
+            msg: "phase check fail",
+        };
         let result = run_eop(&store, "p1", &bad).expect("run eop");
         assert!(!result.success, "external failure should block EOP");
         assert!(
@@ -713,8 +723,8 @@ mod tests {
         ];
         for (raw, expected) in &cases {
             let yaml = raw.to_string();
-            let parsed: PhaseStatus =
-                serde_yaml::from_str(&yaml).unwrap_or_else(|e| panic!("Failed to parse '{raw}': {e}"));
+            let parsed: PhaseStatus = serde_yaml::from_str(&yaml)
+                .unwrap_or_else(|e| panic!("Failed to parse '{raw}': {e}"));
             assert_eq!(parsed, *expected, "Mismatch for raw value '{raw}'");
         }
     }
@@ -738,10 +748,12 @@ mod tests {
             .unwrap();
 
         // A passing `true` command should not block EOT
-        let checks =
-            RealExternalChecks::new().with_build(BuildCheck::new("smoke", "true"));
-        let result =
-            run_eot(&store, "p1", "e01", "w01", "s01", "t01", &checks).expect("run eot");
-        assert!(result.success, "passing command should allow EOT: {:?}", result.errors);
+        let checks = RealExternalChecks::new().with_build(BuildCheck::new("smoke", "true"));
+        let result = run_eot(&store, "p1", "e01", "w01", "s01", "t01", &checks).expect("run eot");
+        assert!(
+            result.success,
+            "passing command should allow EOT: {:?}",
+            result.errors
+        );
     }
 }

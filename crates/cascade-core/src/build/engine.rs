@@ -38,7 +38,10 @@ use tracing::{debug, info, warn};
 use cascade_types::error::{CascadeError, Result};
 
 use crate::pbd::{
-    protocol::{run_eoe, run_eop, run_eos, run_eost, run_eot, run_eow, ExternalChecks, NoExternalChecks, ProtocolResult},
+    protocol::{
+        run_eoe, run_eop, run_eos, run_eost, run_eot, run_eow, ExternalChecks, NoExternalChecks,
+        ProtocolResult,
+    },
     schema::{EpicStatus, SprintStatus, StepStatus, TicketStatus, WaveStatus},
     store::PbdStore,
 };
@@ -102,18 +105,33 @@ impl TicketDispatcher for MockDispatcher {
                 StepStatus::Pending => {
                     // Pending → Running → Passed (respects allowed transitions)
                     store.transition_step(
-                        phase_id, epic_id, wave_id, sprint_id, ticket_id,
-                        &step.id, StepStatus::Running,
+                        phase_id,
+                        epic_id,
+                        wave_id,
+                        sprint_id,
+                        ticket_id,
+                        &step.id,
+                        StepStatus::Running,
                     )?;
                     store.transition_step(
-                        phase_id, epic_id, wave_id, sprint_id, ticket_id,
-                        &step.id, StepStatus::Passed,
+                        phase_id,
+                        epic_id,
+                        wave_id,
+                        sprint_id,
+                        ticket_id,
+                        &step.id,
+                        StepStatus::Passed,
                     )?;
                 }
                 StepStatus::Running => {
                     store.transition_step(
-                        phase_id, epic_id, wave_id, sprint_id, ticket_id,
-                        &step.id, StepStatus::Passed,
+                        phase_id,
+                        epic_id,
+                        wave_id,
+                        sprint_id,
+                        ticket_id,
+                        &step.id,
+                        StepStatus::Passed,
                     )?;
                 }
                 StepStatus::Passed | StepStatus::Skipped | StepStatus::Failed => {}
@@ -167,7 +185,12 @@ impl BuildEngine {
 
     /// Create an engine with [`MockDispatcher`] and [`NoExternalChecks`] for tests.
     pub fn new_mock(store: PbdStore) -> Self {
-        Self::new(store, MockDispatcher, NoExternalChecks, BuildConfig::default())
+        Self::new(
+            store,
+            MockDispatcher,
+            NoExternalChecks,
+            BuildConfig::default(),
+        )
     }
 
     /// Run the full build for a phase, then call EOP.
@@ -231,7 +254,8 @@ impl BuildEngine {
         // TODO(pews-02): refactor to Arc<dyn TicketDispatcher> + JoinSet for true
         // concurrency once the agent-process harness lands and the dispatcher is Send+Clone.
         for sprint_id in wave.sprints.clone() {
-            self.run_sprint(phase_id, epic_id, wave_id, &sprint_id).await?;
+            self.run_sprint(phase_id, epic_id, wave_id, &sprint_id)
+                .await?;
         }
 
         let result = run_eow(&self.store, phase_id, epic_id, wave_id)?;
@@ -253,22 +277,32 @@ impl BuildEngine {
         sprint_id: &str,
     ) -> Result<()> {
         debug!(
-            phase = phase_id, epic = epic_id, wave = wave_id, sprint = sprint_id,
+            phase = phase_id,
+            epic = epic_id,
+            wave = wave_id,
+            sprint = sprint_id,
             "run_sprint"
         );
 
-        let sprint = self.store.load_sprint(phase_id, epic_id, wave_id, sprint_id)?;
+        let sprint = self
+            .store
+            .load_sprint(phase_id, epic_id, wave_id, sprint_id)?;
         if sprint.status == SprintStatus::Done {
             debug!(sprint = sprint_id, "already done — skipping");
             return Ok(());
         }
 
         // Build topological order of tickets
-        let tickets = self.store.list_tickets(phase_id, epic_id, wave_id, sprint_id)?;
+        let tickets = self
+            .store
+            .list_tickets(phase_id, epic_id, wave_id, sprint_id)?;
         let ordered = topological_sort(&tickets)?;
 
         for ticket_id in ordered {
-            let ticket = tickets.iter().find(|t| t.id == ticket_id).expect("ticket in list");
+            let ticket = tickets
+                .iter()
+                .find(|t| t.id == ticket_id)
+                .expect("ticket in list");
             if ticket.status == TicketStatus::Done || ticket.status == TicketStatus::Archived {
                 debug!(ticket = ticket_id, "already done — skipping");
                 continue;
@@ -281,7 +315,11 @@ impl BuildEngine {
             // Transition ticket to Active so run_eot can close it (Queue → Active → Done)
             if ticket.status == TicketStatus::Queue {
                 self.store.transition_ticket(
-                    phase_id, epic_id, wave_id, sprint_id, &ticket_id,
+                    phase_id,
+                    epic_id,
+                    wave_id,
+                    sprint_id,
+                    &ticket_id,
                     TicketStatus::Active,
                     Some("engine: dispatching"),
                 )?;
@@ -289,13 +327,30 @@ impl BuildEngine {
 
             // Dispatch ticket work
             self.dispatcher
-                .dispatch(self.store_ref(), phase_id, epic_id, wave_id, sprint_id, &ticket_id)
+                .dispatch(
+                    self.store_ref(),
+                    phase_id,
+                    epic_id,
+                    wave_id,
+                    sprint_id,
+                    &ticket_id,
+                )
                 .await?;
 
             // EOSt per step — lightweight gate after dispatcher runs each step
-            let ticket_fresh = self.store.load_ticket(phase_id, epic_id, wave_id, sprint_id, &ticket_id)?;
+            let ticket_fresh = self
+                .store
+                .load_ticket(phase_id, epic_id, wave_id, sprint_id, &ticket_id)?;
             for step in &ticket_fresh.steps {
-                let result = run_eost(&self.store, phase_id, epic_id, wave_id, sprint_id, &ticket_id, &step.id)?;
+                let result = run_eost(
+                    &self.store,
+                    phase_id,
+                    epic_id,
+                    wave_id,
+                    sprint_id,
+                    &ticket_id,
+                    &step.id,
+                )?;
                 if !result.success {
                     return Err(CascadeError::Other(format!(
                         "EOSt failed for step {}/{}: {:?}",
@@ -322,7 +377,14 @@ impl BuildEngine {
             }
         }
 
-        let result = run_eos(&self.store, phase_id, epic_id, wave_id, sprint_id, self.checks.as_ref())?;
+        let result = run_eos(
+            &self.store,
+            phase_id,
+            epic_id,
+            wave_id,
+            sprint_id,
+            self.checks.as_ref(),
+        )?;
         if !result.success {
             return Err(CascadeError::Other(format!(
                 "EOS failed for sprint {sprint_id}: {:?}",
@@ -457,7 +519,9 @@ mod tests {
             tickets: vec!["t01".into(), "t02".into(), "t03".into()],
             note: None,
         };
-        store.save_sprint("p1", "e01", "w01", &sprint).expect("save sprint");
+        store
+            .save_sprint("p1", "e01", "w01", &sprint)
+            .expect("save sprint");
 
         let step = Step {
             id: "step-01".into(),
@@ -479,7 +543,9 @@ mod tests {
                 note: None,
                 blocked_reason: None,
             };
-            store.create_ticket("p1", "e01", "w01", &ticket).expect("create ticket");
+            store
+                .create_ticket("p1", "e01", "w01", &ticket)
+                .expect("create ticket");
         }
 
         // t03 depends on t01
@@ -495,7 +561,9 @@ mod tests {
             note: None,
             blocked_reason: None,
         };
-        store.create_ticket("p1", "e01", "w01", &t03).expect("create t03");
+        store
+            .create_ticket("p1", "e01", "w01", &t03)
+            .expect("create t03");
     }
 
     #[tokio::test]
@@ -507,7 +575,11 @@ mod tests {
         let engine = BuildEngine::new_mock(store);
         let result = engine.run_phase("p1").await.expect("run_phase");
 
-        assert!(result.success, "EOP gate should pass; errors: {:?}", result.errors);
+        assert!(
+            result.success,
+            "EOP gate should pass; errors: {:?}",
+            result.errors
+        );
         assert_eq!(result.level, "phase");
     }
 
@@ -535,7 +607,11 @@ mod tests {
         ];
 
         let order = topological_sort(&tickets).expect("no cycle");
-        let pos: HashMap<_, _> = order.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+        let pos: HashMap<_, _> = order
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect();
         assert!(pos["t01"] < pos["t03"], "t01 must precede t03");
     }
 
@@ -555,10 +631,10 @@ mod tests {
                 blocked_reason: None,
             }
         };
-        let tickets = vec![
-            make_ticket("ta", vec!["tb"]),
-            make_ticket("tb", vec!["ta"]),
-        ];
-        assert!(topological_sort(&tickets).is_err(), "cycle should be detected");
+        let tickets = vec![make_ticket("ta", vec!["tb"]), make_ticket("tb", vec!["ta"])];
+        assert!(
+            topological_sort(&tickets).is_err(),
+            "cycle should be detected"
+        );
     }
 }

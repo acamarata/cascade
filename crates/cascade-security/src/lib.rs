@@ -7,10 +7,10 @@
 //! - `error_leak`  — DB errors / stack traces exposed in HTTP responses
 //! - `report`      — aggregated `Report` type + `prelaunch_scan`
 
-pub mod secret_scan;
 pub mod client_leak;
 pub mod dep_audit;
 pub mod error_leak;
 pub mod report;
+pub mod secret_scan;
 
-pub use report::{Report, prelaunch_scan};
+pub use report::{prelaunch_scan, Report};

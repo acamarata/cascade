@@ -19,11 +19,20 @@ use crate::capability::Capability;
 #[derive(Debug, Error)]
 pub enum GrantError {
     #[error("failed to read grants file {path}: {source}")]
-    Read { path: PathBuf, source: std::io::Error },
+    Read {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("failed to write grants file {path}: {source}")]
-    Write { path: PathBuf, source: std::io::Error },
+    Write {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("failed to parse grants file {path}: {source}")]
-    Parse { path: PathBuf, source: serde_json::Error },
+    Parse {
+        path: PathBuf,
+        source: serde_json::Error,
+    },
 }
 
 /// Persisted grant record: plugin_id -> set of granted capability names.
@@ -42,11 +51,20 @@ impl GrantStore {
     pub fn load() -> Result<Self, GrantError> {
         let path = grants_path();
         if !path.exists() {
-            return Ok(Self { grants: HashMap::new(), path });
+            return Ok(Self {
+                grants: HashMap::new(),
+                path,
+            });
         }
-        let bytes = std::fs::read(&path).map_err(|source| GrantError::Read { path: path.clone(), source })?;
-        let mut store: GrantStore = serde_json::from_slice(&bytes)
-            .map_err(|source| GrantError::Parse { path: path.clone(), source })?;
+        let bytes = std::fs::read(&path).map_err(|source| GrantError::Read {
+            path: path.clone(),
+            source,
+        })?;
+        let mut store: GrantStore =
+            serde_json::from_slice(&bytes).map_err(|source| GrantError::Parse {
+                path: path.clone(),
+                source,
+            })?;
         store.path = path;
         Ok(store)
     }
@@ -54,11 +72,20 @@ impl GrantStore {
     /// Load from an explicit path (for tests).
     pub fn load_from(path: PathBuf) -> Result<Self, GrantError> {
         if !path.exists() {
-            return Ok(Self { grants: HashMap::new(), path });
+            return Ok(Self {
+                grants: HashMap::new(),
+                path,
+            });
         }
-        let bytes = std::fs::read(&path).map_err(|source| GrantError::Read { path: path.clone(), source })?;
-        let mut store: GrantStore = serde_json::from_slice(&bytes)
-            .map_err(|source| GrantError::Parse { path: path.clone(), source })?;
+        let bytes = std::fs::read(&path).map_err(|source| GrantError::Read {
+            path: path.clone(),
+            source,
+        })?;
+        let mut store: GrantStore =
+            serde_json::from_slice(&bytes).map_err(|source| GrantError::Parse {
+                path: path.clone(),
+                source,
+            })?;
         store.path = path;
         Ok(store)
     }
@@ -95,10 +122,12 @@ impl GrantStore {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
-        let json = serde_json::to_vec_pretty(&self)
-            .expect("GrantStore serialization is infallible");
-        std::fs::write(&self.path, json)
-            .map_err(|source| GrantError::Write { path: self.path.clone(), source })
+        let json =
+            serde_json::to_vec_pretty(&self).expect("GrantStore serialization is infallible");
+        std::fs::write(&self.path, json).map_err(|source| GrantError::Write {
+            path: self.path.clone(),
+            source,
+        })
     }
 }
 
@@ -111,14 +140,14 @@ fn grants_path() -> PathBuf {
 
 fn cap_to_str(cap: &Capability) -> &'static str {
     match cap {
-        Capability::FsRead       => "fs_read",
-        Capability::FsWrite      => "fs_write",
-        Capability::FsExec       => "fs_exec",
-        Capability::NetOutbound  => "net_outbound",
-        Capability::NetListen    => "net_listen",
-        Capability::IpcCascade   => "ipc_cascade",
+        Capability::FsRead => "fs_read",
+        Capability::FsWrite => "fs_write",
+        Capability::FsExec => "fs_exec",
+        Capability::NetOutbound => "net_outbound",
+        Capability::NetListen => "net_listen",
+        Capability::IpcCascade => "ipc_cascade",
         Capability::PersonalData => "personal_data",
-        Capability::McpInvoke    => "mcp_invoke",
+        Capability::McpInvoke => "mcp_invoke",
     }
 }
 
@@ -157,7 +186,9 @@ mod tests {
         let path = tmp.path().join("plugin-grants.json");
         {
             let mut store = GrantStore::load_from(path.clone()).unwrap();
-            store.grant("com.ex.persist", &Capability::NetOutbound).unwrap();
+            store
+                .grant("com.ex.persist", &Capability::NetOutbound)
+                .unwrap();
         }
         let store2 = GrantStore::load_from(path).unwrap();
         assert!(store2.is_granted("com.ex.persist", &Capability::NetOutbound));

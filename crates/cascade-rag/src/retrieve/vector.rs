@@ -102,7 +102,7 @@ impl Retriever for VectorRetriever {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use cascade_types::{Embedding, EmbedOpts, EmbeddingProvider};
+    use cascade_types::{EmbedOpts, Embedding, EmbeddingProvider};
     use std::sync::Arc;
     use tempfile::NamedTempFile;
 
@@ -133,10 +133,7 @@ mod tests {
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
-    async fn open_index_with_dim(
-        path: &std::path::Path,
-        dim: usize,
-    ) -> Arc<RagIndex> {
+    async fn open_index_with_dim(path: &std::path::Path, dim: usize) -> Arc<RagIndex> {
         Arc::new(
             RagIndex::open_with_dim(path, dim)
                 .await
@@ -201,8 +198,9 @@ mod tests {
         idx.upsert_embedding("b", &embed_b).await.unwrap();
 
         // Mock embedder returns embed_a so "a" should be nearest.
-        let embedder: Arc<dyn EmbeddingProvider> =
-            Arc::new(FixedEmbedder { vec: embed_a.clone() });
+        let embedder: Arc<dyn EmbeddingProvider> = Arc::new(FixedEmbedder {
+            vec: embed_a.clone(),
+        });
         let retriever = VectorRetriever::new(Arc::clone(&idx), embedder);
 
         let opts = RetrieveOpts {

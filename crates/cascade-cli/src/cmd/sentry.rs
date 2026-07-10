@@ -30,9 +30,7 @@
 use async_trait::async_trait;
 use clap::{Args, Subcommand};
 
-use cascade_core::nsentry::{
-    self, dev_id, load_config, manifest_size, save_config, NsentryConfig,
-};
+use cascade_core::nsentry::{self, dev_id, load_config, manifest_size, save_config, NsentryConfig};
 use cascade_types::error::{CascadeError, Result};
 
 use super::Command;
@@ -64,11 +62,11 @@ pub enum SentrySubcmd {
 impl Command for SentryArgs {
     async fn run(&self) -> Result<()> {
         match &self.subcommand {
-            SentrySubcmd::Enable(a)  => a.run().await,
-            SentrySubcmd::Sync(a)    => a.run().await,
-            SentrySubcmd::Status(a)  => a.run().await,
+            SentrySubcmd::Enable(a) => a.run().await,
+            SentrySubcmd::Sync(a) => a.run().await,
+            SentrySubcmd::Status(a) => a.run().await,
             SentrySubcmd::Disable(a) => a.run().await,
-            SentrySubcmd::Update(a)  => a.run().await,
+            SentrySubcmd::Update(a) => a.run().await,
         }
     }
 }
@@ -101,8 +99,11 @@ impl Command for SentryEnableArgs {
         let project_root = resolve_project(self.project.as_deref())?;
         let cfg = NsentryConfig {
             sentry_server: self.server.clone(),
-            remote_dir:    self.remote_dir.clone().unwrap_or_else(|| "/opt/nself-ops/errors".to_string()),
-            inbox:         self.inbox.clone(),
+            remote_dir: self
+                .remote_dir
+                .clone()
+                .unwrap_or_else(|| "/opt/nself-ops/errors".to_string()),
+            inbox: self.inbox.clone(),
             interval_secs: self.interval.unwrap_or(120),
         };
         save_config(&project_root, &cfg)?;
@@ -144,12 +145,19 @@ impl Command for SentrySyncArgs {
         })?;
 
         if self.dry_run {
-            println!("[dry-run] would sync from {}:{}", cfg.sentry_server, cfg.remote_dir);
+            println!(
+                "[dry-run] would sync from {}:{}",
+                cfg.sentry_server, cfg.remote_dir
+            );
         }
 
         let report = nsentry::sync(&project_root, &cfg, self.dry_run, None)?;
         if self.dry_run {
-            println!("[dry-run] would copy {} new file(s) into {}", report.new, report.inbox.display());
+            println!(
+                "[dry-run] would copy {} new file(s) into {}",
+                report.new,
+                report.inbox.display()
+            );
         } else {
             println!(
                 "nSentry sync complete: {} new, {} cached — dev_id={} inbox={}",
@@ -201,8 +209,14 @@ impl Command for SentryStatusArgs {
                 println!("  remote_dir: {}", cfg.remote_dir);
                 println!("  inbox:      {}", cfg.resolved_inbox(root).display());
                 println!("  interval:   {}s", cfg.interval_secs);
-                println!("  consumed:   {} file(s) in manifest", manifest_size(&id, &slug));
-                println!("  launchd:    {}", if loaded { "loaded" } else { "not loaded" });
+                println!(
+                    "  consumed:   {} file(s) in manifest",
+                    manifest_size(&id, &slug)
+                );
+                println!(
+                    "  launchd:    {}",
+                    if loaded { "loaded" } else { "not loaded" }
+                );
                 println!();
             }
         }
@@ -228,9 +242,9 @@ impl Command for SentryDisableArgs {
         let config = nsentry::config_path(&project_root);
         if config.is_file() {
             std::fs::remove_file(&config).map_err(|e| CascadeError::Io {
-                path:      config.clone(),
+                path: config.clone(),
                 operation: "remove nsentry.toml",
-                source:    e,
+                source: e,
             })?;
         }
         println!("nSentry disabled for {}", project_root.display());
@@ -270,9 +284,8 @@ impl Command for SentryUpdateArgs {
 fn resolve_project(path: Option<&std::path::Path>) -> Result<std::path::PathBuf> {
     match path {
         Some(p) => Ok(p.to_path_buf()),
-        None => std::env::current_dir().map_err(|e| {
-            CascadeError::Other(format!("cannot determine current directory: {e}"))
-        }),
+        None => std::env::current_dir()
+            .map_err(|e| CascadeError::Other(format!("cannot determine current directory: {e}"))),
     }
 }
 
@@ -330,19 +343,16 @@ fn resolve_cascade_binary() -> std::path::PathBuf {
 
 /// Write and load a launchd plist for the nSentry sync agent (macOS).
 #[cfg(target_os = "macos")]
-fn install_launchd_agent(
-    project_root: &std::path::Path,
-    cfg: &NsentryConfig,
-) -> Result<()> {
+fn install_launchd_agent(project_root: &std::path::Path, cfg: &NsentryConfig) -> Result<()> {
     let slug = project_slug(project_root);
     let label = launchd_label(&slug);
     let binary = resolve_cascade_binary();
     let home = cascade_types::paths::home_dir();
     let agents_dir = home.join("Library").join("LaunchAgents");
     std::fs::create_dir_all(&agents_dir).map_err(|e| CascadeError::Io {
-        path:      agents_dir.clone(),
+        path: agents_dir.clone(),
         operation: "create LaunchAgents dir",
-        source:    e,
+        source: e,
     })?;
 
     let plist_path = agents_dir.join(format!("{label}.plist"));
@@ -388,25 +398,25 @@ fn install_launchd_agent(
 </dict>
 </plist>
 "#,
-        label    = label,
-        binary   = binary.display(),
-        project  = project_root.display(),
+        label = label,
+        binary = binary.display(),
+        project = project_root.display(),
         interval = cfg.interval_secs,
-        log_out  = log_out.display(),
-        log_err  = log_err.display(),
+        log_out = log_out.display(),
+        log_err = log_err.display(),
     );
 
     // Atomic write via .tmp sibling.
     let tmp = plist_path.with_extension("plist.tmp");
     std::fs::write(&tmp, &plist).map_err(|e| CascadeError::Io {
-        path:      tmp.clone(),
+        path: tmp.clone(),
         operation: "write plist (tmp)",
-        source:    e,
+        source: e,
     })?;
     std::fs::rename(&tmp, &plist_path).map_err(|e| CascadeError::Io {
-        path:      plist_path.clone(),
+        path: plist_path.clone(),
         operation: "rename plist into place",
-        source:    e,
+        source: e,
     })?;
 
     // Idempotent: unload first (ignore error — may not be loaded yet).
@@ -435,12 +445,11 @@ fn install_launchd_agent(
 
 /// Non-macOS: print a notice, do not install a launchd agent.
 #[cfg(not(target_os = "macos"))]
-fn install_launchd_agent(
-    _project_root: &std::path::Path,
-    _cfg: &NsentryConfig,
-) -> Result<()> {
+fn install_launchd_agent(_project_root: &std::path::Path, _cfg: &NsentryConfig) -> Result<()> {
     println!("launchd agent: macOS only.");
-    println!("On Linux, add `cascade sentry sync --project <dir>` to a systemd --user timer or cron.");
+    println!(
+        "On Linux, add `cascade sentry sync --project <dir>` to a systemd --user timer or cron."
+    );
     Ok(())
 }
 
@@ -460,9 +469,9 @@ fn remove_launchd_agent(project_root: &std::path::Path) -> Result<()> {
             .arg(&plist_path)
             .output();
         std::fs::remove_file(&plist_path).map_err(|e| CascadeError::Io {
-            path:      plist_path.clone(),
+            path: plist_path.clone(),
             operation: "remove nsentry plist",
-            source:    e,
+            source: e,
         })?;
         println!("launchd agent removed: {label}");
     } else {

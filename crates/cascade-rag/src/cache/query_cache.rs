@@ -480,7 +480,13 @@ mod tests {
         let cache = QueryCache::new(512, Duration::from_secs(60));
 
         // Tenant A populates the cache.
-        cache.set_scoped("query".into(), 5, Some("tenant-a"), None, vec![make_hit("doc-a")]);
+        cache.set_scoped(
+            "query".into(),
+            5,
+            Some("tenant-a"),
+            None,
+            vec![make_hit("doc-a")],
+        );
 
         // Tenant B must NOT see tenant A's result.
         let b_result = cache.get_scoped("query", 5, Some("tenant-b"), None);
@@ -491,7 +497,10 @@ mod tests {
 
         // Tenant A's own key is still a hit.
         let a_result = cache.get_scoped("query", 5, Some("tenant-a"), None);
-        assert!(a_result.is_some(), "tenant A must hit its own cached result");
+        assert!(
+            a_result.is_some(),
+            "tenant A must hit its own cached result"
+        );
     }
 
     // ── T-RAG-07: invalidate_project leaves other project intact ─────────────

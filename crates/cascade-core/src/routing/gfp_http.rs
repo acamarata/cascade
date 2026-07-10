@@ -167,7 +167,9 @@ pub(crate) fn post_messages(url: &str, prompt: &str, timeout: Duration) -> Resul
         return Ok(LaneResult::Unavailable(reason));
     }
 
-    Ok(parse_messages_response(&String::from_utf8_lossy(&output.stdout)))
+    Ok(parse_messages_response(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
 }
 
 /// Parse an Anthropic-format `/v1/messages` response body (pure, no I/O).
@@ -334,7 +336,8 @@ mod tests {
 
     #[test]
     fn parse_pool_exhausted_error_is_unavailable() {
-        let body = r#"{"error": {"type": "api_error", "message": "all Gemini providers exhausted"}}"#;
+        let body =
+            r#"{"error": {"type": "api_error", "message": "all Gemini providers exhausted"}}"#;
         match parse_messages_response(body) {
             LaneResult::Unavailable(reason) => {
                 assert!(reason.contains("exhausted"), "reason: {reason}");
@@ -407,8 +410,7 @@ mod tests {
         let big_prompt = "x".repeat(1_000_000); // ~1 MiB, >> 64 KiB pipe buffer
         let url = format!("http://{addr}/v1/messages");
         let start = Instant::now();
-        let result =
-            post_messages(&url, &big_prompt, Duration::from_secs(2)).expect("no io error");
+        let result = post_messages(&url, &big_prompt, Duration::from_secs(2)).expect("no io error");
         assert!(
             matches!(result, LaneResult::Unavailable(_)),
             "stuck server must be Unavailable, got Output"

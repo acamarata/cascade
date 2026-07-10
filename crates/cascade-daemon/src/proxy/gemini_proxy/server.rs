@@ -18,7 +18,7 @@ use crate::event_bus::SharedBus;
 
 use super::dispatch::handle_connection;
 use super::state::build_routing_state;
-use super::types::{GEMINI_UPSTREAM_BASE, ProxyError, ProxyState};
+use super::types::{ProxyError, ProxyState, GEMINI_UPSTREAM_BASE};
 
 // ── Proxy struct ──────────────────────────────────────────────────────────────
 

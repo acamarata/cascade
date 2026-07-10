@@ -38,15 +38,15 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::{
-    Json, Router,
     body::Body,
     extract::State,
-    http::{HeaderMap, StatusCode, header},
+    http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
+    Json, Router,
 };
 use futures_util::stream;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -556,8 +556,8 @@ async fn messages(
                 "message": msg
             }
         });
-        let status = StatusCode::from_u16(upstream_status.as_u16())
-            .unwrap_or(StatusCode::BAD_GATEWAY);
+        let status =
+            StatusCode::from_u16(upstream_status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
         return (status, Json(err)).into_response();
     }
 
@@ -797,10 +797,15 @@ mod tests {
         h.insert("x-cascade-namespace", "meta".parse().unwrap());
         assert!(protected_namespace_refusal(&h).is_none(), "meta ns");
 
-        for ns in ["personal", "personal:private", "private", "Personal:Private"] {
+        for ns in [
+            "personal",
+            "personal:private",
+            "private",
+            "Personal:Private",
+        ] {
             h.insert("x-cascade-namespace", ns.parse().unwrap());
-            let resp = protected_namespace_refusal(&h)
-                .unwrap_or_else(|| panic!("{ns} must be refused"));
+            let resp =
+                protected_namespace_refusal(&h).unwrap_or_else(|| panic!("{ns} must be refused"));
             assert_eq!(resp.status(), StatusCode::FORBIDDEN, "{ns}");
         }
     }
@@ -871,7 +876,10 @@ mod tests {
             .expect("read body");
         let body: Value = serde_json::from_slice(&body_bytes).expect("json body");
         let msg = body["error"]["message"].as_str().expect("message string");
-        assert!(msg.contains("6 keys"), "msg should mention key count: {msg}");
+        assert!(
+            msg.contains("6 keys"),
+            "msg should mention key count: {msg}"
+        );
         assert!(msg.contains("42s"), "msg should mention reset time: {msg}");
         assert!(
             msg.contains("CASCADE_GFP_FALLBACK=agy"),
@@ -893,7 +901,10 @@ mod tests {
             .expect("read body");
         let body: Value = serde_json::from_slice(&body_bytes).expect("json body");
         let msg = body["error"]["message"].as_str().expect("message string");
-        assert!(msg.contains("1 key;") || msg.contains("1 key "), "msg: {msg}");
+        assert!(
+            msg.contains("1 key;") || msg.contains("1 key "),
+            "msg: {msg}"
+        );
         assert!(msg.contains("reset time unknown"), "msg: {msg}");
     }
 
@@ -910,7 +921,10 @@ mod tests {
     #[serial_test::serial(gfp_fallback_env)]
     fn agy_fallback_not_requested_for_other_values() {
         std::env::set_var(GFP_FALLBACK_ENV, "true");
-        assert!(!agy_fallback_requested(), "only the literal 'agy' value opts in");
+        assert!(
+            !agy_fallback_requested(),
+            "only the literal 'agy' value opts in"
+        );
         std::env::remove_var(GFP_FALLBACK_ENV);
     }
 

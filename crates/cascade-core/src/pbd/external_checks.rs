@@ -55,11 +55,19 @@ pub struct CheckResult {
 
 impl CheckResult {
     fn pass(label: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { label: label.into(), passed: true, detail: detail.into() }
+        Self {
+            label: label.into(),
+            passed: true,
+            detail: detail.into(),
+        }
     }
 
     fn fail(label: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { label: label.into(), passed: false, detail: detail.into() }
+        Self {
+            label: label.into(),
+            passed: false,
+            detail: detail.into(),
+        }
     }
 }
 
@@ -85,7 +93,11 @@ pub struct BuildCheck {
 impl BuildCheck {
     /// Create a new build check with no working-directory override.
     pub fn new(label: impl Into<String>, command: impl Into<String>) -> Self {
-        Self { label: label.into(), command: command.into(), working_dir: None }
+        Self {
+            label: label.into(),
+            command: command.into(),
+            working_dir: None,
+        }
     }
 
     /// Set an explicit working directory.
@@ -103,10 +115,7 @@ impl BuildCheck {
         }
 
         match cmd.output() {
-            Err(e) => CheckResult::fail(
-                &self.label,
-                format!("failed to spawn command: {e}"),
-            ),
+            Err(e) => CheckResult::fail(&self.label, format!("failed to spawn command: {e}")),
             Ok(out) => {
                 if out.status.success() {
                     CheckResult::pass(&self.label, "ok")
@@ -175,10 +184,7 @@ impl HealthCheck {
                 {
                     CheckResult::pass(&self.label, status_line)
                 } else {
-                    CheckResult::fail(
-                        &self.label,
-                        format!("unexpected response: {status_line}"),
-                    )
+                    CheckResult::fail(&self.label, format!("unexpected response: {status_line}"))
                 }
             }
             Err(e) => CheckResult::fail(&self.label, e),
@@ -187,8 +193,8 @@ impl HealthCheck {
 
     /// Returns the HTTP status line (`"HTTP/1.0 200 OK"`) or an error string.
     fn run_inner(&self) -> std::result::Result<String, String> {
-        let (host, port, path) = parse_http_url(&self.url)
-            .map_err(|e| format!("bad URL {}: {e}", self.url))?;
+        let (host, port, path) =
+            parse_http_url(&self.url).map_err(|e| format!("bad URL {}: {e}", self.url))?;
 
         let addr = format!("{host}:{port}");
         let timeout = Duration::from_secs(HTTP_TIMEOUT_SECS);
@@ -389,8 +395,7 @@ mod tests {
 
     #[test]
     fn real_checks_trait_impl_returns_failures() {
-        let checks = RealExternalChecks::new()
-            .with_build(BuildCheck::new("broken", "false"));
+        let checks = RealExternalChecks::new().with_build(BuildCheck::new("broken", "false"));
         let result = checks.run_checks("p1").expect("no error");
         assert_eq!(result.len(), 1);
     }

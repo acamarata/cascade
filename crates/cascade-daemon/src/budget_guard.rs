@@ -104,9 +104,11 @@ impl BudgetGuard {
         use cascade_types::quota_store::{PROVIDER_CLAUDE_MAX, PROVIDER_OC_GO};
 
         // Find the account entry.
-        let account = match store.accounts.iter().find(|a| {
-            a.provider == provider && a.account_id == account_id
-        }) {
+        let account = match store
+            .accounts
+            .iter()
+            .find(|a| a.provider == provider && a.account_id == account_id)
+        {
             Some(a) => a,
             None => return BudgetResult::Allow, // unknown account → fail open
         };
@@ -177,7 +179,9 @@ impl BudgetGuard {
 mod tests {
     use super::*;
     use cascade_core::quota_store::{AccountEntry, ModelUsage, QuotaStore, RateWindow};
-    use cascade_types::quota_store::{PROVIDER_CLAUDE_MAX, PROVIDER_OC_GO, QUOTA_STORE_SCHEMA_VERSION};
+    use cascade_types::quota_store::{
+        PROVIDER_CLAUDE_MAX, PROVIDER_OC_GO, QUOTA_STORE_SCHEMA_VERSION,
+    };
     use std::collections::HashMap;
 
     fn make_store(account: AccountEntry) -> QuotaStore {

@@ -19,10 +19,22 @@ use cascade_types::error::{CascadeError, Result};
 
 /// Built-in agent definitions embedded at compile time.
 static AGENT_FILES: &[(&str, &str)] = &[
-    ("code-reviewer.toml",    include_str!("../../../data/agents/code-reviewer.toml")),
-    ("doc-writer.toml",       include_str!("../../../data/agents/doc-writer.toml")),
-    ("drift-detector.toml",   include_str!("../../../data/agents/drift-detector.toml")),
-    ("security-reviewer.toml", include_str!("../../../data/agents/security-reviewer.toml")),
+    (
+        "code-reviewer.toml",
+        include_str!("../../../data/agents/code-reviewer.toml"),
+    ),
+    (
+        "doc-writer.toml",
+        include_str!("../../../data/agents/doc-writer.toml"),
+    ),
+    (
+        "drift-detector.toml",
+        include_str!("../../../data/agents/drift-detector.toml"),
+    ),
+    (
+        "security-reviewer.toml",
+        include_str!("../../../data/agents/security-reviewer.toml"),
+    ),
 ];
 
 /// Install built-in agent TOML files into `agents_dir`.
@@ -77,7 +89,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         install_agents(dir.path()).unwrap();
         let installed2 = install_agents(dir.path()).unwrap();
-        assert!(installed2.is_empty(), "second install must skip existing files");
+        assert!(
+            installed2.is_empty(),
+            "second install must skip existing files"
+        );
     }
 
     #[test]

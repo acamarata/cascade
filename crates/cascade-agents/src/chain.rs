@@ -26,27 +26,19 @@
 //!
 //! SPORT: cascade-agents / chain — E-P6-08
 
-pub mod types;
-pub mod helpers;
-pub mod executor;
 pub mod builtins;
+pub mod executor;
+pub mod helpers;
 mod tests;
+pub mod types;
 
 // ── Public re-exports (preserve original API surface) ─────────────────────────
 
 pub use types::{
-    CHAIN_DEFAULT_MAX_STEPS,
-    CHAIN_DEFAULT_MAX_DEPTH,
-    PARALLEL_CAP_MAX,
-    ChainStep,
-    ChainFlow,
-    ChainValidationError,
-    ChainError,
-    ChainContext,
-    ChainStepTrace,
-    ChainResult,
+    ChainContext, ChainError, ChainFlow, ChainResult, ChainStep, ChainStepTrace,
+    ChainValidationError, CHAIN_DEFAULT_MAX_DEPTH, CHAIN_DEFAULT_MAX_STEPS, PARALLEL_CAP_MAX,
 };
 
-pub use executor::{ChainExecutor, ChainExecutorBuilder, parallel_concurrency_cap};
+pub use executor::{parallel_concurrency_cap, ChainExecutor, ChainExecutorBuilder};
 
 pub use builtins::{builtin_research_summarize_draft, builtin_triage_branch_respond};

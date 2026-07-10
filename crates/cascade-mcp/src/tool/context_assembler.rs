@@ -151,8 +151,8 @@ impl ContextAssembler {
             }
         };
 
-        let parsed: ProfilesFile =
-            toml::from_str(&content).map_err(|e| format!("context_profiles.toml parse error: {e}"))?;
+        let parsed: ProfilesFile = toml::from_str(&content)
+            .map_err(|e| format!("context_profiles.toml parse error: {e}"))?;
 
         Ok(Self {
             profiles: parsed.profiles,

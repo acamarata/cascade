@@ -520,7 +520,9 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn cascade_resolves_fail_with_empty_dir() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let dir = TempDir::new().unwrap();
         // Isolate the global/personal (HOME-based) tiers so a real `~/.cascade` on
         // the host machine doesn't satisfy resolution — point HOME at the empty dir.
@@ -545,7 +547,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn daemon_warn_when_socket_absent() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Set HOME to a fresh temp dir so daemon_socket() points to a non-existent path.
         let home = TempDir::new().unwrap();
         // Safety: test-only env mutation guarded by serial lock.
@@ -560,7 +564,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn daemon_fail_when_socket_absent_and_require_daemon() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", home.path()) };
         let result = check_daemon(true);
@@ -574,7 +580,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn ai_provider_fail_when_no_providers_and_no_local_models() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Point HOME to a temp dir so providers.json doesn't exist and
         // ~/.cascade/models/ is absent.
         let home = TempDir::new().unwrap();
@@ -629,7 +637,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn config_integrity_pass_when_no_config_exists() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", home.path()) };
         let result = check_config_integrity(home.path());
@@ -646,7 +656,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn config_integrity_pass_with_valid_toml() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         fs::create_dir_all(&cascade_dir).unwrap();
@@ -671,7 +683,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn config_integrity_fail_with_broken_toml() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         fs::create_dir_all(&cascade_dir).unwrap();
@@ -748,7 +762,9 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn all_checks_pass_on_fully_setup_tempdir() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Build a fully-configured tempdir:
         // - .cascade/CASCADE.md
         // - .cascade/config.toml (valid)

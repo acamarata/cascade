@@ -717,8 +717,11 @@ mod tests {
 
         // Absent section in a real file → defaults.
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("config.toml"), "[daemon]\nlog_level = \"info\"\n")
-            .expect("write");
+        std::fs::write(
+            dir.path().join("config.toml"),
+            "[daemon]\nlog_level = \"info\"\n",
+        )
+        .expect("write");
         let loaded = Config::load(dir.path()).expect("load");
         assert!(!loaded.middleware.compress_context);
         assert!(!loaded.middleware.inject_context);

@@ -58,8 +58,7 @@ use tracing::{debug, warn};
 /// back to the plain-text parser for unrecognised extensions, so JSONL
 /// ingests as text.
 const WATCHED_EXTENSIONS: &[&str] = &[
-    "md", "rs", "ts", "py", "json", "yaml", "toml", "html",
-    "txt", "pdf", "docx", "xlsx", "jsonl",
+    "md", "rs", "ts", "py", "json", "yaml", "toml", "html", "txt", "pdf", "docx", "xlsx", "jsonl",
 ];
 
 /// Directory name segments that are always excluded from watching.
@@ -177,9 +176,7 @@ pub(crate) fn is_excluded(path: &Path) -> bool {
         .collect();
     for (i, s) in comps.iter().enumerate() {
         if EXCLUDED_DIRS.iter().any(|ex| s == ex) {
-            if s == ".cascade"
-                && comps.get(i + 1).map(String::as_str) == Some(CONTEXT_SYNC_DIR)
-            {
+            if s == ".cascade" && comps.get(i + 1).map(String::as_str) == Some(CONTEXT_SYNC_DIR) {
                 continue;
             }
             return true;
@@ -463,10 +460,14 @@ mod tests {
         assert!(!is_excluded(&PathBuf::from(
             "/home/u/.cascade/context-sync/2026-07-03.jsonl"
         )));
-        assert!(!is_excluded(&PathBuf::from("/home/u/.cascade/context-sync")));
+        assert!(!is_excluded(&PathBuf::from(
+            "/home/u/.cascade/context-sync"
+        )));
         // Index internals and other .cascade content remain excluded.
         assert!(is_excluded(&PathBuf::from("/home/u/.cascade/index/vec.db")));
-        assert!(is_excluded(&PathBuf::from("/home/u/.cascade/logs/daemon.log")));
+        assert!(is_excluded(&PathBuf::from(
+            "/home/u/.cascade/logs/daemon.log"
+        )));
         // A `.cascade` deeper in the path without the carve-out is excluded
         // even when context-sync appears elsewhere.
         assert!(is_excluded(&PathBuf::from(

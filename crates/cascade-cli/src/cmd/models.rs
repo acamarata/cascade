@@ -176,8 +176,9 @@ impl Command for DownloadArgs {
             })?;
 
             // Check if already present (idempotent).
-            let model_dir = model_dir_path_home(id)
-                .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
+            let model_dir = model_dir_path_home(id).ok_or_else(|| {
+                CascadeError::Other("cannot determine HOME directory".to_string())
+            })?;
             let weight_file = model_dir.join(entry.filename);
 
             if weight_file.exists() {
@@ -254,8 +255,9 @@ impl Command for RemoveArgs {
                 )));
             }
 
-            let model_dir = model_dir_path_home(id)
-                .ok_or_else(|| CascadeError::Other("cannot determine HOME directory".to_string()))?;
+            let model_dir = model_dir_path_home(id).ok_or_else(|| {
+                CascadeError::Other("cannot determine HOME directory".to_string())
+            })?;
 
             if !model_dir.is_dir() {
                 println!("Model '{}' is not downloaded (nothing to remove).", id);
@@ -353,7 +355,9 @@ mod tests {
     #[tokio::test]
     #[serial(global_env)]
     async fn list_runs_without_panic() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let _home = with_fake_home();
         // ListArgs::run() prints to stdout; we just ensure it returns Ok.
         let args = ListArgs { json: false };

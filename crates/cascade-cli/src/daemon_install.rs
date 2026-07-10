@@ -145,10 +145,7 @@ fn install_platform(binary: PathBuf) -> Result<InstallResult> {
     })?;
 
     let plist_path = agents_dir.join(format!("{LABEL}.plist"));
-    let log_out = home
-        .join("Library")
-        .join("Logs")
-        .join("cascade-daemon.log");
+    let log_out = home.join("Library").join("Logs").join("cascade-daemon.log");
     let log_err = home
         .join("Library")
         .join("Logs")
@@ -243,7 +240,10 @@ fn status_platform() -> Result<()> {
         .join("LaunchAgents")
         .join(format!("{LABEL}.plist"));
     let installed = plist_path.exists();
-    println!("service file: {}", if installed { "present" } else { "not found" });
+    println!(
+        "service file: {}",
+        if installed { "present" } else { "not found" }
+    );
     if installed {
         println!("plist: {}", plist_path.display());
     }
@@ -417,7 +417,10 @@ fn status_platform() -> Result<()> {
         .join(UNIT_NAME);
 
     let installed = unit_path.exists();
-    println!("service file: {}", if installed { "present" } else { "not found" });
+    println!(
+        "service file: {}",
+        if installed { "present" } else { "not found" }
+    );
     if installed {
         println!("unit: {}", unit_path.display());
         let out = std::process::Command::new("systemctl")
@@ -487,8 +490,8 @@ fn install_platform(binary: PathBuf) -> Result<InstallResult> {
             &format!("{bin_str} serve"),
             "/sc",
             "ONLOGON",
-            "/it",  // run only when user is logged on
-            "/f",   // force overwrite
+            "/it", // run only when user is logged on
+            "/f",  // force overwrite
         ])
         .output()
         .map_err(|e| CascadeError::Other(format!("schtasks /create failed: {e}")))?;
@@ -720,7 +723,10 @@ mod tests {
             written.contains(&binary.display().to_string()),
             "binary path missing"
         );
-        assert!(written.contains("<key>KeepAlive</key>"), "KeepAlive missing");
+        assert!(
+            written.contains("<key>KeepAlive</key>"),
+            "KeepAlive missing"
+        );
     }
 
     // ── Linux template generation (cfg-gated pure test) ───────────────────────

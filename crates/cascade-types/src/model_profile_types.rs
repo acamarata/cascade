@@ -19,8 +19,8 @@
 //! - No runtime-dep beyond serde + std. Zero I/O.
 //! - All types are `Clone + PartialEq + Serialize + Deserialize`.
 
-use serde::{Deserialize, Serialize};
 use crate::agent::Tier;
+use serde::{Deserialize, Serialize};
 
 // ── OutputFormat ──────────────────────────────────────────────────────────────
 

@@ -112,7 +112,11 @@ impl ImportPlan {
             "FAIL"
         };
         let rt_verdict = &self.round_trip.verdict;
-        let isolation_status = if self.isolation.clean { "CLEAN" } else { "VIOLATIONS" };
+        let isolation_status = if self.isolation.clean {
+            "CLEAN"
+        } else {
+            "VIOLATIONS"
+        };
 
         format!(
             "Import plan: {} files ({} conflicts)\n\
@@ -126,7 +130,11 @@ impl ImportPlan {
             lossless,
             rt_verdict,
             isolation_status,
-            if self.ready_to_apply { "YES" } else { "NO — see gaps above" }
+            if self.ready_to_apply {
+                "YES"
+            } else {
+                "NO — see gaps above"
+            }
         )
     }
 }
@@ -205,12 +213,7 @@ impl ImportEngine {
     ///
     /// # Errors
     /// Returns `CascadeError::PathNotFound` if `source_root` does not exist.
-    pub fn plan(
-        &self,
-        source_root: &Path,
-        harness: &str,
-        dest_root: &Path,
-    ) -> Result<ImportPlan> {
+    pub fn plan(&self, source_root: &Path, harness: &str, dest_root: &Path) -> Result<ImportPlan> {
         let tool = harness_to_tool(harness);
 
         // 1. Discover source files.
@@ -278,8 +281,7 @@ impl ImportEngine {
         let isolation = check_isolation(&plan_pairs);
 
         // 7. Determine readiness.
-        let ready_to_apply =
-            coverage.is_lossless && round_trip.passed && isolation.clean;
+        let ready_to_apply = coverage.is_lossless && round_trip.passed && isolation.clean;
 
         Ok(ImportPlan {
             harness: harness.to_string(),
@@ -488,19 +490,35 @@ mod tests {
 
     fn setup_minimal_source(root: &Path) {
         // GCI CLAUDE.md
-        fs::write(root.join("CLAUDE.md"), "# Global\n## Operating Posture\nAct then report.\n## Delegation\nTop chat plans.\n").unwrap();
+        fs::write(
+            root.join("CLAUDE.md"),
+            "# Global\n## Operating Posture\nAct then report.\n## Delegation\nTop chat plans.\n",
+        )
+        .unwrap();
         // Always-loaded rule
         let rules = root.join("rules");
         fs::create_dir_all(&rules).unwrap();
-        fs::write(rules.join("deny.md"), "# Deny List\n## Hard Rule\nNo rm -rf.\n").unwrap();
+        fs::write(
+            rules.join("deny.md"),
+            "# Deny List\n## Hard Rule\nNo rm -rf.\n",
+        )
+        .unwrap();
         // On-demand reference
         let refs = root.join("references");
         fs::create_dir_all(&refs).unwrap();
-        fs::write(refs.join("model-registry.md"), "# Model Registry\n## Models\nSonnet.\n").unwrap();
+        fs::write(
+            refs.join("model-registry.md"),
+            "# Model Registry\n## Models\nSonnet.\n",
+        )
+        .unwrap();
         // Script
         let scripts = root.join("scripts");
         fs::create_dir_all(&scripts).unwrap();
-        fs::write(scripts.join("claude-recall"), "#!/usr/bin/env python3\n# recall\n").unwrap();
+        fs::write(
+            scripts.join("claude-recall"),
+            "#!/usr/bin/env python3\n# recall\n",
+        )
+        .unwrap();
     }
 
     #[test]
@@ -581,7 +599,10 @@ mod tests {
 
         // Isolation report must always be present.
         // A clean source should produce a clean report.
-        assert!(plan.isolation.clean, "clean source should have no isolation violations");
+        assert!(
+            plan.isolation.clean,
+            "clean source should have no isolation violations"
+        );
     }
 
     #[test]
@@ -594,8 +615,14 @@ mod tests {
         let plan = engine.plan(src.path(), "claude-code", dest.path()).unwrap();
         let summary = plan.summary();
 
-        assert!(summary.contains("Coverage:"), "summary must include coverage");
-        assert!(summary.contains("Round-trip:"), "summary must include round-trip");
+        assert!(
+            summary.contains("Coverage:"),
+            "summary must include coverage"
+        );
+        assert!(
+            summary.contains("Round-trip:"),
+            "summary must include round-trip"
+        );
     }
 
     #[test]
@@ -603,7 +630,11 @@ mod tests {
         let src = TempDir::new().unwrap();
         let dest = TempDir::new().unwrap();
         // opencode uses phases/ not rules/
-        fs::write(src.path().join("GLOBAL.md"), "# Global\n## Tier\nContent.\n").unwrap();
+        fs::write(
+            src.path().join("GLOBAL.md"),
+            "# Global\n## Tier\nContent.\n",
+        )
+        .unwrap();
         let phases = src.path().join("phases");
         fs::create_dir_all(&phases).unwrap();
         fs::write(phases.join("current.yaml"), "mode: phased\n").unwrap();

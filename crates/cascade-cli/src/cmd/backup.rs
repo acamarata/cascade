@@ -71,9 +71,7 @@ impl Command for BackupArgs {
             BackupSubcommand::List { tier, backup_root } => {
                 list_snapshots(tier, backup_root.clone()).await
             }
-            BackupSubcommand::Schedule { interval } => {
-                set_schedule(interval).await
-            }
+            BackupSubcommand::Schedule { interval } => set_schedule(interval).await,
         }
     }
 }
@@ -150,9 +148,9 @@ async fn set_schedule(interval: &ScheduleInterval) -> Result<()> {
 
     let config_path = home.join(".cascade").join("config.toml");
     let interval_str = match interval {
-        ScheduleInterval::Daily   => "daily",
-        ScheduleInterval::Weekly  => "weekly",
-        ScheduleInterval::Hourly  => "hourly",
+        ScheduleInterval::Daily => "daily",
+        ScheduleInterval::Weekly => "weekly",
+        ScheduleInterval::Hourly => "hourly",
     };
 
     // Read existing config or start fresh.
@@ -167,9 +165,9 @@ async fn set_schedule(interval: &ScheduleInterval) -> Result<()> {
     };
 
     // Parse as TOML and set backup.schedule.
-    let mut doc: toml_edit::DocumentMut = raw.parse().map_err(|e| {
-        CascadeError::Other(format!("parse config.toml: {e}"))
-    })?;
+    let mut doc: toml_edit::DocumentMut = raw
+        .parse()
+        .map_err(|e| CascadeError::Other(format!("parse config.toml: {e}")))?;
 
     doc["backup"]["schedule"] = toml_edit::value(interval_str);
 
@@ -188,7 +186,11 @@ async fn set_schedule(interval: &ScheduleInterval) -> Result<()> {
         source: e,
     })?;
 
-    println!("Backup schedule set to '{}' in {}", interval_str, config_path.display());
+    println!(
+        "Backup schedule set to '{}' in {}",
+        interval_str,
+        config_path.display()
+    );
     println!("Note: daemon scheduling wiring is pending (TODO).");
 
     Ok(())

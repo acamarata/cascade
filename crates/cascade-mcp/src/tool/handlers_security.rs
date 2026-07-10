@@ -39,16 +39,12 @@ use crate::server::JsonRpcError;
 ///
 /// Client-side paths (browser-visible code) have their findings upgraded to
 /// `high` severity when the pattern severity is below `high`.
-pub(super) async fn handle_secret_scan(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_secret_scan(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let root = resolve_path_arg(args)?;
 
-    let findings: Vec<SecretFinding> = tokio::task::spawn_blocking(move || {
-        scan_path(&root)
-    })
-    .await
-    .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?;
+    let findings: Vec<SecretFinding> = tokio::task::spawn_blocking(move || scan_path(&root))
+        .await
+        .map_err(|e| JsonRpcError::internal(format!("spawn_blocking: {e}")))?;
 
     let high_or_critical: usize = findings
         .iter()
@@ -215,9 +211,7 @@ fn resolve_path_arg(args: &Value) -> std::result::Result<PathBuf, JsonRpcError> 
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        });
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     Ok(path)
 }

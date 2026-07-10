@@ -13,7 +13,7 @@
 //!              boundaries (network reads rarely align on `\n\n`).
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — proxy/anthropic_compat/sse
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 // ── Gemini SSE frame parser ───────────────────────────────────────────────────
@@ -141,9 +141,14 @@ impl StreamTranslator {
             }
         }
 
-        let candidate = chunk.get("candidates").and_then(Value::as_array).and_then(|c| c.first());
+        let candidate = chunk
+            .get("candidates")
+            .and_then(Value::as_array)
+            .and_then(|c| c.first());
 
-        if let Some(reason) = candidate.and_then(|c| c.get("finishReason")).and_then(Value::as_str)
+        if let Some(reason) = candidate
+            .and_then(|c| c.get("finishReason"))
+            .and_then(Value::as_str)
         {
             self.finish_reason = Some(reason.to_string());
         }
@@ -299,20 +304,38 @@ mod tests {
         );
 
         // message_start carries model + zeroed usage.
-        let start_json: Value =
-            serde_json::from_str(String::from_utf8_lossy(&events[0]).lines().nth(1).unwrap().trim_start_matches("data: ")).unwrap();
+        let start_json: Value = serde_json::from_str(
+            String::from_utf8_lossy(&events[0])
+                .lines()
+                .nth(1)
+                .unwrap()
+                .trim_start_matches("data: "),
+        )
+        .unwrap();
         assert_eq!(start_json["message"]["model"], "gemini-flash-latest");
         assert_eq!(start_json["message"]["usage"]["input_tokens"], 0);
 
         // content_block_delta carries the text.
-        let delta_json: Value =
-            serde_json::from_str(String::from_utf8_lossy(&events[2]).lines().nth(1).unwrap().trim_start_matches("data: ")).unwrap();
+        let delta_json: Value = serde_json::from_str(
+            String::from_utf8_lossy(&events[2])
+                .lines()
+                .nth(1)
+                .unwrap()
+                .trim_start_matches("data: "),
+        )
+        .unwrap();
         assert_eq!(delta_json["delta"]["text"], "Hello");
         assert_eq!(delta_json["delta"]["type"], "text_delta");
 
         // message_delta carries stop_reason + output_tokens.
-        let mdelta_json: Value =
-            serde_json::from_str(String::from_utf8_lossy(&events[4]).lines().nth(1).unwrap().trim_start_matches("data: ")).unwrap();
+        let mdelta_json: Value = serde_json::from_str(
+            String::from_utf8_lossy(&events[4])
+                .lines()
+                .nth(1)
+                .unwrap()
+                .trim_start_matches("data: "),
+        )
+        .unwrap();
         assert_eq!(mdelta_json["delta"]["stop_reason"], "end_turn");
         assert_eq!(mdelta_json["usage"]["output_tokens"], 2);
     }
@@ -353,7 +376,10 @@ mod tests {
 
         let second = parser.push(part2.as_bytes());
         assert_eq!(second.len(), 1);
-        assert_eq!(second[0]["candidates"][0]["content"]["parts"][0]["text"], "split");
+        assert_eq!(
+            second[0]["candidates"][0]["content"]["parts"][0]["text"],
+            "split"
+        );
     }
 
     #[test]
@@ -366,10 +392,9 @@ mod tests {
     #[test]
     fn empty_text_chunk_produces_no_delta_events() {
         let mut translator = StreamTranslator::new("gemini-flash-latest");
-        let chunk: Value = serde_json::from_str(
-            "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}]}}]}",
-        )
-        .unwrap();
+        let chunk: Value =
+            serde_json::from_str("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}]}}]}")
+                .unwrap();
         let events = translator.on_chunk(&chunk);
         assert!(events.is_empty());
     }
@@ -401,7 +426,10 @@ mod tests {
     fn format_event_produces_correct_sse_wire_framing() {
         let bytes = format_event("message_stop", &json!({"type": "message_stop"}));
         let s = String::from_utf8(bytes).unwrap();
-        assert_eq!(s, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+        assert_eq!(
+            s,
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+        );
     }
 
     #[test]

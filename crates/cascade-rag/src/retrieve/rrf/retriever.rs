@@ -199,7 +199,10 @@ impl Retriever for RrfRetriever {
         // ── Parallel fetch ──────────────────────────────────────────────────
         let fts_fut = async {
             if self.config.use_fts {
-                self.fts.retrieve(query, &wide_opts).await.unwrap_or_default()
+                self.fts
+                    .retrieve(query, &wide_opts)
+                    .await
+                    .unwrap_or_default()
             } else {
                 vec![]
             }
@@ -244,31 +247,46 @@ impl Retriever for RrfRetriever {
         // (fail-open) — layer 2 catches them if they do have a path after
         // the hit-map join.
         let path_str = |h: &RetrievalHit| -> Option<String> {
-            h.file_path.as_ref().and_then(|p| p.to_str()).map(str::to_string)
+            h.file_path
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .map(str::to_string)
         };
 
         let fts_pairs: Vec<(i64, f64)> = {
             let raw = hits_to_pairs(&fts_hits);
             self.exclusion.filter_pairs(&raw, |id| {
-                fts_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+                fts_hits
+                    .iter()
+                    .find(|h| h.chunk_id == id.to_string())
+                    .and_then(path_str)
             })
         };
         let vec_pairs: Vec<(i64, f64)> = {
             let raw = hits_to_pairs(&vec_hits);
             self.exclusion.filter_pairs(&raw, |id| {
-                vec_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+                vec_hits
+                    .iter()
+                    .find(|h| h.chunk_id == id.to_string())
+                    .and_then(path_str)
             })
         };
         let curated_pairs: Vec<(i64, f64)> = {
             let raw = hits_to_pairs(&curated_hits);
             self.exclusion.filter_pairs(&raw, |id| {
-                curated_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+                curated_hits
+                    .iter()
+                    .find(|h| h.chunk_id == id.to_string())
+                    .and_then(path_str)
             })
         };
         let recency_pairs: Vec<(i64, f64)> = {
             let raw = hits_to_pairs(&recency_hits);
             self.exclusion.filter_pairs(&raw, |id| {
-                recency_hits.iter().find(|h| h.chunk_id == id.to_string()).and_then(path_str)
+                recency_hits
+                    .iter()
+                    .find(|h| h.chunk_id == id.to_string())
+                    .and_then(path_str)
             })
         };
 
@@ -391,6 +409,11 @@ impl Retriever for RrfRetriever {
 /// pre-translated to real chunk IDs by [`RagIndex`].
 pub(super) fn hits_to_pairs(hits: &[RetrievalHit]) -> Vec<(i64, f64)> {
     hits.iter()
-        .filter_map(|h| h.chunk_id.parse::<i64>().ok().map(|id| (id, h.score as f64)))
+        .filter_map(|h| {
+            h.chunk_id
+                .parse::<i64>()
+                .ok()
+                .map(|id| (id, h.score as f64))
+        })
         .collect()
 }

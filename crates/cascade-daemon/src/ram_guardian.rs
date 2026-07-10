@@ -188,11 +188,7 @@ fn parse_vm_stat_output(text: &str) -> Option<f32> {
 
     for line in text.lines() {
         let (key, val) = line.split_once(':')?;
-        let val: u64 = val
-            .trim()
-            .trim_end_matches('.')
-            .parse()
-            .unwrap_or_default();
+        let val: u64 = val.trim().trim_end_matches('.').parse().unwrap_or_default();
         match key.trim() {
             "Pages free" => free = val,
             "Pages active" => active = val,
@@ -302,8 +298,7 @@ impl GuardianState {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string_pretty(self)
-            .unwrap_or_else(|_| "{}".to_owned());
+        let json = serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_owned());
         std::fs::write(path, json)
     }
 }
@@ -346,7 +341,12 @@ pub fn format_report(events: &[KillEvent], sample: MemSample, dry_run: bool) -> 
     ));
     out.push_str("| pid | name | age (s) |\n|---|---|---|\n");
     for e in events {
-        out.push_str(&format!("| {} | {} | {} |\n", e.pid, e.name, e.age.as_secs()));
+        out.push_str(&format!(
+            "| {} | {} | {} |\n",
+            e.pid,
+            e.name,
+            e.age.as_secs()
+        ));
     }
     Some(out)
 }
@@ -427,7 +427,11 @@ fn parse_etime(etime: &str) -> Option<Duration> {
     };
     let fields: Vec<&str> = rest.split(':').collect();
     let (hours, mins, secs) = match fields.as_slice() {
-        [h, m, s] => (h.parse::<u64>().ok()?, m.parse::<u64>().ok()?, s.parse::<u64>().ok()?),
+        [h, m, s] => (
+            h.parse::<u64>().ok()?,
+            m.parse::<u64>().ok()?,
+            s.parse::<u64>().ok()?,
+        ),
         [m, s] => (0u64, m.parse::<u64>().ok()?, s.parse::<u64>().ok()?),
         _ => return None,
     };

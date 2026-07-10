@@ -289,7 +289,9 @@ mod tests {
     #[serial(global_env)]
     #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_cc_stop_hook_idempotent() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -301,7 +303,10 @@ mod tests {
         register_cc_stop_hook().await;
         let content2 = fs::read_to_string(&settings_path).unwrap_or_default();
 
-        assert_eq!(content1, content2, "second register_cc_stop_hook must not change content");
+        assert_eq!(
+            content1, content2,
+            "second register_cc_stop_hook must not change content"
+        );
 
         // Verify the hook is present
         let val: serde_json::Value = serde_json::from_str(&content1).unwrap();
@@ -313,7 +318,9 @@ mod tests {
     #[serial(global_env)]
     #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_writes_post_tool_use_entry() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -333,19 +340,19 @@ mod tests {
         let hooks = arr[0]["hooks"].as_array().unwrap();
         assert_eq!(hooks.len(), 1);
         assert_eq!(hooks[0]["type"], "command");
-        assert!(
-            hooks[0]["command"]
-                .as_str()
-                .unwrap()
-                .contains("cascade security scan-hook")
-        );
+        assert!(hooks[0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("cascade security scan-hook"));
     }
 
     #[tokio::test]
     #[serial(global_env)]
     #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_idempotent() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -358,7 +365,10 @@ mod tests {
         register_security_hook().await;
         let content2 = fs::read_to_string(&settings_path).unwrap();
 
-        assert_eq!(content1, content2, "second register_security_hook must not change content");
+        assert_eq!(
+            content1, content2,
+            "second register_security_hook must not change content"
+        );
 
         // Still exactly one entry.
         let val: serde_json::Value = serde_json::from_str(&content1).unwrap();
@@ -370,7 +380,9 @@ mod tests {
     #[serial(global_env)]
     #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn test_register_security_hook_preserves_other_keys() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let home = TempDir::new().unwrap();
         let cascade_dir = home.path().join(".cascade");
         setup(&cascade_dir, home.path());
@@ -383,7 +395,11 @@ mod tests {
                 "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "echo done" }] }]
             }
         });
-        fs::write(&settings_path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
+        fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&initial).unwrap(),
+        )
+        .unwrap();
 
         register_security_hook().await;
 

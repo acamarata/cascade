@@ -135,22 +135,22 @@ pub use index::{CachedIndex, RagIndex};
 pub use index_manager::{resolve_db_path, IndexManager, IndexRegistry, SourceInfo};
 pub use ingest::{IngestConfig, IngestPipeline, IngestResult, IngestStats};
 pub use parse::{DocumentParser, DocumentText, ParseDispatcher};
+pub use privacy::{RedactionConfig, RedactionPipeline};
 pub use retrieve::exclusion::{ExclusionConfig, ExclusionSet};
 pub use retrieve::rrf::{NormStrategy, RrfRetriever};
 pub use search::{
-    route_query, search, weights_for_kind, HydeLlm, QueryKind, RerankerModelConfig,
-    RoutingWeights, SearchConfig,
+    route_query, search, weights_for_kind, HydeLlm, QueryKind, RerankerModelConfig, RoutingWeights,
+    SearchConfig,
 };
-pub use privacy::{RedactionConfig, RedactionPipeline};
 pub use workers::{EmbedResult, RawDoc, WorkerPool, WorkerPoolConfig};
 
 // ── rag-08 exports ────────────────────────────────────────────────────────────
+pub use memory::namespace::{validate as validate_namespace, validate_with_firewall};
 pub use memory::{
     archive_fact, consolidate_namespace, count_episodes, decay_namespace, delete_episode,
     insert_episode, recall, upsert_fact, NamespaceError, RecallHit, ValidatedNamespace,
     CONSOLIDATION_THRESHOLD,
 };
-pub use memory::namespace::{validate as validate_namespace, validate_with_firewall};
 
 // ── rag-09 exports ────────────────────────────────────────────────────────────
 pub use agentic::{agentic_retrieve, AdequacyAssessor, AgenticConfig, AgenticResult};

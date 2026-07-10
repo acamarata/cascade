@@ -69,7 +69,10 @@ impl std::fmt::Display for HookEvent {
             HookEvent::DaemonStop => write!(f, "DaemonStop"),
             HookEvent::BackupComplete => write!(f, "BackupComplete"),
             HookEvent::TurnComplete { session_id } => write!(f, "TurnComplete({})", session_id),
-            HookEvent::CcSessionStop { session_id, project_dir } => write!(f, "CcSessionStop({}, {})", session_id, project_dir),
+            HookEvent::CcSessionStop {
+                session_id,
+                project_dir,
+            } => write!(f, "CcSessionStop({}, {})", session_id, project_dir),
             HookEvent::Custom { kind } => write!(f, "Custom({})", kind),
         }
     }
@@ -91,11 +94,15 @@ impl HookEvent {
                 HookEvent::TurnComplete { session_id: pat },
             ) => pat == "*" || actual == pat,
             (
-                HookEvent::CcSessionStop { session_id: actual_s, project_dir: actual_p },
-                HookEvent::CcSessionStop { session_id: pat_s, project_dir: pat_p },
-            ) => {
-                (pat_s == "*" || actual_s == pat_s) && (pat_p == "*" || actual_p == pat_p)
-            }
+                HookEvent::CcSessionStop {
+                    session_id: actual_s,
+                    project_dir: actual_p,
+                },
+                HookEvent::CcSessionStop {
+                    session_id: pat_s,
+                    project_dir: pat_p,
+                },
+            ) => (pat_s == "*" || actual_s == pat_s) && (pat_p == "*" || actual_p == pat_p),
             (HookEvent::Custom { kind: a }, HookEvent::Custom { kind: b }) => a == b,
             _ => std::mem::discriminant(self) == std::mem::discriminant(pattern),
         }
@@ -429,10 +436,16 @@ mod tests {
             project_dir: "/home/user/project".to_string(),
         };
 
-        assert!(fired.matches(&wildcard), "wildcard should match any CcSessionStop");
+        assert!(
+            fired.matches(&wildcard),
+            "wildcard should match any CcSessionStop"
+        );
         assert!(fired.matches(&exact), "exact match should work");
         assert!(!fired.matches(&wrong), "wrong session_id should not match");
-        assert_eq!(format!("{}", fired), "CcSessionStop(sess-abc, /home/user/project)");
+        assert_eq!(
+            format!("{}", fired),
+            "CcSessionStop(sess-abc, /home/user/project)"
+        );
     }
 
     #[test]
@@ -455,10 +468,7 @@ mod tests {
             "wildcard should match any TurnComplete"
         );
         assert!(fired.matches(&exact), "exact session_id should match");
-        assert!(
-            !fired.matches(&wrong),
-            "wrong session_id should not match"
-        );
+        assert!(!fired.matches(&wrong), "wrong session_id should not match");
 
         assert_eq!(format!("{}", fired), "TurnComplete(sess-abc)");
     }

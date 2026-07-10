@@ -36,13 +36,13 @@ pub mod ipc;
 pub mod ipc_handlers;
 pub mod key_index;
 pub mod log;
+#[cfg(feature = "gfp")]
+pub mod project_poller;
 pub mod provider_health;
 #[cfg(feature = "gemini-proxy")]
 pub mod proxy;
 #[cfg(feature = "gfp")]
 pub mod quota_poller;
-#[cfg(feature = "gfp")]
-pub mod project_poller;
 // ram-guardian: OOM-prevention subsystem — memory sampling + conservative
 // stray rustc/vitest reaper.
 pub mod ram_guardian;

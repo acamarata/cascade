@@ -180,7 +180,11 @@ t1 = { provider_id = "legacy", model_id = "legacy-v1" }
 fn best_for_same_tier_tag_match() {
     let mut reg = ModelRegistry::default();
     reg.apply_overrides(&ModelOverrides {
-        t2: Some(ModelEntry::with_profile("acme", "acme-code", code_profile())),
+        t2: Some(ModelEntry::with_profile(
+            "acme",
+            "acme-code",
+            code_profile(),
+        )),
         ..Default::default()
     });
     let shape = TaskShape {
@@ -198,7 +202,11 @@ fn best_for_same_tier_tag_match() {
 fn best_for_format_match() {
     let mut reg = ModelRegistry::default();
     reg.apply_overrides(&ModelOverrides {
-        t3: Some(ModelEntry::with_profile("acme", "acme-json", json_profile())),
+        t3: Some(ModelEntry::with_profile(
+            "acme",
+            "acme-json",
+            json_profile(),
+        )),
         ..Default::default()
     });
     let shape = TaskShape {
@@ -231,7 +239,11 @@ fn best_for_no_profile_falls_back_to_tier() {
 fn best_for_empty_shape_returns_tier() {
     let mut reg = ModelRegistry::default();
     reg.apply_overrides(&ModelOverrides {
-        t2: Some(ModelEntry::with_profile("acme", "acme-fast", code_profile())),
+        t2: Some(ModelEntry::with_profile(
+            "acme",
+            "acme-fast",
+            code_profile(),
+        )),
         ..Default::default()
     });
     let shape = TaskShape {

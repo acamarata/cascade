@@ -148,7 +148,12 @@ pub async fn ai_merge_section(
     legacy_text: String,
     template_text: String,
 ) -> Result<serde_json::Value, String> {
-    tracing::debug!("ai_merge_section: section={} tier={} provider={}", section_id, tier, provider_id);
+    tracing::debug!(
+        "ai_merge_section: section={} tier={} provider={}",
+        section_id,
+        tier,
+        provider_id
+    );
     let _ = (legacy_text,);
     Ok(serde_json::json!({
         "merged_text": format!("# {}\n\n{}", heading, template_text),

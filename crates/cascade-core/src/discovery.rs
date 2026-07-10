@@ -106,9 +106,7 @@ impl TierDiscovery {
     /// Reading happens once at construction, not per-call, to avoid race
     /// conditions if the env var changes at runtime (T-P5-E02-02).
     pub fn new() -> Self {
-        let sites_override = std::env::var("CASCADE_APC_PATH")
-            .ok()
-            .map(PathBuf::from);
+        let sites_override = std::env::var("CASCADE_APC_PATH").ok().map(PathBuf::from);
         Self {
             home_override: None,
             sites_override,

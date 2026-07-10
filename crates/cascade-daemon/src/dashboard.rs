@@ -322,9 +322,7 @@ fn resolve_gci_target(base: &Path, requested: &str) -> Result<std::path::PathBuf
 /// Outputs: `200 {"written": true, "path": "<resolved>"}` on success;
 ///          `400 {"written": false, "error": "..."}` on validation failure
 ///          (traversal, missing HOME) or I/O error. Never a fake success.
-async fn gci_write_file(
-    Json(req): Json<GciFileWriteRequest>,
-) -> impl IntoResponse {
+async fn gci_write_file(Json(req): Json<GciFileWriteRequest>) -> impl IntoResponse {
     let Some(path) = req.path.as_deref() else {
         // No path supplied — documented no-op (see doc comment above).
         return (StatusCode::OK, Json(serde_json::json!({"written": true}))).into_response();
@@ -387,9 +385,7 @@ async fn gci_write_file(
 ///          which is idempotent-safe for a delete); `400 {"deleted": false,
 ///          "error": "..."}` on validation failure or I/O error other than
 ///          NotFound.
-async fn gci_delete_file(
-    Json(req): Json<GciFileDeleteRequest>,
-) -> impl IntoResponse {
+async fn gci_delete_file(Json(req): Json<GciFileDeleteRequest>) -> impl IntoResponse {
     let Some(path) = req.path.as_deref() else {
         return (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response();
     };
@@ -522,7 +518,10 @@ pub fn build_router(state: DashboardState) -> Router {
         .nest("/api/projects", crate::http::projects_handlers::router())
         .nest("/api/chat", crate::http::chat_handlers::router())
         .nest("/api/personal", crate::http::usage_history::router())
-        .nest("/api/gci", protect_writes(crate::http::hooks_write::router()))
+        .nest(
+            "/api/gci",
+            protect_writes(crate::http::hooks_write::router()),
+        )
         .nest("/api/gci", protect_writes(crate::http::harness::router()))
         .nest("/api/gci", crate::http::rag_status::router())
         // RAG-08: memory chat_history API — POST/GET /api/memory/chat
@@ -531,7 +530,10 @@ pub fn build_router(state: DashboardState) -> Router {
             protect_writes(crate::http::chat_history_memory::router()),
         )
         // mem-01: CC session harvest — POST /api/harvest/cc-session
-        .nest("/api/harvest", protect_writes(crate::http::harvest::router()))
+        .nest(
+            "/api/harvest",
+            protect_writes(crate::http::harvest::router()),
+        )
         // fleet-01: routing event stream — GET /api/fleet/routing
         .nest("/api/fleet", crate::http::fleet_routing::router());
 
@@ -927,8 +929,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let base = tmp.path();
 
-        let target =
-            resolve_gci_target(base, "scratch.md").expect("relative path must resolve");
+        let target = resolve_gci_target(base, "scratch.md").expect("relative path must resolve");
         write_file_atomic(&target, b"to be deleted").expect("write must succeed");
         assert!(target.exists(), "precondition: file exists before delete");
 

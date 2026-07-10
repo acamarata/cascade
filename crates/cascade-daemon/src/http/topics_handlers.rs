@@ -44,7 +44,11 @@ async fn list_topics() -> Json<serde_json::Value> {
         if !meta.is_dir() {
             continue;
         }
-        let Some(id) = path.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
+        let Some(id) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(str::to_string)
+        else {
             continue;
         };
         let title = topic_title(&path, &id).await;
@@ -114,7 +118,9 @@ fn title_from_text(text: &str) -> Option<String> {
         }
         let lower = line.to_ascii_lowercase();
         let candidate = if lower.starts_with("title:") {
-            line.split_once(':').map(|(_, rest)| rest.trim()).unwrap_or(line)
+            line.split_once(':')
+                .map(|(_, rest)| rest.trim())
+                .unwrap_or(line)
         } else if line.starts_with('#') {
             line.trim_start_matches('#').trim()
         } else {

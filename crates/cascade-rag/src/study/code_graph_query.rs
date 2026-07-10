@@ -210,10 +210,7 @@ pub fn code_graph_query(conn: &Connection, question: &str) -> Result<Option<Grap
             let summary = if callers.is_empty() {
                 format!("No callers of `{symbol}` found in the code graph.")
             } else {
-                format!(
-                    "`{symbol}` is referenced by: {}",
-                    callers.join(", ")
-                )
+                format!("`{symbol}` is referenced by: {}", callers.join(", "))
             };
             Ok(Some(GraphQueryResult {
                 intent,
@@ -280,7 +277,12 @@ mod tests {
             make_chunk("bar", "fn", "src/lib.rs", "fn bar() { foo() }"),
             make_chunk("baz", "fn", "src/lib.rs", "fn baz() { foo() }"),
             make_chunk("init", "fn", "src/main.rs", "fn init() { bar(); baz(); }"),
-            make_chunk("Config", "struct", "src/config.rs", "struct Config { field: u32 }"),
+            make_chunk(
+                "Config",
+                "struct",
+                "src/config.rs",
+                "struct Config { field: u32 }",
+            ),
         ];
         build_graph(&conn, &chunks).unwrap();
         conn
@@ -353,7 +355,9 @@ mod tests {
     #[test]
     fn code_graph_query_symbols_in_file() {
         let conn = synthetic_graph();
-        let res = code_graph_query(&conn, "symbols in src/lib.rs").unwrap().unwrap();
+        let res = code_graph_query(&conn, "symbols in src/lib.rs")
+            .unwrap()
+            .unwrap();
 
         assert!(matches!(res.intent, StructuralIntent::SymbolsIn(ref p) if p == "src/lib.rs"));
         let syms = match &res.raw {
@@ -370,14 +374,18 @@ mod tests {
     fn code_graph_query_no_callers_returns_empty_summary() {
         let conn = synthetic_graph();
         // "Config" has no callers in the graph
-        let res = code_graph_query(&conn, "callers of Config").unwrap().unwrap();
+        let res = code_graph_query(&conn, "callers of Config")
+            .unwrap()
+            .unwrap();
         assert!(res.summary.contains("No callers"));
     }
 
     #[test]
     fn code_graph_query_unknown_file_returns_empty_summary() {
         let conn = synthetic_graph();
-        let res = code_graph_query(&conn, "symbols in src/unknown.rs").unwrap().unwrap();
+        let res = code_graph_query(&conn, "symbols in src/unknown.rs")
+            .unwrap()
+            .unwrap();
         assert!(res.summary.contains("No symbols"));
     }
 
@@ -394,6 +402,8 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let res = code_graph_query(&conn, "who calls foo").unwrap();
         // callers_of returns Err which we unwrap_or_default — result is Some with empty callers
-        assert!(matches!(res, Some(GraphQueryResult { raw: GraphRaw::Callers(ref c), .. }) if c.is_empty()));
+        assert!(
+            matches!(res, Some(GraphQueryResult { raw: GraphRaw::Callers(ref c), .. }) if c.is_empty())
+        );
     }
 }

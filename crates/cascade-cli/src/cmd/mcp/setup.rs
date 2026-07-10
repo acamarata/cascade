@@ -3,9 +3,11 @@
 use async_trait::async_trait;
 use cascade_types::error::{CascadeError, Result};
 
-use crate::cmd::Command;
 use super::args::{McpSetupArgs, ToolName};
-use super::clients::{setup_all, setup_claude_code, setup_claude_desktop, setup_list, setup_opencode, setup_vscode};
+use super::clients::{
+    setup_all, setup_claude_code, setup_claude_desktop, setup_list, setup_opencode, setup_vscode,
+};
+use crate::cmd::Command;
 
 #[async_trait]
 impl Command for McpSetupArgs {

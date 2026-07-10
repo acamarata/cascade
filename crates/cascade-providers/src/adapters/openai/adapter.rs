@@ -20,10 +20,8 @@ use crate::{
     },
 };
 
-use super::helpers::{CHAT_PREFIXES, DEFAULT_BASE_URL, O_SERIES_PREFIXES, model_context_window};
-use super::types::{
-    OaiMessage, OaiModelList, OaiRequest, OaiResponse, OaiStreamEvent,
-};
+use super::helpers::{model_context_window, CHAT_PREFIXES, DEFAULT_BASE_URL, O_SERIES_PREFIXES};
+use super::types::{OaiMessage, OaiModelList, OaiRequest, OaiResponse, OaiStreamEvent};
 
 async fn forward_openai_sse_line(
     line: &str,
@@ -415,4 +413,3 @@ impl ProviderAdapter for OpenAIAdapter {
         }
     }
 }
-

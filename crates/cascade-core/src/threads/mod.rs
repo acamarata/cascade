@@ -10,6 +10,8 @@
 
 mod store;
 pub use store::ThreadStore;
-pub use store::{Thread, ThreadTask, Topic, CreateThreadParams, CreateTaskParams,
-                MoveTaskParams, SearchParams, SearchResult};
-pub use store::{RagSink, NoopRagSink};
+pub use store::{
+    CreateTaskParams, CreateThreadParams, MoveTaskParams, SearchParams, SearchResult, Thread,
+    ThreadTask, Topic,
+};
+pub use store::{NoopRagSink, RagSink};

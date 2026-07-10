@@ -125,15 +125,15 @@ impl Serialize for TaskClass {
         // `Other` passes through unchanged so round-trips are lossless.
         let label = match self {
             TaskClass::InteractiveChat => "interactive-chat",
-            TaskClass::BulkExecution   => "bulk-execution",
-            TaskClass::Grunt           => "grunt",
-            TaskClass::Taxonomy        => "taxonomy",
-            TaskClass::AdversarialCr   => "adversarial-cr",
-            TaskClass::FinalGate       => "final-gate",
-            TaskClass::Sensitive       => "sensitive",
-            TaskClass::Background      => "background",
-            TaskClass::PostPrompt      => "post-prompt",
-            TaskClass::Other(v)        => v.as_str(),
+            TaskClass::BulkExecution => "bulk-execution",
+            TaskClass::Grunt => "grunt",
+            TaskClass::Taxonomy => "taxonomy",
+            TaskClass::AdversarialCr => "adversarial-cr",
+            TaskClass::FinalGate => "final-gate",
+            TaskClass::Sensitive => "sensitive",
+            TaskClass::Background => "background",
+            TaskClass::PostPrompt => "post-prompt",
+            TaskClass::Other(v) => v.as_str(),
         };
         s.serialize_str(label)
     }
@@ -144,15 +144,15 @@ impl<'de> Deserialize<'de> for TaskClass {
         let s = String::deserialize(d)?;
         Ok(match s.as_str() {
             "interactive-chat" => TaskClass::InteractiveChat,
-            "bulk-execution"   => TaskClass::BulkExecution,
-            "grunt"            => TaskClass::Grunt,
-            "taxonomy"         => TaskClass::Taxonomy,
-            "adversarial-cr"   => TaskClass::AdversarialCr,
-            "final-gate"       => TaskClass::FinalGate,
-            "sensitive"        => TaskClass::Sensitive,
-            "background"       => TaskClass::Background,
-            "post-prompt"      => TaskClass::PostPrompt,
-            other              => TaskClass::Other(other.to_string()),
+            "bulk-execution" => TaskClass::BulkExecution,
+            "grunt" => TaskClass::Grunt,
+            "taxonomy" => TaskClass::Taxonomy,
+            "adversarial-cr" => TaskClass::AdversarialCr,
+            "final-gate" => TaskClass::FinalGate,
+            "sensitive" => TaskClass::Sensitive,
+            "background" => TaskClass::Background,
+            "post-prompt" => TaskClass::PostPrompt,
+            other => TaskClass::Other(other.to_string()),
         })
     }
 }
@@ -268,19 +268,23 @@ mod tests {
     fn task_class_known_variants_round_trip() {
         let cases = [
             (TaskClass::InteractiveChat, "interactive-chat"),
-            (TaskClass::BulkExecution,   "bulk-execution"),
-            (TaskClass::Grunt,           "grunt"),
-            (TaskClass::Taxonomy,        "taxonomy"),
-            (TaskClass::AdversarialCr,   "adversarial-cr"),
-            (TaskClass::FinalGate,       "final-gate"),
-            (TaskClass::Sensitive,       "sensitive"),
-            (TaskClass::Background,      "background"),
-            (TaskClass::PostPrompt,      "post-prompt"),
+            (TaskClass::BulkExecution, "bulk-execution"),
+            (TaskClass::Grunt, "grunt"),
+            (TaskClass::Taxonomy, "taxonomy"),
+            (TaskClass::AdversarialCr, "adversarial-cr"),
+            (TaskClass::FinalGate, "final-gate"),
+            (TaskClass::Sensitive, "sensitive"),
+            (TaskClass::Background, "background"),
+            (TaskClass::PostPrompt, "post-prompt"),
         ];
         for (variant, expected_str) in &cases {
             // Serialise to JSON string.
             let json = serde_json::to_string(variant).expect("serialise");
-            assert_eq!(json, format!("\"{}\"", expected_str), "serialize {expected_str}");
+            assert_eq!(
+                json,
+                format!("\"{}\"", expected_str),
+                "serialize {expected_str}"
+            );
             // Deserialise back.
             let decoded: TaskClass = serde_json::from_str(&json).expect("deserialise");
             assert_eq!(&decoded, variant, "round-trip {expected_str}");
@@ -295,7 +299,8 @@ mod tests {
     #[test]
     fn task_class_unknown_string_becomes_other() {
         let json = "\"future-unknown-class\"";
-        let decoded: TaskClass = serde_json::from_str(json).expect("must not fail on unknown value");
+        let decoded: TaskClass =
+            serde_json::from_str(json).expect("must not fail on unknown value");
         assert_eq!(
             decoded,
             TaskClass::Other("future-unknown-class".to_string()),

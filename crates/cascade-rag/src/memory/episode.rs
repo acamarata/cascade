@@ -52,7 +52,11 @@ pub fn count_episodes(conn: &Connection, namespace: &ValidatedNamespace) -> Resu
 }
 
 /// Delete a single episode by id. Used by the `forget` MCP tool.
-pub fn delete_episode(conn: &Connection, namespace: &ValidatedNamespace, id: &str) -> Result<usize> {
+pub fn delete_episode(
+    conn: &Connection,
+    namespace: &ValidatedNamespace,
+    id: &str,
+) -> Result<usize> {
     conn.execute(
         "DELETE FROM memory_episodes WHERE id = ?1 AND namespace = ?2",
         rusqlite::params![id, namespace.as_str()],

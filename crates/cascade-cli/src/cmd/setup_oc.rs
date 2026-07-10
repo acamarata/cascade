@@ -285,7 +285,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_oc_global_creates_mcp_entry() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -320,7 +322,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_oc_idempotent_global_mcp() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -346,7 +350,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_oc_preserves_other_mcp_servers() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -387,7 +393,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn setup_oc_dry_run_does_not_write() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -404,7 +412,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn inject_oc_instructions_writes_preamble() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -433,7 +443,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn inject_oc_instructions_updates_project_opencode_json() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -460,7 +472,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn inject_oc_instructions_preserves_existing_project_json_keys() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -496,7 +510,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn inject_oc_instructions_idempotent() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 
@@ -518,7 +534,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn inject_oc_instructions_dry_run_no_write() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = temp_home();
         std::env::set_var("HOME", tmp.path());
 

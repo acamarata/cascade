@@ -117,7 +117,11 @@ impl QueryStrategy for MultiQueryStrategy {
     /// Expand `query` into the original plus up to `n_variants` paraphrases.
     #[instrument(skip(self), fields(n_variants = self.n_variants))]
     async fn expand(&self, query: &str) -> Result<ExpandedQuery> {
-        debug!(query, n = self.n_variants, "MultiQuery: generating paraphrases");
+        debug!(
+            query,
+            n = self.n_variants,
+            "MultiQuery: generating paraphrases"
+        );
 
         let mut queries = vec![query.to_string()];
 
@@ -250,9 +254,7 @@ mod tests {
             if self.paraphrase_fail {
                 return Err(CascadeError::Other("mock paraphrase failure".into()));
             }
-            Ok((0..n)
-                .map(|i| format!("variant_{i}: {query}"))
-                .collect())
+            Ok((0..n).map(|i| format!("variant_{i}: {query}")).collect())
         }
 
         async fn step_back(&self, query: &str) -> Result<String> {

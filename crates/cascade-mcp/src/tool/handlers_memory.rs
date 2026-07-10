@@ -15,11 +15,10 @@
 
 use serde_json::Value;
 
-use cascade_rag::memory::{
-    delete_episode, insert_episode, recall as memory_recall,
-    validate_with_firewall, NamespaceError,
-};
 use cascade_rag::db::run_migrations;
+use cascade_rag::memory::{
+    delete_episode, insert_episode, recall as memory_recall, validate_with_firewall, NamespaceError,
+};
 
 use crate::paths::memory_db_path;
 use crate::server::JsonRpcError;
@@ -38,8 +37,7 @@ fn open_memory_db() -> std::result::Result<rusqlite::Connection, String> {
     let conn = rusqlite::Connection::open(&path)
         .map_err(|e| format!("failed to open memory DB at {}: {e}", path.display()))?;
 
-    run_migrations(&conn)
-        .map_err(|e| format!("memory DB migration failed: {e}"))?;
+    run_migrations(&conn).map_err(|e| format!("memory DB migration failed: {e}"))?;
 
     Ok(conn)
 }
@@ -113,9 +111,7 @@ pub(super) async fn handle_memory_remember(
 /// Query memory for the given namespace and query string.
 ///
 /// Personal namespace is blocked unless `opt_in: true`.
-pub(super) async fn handle_memory_recall(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_memory_recall(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let (namespace_raw, opt_in) = extract_namespace_and_opt_in(args)?;
     let query = args
         .get("query")
@@ -155,7 +151,11 @@ pub(super) async fn handle_memory_recall(
         .collect();
 
     let text = if results.is_empty() {
-        format!("No memory found in namespace '{}' for query '{}'", namespace_raw, args.get("query").and_then(|v| v.as_str()).unwrap_or(""))
+        format!(
+            "No memory found in namespace '{}' for query '{}'",
+            namespace_raw,
+            args.get("query").and_then(|v| v.as_str()).unwrap_or("")
+        )
     } else {
         results
             .iter()
@@ -185,9 +185,7 @@ pub(super) async fn handle_memory_recall(
 /// Archive or delete a memory item by id.
 ///
 /// Personal namespace is blocked unless `opt_in: true`.
-pub(super) async fn handle_memory_forget(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_memory_forget(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let (namespace_raw, opt_in) = extract_namespace_and_opt_in(args)?;
     let id = args
         .get("id")
@@ -216,8 +214,7 @@ pub(super) async fn handle_memory_forget(
             }
             _ => {
                 // Default: episode — hard delete.
-                delete_episode(&conn, &ns, &id)
-                    .map_err(|e| format!("delete_episode failed: {e}"))
+                delete_episode(&conn, &ns, &id).map_err(|e| format!("delete_episode failed: {e}"))
             }
         }
     })
@@ -243,9 +240,7 @@ pub(super) async fn handle_memory_forget(
 /// Semantic search within a namespace (alias of recall for discoverability).
 ///
 /// Personal namespace is blocked unless `opt_in: true`.
-pub(super) async fn handle_memory_search(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_memory_search(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     // search is identical to recall — delegate.
     handle_memory_recall(args).await
 }
@@ -274,7 +269,10 @@ mod tests {
         // Without opt_in, should return a tool-level error (not a protocol error).
         let result = handle_memory_remember(&args).await.unwrap();
         let is_error = result["isError"].as_bool().unwrap_or(false);
-        assert!(is_error, "personal namespace without opt_in must return isError=true");
+        assert!(
+            is_error,
+            "personal namespace without opt_in must return isError=true"
+        );
     }
 
     #[tokio::test]
@@ -285,7 +283,10 @@ mod tests {
         });
         let result = handle_memory_recall(&args).await.unwrap();
         let is_error = result["isError"].as_bool().unwrap_or(false);
-        assert!(is_error, "personal namespace without opt_in must return isError=true");
+        assert!(
+            is_error,
+            "personal namespace without opt_in must return isError=true"
+        );
     }
 
     #[tokio::test]
@@ -296,14 +297,20 @@ mod tests {
         });
         let result = handle_memory_forget(&args).await.unwrap();
         let is_error = result["isError"].as_bool().unwrap_or(false);
-        assert!(is_error, "personal namespace without opt_in must return isError=true");
+        assert!(
+            is_error,
+            "personal namespace without opt_in must return isError=true"
+        );
     }
 
     #[tokio::test]
     async fn remember_missing_content_returns_protocol_error() {
         let args = json!({ "namespace": "dev-test" });
         let result = handle_memory_remember(&args).await;
-        assert!(result.is_err(), "missing 'content' must be a protocol error");
+        assert!(
+            result.is_err(),
+            "missing 'content' must be a protocol error"
+        );
     }
 
     #[tokio::test]

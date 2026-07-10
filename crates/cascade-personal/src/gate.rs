@@ -52,10 +52,7 @@ impl Collection {
     ///
     /// Keep in sync with the `sensitivity = 'restricted'` seed rows in migrate.rs.
     pub fn is_restricted(&self) -> bool {
-        matches!(
-            self.0.as_str(),
-            "finance" | "health" | "credentials"
-        )
+        matches!(self.0.as_str(), "finance" | "health" | "credentials")
     }
 }
 

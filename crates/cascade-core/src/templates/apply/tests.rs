@@ -376,7 +376,10 @@ mod upgrade {
         assert!(result.added.is_empty());
 
         let content = fs::read_to_string(&target).unwrap();
-        assert!(content.contains("new rules"), "target must have new content");
+        assert!(
+            content.contains("new rules"),
+            "target must have new content"
+        );
         assert!(
             content.contains(r#"version="1.1.0""#),
             "stamp must be updated"
@@ -413,7 +416,10 @@ mod upgrade {
             content.contains("cascade:deprecated"),
             "deprecation comment must appear"
         );
-        assert!(content.contains("old stuff"), "old content must be preserved");
+        assert!(
+            content.contains("old stuff"),
+            "old content must be preserved"
+        );
     }
 
     #[test]

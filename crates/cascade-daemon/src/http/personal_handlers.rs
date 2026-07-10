@@ -224,9 +224,11 @@ pub async fn handler_threads() -> impl IntoResponse {
             return (StatusCode::OK, Json(json!([]))).into_response();
         };
         match store.list_threads(false) {
-            Ok(threads) => {
-                (StatusCode::OK, Json(serde_json::to_value(threads).unwrap_or(json!([])))).into_response()
-            }
+            Ok(threads) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(threads).unwrap_or(json!([]))),
+            )
+                .into_response(),
             Err(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": e.to_string()})),
@@ -236,7 +238,11 @@ pub async fn handler_threads() -> impl IntoResponse {
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -244,20 +250,36 @@ pub async fn handler_threads() -> impl IntoResponse {
 pub async fn handler_create_thread(Json(body): Json<CreateThreadBody>) -> impl IntoResponse {
     tokio::task::spawn_blocking(move || {
         let Some(store) = open_thread_store() else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir"})),
+            )
+                .into_response();
         };
         match store.create_thread(CreateThreadParams {
             title: body.title,
             parent_id: body.parent_id,
             sensitivity: body.sensitivity,
         }) {
-            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(t) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(t).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -268,14 +290,28 @@ pub async fn handler_get_thread(AxumPath(id): AxumPath<String>) -> impl IntoResp
             return (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response();
         };
         match store.get_thread(&id) {
-            Ok(Some(t)) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
-            Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(Some(t)) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(t).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Ok(None) => {
+                (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
+            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -286,16 +322,28 @@ pub async fn handler_archive_thread(
 ) -> impl IntoResponse {
     tokio::task::spawn_blocking(move || {
         let Some(store) = open_thread_store() else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir"})),
+            )
+                .into_response();
         };
         match store.set_archived(&id, body.archived) {
             Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -306,7 +354,11 @@ pub async fn handler_add_task(
 ) -> impl IntoResponse {
     tokio::task::spawn_blocking(move || {
         let Some(store) = open_thread_store() else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir"})),
+            )
+                .into_response();
         };
         match store.add_task(CreateTaskParams {
             thread_id,
@@ -314,13 +366,25 @@ pub async fn handler_add_task(
             stage: body.stage,
             notes: body.notes,
         }) {
-            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(t) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(t).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -331,19 +395,35 @@ pub async fn handler_move_task(
 ) -> impl IntoResponse {
     tokio::task::spawn_blocking(move || {
         let Some(store) = open_thread_store() else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir"})),
+            )
+                .into_response();
         };
         match store.move_task(MoveTaskParams {
             task_id,
             new_stage: body.new_stage,
         }) {
-            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(t) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(t).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -354,16 +434,32 @@ pub async fn handler_add_topic(
 ) -> impl IntoResponse {
     tokio::task::spawn_blocking(move || {
         let Some(store) = open_thread_store() else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "no home dir"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "no home dir"})),
+            )
+                .into_response();
         };
         match store.add_topic_to_thread(&thread_id, &body.name) {
-            Ok(t) => (StatusCode::OK, Json(serde_json::to_value(t).unwrap_or(json!({})))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(t) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(t).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -374,13 +470,25 @@ pub async fn handler_list_topics(AxumPath(thread_id): AxumPath<String>) -> impl 
             return (StatusCode::OK, Json(json!([]))).into_response();
         };
         match store.list_topics_for_thread(&thread_id) {
-            Ok(topics) => (StatusCode::OK, Json(serde_json::to_value(topics).unwrap_or(json!([])))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(topics) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(topics).unwrap_or(json!([]))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -395,13 +503,25 @@ pub async fn handler_search_threads(Query(params): Query<SearchQuery>) -> impl I
             topic: params.topic,
             include_archived: params.archived.unwrap_or(false),
         }) {
-            Ok(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or(json!({})))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            Ok(r) => (
+                StatusCode::OK,
+                Json(serde_json::to_value(r).unwrap_or(json!({}))),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
         }
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -808,7 +928,11 @@ pub async fn handler_push_to_rag() -> impl IntoResponse {
     })
     .await
     .unwrap_or_else(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response()
     })
 }
 
@@ -818,30 +942,24 @@ pub async fn handler_push_to_rag() -> impl IntoResponse {
 pub fn router() -> Router<DashboardState> {
     Router::new()
         // threads CRUD
-        .route(
-            "/threads",
-            get(handler_threads).post(handler_create_thread),
-        )
+        .route("/threads", get(handler_threads).post(handler_create_thread))
         .route("/threads/search", get(handler_search_threads))
         .route("/threads/:id", get(handler_get_thread))
         .route(
             "/threads/:id/archive",
             axum::routing::patch(handler_archive_thread),
         )
-        .route(
-            "/threads/:id/tasks",
-            axum::routing::post(handler_add_task),
-        )
+        .route("/threads/:id/tasks", axum::routing::post(handler_add_task))
         .route(
             "/threads/:id/topics",
             axum::routing::post(handler_add_topic).get(handler_list_topics),
         )
-        .route(
-            "/tasks/:id/stage",
-            axum::routing::patch(handler_move_task),
-        )
+        .route("/tasks/:id/stage", axum::routing::patch(handler_move_task))
         // rag-08 push
-        .route("/threads/push-to-rag", axum::routing::post(handler_push_to_rag))
+        .route(
+            "/threads/push-to-rag",
+            axum::routing::post(handler_push_to_rag),
+        )
         // existing routes
         .route("/ideas-inbox", get(handler_ideas_inbox))
         .route("/crd-chains", get(handler_crd_chains))
@@ -882,7 +1000,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_empty() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // DB-backed: empty DB → 200 []
         with_fake_home(|tmp| {
             // Create the .cascade dir so open_thread_store succeeds.
@@ -911,7 +1031,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_threads_with_memory() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Legacy test: MEMORY.md files are no longer returned by /threads (now DB-backed).
         // Verify the endpoint still returns 200 [] when no threads exist in DB.
         with_fake_home(|tmp| {
@@ -949,7 +1071,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_ideas_inbox_empty() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -973,7 +1097,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_ideas_inbox_with_idea() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let ideas_dir = tmp.path().join(".claude").join("ideas");
             std::fs::create_dir_all(&ideas_dir).unwrap();
@@ -1004,7 +1130,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_crd_chains_no_dir() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -1029,7 +1157,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_crd_chains_with_chain() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let chains_dir = tmp.path().join(".claude-relay").join("chains");
             std::fs::create_dir_all(&chains_dir).unwrap();
@@ -1070,7 +1200,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_scheduled_tasks_absent() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -1094,7 +1226,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_scheduled_tasks_present() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
             std::fs::create_dir_all(&temp_dir).unwrap();
@@ -1129,7 +1263,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_fleet_quota_missing() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {
@@ -1154,7 +1290,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_fleet_quota_present() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|tmp| {
             let temp_dir = tmp.path().join(".claude").join("temp");
             std::fs::create_dir_all(&temp_dir).unwrap();
@@ -1200,7 +1338,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[serial(global_env)]
     async fn test_personal_account_ledger_missing() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         with_fake_home(|_tmp| {
             let app = test_router();
             tokio::task::block_in_place(|| {

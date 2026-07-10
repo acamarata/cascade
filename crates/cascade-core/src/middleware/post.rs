@@ -154,10 +154,7 @@ pub fn extract_path_candidates(response: &str) -> Vec<String> {
 /// `path_exists` receives each candidate token and returns whether it exists
 /// under the caller's project root; the closure is the ONLY existence
 /// authority so tests run without a real filesystem.
-pub fn extract_files_touched(
-    response: &str,
-    path_exists: impl Fn(&str) -> bool,
-) -> Vec<String> {
+pub fn extract_files_touched(response: &str, path_exists: impl Fn(&str) -> bool) -> Vec<String> {
     extract_path_candidates(response)
         .into_iter()
         .filter(|p| path_exists(p))
@@ -306,10 +303,7 @@ pub fn extract_digest_with(
 
 /// Fully pure digest extraction: rule-based taxonomy only (no I/O of any kind
 /// beyond the injected `path_exists` closure).
-pub fn extract_digest(
-    response: &str,
-    path_exists: impl Fn(&str) -> bool,
-) -> ResponseDigest {
+pub fn extract_digest(response: &str, path_exists: impl Fn(&str) -> bool) -> ResponseDigest {
     extract_digest_with(response, path_exists, classify_topic_rule_based)
 }
 
@@ -416,7 +410,10 @@ Done: update the changelog
     fn path_candidates_found_in_fixture() {
         let c = extract_path_candidates(FIXTURE);
         assert!(c.contains(&"src/lib.rs".to_string()), "got: {c:?}");
-        assert!(c.contains(&"crates/core/src/store.rs".to_string()), "got: {c:?}");
+        assert!(
+            c.contains(&"crates/core/src/store.rs".to_string()),
+            "got: {c:?}"
+        );
     }
 
     #[test]
@@ -438,7 +435,10 @@ Done: update the changelog
         let some = extract_files_touched(FIXTURE, fixture_exists);
         assert_eq!(
             some,
-            vec!["src/lib.rs".to_string(), "crates/core/src/store.rs".to_string()]
+            vec![
+                "src/lib.rs".to_string(),
+                "crates/core/src/store.rs".to_string()
+            ]
         );
     }
 
@@ -448,7 +448,10 @@ Done: update the changelog
             "see https://example.com/docs/page.html for details",
             fixture_exists,
         );
-        assert!(got.is_empty(), "URL fragments must not survive the gate: {got:?}");
+        assert!(
+            got.is_empty(),
+            "URL fragments must not survive the gate: {got:?}"
+        );
     }
 
     // ── completed tasks ───────────────────────────────────────────────────────
@@ -489,7 +492,11 @@ Done: update the changelog
         assert_eq!(d.completed_tasks.len(), 5);
         assert!(!d.is_empty());
         // Rule-based taxonomy ran (fixture contains decision signals).
-        assert!(d.tags.contains(&"decision".to_string()), "tags: {:?}", d.tags);
+        assert!(
+            d.tags.contains(&"decision".to_string()),
+            "tags: {:?}",
+            d.tags
+        );
     }
 
     #[test]

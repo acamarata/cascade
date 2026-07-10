@@ -84,14 +84,14 @@ fn audit_log_path() -> PathBuf {
 
 fn cap_name(cap: &Capability) -> &'static str {
     match cap {
-        Capability::FsRead       => "fs_read",
-        Capability::FsWrite      => "fs_write",
-        Capability::FsExec       => "fs_exec",
-        Capability::NetOutbound  => "net_outbound",
-        Capability::NetListen    => "net_listen",
-        Capability::IpcCascade   => "ipc_cascade",
+        Capability::FsRead => "fs_read",
+        Capability::FsWrite => "fs_write",
+        Capability::FsExec => "fs_exec",
+        Capability::NetOutbound => "net_outbound",
+        Capability::NetListen => "net_listen",
+        Capability::IpcCascade => "ipc_cascade",
         Capability::PersonalData => "personal_data",
-        Capability::McpInvoke    => "mcp_invoke",
+        Capability::McpInvoke => "mcp_invoke",
     }
 }
 

@@ -43,9 +43,8 @@ use regex::Regex;
 // ── Compiled patterns (lazy, thread-safe) ────────────────────────────────────
 
 /// US Social Security Numbers: `NNN-NN-NNNN` or `NNN NN NNNN`.
-static RE_SSN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b").expect("SSN regex must compile")
-});
+static RE_SSN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b").expect("SSN regex must compile"));
 
 /// Email addresses.
 static RE_EMAIL: Lazy<Regex> = Lazy::new(|| {
@@ -330,7 +329,10 @@ mod tests {
     #[test]
     fn redact_ssn_space() {
         let out = rp().redact("SSN 123 45 6789");
-        assert!(!out.contains("123 45 6789"), "space-delimited SSN must be redacted");
+        assert!(
+            !out.contains("123 45 6789"),
+            "space-delimited SSN must be redacted"
+        );
     }
 
     // ── redaction::email ──────────────────────────────────────────────────────
@@ -401,14 +403,10 @@ mod tests {
 
     #[test]
     fn normal_prose_not_redacted() {
-        let prose =
-            "The quick brown fox jumps over the lazy dog and the sun shines bright today.";
+        let prose = "The quick brown fox jumps over the lazy dog and the sun shines bright today.";
         let out = rp().redact(prose);
         // No SSNs, emails, keys, or high-entropy tokens in this string.
-        assert_eq!(
-            out, prose,
-            "plain prose must pass through unchanged"
-        );
+        assert_eq!(out, prose, "plain prose must pass through unchanged");
     }
 
     // ── redaction::shannon_entropy ────────────────────────────────────────────
@@ -422,7 +420,10 @@ mod tests {
     fn entropy_uniform_string_high() {
         // 32 completely random-looking chars should have high entropy.
         let h = shannon_entropy("aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpP");
-        assert!(h >= 3.5, "high-entropy string expected >= 3.5 bits/char, got {h}");
+        assert!(
+            h >= 3.5,
+            "high-entropy string expected >= 3.5 bits/char, got {h}"
+        );
     }
 
     #[test]

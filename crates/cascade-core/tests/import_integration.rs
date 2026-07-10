@@ -167,9 +167,18 @@ fn plan_serializes_to_json() {
 
     let json = serde_json::to_string_pretty(&plan).expect("plan must serialize to JSON");
     assert!(!json.is_empty());
-    assert!(json.contains("coverage"), "JSON must contain coverage field");
-    assert!(json.contains("round_trip"), "JSON must contain round_trip field");
-    assert!(json.contains("isolation"), "JSON must contain isolation field");
+    assert!(
+        json.contains("coverage"),
+        "JSON must contain coverage field"
+    );
+    assert!(
+        json.contains("round_trip"),
+        "JSON must contain round_trip field"
+    );
+    assert!(
+        json.contains("isolation"),
+        "JSON must contain isolation field"
+    );
     assert!(json.contains("entries"), "JSON must contain entries field");
 
     // Must deserialize back without error.
@@ -203,5 +212,8 @@ fn plan_entry_count_plausible() {
         "expected at least 50 plan entries for the reference corpus, got {}",
         plan.entries.len()
     );
-    println!("[PASS] Plan has {} entries for reference corpus", plan.entries.len());
+    println!(
+        "[PASS] Plan has {} entries for reference corpus",
+        plan.entries.len()
+    );
 }

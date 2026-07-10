@@ -31,12 +31,7 @@ use std::path::Path;
 pub fn classify(dir: &Path) -> (ProjectType, Option<String>, Option<String>, Option<String>) {
     // ── Rust ──────────────────────────────────────────────────────────────────
     if dir.join("Cargo.toml").exists() {
-        return (
-            ProjectType::RustCrate,
-            Some("rust".into()),
-            None,
-            None,
-        );
+        return (ProjectType::RustCrate, Some("rust".into()), None, None);
     }
 
     // ── Python ────────────────────────────────────────────────────────────────
@@ -44,12 +39,7 @@ pub fn classify(dir: &Path) -> (ProjectType, Option<String>, Option<String>, Opt
         || dir.join("setup.py").exists()
         || dir.join("setup.cfg").exists()
     {
-        return (
-            ProjectType::PythonPkg,
-            Some("python".into()),
-            None,
-            None,
-        );
+        return (ProjectType::PythonPkg, Some("python".into()), None, None);
     }
 
     // ── Dart / Flutter ────────────────────────────────────────────────────────

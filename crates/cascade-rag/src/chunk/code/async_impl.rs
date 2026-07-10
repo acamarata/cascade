@@ -27,8 +27,12 @@ pub(super) async fn async_chunk_impl(
             mime = ?doc.mime_type,
             "CodeChunker (async): unsupported language; falling back to semantic"
         );
-        return TypesChunker::chunk(&super::super::semantic::SemanticChunker::default(), doc, opts)
-            .await;
+        return TypesChunker::chunk(
+            &super::super::semantic::SemanticChunker::default(),
+            doc,
+            opts,
+        )
+        .await;
     }
 
     let config = ChunkerConfig {
@@ -63,10 +67,7 @@ pub(super) async fn async_chunk_impl(
                                 e.insert(k.clone(), serde_json::Value::String(v.clone()));
                             }
                             if let Some(hp) = c.heading_path {
-                                e.insert(
-                                    "heading_path".to_owned(),
-                                    serde_json::Value::String(hp),
-                                );
+                                e.insert("heading_path".to_owned(), serde_json::Value::String(hp));
                             }
                             e
                         },

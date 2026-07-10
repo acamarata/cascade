@@ -3,12 +3,12 @@
 //!
 //! SPORT: cascade-agents / executor / tests
 
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::context::{AgentRunContext, StepOutcome, ToolCall, TokenUsage};
+use crate::context::{AgentRunContext, StepOutcome, TokenUsage, ToolCall};
 use crate::grants::{AccessLevel, ToolGrant};
 use crate::spec::{builtin_ceo, builtin_coder, AgentRole, Runtime};
 use crate::task::{AgentTask, TaskStatus};

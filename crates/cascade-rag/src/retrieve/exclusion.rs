@@ -298,8 +298,7 @@ mod tests {
     /// Trailing `/**` is normalised to the directory prefix.
     #[test]
     fn glob_suffix_normalised() {
-        let ex =
-            ExclusionSet::compile(&ExclusionConfig::from_patterns(["/home/user/medical/**"]));
+        let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/home/user/medical/**"]));
         assert!(
             ex.is_excluded("/home/user/medical/appointment.md"),
             "child must be excluded after glob normalisation"
@@ -432,7 +431,10 @@ mod tests {
     #[test]
     fn case_sensitive_no_false_positive() {
         let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/Locked"]));
-        assert!(ex.is_excluded("/Locked/file.md"), "/Locked/ must be excluded");
+        assert!(
+            ex.is_excluded("/Locked/file.md"),
+            "/Locked/ must be excluded"
+        );
         assert!(
             !ex.is_excluded("/locked/file.md"),
             "/locked/ (different case) must NOT be excluded"

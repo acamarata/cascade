@@ -302,7 +302,10 @@ async fn handle_mcp_post(
         if crate::security::tool_requires_personal_data(&tool_name)
             && !client_cap.contains(crate::security::CapabilitySet::PERSONAL_DATA)
         {
-            warn!(tool = tool_name, "POST /mcp: PersonalData capability required");
+            warn!(
+                tool = tool_name,
+                "POST /mcp: PersonalData capability required"
+            );
             let err_json = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": null,
@@ -353,10 +356,7 @@ async fn handle_mcp_post(
 }
 
 /// GET /mcp/health — unauthenticated health check (still subject to Origin guard).
-async fn handle_health(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+async fn handle_health(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     if let Err(status) = crate::security::validate_local_origin(&headers) {
         warn!("GET /mcp/health: foreign Origin/Host rejected");
         return (
@@ -459,10 +459,7 @@ fn extract_tools_call_name(body: &str) -> Option<String> {
 /// Exposed for integration tests (`tests/transport_security.rs`) so they can
 /// call `tower::ServiceExt::oneshot` without starting a real TCP listener.
 #[cfg(any(test, feature = "test-utils"))]
-pub fn build_http_app_for_test(
-    auth: std::sync::Arc<McpAuth>,
-    config: McpServerConfig,
-) -> Router {
+pub fn build_http_app_for_test(auth: std::sync::Arc<McpAuth>, config: McpServerConfig) -> Router {
     let state = AppState {
         server_version: config.server_version.clone(),
         auth,

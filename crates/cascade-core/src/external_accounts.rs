@@ -176,7 +176,9 @@ pub fn discover() -> Vec<ExternalAccount> {
 
 /// Return the single Primary account (`~/.claude`) if it exists.
 pub fn primary() -> Option<ExternalAccount> {
-    discover().into_iter().find(|a| a.role == AccountRole::Primary)
+    discover()
+        .into_iter()
+        .find(|a| a.role == AccountRole::Primary)
 }
 
 // ── Internal constructors ─────────────────────────────────────────────────────
@@ -189,7 +191,13 @@ fn make_claude(home: &Path, dir: PathBuf, role: AccountRole) -> ExternalAccount 
     let auth = read_claude_auth(&dir);
     // Suppress unused-variable warning for `home` on non-macOS (auth reader doesn't use it).
     let _ = home;
-    ExternalAccount { agent: ExternalAgent::Claude, config_dir: dir, label, role, auth }
+    ExternalAccount {
+        agent: ExternalAgent::Claude,
+        config_dir: dir,
+        label,
+        role,
+        auth,
+    }
 }
 
 fn make_codex(dir: PathBuf) -> ExternalAccount {
@@ -264,7 +272,11 @@ fn read_keychain_secret(service: &str) -> Option<String> {
     }
     let s = String::from_utf8(out.stdout).ok()?;
     let trimmed = s.trim();
-    if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    }
 }
 
 // ── Pure JSON parsers (testable without touching the real keychain) ───────────
@@ -290,8 +302,14 @@ pub fn parse_claude_blob(blob: &str) -> AuthStatus {
         Some(o) => o,
         None => return AuthStatus::Unknown,
     };
-    let access_token = oauth.get("accessToken").and_then(|v| v.as_str()).unwrap_or("");
-    let refresh_token = oauth.get("refreshToken").and_then(|v| v.as_str()).unwrap_or("");
+    let access_token = oauth
+        .get("accessToken")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let refresh_token = oauth
+        .get("refreshToken")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let expires_at_ms = oauth.get("expiresAt").and_then(|v| v.as_i64());
 
     if access_token.is_empty() && refresh_token.is_empty() {
@@ -311,7 +329,9 @@ pub fn parse_claude_blob(blob: &str) -> AuthStatus {
 
     if token_valid || !refresh_token.is_empty() {
         // At least one path exists to get a valid token.
-        AuthStatus::Ok { expires_at: expires_at_ms }
+        AuthStatus::Ok {
+            expires_at: expires_at_ms,
+        }
     } else {
         // Token expired and no refresh available.
         AuthStatus::NeedsReauth
@@ -390,7 +410,10 @@ pub fn read_claude_access_token(dir: &Path) -> Option<(String, bool)> {
 
     let v: serde_json::Value = serde_json::from_str(&blob).ok()?;
     let oauth = v.get("claudeAiOauth")?;
-    let access_token = oauth.get("accessToken").and_then(|t| t.as_str()).unwrap_or("");
+    let access_token = oauth
+        .get("accessToken")
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
     if access_token.is_empty() {
         return None;
     }
@@ -428,11 +451,17 @@ mod tests {
         );
         let suffix = svc.trim_start_matches("Claude Code-credentials-");
         assert_eq!(suffix.len(), 8, "suffix must be exactly 8 hex chars");
-        assert!(suffix.chars().all(|c| c.is_ascii_hexdigit()), "suffix must be hex");
+        assert!(
+            suffix.chars().all(|c| c.is_ascii_hexdigit()),
+            "suffix must be hex"
+        );
 
         // Different dirs produce different service names.
         let svc2 = claude_keychain_service(Path::new("/home/user/.claude2"));
-        assert_ne!(svc, svc2, "different dirs must produce different service names");
+        assert_ne!(
+            svc, svc2,
+            "different dirs must produce different service names"
+        );
     }
 
     /// Spot-check exact sha256[:8] for a deterministic path string.
@@ -553,14 +582,26 @@ mod tests {
         std::fs::create_dir_all(&codex_dir).unwrap();
 
         // Write minimal auth.json for codex.
-        std::fs::write(codex_dir.join("auth.json"), r#"{"OPENAI_API_KEY":"sk-test"}"#).unwrap();
+        std::fs::write(
+            codex_dir.join("auth.json"),
+            r#"{"OPENAI_API_KEY":"sk-test"}"#,
+        )
+        .unwrap();
 
         let primary_acc = make_claude(home_path, claude_dir, AccountRole::Primary);
         let pool_claude = make_claude(home_path, claude2_dir, AccountRole::Pool);
         let pool_codex = make_codex(codex_dir);
 
-        assert_eq!(primary_acc.role, AccountRole::Primary, "~/.claude must be Primary");
-        assert_eq!(pool_claude.role, AccountRole::Pool, "~/.claude2 must be Pool");
+        assert_eq!(
+            primary_acc.role,
+            AccountRole::Primary,
+            "~/.claude must be Primary"
+        );
+        assert_eq!(
+            pool_claude.role,
+            AccountRole::Pool,
+            "~/.claude2 must be Pool"
+        );
         assert_eq!(pool_codex.role, AccountRole::Pool, "~/.codex must be Pool");
         assert_eq!(pool_codex.agent, ExternalAgent::Codex);
     }

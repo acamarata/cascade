@@ -100,9 +100,7 @@ fn open_memory_db() -> Result<rusqlite::Connection, String> {
 /// Immediately returns 202 Accepted and spawns a background task to extract
 /// memory facts from the transcript/summary and write them to the dev-<slug>
 /// memory namespace.
-async fn harvest_cc_session_handler(
-    Json(req): Json<HarvestCcSessionRequest>,
-) -> impl IntoResponse {
+async fn harvest_cc_session_handler(Json(req): Json<HarvestCcSessionRequest>) -> impl IntoResponse {
     let session_id = req.session_id.clone();
     tokio::spawn(async move {
         tokio::task::spawn_blocking(move || {
@@ -204,9 +202,8 @@ fn classify_line(line: &str) -> Option<MemoryFactKind> {
     // ToolPattern: tool usage keywords
     let tool_keywords = ["tool", "bash", "grep", "read"];
     // Only match if line also has a pattern indicator
-    let has_pattern = lower.contains("pattern")
-        || lower.contains("command")
-        || lower.contains("use");
+    let has_pattern =
+        lower.contains("pattern") || lower.contains("command") || lower.contains("use");
     if has_pattern {
         for kw in &tool_keywords {
             if lower.contains(kw) {
@@ -253,7 +250,14 @@ fn write_facts_to_memory(
             }
         };
         let kind_str = fact.kind.to_string();
-        match upsert_fact(conn, &ns, &kind_str, "observed", &fact.content, fact.confidence) {
+        match upsert_fact(
+            conn,
+            &ns,
+            &kind_str,
+            "observed",
+            &fact.content,
+            fact.confidence,
+        ) {
             Ok(_) => count += 1,
             Err(e) => {
                 tracing::warn!(kind = %kind_str, err = %e, "harvest: upsert_fact failed, skipping");
@@ -344,7 +348,10 @@ mod tests {
 
     #[test]
     fn slug_from_project_dir_extracts_last_component() {
-        assert_eq!(slug_from_project_dir("/home/me/projects/cascade"), "cascade");
+        assert_eq!(
+            slug_from_project_dir("/home/me/projects/cascade"),
+            "cascade"
+        );
         assert_eq!(slug_from_project_dir("/home/user/my-project"), "my-project");
         assert_eq!(slug_from_project_dir(""), "unknown");
     }

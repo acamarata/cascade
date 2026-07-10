@@ -127,10 +127,7 @@ fn run_list(workspace: &std::path::Path) -> Result<()> {
 /// `dry_run = true` means only print, no writes.
 fn run_restore(workspace: &std::path::Path, timestamp: &str, dry_run: bool) -> Result<()> {
     // Locate the snapshot directory.
-    let snap_dir = workspace
-        .join(".cascade")
-        .join("snapshots")
-        .join(timestamp);
+    let snap_dir = workspace.join(".cascade").join("snapshots").join(timestamp);
 
     if !snap_dir.exists() {
         return Err(CascadeError::Other(format!(
@@ -288,20 +285,12 @@ mod tests {
         let cli2 = Cli::try_parse_from(["snapshot", "restore", "20260101-000000-001"]).unwrap();
         assert!(matches!(
             cli2.cmd,
-            SnapshotSubcommand::Restore {
-                apply: false,
-                ..
-            }
+            SnapshotSubcommand::Restore { apply: false, .. }
         ));
 
         // restore --apply
-        let cli3 = Cli::try_parse_from([
-            "snapshot",
-            "restore",
-            "20260101-000000-001",
-            "--apply",
-        ])
-        .unwrap();
+        let cli3 =
+            Cli::try_parse_from(["snapshot", "restore", "20260101-000000-001", "--apply"]).unwrap();
         assert!(matches!(
             cli3.cmd,
             SnapshotSubcommand::Restore { apply: true, .. }

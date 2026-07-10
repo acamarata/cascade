@@ -580,10 +580,7 @@ mod tests {
             ]
         }"#;
 
-        let sources = vec![make_raw_source(
-            "$HOME/.claude/CLAUDE.md",
-            "no any types",
-        )];
+        let sources = vec![make_raw_source("$HOME/.claude/CLAUDE.md", "no any types")];
         let result = parse_ai_output(4, sources, model_text, MODEL_GEMINI, "abc123".to_string())
             .expect("parse_ai_output should succeed");
 

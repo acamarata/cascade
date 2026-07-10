@@ -78,10 +78,7 @@ impl ArchDiagram {
 /// # Errors
 ///
 /// SQLite errors are wrapped in [`CascadeError::Other`].
-pub fn extract_arch(
-    conn: &Connection,
-    _llm: Option<&dyn HydeLlm>,
-) -> Result<ArchDiagram> {
+pub fn extract_arch(conn: &Connection, _llm: Option<&dyn HydeLlm>) -> Result<ArchDiagram> {
     // Fetch all (symbol, file_path, chunk_text) rows.
     let rows = fetch_graph_rows(conn)?;
 
@@ -163,8 +160,7 @@ fn fetch_graph_rows(conn: &Connection) -> Result<Vec<GraphRow>> {
 
 /// Returns an ordered map of module_label → Vec<row_index>.
 fn group_by_module(rows: &[GraphRow]) -> Vec<(String, Vec<usize>)> {
-    let mut map: std::collections::HashMap<String, Vec<usize>> =
-        std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
     let mut order: Vec<String> = Vec::new();
 
     for (i, row) in rows.iter().enumerate() {
@@ -176,10 +172,13 @@ fn group_by_module(rows: &[GraphRow]) -> Vec<(String, Vec<usize>)> {
         entry.push(i);
     }
 
-    order.into_iter().map(|k| {
-        let v = map.remove(&k).unwrap_or_default();
-        (k, v)
-    }).collect()
+    order
+        .into_iter()
+        .map(|k| {
+            let v = map.remove(&k).unwrap_or_default();
+            (k, v)
+        })
+        .collect()
 }
 
 fn module_label(sym: &str) -> String {
@@ -337,7 +336,10 @@ mod tests {
             diag.mermaid_src.contains("graph TD"),
             "must be mermaid graph TD"
         );
-        assert!(diag.mermaid_src.contains("router"), "must contain 'router' module");
+        assert!(
+            diag.mermaid_src.contains("router"),
+            "must contain 'router' module"
+        );
         assert!(diag.mermaid_src.contains("db"), "must contain 'db' module");
     }
 

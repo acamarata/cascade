@@ -85,7 +85,9 @@ pub use prompt_gate::{
 };
 
 // soul module re-exports (soul-01)
-pub use soul::{render_soul_block, resolve_soul, verbosity_instruction, ResolvedSoul, SoulOverride};
+pub use soul::{
+    render_soul_block, resolve_soul, verbosity_instruction, ResolvedSoul, SoulOverride,
+};
 
 // board_llm re-exports (agents-02)
 pub use board_llm::{BoardLlm, NoopBoardLlm};

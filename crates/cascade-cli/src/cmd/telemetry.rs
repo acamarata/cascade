@@ -75,7 +75,11 @@ impl Command for TelemetryArgs {
                     .to_owned();
                 println!(
                     "Telemetry: {}",
-                    if enabled { "enabled" } else { "disabled (default)" }
+                    if enabled {
+                        "enabled"
+                    } else {
+                        "disabled (default)"
+                    }
                 );
                 if enabled && !endpoint.is_empty() {
                     println!("Endpoint:  {endpoint}");
@@ -93,10 +97,7 @@ impl Command for TelemetryArgs {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn set_telemetry_enabled(config_path: &PathBuf, enabled: bool) -> Result<()> {
-    std::fs::create_dir_all(
-        config_path.parent().expect("config path has parent"),
-    )
-    .ok();
+    std::fs::create_dir_all(config_path.parent().expect("config path has parent")).ok();
     let raw = std::fs::read_to_string(config_path).unwrap_or_default();
     let mut table: DocumentMut = raw.parse().unwrap_or_default();
 

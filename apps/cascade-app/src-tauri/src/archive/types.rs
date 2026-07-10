@@ -309,7 +309,10 @@ mod tests {
 
         // Serialize back: known camelCase fields must still be present.
         let back = serde_json::to_string(&roundtrip).expect("re-serialize failed");
-        assert!(back.contains("\"version\""), "version missing after round-trip");
+        assert!(
+            back.contains("\"version\""),
+            "version missing after round-trip"
+        );
         assert!(
             back.contains("\"createdAt\""),
             "createdAt missing after round-trip"

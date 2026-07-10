@@ -14,18 +14,18 @@
 //! | [`registry`] | `ToolRegistry` — dispatch hub |
 //! | [`context_assembler`] | Role-aware context assembly layer (ctx-01) |
 
-mod types;
-mod helpers;
-mod schemas;
-mod handlers_core;
-mod handlers_pbd;
-pub(crate) mod handlers_memory;
-mod handlers_security;
 pub mod context_assembler;
+mod handlers_core;
+pub(crate) mod handlers_memory;
+mod handlers_pbd;
+mod handlers_security;
+mod helpers;
 pub mod registry;
+mod schemas;
+mod types;
 
 #[cfg(test)]
 mod tests;
 
-pub use types::{ConnectionContext, McpTool, RetrieverSlot};
 pub use registry::ToolRegistry;
+pub use types::{ConnectionContext, McpTool, RetrieverSlot};

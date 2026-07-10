@@ -91,10 +91,7 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
                     tier: CascadeTier::Gci,
                     cascade_relative_path: PathBuf::from("library").join("refs").join(file_name),
                     load_mode: LoadMode::Library,
-                    reason: format!(
-                        "{} companion → GCI library/refs/{}",
-                        tool, file_name
-                    ),
+                    reason: format!("{} companion → GCI library/refs/{}", tool, file_name),
                 };
             }
 
@@ -108,7 +105,10 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
 
         SourceKind::AlwaysLoadedRule => {
             // rules/* → GCI .cascade/rules/
-            let file_name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("rule.md");
+            let file_name = rel
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("rule.md");
             TierMapping {
                 tier: CascadeTier::Gci,
                 cascade_relative_path: PathBuf::from("rules").join(file_name),
@@ -124,21 +124,19 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
                 tier: CascadeTier::Gci,
                 cascade_relative_path: subpath.clone(),
                 load_mode: LoadMode::OnDemand,
-                reason: format!(
-                    "on-demand reference → GCI {}",
-                    subpath.display()
-                ),
+                reason: format!("on-demand reference → GCI {}", subpath.display()),
             }
         }
 
         SourceKind::Standard => {
             // standards/* → GCI .cascade/library/standards/
-            let file_name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("standard.md");
+            let file_name = rel
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("standard.md");
             TierMapping {
                 tier: CascadeTier::Gci,
-                cascade_relative_path: PathBuf::from("library")
-                    .join("standards")
-                    .join(file_name),
+                cascade_relative_path: PathBuf::from("library").join("standards").join(file_name),
                 load_mode: LoadMode::OnDemand,
                 reason: format!("standard → GCI library/standards/{}", file_name),
             }
@@ -146,12 +144,13 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
 
         SourceKind::Template => {
             // templates/* → GCI .cascade/library/templates/
-            let file_name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("template.md");
+            let file_name = rel
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("template.md");
             TierMapping {
                 tier: CascadeTier::Gci,
-                cascade_relative_path: PathBuf::from("library")
-                    .join("templates")
-                    .join(file_name),
+                cascade_relative_path: PathBuf::from("library").join("templates").join(file_name),
                 load_mode: LoadMode::Library,
                 reason: format!("template → GCI library/templates/{}", file_name),
             }
@@ -162,9 +161,7 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
             let file_name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("script");
             TierMapping {
                 tier: CascadeTier::Gci,
-                cascade_relative_path: PathBuf::from("library")
-                    .join("scripts")
-                    .join(file_name),
+                cascade_relative_path: PathBuf::from("library").join("scripts").join(file_name),
                 load_mode: LoadMode::Library,
                 reason: format!("script → GCI library/scripts/{}", file_name),
             }
@@ -215,7 +212,10 @@ pub fn map_file(file: &DiscoveredFile, tool: &str) -> TierMapping {
         SourceKind::SiteTier => {
             // sites/* are PCI-level (project-group) instructions.
             let subpath = rel.strip_prefix("sites").unwrap_or(rel);
-            let file_name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("file.md");
+            let file_name = rel
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("file.md");
             let name_lower = file_name.to_lowercase();
             if name_lower == "asi-claude.md"
                 || name_lower == "engineering-standard.md"
@@ -343,7 +343,10 @@ mod tests {
 
     #[test]
     fn rule_file_maps_to_gci_rules() {
-        let f = make_file("rules/destructive-deny-list.md", SourceKind::AlwaysLoadedRule);
+        let f = make_file(
+            "rules/destructive-deny-list.md",
+            SourceKind::AlwaysLoadedRule,
+        );
         let m = map_file(&f, "claude");
         assert_eq!(m.tier, CascadeTier::Gci);
         assert_eq!(

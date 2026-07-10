@@ -5,6 +5,7 @@
 #[allow(clippy::module_inception)]
 #[cfg(test)]
 mod tests {
+    use crate::adapter::ProviderAdapter;
     use crate::adapters::gemini::{
         adapter::GeminiAdapter,
         config::{GeminiConfig, GEMINI_DIRECT_BASE, GEMINI_PROXY_BASE},
@@ -15,7 +16,6 @@ mod tests {
         fixture_json, fixture_text, HttpMethod, MockProviderServer,
     };
     use crate::types::CompletionRequest;
-    use crate::adapter::ProviderAdapter;
     use cascade_types::model_ids::{MODEL_GEMINI_FLASH, MODEL_GEMINI_PRO};
     use futures::StreamExt;
     use wiremock::matchers::{method, path, query_param};
@@ -167,7 +167,8 @@ mod tests {
         let chunks: Vec<_> = stream.collect().await;
         assert!(!chunks.is_empty(), "expected at least 1 chunk");
 
-        let ok_chunks: Vec<crate::types::StreamChunk> = chunks.into_iter().map(|r| r.unwrap()).collect();
+        let ok_chunks: Vec<crate::types::StreamChunk> =
+            chunks.into_iter().map(|r| r.unwrap()).collect();
         let full_text: String = ok_chunks.iter().map(|c| c.delta.as_str()).collect();
         assert!(
             !full_text.is_empty(),
@@ -437,7 +438,10 @@ mod tests {
         let text = &si.parts[0].text;
         let prefix_pos = text.find("# Project context").expect("req.system kept");
         let summary_pos = text.find("chose sqlite").expect("system turn hoisted");
-        assert!(prefix_pos < summary_pos, "req.system must come first: {text}");
+        assert!(
+            prefix_pos < summary_pos,
+            "req.system must come first: {text}"
+        );
         // contents holds only the non-system turns.
         assert_eq!(wire.contents.len(), 1);
         assert_eq!(wire.contents[0].role, "user");

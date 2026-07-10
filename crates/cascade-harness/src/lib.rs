@@ -16,12 +16,12 @@
 //! ## SPORT
 //! MASTER-CRATES.md: cascade-harness (T-P4-E06-01)
 
+pub mod agents;
 pub mod codex;
 pub mod generate;
 pub mod policy;
 pub mod settings;
 pub mod skills;
-pub mod agents;
 
 #[cfg(test)]
 pub(crate) mod test_support;

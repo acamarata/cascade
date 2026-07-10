@@ -41,11 +41,11 @@ mod claude_usage;
 mod key_index;
 mod key_loader;
 mod log;
+#[cfg(feature = "gfp")]
+mod project_poller;
 mod provider_health;
 #[cfg(feature = "gfp")]
 mod quota_poller;
-#[cfg(feature = "gfp")]
-mod project_poller;
 // ram-guardian: OOM-prevention subsystem — memory sampling + conservative
 // stray rustc/vitest reaper. Runs unconditionally alongside other daemon
 // tasks (local-only, no external network surface, no feature gate needed).
@@ -55,12 +55,12 @@ mod ram_guardian;
 // target dirs, finished agent worktrees). Sibling to ram_guardian; same
 // unconditional wiring rationale.
 mod disk_guardian;
+#[cfg(feature = "gemini-proxy")]
+mod proxy;
 mod regen;
 mod shutdown;
 mod state;
 mod supervisor;
-#[cfg(feature = "gemini-proxy")]
-mod proxy;
 mod telemetry;
 mod tray;
 // T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
@@ -435,9 +435,8 @@ async fn main() {
                         } else {
                             // App not installed — open accounts dir as fallback.
                             let fallback = home.join(".cascade").join("accounts");
-                            if let Err(e) = std::process::Command::new("open")
-                                .arg(&fallback)
-                                .spawn()
+                            if let Err(e) =
+                                std::process::Command::new("open").arg(&fallback).spawn()
                             {
                                 warn!(%e, path = %fallback.display(), "tray: OpenApp: fallback open failed");
                             } else {
@@ -660,7 +659,10 @@ fn provider_key_for_entry(
 
     let candidates = [
         (IPC_PROVIDER_KEYCHAIN_SERVICE, entry.id.as_str()),
-        (cascade_providers::PROVIDER_KEYCHAIN_SERVICE, entry.id.as_str()),
+        (
+            cascade_providers::PROVIDER_KEYCHAIN_SERVICE,
+            entry.id.as_str(),
+        ),
         (IPC_PROVIDER_KEYCHAIN_SERVICE, entry.account_id.as_str()),
         (
             cascade_providers::PROVIDER_KEYCHAIN_SERVICE,

@@ -149,16 +149,13 @@ fn check_generated_file(path: &Path) -> Option<GeneratedFinding> {
 /// Returns `None` when no hash comment is present (older generated file).
 fn extract_hash_and_body(content: &str) -> Option<(String, &str)> {
     // Find the line containing the hash comment.
-    let hash_line_pos = content
-        .lines()
-        .enumerate()
-        .find_map(|(i, line)| {
-            if line.starts_with(HASH_COMMENT_PREFIX) {
-                Some(i)
-            } else {
-                None
-            }
-        })?;
+    let hash_line_pos = content.lines().enumerate().find_map(|(i, line)| {
+        if line.starts_with(HASH_COMMENT_PREFIX) {
+            Some(i)
+        } else {
+            None
+        }
+    })?;
 
     // Extract the hex from that line.
     // Line format: `<!-- cascade:content-hash: <hex> -->`

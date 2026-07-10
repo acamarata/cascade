@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 use cascade_types::{error::Result, paths::home_dir};
 
-use crate::cmd::Command;
 use super::token::McpTokenArgs;
+use crate::cmd::Command;
 
 // ── Status ────────────────────────────────────────────────────────────────────
 

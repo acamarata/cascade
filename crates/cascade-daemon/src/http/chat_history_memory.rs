@@ -109,16 +109,16 @@ fn open_memory_db() -> std::result::Result<rusqlite::Connection, String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create ~/.cascade/: {e}"))?;
     }
-    let conn = rusqlite::Connection::open(&path)
-        .map_err(|e| format!("failed to open memory DB: {e}"))?;
+    let conn =
+        rusqlite::Connection::open(&path).map_err(|e| format!("failed to open memory DB: {e}"))?;
     run_migrations(&conn).map_err(|e| format!("migration failed: {e}"))?;
     Ok(conn)
 }
 
 /// Re-use the same path resolution as cascade-mcp.
 mod cascade_mcp_paths {
-    use std::path::PathBuf;
     use cascade_types::paths::home_dir;
+    use std::path::PathBuf;
     pub fn memory_db_path() -> PathBuf {
         home_dir().join(".cascade").join("memory.db")
     }
@@ -127,9 +127,7 @@ mod cascade_mcp_paths {
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 /// POST /api/memory/chat — insert a chat message.
-async fn insert_chat_handler(
-    Json(req): Json<InsertChatRequest>,
-) -> impl IntoResponse {
+async fn insert_chat_handler(Json(req): Json<InsertChatRequest>) -> impl IntoResponse {
     let namespace = match validate_with_firewall(&req.namespace, req.opt_in) {
         Ok(ns) => ns,
         Err(e) => {
@@ -168,9 +166,7 @@ async fn insert_chat_handler(
 }
 
 /// GET /api/memory/chat?scope=...&namespace=...&limit=...&opt_in=...
-async fn list_chat_handler(
-    Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
+async fn list_chat_handler(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
     let scope = match params.get("scope") {
         Some(s) => s.clone(),
         None => {
@@ -213,15 +209,18 @@ async fn list_chat_handler(
 
     let result = tokio::task::spawn_blocking(move || {
         let conn = open_memory_db()?;
-        list_chat(&conn, &scope, &namespace, limit)
-            .map_err(|e| format!("list_chat failed: {e}"))
+        list_chat(&conn, &scope, &namespace, limit).map_err(|e| format!("list_chat failed: {e}"))
     })
     .await;
 
     match result {
         Ok(Ok(msgs)) => {
             let dtos: Vec<ChatMessageDto> = msgs.into_iter().map(ChatMessageDto::from).collect();
-            (StatusCode::OK, Json(serde_json::json!({ "messages": dtos }))).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "messages": dtos })),
+            )
+                .into_response()
         }
         Ok(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -241,9 +240,7 @@ async fn list_chat_handler(
 /// Purges all chat rows for the given scope + namespace. Used by the app's
 /// "Clear chat" action so the server-side copy (when persistence is active)
 /// does not silently outlive the client-side clear.
-async fn delete_chat_handler(
-    Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
+async fn delete_chat_handler(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
     let scope = match params.get("scope") {
         Some(s) => s.clone(),
         None => {
@@ -282,15 +279,16 @@ async fn delete_chat_handler(
 
     let result = tokio::task::spawn_blocking(move || {
         let conn = open_memory_db()?;
-        clear_chat(&conn, &scope, &namespace)
-            .map_err(|e| format!("clear_chat failed: {e}"))
+        clear_chat(&conn, &scope, &namespace).map_err(|e| format!("clear_chat failed: {e}"))
     })
     .await;
 
     match result {
-        Ok(Ok(removed)) => {
-            (StatusCode::OK, Json(serde_json::json!({ "removed": removed }))).into_response()
-        }
+        Ok(Ok(removed)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "removed": removed })),
+        )
+            .into_response(),
         Ok(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e })),

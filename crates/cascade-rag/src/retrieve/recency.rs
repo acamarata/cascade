@@ -94,10 +94,7 @@ pub fn query_by_recency(conn: &Connection, k: usize) -> SqlResult<Vec<(i64, f64)
     let t_max = pairs[0].1;
     if t_max <= 0 {
         // All timestamps are zero or missing — return uniform scores.
-        return Ok(pairs
-            .into_iter()
-            .map(|(id, _)| (id, 1.0_f64))
-            .collect());
+        return Ok(pairs.into_iter().map(|(id, _)| (id, 1.0_f64)).collect());
     }
 
     let normalised = pairs
@@ -315,6 +312,9 @@ pub mod tests {
 
         let results = query_by_recency(&conn, 10).unwrap();
         let ids: Vec<i64> = results.iter().map(|(id, _)| *id).collect();
-        assert!(ids.contains(&c), "chunk from source with NULL mtime must appear via indexed_at fallback");
+        assert!(
+            ids.contains(&c),
+            "chunk from source with NULL mtime must appear via indexed_at fallback"
+        );
     }
 }

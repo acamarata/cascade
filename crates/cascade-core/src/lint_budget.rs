@@ -141,7 +141,13 @@ pub fn lint_always_loaded_budget(resolved: &ResolvedCascade, cfg: BudgetConfig) 
         .tiers_found
         .iter()
         .filter(|tr| tr.found && !tr.instructions.trim().is_empty())
-        .map(|tr| (tr.tier, estimate_tokens(&tr.instructions), tr.instructions.as_str()))
+        .map(|tr| {
+            (
+                tr.tier,
+                estimate_tokens(&tr.instructions),
+                tr.instructions.as_str(),
+            )
+        })
         .collect();
 
     let total_est_tokens: usize = tier_data.iter().map(|(_, t, _)| t).sum();
@@ -213,13 +219,15 @@ fn extract_sections(tier: CascadeTier, text: &str) -> Vec<SectionSuggestion> {
     let heading_indices: Vec<usize> = lines
         .iter()
         .enumerate()
-        .filter_map(|(i, line)| {
-            if line.starts_with('#') {
-                Some(i)
-            } else {
-                None
-            }
-        })
+        .filter_map(
+            |(i, line)| {
+                if line.starts_with('#') {
+                    Some(i)
+                } else {
+                    None
+                }
+            },
+        )
         .collect();
 
     if heading_indices.is_empty() {
@@ -235,19 +243,13 @@ fn extract_sections(tier: CascadeTier, text: &str) -> Vec<SectionSuggestion> {
     }
 
     for (pos, &start) in heading_indices.iter().enumerate() {
-        let end = heading_indices
-            .get(pos + 1)
-            .copied()
-            .unwrap_or(lines.len());
+        let end = heading_indices.get(pos + 1).copied().unwrap_or(lines.len());
 
         let section_lines = &lines[start..end];
         let section_text = section_lines.join("\n");
 
         // Extract the heading text (strip leading `#` characters and whitespace).
-        let heading = lines[start]
-            .trim_start_matches('#')
-            .trim()
-            .to_owned();
+        let heading = lines[start].trim_start_matches('#').trim().to_owned();
 
         sections.push(SectionSuggestion {
             tier,
@@ -326,10 +328,7 @@ mod tests {
     fn small_cascade_is_ok() {
         let gci = "# Global Config\n\nKeep it lean.";
         let ppc = "# Project Config\n\nProject override.";
-        let resolved = make_resolved(&[
-            (CascadeTier::Gci, gci),
-            (CascadeTier::Ppc, ppc),
-        ]);
+        let resolved = make_resolved(&[(CascadeTier::Gci, gci), (CascadeTier::Ppc, ppc)]);
         let report = lint_always_loaded_budget(&resolved, BudgetConfig::default());
 
         assert!(
@@ -355,8 +354,7 @@ mod tests {
         // warn=6000, error=12000 (default). We need ~6001 tokens = ~24004 chars.
         let large_block = "x".repeat(24_010); // just over 6000 est tokens
         let resolved_warn = make_resolved(&[(CascadeTier::Gci, &large_block)]);
-        let report_warn =
-            lint_always_loaded_budget(&resolved_warn, BudgetConfig::default());
+        let report_warn = lint_always_loaded_budget(&resolved_warn, BudgetConfig::default());
 
         assert!(
             report_warn.total_est_tokens >= DEFAULT_WARN_TOKENS,
@@ -371,8 +369,7 @@ mod tests {
         // Now above error threshold: ~12001 tokens = ~48004 chars.
         let huge_block = "x".repeat(48_010);
         let resolved_error = make_resolved(&[(CascadeTier::Gci, &huge_block)]);
-        let report_error =
-            lint_always_loaded_budget(&resolved_error, BudgetConfig::default());
+        let report_error = lint_always_loaded_budget(&resolved_error, BudgetConfig::default());
 
         assert_eq!(
             report_error.verdict,
@@ -444,8 +441,7 @@ mod tests {
         let medium = "# Section\n\nThis is some content.\n".repeat(10);
         let resolved = make_resolved(&[(CascadeTier::Gci, &medium)]);
 
-        let report_default =
-            lint_always_loaded_budget(&resolved, BudgetConfig::default());
+        let report_default = lint_always_loaded_budget(&resolved, BudgetConfig::default());
         assert_eq!(report_default.verdict, Verdict::Ok, "default: should be Ok");
 
         let tight_cfg = BudgetConfig {

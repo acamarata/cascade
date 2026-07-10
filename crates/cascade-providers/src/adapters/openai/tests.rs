@@ -460,12 +460,8 @@ async fn openai_oauth_double_401_returns_oauth_expired() {
         scopes: vec!["openid".to_owned()],
     };
 
-    let adapter = OpenAIAdapter::with_oauth_token(
-        "bad-token",
-        "bad-rt",
-        oauth_cfg,
-        Some(api_server.uri()),
-    );
+    let adapter =
+        OpenAIAdapter::with_oauth_token("bad-token", "bad-rt", oauth_cfg, Some(api_server.uri()));
 
     let err = adapter
         .complete(CompletionRequest::simple("gpt-4o", "hi"))

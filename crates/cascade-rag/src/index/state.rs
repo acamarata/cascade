@@ -261,11 +261,9 @@ impl IndexStateStore {
     /// can display "last indexed N minutes ago" instead of a zero stub.
     pub fn last_indexed_at(&self) -> Option<i64> {
         self.conn
-            .query_row(
-                "SELECT MAX(indexed_at) FROM index_state",
-                [],
-                |r| r.get::<_, Option<i64>>(0),
-            )
+            .query_row("SELECT MAX(indexed_at) FROM index_state", [], |r| {
+                r.get::<_, Option<i64>>(0)
+            })
             .ok()
             .flatten()
     }

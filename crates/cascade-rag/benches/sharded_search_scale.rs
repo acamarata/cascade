@@ -119,8 +119,7 @@ fn populate_index(root: &Path, n_docs: usize) -> ShardedIndex {
     const DIM: usize = 1024;
     const BATCH: usize = 1000;
 
-    let idx =
-        ShardedIndex::new(root, SHARD_COUNT, DIM).expect("failed to create sharded index");
+    let idx = ShardedIndex::new(root, SHARD_COUNT, DIM).expect("failed to create sharded index");
     let embedder = StubEmbedder::new(DIM);
 
     let mut inserted = 0usize;
@@ -169,16 +168,12 @@ fn bench_sharded_100k(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(5));
     group.throughput(Throughput::Elements(N_DOCS as u64));
 
-    group.bench_with_input(
-        BenchmarkId::new("top_k20", "100k"),
-        &N_DOCS,
-        |b, _| {
-            b.iter(|| {
-                let hits = idx.search(&q, TOP_K).expect("search failed");
-                assert!(hits.len() <= TOP_K);
-            });
-        },
-    );
+    group.bench_with_input(BenchmarkId::new("top_k20", "100k"), &N_DOCS, |b, _| {
+        b.iter(|| {
+            let hits = idx.search(&q, TOP_K).expect("search failed");
+            assert!(hits.len() <= TOP_K);
+        });
+    });
 
     group.finish();
 }
@@ -201,16 +196,12 @@ fn bench_sharded_1m(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(10));
     group.throughput(Throughput::Elements(N_DOCS as u64));
 
-    group.bench_with_input(
-        BenchmarkId::new("top_k20", "1m"),
-        &N_DOCS,
-        |b, _| {
-            b.iter(|| {
-                let hits = idx.search(&q, TOP_K).expect("search failed");
-                assert!(hits.len() <= TOP_K);
-            });
-        },
-    );
+    group.bench_with_input(BenchmarkId::new("top_k20", "1m"), &N_DOCS, |b, _| {
+        b.iter(|| {
+            let hits = idx.search(&q, TOP_K).expect("search failed");
+            assert!(hits.len() <= TOP_K);
+        });
+    });
 
     group.finish();
 }
@@ -233,16 +224,12 @@ fn bench_sharded_10m(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(15));
     group.throughput(Throughput::Elements(N_DOCS as u64));
 
-    group.bench_with_input(
-        BenchmarkId::new("top_k20", "10m"),
-        &N_DOCS,
-        |b, _| {
-            b.iter(|| {
-                let hits = idx.search(&q, TOP_K).expect("search failed");
-                assert!(hits.len() <= TOP_K);
-            });
-        },
-    );
+    group.bench_with_input(BenchmarkId::new("top_k20", "10m"), &N_DOCS, |b, _| {
+        b.iter(|| {
+            let hits = idx.search(&q, TOP_K).expect("search failed");
+            assert!(hits.len() <= TOP_K);
+        });
+    });
 
     group.finish();
 }
@@ -253,6 +240,11 @@ fn bench_sharded_10m(c: &mut Criterion) {
 criterion_group!(benches, bench_sharded_100k);
 
 #[cfg(feature = "bench-scale-heavy")]
-criterion_group!(benches, bench_sharded_100k, bench_sharded_1m, bench_sharded_10m);
+criterion_group!(
+    benches,
+    bench_sharded_100k,
+    bench_sharded_1m,
+    bench_sharded_10m
+);
 
 criterion_main!(benches);

@@ -5,7 +5,9 @@ use crate::ipc::*;
 use serde_json;
 
 /// Helper: serialize to JSON then deserialize back, assert equality.
-fn roundtrip<T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug>(
+fn roundtrip<
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug,
+>(
     value: &T,
 ) {
     let json = serde_json::to_string(value).expect("serialize");
@@ -354,7 +356,8 @@ fn deserialize_request_rejects_missing_field() {
 
 #[test]
 fn deserialize_request_accepts_valid() {
-    let body = br#"{"jsonrpc":"2.0","id":1,"method":"ping","protocol_version":1,"params":{"echo":"hi"}}"#;
+    let body =
+        br#"{"jsonrpc":"2.0","id":1,"method":"ping","protocol_version":1,"params":{"echo":"hi"}}"#;
     let req = deserialize_request::<PingParams>(body).expect("valid request must deserialize");
     assert_eq!(req.method, "ping");
 }

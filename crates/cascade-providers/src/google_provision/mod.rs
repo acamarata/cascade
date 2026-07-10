@@ -24,14 +24,13 @@ pub const APIKEYS_BASE: &str = "https://apikeys.googleapis.com";
 
 // ── Sub-modules ───────────────────────────────────────────────────────────────
 
-pub mod types;
 pub mod client;
+pub mod types;
 
 // ── Public re-exports (preserve existing API surface) ────────────────────────
 
-pub use types::{
-    ProvisionError, ProvisionOptions, ProvisioningCheckpoint,
-    ProvisionMultiResult, ProvisionedKey,
-};
-pub use client::GoogleProvisionClient;
 pub use cascade_types::provision::{ProvisionMode, ProvisionRequest, ProvisionResult};
+pub use client::GoogleProvisionClient;
+pub use types::{
+    ProvisionError, ProvisionMultiResult, ProvisionOptions, ProvisionedKey, ProvisioningCheckpoint,
+};

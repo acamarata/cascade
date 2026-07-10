@@ -104,11 +104,27 @@ fn is_placeholder(value: &str) -> bool {
     let v = value.trim_matches(|c| c == '"' || c == '\'');
     // Common placeholder strings
     let placeholders = [
-        "your-api-key", "your_api_key", "your-secret", "your_secret",
-        "changeme", "change_me", "change-me", "placeholder",
-        "insert-key-here", "todo", "fixme", "xxx", "xxxx",
-        "xxxxxxxx", "example", "sample", "test", "fake",
-        "your-token", "your_token", "akia_example",
+        "your-api-key",
+        "your_api_key",
+        "your-secret",
+        "your_secret",
+        "changeme",
+        "change_me",
+        "change-me",
+        "placeholder",
+        "insert-key-here",
+        "todo",
+        "fixme",
+        "xxx",
+        "xxxx",
+        "xxxxxxxx",
+        "example",
+        "sample",
+        "test",
+        "fake",
+        "your-token",
+        "your_token",
+        "akia_example",
         "sk_live_example",
     ];
     let lower = v.to_lowercase();
@@ -166,7 +182,7 @@ pub fn scan_text(text: &str, path: &str) -> Vec<SecretFinding> {
 pub fn scan_file(path: &Path) -> Vec<SecretFinding> {
     match std::fs::read_to_string(path) {
         Ok(text) => scan_text(&text, &path.display().to_string()),
-        Err(_) => vec![],  // Binary or unreadable files are skipped silently
+        Err(_) => vec![], // Binary or unreadable files are skipped silently
     }
 }
 
@@ -188,7 +204,10 @@ mod tests {
     fn skips_placeholder_aws_key() {
         let text2 = "AWS_KEY=AKIAxxxxxxxxxxxxxxxxxxxx";
         let findings2 = scan_text(text2, "test.env");
-        assert!(findings2.is_empty(), "all-same-char placeholder should be skipped");
+        assert!(
+            findings2.is_empty(),
+            "all-same-char placeholder should be skipped"
+        );
     }
 
     #[test]
@@ -237,6 +256,9 @@ mod tests {
     fn skips_changeme_placeholder() {
         let text = r#"password = "changeme123456789012""#;
         let findings = scan_text(text, "config.toml");
-        assert!(findings.is_empty(), "changeme should be skipped as placeholder");
+        assert!(
+            findings.is_empty(),
+            "changeme should be skipped as placeholder"
+        );
     }
 }

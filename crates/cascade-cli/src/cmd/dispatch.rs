@@ -399,12 +399,16 @@ fn fetch_context_with_optimizer(query: &str, budget_tokens: usize) -> String {
 /// captured stdout.
 pub fn print_routing_decision(task_class: TaskClass, decision: &RoutingDecision) {
     match decision {
-        RoutingDecision::Lane { provider_id, reason } => {
-            eprintln!(
-                "cascade dispatch: route({task_class}) → provider={provider_id} ({reason})"
-            );
+        RoutingDecision::Lane {
+            provider_id,
+            reason,
+        } => {
+            eprintln!("cascade dispatch: route({task_class}) → provider={provider_id} ({reason})");
         }
-        RoutingDecision::Reserved { provider_id, reason } => {
+        RoutingDecision::Reserved {
+            provider_id,
+            reason,
+        } => {
             eprintln!(
                 "cascade dispatch: route({task_class}) → RESERVED provider={provider_id} ({reason})"
             );
@@ -416,9 +420,7 @@ pub fn print_routing_decision(task_class: TaskClass, decision: &RoutingDecision)
             );
         }
         RoutingDecision::FirewallDeny { reason } => {
-            eprintln!(
-                "cascade dispatch: route({task_class}) → FIREWALL_DENY: {reason}"
-            );
+            eprintln!("cascade dispatch: route({task_class}) → FIREWALL_DENY: {reason}");
         }
     }
 }
@@ -774,12 +776,24 @@ mod tests {
 
     #[test]
     fn task_class_arg_converts_to_task_class() {
-        assert_eq!(TaskClass::from(TaskClassArg::InteractiveChat), TaskClass::InteractiveChat);
+        assert_eq!(
+            TaskClass::from(TaskClassArg::InteractiveChat),
+            TaskClass::InteractiveChat
+        );
         assert_eq!(TaskClass::from(TaskClassArg::BulkExec), TaskClass::BulkExec);
         assert_eq!(TaskClass::from(TaskClassArg::Cheap), TaskClass::Cheap);
-        assert_eq!(TaskClass::from(TaskClassArg::AdversarialReview), TaskClass::AdversarialReview);
-        assert_eq!(TaskClass::from(TaskClassArg::FinalGate), TaskClass::FinalGate);
-        assert_eq!(TaskClass::from(TaskClassArg::Sensitive), TaskClass::Sensitive);
+        assert_eq!(
+            TaskClass::from(TaskClassArg::AdversarialReview),
+            TaskClass::AdversarialReview
+        );
+        assert_eq!(
+            TaskClass::from(TaskClassArg::FinalGate),
+            TaskClass::FinalGate
+        );
+        assert_eq!(
+            TaskClass::from(TaskClassArg::Sensitive),
+            TaskClass::Sensitive
+        );
     }
 
     #[test]
@@ -787,13 +801,12 @@ mod tests {
         // Hermetic: accounts_registry_path = None means an EMPTY registry (the FOSS
         // default), so InteractiveChat returns the "claude" sentinel. Without this
         // the test would read the developer's real ~/.cascade/accounts/accounts.json.
-        let router = cascade_core::routing::Router::with_config(
-            cascade_core::routing::RouterConfig {
+        let router =
+            cascade_core::routing::Router::with_config(cascade_core::routing::RouterConfig {
                 quota_store_path: None,
                 accounts_registry_path: None,
                 ..Default::default()
-            },
-        );
+            });
         let d = router.select(TaskClass::InteractiveChat, "hello");
         assert!(
             matches!(d, cascade_core::routing::RoutingDecision::Reserved { ref provider_id, .. }
@@ -806,13 +819,12 @@ mod tests {
     fn sensitive_task_class_never_routes_to_external() {
         // Hermetic: empty registry (None) so the test doesn't read the developer's
         // real ~/.cascade accounts. Sensitive must stay on claude/local regardless.
-        let router = cascade_core::routing::Router::with_config(
-            cascade_core::routing::RouterConfig {
+        let router =
+            cascade_core::routing::Router::with_config(cascade_core::routing::RouterConfig {
                 quota_store_path: None,
                 accounts_registry_path: None,
                 ..Default::default()
-            },
-        );
+            });
         let d = router.select(TaskClass::Sensitive, "my ssn is 123-45-6789");
         match &d {
             cascade_core::routing::RoutingDecision::Lane { provider_id, .. } => {

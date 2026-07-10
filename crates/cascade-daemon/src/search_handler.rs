@@ -454,9 +454,16 @@ impl RagSearchHandler {
 
         let t0 = Instant::now();
 
-        let citations = search(&params.query, &config, conn_arc, embed, reranker_arg, hyde_arg)
-            .await
-            .map_err(|e| format!("search: {e}"))?;
+        let citations = search(
+            &params.query,
+            &config,
+            conn_arc,
+            embed,
+            reranker_arg,
+            hyde_arg,
+        )
+        .await
+        .map_err(|e| format!("search: {e}"))?;
 
         let duration_ms = t0.elapsed().as_millis() as u64;
         debug!(hits = citations.len(), duration_ms, "rag.search complete");

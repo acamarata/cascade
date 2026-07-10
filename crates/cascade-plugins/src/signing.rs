@@ -19,15 +19,27 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum SigningError {
     #[error("failed to read {path}: {source}")]
-    Io { path: PathBuf, source: std::io::Error },
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[error("failed to parse trusted-publishers.json at {path}: {source}")]
-    Parse { path: PathBuf, source: serde_json::Error },
+    Parse {
+        path: PathBuf,
+        source: serde_json::Error,
+    },
     #[error("plugin '{id}' is unsigned; install with --allow-unsigned to override")]
     Unsigned { id: String },
     #[error("plugin '{id}' signature verification failed: {reason}")]
     BadSignature { id: String, reason: String },
-    #[error("publisher key '{key}' for plugin '{id}' is not valid base64-encoded Ed25519: {reason}")]
-    BadKey { id: String, key: String, reason: String },
+    #[error(
+        "publisher key '{key}' for plugin '{id}' is not valid base64-encoded Ed25519: {reason}"
+    )]
+    BadKey {
+        id: String,
+        key: String,
+        reason: String,
+    },
 }
 
 /// Outcome of signature verification.
@@ -67,10 +79,14 @@ impl TrustedPublishers {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let bytes = std::fs::read(path)
-            .map_err(|source| SigningError::Io { path: path.to_owned(), source })?;
-        serde_json::from_slice(&bytes)
-            .map_err(|source| SigningError::Parse { path: path.to_owned(), source })
+        let bytes = std::fs::read(path).map_err(|source| SigningError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
+        serde_json::from_slice(&bytes).map_err(|source| SigningError::Parse {
+            path: path.to_owned(),
+            source,
+        })
     }
 
     /// Add a trusted publisher and persist.
@@ -87,8 +103,7 @@ impl TrustedPublishers {
             std::fs::create_dir_all(parent).ok();
         }
         let json = serde_json::to_vec_pretty(self).expect("infallible");
-        std::fs::write(&path, json)
-            .map_err(|source| SigningError::Io { path, source })
+        std::fs::write(&path, json).map_err(|source| SigningError::Io { path, source })
     }
 }
 
@@ -108,20 +123,29 @@ pub fn verify_plugin(
 
     if !sig_path.exists() {
         if allow_unsigned {
-            tracing::warn!(plugin_id, "plugin is unsigned (allowed by --allow-unsigned)");
+            tracing::warn!(
+                plugin_id,
+                "plugin is unsigned (allowed by --allow-unsigned)"
+            );
             return Ok(VerifyResult::UnsignedWarned);
         } else {
-            return Err(SigningError::Unsigned { id: plugin_id.to_owned() });
+            return Err(SigningError::Unsigned {
+                id: plugin_id.to_owned(),
+            });
         }
     }
 
     // Read the WASM bytes to verify.
-    let wasm_bytes = std::fs::read(wasm_path)
-        .map_err(|source| SigningError::Io { path: wasm_path.to_owned(), source })?;
+    let wasm_bytes = std::fs::read(wasm_path).map_err(|source| SigningError::Io {
+        path: wasm_path.to_owned(),
+        source,
+    })?;
 
     // Read and decode the signature.
-    let sig_b64 = std::fs::read_to_string(&sig_path)
-        .map_err(|source| SigningError::Io { path: sig_path.clone(), source })?;
+    let sig_b64 = std::fs::read_to_string(&sig_path).map_err(|source| SigningError::Io {
+        path: sig_path.clone(),
+        source,
+    })?;
     let sig_b64 = sig_b64.trim();
 
     let sig_bytes = base64::engine::general_purpose::STANDARD
@@ -143,7 +167,9 @@ pub fn verify_plugin(
             Err(_) => continue,
         };
         if key.verify(&wasm_bytes, &sig).is_ok() {
-            return Ok(VerifyResult::Trusted { publisher: publisher.name.clone() });
+            return Ok(VerifyResult::Trusted {
+                publisher: publisher.name.clone(),
+            });
         }
     }
 
@@ -250,7 +276,10 @@ mod tests {
         };
 
         let result = verify_plugin("com.ex.p", &wasm_path, &publishers, false);
-        assert!(matches!(result, Ok(VerifyResult::Trusted { .. })), "{result:?}");
+        assert!(
+            matches!(result, Ok(VerifyResult::Trusted { .. })),
+            "{result:?}"
+        );
     }
 
     #[test]
@@ -272,6 +301,9 @@ mod tests {
         };
 
         let result = verify_plugin("com.ex.p", &wasm_path, &publishers, false);
-        assert!(matches!(result, Err(SigningError::BadSignature { .. })), "{result:?}");
+        assert!(
+            matches!(result, Err(SigningError::BadSignature { .. })),
+            "{result:?}"
+        );
     }
 }

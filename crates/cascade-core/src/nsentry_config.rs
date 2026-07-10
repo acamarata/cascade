@@ -51,7 +51,10 @@ pub struct RsyncStreamConfig {
 
 impl Default for RsyncStreamConfig {
     fn default() -> Self {
-        Self { interval_secs: default_rsync_interval(), enabled: true }
+        Self {
+            interval_secs: default_rsync_interval(),
+            enabled: true,
+        }
     }
 }
 
@@ -92,7 +95,10 @@ pub struct DependabotStreamConfig {
 
 impl Default for DependabotStreamConfig {
     fn default() -> Self {
-        Self { interval_secs: default_dependabot_interval(), enabled: true }
+        Self {
+            interval_secs: default_dependabot_interval(),
+            enabled: true,
+        }
     }
 }
 
@@ -123,7 +129,10 @@ pub struct NsentryProjectConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sentry_server: Option<String>,
     /// Remote directory to rsync from. Defaults to `/opt/nself-ops/errors`.
-    #[serde(default = "default_remote_dir", skip_serializing_if = "is_default_remote_dir")]
+    #[serde(
+        default = "default_remote_dir",
+        skip_serializing_if = "is_default_remote_dir"
+    )]
     pub remote_dir: String,
     /// Local inbox directory. Defaults to `<path>/.claude/inbox`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -173,13 +182,13 @@ pub fn load(path: &Path) -> Result<NsentrySyncConfig> {
         return Ok(NsentrySyncConfig::default());
     }
     let raw = std::fs::read_to_string(path).map_err(|e| CascadeError::Io {
-        path:      path.to_path_buf(),
+        path: path.to_path_buf(),
         operation: "read nsentry-sync.yaml",
-        source:    e,
+        source: e,
     })?;
     let cfg: NsentrySyncConfig =
         serde_yaml::from_str(&raw).map_err(|e| CascadeError::ConfigParse {
-            path:   path.to_path_buf(),
+            path: path.to_path_buf(),
             detail: e.to_string(),
         })?;
     Ok(cfg)
@@ -189,23 +198,23 @@ pub fn load(path: &Path) -> Result<NsentrySyncConfig> {
 pub fn save(path: &Path, cfg: &NsentrySyncConfig) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| CascadeError::Io {
-            path:      parent.to_path_buf(),
+            path: parent.to_path_buf(),
             operation: "create nsentry-sync.yaml parent dir",
-            source:    e,
+            source: e,
         })?;
     }
     let raw = serde_yaml::to_string(cfg)
         .map_err(|e| CascadeError::Other(format!("nsentry-sync.yaml serialize: {e}")))?;
     let tmp = path.with_extension("yaml.tmp");
     std::fs::write(&tmp, &raw).map_err(|e| CascadeError::Io {
-        path:      tmp.clone(),
+        path: tmp.clone(),
         operation: "write nsentry-sync.yaml (tmp)",
-        source:    e,
+        source: e,
     })?;
     std::fs::rename(&tmp, path).map_err(|e| CascadeError::Io {
-        path:      path.to_path_buf(),
+        path: path.to_path_buf(),
         operation: "rename nsentry-sync.yaml into place",
-        source:    e,
+        source: e,
     })?;
     Ok(())
 }
@@ -225,15 +234,33 @@ pub fn toggle_project_enabled(path: &Path, project_name: &str, enabled: bool) ->
 
 // ── Default helpers ───────────────────────────────────────────────────────────
 
-fn default_true() -> bool { true }
-fn schema_v1() -> u32 { 1 }
-fn default_rsync_interval() -> u64 { 300 }
-fn default_ci_interval() -> u64 { 900 }
-fn default_dependabot_interval() -> u64 { 21600 }
-fn default_per_repo() -> u32 { 10 }
-fn default_per_run_cap() -> usize { 50 }
-fn default_remote_dir() -> String { "/opt/nself-ops/errors".to_string() }
-fn is_default_remote_dir(s: &str) -> bool { s == "/opt/nself-ops/errors" }
+fn default_true() -> bool {
+    true
+}
+fn schema_v1() -> u32 {
+    1
+}
+fn default_rsync_interval() -> u64 {
+    300
+}
+fn default_ci_interval() -> u64 {
+    900
+}
+fn default_dependabot_interval() -> u64 {
+    21600
+}
+fn default_per_repo() -> u32 {
+    10
+}
+fn default_per_run_cap() -> usize {
+    50
+}
+fn default_remote_dir() -> String {
+    "/opt/nself-ops/errors".to_string()
+}
+fn is_default_remote_dir(s: &str) -> bool {
+    s == "/opt/nself-ops/errors"
+}
 
 // ── Sync status ───────────────────────────────────────────────────────────────
 
@@ -287,13 +314,7 @@ impl NsentrySyncStatus {
     }
 
     /// Record a successful run result.
-    pub fn record_success(
-        &mut self,
-        project: &str,
-        stream: &str,
-        delivered: usize,
-        enabled: bool,
-    ) {
+    pub fn record_success(&mut self, project: &str, stream: &str, delivered: usize, enabled: bool) {
         let now = unix_now();
         let s = self
             .streams
@@ -386,15 +407,18 @@ pub fn run_rsync_stream(proj: &NsentryProjectConfig) -> std::result::Result<RunR
 
     let cfg = NsentryConfig {
         sentry_server: sentry_server.to_string(),
-        remote_dir:    proj.remote_dir.clone(),
-        inbox:         proj.inbox.clone(),
+        remote_dir: proj.remote_dir.clone(),
+        inbox: proj.inbox.clone(),
         interval_secs: proj.streams.rsync.interval_secs,
     };
 
     let report = nsentry::sync(&proj.path, &cfg, false, Some(proj.per_run_cap))
         .map_err(|e| format!("rsync: {e}"))?;
 
-    Ok(RunResult { delivered: report.new, dropped: report.dropped })
+    Ok(RunResult {
+        delivered: report.new,
+        dropped: report.dropped,
+    })
 }
 
 /// Build a PATH that includes the well-known bin dirs, so a spawned bridge
@@ -421,17 +445,19 @@ fn augmented_path() -> String {
 
 /// Enforce `per_run_cap`: if `wrote_count > cap`, return cap as delivered and
 /// (wrote_count - cap) as dropped.
-pub fn enforce_cap(
-    proj: &NsentryProjectConfig,
-    _stream: &str,
-    wrote_count: usize,
-) -> RunResult {
+pub fn enforce_cap(proj: &NsentryProjectConfig, _stream: &str, wrote_count: usize) -> RunResult {
     let cap = proj.per_run_cap;
     if wrote_count > cap {
         let dropped = wrote_count - cap;
-        RunResult { delivered: cap, dropped }
+        RunResult {
+            delivered: cap,
+            dropped,
+        }
     } else {
-        RunResult { delivered: wrote_count, dropped: 0 }
+        RunResult {
+            delivered: wrote_count,
+            dropped: 0,
+        }
     }
 }
 
@@ -444,8 +470,7 @@ pub fn run_ci_stream(
         .ok_or_else(|| "ci stream: bash not found on PATH or probe dirs".to_string())?;
     let script = scripts_dir.join("gh-ci-failures-to-reports.sh");
     let inbox = proj.resolved_inbox();
-    std::fs::create_dir_all(&inbox)
-        .map_err(|e| format!("ci stream: create inbox dir: {e}"))?;
+    std::fs::create_dir_all(&inbox).map_err(|e| format!("ci stream: create inbox dir: {e}"))?;
 
     let out = std::process::Command::new(&bash)
         .arg(&script)
@@ -479,8 +504,8 @@ pub fn run_dependabot_stream(
     proj: &NsentryProjectConfig,
     scripts_dir: &Path,
 ) -> std::result::Result<RunResult, String> {
-    let bash = resolve_binary("bash")
-        .ok_or_else(|| "dependabot stream: bash not found".to_string())?;
+    let bash =
+        resolve_binary("bash").ok_or_else(|| "dependabot stream: bash not found".to_string())?;
     let script = scripts_dir.join("gh-dependabot-to-reports.sh");
     let inbox = proj.resolved_inbox();
     std::fs::create_dir_all(&inbox)
@@ -531,8 +556,15 @@ mod tests {
                 enabled: true,
                 per_run_cap: 50,
                 streams: StreamsConfig {
-                    rsync: RsyncStreamConfig { interval_secs: 300, enabled: true },
-                    ci: CiStreamConfig { interval_secs: 900, enabled: true, per_repo: 10 },
+                    rsync: RsyncStreamConfig {
+                        interval_secs: 300,
+                        enabled: true,
+                    },
+                    ci: CiStreamConfig {
+                        interval_secs: 900,
+                        enabled: true,
+                        per_repo: 10,
+                    },
                     dependabot: DependabotStreamConfig {
                         interval_secs: 21600,
                         enabled: true,
@@ -567,7 +599,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("nsentry-sync.yaml");
         let cfg = load(&path).unwrap();
-        assert!(cfg.projects.is_empty(), "absent config must yield empty projects");
+        assert!(
+            cfg.projects.is_empty(),
+            "absent config must yield empty projects"
+        );
     }
 
     #[test]
@@ -598,7 +633,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("nsentry-sync.yaml");
         // Minimal YAML with only required fields — defaults must fill in the rest.
-        let minimal = "version: 1\nprojects:\n  - name: test\n    path: /tmp/test\n    org: test-org\n";
+        let minimal =
+            "version: 1\nprojects:\n  - name: test\n    path: /tmp/test\n    org: test-org\n";
         std::fs::write(&path, minimal).unwrap();
         let cfg = load(&path).unwrap();
         let p = &cfg.projects[0];

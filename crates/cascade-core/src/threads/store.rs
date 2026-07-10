@@ -131,7 +131,10 @@ impl ThreadStore {
         let sensitivity = params.sensitivity.unwrap_or_else(|| "normal".to_string());
 
         {
-            let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
             conn.execute(
                 "INSERT INTO threads (id, parent_id, title, sensitivity, created_at, archived)
                  VALUES (?1, ?2, ?3, ?4, ?5, 0)",
@@ -157,14 +160,18 @@ impl ThreadStore {
 
     /// List all active (non-archived) threads, ordered by created_at DESC.
     pub fn list_threads(&self, include_archived: bool) -> Result<Vec<Thread>> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         let mut threads = Vec::new();
         if include_archived {
-            let mut stmt = conn.prepare(
-                "SELECT id, parent_id, title, sensitivity, created_at, archived
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, parent_id, title, sensitivity, created_at, archived
                  FROM threads ORDER BY created_at DESC",
-            )
-            .map_err(|e| CascadeError::Other(format!("list_threads prepare: {e}")))?;
+                )
+                .map_err(|e| CascadeError::Other(format!("list_threads prepare: {e}")))?;
             let rows = stmt
                 .query_map([], |row| {
                     Ok(Thread {
@@ -181,11 +188,12 @@ impl ThreadStore {
                 threads.push(r);
             }
         } else {
-            let mut stmt = conn.prepare(
-                "SELECT id, parent_id, title, sensitivity, created_at, archived
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, parent_id, title, sensitivity, created_at, archived
                  FROM threads WHERE archived = 0 ORDER BY created_at DESC",
-            )
-            .map_err(|e| CascadeError::Other(format!("list_threads prepare: {e}")))?;
+                )
+                .map_err(|e| CascadeError::Other(format!("list_threads prepare: {e}")))?;
             let rows = stmt
                 .query_map([], |row| {
                     Ok(Thread {
@@ -207,7 +215,10 @@ impl ThreadStore {
 
     /// Get a single thread by ID.
     pub fn get_thread(&self, id: &str) -> Result<Option<Thread>> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, parent_id, title, sensitivity, created_at, archived
@@ -232,7 +243,10 @@ impl ThreadStore {
     /// Toggle archive state. Archive moves dir to threads/archive/{id}/ (never deletes).
     pub fn set_archived(&self, id: &str, archived: bool) -> Result<()> {
         {
-            let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
             conn.execute(
                 "UPDATE threads SET archived = ?1 WHERE id = ?2",
                 params![archived as i64, id],
@@ -269,7 +283,10 @@ impl ThreadStore {
         let now = Utc::now().to_rfc3339();
 
         {
-            let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
             conn.execute(
                 "INSERT INTO thread_tasks (id, thread_id, title, stage, notes, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
@@ -296,7 +313,10 @@ impl ThreadStore {
     pub fn move_task(&self, params: MoveTaskParams) -> Result<ThreadTask> {
         let now = Utc::now().to_rfc3339();
         let (old_stage, updated_task) = {
-            let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
 
             // Fetch current stage before update.
             let old_stage: String = conn
@@ -342,7 +362,10 @@ impl ThreadStore {
 
     /// List tasks for a thread, optionally filtered by stage.
     pub fn list_tasks(&self, thread_id: &str, stage: Option<&str>) -> Result<Vec<ThreadTask>> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         let tasks: Vec<ThreadTask> = if let Some(s) = stage {
             let mut stmt = conn
                 .prepare(
@@ -395,28 +418,43 @@ impl ThreadStore {
 
     /// Get or create a topic by name.
     pub fn upsert_topic(&self, name: &str) -> Result<Topic> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
 
         // Try to find existing.
-        if let Ok(id) = conn.query_row::<String, _, _>(
-            "SELECT id FROM topics WHERE name = ?1",
-            [name],
-            |r| r.get(0),
-        ) {
-            return Ok(Topic { id, name: name.to_string() });
+        if let Ok(id) =
+            conn.query_row::<String, _, _>("SELECT id FROM topics WHERE name = ?1", [name], |r| {
+                r.get(0)
+            })
+        {
+            return Ok(Topic {
+                id,
+                name: name.to_string(),
+            });
         }
 
         // Create new.
         let id = Uuid::new_v4().to_string();
-        conn.execute("INSERT INTO topics (id, name) VALUES (?1, ?2)", params![id, name])
-            .map_err(|e| CascadeError::Other(format!("upsert_topic insert: {e}")))?;
-        Ok(Topic { id, name: name.to_string() })
+        conn.execute(
+            "INSERT INTO topics (id, name) VALUES (?1, ?2)",
+            params![id, name],
+        )
+        .map_err(|e| CascadeError::Other(format!("upsert_topic insert: {e}")))?;
+        Ok(Topic {
+            id,
+            name: name.to_string(),
+        })
     }
 
     /// Add a topic to a thread (idempotent).
     pub fn add_topic_to_thread(&self, thread_id: &str, topic_name: &str) -> Result<Topic> {
         let topic = self.upsert_topic(topic_name)?;
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         conn.execute(
             "INSERT OR IGNORE INTO thread_topics (thread_id, topic_id) VALUES (?1, ?2)",
             params![thread_id, topic.id],
@@ -427,7 +465,10 @@ impl ThreadStore {
 
     /// List all topics for a thread.
     pub fn list_topics_for_thread(&self, thread_id: &str) -> Result<Vec<Topic>> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT t.id, t.name FROM topics t
@@ -436,7 +477,12 @@ impl ThreadStore {
             )
             .map_err(|e| CascadeError::Other(format!("list_topics prepare: {e}")))?;
         let rows = stmt
-            .query_map([thread_id], |r| Ok(Topic { id: r.get(0)?, name: r.get(1)? }))
+            .query_map([thread_id], |r| {
+                Ok(Topic {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                })
+            })
             .map_err(|e| CascadeError::Other(format!("list_topics query: {e}")))?;
         let topics: Vec<Topic> = rows.filter_map(|r| r.ok()).collect();
         Ok(topics)
@@ -447,7 +493,10 @@ impl ThreadStore {
     /// Full-text keyword search across thread titles + task titles.
     /// Optionally filter by topic name. Skips locked threads.
     pub fn search(&self, params: SearchParams) -> Result<SearchResult> {
-        let conn = self.conn.lock().map_err(|_| CascadeError::Other("lock poisoned".into()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
         let pattern = format!("%{}%", params.query.to_lowercase());
         let archived_filter: i64 = if params.include_archived { -1 } else { 0 };
 
@@ -460,19 +509,22 @@ impl ThreadStore {
                        AND (?2 = -1 OR th.archived = ?2)
                        AND (LOWER(th.title) LIKE ?1 OR LOWER(tp.name) = ?3)
                      ORDER BY th.created_at DESC";
-            let mut stmt = conn.prepare(q)
+            let mut stmt = conn
+                .prepare(q)
                 .map_err(|e| CascadeError::Other(format!("search threads prepare: {e}")))?;
             let rows = stmt
                 .query_map(
                     params![pattern, archived_filter, topic_name.to_lowercase()],
-                    |r| Ok(Thread {
-                        id: r.get(0)?,
-                        parent_id: r.get(1)?,
-                        title: r.get(2)?,
-                        sensitivity: r.get(3)?,
-                        created_at: r.get(4)?,
-                        archived: r.get::<_, i64>(5)? != 0,
-                    }),
+                    |r| {
+                        Ok(Thread {
+                            id: r.get(0)?,
+                            parent_id: r.get(1)?,
+                            title: r.get(2)?,
+                            sensitivity: r.get(3)?,
+                            created_at: r.get(4)?,
+                            archived: r.get::<_, i64>(5)? != 0,
+                        })
+                    },
                 )
                 .map_err(|e| CascadeError::Other(format!("search threads query: {e}")))?;
             let result: Vec<Thread> = rows.filter_map(|r| r.ok()).collect();
@@ -551,7 +603,9 @@ impl ThreadStore {
     pub fn push_to_rag(&self, sink: &dyn RagSink) -> Result<()> {
         // Gather all threads (active + archived), skip locked.
         let threads = {
-            let conn = self.conn.lock()
+            let conn = self
+                .conn
+                .lock()
                 .map_err(|_| CascadeError::Other("lock poisoned".into()))?;
             let mut stmt = conn
                 .prepare(
@@ -605,7 +659,10 @@ impl ThreadStore {
             tracing::debug!("push_to_rag: pushed thread '{}'", thread.title);
         }
 
-        tracing::debug!("push_to_rag: pushed {} thread(s) to personal namespace", threads.len());
+        tracing::debug!(
+            "push_to_rag: pushed {} thread(s) to personal namespace",
+            threads.len()
+        );
         Ok(())
     }
 
@@ -639,8 +696,9 @@ impl ThreadStore {
         for stage in &["todo", "in_progress", "done"] {
             let f = dir.join(format!("{stage}.md"));
             if !f.exists() {
-                std::fs::write(&f, format!("# {stage}\n\n"))
-                    .map_err(|e| CascadeError::Other(format!("init_thread_dir stage {stage}: {e}")))?;
+                std::fs::write(&f, format!("# {stage}\n\n")).map_err(|e| {
+                    CascadeError::Other(format!("init_thread_dir stage {stage}: {e}"))
+                })?;
             }
         }
         Ok(())
@@ -699,17 +757,22 @@ mod tests {
     #[test]
     fn create_thread_creates_dirs_and_files() {
         let (store, tmp) = make_store();
-        let t = store.create_thread(CreateThreadParams {
-            title: "My Thread".to_string(),
-            parent_id: None,
-            sensitivity: None,
-        }).unwrap();
+        let t = store
+            .create_thread(CreateThreadParams {
+                title: "My Thread".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
 
         let dir = tmp.path().join("threads").join(&t.id);
         assert!(dir.exists(), "thread dir must be created");
         assert!(dir.join("README.md").exists(), "README.md must exist");
         assert!(dir.join("todo.md").exists(), "todo.md must exist");
-        assert!(dir.join("in_progress.md").exists(), "in_progress.md must exist");
+        assert!(
+            dir.join("in_progress.md").exists(),
+            "in_progress.md must exist"
+        );
         assert!(dir.join("done.md").exists(), "done.md must exist");
 
         let readme = std::fs::read_to_string(dir.join("README.md")).unwrap();
@@ -719,12 +782,20 @@ mod tests {
     #[test]
     fn list_threads_returns_active_only() {
         let (store, _tmp) = make_store();
-        store.create_thread(CreateThreadParams {
-            title: "Active".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
-        let archived = store.create_thread(CreateThreadParams {
-            title: "Archived".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Active".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
+        let archived = store
+            .create_thread(CreateThreadParams {
+                title: "Archived".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
         store.set_archived(&archived.id, true).unwrap();
 
         let active_list = store.list_threads(false).unwrap();
@@ -738,106 +809,149 @@ mod tests {
     #[test]
     fn task_stage_transition_updates_markdown() {
         let (store, tmp) = make_store();
-        let t = store.create_thread(CreateThreadParams {
-            title: "T".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
-        let task = store.add_task(CreateTaskParams {
-            thread_id: t.id.clone(),
-            title: "do the thing".to_string(),
-            stage: Some("todo".to_string()),
-            notes: None,
-        }).unwrap();
+        let t = store
+            .create_thread(CreateThreadParams {
+                title: "T".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
+        let task = store
+            .add_task(CreateTaskParams {
+                thread_id: t.id.clone(),
+                title: "do the thing".to_string(),
+                stage: Some("todo".to_string()),
+                notes: None,
+            })
+            .unwrap();
 
-        let todo_content = std::fs::read_to_string(
-            tmp.path().join("threads").join(&t.id).join("todo.md")
-        ).unwrap();
+        let todo_content =
+            std::fs::read_to_string(tmp.path().join("threads").join(&t.id).join("todo.md"))
+                .unwrap();
         assert!(todo_content.contains("do the thing"));
 
-        store.move_task(MoveTaskParams {
-            task_id: task.id.clone(),
-            new_stage: "done".to_string(),
-        }).unwrap();
+        store
+            .move_task(MoveTaskParams {
+                task_id: task.id.clone(),
+                new_stage: "done".to_string(),
+            })
+            .unwrap();
 
-        let done_content = std::fs::read_to_string(
-            tmp.path().join("threads").join(&t.id).join("done.md")
-        ).unwrap();
+        let done_content =
+            std::fs::read_to_string(tmp.path().join("threads").join(&t.id).join("done.md"))
+                .unwrap();
         assert!(done_content.contains("do the thing"));
 
-        let todo_after = std::fs::read_to_string(
-            tmp.path().join("threads").join(&t.id).join("todo.md")
-        ).unwrap();
-        assert!(!todo_after.contains("do the thing"), "task must be removed from todo.md after move");
+        let todo_after =
+            std::fs::read_to_string(tmp.path().join("threads").join(&t.id).join("todo.md"))
+                .unwrap();
+        assert!(
+            !todo_after.contains("do the thing"),
+            "task must be removed from todo.md after move"
+        );
     }
 
     #[test]
     fn archive_moves_dir_not_deletes() {
         let (store, tmp) = make_store();
-        let t = store.create_thread(CreateThreadParams {
-            title: "Will Archive".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
+        let t = store
+            .create_thread(CreateThreadParams {
+                title: "Will Archive".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
 
         store.set_archived(&t.id, true).unwrap();
 
         let active_dir = tmp.path().join("threads").join(&t.id);
         let archive_dir = tmp.path().join("threads").join("archive").join(&t.id);
-        assert!(!active_dir.exists(), "active dir must be gone after archive");
+        assert!(
+            !active_dir.exists(),
+            "active dir must be gone after archive"
+        );
         assert!(archive_dir.exists(), "archive dir must exist");
-        assert!(archive_dir.join("README.md").exists(), "README must survive archival");
+        assert!(
+            archive_dir.join("README.md").exists(),
+            "README must survive archival"
+        );
     }
 
     #[test]
     fn topic_search_and_cross_thread() {
         let (store, _tmp) = make_store();
-        let t1 = store.create_thread(CreateThreadParams {
-            title: "Rust threads".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
-        let t2 = store.create_thread(CreateThreadParams {
-            title: "Python ideas".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
+        let t1 = store
+            .create_thread(CreateThreadParams {
+                title: "Rust threads".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
+        let t2 = store
+            .create_thread(CreateThreadParams {
+                title: "Python ideas".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
 
         store.add_topic_to_thread(&t1.id, "rust").unwrap();
         store.add_topic_to_thread(&t2.id, "python").unwrap();
-        store.add_task(CreateTaskParams {
-            thread_id: t1.id.clone(),
-            title: "Write a parser".to_string(),
-            stage: None,
-            notes: None,
-        }).unwrap();
+        store
+            .add_task(CreateTaskParams {
+                thread_id: t1.id.clone(),
+                title: "Write a parser".to_string(),
+                stage: None,
+                notes: None,
+            })
+            .unwrap();
 
-        let results = store.search(SearchParams {
-            query: "parser".to_string(),
-            topic: None,
-            include_archived: false,
-        }).unwrap();
+        let results = store
+            .search(SearchParams {
+                query: "parser".to_string(),
+                topic: None,
+                include_archived: false,
+            })
+            .unwrap();
         assert_eq!(results.tasks.len(), 1);
         assert_eq!(results.tasks[0].title, "Write a parser");
 
-        let topic_results = store.search(SearchParams {
-            query: "".to_string(),
-            topic: Some("rust".to_string()),
-            include_archived: false,
-        }).unwrap();
+        let topic_results = store
+            .search(SearchParams {
+                query: "".to_string(),
+                topic: Some("rust".to_string()),
+                include_archived: false,
+            })
+            .unwrap();
         assert!(topic_results.threads.iter().any(|th| th.id == t1.id));
     }
 
     #[test]
     fn markdown_readable_without_db() {
         let (store, tmp) = make_store();
-        let t = store.create_thread(CreateThreadParams {
-            title: "Standalone".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
-        store.add_task(CreateTaskParams {
-            thread_id: t.id.clone(),
-            title: "standalone task".to_string(),
-            stage: Some("todo".to_string()),
-            notes: None,
-        }).unwrap();
+        let t = store
+            .create_thread(CreateThreadParams {
+                title: "Standalone".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
+        store
+            .add_task(CreateTaskParams {
+                thread_id: t.id.clone(),
+                title: "standalone task".to_string(),
+                stage: Some("todo".to_string()),
+                notes: None,
+            })
+            .unwrap();
 
         // Read the markdown file directly (no DB access) and verify it's meaningful.
-        let md = std::fs::read_to_string(
-            tmp.path().join("threads").join(&t.id).join("todo.md")
-        ).unwrap();
-        assert!(md.contains("standalone task"), "markdown must be readable without DB");
+        let md = std::fs::read_to_string(tmp.path().join("threads").join(&t.id).join("todo.md"))
+            .unwrap();
+        assert!(
+            md.contains("standalone task"),
+            "markdown must be readable without DB"
+        );
     }
 
     // ── push_to_rag tests ────────────────────────────────────────────────────
@@ -846,8 +960,12 @@ mod tests {
     struct CollectingSink(std::sync::Mutex<Vec<String>>);
 
     impl CollectingSink {
-        fn new() -> Self { Self(std::sync::Mutex::new(vec![])) }
-        fn episodes(&self) -> Vec<String> { self.0.lock().unwrap().clone() }
+        fn new() -> Self {
+            Self(std::sync::Mutex::new(vec![]))
+        }
+        fn episodes(&self) -> Vec<String> {
+            self.0.lock().unwrap().clone()
+        }
     }
 
     impl RagSink for CollectingSink {
@@ -860,56 +978,86 @@ mod tests {
     #[test]
     fn push_to_rag_sends_normal_thread_content() {
         let (store, _tmp) = make_store();
-        store.create_thread(CreateThreadParams {
-            title: "Normal Thread".to_string(),
-            parent_id: None,
-            sensitivity: Some("normal".to_string()),
-        }).unwrap();
-        store.create_thread(CreateThreadParams {
-            title: "Default Sensitivity Thread".to_string(),
-            parent_id: None,
-            sensitivity: None,  // defaults to "normal"
-        }).unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Normal Thread".to_string(),
+                parent_id: None,
+                sensitivity: Some("normal".to_string()),
+            })
+            .unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Default Sensitivity Thread".to_string(),
+                parent_id: None,
+                sensitivity: None, // defaults to "normal"
+            })
+            .unwrap();
 
         let sink = CollectingSink::new();
         store.push_to_rag(&sink).unwrap();
 
         let episodes = sink.episodes();
-        assert_eq!(episodes.len(), 2, "both normal-sensitivity threads must be pushed");
-        assert!(episodes.iter().any(|e| e.contains("Normal Thread")), "episode must include thread title");
-        assert!(episodes.iter().any(|e| e.contains("Default Sensitivity Thread")));
+        assert_eq!(
+            episodes.len(),
+            2,
+            "both normal-sensitivity threads must be pushed"
+        );
+        assert!(
+            episodes.iter().any(|e| e.contains("Normal Thread")),
+            "episode must include thread title"
+        );
+        assert!(episodes
+            .iter()
+            .any(|e| e.contains("Default Sensitivity Thread")));
     }
 
     #[test]
     fn push_to_rag_skips_locked_threads() {
         let (store, _tmp) = make_store();
-        store.create_thread(CreateThreadParams {
-            title: "Public Thread".to_string(),
-            parent_id: None,
-            sensitivity: Some("normal".to_string()),
-        }).unwrap();
-        store.create_thread(CreateThreadParams {
-            title: "Secret Thread".to_string(),
-            parent_id: None,
-            sensitivity: Some("locked".to_string()),
-        }).unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Public Thread".to_string(),
+                parent_id: None,
+                sensitivity: Some("normal".to_string()),
+            })
+            .unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Secret Thread".to_string(),
+                parent_id: None,
+                sensitivity: Some("locked".to_string()),
+            })
+            .unwrap();
 
         let sink = CollectingSink::new();
         store.push_to_rag(&sink).unwrap();
 
         let episodes = sink.episodes();
         assert_eq!(episodes.len(), 1, "locked thread must be excluded");
-        assert!(episodes[0].contains("Public Thread"), "only public thread must be pushed");
-        assert!(!episodes.iter().any(|e| e.contains("Secret Thread")), "locked thread must never appear");
+        assert!(
+            episodes[0].contains("Public Thread"),
+            "only public thread must be pushed"
+        );
+        assert!(
+            !episodes.iter().any(|e| e.contains("Secret Thread")),
+            "locked thread must never appear"
+        );
     }
 
     #[test]
     fn push_to_rag_noop_sink_returns_ok() {
         let (store, _tmp) = make_store();
-        store.create_thread(CreateThreadParams {
-            title: "Any Thread".to_string(), parent_id: None, sensitivity: None,
-        }).unwrap();
+        store
+            .create_thread(CreateThreadParams {
+                title: "Any Thread".to_string(),
+                parent_id: None,
+                sensitivity: None,
+            })
+            .unwrap();
         let sink = NoopRagSink;
-        assert!(store.push_to_rag(&sink).is_ok(), "NoopRagSink must never error");
+        assert!(
+            store.push_to_rag(&sink).is_ok(),
+            "NoopRagSink must never error"
+        );
     }
 }

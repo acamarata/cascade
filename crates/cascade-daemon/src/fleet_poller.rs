@@ -44,10 +44,10 @@ use cascade_core::accounts_store::{
     write_quota_json,
 };
 use cascade_core::external_accounts::{discover as discover_external, ExternalAgent};
-use cascade_core::read_claude_access_token;
-use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::model_ids::MODEL_CLAUDE_HAIKU;
+use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
+use cascade_core::read_claude_access_token;
 use cascade_types::accounts::{AccessMethod, AccountFamily};
 use cascade_types::quota_store::{
     QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
@@ -267,8 +267,7 @@ impl FleetPoller {
             Box::new(GfpSource::new(state_path)),
         ];
 
-        let interval =
-            tokio::time::Duration::from_secs(config.interval_secs.max(1));
+        let interval = tokio::time::Duration::from_secs(config.interval_secs.max(1));
 
         info!(interval_secs = config.interval_secs, "fleet poller started");
 
@@ -342,7 +341,9 @@ impl FleetPoller {
                 rolling_history: vec![],
             };
             match write_quota_store(store_path, &empty) {
-                Ok(()) => info!(path = %store_path.display(), "fleet: wrote empty quota-store.json (no sources ready)"),
+                Ok(()) => {
+                    info!(path = %store_path.display(), "fleet: wrote empty quota-store.json (no sources ready)")
+                }
                 Err(e) => warn!(%e, "fleet: failed to write quota-store.json"),
             }
             return;
@@ -648,8 +649,7 @@ fn merge_usage_cache_updates(
     updates: Vec<(String, serde_json::Value)>,
 ) -> Result<(), String> {
     if let Some(parent) = cache_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("create usage-cache parent: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("create usage-cache parent: {e}"))?;
     }
 
     let lock_file = OpenOptions::new()
@@ -679,15 +679,13 @@ fn merge_usage_cache_updates(
         let bytes = serde_json::to_vec_pretty(&payload)
             .map_err(|e| format!("serialize usage cache: {e}"))?;
         let tmp = cache_path.with_extension("tmp");
-        std::fs::write(&tmp, &bytes)
-            .map_err(|e| format!("write usage-cache tmp: {e}"))?;
-        std::fs::rename(&tmp, cache_path)
-            .map_err(|e| format!("rename usage-cache tmp: {e}"))?;
+        std::fs::write(&tmp, &bytes).map_err(|e| format!("write usage-cache tmp: {e}"))?;
+        std::fs::rename(&tmp, cache_path).map_err(|e| format!("rename usage-cache tmp: {e}"))?;
         Ok(())
     })();
 
-    let unlock_result = fs2::FileExt::unlock(&lock_file)
-        .map_err(|e| format!("unlock usage-cache: {e}"));
+    let unlock_result =
+        fs2::FileExt::unlock(&lock_file).map_err(|e| format!("unlock usage-cache: {e}"));
     result.and(unlock_result)
 }
 
@@ -702,9 +700,10 @@ fn upsert_cache_entry(
     account_id: &str,
     entry: serde_json::Value,
 ) {
-    if let Some(pos) = entries.iter().position(|e| {
-        e.get("account").and_then(|v| v.as_str()) == Some(account_id)
-    }) {
+    if let Some(pos) = entries
+        .iter()
+        .position(|e| e.get("account").and_then(|v| v.as_str()) == Some(account_id))
+    {
         entries[pos] = entry;
     } else {
         entries.push(entry);
@@ -769,7 +768,10 @@ mod tests {
 
         FleetPoller::tick(&sources, &store_path);
 
-        assert!(store_path.exists(), "quota-store.json must exist after tick");
+        assert!(
+            store_path.exists(),
+            "quota-store.json must exist after tick"
+        );
 
         let bytes = std::fs::read(&store_path).expect("read store");
         let store: QuotaStore = serde_json::from_slice(&bytes).expect("valid JSON");
@@ -810,9 +812,6 @@ mod tests {
         assert!(results[1].is_none());
         assert!(results[2].is_none());
         assert!(results[3].is_some());
-        assert_eq!(
-            results[3].as_ref().unwrap().account_id,
-            "dyn-acct"
-        );
+        assert_eq!(results[3].as_ref().unwrap().account_id, "dyn-acct");
     }
 }

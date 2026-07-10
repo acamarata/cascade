@@ -89,10 +89,7 @@ impl Command for ConfigureArgs {
         }
 
         let result = configure_harness(target, self.path.as_deref(), dry_run).map_err(|e| {
-            CascadeError::Other(format!(
-                "configure {} failed: {e}",
-                target.display_name()
-            ))
+            CascadeError::Other(format!("configure {} failed: {e}", target.display_name()))
         })?;
 
         println!("Target:  {}", target.display_name());

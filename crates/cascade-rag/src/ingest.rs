@@ -512,20 +512,22 @@ mod tests {
         // The file will be written to a temp dir — we'll exclude based on the dir prefix.
         let f = write_file("# Secret document\n\nTop secret content.\n", ".md");
         let path = f.path();
-        let parent = path.parent().expect("parent dir").to_string_lossy().to_string();
+        let parent = path
+            .parent()
+            .expect("parent dir")
+            .to_string_lossy()
+            .to_string();
         let exclusion_pattern = format!("{parent}/");
 
-        let exclusion = ExclusionSet::compile(&ExclusionConfig::from_patterns([&exclusion_pattern]));
+        let exclusion =
+            ExclusionSet::compile(&ExclusionConfig::from_patterns([&exclusion_pattern]));
 
-        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default())
-            .with_exclusion(exclusion);
+        let pipeline =
+            IngestPipeline::new(conn, embed, IngestConfig::default()).with_exclusion(exclusion);
 
         // Attempting to ingest an excluded path must return skipped=true.
         let result = pipeline.ingest_file(path).expect("ingest must not error");
-        assert!(
-            result.skipped,
-            "excluded path must be returned as skipped"
-        );
+        assert!(result.skipped, "excluded path must be returned as skipped");
         assert_eq!(result.chunks_created, 0, "no chunks must be created");
 
         // The path must NOT appear in rag_sources.
@@ -562,8 +564,8 @@ mod tests {
         let exclusion =
             ExclusionSet::compile(&ExclusionConfig::from_patterns(["/private/secret/"]));
 
-        let pipeline = IngestPipeline::new(conn, embed, IngestConfig::default())
-            .with_exclusion(exclusion);
+        let pipeline =
+            IngestPipeline::new(conn, embed, IngestConfig::default()).with_exclusion(exclusion);
 
         let f = write_file("# Normal document\n\nPublic content here.\n", ".md");
         let result = pipeline.ingest_file(f.path()).expect("ingest ok");
@@ -578,6 +580,9 @@ mod tests {
             .conn
             .query_row("SELECT COUNT(*) FROM rag_sources", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(source_count, 1, "non-excluded file must appear in rag_sources");
+        assert_eq!(
+            source_count, 1,
+            "non-excluded file must appear in rag_sources"
+        );
     }
 }

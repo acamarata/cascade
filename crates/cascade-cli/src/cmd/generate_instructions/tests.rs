@@ -10,9 +10,13 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use super::cc::{generate_cc, update_cc_settings_json, CASCADE_HEADER_MARKER};
-use super::oc::{generate_oc};
+use super::oc::generate_oc;
 
-fn fake_tier_result(tier: CascadeTier, cascade_dir: &std::path::Path, instructions: &str) -> TierResult {
+fn fake_tier_result(
+    tier: CascadeTier,
+    cascade_dir: &std::path::Path,
+    instructions: &str,
+) -> TierResult {
     TierResult {
         tier,
         found: true,
@@ -29,7 +33,9 @@ fn fake_tier_result(tier: CascadeTier, cascade_dir: &std::path::Path, instructio
 #[test]
 #[serial(global_env)]
 fn cc_claude_md_written() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -69,7 +75,9 @@ fn cc_claude_md_written() {
 #[test]
 #[serial(global_env)]
 fn cc_settings_json_mcp_entry() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -108,7 +116,9 @@ fn cc_settings_json_mcp_entry() {
 #[serial(global_env)]
 #[cfg(unix)]
 fn agents_md_is_symlink() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -146,7 +156,9 @@ fn agents_md_is_symlink() {
 #[test]
 #[serial(global_env)]
 fn cc_idempotent() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -177,7 +189,9 @@ fn cc_idempotent() {
 #[test]
 #[serial(global_env)]
 fn dry_run_writes_nothing() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -210,7 +224,9 @@ fn dry_run_writes_nothing() {
 #[test]
 #[serial(global_env)]
 fn settings_json_additive() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let settings_path = tmp.path().join("settings.json");
 
@@ -252,7 +268,9 @@ fn settings_json_additive() {
 #[test]
 #[serial(global_env)]
 fn oc_generate_sets_instructions_field() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -285,7 +303,9 @@ fn oc_generate_sets_instructions_field() {
 #[test]
 #[serial(global_env)]
 fn oc_generate_instructions_md_contains_cascade_search() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -316,7 +336,9 @@ fn oc_generate_instructions_md_contains_cascade_search() {
 #[test]
 #[serial(global_env)]
 fn oc_project_instructions_idempotent() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
@@ -345,7 +367,9 @@ fn oc_project_instructions_idempotent() {
 #[test]
 #[serial(global_env)]
 fn oc_project_instructions_dry_run_no_write() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     std::env::set_var("HOME", tmp.path().to_str().unwrap());
 

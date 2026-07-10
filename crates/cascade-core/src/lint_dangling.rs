@@ -129,11 +129,9 @@ fn extract_path_refs(text: &str) -> Vec<String> {
     // Bare words (e.g. `-> detail`) that contain no slash or dot are skipped
     // because they are prose pointers, not filesystem references.
 
-    let arrow_re =
-        Regex::new(r"(?m)^[[:blank:]]*->[[:blank:]]+([^\s]+\.[^\s]+|/[^\s]+)").unwrap();
+    let arrow_re = Regex::new(r"(?m)^[[:blank:]]*->[[:blank:]]+([^\s]+\.[^\s]+|/[^\s]+)").unwrap();
     let import_re = Regex::new(r"(?m)^[[:blank:]]*@([^\s@][^\s]*)").unwrap();
-    let load_when_re =
-        Regex::new(r"(?i)load_when:[[:blank:]]*([^\s]+\.[^\s]+|/[^\s]+)").unwrap();
+    let load_when_re = Regex::new(r"(?i)load_when:[[:blank:]]*([^\s]+\.[^\s]+|/[^\s]+)").unwrap();
 
     let mut refs: Vec<String> = Vec::new();
 

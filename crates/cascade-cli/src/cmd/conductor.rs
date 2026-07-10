@@ -26,8 +26,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use cascade_core::accounts_store::quota_json_path;
 use cascade_core::conductor_router::{
-    ConductorRequest, ConductorTarget, GpHealthSnapshot, ModelClass, Provider, QuotaAccount,
-    QuotaSnapshot, Tier, select_target_with_gp,
+    select_target_with_gp, ConductorRequest, ConductorTarget, GpHealthSnapshot, ModelClass,
+    Provider, QuotaAccount, QuotaSnapshot, Tier,
 };
 use cascade_core::model_ids::MODEL_GEMINI_PRO;
 use cascade_core::routing::gfp_http::{probe_gp_health, GFP_HEALTH_URL};
@@ -141,7 +141,11 @@ impl Command for ConductorArgs {
 
         let prompt = build_prompt(&self.prompt, &self.prompt_file)?;
 
-        let req = ConductorRequest { tier, model_class, account_override };
+        let req = ConductorRequest {
+            tier,
+            model_class,
+            account_override,
+        };
 
         // Load live quota snapshot.
         let snapshot = load_quota_snapshot();
@@ -154,7 +158,8 @@ impl Command for ConductorArgs {
 
         // Select target.
         let Some(target) = select_target_with_gp(&req, &snapshot, &gp) else {
-            let msg = "cascade conductor: no available backend (all accounts saturated or unavailable)";
+            let msg =
+                "cascade conductor: no available backend (all accounts saturated or unavailable)";
             if self.json {
                 println!("{}", serde_json::json!({"error": msg}));
             } else {
@@ -244,8 +249,16 @@ fn load_quota_snapshot() -> QuotaSnapshot {
         .iter()
         .filter_map(|entry| {
             let account = entry.get("account").and_then(|v| v.as_str())?.to_string();
-            let provider = entry.get("provider").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-            let status = entry.get("status").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+            let provider = entry
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let status = entry
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
             let config_dir = entry
                 .get("config_dir")
                 .and_then(|v| v.as_str())
@@ -383,7 +396,10 @@ fn execute_with_fallback(
                         tried.join(", ")
                     );
                     if json_output {
-                        println!("{}", serde_json::json!({"error": msg, "fallbacks_tried": tried}));
+                        println!(
+                            "{}",
+                            serde_json::json!({"error": msg, "fallbacks_tried": tried})
+                        );
                     } else {
                         eprintln!("{msg}");
                     }
@@ -402,7 +418,10 @@ fn execute_with_fallback(
                     current.account_id, message
                 );
                 if json_output {
-                    println!("{}", serde_json::json!({"error": msg, "fallbacks_tried": tried}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"error": msg, "fallbacks_tried": tried})
+                    );
                 } else {
                     eprintln!("{msg}");
                 }
@@ -411,7 +430,10 @@ fn execute_with_fallback(
         }
     }
 
-    let msg = format!("cascade conductor: all backends exhausted (tried: {})", tried.join(", "));
+    let msg = format!(
+        "cascade conductor: all backends exhausted (tried: {})",
+        tried.join(", ")
+    );
     if json_output {
         println!("{}", serde_json::json!({"error": msg}));
     } else {
@@ -445,12 +467,7 @@ const AUGMENTED_PATH: &str =
 fn find_binary(name: &str) -> Option<PathBuf> {
     // Common absolute install dirs; `~/bin` is covered by the home-relative
     // fallback below (no hardcoded user paths).
-    let extra_dirs = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-    ];
+    let extra_dirs = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
     // Try PATH-based lookup via `which`-style probe.
     for dir in &extra_dirs {
         let candidate = PathBuf::from(dir).join(name);
@@ -470,7 +487,9 @@ fn find_binary(name: &str) -> Option<PathBuf> {
 
 fn apply_cascade_env(cmd: &mut StdCommand, config_dir: &Path) {
     let env_path = config_dir.join("cascade-env.sh");
-    let Ok(content) = std::fs::read_to_string(&env_path) else { return };
+    let Ok(content) = std::fs::read_to_string(&env_path) else {
+        return;
+    };
     for (key, value) in parse_cascade_env(&content) {
         cmd.env(key, value);
     }
@@ -484,7 +503,9 @@ fn parse_cascade_env(content: &str) -> Vec<(String, String)> {
             continue;
         }
         let line = line.strip_prefix("export ").unwrap_or(line).trim();
-        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
         let key = key.trim();
         if !is_env_key(key) {
             continue;
@@ -496,7 +517,9 @@ fn parse_cascade_env(content: &str) -> Vec<(String, String)> {
 
 fn is_env_key(key: &str) -> bool {
     let mut chars = key.chars();
-    let Some(first) = chars.next() else { return false };
+    let Some(first) = chars.next() else {
+        return false;
+    };
     (first == '_' || first.is_ascii_alphabetic())
         && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
 }
@@ -626,7 +649,8 @@ fn execute_opencode(_target: &ConductorTarget, prompt: &str) -> Outcome {
 // here, where the owner is dispatching their own account's prompts directly.
 
 /// OAuth client used by the Antigravity desktop app (public, not secret).
-const AGY_CLIENT_ID: &str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const AGY_CLIENT_ID: &str =
+    "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
 const AGY_CLIENT_SECRET: &str = "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";
 const AGY_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const AGY_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
@@ -651,7 +675,11 @@ fn read_agy_refresh_token(path: &std::path::Path) -> Option<(String, String)> {
     let v: Value = serde_json::from_slice(&bytes).ok()?;
     let acc = v.get("accounts")?.as_array()?.first()?;
     let refresh_token = acc.get("refresh_token")?.as_str()?.to_string();
-    let email = acc.get("email").and_then(|e| e.as_str()).unwrap_or("").to_string();
+    let email = acc
+        .get("email")
+        .and_then(|e| e.as_str())
+        .unwrap_or("")
+        .to_string();
     Some((refresh_token, email))
 }
 
@@ -677,13 +705,18 @@ fn curl_post_json(
     for (k, v) in headers {
         cmd.args(["-H", &format!("{k}: {v}")]);
     }
-    cmd.args(["-d", body, url]).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(["-d", body, url])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     match cmd.output() {
         Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            Err(format!("HTTP request failed (exit {}): {stderr}", out.status.code().unwrap_or(-1)))
+            Err(format!(
+                "HTTP request failed (exit {}): {stderr}",
+                out.status.code().unwrap_or(-1)
+            ))
         }
         Err(e) => Err(format!("curl exec failed: {e}")),
     }
@@ -797,8 +830,7 @@ fn extract_generate_content_text(resp: &Value) -> Option<String> {
         if part.get("thoughtSignature").is_some() && part.get("text").is_none() {
             continue;
         }
-        if part.get("thought").and_then(|t| t.as_bool()) == Some(true)
-            && part.get("text").is_none()
+        if part.get("thought").and_then(|t| t.as_bool()) == Some(true) && part.get("text").is_none()
         {
             continue;
         }
@@ -807,7 +839,11 @@ fn extract_generate_content_text(resp: &Value) -> Option<String> {
         }
     }
 
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 /// Dispatch `prompt` to Gemini Pro via the Antigravity / cloudcode-pa backend.
@@ -819,20 +855,29 @@ fn extract_generate_content_text(resp: &Value) -> Option<String> {
 /// blocks the fallback path.
 fn execute_gemini(_target: &ConductorTarget, prompt: &str) -> Outcome {
     let Some(token_path) = agy_token_path() else {
-        return Outcome::Unavailable { reason: "cannot resolve home dir for agy-token.json".to_string() };
+        return Outcome::Unavailable {
+            reason: "cannot resolve home dir for agy-token.json".to_string(),
+        };
     };
     if !token_path.is_file() {
         return Outcome::Unavailable {
-            reason: format!("no agy token at {} (run cascade-agy-auth)", token_path.display()),
+            reason: format!(
+                "no agy token at {} (run cascade-agy-auth)",
+                token_path.display()
+            ),
         };
     }
 
     let Some((refresh_token, _email)) = read_agy_refresh_token(&token_path) else {
-        return Outcome::Unavailable { reason: "agy-token.json present but unreadable/malformed".to_string() };
+        return Outcome::Unavailable {
+            reason: "agy-token.json present but unreadable/malformed".to_string(),
+        };
     };
 
     let Some(access_token) = agy_refresh_access_token(&refresh_token) else {
-        return Outcome::Unavailable { reason: "agy OAuth refresh failed".to_string() };
+        return Outcome::Unavailable {
+            reason: "agy OAuth refresh failed".to_string(),
+        };
     };
 
     let project = agy_load_project(&access_token);
@@ -859,7 +904,9 @@ fn execute_gemini(_target: &ConductorTarget, prompt: &str) -> Outcome {
                 Ok(v) => v,
                 Err(e) => {
                     return Outcome::Unavailable {
-                        reason: format!("gemini ({AGY_MODEL_LABEL}) returned unparseable response: {e}"),
+                        reason: format!(
+                            "gemini ({AGY_MODEL_LABEL}) returned unparseable response: {e}"
+                        ),
                     }
                 }
             };
@@ -984,8 +1031,12 @@ fn read_dashboard_token() -> Option<String> {
 ///
 /// Silently exits on any failure — the daemon ring is best-effort telemetry.
 fn post_routing_event(task_class: &str, account_id: &str, model: &str, reason: &str) {
-    let Some(token) = read_dashboard_token() else { return };
-    let Some(curl) = find_binary("curl") else { return };
+    let Some(token) = read_dashboard_token() else {
+        return;
+    };
+    let Some(curl) = find_binary("curl") else {
+        return;
+    };
 
     let body = serde_json::json!({
         "task_class": task_class,
@@ -1075,27 +1126,52 @@ fn run_selftest(json_output: bool) -> Result<()> {
     let providers: &[SelftestProvider] = &[
         SelftestProvider {
             name: "claude (A1 ~/.claude)",
-            probe: || (find_binary("claude").is_some(), find_binary("claude").map(|p| p.display().to_string())),
+            probe: || {
+                (
+                    find_binary("claude").is_some(),
+                    find_binary("claude").map(|p| p.display().to_string()),
+                )
+            },
             ping: || ping_claude_config(dirs::home_dir().map(|h| h.join(".claude"))),
         },
         SelftestProvider {
             name: "claude2 (A2 ~/.claude2)",
-            probe: || (find_binary("claude").is_some(), find_binary("claude").map(|p| p.display().to_string())),
+            probe: || {
+                (
+                    find_binary("claude").is_some(),
+                    find_binary("claude").map(|p| p.display().to_string()),
+                )
+            },
             ping: || ping_claude_config(dirs::home_dir().map(|h| h.join(".claude2"))),
         },
         SelftestProvider {
             name: "codex",
-            probe: || (find_binary("codex").is_some(), find_binary("codex").map(|p| p.display().to_string())),
+            probe: || {
+                (
+                    find_binary("codex").is_some(),
+                    find_binary("codex").map(|p| p.display().to_string()),
+                )
+            },
             ping: || ping_codex(),
         },
         SelftestProvider {
             name: "opencode",
-            probe: || (find_binary("opencode").is_some(), find_binary("opencode").map(|p| p.display().to_string())),
+            probe: || {
+                (
+                    find_binary("opencode").is_some(),
+                    find_binary("opencode").map(|p| p.display().to_string()),
+                )
+            },
             ping: || ping_opencode(),
         },
         SelftestProvider {
             name: "gemini (cascade-agy)",
-            probe: || (find_binary("cascade-agy").is_some(), find_binary("cascade-agy").map(|p| p.display().to_string())),
+            probe: || {
+                (
+                    find_binary("cascade-agy").is_some(),
+                    find_binary("cascade-agy").map(|p| p.display().to_string()),
+                )
+            },
             ping: || None, // cascade-agy has no prompt path
         },
         SelftestProvider {
@@ -1109,11 +1185,7 @@ fn run_selftest(json_output: bool) -> Result<()> {
 
     for p in providers {
         let (found, path) = (p.probe)();
-        let status = if !found {
-            "unavailable"
-        } else {
-            "available"
-        };
+        let status = if !found { "unavailable" } else { "available" };
 
         let ping_result = if found { (p.ping)() } else { None };
 
@@ -1136,7 +1208,10 @@ fn run_selftest(json_output: bool) -> Result<()> {
     }
 
     if json_output {
-        println!("{}", serde_json::to_string_pretty(&results).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&results).unwrap_or_default()
+        );
     }
 
     Ok(())

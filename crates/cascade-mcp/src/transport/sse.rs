@@ -340,13 +340,14 @@ async fn handle_mcp_post_sse(
 
     // ── Capability gate (fires before auth; cap is a deny rule, not grant) ────
     let client_cap = crate::transport::http::parse_cap_header_pub(&headers);
-    if let Some(tool_name) =
-        crate::transport::http::extract_tools_call_name_pub(&body_str)
-    {
+    if let Some(tool_name) = crate::transport::http::extract_tools_call_name_pub(&body_str) {
         if crate::security::tool_requires_personal_data(&tool_name)
             && !client_cap.contains(crate::security::CapabilitySet::PERSONAL_DATA)
         {
-            warn!(tool = tool_name, "POST /mcp (SSE): PersonalData capability required");
+            warn!(
+                tool = tool_name,
+                "POST /mcp (SSE): PersonalData capability required"
+            );
             let err_json = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": null,

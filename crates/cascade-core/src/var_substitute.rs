@@ -223,7 +223,10 @@ pub fn missed_canonical_refs(text: &str, vars: &VarsMap) -> Vec<MissedRef> {
 ///
 /// Returns `None` if no `}` is found (unclosed token).
 fn find_closing_brace(bytes: &[u8], start: usize) -> Option<usize> {
-    bytes[start..].iter().position(|&b| b == b'}').map(|p| start + p)
+    bytes[start..]
+        .iter()
+        .position(|&b| b == b'}')
+        .map(|p| start + p)
 }
 
 /// Return `true` when the substring `text[span_start..span_end]` is contained
@@ -298,17 +301,17 @@ mod tests {
     fn escape_produces_literal_token() {
         let v = vars(&[("ns.key", "replaced")]);
         let result = substitute_vars("literal: $${ns.key} end", &v);
-        assert_eq!(result, "literal: ${ns.key} end", "escaped token must appear verbatim");
+        assert_eq!(
+            result, "literal: ${ns.key} end",
+            "escaped token must appear verbatim"
+        );
     }
 
     // Test 4: multiple tokens in one string
     /// Multiple `${…}` tokens in the same string are all substituted.
     #[test]
     fn multiple_tokens_substituted() {
-        let v = vars(&[
-            ("host", "example.com"),
-            ("port", "8080"),
-        ]);
+        let v = vars(&[("host", "example.com"), ("port", "8080")]);
         let result = substitute_vars("url: ${host}:${port}/path", &v);
         assert_eq!(result, "url: example.com:8080/path");
     }
@@ -329,7 +332,10 @@ mod tests {
         let v = vars(&[("ns.key", "value")]);
         let result = substitute_vars("broken: ${ns.key and more text", &v);
         // The `${` is unclosed so the whole thing from `$` onward is left as-is.
-        assert!(result.contains("${ns.key"), "unclosed token must be left verbatim: {result}");
+        assert!(
+            result.contains("${ns.key"),
+            "unclosed token must be left verbatim: {result}"
+        );
     }
 
     // Test 7: text with no tokens passes through unchanged
@@ -407,7 +413,11 @@ mod tests {
         let v = vars(&[("host", "example.com")]);
         let text = "a=example.com b=example.com c=example.com";
         let refs = missed_canonical_refs(text, &v);
-        assert_eq!(refs.len(), 3, "one finding per literal occurrence: {refs:#?}");
+        assert_eq!(
+            refs.len(),
+            3,
+            "one finding per literal occurrence: {refs:#?}"
+        );
     }
 
     // Test 13: empty vars map produces no findings

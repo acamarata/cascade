@@ -52,7 +52,12 @@ pub struct NoopBoardLlm;
 
 #[async_trait]
 impl BoardLlm for NoopBoardLlm {
-    async fn opine(&self, _role: &AgentRole, _topic: &str, _system: &str) -> Result<String, String> {
+    async fn opine(
+        &self,
+        _role: &AgentRole,
+        _topic: &str,
+        _system: &str,
+    ) -> Result<String, String> {
         Err("no LLM provider configured for board debate".to_owned())
     }
 }

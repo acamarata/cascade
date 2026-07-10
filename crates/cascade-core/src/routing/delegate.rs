@@ -183,13 +183,13 @@ pub(crate) fn run_lane_subprocess(
         }
     }
 
-    let output = child.wait_with_output().unwrap_or_else(|_| {
-        std::process::Output {
+    let output = child
+        .wait_with_output()
+        .unwrap_or_else(|_| std::process::Output {
             status: std::process::ExitStatus::default(),
             stdout: Vec::new(),
             stderr: Vec::new(),
-        }
-    });
+        });
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -216,9 +216,7 @@ impl DelegateLane for CodexLane {
 
     fn execute(&self, payload: &str, timeout: Duration) -> Result<LaneResult> {
         let Some(bin) = find_binary_opt("codex") else {
-            return Ok(LaneResult::Unavailable(
-                "`codex` not on PATH".into(),
-            ));
+            return Ok(LaneResult::Unavailable("`codex` not on PATH".into()));
         };
         let out = run_lane_subprocess(&bin, &["exec", "-p"], payload, timeout)?;
         Ok(LaneResult::Output(out))
@@ -367,8 +365,16 @@ impl DelegateLane for CcAccLane {
     }
 
     fn check_availability(&self) -> LaneAvailability {
-        let bin = self.binary_override.as_deref()
-            .and_then(|p| if is_exec(p) { Some(p.to_path_buf()) } else { None })
+        let bin = self
+            .binary_override
+            .as_deref()
+            .and_then(|p| {
+                if is_exec(p) {
+                    Some(p.to_path_buf())
+                } else {
+                    None
+                }
+            })
             .or_else(|| find_binary_opt("claude"));
         match bin {
             Some(_) => LaneAvailability::Available,
@@ -379,7 +385,9 @@ impl DelegateLane for CcAccLane {
     }
 
     fn execute(&self, payload: &str, timeout: Duration) -> Result<LaneResult> {
-        let bin = self.binary_override.as_deref()
+        let bin = self
+            .binary_override
+            .as_deref()
             .filter(|p| is_exec(p))
             .map(|p| p.to_path_buf())
             .or_else(|| find_binary_opt("claude"));
@@ -405,7 +413,9 @@ pub struct MainClaudeLane {
 #[allow(clippy::derivable_impls)] // explicit Default is intentional for clarity
 impl Default for MainClaudeLane {
     fn default() -> Self {
-        Self { binary_override: None }
+        Self {
+            binary_override: None,
+        }
     }
 }
 
@@ -415,8 +425,16 @@ impl DelegateLane for MainClaudeLane {
     }
 
     fn check_availability(&self) -> LaneAvailability {
-        let bin = self.binary_override.as_deref()
-            .and_then(|p| if is_exec(p) { Some(p.to_path_buf()) } else { None })
+        let bin = self
+            .binary_override
+            .as_deref()
+            .and_then(|p| {
+                if is_exec(p) {
+                    Some(p.to_path_buf())
+                } else {
+                    None
+                }
+            })
             .or_else(|| find_binary_opt("claude"));
         match bin {
             Some(_) => LaneAvailability::Available,
@@ -427,7 +445,9 @@ impl DelegateLane for MainClaudeLane {
     }
 
     fn execute(&self, payload: &str, timeout: Duration) -> Result<LaneResult> {
-        let bin = self.binary_override.as_deref()
+        let bin = self
+            .binary_override
+            .as_deref()
             .filter(|p| is_exec(p))
             .map(|p| p.to_path_buf())
             .or_else(|| find_binary_opt("claude"));
@@ -590,7 +610,9 @@ mod tests {
 
     #[test]
     fn local_llm_execute_returns_provider_unavailable() {
-        let result = LocalLlmLane.execute("test", Duration::from_secs(5)).unwrap();
+        let result = LocalLlmLane
+            .execute("test", Duration::from_secs(5))
+            .unwrap();
         assert!(matches!(result, LaneResult::Unavailable(_)));
     }
 
@@ -599,10 +621,7 @@ mod tests {
     #[test]
     fn lane_availability_is_available() {
         assert!(LaneAvailability::Available.is_available());
-        assert!(!LaneAvailability::Unavailable {
-            reason: "x".into()
-        }
-        .is_available());
+        assert!(!LaneAvailability::Unavailable { reason: "x".into() }.is_available());
     }
 
     // ── CcAccLane with binary override ────────────────────────────────────

@@ -128,8 +128,16 @@ fn multi_provider_store_round_trip() {
     let back: QuotaStore = serde_json::from_str(&json).expect("deserialise");
 
     assert_eq!(back.accounts.len(), 2);
-    let cc = back.accounts.iter().find(|a| a.account_id == "cc-1").unwrap();
-    let oc = back.accounts.iter().find(|a| a.account_id == "oc-1").unwrap();
+    let cc = back
+        .accounts
+        .iter()
+        .find(|a| a.account_id == "cc-1")
+        .unwrap();
+    let oc = back
+        .accounts
+        .iter()
+        .find(|a| a.account_id == "oc-1")
+        .unwrap();
     assert_eq!(cc.provider, PROVIDER_CLAUDE_MAX);
     assert_eq!(oc.provider, PROVIDER_OC_GO);
     assert_eq!(oc.rate_windows.len(), 2);

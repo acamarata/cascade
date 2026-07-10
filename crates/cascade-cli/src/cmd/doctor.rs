@@ -169,8 +169,7 @@ impl Command for DoctorArgs {
         // ── Cross-tier duplication lint ────────────────────────────────────
         // Advisory by default; --strict makes findings a FAIL.
         {
-            let resolved =
-                cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
+            let resolved = cascade_core::cascade_resolution::resolve_cascade_full(&cwd);
             match resolved {
                 Ok(ref rc) => {
                     let findings = cascade_core::lint_duplication::lint_duplication(rc);
@@ -198,10 +197,7 @@ impl Command for DoctorArgs {
                             checks.push(Check {
                                 name,
                                 status: dup_status,
-                                detail: format!(
-                                    "'{}' — reference up instead",
-                                    finding.snippet
-                                ),
+                                detail: format!("'{}' — reference up instead", finding.snippet),
                             });
                         }
                     }
@@ -239,8 +235,7 @@ impl Command for DoctorArgs {
                         };
                         for finding in &findings {
                             let name: &'static str = Box::leak(
-                                format!("Dangling reference ({:?})", finding.tier)
-                                    .into_boxed_str(),
+                                format!("Dangling reference ({:?})", finding.tier).into_boxed_str(),
                             );
                             checks.push(Check {
                                 name,
@@ -266,10 +261,7 @@ impl Command for DoctorArgs {
 
         // ── Hand-edited generated files ────────────────────────────────────
         {
-            let scan_dirs: Vec<PathBuf> = tiers
-                .iter()
-                .map(|t| t.cascade_dir.clone())
-                .collect();
+            let scan_dirs: Vec<PathBuf> = tiers.iter().map(|t| t.cascade_dir.clone()).collect();
             let findings = cascade_core::lint_generated::lint_generated(&scan_dirs);
             if findings.is_empty() {
                 checks.push(Check {
@@ -293,10 +285,7 @@ impl Command for DoctorArgs {
 
         // ── Behavioral-core rules ──────────────────────────────────────────
         {
-            let scan_dirs: Vec<PathBuf> = tiers
-                .iter()
-                .map(|t| t.cascade_dir.clone())
-                .collect();
+            let scan_dirs: Vec<PathBuf> = tiers.iter().map(|t| t.cascade_dir.clone()).collect();
             let findings = cascade_core::lint_behavioral::lint_behavioral_core(&scan_dirs);
             if findings.is_empty() {
                 checks.push(Check {
@@ -332,9 +321,8 @@ impl Command for DoctorArgs {
 
                     // Per-tier table.
                     for tb in &report.per_tier {
-                        let name: &'static str = Box::leak(
-                            format!("Budget: {:?} tier", tb.tier).into_boxed_str(),
-                        );
+                        let name: &'static str =
+                            Box::leak(format!("Budget: {:?} tier", tb.tier).into_boxed_str());
                         checks.push(Check {
                             name,
                             status: CheckStatus::Pass,
@@ -351,10 +339,7 @@ impl Command for DoctorArgs {
                             checks.push(Check {
                                 name: "Always-loaded context budget",
                                 status: CheckStatus::Pass,
-                                detail: format!(
-                                    "~{} tokens total",
-                                    report.total_est_tokens
-                                ),
+                                detail: format!("~{} tokens total", report.total_est_tokens),
                             });
                         }
                         cascade_core::lint_budget::Verdict::Warn => {

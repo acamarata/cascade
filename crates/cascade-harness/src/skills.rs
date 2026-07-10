@@ -43,27 +43,54 @@ impl SkillSuite {
 
 // Embedded skill files — compiled into the binary.
 static PEWS_FILES: &[(&str, &str)] = &[
-    ("plan.md",  include_str!("../../../data/skills/pews/plan.md")),
-    ("build.md", include_str!("../../../data/skills/pews/build.md")),
-    ("eot.md",   include_str!("../../../data/skills/pews/eot.md")),
-    ("eos.md",   include_str!("../../../data/skills/pews/eos.md")),
-    ("eow.md",   include_str!("../../../data/skills/pews/eow.md")),
-    ("eoe.md",   include_str!("../../../data/skills/pews/eoe.md")),
-    ("eop.md",   include_str!("../../../data/skills/pews/eop.md")),
+    ("plan.md", include_str!("../../../data/skills/pews/plan.md")),
+    (
+        "build.md",
+        include_str!("../../../data/skills/pews/build.md"),
+    ),
+    ("eot.md", include_str!("../../../data/skills/pews/eot.md")),
+    ("eos.md", include_str!("../../../data/skills/pews/eos.md")),
+    ("eow.md", include_str!("../../../data/skills/pews/eow.md")),
+    ("eoe.md", include_str!("../../../data/skills/pews/eoe.md")),
+    ("eop.md", include_str!("../../../data/skills/pews/eop.md")),
 ];
 
 static PERSONAL_FILES: &[(&str, &str)] = &[
-    ("threads.md", include_str!("../../../data/skills/personal/threads.md")),
-    ("topics.md",  include_str!("../../../data/skills/personal/topics.md")),
-    ("recall.md",  include_str!("../../../data/skills/personal/recall.md")),
-    ("archive.md", include_str!("../../../data/skills/personal/archive.md")),
+    (
+        "threads.md",
+        include_str!("../../../data/skills/personal/threads.md"),
+    ),
+    (
+        "topics.md",
+        include_str!("../../../data/skills/personal/topics.md"),
+    ),
+    (
+        "recall.md",
+        include_str!("../../../data/skills/personal/recall.md"),
+    ),
+    (
+        "archive.md",
+        include_str!("../../../data/skills/personal/archive.md"),
+    ),
 ];
 
 static SECURITY_FILES: &[(&str, &str)] = &[
-    ("security-audit.md", include_str!("../../../data/skills/security/security-audit.md")),
-    ("prelaunch.md",      include_str!("../../../data/skills/security/prelaunch.md")),
-    ("rls-check.md",      include_str!("../../../data/skills/security/rls-check.md")),
-    ("deps-audit.md",     include_str!("../../../data/skills/security/deps-audit.md")),
+    (
+        "security-audit.md",
+        include_str!("../../../data/skills/security/security-audit.md"),
+    ),
+    (
+        "prelaunch.md",
+        include_str!("../../../data/skills/security/prelaunch.md"),
+    ),
+    (
+        "rls-check.md",
+        include_str!("../../../data/skills/security/rls-check.md"),
+    ),
+    (
+        "deps-audit.md",
+        include_str!("../../../data/skills/security/deps-audit.md"),
+    ),
 ];
 
 /// Install skill files from the suite into `skills_dir`.
@@ -103,7 +130,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let installed = install_suite(SkillSuite::Pews, dir.path()).unwrap();
         assert_eq!(installed.len(), 7, "pews suite has 7 files");
-        for name in &["plan.md", "build.md", "eot.md", "eos.md", "eow.md", "eoe.md", "eop.md"] {
+        for name in &[
+            "plan.md", "build.md", "eot.md", "eos.md", "eow.md", "eoe.md", "eop.md",
+        ] {
             assert!(dir.path().join(name).exists(), "{name} must be installed");
         }
     }
@@ -121,7 +150,10 @@ mod tests {
         install_suite(SkillSuite::Pews, dir.path()).unwrap();
         // Second call — nothing new installed (files already exist).
         let installed2 = install_suite(SkillSuite::Pews, dir.path()).unwrap();
-        assert!(installed2.is_empty(), "second install must skip existing files");
+        assert!(
+            installed2.is_empty(),
+            "second install must skip existing files"
+        );
     }
 
     #[test]
@@ -129,7 +161,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let installed = install_suite(SkillSuite::Security, dir.path()).unwrap();
         assert_eq!(installed.len(), 4, "security suite has 4 files");
-        for name in &["security-audit.md", "prelaunch.md", "rls-check.md", "deps-audit.md"] {
+        for name in &[
+            "security-audit.md",
+            "prelaunch.md",
+            "rls-check.md",
+            "deps-audit.md",
+        ] {
             assert!(dir.path().join(name).exists(), "{name} must be installed");
         }
     }
@@ -141,6 +178,9 @@ mod tests {
         fs::write(&plan, "# user-modified content").unwrap();
         install_suite(SkillSuite::Pews, dir.path()).unwrap();
         let content = fs::read_to_string(&plan).unwrap();
-        assert_eq!(content, "# user-modified content", "user file must not be overwritten");
+        assert_eq!(
+            content, "# user-modified content",
+            "user file must not be overwritten"
+        );
     }
 }

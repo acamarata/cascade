@@ -357,7 +357,7 @@ fn matches_va_disability(lower: &str) -> bool {
         || lower.contains("38 cfr")
         || lower.contains("board of veterans")
         || lower.contains("cavc ")         // Court of Appeals for Veterans Claims
-        || lower.contains("vso ")          // Veterans Service Organization
+        || lower.contains("vso ") // Veterans Service Organization
 }
 
 /// Custody / family-court patterns.
@@ -487,7 +487,9 @@ mod tests {
 
     #[test]
     fn benign_question_is_public() {
-        assert!(public_text("how does the cascade resolution algorithm work?"));
+        assert!(public_text(
+            "how does the cascade resolution algorithm work?"
+        ));
     }
 
     // ── SSN ───────────────────────────────────────────────────────────────────
@@ -537,7 +539,9 @@ mod tests {
     fn address_alone_is_not_sensitive() {
         // Just an address mention without a name context should not trigger
         // (avoids false-positive on "turn left on Main Street").
-        assert!(public_text("turn left on Main Street heading toward the park"));
+        assert!(public_text(
+            "turn left on Main Street heading toward the park"
+        ));
     }
 
     // ── VA / disability ───────────────────────────────────────────────────────
@@ -664,7 +668,9 @@ mod tests {
 
     #[test]
     fn sites_path_is_not_personal_scope() {
-        assert!(!path_is_personal_scope(Path::new("~/Sites/myproject/src/main.rs")));
+        assert!(!path_is_personal_scope(Path::new(
+            "~/Sites/myproject/src/main.rs"
+        )));
     }
 
     #[test]
@@ -683,7 +689,10 @@ mod tests {
     fn policy_allows_claude_for_sensitive() {
         let policy = SensitivityPolicy::new();
         let v = policy.check(ContentSensitivity::Sensitive, "claude");
-        assert!(v.is_allow(), "claude should be allowed for sensitive content");
+        assert!(
+            v.is_allow(),
+            "claude should be allowed for sensitive content"
+        );
     }
 
     #[test]
@@ -725,7 +734,10 @@ mod tests {
     fn policy_blocks_gfp_for_sensitive() {
         let policy = SensitivityPolicy::new();
         let v = policy.check(ContentSensitivity::Sensitive, "gfp");
-        assert!(v.is_deny(), "gfp (Gemini Free Pool) must be blocked for sensitive content");
+        assert!(
+            v.is_deny(),
+            "gfp (Gemini Free Pool) must be blocked for sensitive content"
+        );
     }
 
     #[test]
@@ -748,7 +760,11 @@ mod tests {
         // Public content is unrestricted.
         for provider in &["gemini", "openai", "gfp", "oc-go", "codex", "claude"] {
             let v = policy.check(ContentSensitivity::Public, provider);
-            assert!(v.is_allow(), "public content should be allowed on {}", provider);
+            assert!(
+                v.is_allow(),
+                "public content should be allowed on {}",
+                provider
+            );
         }
     }
 
@@ -796,8 +812,15 @@ mod tests {
             assert!(registry_provider_is_trusted_for_sensitive(id), "{id}");
         }
         for id in [
-            "gemini", "gp-pool", "openai", "codex", "oc-go", "gfp", "generic-openai",
-            "noop-x", "",
+            "gemini",
+            "gp-pool",
+            "openai",
+            "codex",
+            "oc-go",
+            "gfp",
+            "generic-openai",
+            "noop-x",
+            "",
         ] {
             assert!(!registry_provider_is_trusted_for_sensitive(id), "{id}");
         }

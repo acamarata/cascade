@@ -189,7 +189,9 @@ fn single_file_output() {
 #[test]
 #[serial(global_env)]
 fn init_from_installed_detects_via_path() {
-    let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let tmp = TempDir::new().unwrap();
     let workspace = TempDir::new().unwrap();
 
@@ -564,7 +566,10 @@ fn snapshot_created_before_overwrite() {
         .map(|e| e.path())
         .filter(|p| p.is_dir())
         .collect();
-    assert!(!snap_dirs.is_empty(), "at least one snapshot dir must exist");
+    assert!(
+        !snap_dirs.is_empty(),
+        "at least one snapshot dir must exist"
+    );
     snap_dirs.sort();
 
     // The snapshot must contain a copy of the original CLAUDE.md.
@@ -597,13 +602,7 @@ fn hand_edit_detected_via_hash_mismatch() {
 
     let tmp = TempDir::new().unwrap();
     let resolved = mock_resolved("## RULES\n\nOriginal content.");
-    generate_for_harnesses(
-        &resolved,
-        tmp.path(),
-        &[HarnessKind::ClaudeCode],
-        false,
-    )
-    .unwrap();
+    generate_for_harnesses(&resolved, tmp.path(), &[HarnessKind::ClaudeCode], false).unwrap();
 
     let dest = tmp.path().join("CLAUDE.md");
     let original = fs::read_to_string(&dest).unwrap();

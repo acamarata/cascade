@@ -24,8 +24,7 @@ use serde::Deserialize;
 
 // ── Embedded soul YAML data ───────────────────────────────────────────────────
 
-const SOUL_PROFESSIONAL_MINIMAL: &str =
-    include_str!("../data/souls/professional-minimal.yaml");
+const SOUL_PROFESSIONAL_MINIMAL: &str = include_str!("../data/souls/professional-minimal.yaml");
 const SOUL_INTER_AGENT: &str = include_str!("../data/souls/inter-agent.yaml");
 const SOUL_VERBOSE_TEACHER: &str = include_str!("../data/souls/verbose-teacher.yaml");
 
@@ -237,10 +236,7 @@ mod tests {
     #[test]
     fn inter_agent_changes_style_block() {
         let non_inter = resolve_soul(None, SoulOverride::default());
-        let inter = resolve_soul(
-            Some("inter-agent"),
-            SoulOverride::default(),
-        );
+        let inter = resolve_soul(Some("inter-agent"), SoulOverride::default());
         assert!(
             inter.system_block.contains("field: value"),
             "inter-agent soul must mention field-labelled format"

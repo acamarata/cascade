@@ -47,10 +47,8 @@ use cascade_core::nsentry_config::{
 
 // ── Script assets (embedded at compile time) ──────────────────────────────────
 
-const CI_SCRIPT: &str =
-    include_str!("../assets/nsentry/gh-ci-failures-to-reports.sh");
-const DEPENDABOT_SCRIPT: &str =
-    include_str!("../assets/nsentry/gh-dependabot-to-reports.sh");
+const CI_SCRIPT: &str = include_str!("../assets/nsentry/gh-ci-failures-to-reports.sh");
+const DEPENDABOT_SCRIPT: &str = include_str!("../assets/nsentry/gh-dependabot-to-reports.sh");
 
 // ── Script setup ─────────────────────────────────────────────────────────────
 
@@ -120,7 +118,14 @@ pub fn spawn(
             "nsentry: sync subsystem starting"
         );
 
-        run_sync_loop(cfg, config_yaml_path, status_json_path, scripts_dir, shutdown).await;
+        run_sync_loop(
+            cfg,
+            config_yaml_path,
+            status_json_path,
+            scripts_dir,
+            shutdown,
+        )
+        .await;
     });
 }
 
@@ -225,8 +230,7 @@ async fn run_sync_loop(
                     }
                     next_runs.insert(
                         key,
-                        Instant::now()
-                            + Duration::from_secs(proj.streams.dependabot.interval_secs),
+                        Instant::now() + Duration::from_secs(proj.streams.dependabot.interval_secs),
                     );
                     any_ran = true;
                 }
@@ -243,11 +247,7 @@ async fn run_sync_loop(
 
 /// Seed `next_runs` for every enabled (project, stream) that does not yet have
 /// an entry. `initial_delay_secs` staggers the first run after startup.
-fn seed_next_runs(
-    cfg: &NsentrySyncConfig,
-    next_runs: &mut NextRunMap,
-    initial_delay_secs: u64,
-) {
+fn seed_next_runs(cfg: &NsentrySyncConfig, next_runs: &mut NextRunMap, initial_delay_secs: u64) {
     let soon = Instant::now() + Duration::from_secs(initial_delay_secs);
     for proj in cfg.projects.iter().filter(|p| p.enabled) {
         for stream in ["rsync", "ci", "dependabot"] {
@@ -279,8 +279,15 @@ mod tests {
             enabled: true,
             per_run_cap: 50,
             streams: StreamsConfig {
-                rsync: RsyncStreamConfig { interval_secs: 300, enabled: true },
-                ci: CiStreamConfig { interval_secs: 900, enabled: true, per_repo: 10 },
+                rsync: RsyncStreamConfig {
+                    interval_secs: 300,
+                    enabled: true,
+                },
+                ci: CiStreamConfig {
+                    interval_secs: 900,
+                    enabled: true,
+                    per_repo: 10,
+                },
                 dependabot: DependabotStreamConfig {
                     interval_secs: 21600,
                     enabled: true,
@@ -344,7 +351,10 @@ mod tests {
         seed_next_runs(&cfg, &mut next_runs, 999);
         assert_eq!(next_runs.len(), 3);
         let t_after = next_runs[&("nself".to_string(), "rsync".to_string())];
-        assert_eq!(t_before, t_after, "existing next-run must not be reset on reload");
+        assert_eq!(
+            t_before, t_after,
+            "existing next-run must not be reset on reload"
+        );
     }
 
     #[test]

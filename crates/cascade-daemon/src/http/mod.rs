@@ -12,6 +12,7 @@ pub mod chat_tools;
 pub mod fleet_routing;
 pub mod gci_handlers;
 pub mod harness;
+pub mod harvest;
 pub mod hooks_write;
 pub mod personal_handlers;
 pub mod projects_handlers;
@@ -19,7 +20,6 @@ pub mod rag_status;
 pub mod static_handler;
 pub mod topics_handlers;
 pub mod usage_history;
-pub mod harvest;
 
 use std::path::PathBuf;
 

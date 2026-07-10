@@ -276,7 +276,10 @@ pub fn is_eligible_to_fire(intent: &ContinuityIntent, snapshot: Option<QuotaSnap
 /// Extract a [`QuotaSnapshot`] for `account_id` from a parsed `quota.json`
 /// document. Returns `None` when the account is absent or has no usage block
 /// — callers treat that as "cannot verify reset, do not fire".
-pub fn snapshot_for_account(quota_doc: &serde_json::Value, account_id: &str) -> Option<QuotaSnapshot> {
+pub fn snapshot_for_account(
+    quota_doc: &serde_json::Value,
+    account_id: &str,
+) -> Option<QuotaSnapshot> {
     let accounts = quota_doc.get("accounts")?.as_array()?;
     let entry = accounts
         .iter()
@@ -304,7 +307,10 @@ pub fn snapshot_for_account(quota_doc: &serde_json::Value, account_id: &str) -> 
 /// `shutdown` is cancelled. Never panics.
 pub fn spawn(shutdown: CancellationToken) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        info!("continuity: watcher task starting (interval={:?})", WATCH_INTERVAL);
+        info!(
+            "continuity: watcher task starting (interval={:?})",
+            WATCH_INTERVAL
+        );
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(WATCH_INTERVAL) => {}
@@ -609,15 +615,20 @@ mod tests {
     #[test]
     fn eligible_when_utilization_under_100() {
         let intent = make_intent("e1");
-        let snap = QuotaSnapshot { five_hour_utilization: Some(3.0), seven_day_utilization: None };
+        let snap = QuotaSnapshot {
+            five_hour_utilization: Some(3.0),
+            seven_day_utilization: None,
+        };
         assert!(is_eligible_to_fire(&intent, Some(snap)));
     }
 
     #[test]
     fn not_eligible_when_saturated() {
         let intent = make_intent("e2");
-        let snap =
-            QuotaSnapshot { five_hour_utilization: Some(100.0), seven_day_utilization: None };
+        let snap = QuotaSnapshot {
+            five_hour_utilization: Some(100.0),
+            seven_day_utilization: None,
+        };
         assert!(!is_eligible_to_fire(&intent, Some(snap)));
     }
 
@@ -630,7 +641,10 @@ mod tests {
     #[test]
     fn not_eligible_when_utilization_unknown() {
         let intent = make_intent("e4");
-        let snap = QuotaSnapshot { five_hour_utilization: None, seven_day_utilization: None };
+        let snap = QuotaSnapshot {
+            five_hour_utilization: None,
+            seven_day_utilization: None,
+        };
         assert!(!is_eligible_to_fire(&intent, Some(snap)));
     }
 
@@ -638,7 +652,10 @@ mod tests {
     fn fired_intent_is_never_eligible_again() {
         let mut intent = make_intent("e5");
         intent.fired_at = Some(1_700_000_500);
-        let snap = QuotaSnapshot { five_hour_utilization: Some(1.0), seven_day_utilization: None };
+        let snap = QuotaSnapshot {
+            five_hour_utilization: Some(1.0),
+            seven_day_utilization: None,
+        };
         assert!(!is_eligible_to_fire(&intent, Some(snap)));
     }
 
@@ -670,7 +687,10 @@ mod tests {
     #[test]
     fn eligible_when_weekly_window_absent() {
         let intent = make_intent("e8");
-        let snap = QuotaSnapshot { five_hour_utilization: Some(10.0), seven_day_utilization: None };
+        let snap = QuotaSnapshot {
+            five_hour_utilization: Some(10.0),
+            seven_day_utilization: None,
+        };
         assert!(is_eligible_to_fire(&intent, Some(snap)));
     }
 
@@ -736,7 +756,10 @@ mod tests {
         fire_intent(tmp.path(), intent.clone()).await;
 
         let reloaded = read_intent(&intent_path(tmp.path(), "fire-1")).unwrap();
-        assert!(reloaded.fired_at.is_some(), "fired_at must be set after fire_intent");
+        assert!(
+            reloaded.fired_at.is_some(),
+            "fired_at must be set after fire_intent"
+        );
     }
 
     #[test]
@@ -767,7 +790,10 @@ mod tests {
         // tests running in the same parallel suite.
         std::fs::write(
             &script,
-            format!("#!/bin/sh\necho $$ > {}\nexec sleep 30\n", pid_file.display()),
+            format!(
+                "#!/bin/sh\necho $$ > {}\nexec sleep 30\n",
+                pid_file.display()
+            ),
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -785,7 +811,11 @@ mod tests {
         // Must report the timeout, and quickly (not the child's 30 s sleep).
         let err = result.expect_err("hung resume must time out");
         assert!(err.contains("timed out"), "err: {err}");
-        assert!(start.elapsed() < Duration::from_secs(5), "took {:?}", start.elapsed());
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "took {:?}",
+            start.elapsed()
+        );
 
         // The child must be dead shortly after the drop (SIGKILL via
         // kill_on_drop). Poll for the pid file, then `kill -0 <pid>` until it
@@ -839,9 +869,14 @@ mod tests {
         // 60 s is an anti-hang bound only — the script exits in milliseconds.
         // 10 s proved too tight when the full suite spawns subprocesses from
         // many test threads at once on a loaded machine.
-        let result =
-            run_resume_command(&script, "/tmp", "sess-ok", "continue", Duration::from_secs(60))
-                .await;
+        let result = run_resume_command(
+            &script,
+            "/tmp",
+            "sess-ok",
+            "continue",
+            Duration::from_secs(60),
+        )
+        .await;
         assert!(result.is_ok(), "got: {result:?}");
     }
 
@@ -858,10 +893,15 @@ mod tests {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         // 60 s anti-hang bound — see run_resume_command_success_path.
-        let err =
-            run_resume_command(&script, "/tmp", "sess-fail", "continue", Duration::from_secs(60))
-                .await
-                .expect_err("non-zero exit must be an error");
+        let err = run_resume_command(
+            &script,
+            "/tmp",
+            "sess-fail",
+            "continue",
+            Duration::from_secs(60),
+        )
+        .await
+        .expect_err("non-zero exit must be an error");
         assert!(err.contains("exited with"), "err: {err}");
         assert!(err.contains("boom"), "stderr must be captured: {err}");
     }

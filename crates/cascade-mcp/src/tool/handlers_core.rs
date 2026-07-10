@@ -346,9 +346,7 @@ pub(super) async fn handle_inbox_send(args: &Value) -> std::result::Result<Value
 }
 
 /// `cascade.master_lists` — read a master list file.
-pub(super) async fn handle_master_lists(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_master_lists(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let project = args
         .get("project")
         .and_then(|v| v.as_str())
@@ -422,9 +420,7 @@ pub(super) async fn handle_memory_read(args: &Value) -> std::result::Result<Valu
 ///
 /// Auth-gated: callers must pass `ConnectionContext { authenticated: true }`.
 /// The gate is enforced in `call_with_context` before this handler is invoked.
-pub(super) async fn handle_memory_write(
-    args: &Value,
-) -> std::result::Result<Value, JsonRpcError> {
+pub(super) async fn handle_memory_write(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let project = args
         .get("project")
         .and_then(|v| v.as_str())

@@ -57,7 +57,10 @@ impl NormStrategy {
                     return;
                 }
                 let min = hits.iter().map(|(_, s)| *s).fold(f64::INFINITY, f64::min);
-                let max = hits.iter().map(|(_, s)| *s).fold(f64::NEG_INFINITY, f64::max);
+                let max = hits
+                    .iter()
+                    .map(|(_, s)| *s)
+                    .fold(f64::NEG_INFINITY, f64::max);
                 let range = max - min;
                 if range < f64::EPSILON {
                     // All scores equal — map to 1.0.
@@ -76,8 +79,7 @@ impl NormStrategy {
                 }
                 let n = hits.len() as f64;
                 let mean = hits.iter().map(|(_, s)| *s).sum::<f64>() / n;
-                let variance =
-                    hits.iter().map(|(_, s)| (*s - mean).powi(2)).sum::<f64>() / n;
+                let variance = hits.iter().map(|(_, s)| (*s - mean).powi(2)).sum::<f64>() / n;
                 let std_dev = variance.sqrt();
                 if std_dev < f64::EPSILON {
                     // All equal — map to 1.0 for usability.
@@ -241,10 +243,22 @@ mod tests {
         let mut hits = vec![(1i64, 10.0f64), (2, 6.0), (3, 2.0)];
         NormStrategy::MinMax.apply(&mut hits);
         // max=10 → 1.0, min=2 → 0.0
-        assert!((hits[0].1 - 1.0).abs() < 1e-9, "max maps to 1.0: {}", hits[0].1);
-        assert!((hits[2].1 - 0.0).abs() < 1e-9, "min maps to 0.0: {}", hits[2].1);
+        assert!(
+            (hits[0].1 - 1.0).abs() < 1e-9,
+            "max maps to 1.0: {}",
+            hits[0].1
+        );
+        assert!(
+            (hits[2].1 - 0.0).abs() < 1e-9,
+            "min maps to 0.0: {}",
+            hits[2].1
+        );
         // middle: (6-2)/(10-2) = 0.5
-        assert!((hits[1].1 - 0.5).abs() < 1e-9, "middle maps to 0.5: {}", hits[1].1);
+        assert!(
+            (hits[1].1 - 0.5).abs() < 1e-9,
+            "middle maps to 0.5: {}",
+            hits[1].1
+        );
     }
 
     #[test]
@@ -270,7 +284,10 @@ mod tests {
         let mut hits = vec![(1i64, 7.0f64), (2, 7.0)];
         NormStrategy::ZScore.apply(&mut hits);
         for (_, s) in &hits {
-            assert!((*s - 1.0).abs() < 1e-9, "all-equal z-score maps to 1.0: {s}");
+            assert!(
+                (*s - 1.0).abs() < 1e-9,
+                "all-equal z-score maps to 1.0: {s}"
+            );
         }
     }
 
@@ -278,7 +295,11 @@ mod tests {
     fn norm_sigmoid_maps_zero_to_half() {
         let mut hits = vec![(1i64, 0.0f64)];
         NormStrategy::Sigmoid.apply(&mut hits);
-        assert!((hits[0].1 - 0.5).abs() < 1e-9, "sigmoid(0) = 0.5: {}", hits[0].1);
+        assert!(
+            (hits[0].1 - 0.5).abs() < 1e-9,
+            "sigmoid(0) = 0.5: {}",
+            hits[0].1
+        );
     }
 
     #[test]

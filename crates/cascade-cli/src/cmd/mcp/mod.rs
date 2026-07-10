@@ -35,8 +35,8 @@ mod helpers;
 mod setup;
 mod status;
 mod stdio;
-mod token;
 mod tests;
+mod token;
 
 use async_trait::async_trait;
 use cascade_types::error::Result;

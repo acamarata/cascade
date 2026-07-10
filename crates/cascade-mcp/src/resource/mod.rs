@@ -20,10 +20,10 @@ mod tests;
 // Re-export the full public API at the `resource` module level so all existing
 // `use crate::resource::*` call-sites continue to compile without change.
 
-pub use types::{ContentBackend, McpResource, TextResourceContents, PAGE_SIZE};
 pub use backend::FsContentBackend;
-pub use subscription::SubscriptionStore;
 pub use registry::{
     register_resource_handlers, ResourceRegistry, ResourcesListHandler, ResourcesReadHandler,
     ResourcesSubscribeHandler, ResourcesUnsubscribeHandler,
 };
+pub use subscription::SubscriptionStore;
+pub use types::{ContentBackend, McpResource, TextResourceContents, PAGE_SIZE};

@@ -164,8 +164,8 @@ impl IndexingPipeline {
         // Clone path before moving into spawn_blocking so we can log after.
         let path_for_log = path.clone();
         let result = tokio::task::spawn_blocking(move || {
-            let conn = cascade_db::open_configured(&db_path)
-                .map_err(|e| format!("open db: {e}"))?;
+            let conn =
+                cascade_db::open_configured(&db_path).map_err(|e| format!("open db: {e}"))?;
 
             // Use the WorkerPool to account for queue_depth even when
             // IngestPipeline does its own batching.
@@ -203,8 +203,8 @@ impl IndexingPipeline {
         let path_str = path.to_string_lossy().to_string();
 
         let result = tokio::task::spawn_blocking(move || -> Result<(), String> {
-            let conn = cascade_db::open_configured(&db_path)
-                .map_err(|e| format!("open db: {e}"))?;
+            let conn =
+                cascade_db::open_configured(&db_path).map_err(|e| format!("open db: {e}"))?;
             // DELETE FROM rag_sources cascades to rag_chunks via FK ON DELETE CASCADE.
             conn.execute(
                 "DELETE FROM rag_sources WHERE file_path = ?1",

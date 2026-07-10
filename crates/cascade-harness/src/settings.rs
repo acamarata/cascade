@@ -144,10 +144,7 @@ fn read_or_empty(path: &Path) -> Result<Value> {
         return Ok(Value::Object(Map::new()));
     }
     serde_json::from_str(&raw).map_err(|e| {
-        CascadeError::Other(format!(
-            "could not parse {} as JSON: {e}",
-            path.display()
-        ))
+        CascadeError::Other(format!("could not parse {} as JSON: {e}", path.display()))
     })
 }
 
@@ -165,17 +162,11 @@ fn build_managed_block(target: HarnessTarget) -> Value {
 
     // env block — cascade-relevant runtime vars.
     let mut env = Map::new();
-    env.insert(
-        "CASCADE_MANAGED".into(),
-        Value::String("1".into()),
-    );
+    env.insert("CASCADE_MANAGED".into(), Value::String("1".into()));
     block.insert("env".into(), Value::Object(env));
 
     // permissions.deny — derived from the built-in policy engine.
-    let patterns: Vec<Value> = deny_patterns()
-        .into_iter()
-        .map(Value::String)
-        .collect();
+    let patterns: Vec<Value> = deny_patterns().into_iter().map(Value::String).collect();
     let mut permissions = Map::new();
     permissions.insert("deny".into(), Value::Array(patterns));
     block.insert("permissions".into(), Value::Object(permissions));
@@ -229,11 +220,12 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
             operation: "create_tmp",
             source: e,
         })?;
-        f.write_all(content.as_bytes()).map_err(|e| CascadeError::Io {
-            path: tmp.clone(),
-            operation: "write",
-            source: e,
-        })?;
+        f.write_all(content.as_bytes())
+            .map_err(|e| CascadeError::Io {
+                path: tmp.clone(),
+                operation: "write",
+                source: e,
+            })?;
     }
     fs::rename(&tmp, path).map_err(|e| CascadeError::Io {
         path: path.to_path_buf(),
@@ -274,10 +266,15 @@ mod tests {
 
         let content = fs::read_to_string(&result.path).unwrap();
         let parsed: Value = serde_json::from_str(&content).unwrap();
-        let managed = parsed.get("_cascade_managed").expect("_cascade_managed key");
+        let managed = parsed
+            .get("_cascade_managed")
+            .expect("_cascade_managed key");
         assert_eq!(managed["harness"], json!("claude-code"));
         assert!(managed["permissions"]["deny"].is_array());
-        assert!(!managed["permissions"]["deny"].as_array().unwrap().is_empty());
+        assert!(!managed["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -321,9 +318,20 @@ mod tests {
         let parsed: Value = serde_json::from_str(&content).unwrap();
 
         assert_eq!(parsed["theme"], json!("dark"), "theme preserved");
-        assert_eq!(parsed["userKey"], json!("do-not-touch"), "userKey preserved");
-        assert_eq!(parsed["preferences"]["vim"], json!(true), "preferences preserved");
-        assert!(parsed.get("_cascade_managed").is_some(), "managed block added");
+        assert_eq!(
+            parsed["userKey"],
+            json!("do-not-touch"),
+            "userKey preserved"
+        );
+        assert_eq!(
+            parsed["preferences"]["vim"],
+            json!(true),
+            "preferences preserved"
+        );
+        assert!(
+            parsed.get("_cascade_managed").is_some(),
+            "managed block added"
+        );
     }
 
     #[test]

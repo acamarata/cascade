@@ -46,8 +46,9 @@
 //!
 //! MASTER-POLICIES.md — cascade-harness: sensitivity_guard evaluator (v1.2)
 
-use cascade_core::sensitivity::{classify_sensitivity, provider_is_trusted_for_sensitive,
-                                ContentSensitivity};
+use cascade_core::sensitivity::{
+    classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity,
+};
 use cascade_types::policy::{PolicyAction, PolicyResult};
 
 use crate::policy::engine::PolicyEvaluator;
@@ -87,7 +88,9 @@ impl PolicyEvaluator for SensitivityGuardEvaluator {
         // Classify the payload.
         let sensitivity = classify_sensitivity(payload);
 
-        if sensitivity == ContentSensitivity::Sensitive && !provider_is_trusted_for_sensitive(provider) {
+        if sensitivity == ContentSensitivity::Sensitive
+            && !provider_is_trusted_for_sensitive(provider)
+        {
             return PolicyResult::deny(
                 self.policy_id(),
                 format!(
@@ -146,10 +149,7 @@ mod tests {
 
     #[test]
     fn dispatch_without_provider_allows() {
-        let action = PolicyAction::new(
-            "dispatch",
-            json!({"payload": "my ssn is 123-45-6789"}),
-        );
+        let action = PolicyAction::new("dispatch", json!({"payload": "my ssn is 123-45-6789"}));
         let result = guard().evaluate(&action);
         assert_eq!(result.decision, Decision::Allow);
     }

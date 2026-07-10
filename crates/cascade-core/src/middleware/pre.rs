@@ -89,7 +89,10 @@ pub struct ChatTurn {
 impl ChatTurn {
     /// Convenience constructor.
     pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: role.into(), content: content.into() }
+        Self {
+            role: role.into(),
+            content: content.into(),
+        }
     }
 }
 
@@ -177,9 +180,7 @@ pub fn compress_context_with(
         return turns.to_vec();
     };
     match summarize(&summary_prompt(older)) {
-        Some(summary) if !summary.trim().is_empty() => {
-            assemble_compressed(summary.trim(), recent)
-        }
+        Some(summary) if !summary.trim().is_empty() => assemble_compressed(summary.trim(), recent),
         // GP failure or empty summary → original messages, unchanged.
         _ => turns.to_vec(),
     }
@@ -191,9 +192,12 @@ pub fn compress_context_with(
 /// Blocking (curl subprocess) — async callers must use `spawn_blocking`.
 /// Uses [`DEFAULT_COMPRESS_THRESHOLD_TOKENS`] and [`KEEP_LAST_TURNS`].
 pub fn compress_context_via_gp(turns: &[ChatTurn]) -> Vec<ChatTurn> {
-    compress_context_with(turns, DEFAULT_COMPRESS_THRESHOLD_TOKENS, KEEP_LAST_TURNS, |prompt| {
-        gp_complete(prompt, GP_SUMMARY_TIMEOUT)
-    })
+    compress_context_with(
+        turns,
+        DEFAULT_COMPRESS_THRESHOLD_TOKENS,
+        KEEP_LAST_TURNS,
+        |prompt| gp_complete(prompt, GP_SUMMARY_TIMEOUT),
+    )
 }
 
 // ── 2. System-prompt injection — pure template merge ──────────────────────────
@@ -312,7 +316,9 @@ pub fn classify_with(
 /// caller keeps its own tier/model choice. Blocking (curl subprocess);
 /// async callers must use `spawn_blocking`.
 pub fn classify_prompt(user_prompt: &str) -> Option<RequestComplexity> {
-    classify_with(user_prompt, |prompt| gp_complete(prompt, GP_CLASSIFY_TIMEOUT))
+    classify_with(user_prompt, |prompt| {
+        gp_complete(prompt, GP_CLASSIFY_TIMEOUT)
+    })
 }
 
 /// Map a classification onto the selection module's [`Tier`] (pure).
@@ -444,7 +450,9 @@ mod tests {
         assert_eq!(out.len(), 4);
         assert_eq!(out[0].role, "system");
         assert!(out[0].content.contains("the summary"));
-        assert!(out[0].content.contains("Summary of the earlier conversation"));
+        assert!(out[0]
+            .content
+            .contains("Summary of the earlier conversation"));
         assert_eq!(&out[1..], &recent[..]);
     }
 
@@ -514,7 +522,11 @@ mod tests {
         let ctx = full_ctx();
         let a = build_system_prefix(&ctx).expect("some");
         let b = build_system_prefix(&ctx).expect("some");
-        assert_eq!(a.as_bytes(), b.as_bytes(), "must be byte-stable (cache-prefix-safe)");
+        assert_eq!(
+            a.as_bytes(),
+            b.as_bytes(),
+            "must be byte-stable (cache-prefix-safe)"
+        );
     }
 
     #[test]
@@ -523,7 +535,10 @@ mod tests {
         let summary_pos = s.find("Project instructions").expect("summary section");
         let task_pos = s.find("Active task").expect("task section");
         let notes_pos = s.find("Stack notes").expect("notes section");
-        assert!(summary_pos < task_pos && task_pos < notes_pos, "fixed order: {s}");
+        assert!(
+            summary_pos < task_pos && task_pos < notes_pos,
+            "fixed order: {s}"
+        );
     }
 
     #[test]
@@ -561,9 +576,18 @@ mod tests {
 
     #[test]
     fn parse_clean_labels() {
-        assert_eq!(parse_classification("trivial"), Some(RequestComplexity::Trivial));
-        assert_eq!(parse_classification(" Medium\n"), Some(RequestComplexity::Medium));
-        assert_eq!(parse_classification("COMPLEX."), Some(RequestComplexity::Complex));
+        assert_eq!(
+            parse_classification("trivial"),
+            Some(RequestComplexity::Trivial)
+        );
+        assert_eq!(
+            parse_classification(" Medium\n"),
+            Some(RequestComplexity::Medium)
+        );
+        assert_eq!(
+            parse_classification("COMPLEX."),
+            Some(RequestComplexity::Complex)
+        );
     }
 
     #[test]
@@ -620,7 +644,9 @@ mod tests {
     fn gp_may_process_blocks_sensitive_prompts() {
         assert!(!gp_may_process("my ssn is 123-45-6789"));
         assert!(!gp_may_process("my va disability rating went up"));
-        assert!(!gp_may_process("set ANTHROPIC_API_KEY=sk-ant-abc in the env"));
+        assert!(!gp_may_process(
+            "set ANTHROPIC_API_KEY=sk-ant-abc in the env"
+        ));
         assert!(gp_may_process("refactor the auth module to be smaller"));
     }
 
@@ -646,6 +672,9 @@ mod tests {
     /// the caller keeps its own tier/model choice (`None`).
     #[test]
     fn classify_prompt_sensitive_content_is_none_without_network() {
-        assert_eq!(classify_prompt("draft my va claim with ssn 123-45-6789"), None);
+        assert_eq!(
+            classify_prompt("draft my va claim with ssn 123-45-6789"),
+            None
+        );
     }
 }

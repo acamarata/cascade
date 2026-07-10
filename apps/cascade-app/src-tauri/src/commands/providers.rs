@@ -244,9 +244,7 @@ pub async fn cascade_check_gfp_proxy(_state: State<'_, AppState>) -> Result<bool
 ///
 /// JS: `invoke("cascade_providers_add_gfp")`
 #[tauri::command]
-pub async fn cascade_providers_add_gfp(
-    _state: State<'_, AppState>,
-) -> Result<(), CascadeError> {
+pub async fn cascade_providers_add_gfp(_state: State<'_, AppState>) -> Result<(), CascadeError> {
     debug!("cascade_providers_add_gfp invoked");
     daemon_call::<_, ()>(
         "cascade_providers_add_apikey",
@@ -293,11 +291,7 @@ pub async fn keychain_delete(
     _state: State<'_, AppState>,
 ) -> Result<(), CascadeError> {
     debug!(service = %service, "keychain_delete invoked");
-    daemon_call::<_, ()>(
-        "keychain_delete",
-        serde_json::json!({ "service": service }),
-    )
-    .await
+    daemon_call::<_, ()>("keychain_delete", serde_json::json!({ "service": service })).await
 }
 
 /// Detects a running local LLM server (Ollama on 11434, llama.cpp on 8080/8000).
@@ -310,15 +304,23 @@ pub async fn local_llm_detect() -> Result<serde_json::Value, String> {
     if TcpStream::connect_timeout(
         &std::net::SocketAddr::from(([127, 0, 0, 1], ollama_port)),
         Duration::from_millis(200),
-    ).is_ok() {
-        return Ok(serde_json::json!({ "type": "ollama", "endpoint": "http://localhost:11434", "detected_port": ollama_port }));
+    )
+    .is_ok()
+    {
+        return Ok(
+            serde_json::json!({ "type": "ollama", "endpoint": "http://localhost:11434", "detected_port": ollama_port }),
+        );
     }
     for &port in llama_ports {
         if TcpStream::connect_timeout(
             &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
             Duration::from_millis(200),
-        ).is_ok() {
-            return Ok(serde_json::json!({ "type": "llama_cpp", "endpoint": format!("http://localhost:{}", port), "detected_port": port }));
+        )
+        .is_ok()
+        {
+            return Ok(
+                serde_json::json!({ "type": "llama_cpp", "endpoint": format!("http://localhost:{}", port), "detected_port": port }),
+            );
         }
     }
     Ok(serde_json::json!({ "type": "none" }))
@@ -331,7 +333,10 @@ pub async fn oauth_pkce_flow(
     _client_id: Option<String>,
     _scopes: Option<Vec<String>>,
 ) -> Result<serde_json::Value, String> {
-    Err(format!("OAuth PKCE flow not yet configured for provider '{}'", provider_id))
+    Err(format!(
+        "OAuth PKCE flow not yet configured for provider '{}'",
+        provider_id
+    ))
 }
 
 /// Validates an API key by testing a lightweight request against the provider.
@@ -343,14 +348,14 @@ pub async fn api_key_connect(
 ) -> Result<serde_json::Value, String> {
     debug!("api_key_connect: provider={}", provider_id);
     let _ = (api_key, endpoint);
-    Ok(serde_json::json!({ "success": false, "error": "api_key_connect: use provider settings to add keys" }))
+    Ok(
+        serde_json::json!({ "success": false, "error": "api_key_connect: use provider settings to add keys" }),
+    )
 }
 
 /// Detects an already-configured provider from disk config.
 #[tauri::command]
-pub async fn config_detect_connect(
-    provider_id: String,
-) -> Result<serde_json::Value, String> {
+pub async fn config_detect_connect(provider_id: String) -> Result<serde_json::Value, String> {
     debug!("config_detect_connect: provider={}", provider_id);
     Ok(serde_json::json!({ "success": false, "detected": false }))
 }

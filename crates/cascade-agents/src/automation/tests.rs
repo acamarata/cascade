@@ -355,9 +355,8 @@ async fn deny_does_not_call_sink() {
 
 #[tokio::test]
 async fn yaml_automation_library_loads() {
-    let dir = std::path::Path::new(
-        "/home/user/projects/acamarata/cascade/.cascade/library/automations",
-    );
+    let dir =
+        std::path::Path::new("/home/user/projects/acamarata/cascade/.cascade/library/automations");
     if !dir.exists() {
         // Skip if fixtures not yet written — builder will write them after
         return;

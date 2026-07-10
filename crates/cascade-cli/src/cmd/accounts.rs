@@ -14,9 +14,9 @@
 
 use async_trait::async_trait;
 use cascade_core::accounts_store::{
-    accounts_dir, accounts_path, count_gfp_keys, default_registry, detect_cli,
-    init_accounts_dir, migrate_accounts_if_needed, read_accounts_registry,
-    write_accounts_registry, write_matrix_md, write_quota_json,
+    accounts_dir, accounts_path, count_gfp_keys, default_registry, detect_cli, init_accounts_dir,
+    migrate_accounts_if_needed, read_accounts_registry, write_accounts_registry, write_matrix_md,
+    write_quota_json,
 };
 use cascade_core::quota_store::read_quota_store;
 use cascade_types::accounts::{Account, AccountFamily};
@@ -86,18 +86,33 @@ async fn run_list(as_json: bool) -> Result<()> {
 /// Inputs: slice of [`Account`] records.
 /// Outputs: formatted table on stdout; never panics.
 pub fn print_accounts_table(accounts: &[Account]) {
-    println!("{:<16} {:<10} {:<18} {:<20} {:<6} {:<6} {:<14} {:<12} {:<8}",
-        "ID", "Family", "Subscription", "Access", "CLI?", "Keys", "Quota-Link", "Role", "Priority");
+    println!(
+        "{:<16} {:<10} {:<18} {:<20} {:<6} {:<6} {:<14} {:<12} {:<8}",
+        "ID", "Family", "Subscription", "Access", "CLI?", "Keys", "Quota-Link", "Role", "Priority"
+    );
     println!("{}", "-".repeat(115));
     for a in accounts {
         let fam = format!("{:?}", a.family);
-        let access = a.access_methods.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(",");
+        let access = a
+            .access_methods
+            .iter()
+            .map(|m| format!("{:?}", m))
+            .collect::<Vec<_>>()
+            .join(",");
         let quota = a.quota_account_id.as_deref().unwrap_or("-");
         let role = format!("{:?}", a.role);
-        println!("{:<16} {:<10} {:<18} {:<20} {:<6} {:<6} {:<14} {:<12} {:<8}",
-            trunc(&a.id, 16), trunc(&fam, 10), trunc(&a.subscription, 18),
-            trunc(&access, 20), if a.cli_available { "yes" } else { "no" },
-            a.key_count, trunc(quota, 14), trunc(&role, 12), a.exhaustion_priority);
+        println!(
+            "{:<16} {:<10} {:<18} {:<20} {:<6} {:<6} {:<14} {:<12} {:<8}",
+            trunc(&a.id, 16),
+            trunc(&fam, 10),
+            trunc(&a.subscription, 18),
+            trunc(&access, 20),
+            if a.cli_available { "yes" } else { "no" },
+            a.key_count,
+            trunc(quota, 14),
+            trunc(&role, 12),
+            a.exhaustion_priority
+        );
     }
 }
 
@@ -120,17 +135,39 @@ async fn run_status(as_json: bool) -> Result<()> {
         Err(e) => return Err(e),
     };
 
-    if as_json { println!("{}", to_json(&registry.accounts)?); return Ok(()); }
+    if as_json {
+        println!("{}", to_json(&registry.accounts)?);
+        return Ok(());
+    }
 
-    println!("{:<16} {:<14} {:<14} {:<14}", "ID", "Week Used", "Month Used", "Last Polled");
+    println!(
+        "{:<16} {:<14} {:<14} {:<14}",
+        "ID", "Week Used", "Month Used", "Last Polled"
+    );
     println!("{}", "-".repeat(62));
     for acc in &registry.accounts {
-        let (week, month, polled) = quota.as_ref()
-            .and_then(|qs| acc.quota_account_id.as_deref()
-                .and_then(|id| qs.accounts.iter().find(|e| e.account_id == id)))
-            .map(|e| (e.week_total_used.to_string(), e.month_total_used.to_string(), e.last_polled.clone()))
+        let (week, month, polled) = quota
+            .as_ref()
+            .and_then(|qs| {
+                acc.quota_account_id
+                    .as_deref()
+                    .and_then(|id| qs.accounts.iter().find(|e| e.account_id == id))
+            })
+            .map(|e| {
+                (
+                    e.week_total_used.to_string(),
+                    e.month_total_used.to_string(),
+                    e.last_polled.clone(),
+                )
+            })
             .unwrap_or_else(|| ("-".into(), "-".into(), "-".into()));
-        println!("{:<16} {:<14} {:<14} {:<14}", acc.id, week, month, trunc(&polled, 14));
+        println!(
+            "{:<16} {:<14} {:<14} {:<14}",
+            acc.id,
+            week,
+            month,
+            trunc(&polled, 14)
+        );
     }
     Ok(())
 }
@@ -139,16 +176,36 @@ async fn run_status(as_json: bool) -> Result<()> {
 
 async fn run_matrix(as_json: bool) -> Result<()> {
     let registry = read_accounts_registry(&accounts_path())?;
-    if as_json { println!("{}", to_json(&registry.model_matrix)?); return Ok(()); }
+    if as_json {
+        println!("{}", to_json(&registry.model_matrix)?);
+        return Ok(());
+    }
 
-    println!("{:<36} {:<30} {:<28} {:<10}", "Model", "Available-Via", "Best-For", "Tier");
+    println!(
+        "{:<36} {:<30} {:<28} {:<10}",
+        "Model", "Available-Via", "Best-For", "Tier"
+    );
     println!("{}", "-".repeat(106));
     for e in &registry.model_matrix {
-        let via = e.available_via.iter()
-            .map(|r| format!("{}:{:?}", r.account_id, r.method)).collect::<Vec<_>>().join(",");
-        let best = e.best_for.iter().map(|t| format!("{:?}", t)).collect::<Vec<_>>().join(",");
-        println!("{:<36} {:<30} {:<28} {:<10}",
-            trunc(&e.model_id, 36), trunc(&via, 30), trunc(&best, 28), e.tier);
+        let via = e
+            .available_via
+            .iter()
+            .map(|r| format!("{}:{:?}", r.account_id, r.method))
+            .collect::<Vec<_>>()
+            .join(",");
+        let best = e
+            .best_for
+            .iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>()
+            .join(",");
+        println!(
+            "{:<36} {:<30} {:<28} {:<10}",
+            trunc(&e.model_id, 36),
+            trunc(&via, 30),
+            trunc(&best, 28),
+            e.tier
+        );
     }
     Ok(())
 }
@@ -174,20 +231,28 @@ async fn run_detect(as_json: bool) -> Result<()> {
     for acc in &mut registry.accounts {
         if acc.family == AccountFamily::Gfp {
             if acc.key_count != gfp_keys {
-                changes.push(format!("{}: key_count {} → {}", acc.id, acc.key_count, gfp_keys));
+                changes.push(format!(
+                    "{}: key_count {} → {}",
+                    acc.id, acc.key_count, gfp_keys
+                ));
                 acc.key_count = gfp_keys;
             }
         } else {
             let new_avail = acc.access_methods.iter().any(|m| match m {
                 cascade_types::accounts::AccessMethod::NativeCc => detect_cli("claude"),
-                cascade_types::accounts::AccessMethod::SmithersClaudeP => detect_cli("smithers") || detect_cli("claude-p"),
+                cascade_types::accounts::AccessMethod::SmithersClaudeP => {
+                    detect_cli("smithers") || detect_cli("claude-p")
+                }
                 cascade_types::accounts::AccessMethod::CodexCli => detect_cli("codex"),
                 cascade_types::accounts::AccessMethod::AgyCli => detect_cli("agy"),
                 cascade_types::accounts::AccessMethod::OpencodeRun => detect_cli("opencode"),
                 cascade_types::accounts::AccessMethod::GfpKeypool => true,
             });
             if new_avail != acc.cli_available {
-                changes.push(format!("{}: cli_available {} → {}", acc.id, acc.cli_available, new_avail));
+                changes.push(format!(
+                    "{}: cli_available {} → {}",
+                    acc.id, acc.cli_available, new_avail
+                ));
                 acc.cli_available = new_avail;
             }
         }
@@ -212,8 +277,14 @@ async fn run_detect(as_json: bool) -> Result<()> {
     }
 
     println!("accounts/ written to {}", dir.display());
-    if changes.is_empty() { println!("No changes detected."); }
-    else { println!("Changes:"); for c in &changes { println!("  {c}"); } }
+    if changes.is_empty() {
+        println!("No changes detected.");
+    } else {
+        println!("Changes:");
+        for c in &changes {
+            println!("  {c}");
+        }
+    }
     println!("{} accounts registered.", registry.accounts.len());
     Ok(())
 }
@@ -222,7 +293,11 @@ async fn run_detect(as_json: bool) -> Result<()> {
 
 /// Truncate a string to `max` chars for table display.
 fn trunc(s: &str, max: usize) -> &str {
-    if s.len() <= max { s } else { &s[..max] }
+    if s.len() <= max {
+        s
+    } else {
+        &s[..max]
+    }
 }
 
 /// Serialise a value to pretty JSON.

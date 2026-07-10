@@ -21,8 +21,7 @@ use super::handlers_memory::{
 };
 use super::handlers_pbd::{
     handle_append_event, handle_check_routes, handle_get_current, handle_get_sprint,
-    handle_list_tickets, handle_read_phase_status, handle_scan_inbox,
-    handle_update_ticket_status,
+    handle_list_tickets, handle_read_phase_status, handle_scan_inbox, handle_update_ticket_status,
 };
 use super::handlers_security::{handle_secret_scan, handle_security_audit};
 use super::helpers::{call_tool_error, tool_result};
@@ -218,9 +217,7 @@ impl ToolRegistry {
             }
             // PBD tools (E-P8-04)
             "cascade.get_current" => tool_result(handle_get_current(&args).await),
-            "cascade.update_ticket_status" => {
-                tool_result(handle_update_ticket_status(&args).await)
-            }
+            "cascade.update_ticket_status" => tool_result(handle_update_ticket_status(&args).await),
             "cascade.append_event" => tool_result(handle_append_event(&args).await),
             "cascade.get_sprint" => tool_result(handle_get_sprint(&args).await),
             "cascade.read_phase_status" => tool_result(handle_read_phase_status(&args).await),

@@ -33,18 +33,12 @@ use std::time::Duration;
 
 use cascade_core::routing::{router::Router, router::RouterConfig, task_class::TaskClass};
 use cascade_types::accounts::{
-    AccessMethod, Account, AccountFamily, AccountRole, AccountsRegistry,
-    ACCOUNTS_SCHEMA_VERSION,
+    AccessMethod, Account, AccountFamily, AccountRole, AccountsRegistry, ACCOUNTS_SCHEMA_VERSION,
 };
 
 // ── Registry fixture builders ─────────────────────────────────────────────────
 
-fn make_account(
-    id: &str,
-    family: AccountFamily,
-    role: AccountRole,
-    priority: u8,
-) -> Account {
+fn make_account(id: &str, family: AccountFamily, role: AccountRole, priority: u8) -> Account {
     Account {
         id: id.to_string(),
         family,

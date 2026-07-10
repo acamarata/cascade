@@ -23,8 +23,8 @@
 //!
 //! SPORT: cascade-agents / model_profile — E-P12-01
 
-use cascade_types::model_registry::{ModelEntry, ModelRegistry, OutputFormat, TaskShape};
 use cascade_types::agent::Tier;
+use cascade_types::model_registry::{ModelEntry, ModelRegistry, OutputFormat, TaskShape};
 
 // ── Public helpers ────────────────────────────────────────────────────────────
 

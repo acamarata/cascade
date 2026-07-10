@@ -589,13 +589,8 @@ impl InMemoryEmbedCache {
     /// - `ttl` — maximum age of a cached entry before it is treated as a miss.
     /// - `capacity_entries` — maximum number of entries in the LRU (bounds the
     ///   memory footprint independently of `max_size_bytes`).
-    pub fn new(
-        max_size_bytes: usize,
-        ttl: std::time::Duration,
-        capacity_entries: usize,
-    ) -> Self {
-        let cap =
-            std::num::NonZeroUsize::new(capacity_entries.max(1)).expect("capacity >= 1");
+    pub fn new(max_size_bytes: usize, ttl: std::time::Duration, capacity_entries: usize) -> Self {
+        let cap = std::num::NonZeroUsize::new(capacity_entries.max(1)).expect("capacity >= 1");
         Self {
             inner: Mutex::new(LruCache::new(cap)),
             max_size_bytes,
@@ -619,10 +614,8 @@ impl InMemoryEmbedCache {
 
         if expired {
             if let Some(evicted) = guard.pop(&key) {
-                self.current_bytes.fetch_sub(
-                    evicted.byte_size(),
-                    std::sync::atomic::Ordering::Relaxed,
-                );
+                self.current_bytes
+                    .fetch_sub(evicted.byte_size(), std::sync::atomic::Ordering::Relaxed);
             }
             return None;
         }
@@ -644,15 +637,16 @@ impl InMemoryEmbedCache {
         let mut guard = self.inner.lock().expect("InMemoryEmbedCache poisoned");
 
         // Evict LRU entries until we have headroom for the new entry.
-        while self.current_bytes.load(std::sync::atomic::Ordering::Relaxed) + entry_bytes
+        while self
+            .current_bytes
+            .load(std::sync::atomic::Ordering::Relaxed)
+            + entry_bytes
             > self.max_size_bytes
             && !guard.is_empty()
         {
             if let Some((_, evicted)) = guard.pop_lru() {
-                self.current_bytes.fetch_sub(
-                    evicted.byte_size(),
-                    std::sync::atomic::Ordering::Relaxed,
-                );
+                self.current_bytes
+                    .fetch_sub(evicted.byte_size(), std::sync::atomic::Ordering::Relaxed);
             } else {
                 break;
             }
@@ -660,10 +654,8 @@ impl InMemoryEmbedCache {
 
         // If existing key is being replaced, subtract old bytes first.
         if let Some(old) = guard.peek(&key) {
-            self.current_bytes.fetch_sub(
-                old.byte_size(),
-                std::sync::atomic::Ordering::Relaxed,
-            );
+            self.current_bytes
+                .fetch_sub(old.byte_size(), std::sync::atomic::Ordering::Relaxed);
         }
 
         guard.put(key, entry);
@@ -673,7 +665,8 @@ impl InMemoryEmbedCache {
 
     /// Return the approximate number of bytes currently stored.
     pub fn current_bytes(&self) -> usize {
-        self.current_bytes.load(std::sync::atomic::Ordering::Relaxed)
+        self.current_bytes
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Return the number of entries currently held.
@@ -1098,7 +1091,7 @@ mod tests {
 
         c.set(None, "h1", vec![0.0; 4]); // 16 bytes
         c.set(None, "h2", vec![0.0; 4]); // 16 bytes — now at cap
-        // Adding h3 (16 bytes) must evict the LRU entry (h1, then h2 was accessed).
+                                         // Adding h3 (16 bytes) must evict the LRU entry (h1, then h2 was accessed).
         c.set(None, "h3", vec![0.0; 4]);
 
         // Cache should not exceed the byte cap.

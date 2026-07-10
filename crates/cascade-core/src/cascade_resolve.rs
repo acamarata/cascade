@@ -347,7 +347,9 @@ mod tests {
         write_config_toml(&cascade_dir, r#"instructions = "Do the right thing.""#);
 
         // Override HOME so GCI path points to tmp
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("should resolve");
@@ -372,7 +374,9 @@ mod tests {
         let ppc_dir = make_tier_dir(tmp_project.path());
         write_config_toml(&ppc_dir, r#"instructions = "B""#);
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("should resolve");
@@ -396,7 +400,9 @@ mod tests {
 
         // HOME points to a directory that has NO .cascade subdirectory
         let fake_home = TempDir::new().unwrap();
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", fake_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("should return Ok even with missing tiers");
@@ -418,7 +424,9 @@ mod tests {
         // CASCADE.md supplies the instructions text
         write_cascade_md(&cascade_dir, "Instructions from CASCADE.md");
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("should resolve");
@@ -441,7 +449,9 @@ mod tests {
         let ppc_dir = make_tier_dir(tmp_project.path());
         write_config_toml(&ppc_dir, r#"rules = ["ppc-rule"]"#);
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("should resolve");
@@ -486,7 +496,9 @@ rules = ["project-rule-1"]
 "#,
         );
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("resolve_all_tiers should succeed");
@@ -521,7 +533,9 @@ rules = ["project-rule-1"]
         let tmp_project = TempDir::new().unwrap();
 
         // Neither HOME nor project has .cascade dir
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", fake_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("should return Ok with empty context");
@@ -541,7 +555,9 @@ rules = ["project-rule-1"]
     fn resolved_at_is_set() {
         let fake_home = TempDir::new().unwrap();
         let tmp = TempDir::new().unwrap();
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", fake_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("should succeed");
@@ -585,7 +601,9 @@ rules = ["project-rule-1"]
         let cascade_dir = make_tier_dir(tmp.path());
         write_config_toml(&cascade_dir, "this is not valid toml = [[[");
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
         // Should return Ok (not Err) — malformed config treated as empty
@@ -626,7 +644,9 @@ load_when = "auth"
 "#,
         );
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", fake_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("should resolve");
@@ -674,7 +694,9 @@ rules = ["rule one", "rule two"]
 "#,
         );
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("back-compat config must resolve");
@@ -721,7 +743,9 @@ rules = ["rule one", "rule two"]
 "#,
         );
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp_home.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp_project.path()).expect("vars merge must succeed");
@@ -762,7 +786,9 @@ t2 = { provider_id = "openai", model_id = "gpt-4o" }
 "#,
         );
 
-        let _guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("HOME", tmp.path().to_str().unwrap());
 
         let ctx = resolve_cascade(tmp.path()).expect("should resolve");

@@ -219,7 +219,8 @@ fn run_revoke(id: &str, cap_str: &str) -> Result<()> {
     let cap = str_to_cap(cap_str)?;
     let mut store = GrantStore::load()
         .map_err(|e| CascadeError::Other(format!("failed to load grants: {e}")))?;
-    store.revoke(id, &cap)
+    store
+        .revoke(id, &cap)
         .map_err(|e| CascadeError::Other(format!("failed to revoke: {e}")))?;
     println!("Revoked '{cap_str}' from plugin '{id}'.");
     Ok(())
@@ -229,7 +230,8 @@ fn run_grant(id: &str, cap_str: &str) -> Result<()> {
     let cap = str_to_cap(cap_str)?;
     let mut store = GrantStore::load()
         .map_err(|e| CascadeError::Other(format!("failed to load grants: {e}")))?;
-    store.grant(id, &cap)
+    store
+        .grant(id, &cap)
         .map_err(|e| CascadeError::Other(format!("failed to grant: {e}")))?;
     println!("Granted '{cap_str}' to plugin '{id}'.");
     Ok(())
@@ -238,7 +240,8 @@ fn run_grant(id: &str, cap_str: &str) -> Result<()> {
 fn run_trust(name: &str, public_key: &str) -> Result<()> {
     let mut publishers = TrustedPublishers::load()
         .map_err(|e| CascadeError::Other(format!("failed to load publishers: {e}")))?;
-    publishers.trust(name.to_owned(), public_key.to_owned())
+    publishers
+        .trust(name.to_owned(), public_key.to_owned())
         .map_err(|e| CascadeError::Other(format!("failed to add publisher: {e}")))?;
     println!("Added trusted publisher '{name}'.");
     Ok(())
@@ -966,7 +969,9 @@ mod tests {
 
     #[test]
     fn resolve_template_path_finds_vendored_template() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Set CASCADE_WORKSPACE to the repo root so the resolver can find the template.
         let workspace = "/home/user/projects/acamarata/cascade";
         std::env::set_var("CASCADE_WORKSPACE", workspace);

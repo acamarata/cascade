@@ -1,7 +1,7 @@
 //! Tests for RRF merge logic and exclusion integration.
 
-use super::merge::{rrf_merge, RankedList};
 use super::super::exclusion::{ExclusionConfig, ExclusionSet};
+use super::merge::{rrf_merge, RankedList};
 use cascade_types::retriever::RetrievalHit;
 use std::path::PathBuf;
 
@@ -293,7 +293,10 @@ fn curated_channel_boosts_sparse_body_doc() {
         .iter()
         .position(|h| h.chunk_id == 2)
         .expect("doc=2 must appear");
-    assert_eq!(rank_without, 4, "doc=2 must be last without curated channel");
+    assert_eq!(
+        rank_without, 4,
+        "doc=2 must be last without curated channel"
+    );
 
     // With curated: doc=2 rank must improve (move closer to the front).
     let rank_with = fused_with
@@ -316,7 +319,7 @@ fn recency_breaks_ties_toward_newer_doc() {
     // doc=10 and doc=20 are symmetric in FTS (rank 1 each in their own list
     // → simulate tied scores by putting them at the same rank in both).
     let fts: Vec<(i64, f64)> = vec![(10, 0.8), (20, 0.8)]; // tied FTS scores
-    // Recency: doc=10 is newer → rank 1; doc=20 is older → rank 2.
+                                                           // Recency: doc=10 is newer → rank 1; doc=20 is older → rank 2.
     let recency: Vec<(i64, f64)> = vec![(10, 1.0), (20, 0.5)];
 
     let lists = vec![
@@ -334,7 +337,10 @@ fn recency_breaks_ties_toward_newer_doc() {
     let fused = rrf_merge(&lists, 60.0, 10);
 
     // doc=10 should be first because it wins the recency channel.
-    assert_eq!(fused[0].chunk_id, 10, "newer doc must rank first after recency tie-break");
+    assert_eq!(
+        fused[0].chunk_id, 10,
+        "newer doc must rank first after recency tie-break"
+    );
     assert!(fused[0].sources_hit.contains(&"recency".to_string()));
 }
 
@@ -348,16 +354,43 @@ fn five_channel_fusion_all_sources_contribute() {
     let sparse: Vec<(i64, f64)> = vec![(1, 0.75), (6, 0.3)];
 
     let lists = vec![
-        RankedList { source: "fts5",    weight: 1.0, hits: &fts },
-        RankedList { source: "dense",   weight: 1.0, hits: &dense },
-        RankedList { source: "curated", weight: 0.8, hits: &curated },
-        RankedList { source: "recency", weight: 0.5, hits: &recency },
-        RankedList { source: "sparse",  weight: 1.0, hits: &sparse },
+        RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        },
+        RankedList {
+            source: "dense",
+            weight: 1.0,
+            hits: &dense,
+        },
+        RankedList {
+            source: "curated",
+            weight: 0.8,
+            hits: &curated,
+        },
+        RankedList {
+            source: "recency",
+            weight: 0.5,
+            hits: &recency,
+        },
+        RankedList {
+            source: "sparse",
+            weight: 1.0,
+            hits: &sparse,
+        },
     ];
     let fused = rrf_merge(&lists, 60.0, 10);
 
-    assert_eq!(fused[0].chunk_id, 1, "doc=1 (all 5 channels) must rank first");
-    assert_eq!(fused[0].sources_hit.len(), 5, "all 5 sources must be in provenance");
+    assert_eq!(
+        fused[0].chunk_id, 1,
+        "doc=1 (all 5 channels) must rank first"
+    );
+    assert_eq!(
+        fused[0].sources_hit.len(),
+        5,
+        "all 5 sources must be in provenance"
+    );
 }
 
 /// Missing channels (all empty except one) must not crash — single-channel fallback.
@@ -368,9 +401,21 @@ fn missing_channels_degrade_gracefully() {
 
     // Only the FTS list is non-empty; curated and recency are empty.
     let lists = vec![
-        RankedList { source: "fts5",    weight: 1.0, hits: &fts },
-        RankedList { source: "curated", weight: 0.8, hits: &empty },
-        RankedList { source: "recency", weight: 0.5, hits: &empty },
+        RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        },
+        RankedList {
+            source: "curated",
+            weight: 0.8,
+            hits: &empty,
+        },
+        RankedList {
+            source: "recency",
+            weight: 0.5,
+            hits: &empty,
+        },
     ];
     let fused = rrf_merge(&lists, 60.0, 10);
 
@@ -387,13 +432,24 @@ fn zero_weight_channel_has_no_influence() {
 
     // With weight=0.0 on recency, doc=2 gets 0 contribution from recency.
     let lists_zero = vec![
-        RankedList { source: "fts5",    weight: 1.0, hits: &fts },
-        RankedList { source: "recency", weight: 0.0, hits: &recency },
+        RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts,
+        },
+        RankedList {
+            source: "recency",
+            weight: 0.0,
+            hits: &recency,
+        },
     ];
     let fused_zero = rrf_merge(&lists_zero, 60.0, 10);
 
     // doc=1 wins because recency has zero weight.
-    assert_eq!(fused_zero[0].chunk_id, 1, "zero-weight recency must not override FTS");
+    assert_eq!(
+        fused_zero[0].chunk_id, 1,
+        "zero-weight recency must not override FTS"
+    );
 }
 
 // ── Adversarial exclusion tests ───────────────────────────────────────────
@@ -416,8 +472,8 @@ fn adversarial_fts_channel_locked_doc_absent() {
 
     let filtered = ex.filter_pairs(&raw_fts, |id| match id {
         999 => Some("/locked/secret.md".to_string()),
-        1   => Some("/public/safe.md".to_string()),
-        _   => None,
+        1 => Some("/public/safe.md".to_string()),
+        _ => None,
     });
 
     assert!(
@@ -438,7 +494,7 @@ fn adversarial_vector_channel_locked_doc_absent() {
 
     let filtered = ex.filter_pairs(&raw_vec, |id| match id {
         999 => Some("/locked/secret.md".to_string()),
-        _   => None,
+        _ => None,
     });
 
     assert!(!filtered.iter().any(|(id, _)| *id == 999));
@@ -452,7 +508,7 @@ fn adversarial_curated_channel_locked_doc_absent() {
 
     let filtered = ex.filter_pairs(&raw_curated, |id| match id {
         999 => Some("/locked/meta.md".to_string()),
-        _   => None,
+        _ => None,
     });
 
     assert!(!filtered.iter().any(|(id, _)| *id == 999));
@@ -466,7 +522,7 @@ fn adversarial_recency_channel_locked_doc_absent() {
 
     let filtered = ex.filter_pairs(&raw_recency, |id| match id {
         999 => Some("/locked/diary.md".to_string()),
-        _   => None,
+        _ => None,
     });
 
     assert!(!filtered.iter().any(|(id, _)| *id == 999));
@@ -479,30 +535,30 @@ fn adversarial_five_channel_fusion_locked_doc_absent() {
     let ex = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
 
     // Locked doc is rank-1 everywhere; public docs are rank-2.
-    let raw_fts:    Vec<(i64, f64)> = vec![(999, 0.99), (1, 0.5)];
-    let raw_vec:    Vec<(i64, f64)> = vec![(999, 0.98), (2, 0.6)];
-    let raw_curated:Vec<(i64, f64)> = vec![(999, 0.97), (3, 0.7)];
-    let raw_recency:Vec<(i64, f64)> = vec![(999, 1.0),  (4, 0.8)];
+    let raw_fts: Vec<(i64, f64)> = vec![(999, 0.99), (1, 0.5)];
+    let raw_vec: Vec<(i64, f64)> = vec![(999, 0.98), (2, 0.6)];
+    let raw_curated: Vec<(i64, f64)> = vec![(999, 0.97), (3, 0.7)];
+    let raw_recency: Vec<(i64, f64)> = vec![(999, 1.0), (4, 0.8)];
     let raw_sparse: Vec<(i64, f64)> = vec![(999, 0.95), (5, 0.4)];
 
     let path_of = |id: i64| match id {
         999 => Some("/locked/top-secret.md".to_string()),
-        _   => None,
+        _ => None,
     };
 
-    let fts_pairs     = ex.filter_pairs(&raw_fts,     path_of);
-    let vec_pairs     = ex.filter_pairs(&raw_vec,     path_of);
+    let fts_pairs = ex.filter_pairs(&raw_fts, path_of);
+    let vec_pairs = ex.filter_pairs(&raw_vec, path_of);
     let curated_pairs = ex.filter_pairs(&raw_curated, path_of);
     let recency_pairs = ex.filter_pairs(&raw_recency, path_of);
-    let sparse_pairs  = ex.filter_pairs(&raw_sparse,  path_of);
+    let sparse_pairs = ex.filter_pairs(&raw_sparse, path_of);
 
     // None of the filtered lists must contain the locked id.
     for (label, pairs) in [
-        ("fts",     &fts_pairs),
-        ("vec",     &vec_pairs),
+        ("fts", &fts_pairs),
+        ("vec", &vec_pairs),
         ("curated", &curated_pairs),
         ("recency", &recency_pairs),
-        ("sparse",  &sparse_pairs),
+        ("sparse", &sparse_pairs),
     ] {
         assert!(
             !pairs.iter().any(|(id, _)| *id == 999),
@@ -512,11 +568,31 @@ fn adversarial_five_channel_fusion_locked_doc_absent() {
 
     // Fuse the clean lists — locked id must not appear in fusion output.
     let lists = vec![
-        RankedList { source: "fts5",    weight: 1.0, hits: &fts_pairs },
-        RankedList { source: "dense",   weight: 1.0, hits: &vec_pairs },
-        RankedList { source: "curated", weight: 0.8, hits: &curated_pairs },
-        RankedList { source: "recency", weight: 0.5, hits: &recency_pairs },
-        RankedList { source: "sparse",  weight: 1.0, hits: &sparse_pairs },
+        RankedList {
+            source: "fts5",
+            weight: 1.0,
+            hits: &fts_pairs,
+        },
+        RankedList {
+            source: "dense",
+            weight: 1.0,
+            hits: &vec_pairs,
+        },
+        RankedList {
+            source: "curated",
+            weight: 0.8,
+            hits: &curated_pairs,
+        },
+        RankedList {
+            source: "recency",
+            weight: 0.5,
+            hits: &recency_pairs,
+        },
+        RankedList {
+            source: "sparse",
+            weight: 1.0,
+            hits: &sparse_pairs,
+        },
     ];
     let fused = rrf_merge(&lists, 60.0, 20);
     assert!(
@@ -537,7 +613,10 @@ fn adversarial_prefix_locks_all_children() {
         "/private/",
     ];
     for p in paths_to_check {
-        assert!(ex.is_excluded(p), "'{p}' must be excluded under /private prefix");
+        assert!(
+            ex.is_excluded(p),
+            "'{p}' must be excluded under /private prefix"
+        );
     }
     // Sibling path must not be excluded.
     assert!(!ex.is_excluded("/private-other/file.md"));
@@ -554,8 +633,8 @@ fn adversarial_layer2_catches_leaked_hit() {
     // but now has a file_path set (e.g. from the hit-map join in RrfRetriever).
     let hits = vec![
         hit(999, Some("/locked/leaked.md"), 0.99), // would-be winner, locked
-        hit(1,   Some("/public/safe.md"),   0.85),
-        hit(2,   None,                      0.70), // no path → kept
+        hit(1, Some("/public/safe.md"), 0.85),
+        hit(2, None, 0.70), // no path → kept
     ];
 
     let filtered = ex.filter_hits(hits);
@@ -575,7 +654,7 @@ fn removing_exclusion_unlocks_doc() {
     let ex_on = ExclusionSet::compile(&ExclusionConfig::from_patterns(["/locked"]));
     let hits_on = vec![
         hit(999, Some("/locked/secret.md"), 0.99),
-        hit(1,   Some("/public/safe.md"),   0.85),
+        hit(1, Some("/public/safe.md"), 0.85),
     ];
     let filtered_on = ex_on.filter_hits(hits_on);
     assert!(!filtered_on.iter().any(|h| h.chunk_id == "999"));
@@ -584,7 +663,7 @@ fn removing_exclusion_unlocks_doc() {
     let ex_off = ExclusionSet::compile(&ExclusionConfig::default());
     let hits_off = vec![
         hit(999, Some("/locked/secret.md"), 0.99),
-        hit(1,   Some("/public/safe.md"),   0.85),
+        hit(1, Some("/public/safe.md"), 0.85),
     ];
     let filtered_off = ex_off.filter_hits(hits_off);
     assert!(
@@ -599,5 +678,9 @@ fn empty_exclusion_no_filtering_regression() {
     let ex = ExclusionSet::compile(&ExclusionConfig::default());
     let pairs: Vec<(i64, f64)> = vec![(1, 0.9), (2, 0.8), (3, 0.7)];
     let filtered = ex.filter_pairs(&pairs, |_| Some("/any/path.md".to_string()));
-    assert_eq!(filtered.len(), 3, "empty exclusion must not filter anything");
+    assert_eq!(
+        filtered.len(),
+        3,
+        "empty exclusion must not filter anything"
+    );
 }

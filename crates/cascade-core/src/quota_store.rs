@@ -22,8 +22,8 @@ use cascade_types::error::{CascadeError, Result};
 // Re-export everything from cascade-types so callers can use either crate.
 pub use cascade_types::quota_store::{
     AccountEntry, HistoryEntry, ModelUsage, QuotaState, QuotaStore, RateWindow,
-    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO,
-    PROVIDER_OPENAI_CODEX, QUOTA_STORE_SCHEMA_VERSION,
+    PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY, PROVIDER_OC_GO, PROVIDER_OPENAI_CODEX,
+    QUOTA_STORE_SCHEMA_VERSION,
 };
 
 // ── Writer ────────────────────────────────────────────────────────────────────

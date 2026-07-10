@@ -301,8 +301,11 @@ fn migrate_fallback_keys_into_providers_store(path: &Path, keys: &[SecretString]
     // gemini-free slots — this is what makes repeated boots idempotent.
     // Owned Strings (not &str) so the set does not borrow `store.providers`
     // while the loop below pushes into it (E0502).
-    let existing_values: std::collections::HashSet<String> =
-        store.providers.iter().map(|p| p.account_id.clone()).collect();
+    let existing_values: std::collections::HashSet<String> = store
+        .providers
+        .iter()
+        .map(|p| p.account_id.clone())
+        .collect();
 
     let next_slot_start = store
         .providers
@@ -516,7 +519,9 @@ mod tests {
     // other env-mutating test) under the parallel test runner.
     #[test]
     fn load_api_keys_from_path_prefers_providers_store_over_fallback() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("providers.json");
         let key1 = "AIzaFixtureAAAAAAAAAAAAAAAAAAAAAA1";
@@ -533,7 +538,9 @@ mod tests {
 
     #[test]
     fn fallback_import_writes_back_into_providers_store() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("providers.json");
         // providers.json exists but has zero gemini-free entries.
@@ -554,7 +561,11 @@ mod tests {
             .iter()
             .filter(|p| p.id.starts_with("gemini-free-"))
             .collect();
-        assert_eq!(gfp.len(), 2, "fallback keys must be migrated into providers.json");
+        assert_eq!(
+            gfp.len(),
+            2,
+            "fallback keys must be migrated into providers.json"
+        );
         assert!(gfp.iter().all(|p| p.enabled && p.local_ok));
 
         std::env::remove_var("GEMINI_API_KEY_1");
@@ -590,7 +601,9 @@ mod tests {
 
     #[test]
     fn repeated_boot_is_idempotent_no_duplicate_entries() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Two consecutive load_api_keys_from_path calls with the same env
         // fallback keys present must not create duplicate provider entries —
         // dedup-by-value must hold even across separate migration calls.
@@ -635,7 +648,9 @@ mod tests {
 
     #[test]
     fn revocation_is_respected_no_import_when_store_has_other_providers_but_no_gemini_free() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // The store exists and has been curated (one non-gemini-free entry)
         // but deliberately has zero gemini-free entries — this must be read
         // as intentional revocation, not "never set up," so no fallback
@@ -751,7 +766,9 @@ mod tests {
 
     #[test]
     fn should_advise_migration_true_when_store_empty_and_env_set() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("providers.json");
         write_providers_store(&path, &make_store(vec![])).unwrap();
@@ -763,7 +780,9 @@ mod tests {
 
     #[test]
     fn should_advise_migration_false_when_store_has_keys() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("providers.json");
         let store = make_store(vec![gemini_free_entry(

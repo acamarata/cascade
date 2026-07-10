@@ -222,7 +222,10 @@ impl LiveCcDriver {
     /// # Inputs
     /// - `cmd`: binary path or name on `PATH`
     /// - `args`: arguments to pass after the binary name
-    pub fn with_command(cmd: impl Into<String>, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn with_command(
+        cmd: impl Into<String>,
+        args: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         Self {
             command: cmd.into(),
             args: args.into_iter().map(Into::into).collect(),
@@ -247,10 +250,10 @@ impl ProcessDriver for LiveCcDriver {
     /// - Child runs longer than `timeout_secs` → `Err("PTY read timed out after …s")`.
     /// - Any PTY I/O error → `Err` with the underlying OS message.
     async fn send_prompt(&self, prompt: &str) -> Result<Vec<OutputChunk>, CcApiError> {
+        use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem as _};
         use std::io::{Read, Write};
         use std::sync::mpsc;
         use std::time::Duration;
-        use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem as _};
 
         let cmd_name = self.command.clone();
         let cmd_args = self.args.clone();
@@ -281,18 +284,18 @@ impl ProcessDriver for LiveCcDriver {
             // Spawn into the slave side of the PTY.
             // WHY: this makes the child's stdin/stdout/stderr the slave PTY
             // device; the child sees a real terminal.
-            let mut child = pty_pair
-                .slave
-                .spawn_command(builder)
-                .map_err(|e| {
-                    // Produce a clear message when the binary is absent.
-                    let msg = e.to_string();
-                    if msg.contains("No such file") || msg.contains("not found") || msg.contains("os error 2") {
-                        format!("claude binary not found: {msg}")
-                    } else {
-                        format!("PTY spawn failed: {msg}")
-                    }
-                })?;
+            let mut child = pty_pair.slave.spawn_command(builder).map_err(|e| {
+                // Produce a clear message when the binary is absent.
+                let msg = e.to_string();
+                if msg.contains("No such file")
+                    || msg.contains("not found")
+                    || msg.contains("os error 2")
+                {
+                    format!("claude binary not found: {msg}")
+                } else {
+                    format!("PTY spawn failed: {msg}")
+                }
+            })?;
 
             // Write the prompt to the master side.
             {
@@ -358,10 +361,7 @@ impl ProcessDriver for LiveCcDriver {
                 let remaining = deadline.saturating_duration_since(std::time::Instant::now());
                 if remaining.is_zero() {
                     let _ = child.kill();
-                    return Err(format!(
-                        "PTY read timed out after {}s",
-                        timeout.as_secs()
-                    ));
+                    return Err(format!("PTY read timed out after {}s", timeout.as_secs()));
                 }
 
                 match rx.recv_timeout(remaining) {
@@ -370,10 +370,7 @@ impl ProcessDriver for LiveCcDriver {
                     Ok(Err(e)) => return Err(e),
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         let _ = child.kill();
-                        return Err(format!(
-                            "PTY read timed out after {}s",
-                            timeout.as_secs()
-                        ));
+                        return Err(format!("PTY read timed out after {}s", timeout.as_secs()));
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
                         // Reader thread finished without sending EOF sentinel;
@@ -386,8 +383,7 @@ impl ProcessDriver for LiveCcDriver {
             // Reap the child so it doesn't become a zombie.
             let _ = child.wait();
 
-            String::from_utf8(output)
-                .map_err(|e| format!("PTY output is not valid UTF-8: {e}"))
+            String::from_utf8(output).map_err(|e| format!("PTY output is not valid UTF-8: {e}"))
         })
         .await
         .map_err(|e| CcApiError::DriverError(format!("spawn_blocking panicked: {e}")))?
@@ -466,10 +462,8 @@ mod tests {
     #[tokio::test]
     async fn live_cc_driver_captures_echo_output() {
         // Use /bin/sh with -c flag so the command exits immediately after printing.
-        let driver = crate::driver::LiveCcDriver::with_command(
-            "/bin/sh",
-            ["-c", "echo hello from pty"],
-        );
+        let driver =
+            crate::driver::LiveCcDriver::with_command("/bin/sh", ["-c", "echo hello from pty"]);
         let chunks = driver
             .send_prompt("ignored prompt — command echoes on its own")
             .await
@@ -523,10 +517,7 @@ mod tests {
     #[cfg(feature = "live_cc")]
     #[tokio::test]
     async fn live_cc_driver_times_out_on_hanging_command() {
-        let mut driver = crate::driver::LiveCcDriver::with_command(
-            "/bin/sh",
-            ["-c", "sleep 60"],
-        );
+        let mut driver = crate::driver::LiveCcDriver::with_command("/bin/sh", ["-c", "sleep 60"]);
         // Very short timeout so the test does not actually wait 60 seconds.
         driver.timeout_secs = 2;
 

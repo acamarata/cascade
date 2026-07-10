@@ -352,7 +352,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn cli_restore_happy_path() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
         let archived_dir = tmp.path().join("archive").join("test-tool");
@@ -383,7 +385,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn cli_restore_conflict_skip() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
         let archived_dir = tmp.path().join("archive").join("test-tool");
@@ -412,7 +416,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn cli_restore_overwrite() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
         let archived_dir = tmp.path().join("archive").join("test-tool");
@@ -443,7 +449,9 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn cli_restore_manifest_updated() {
-        let _env_guard = crate::test_support::ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let tmp = TempDir::new().unwrap();
         unsafe { std::env::set_var("HOME", tmp.path()) };
         let archived_dir = tmp.path().join("archive").join("tool-b");

@@ -53,57 +53,57 @@
 //! ```
 
 pub mod accounts_store;
-pub mod conductor_router;
-pub mod selection;
-pub mod external_accounts;
 pub mod ai_folder;
-pub mod model_ids;
 pub mod auth_detector;
+pub mod build;
 pub mod cache;
 pub mod cascade_resolution;
 pub mod cascade_resolve;
-pub mod lint_budget;
-pub mod lint_conflicts;
-pub mod lint_dangling;
-pub mod lint_duplication;
-pub mod lint_behavioral;
-pub mod lint_generated;
-pub mod var_substitute;
 pub mod compat_gen;
+pub mod conductor_router;
 pub mod config;
 pub mod context_pack;
 pub mod derived;
 pub mod discovery;
 pub mod eie;
+pub mod external_accounts;
 pub mod hook_store;
 pub mod import_engine;
 pub mod import_expand;
-pub mod injection_scan;
 pub mod inbox;
+pub mod injection_scan;
 pub mod library;
+pub mod lint_behavioral;
+pub mod lint_budget;
+pub mod lint_conflicts;
+pub mod lint_dangling;
+pub mod lint_duplication;
+pub mod lint_generated;
 pub mod loader;
 pub mod maps;
 pub mod memory;
 pub mod middleware;
+pub mod model_ids;
 pub mod nsentry;
 pub mod nsentry_config;
-pub mod build;
 pub mod pbd;
 pub mod providers_store;
 pub mod quota_aggregator;
 pub mod quota_store;
 pub mod resolution;
+pub mod routing;
 pub mod routing_table;
 pub mod security;
+pub mod selection;
 pub mod sensitivity;
 pub mod settings;
 pub mod symlinks;
 pub mod task_store;
 pub mod tasks;
+pub mod taxonomy;
 pub mod templates;
 pub mod threads;
-pub mod routing;
-pub mod taxonomy;
+pub mod var_substitute;
 pub mod watcher;
 pub mod worktree_store;
 
@@ -111,7 +111,6 @@ pub mod worktree_store;
 pub(crate) mod test_support;
 
 // Re-export the most commonly used top-level items.
-pub use external_accounts::read_claude_access_token;
 pub use accounts_store::{
     accounts_dir, accounts_path, count_gfp_keys, count_gfp_keys_from_path, default_registry,
     detect_cli, init_accounts_dir, migrate_accounts_if_needed, quota_json_path,
@@ -119,8 +118,9 @@ pub use accounts_store::{
     write_quota_json,
 };
 pub use discovery::{DiscoveredTier, TierDiscovery};
-pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};
+pub use external_accounts::read_claude_access_token;
 pub use hook_store::HookStore;
+pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};
 pub use quota_store::{read_quota_store, write_quota_store};
 pub use resolution::{ResolvedCascade, Resolver};
 pub use watcher::{CascadeChanged, CascadeWatcher};

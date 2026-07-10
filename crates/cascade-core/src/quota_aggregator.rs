@@ -677,7 +677,14 @@ mod tests {
         let just_before = boundary - 1; // one second before — EXCLUDED
 
         let snaps: Vec<QuotaState> = vec![
-            snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, just_before, "model", 500),
+            snapshot_with_provider(
+                "acct1",
+                "cc",
+                PROVIDER_CLAUDE_MAX,
+                just_before,
+                "model",
+                500,
+            ),
             snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, boundary, "model", 300),
             snapshot_with_provider("acct1", "cc", PROVIDER_CLAUDE_MAX, ref_ts, "model", 200),
         ];
@@ -695,7 +702,10 @@ mod tests {
         );
         let weekly = windows.iter().find(|w| w.label == "weekly").unwrap();
         // All three snapshots fall within 7 days, so all are included.
-        assert_eq!(weekly.used, 1_000, "weekly window should include all 3 snaps");
+        assert_eq!(
+            weekly.used, 1_000,
+            "weekly window should include all 3 snaps"
+        );
     }
 
     /// OC-Go rate windows sum cost_usd, not token counts.

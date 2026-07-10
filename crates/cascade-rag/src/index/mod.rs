@@ -121,8 +121,8 @@ impl RagIndex {
     #[instrument(skip_all, fields(db_path = %db_path.as_ref().display()))]
     pub async fn open(db_path: impl AsRef<Path>) -> Result<Self> {
         let db_path = db_path.as_ref().to_path_buf();
-        let conn = cascade_db::open_configured(&db_path)
-            .map_err(|e| CascadeError::RetrievalFailed {
+        let conn =
+            cascade_db::open_configured(&db_path).map_err(|e| CascadeError::RetrievalFailed {
                 detail: format!("open db: {e}"),
             })?;
         let idx = Self {
@@ -337,11 +337,7 @@ impl RagIndex {
     /// # Errors
     ///
     /// Returns [`CascadeError::RetrievalFailed`] on SQL errors.
-    pub async fn dense_query(
-        &self,
-        query_vec: &[f32],
-        k: usize,
-    ) -> Result<Vec<(String, f32)>> {
+    pub async fn dense_query(&self, query_vec: &[f32], k: usize) -> Result<Vec<(String, f32)>> {
         let conn = self.conn.lock().await;
 
         #[cfg(feature = "vec")]
@@ -373,9 +369,7 @@ impl RagIndex {
         #[cfg(not(feature = "vec"))]
         {
             // Brute-force scan over dense_fallback blobs.
-            let mut stmt = match conn.prepare(
-                "SELECT chunk_id, embedding FROM dense_fallback",
-            ) {
+            let mut stmt = match conn.prepare("SELECT chunk_id, embedding FROM dense_fallback") {
                 Ok(s) => s,
                 Err(_) => return Ok(vec![]),
             };
@@ -497,8 +491,8 @@ impl RagIndex {
         for (source_id, score) in source_hits {
             match first_chunk_for_source(&conn, source_id) {
                 Ok(Some(chunk_id)) => out.push((chunk_id.to_string(), score)),
-                Ok(None) => {}  // source has no chunks yet — skip
-                Err(_) => {}    // ignore per-row errors
+                Ok(None) => {} // source has no chunks yet — skip
+                Err(_) => {}   // ignore per-row errors
             }
         }
 
@@ -608,8 +602,10 @@ impl RagIndex {
         };
 
         // rusqlite requires values as `dyn ToSql` refs.
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|s| s as &dyn rusqlite::types::ToSql)
+            .collect();
 
         let rows = match stmt.query_map(params.as_slice(), |row| {
             Ok((

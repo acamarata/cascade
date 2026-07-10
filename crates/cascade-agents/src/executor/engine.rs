@@ -12,11 +12,11 @@
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
-use tracing::{debug, info, instrument, warn, event, Level};
+use tracing::{debug, event, info, instrument, warn, Level};
 
 use crate::context::{
-    AgentRunContextBuilder, ContextMessage, ContextProvider, ContextRole,
-    NoopContextProvider, ToolResult,
+    AgentRunContextBuilder, ContextMessage, ContextProvider, ContextRole, NoopContextProvider,
+    ToolResult,
 };
 use crate::grants::{AccessLevel, GrantDecision};
 use crate::prompt_gate::{check_prompt_size, PromptSizeConfig};
@@ -26,7 +26,7 @@ use crate::tool_registry::ToolRegistry;
 
 use super::store::TaskStore;
 use super::types::{
-    ApprovalRequest, ExecutorError, ProviderRouter, SUBAGENT_CONTEXT_PREFIX, ToolInvoker,
+    ApprovalRequest, ExecutorError, ProviderRouter, ToolInvoker, SUBAGENT_CONTEXT_PREFIX,
 };
 
 // ── ChildTaskRequest ──────────────────────────────────────────────────────────

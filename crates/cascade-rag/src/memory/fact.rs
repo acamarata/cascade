@@ -234,8 +234,8 @@ mod tests {
 
     use super::*;
     use crate::db::run_migrations;
-    use crate::memory::namespace::validate;
     use crate::memory::episode::insert_episode;
+    use crate::memory::namespace::validate;
 
     fn test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();

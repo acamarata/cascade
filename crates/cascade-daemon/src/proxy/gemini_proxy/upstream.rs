@@ -66,10 +66,7 @@ pub fn parse_request_line(headers: &str) -> Option<(String, String, usize)> {
 }
 
 /// Read exactly `buf.len()` bytes from `stream`.
-pub async fn read_exact(
-    stream: &mut tokio::net::TcpStream,
-    buf: &mut [u8],
-) -> std::io::Result<()> {
+pub async fn read_exact(stream: &mut tokio::net::TcpStream, buf: &mut [u8]) -> std::io::Result<()> {
     use tokio::io::AsyncReadExt;
     let mut offset = 0;
     while offset < buf.len() {

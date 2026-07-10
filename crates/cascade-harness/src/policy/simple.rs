@@ -60,10 +60,7 @@ fn try_b64_decode(s: &str) -> Option<String> {
     }
 
     // Process every complete 4-char group and any short tail.
-    let chars: Vec<u8> = stripped
-        .bytes()
-        .map(|b| b64_val(b).unwrap_or(0))
-        .collect();
+    let chars: Vec<u8> = stripped.bytes().map(|b| b64_val(b).unwrap_or(0)).collect();
     let mut out: Vec<u8> = Vec::with_capacity(chars.len() * 3 / 4 + 1);
 
     let mut i = 0;
@@ -211,11 +208,7 @@ pub(crate) fn split_chain(text: &str) -> Vec<&str> {
                 || (bytes[i] == b'|' && bytes[i + 1] == b'|'))
         {
             Some(2)
-        } else if bytes[i] == b';'
-            || bytes[i] == b'|'
-            || bytes[i] == b'\n'
-            || bytes[i] == b'\r'
-        {
+        } else if bytes[i] == b';' || bytes[i] == b'|' || bytes[i] == b'\n' || bytes[i] == b'\r' {
             Some(1)
         } else {
             None
@@ -382,9 +375,7 @@ mod tests {
     #[test]
     fn denies_dd_device() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("dd if=/dev/zero of=/dev/sda"))
-                .decision,
+            ev().evaluate(&bash("dd if=/dev/zero of=/dev/sda")).decision,
             Decision::Deny
         );
     }
@@ -400,8 +391,7 @@ mod tests {
     #[test]
     fn denies_diskutil_erase() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("diskutil eraseDisk APFS MyDisk /dev/disk2"))
+            ev().evaluate(&bash("diskutil eraseDisk APFS MyDisk /dev/disk2"))
                 .decision,
             Decision::Deny
         );
@@ -453,8 +443,7 @@ mod tests {
     #[test]
     fn denies_force_push_main() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git push --force origin main"))
+            ev().evaluate(&bash("git push --force origin main"))
                 .decision,
             Decision::Deny
         );
@@ -463,8 +452,7 @@ mod tests {
     #[test]
     fn denies_force_push_master() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git push --force origin master"))
+            ev().evaluate(&bash("git push --force origin master"))
                 .decision,
             Decision::Deny
         );
@@ -473,8 +461,7 @@ mod tests {
     #[test]
     fn denies_force_with_lease_main() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git push --force-with-lease origin main"))
+            ev().evaluate(&bash("git push --force-with-lease origin main"))
                 .decision,
             Decision::Deny
         );
@@ -483,8 +470,7 @@ mod tests {
     #[test]
     fn denies_delete_remote_main() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git push --delete origin main"))
+            ev().evaluate(&bash("git push --delete origin main"))
                 .decision,
             Decision::Deny
         );
@@ -493,8 +479,7 @@ mod tests {
     #[test]
     fn denies_hard_reset_origin_main() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git reset --hard origin/main"))
+            ev().evaluate(&bash("git reset --hard origin/main"))
                 .decision,
             Decision::Deny
         );
@@ -511,11 +496,10 @@ mod tests {
     #[test]
     fn denies_filter_branch() {
         assert_eq!(
-            ev()
-                .evaluate(&bash(
-                    "git filter-branch --tree-filter 'rm secrets.txt' HEAD"
-                ))
-                .decision,
+            ev().evaluate(&bash(
+                "git filter-branch --tree-filter 'rm secrets.txt' HEAD"
+            ))
+            .decision,
             Decision::Deny
         );
     }
@@ -524,8 +508,7 @@ mod tests {
     #[test]
     fn allows_force_push_feature_branch() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git push --force origin feature/cleanup"))
+            ev().evaluate(&bash("git push --force origin feature/cleanup"))
                 .decision,
             Decision::Allow
         );
@@ -535,8 +518,7 @@ mod tests {
     #[test]
     fn allows_branch_delete_feature() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("git branch -D feature/old-experiment"))
+            ev().evaluate(&bash("git branch -D feature/old-experiment"))
                 .decision,
             Decision::Allow
         );
@@ -597,8 +579,7 @@ mod tests {
     #[test]
     fn allows_delete_from_with_where() {
         assert_eq!(
-            ev()
-                .evaluate(&sql("DELETE FROM sessions WHERE expires_at < NOW()"))
+            ev().evaluate(&sql("DELETE FROM sessions WHERE expires_at < NOW()"))
                 .decision,
             Decision::Allow
         );
@@ -617,8 +598,7 @@ mod tests {
     #[test]
     fn denies_kubectl_delete_namespace() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("kubectl delete namespace production"))
+            ev().evaluate(&bash("kubectl delete namespace production"))
                 .decision,
             Decision::Deny
         );
@@ -627,8 +607,7 @@ mod tests {
     #[test]
     fn denies_kubectl_delete_pvc() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("kubectl delete pvc data-volume-0"))
+            ev().evaluate(&bash("kubectl delete pvc data-volume-0"))
                 .decision,
             Decision::Deny
         );
@@ -637,8 +616,7 @@ mod tests {
     #[test]
     fn denies_docker_volume_rm() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("docker volume rm postgres-data"))
+            ev().evaluate(&bash("docker volume rm postgres-data"))
                 .decision,
             Decision::Deny
         );
@@ -647,9 +625,7 @@ mod tests {
     #[test]
     fn denies_docker_system_prune() {
         assert_eq!(
-            ev()
-                .evaluate(&bash("docker system prune -f"))
-                .decision,
+            ev().evaluate(&bash("docker system prune -f")).decision,
             Decision::Deny
         );
     }
@@ -658,10 +634,7 @@ mod tests {
 
     #[test]
     fn denies_npm_publish() {
-        assert_eq!(
-            ev().evaluate(&bash("npm publish")).decision,
-            Decision::Deny
-        );
+        assert_eq!(ev().evaluate(&bash("npm publish")).decision, Decision::Deny);
     }
 
     #[test]
@@ -684,10 +657,7 @@ mod tests {
 
     #[test]
     fn denies_cat_env() {
-        assert_eq!(
-            ev().evaluate(&bash("cat .env")).decision,
-            Decision::Deny
-        );
+        assert_eq!(ev().evaluate(&bash("cat .env")).decision, Decision::Deny);
     }
 
     #[test]
@@ -710,10 +680,7 @@ mod tests {
 
     #[test]
     fn allows_cargo_test() {
-        assert_eq!(
-            ev().evaluate(&bash("cargo test")).decision,
-            Decision::Allow
-        );
+        assert_eq!(ev().evaluate(&bash("cargo test")).decision, Decision::Allow);
     }
 
     #[test]

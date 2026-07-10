@@ -569,8 +569,7 @@ impl AnthropicAdapter {
         };
         let cost_usd = compute_cost("anthropic", &raw.model, &usage);
 
-        if cache_usage.cache_creation_input_tokens > 0 || cache_usage.cache_read_input_tokens > 0
-        {
+        if cache_usage.cache_creation_input_tokens > 0 || cache_usage.cache_read_input_tokens > 0 {
             tracing::debug!(
                 cache_creation_input_tokens = cache_usage.cache_creation_input_tokens,
                 cache_read_input_tokens = cache_usage.cache_read_input_tokens,
@@ -669,9 +668,7 @@ impl ProviderAdapter for AnthropicAdapter {
                 }
             }
 
-            if !buf.is_empty()
-                && !forward_anthropic_sse_line(&buf, &tx, &mut stopped).await
-            {
+            if !buf.is_empty() && !forward_anthropic_sse_line(&buf, &tx, &mut stopped).await {
                 return;
             }
 
@@ -754,11 +751,11 @@ impl ProviderAdapter for AnthropicAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
     use crate::test_helpers::test_support::{
         assert_completion_contract, fixture_json, make_anthropic_sse, HttpMethod,
         MockProviderServer,
     };
+    use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
     use futures::StreamExt;
     use serde_json::json;
     use wiremock::matchers::{method, path};
@@ -1017,7 +1014,10 @@ mod tests {
         let text = &system[0].text;
         let prefix_pos = text.find("# Project context").expect("req.system kept");
         let summary_pos = text.find("chose sqlite").expect("system turn merged");
-        assert!(prefix_pos < summary_pos, "req.system must come first: {text}");
+        assert!(
+            prefix_pos < summary_pos,
+            "req.system must come first: {text}"
+        );
         // The system turn is hoisted, never left in (or dropped from) messages.
         assert_eq!(body.messages.len(), 1);
         assert!(body.messages.iter().all(|m| m.role != "system"));

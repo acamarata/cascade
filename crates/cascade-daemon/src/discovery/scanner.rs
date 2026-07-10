@@ -107,15 +107,22 @@ impl ProjectScanner {
                 .unwrap_or("")
                 .to_owned();
             if !root_name.is_empty() {
-                let is_monorepo =
-                    root_pt != ProjectType::Unknown
-                        && (root.join("apps").is_dir() || root.join("packages").is_dir());
+                let is_monorepo = root_pt != ProjectType::Unknown
+                    && (root.join("apps").is_dir() || root.join("packages").is_dir());
                 let effective_type = if is_monorepo {
                     ProjectType::Monorepo
                 } else {
                     root_pt
                 };
-                let rec = make_record(root, &root_name, effective_type.clone(), root_lang, root_fw, root_pm, None);
+                let rec = make_record(
+                    root,
+                    &root_name,
+                    effective_type.clone(),
+                    root_lang,
+                    root_fw,
+                    root_pm,
+                    None,
+                );
                 if let Err(e) = registry.upsert(&rec) {
                     warn!(path = %root.display(), error = %e, "failed to upsert root-as-project record");
                 } else {
@@ -225,15 +232,7 @@ impl ProjectScanner {
             }
 
             let (pt, lang, fw, pm) = classify(&path);
-            let rec = make_record(
-                &path,
-                &name,
-                pt,
-                lang,
-                fw,
-                pm,
-                Some(parent_id.to_owned()),
-            );
+            let rec = make_record(&path, &name, pt, lang, fw, pm, Some(parent_id.to_owned()));
 
             if let Err(e) = registry.upsert(&rec) {
                 warn!(path = %path.display(), error = %e, "failed to upsert sub-app record");
@@ -446,6 +445,9 @@ mod tests {
 
         // proj should appear only once even though the root was listed twice.
         let count = records.iter().filter(|r| r.name == "proj").count();
-        assert_eq!(count, 1, "duplicate root must not produce duplicate records");
+        assert_eq!(
+            count, 1,
+            "duplicate root must not produce duplicate records"
+        );
     }
 }

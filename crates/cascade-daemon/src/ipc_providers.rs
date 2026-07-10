@@ -288,8 +288,7 @@ impl ProviderIpcHandler {
         // Build the real adapter before zeroing the key so we can pass it to
         // the constructor.  We clone here and zeroize the original immediately
         // after (CR-A: plaintext must not linger once stored).
-        let adapter: Arc<dyn cascade_providers::ProviderAdapter> =
-            build_adapter_for_id(&id, &key);
+        let adapter: Arc<dyn cascade_providers::ProviderAdapter> = build_adapter_for_id(&id, &key);
 
         // Zeroize the key from the local binding immediately after adapter
         // construction.  SAFETY: key is a valid UTF-8 String; overwriting bytes
@@ -766,7 +765,10 @@ mod tests {
             "Anthropic key must NOT register NoopProvider; got id={:?}",
             info.id
         );
-        assert_eq!(info.id, "anthropic", "AnthropicAdapter must report id=anthropic");
+        assert_eq!(
+            info.id, "anthropic",
+            "AnthropicAdapter must report id=anthropic"
+        );
     }
 
     /// Gemini key → GeminiAdapter (not Noop).
@@ -798,7 +800,10 @@ mod tests {
     fn build_adapter_openrouter_is_not_noop() {
         let adapter = build_adapter_for_id("openrouter", "sk-or-test");
         let info = adapter.provider_info();
-        assert_ne!(info.id, "noop", "OpenRouter key must NOT register NoopProvider");
+        assert_ne!(
+            info.id, "noop",
+            "OpenRouter key must NOT register NoopProvider"
+        );
     }
 
     /// Together key → TogetherAdapter (not Noop).
@@ -806,7 +811,10 @@ mod tests {
     fn build_adapter_together_is_not_noop() {
         let adapter = build_adapter_for_id("together", "together-test-key");
         let info = adapter.provider_info();
-        assert_ne!(info.id, "noop", "Together key must NOT register NoopProvider");
+        assert_ne!(
+            info.id, "noop",
+            "Together key must NOT register NoopProvider"
+        );
     }
 
     /// Prefix variants (e.g. "anthropic-acct1") should still map to the real adapter.

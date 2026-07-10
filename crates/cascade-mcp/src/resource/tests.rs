@@ -350,8 +350,7 @@ async fn project_state_returns_json_mime() {
     let mime = result["contents"][0]["mimeType"].as_str().unwrap();
     assert_eq!(mime, "application/json");
     let text = result["contents"][0]["text"].as_str().unwrap();
-    serde_json::from_str::<serde_json::Value>(text)
-        .expect("project_state must return valid JSON");
+    serde_json::from_str::<serde_json::Value>(text).expect("project_state must return valid JSON");
 }
 
 #[tokio::test]

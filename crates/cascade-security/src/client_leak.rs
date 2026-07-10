@@ -16,8 +16,8 @@
 //! - Paths under /api/, /server/, /lib/server/, or named *.server.* are excluded
 //! - Client extensions: .tsx .jsx .vue .svelte .html .astro (plus public/ dist/ build/ static/)
 
-use std::path::Path;
 use crate::secret_scan::{scan_text, SecretFinding};
+use std::path::Path;
 
 /// Return true if `path` is likely to be served to browsers.
 pub fn is_client_side_path(path: &Path) -> bool {
@@ -101,6 +101,9 @@ mod tests {
     fn no_finding_in_server_tsx() {
         let text = "const key = AKIAZ3ABCDEFGHIJKLMN;";
         let findings = scan_client_leak(Path::new("src/api/handler.ts"), text);
-        assert!(findings.is_empty(), "server-side .ts should return no client leak");
+        assert!(
+            findings.is_empty(),
+            "server-side .ts should return no client leak"
+        );
     }
 }

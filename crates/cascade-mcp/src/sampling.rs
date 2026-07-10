@@ -217,13 +217,12 @@ impl SamplingClient {
             Some(params.clone())
         };
 
-        self.handler
-            .handle(params_opt)
-            .await
-            .map_err(|e| cascade_types::error::CascadeError::ConfigParse {
+        self.handler.handle(params_opt).await.map_err(|e| {
+            cascade_types::error::CascadeError::ConfigParse {
                 path: "<sampling/createMessage>".into(),
                 detail: e.to_string(),
-            })
+            }
+        })
     }
 }
 
@@ -865,8 +864,7 @@ mod tests {
         let result = client.create_message(&params).await.unwrap();
         assert_eq!(result["role"], "assistant");
         assert_eq!(
-            result["content"]["text"],
-            "real text from mock anthropic",
+            result["content"]["text"], "real text from mock anthropic",
             "content must be real provider text, not a stub string"
         );
         assert!(

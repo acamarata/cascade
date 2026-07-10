@@ -23,7 +23,9 @@
 // SPORT: MASTER-CLI.md — cascade delegate / conductor_router
 
 use crate::selection::{self, SelectionRequest};
-use crate::sensitivity::{classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity};
+use crate::sensitivity::{
+    classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity,
+};
 
 // Canonical type definitions moved to `crate::selection` (E1-S6); re-exported
 // here so existing consumers (`cascade-cli` conductor) compile unchanged.
@@ -76,10 +78,10 @@ pub struct ConductorTarget {
 /// adapter to invoke.  Whether the CLI binary is actually present on disk is
 /// the executor's responsibility — it should re-fall on `Unavailable` errors.
 ///
-    /// Thin wrapper over [`selection::select_account`] with a default (no-signal)
-    /// GP health snapshot. Callers with a LIVE GP health signal (the CLI
-    /// conductor probes `:3761/health`) must use [`select_target_with_gp`] so
-    /// the T3-GP preference can be reflected in the reason string.
+/// Thin wrapper over [`selection::select_account`] with a default (no-signal)
+/// GP health snapshot. Callers with a LIVE GP health signal (the CLI
+/// conductor probes `:3761/health`) must use [`select_target_with_gp`] so
+/// the T3-GP preference can be reflected in the reason string.
 pub fn select_target(req: &ConductorRequest, quota: &QuotaSnapshot) -> Option<ConductorTarget> {
     select_target_with_gp(req, quota, &GpHealthSnapshot::default())
 }
@@ -102,14 +104,12 @@ pub fn select_target_with_gp(
         model_class: req.model_class,
         account_override: req.account_override.clone(),
     };
-    selection::select_account(&sel_req, quota, gp).map(|t| {
-        ConductorTarget {
-            provider: t.provider,
-            account_id: t.account_id,
-            config_dir: t.config_dir,
-            model: t.model,
-            reason: t.reason,
-        }
+    selection::select_account(&sel_req, quota, gp).map(|t| ConductorTarget {
+        provider: t.provider,
+        account_id: t.account_id,
+        config_dir: t.config_dir,
+        model: t.model,
+        reason: t.reason,
     })
 }
 
@@ -153,7 +153,9 @@ pub fn select_target_for_prompt(
         .filter(|a| provider_is_trusted_for_sensitive(&a.provider))
         .cloned()
         .collect();
-    let trusted_snapshot = QuotaSnapshot { accounts: trusted_accounts };
+    let trusted_snapshot = QuotaSnapshot {
+        accounts: trusted_accounts,
+    };
 
     select_target_with_gp(req, &trusted_snapshot, gp)
 }
@@ -211,7 +213,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick claude2");
         assert_eq!(target.account_id, "claude2");
         assert_eq!(target.provider, Provider::Claude);
@@ -228,7 +234,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick claude");
         assert_eq!(target.account_id, "claude");
     }
@@ -241,7 +251,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick claude");
         assert_eq!(target.account_id, "claude");
     }
@@ -257,7 +271,11 @@ mod tests {
                 codex_entry("codex-acc1"),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick codex");
         assert_eq!(target.provider, Provider::Codex);
         assert_eq!(target.model, MODEL_GPT);
@@ -271,8 +289,14 @@ mod tests {
         c2.status = "ok".to_string();
         let mut c1 = claude_entry("claude", "/home/user/.claude", 100.0, 100.0);
         c1.status = "ok".to_string();
-        let snapshot = QuotaSnapshot { accounts: vec![c2, c1] };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let snapshot = QuotaSnapshot {
+            accounts: vec![c2, c1],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         assert!(select_target(&req, &snapshot).is_none());
     }
 
@@ -316,7 +340,11 @@ mod tests {
         let snapshot = QuotaSnapshot {
             accounts: vec![claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0)],
         };
-        let req = ConductorRequest { tier: Tier::T1, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T1,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick");
         assert_eq!(target.model, MODEL_CLAUDE_OPUS);
     }
@@ -326,7 +354,11 @@ mod tests {
         let snapshot = QuotaSnapshot {
             accounts: vec![claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0)],
         };
-        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T3,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick");
         assert_eq!(target.model, MODEL_CLAUDE_HAIKU);
     }
@@ -349,8 +381,14 @@ mod tests {
 
     #[test]
     fn gfp_selected_when_only_option() {
-        let snapshot = QuotaSnapshot { accounts: vec![gfp_entry()] };
-        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let snapshot = QuotaSnapshot {
+            accounts: vec![gfp_entry()],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T3,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick gfp");
         assert_eq!(target.provider, Provider::Gfp);
         assert_eq!(target.model, MODEL_GEMINI_FLASH);
@@ -358,8 +396,14 @@ mod tests {
 
     #[test]
     fn gfp_skipped_for_t2_even_when_only_option() {
-        let snapshot = QuotaSnapshot { accounts: vec![gfp_entry()] };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let snapshot = QuotaSnapshot {
+            accounts: vec![gfp_entry()],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         assert!(select_target(&req, &snapshot).is_none());
     }
 
@@ -375,7 +419,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should skip dead and pick claude");
         assert_eq!(target.account_id, "claude");
     }
@@ -385,7 +433,11 @@ mod tests {
     #[test]
     fn empty_snapshot_returns_none() {
         let snapshot = QuotaSnapshot { accounts: vec![] };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         assert!(select_target(&req, &snapshot).is_none());
     }
 
@@ -396,7 +448,11 @@ mod tests {
         let snapshot = QuotaSnapshot {
             accounts: vec![claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0)],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick");
         assert!(!target.reason.is_empty(), "reason must be non-empty");
     }
@@ -411,7 +467,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target(&req, &snapshot).expect("should pick claude");
         assert!(
             target.reason.contains("spill after"),
@@ -434,12 +494,23 @@ mod tests {
                 gfp_entry(),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
-        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
+        let req = ConductorRequest {
+            tier: Tier::T3,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 5,
+            ..Default::default()
+        };
         let target = select_target_with_gp(&req, &snapshot, &gp).expect("target");
         assert_eq!(target.provider, Provider::Gfp);
         assert_eq!(target.account_id, "gfp-pool");
-        assert!(target.reason.starts_with("t3-gp-preferred:"), "reason: {}", target.reason);
+        assert!(
+            target.reason.starts_with("t3-gp-preferred:"),
+            "reason: {}",
+            target.reason
+        );
     }
 
     /// With no live signal (default snapshot), T3 may still use GFP because the
@@ -452,7 +523,11 @@ mod tests {
                 gfp_entry(),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T3,
+            model_class: None,
+            account_override: None,
+        };
         let target =
             select_target_with_gp(&req, &snapshot, &GpHealthSnapshot::default()).expect("target");
         assert_eq!(target.account_id, "gfp-pool");
@@ -473,7 +548,11 @@ mod tests {
             ],
         };
         for tier in [Tier::T1, Tier::T2] {
-            let req = ConductorRequest { tier, model_class: None, account_override: None };
+            let req = ConductorRequest {
+                tier,
+                model_class: None,
+                account_override: None,
+            };
             let wrapped = select_target(&req, &snapshot).expect("wrapper target");
             let direct = crate::selection::select_account(
                 &crate::selection::SelectionRequest {
@@ -522,7 +601,11 @@ mod tests {
                 gfp_entry(),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target_for_prompt(
             &req,
             &snapshot,
@@ -547,7 +630,11 @@ mod tests {
                 claude_entry("claude", "/home/user/.claude", 5.0, 10.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target_for_prompt(
             &req,
             &snapshot,
@@ -564,8 +651,14 @@ mod tests {
     /// order.
     #[test]
     fn public_prompt_uses_normal_selection_including_untrusted_lanes() {
-        let snapshot = QuotaSnapshot { accounts: vec![codex_entry("codex-acc1")] };
-        let req = ConductorRequest { tier: Tier::T2, model_class: None, account_override: None };
+        let snapshot = QuotaSnapshot {
+            accounts: vec![codex_entry("codex-acc1")],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target_for_prompt(
             &req,
             &snapshot,
@@ -584,7 +677,11 @@ mod tests {
         let snapshot = QuotaSnapshot {
             accounts: vec![claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0)],
         };
-        let req = ConductorRequest { tier: Tier::T1, model_class: None, account_override: None };
+        let req = ConductorRequest {
+            tier: Tier::T1,
+            model_class: None,
+            account_override: None,
+        };
         let target = select_target_for_prompt(
             &req,
             &snapshot,
@@ -606,8 +703,15 @@ mod tests {
                 claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
             ],
         };
-        let req = ConductorRequest { tier: Tier::T3, model_class: None, account_override: None };
-        let gp = GpHealthSnapshot { healthy_slots: 5, ..Default::default() };
+        let req = ConductorRequest {
+            tier: Tier::T3,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot {
+            healthy_slots: 5,
+            ..Default::default()
+        };
         let target = select_target_for_prompt(
             &req,
             &snapshot,

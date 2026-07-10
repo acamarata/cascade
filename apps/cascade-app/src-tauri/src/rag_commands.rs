@@ -175,7 +175,11 @@ fn resolve_project_root(project_root: Option<String>) -> String {
     project_root
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("CASCADE_PROJECT_ROOT").ok())
-        .or_else(|| std::env::current_dir().ok().map(|p| p.display().to_string()))
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .map(|p| p.display().to_string())
+        })
         .unwrap_or_default()
 }
 
@@ -194,7 +198,10 @@ pub async fn rag_list_sources(
     let client = make_client()?;
     let root = resolve_project_root(project_root);
     let resp: RagListSourcesIpcResponse = client
-        .send("rag.list_sources", &RagListSourcesIpcParams { project_root: root })
+        .send(
+            "rag.list_sources",
+            &RagListSourcesIpcParams { project_root: root },
+        )
         .await
         .map_err(CascadeError::from)?;
 
@@ -231,7 +238,10 @@ pub async fn rag_ingest_file(
     let resp: RagIngestFileIpcResponse = client
         .send(
             "rag.ingest_file",
-            &RagIngestFileIpcParams { path, project_root: root },
+            &RagIngestFileIpcParams {
+                path,
+                project_root: root,
+            },
         )
         .await
         .map_err(CascadeError::from)?;
@@ -256,7 +266,10 @@ pub async fn rag_index_stats(
     let client = make_client()?;
     let root = resolve_project_root(project_root);
     let resp: RagIndexStatsIpcResponse = client
-        .send("rag.index_stats", &RagIndexStatsIpcParams { project_root: root })
+        .send(
+            "rag.index_stats",
+            &RagIndexStatsIpcParams { project_root: root },
+        )
         .await
         .map_err(CascadeError::from)?;
 

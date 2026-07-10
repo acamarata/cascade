@@ -110,7 +110,11 @@ pub fn recall(
 
     // Sort combined results: facts first (higher confidence intent), then episodes.
     // Within each group: recency order is preserved from SQL ORDER BY.
-    hits.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    hits.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     hits.truncate(k);
     Ok(hits)
 }

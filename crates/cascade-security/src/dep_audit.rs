@@ -123,9 +123,17 @@ fn parse_cargo_audit(json: &str) -> AuditReport {
         for vuln in list {
             let id = vuln["advisory"]["id"].as_str().unwrap_or("?").to_string();
             let pkg = vuln["package"]["name"].as_str().unwrap_or("?").to_string();
-            let title = vuln["advisory"]["title"].as_str().unwrap_or("?").to_string();
+            let title = vuln["advisory"]["title"]
+                .as_str()
+                .unwrap_or("?")
+                .to_string();
             let severity = "high".to_string();
-            report.advisories.push(Advisory { id, package: pkg, severity: severity.clone(), title });
+            report.advisories.push(Advisory {
+                id,
+                package: pkg,
+                severity: severity.clone(),
+                title,
+            });
             if matches!(severity.as_str(), "high" | "critical") {
                 report.high_or_critical_count += 1;
             }
@@ -145,7 +153,12 @@ async fn audit_npm(dir: &Path) -> AuditReport {
     let (out, _tool) = match output {
         Ok(o) => (o, "pnpm"),
         Err(_) => {
-            match Command::new("npm").args(["audit", "--json"]).current_dir(dir).output().await {
+            match Command::new("npm")
+                .args(["audit", "--json"])
+                .current_dir(dir)
+                .output()
+                .await
+            {
                 Ok(o) => (o, "npm"),
                 Err(_) => return AuditReport::unavailable(Ecosystem::Npm),
             }

@@ -215,7 +215,8 @@ pub async fn save_cascade_doc(
             .map_err(|e| format!("failed to create temp file: {e}"))?;
         f.write_all(content.as_bytes())
             .map_err(|e| format!("failed to write temp file: {e}"))?;
-        f.flush().map_err(|e| format!("failed to flush temp file: {e}"))?;
+        f.flush()
+            .map_err(|e| format!("failed to flush temp file: {e}"))?;
     }
 
     std::fs::rename(&tmp_path, dest).or_else(|_| -> Result<(), String> {
@@ -432,18 +433,12 @@ mod tests {
 
     #[test]
     fn tier_gci() {
-        assert_eq!(
-            infer_tier("/home/user/.claude/CLAUDE.md"),
-            "gci"
-        );
+        assert_eq!(infer_tier("/home/user/.claude/CLAUDE.md"), "gci");
     }
 
     #[test]
     fn tier_asi() {
-        assert_eq!(
-            infer_tier("/home/user/Sites/.claude/CLAUDE.md"),
-            "asi"
-        );
+        assert_eq!(infer_tier("/home/user/Sites/.claude/CLAUDE.md"), "asi");
     }
 
     // ------------------------------------------------------------------
@@ -461,7 +456,10 @@ mod tests {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(e) => panic!("unexpected error: {e}"),
         };
-        assert!(content.is_empty(), "missing file should return empty string");
+        assert!(
+            content.is_empty(),
+            "missing file should return empty string"
+        );
     }
 
     // ------------------------------------------------------------------

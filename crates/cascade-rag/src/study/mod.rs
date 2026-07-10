@@ -155,7 +155,9 @@ fn collect_all_symbols(conn: &Connection) -> Result<Vec<(String, String)>> {
         .map_err(|e| CascadeError::Other(format!("collect_all_symbols: {e}")))?;
 
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|e| CascadeError::Other(format!("collect_all_symbols query: {e}")))?;
 
     let mut seen = std::collections::HashSet::new();

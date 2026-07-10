@@ -22,8 +22,8 @@
 //! Constraints: no `unwrap()` outside `#[cfg(test)]`; never log tokens.
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — claude_usage (live usage fetcher)
 
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
@@ -381,7 +381,13 @@ fn quota_value_available(value: &Value) -> Option<bool> {
         }
     }
 
-    for key in ["utilization", "percent", "usage_percent", "pct_used", "used_percent"] {
+    for key in [
+        "utilization",
+        "percent",
+        "usage_percent",
+        "pct_used",
+        "used_percent",
+    ] {
         if let Some(percent) = obj.get(key).and_then(|v| v.as_f64()) {
             return Some(percent < 100.0);
         }
@@ -399,9 +405,9 @@ fn value_mentions_fable(value: &Value) -> bool {
     match value {
         Value::String(s) => mentions_fable_str(s),
         Value::Array(items) => items.iter().any(value_mentions_fable),
-        Value::Object(obj) => obj.iter().any(|(key, value)| {
-            mentions_fable_str(key) || value_mentions_fable(value)
-        }),
+        Value::Object(obj) => obj
+            .iter()
+            .any(|(key, value)| mentions_fable_str(key) || value_mentions_fable(value)),
         _ => false,
     }
 }
@@ -477,7 +483,10 @@ mod tests {
 
         // extra_usage is null but must be present.
         assert!(usage.get("extra_usage").is_some());
-        assert!(usage.get("fable_available").map(|v| v.is_null()).unwrap_or(false));
+        assert!(usage
+            .get("fable_available")
+            .map(|v| v.is_null())
+            .unwrap_or(false));
     }
 
     /// Current observed usage shape has no Fable-specific quota field.
@@ -492,7 +501,10 @@ mod tests {
 
         assert_eq!(fable_quota_available(&body), None);
         let usage = parse_usage_response(&body).expect("usage parses");
-        assert!(usage.get("fable_available").map(|v| v.is_null()).unwrap_or(false));
+        assert!(usage
+            .get("fable_available")
+            .map(|v| v.is_null())
+            .unwrap_or(false));
     }
 
     /// If Anthropic adds an explicit Fable window, expose availability.
@@ -505,7 +517,10 @@ mod tests {
 
         assert_eq!(fable_quota_available(&body), Some(true));
         let usage = parse_usage_response(&body).expect("usage parses");
-        assert_eq!(usage.get("fable_available").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            usage.get("fable_available").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 
     /// If Anthropic exposes per-model limits, saturated Fable quota is detected.
@@ -567,9 +582,9 @@ mod tests {
     fn format_duration_secs_examples() {
         assert_eq!(format_duration_secs(7200), "2h 00m");
         assert_eq!(format_duration_secs(3661), "1h 01m");
-        assert_eq!(format_duration_secs(45),   "0h 00m");
+        assert_eq!(format_duration_secs(45), "0h 00m");
         assert_eq!(format_duration_secs(3600), "1h 00m");
-        assert_eq!(format_duration_secs(90),   "0h 01m");
+        assert_eq!(format_duration_secs(90), "0h 01m");
     }
 
     /// remap_window extracts utilization and resets_at epoch from a window Value.
@@ -581,7 +596,10 @@ mod tests {
             "limit_dollars": null
         });
         let mapped = remap_window(&window);
-        assert_eq!(mapped.get("utilization").and_then(|v| v.as_f64()), Some(7.5));
+        assert_eq!(
+            mapped.get("utilization").and_then(|v| v.as_f64()),
+            Some(7.5)
+        );
         // resets_at must be epoch seconds (f64).
         let epoch = mapped.get("resets_at").and_then(|v| v.as_f64());
         assert!(epoch.is_some(), "resets_at must be Some(f64)");
@@ -606,8 +624,13 @@ mod tests {
         let usage = parse_usage_response(&body).expect("partial response must parse");
         assert!(usage.get("five_hour").is_some());
         // Missing optional windows become null.
-        assert!(usage.get("seven_day").and_then(|v| if v.is_null() { Some(()) } else { None }).is_some(),
-            "missing seven_day must be null in output");
+        assert!(
+            usage
+                .get("seven_day")
+                .and_then(|v| if v.is_null() { Some(()) } else { None })
+                .is_some(),
+            "missing seven_day must be null in output"
+        );
     }
 
     /// Fractional-seconds ISO-8601 (as returned by the real API) parses correctly.
@@ -681,6 +704,9 @@ mod tests {
                 .map(|e| Instant::now() < e.retry_after)
                 .unwrap_or(false)
         });
-        assert!(!blocked, "account must not be blocked after success clears backoff");
+        assert!(
+            !blocked,
+            "account must not be blocked after success clears backoff"
+        );
     }
 }

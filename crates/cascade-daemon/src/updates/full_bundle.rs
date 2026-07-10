@@ -398,7 +398,8 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
 
     #[test]
     fn parse_sha256sums_binary_mode_marker() {
-        let raw = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *cascade.tar.gz\n";
+        let raw =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa *cascade.tar.gz\n";
         let map = parse_sha256sums(raw);
         assert_eq!(
             map.get("cascade.tar.gz").unwrap(),
@@ -465,7 +466,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
             assets: vec![GhAsset {
                 name: "SHA256SUMS".to_string(),
                 browser_download_url: "https://example.com/SHA256SUMS".to_string(),
-                    url: String::new(),
+                url: String::new(),
             }],
         };
         let err = find_release_assets(&release, "1.9.19").unwrap_err();
@@ -479,7 +480,7 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
             assets: vec![GhAsset {
                 name: "cascade-v1.9.19-macos-aarch64.tar.gz".to_string(),
                 browser_download_url: "https://example.com/bundle.tar.gz".to_string(),
-                    url: String::new(),
+                url: String::new(),
             }],
         };
         let err = find_release_assets(&release, "1.9.19").unwrap_err();
@@ -505,7 +506,9 @@ deadbeef00000000000000000000000000000000000000000000000000000000  cascade-v1.9.1
         let raw = "abababababababababababababababababababababababababababababab  SHA256SUMS\n";
         let sums = parse_sha256sums(raw);
         let err = expected_digest_for(&sums, "cascade-v1.9.19-macos-aarch64.tar.gz").unwrap_err();
-        assert!(matches!(err, FullBundleError::ChecksumEntryMissing(name) if name == "cascade-v1.9.19-macos-aarch64.tar.gz"));
+        assert!(
+            matches!(err, FullBundleError::ChecksumEntryMissing(name) if name == "cascade-v1.9.19-macos-aarch64.tar.gz")
+        );
     }
 
     // ── extract_tarball + atomic_install ──

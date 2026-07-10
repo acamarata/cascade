@@ -96,12 +96,12 @@ pub fn load_config(project_root: &Path) -> Result<Option<NsentryConfig>> {
         return Ok(None);
     }
     let raw = std::fs::read_to_string(&path).map_err(|e| CascadeError::Io {
-        path:      path.clone(),
+        path: path.clone(),
         operation: "read nsentry.toml",
-        source:    e,
+        source: e,
     })?;
     let cfg: NsentryConfig = toml::from_str(&raw).map_err(|e| CascadeError::ConfigParse {
-        path:   path.clone(),
+        path: path.clone(),
         detail: e.to_string(),
     })?;
     Ok(Some(cfg))
@@ -112,16 +112,16 @@ pub fn save_config(project_root: &Path, cfg: &NsentryConfig) -> Result<()> {
     let path = config_path(project_root);
     let cascade_dir = project_root.join(".cascade");
     std::fs::create_dir_all(&cascade_dir).map_err(|e| CascadeError::Io {
-        path:      cascade_dir.clone(),
+        path: cascade_dir.clone(),
         operation: "create .cascade dir",
-        source:    e,
+        source: e,
     })?;
     let raw = toml::to_string_pretty(cfg)
         .map_err(|e| CascadeError::Other(format!("nsentry.toml serialize: {e}")))?;
     std::fs::write(&path, raw).map_err(|e| CascadeError::Io {
-        path:      path.clone(),
+        path: path.clone(),
         operation: "write nsentry.toml",
-        source:    e,
+        source: e,
     })?;
     Ok(())
 }
@@ -164,9 +164,7 @@ fn system_hostname() -> String {
     }
     let out = Command::new("hostname").output();
     match out {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().to_string()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         _ => "localhost".to_string(),
     }
 }
@@ -190,7 +188,13 @@ pub fn project_slug(project_root: &Path) -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("project");
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .to_lowercase()
 }
@@ -269,16 +273,16 @@ pub fn sync(
     // Ensure required directories exist.
     for dir in [&cache, &inbox] {
         std::fs::create_dir_all(dir).map_err(|e| CascadeError::Io {
-            path:      dir.clone(),
+            path: dir.clone(),
             operation: "create dir",
-            source:    e,
+            source: e,
         })?;
     }
     if let Some(parent) = consumed_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| CascadeError::Io {
-            path:      parent.to_path_buf(),
+            path: parent.to_path_buf(),
             operation: "create consumed.list parent dir",
-            source:    e,
+            source: e,
         })?;
     }
 
@@ -325,9 +329,9 @@ pub fn sync(
     let consumed: HashSet<String> = if consumed_path.is_file() {
         std::fs::read_to_string(&consumed_path)
             .map_err(|e| CascadeError::Io {
-                path:      consumed_path.clone(),
+                path: consumed_path.clone(),
                 operation: "read consumed.list",
-                source:    e,
+                source: e,
             })?
             .lines()
             .map(|l| l.trim().to_string())
@@ -360,9 +364,9 @@ pub fn sync(
         if !dry_run {
             let dest = inbox.join(&name);
             std::fs::copy(path, &dest).map_err(|e| CascadeError::Io {
-                path:      dest.clone(),
+                path: dest.clone(),
                 operation: "copy md to inbox",
-                source:    e,
+                source: e,
             })?;
         }
         new_names.push(name);
@@ -375,15 +379,15 @@ pub fn sync(
             .append(true)
             .open(&consumed_path)
             .map_err(|e| CascadeError::Io {
-                path:      consumed_path.clone(),
+                path: consumed_path.clone(),
                 operation: "open consumed.list for append",
-                source:    e,
+                source: e,
             })?;
         for name in &new_names {
             writeln!(file, "{name}").map_err(|e| CascadeError::Io {
-                path:      consumed_path.clone(),
+                path: consumed_path.clone(),
                 operation: "write consumed.list entry",
-                source:    e,
+                source: e,
             })?;
         }
     }
@@ -405,9 +409,9 @@ fn collect_md_files(dir: &Path) -> Result<Vec<PathBuf>> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
         Err(e) => {
             return Err(CascadeError::Io {
-                path:      dir.to_path_buf(),
+                path: dir.to_path_buf(),
                 operation: "read_dir cache",
-                source:    e,
+                source: e,
             });
         }
     };
@@ -461,8 +465,16 @@ mod tests {
     #[test]
     fn dev_id_differs_by_host_and_user() {
         let base = dev_id_from("hostA", "alice");
-        assert_ne!(base, dev_id_from("hostB", "alice"), "different host -> different id");
-        assert_ne!(base, dev_id_from("hostA", "bob"),   "different user -> different id");
+        assert_ne!(
+            base,
+            dev_id_from("hostB", "alice"),
+            "different host -> different id"
+        );
+        assert_ne!(
+            base,
+            dev_id_from("hostA", "bob"),
+            "different user -> different id"
+        );
     }
 
     #[test]
@@ -470,8 +482,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cfg = NsentryConfig {
             sentry_server: "ops@sentry.example.test".to_string(),
-            remote_dir:    "/opt/errors".to_string(),
-            inbox:         None,
+            remote_dir: "/opt/errors".to_string(),
+            inbox: None,
             interval_secs: 60,
         };
         save_config(dir.path(), &cfg).unwrap();
@@ -497,7 +509,7 @@ mod tests {
         let src = TempDir::new().unwrap();
         std::fs::write(src.path().join("report-001.md"), "# Report 1\n").unwrap();
         std::fs::write(src.path().join("report-002.md"), "# Report 2\n").unwrap();
-        std::fs::write(src.path().join("ignore.txt"),    "not markdown").unwrap();
+        std::fs::write(src.path().join("ignore.txt"), "not markdown").unwrap();
 
         // Simulate the cache + inbox under temp dirs (no ~/.cascade pollution).
         let state = TempDir::new().unwrap();
@@ -541,11 +553,7 @@ mod tests {
     }
 
     /// Helper: copy uncollected .md files into dest, append to manifest; return new names.
-    fn do_consume(
-        cache_files: &[PathBuf],
-        consumed_path: &Path,
-        dest: &Path,
-    ) -> Vec<String> {
+    fn do_consume(cache_files: &[PathBuf], consumed_path: &Path, dest: &Path) -> Vec<String> {
         let consumed: HashSet<String> = if consumed_path.is_file() {
             std::fs::read_to_string(consumed_path)
                 .unwrap()
@@ -566,9 +574,13 @@ mod tests {
         }
         if !new_names.is_empty() {
             let mut f = std::fs::OpenOptions::new()
-                .create(true).append(true)
-                .open(consumed_path).unwrap();
-            for n in &new_names { writeln!(f, "{n}").unwrap(); }
+                .create(true)
+                .append(true)
+                .open(consumed_path)
+                .unwrap();
+            for n in &new_names {
+                writeln!(f, "{n}").unwrap();
+            }
         }
         new_names
     }
@@ -603,8 +615,8 @@ mod tests {
         let d2 = TempDir::new().unwrap();
         let cfg = NsentryConfig {
             sentry_server: "ops@host.example.test".to_string(),
-            remote_dir:    default_remote_dir(),
-            inbox:         None,
+            remote_dir: default_remote_dir(),
+            inbox: None,
             interval_secs: default_interval(),
         };
         save_config(d1.path(), &cfg).unwrap();

@@ -94,7 +94,10 @@ pub fn validate(ns: &str) -> Result<ValidatedNamespace, NamespaceError> {
 ///
 /// External callers (MCP tools, HTTP handlers) MUST use this function.
 /// Access to the "personal" namespace is blocked unless `opt_in` is `true`.
-pub fn validate_with_firewall(ns: &str, opt_in: bool) -> Result<ValidatedNamespace, NamespaceError> {
+pub fn validate_with_firewall(
+    ns: &str,
+    opt_in: bool,
+) -> Result<ValidatedNamespace, NamespaceError> {
     let validated = validate(ns)?;
     if validated.is_personal() && !opt_in {
         return Err(NamespaceError::PersonalFirewall);
@@ -131,20 +134,16 @@ mod tests {
     #[test]
     fn valid_namespaces_pass() {
         for ns in &["personal", "meta", "dev-nself", "dev-my-project", "dev-x1"] {
-            assert!(
-                validate(ns).is_ok(),
-                "expected '{ns}' to be valid"
-            );
+            assert!(validate(ns).is_ok(), "expected '{ns}' to be valid");
         }
     }
 
     #[test]
     fn invalid_namespaces_rejected() {
-        for ns in &["", "dev-", "dev-BAD", "global", "dev-a_b", "dev-" , "unknown"] {
-            assert!(
-                validate(ns).is_err(),
-                "expected '{ns}' to be invalid"
-            );
+        for ns in &[
+            "", "dev-", "dev-BAD", "global", "dev-a_b", "dev-", "unknown",
+        ] {
+            assert!(validate(ns).is_err(), "expected '{ns}' to be invalid");
         }
     }
 

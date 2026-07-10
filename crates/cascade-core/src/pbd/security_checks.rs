@@ -64,7 +64,9 @@ pub struct SecurityChecks {
 impl SecurityChecks {
     /// Create a new security checker targeting `project_dir`.
     pub fn new(project_dir: impl Into<PathBuf>) -> Self {
-        Self { project_dir: project_dir.into() }
+        Self {
+            project_dir: project_dir.into(),
+        }
     }
 
     /// Run the security scan synchronously. Returns only high-severity failures.
@@ -185,8 +187,8 @@ fn failures_from_report(report: &Report, dir: &Path) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::pbd::protocol::{ExternalChecks, NoExternalChecks};
-    use cascade_security::report::Report;
     use cascade_security::dep_audit::{AuditReport, Ecosystem};
+    use cascade_security::report::Report;
     use cascade_security::secret_scan::{SecretFinding, Severity};
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -243,7 +245,9 @@ mod tests {
     fn client_leak_produces_high_failure() {
         let dir = std::path::Path::new("/tmp");
         let mut report = clean_report();
-        report.client_leaks.push(finding("aws_access_key", "public/app.js"));
+        report
+            .client_leaks
+            .push(finding("aws_access_key", "public/app.js"));
 
         let failures = failures_from_report(&report, dir);
         assert_eq!(failures.len(), 1, "expected one failure for client leak");
@@ -290,7 +294,9 @@ mod tests {
         let dir = std::path::Path::new("/tmp");
         let mut report = clean_report();
         // Add a secret to `secrets` only (not `client_leaks`).
-        report.secrets.push(finding("generic_secret_assignment", "src/server/auth.rs"));
+        report
+            .secrets
+            .push(finding("generic_secret_assignment", "src/server/auth.rs"));
 
         let failures = failures_from_report(&report, dir);
         assert!(
@@ -322,7 +328,11 @@ mod tests {
 
         let failures = combined.run_checks("p1").unwrap();
         // Inner always fails; security scan on empty dir is clean.
-        assert_eq!(failures.len(), 1, "expected only inner failure: {failures:#?}");
+        assert_eq!(
+            failures.len(),
+            1,
+            "expected only inner failure: {failures:#?}"
+        );
         assert_eq!(failures[0], "inner failure");
     }
 

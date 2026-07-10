@@ -269,10 +269,7 @@ mod tests {
         assert_eq!(roundtrip.title, section.title);
         assert_eq!(roundtrip.status, SectionStatus::Pending);
         assert_eq!(roundtrip.source_files.len(), 1);
-        assert_eq!(
-            roundtrip.source_files[0].path,
-            "$HOME/.claude/CLAUDE.md"
-        );
+        assert_eq!(roundtrip.source_files[0].path, "$HOME/.claude/CLAUDE.md");
     }
 
     #[test]

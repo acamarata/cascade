@@ -205,15 +205,21 @@ impl CoverageLedger {
 
     /// Compute and return the coverage summary.
     pub fn summarize(&self) -> CoverageSummary {
-        let total = self.rows.iter().filter(|r| r.status != LedgerStatus::Dropped).count();
+        let total = self
+            .rows
+            .iter()
+            .filter(|r| r.status != LedgerStatus::Dropped)
+            .count();
         let covered = self
             .rows
             .iter()
-            .filter(|r| {
-                r.status == LedgerStatus::Mapped || r.status == LedgerStatus::Transformed
-            })
+            .filter(|r| r.status == LedgerStatus::Mapped || r.status == LedgerStatus::Transformed)
             .count();
-        let dropped = self.rows.iter().filter(|r| r.status == LedgerStatus::Dropped).count();
+        let dropped = self
+            .rows
+            .iter()
+            .filter(|r| r.status == LedgerStatus::Dropped)
+            .count();
         let unmapped = self
             .rows
             .iter()

@@ -615,7 +615,9 @@ impl CascadeConfig {
     /// letting users override it in `config.toml` for non-standard setups.
     pub fn effective_personal_dir(&self) -> PathBuf {
         self.personal_dir.clone().unwrap_or_else(|| {
-            crate::tiers::home_dir().unwrap_or_default().join("Downloads")
+            crate::tiers::home_dir()
+                .unwrap_or_default()
+                .join("Downloads")
         })
     }
 

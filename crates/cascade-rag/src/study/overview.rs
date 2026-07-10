@@ -405,9 +405,15 @@ mod tests {
     #[tokio::test]
     async fn falls_back_to_template_when_no_llm() {
         let conn = test_conn();
-        let result = generate(&conn, &rust_stack(), &sample_symbols(), "fallback_proj", None)
-            .await
-            .unwrap();
+        let result = generate(
+            &conn,
+            &rust_stack(),
+            &sample_symbols(),
+            "fallback_proj",
+            None,
+        )
+        .await
+        .unwrap();
 
         assert!(
             result.markdown.contains("# fallback_proj"),

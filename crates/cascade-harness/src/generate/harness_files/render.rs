@@ -3,8 +3,8 @@
 use cascade_core::cascade_resolution::ResolvedCascade;
 use cascade_core::model_ids::DEFAULT_HARNESS_MODEL;
 
-use super::kind::HarnessKind;
 use super::super::safe_write::content_hash;
+use super::kind::HarnessKind;
 
 /// Render pointer-comment lines for on-demand rules.
 ///

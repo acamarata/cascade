@@ -102,22 +102,22 @@ pub fn check_fs_read_allowed(
 
 fn cap_name(cap: &Capability) -> &'static str {
     match cap {
-        Capability::FsRead       => "fs_read",
-        Capability::FsWrite      => "fs_write",
-        Capability::FsExec       => "fs_exec",
-        Capability::NetOutbound  => "net_outbound",
-        Capability::NetListen    => "net_listen",
-        Capability::IpcCascade   => "ipc_cascade",
+        Capability::FsRead => "fs_read",
+        Capability::FsWrite => "fs_write",
+        Capability::FsExec => "fs_exec",
+        Capability::NetOutbound => "net_outbound",
+        Capability::NetListen => "net_listen",
+        Capability::IpcCascade => "ipc_cascade",
         Capability::PersonalData => "personal_data",
-        Capability::McpInvoke    => "mcp_invoke",
+        Capability::McpInvoke => "mcp_invoke",
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use crate::grants::GrantStore;
+    use tempfile::TempDir;
 
     fn store_with_grant(tmp: &TempDir, plugin: &str, cap: &Capability) -> GrantStore {
         let path = tmp.path().join("grants.json");
@@ -140,7 +140,10 @@ mod tests {
         let result = check_fs_read_allowed("com.ex.p", &personal, &store);
         assert!(result.is_err(), "should deny personal path without grant");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("PersonalData") || msg.contains("personal_data"), "error: {msg}");
+        assert!(
+            msg.contains("PersonalData") || msg.contains("personal_data"),
+            "error: {msg}"
+        );
     }
 
     #[test]

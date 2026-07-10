@@ -34,12 +34,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tracing::warn;
 
-use cascade_agents::context::{AgentRunContext, ContextRole, StepOutcome, ToolCall, TokenUsage};
+use cascade_agents::context::{AgentRunContext, ContextRole, StepOutcome, TokenUsage, ToolCall};
 use cascade_agents::executor::{ExecutorError, ProviderRouter, ToolInvoker};
 use cascade_agents::spec::AgentSpec;
-use cascade_providers::{
-    CompletionRequest, Message, MessageRole, ProviderRegistry,
-};
+use cascade_providers::{CompletionRequest, Message, MessageRole, ProviderRegistry};
 
 // ── RegistryRouter ────────────────────────────────────────────────────────────
 
@@ -89,20 +87,20 @@ impl ProviderRouter for RegistryRouter {
     ) -> Result<StepOutcome, ExecutorError> {
         // ── Pick provider ─────────────────────────────────────────────────────
         let preferred = spec.model_pref.as_deref();
-        let (adapter, provider_id) = self
-            .registry
-            .pick_for_chat(preferred)
-            .await
-            .ok_or_else(|| {
-                warn!(
-                    agent_id = %spec.id,
-                    "RegistryRouter: no provider available — registry empty or all unhealthy"
-                );
-                ExecutorError::ProviderFailed(
-                    "no provider available: registry is empty or all providers are unhealthy"
-                        .to_string(),
-                )
-            })?;
+        let (adapter, provider_id) =
+            self.registry
+                .pick_for_chat(preferred)
+                .await
+                .ok_or_else(|| {
+                    warn!(
+                        agent_id = %spec.id,
+                        "RegistryRouter: no provider available — registry empty or all unhealthy"
+                    );
+                    ExecutorError::ProviderFailed(
+                        "no provider available: registry is empty or all providers are unhealthy"
+                            .to_string(),
+                    )
+                })?;
 
         // ── Build CompletionRequest ───────────────────────────────────────────
         // Map ContextMessage → cascade_providers::Message.
@@ -203,7 +201,9 @@ mod tests {
     use async_trait::async_trait;
     use futures_util::Stream;
 
-    use cascade_agents::context::{AgentRunContextBuilder, ContextMessage, ContextRole, NoopContextProvider};
+    use cascade_agents::context::{
+        AgentRunContextBuilder, ContextMessage, ContextRole, NoopContextProvider,
+    };
     use cascade_agents::spec::{AgentRole, AgentSpec, Capability, Runtime};
     use cascade_agents::tool_registry::ToolRegistry;
     use cascade_providers::{
@@ -473,7 +473,10 @@ mod tests {
         });
         let registry = Arc::new(ProviderRegistry::new());
         registry
-            .register("capturing".into(), Arc::clone(&provider) as Arc<dyn ProviderAdapter + Send + Sync>)
+            .register(
+                "capturing".into(),
+                Arc::clone(&provider) as Arc<dyn ProviderAdapter + Send + Sync>,
+            )
             .expect("register");
 
         let router = RegistryRouter::new(Arc::clone(&registry));
@@ -495,7 +498,10 @@ mod tests {
             .clone()
             .expect("should have captured a request");
         assert!(
-            captured.messages.iter().any(|m| m.content == "what is 2+2?"),
+            captured
+                .messages
+                .iter()
+                .any(|m| m.content == "what is 2+2?"),
             "context messages must be forwarded to the provider"
         );
     }

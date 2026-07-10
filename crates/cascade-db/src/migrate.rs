@@ -81,7 +81,12 @@ impl MigrationRegistry {
             })?;
             tx.pragma_update(None, "user_version", step.version)?;
             tx.commit()?;
-            tracing::info!(registry = self.name, version = step.version, name = step.name, "migration applied");
+            tracing::info!(
+                registry = self.name,
+                version = step.version,
+                name = step.name,
+                "migration applied"
+            );
         }
         Ok(())
     }
@@ -149,11 +154,14 @@ mod tests {
         let path = dir.path().join("m.db");
         let mut conn = open_configured(&path).unwrap();
         reg().run(&mut conn, Some(&path)).unwrap();
-        let v: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+        let v: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
         assert_eq!(v, 2);
         // Second run is a no-op.
         reg().run(&mut conn, Some(&path)).unwrap();
-        conn.execute("INSERT INTO t(v, extra) VALUES('a', 1)", []).unwrap();
+        conn.execute("INSERT INTO t(v, extra) VALUES('a', 1)", [])
+            .unwrap();
     }
 
     #[test]
@@ -163,7 +171,13 @@ mod tests {
         let mut conn = open_configured(&path).unwrap();
         conn.pragma_update(None, "user_version", 99u32).unwrap();
         let err = reg().run(&mut conn, Some(&path)).unwrap_err();
-        assert!(matches!(err, DbError::FutureSchema { found: 99, supported: 2 }));
+        assert!(matches!(
+            err,
+            DbError::FutureSchema {
+                found: 99,
+                supported: 2
+            }
+        ));
     }
 
     #[test]
@@ -173,11 +187,14 @@ mod tests {
         {
             // Seed a v1 DB so a backup has something to copy.
             let mut conn = open_configured(&path).unwrap();
-            MigrationRegistry::new("test", vec![MigrationStep {
-                version: 1,
-                name: "create_t",
-                up: |tx| tx.execute_batch("CREATE TABLE t(id INTEGER PRIMARY KEY)"),
-            }])
+            MigrationRegistry::new(
+                "test",
+                vec![MigrationStep {
+                    version: 1,
+                    name: "create_t",
+                    up: |tx| tx.execute_batch("CREATE TABLE t(id INTEGER PRIMARY KEY)"),
+                }],
+            )
             .run(&mut conn, Some(&path))
             .unwrap();
         }
