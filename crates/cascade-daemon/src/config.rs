@@ -296,6 +296,35 @@ impl Default for AgyQuotaConfig {
     }
 }
 
+/// `[quota.zai]` section — z.ai GLM Coding Plan prompt-rate quota config.
+///
+/// The Za account exposes no usage API, so quota is tracked locally by counting
+/// dispatched prompts in `~/.cascade/za-usage.jsonl` (written by the CLI
+/// conductor on each Za dispatch). The daemon reads this log to synthesise a
+/// rolling five-hour utilization for the widget.
+///
+/// # TOML example
+/// ```toml
+/// [quota.zai]
+/// prompts_per_5h = 120
+/// ```
+// [Guessing]: verify against z.ai plan; override via config
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ZaiQuotaConfig {
+    /// Maximum prompts allowed in any rolling 5-hour window.
+    /// Default 120. Override via `[quota.zai] prompts_per_5h` in config.toml.
+    pub prompts_per_5h: u32,
+}
+
+impl Default for ZaiQuotaConfig {
+    fn default() -> Self {
+        Self {
+            prompts_per_5h: 120,
+        }
+    }
+}
+
 /// `[quota.oc_go]` section — OC-Go dollar-metered quota config.
 ///
 /// OC-Go uses cost_usd (not token counts) for rate windows.
@@ -344,6 +373,8 @@ pub struct QuotaConfig {
     pub agy: AgyQuotaConfig,
     /// `[quota.oc_go]` — OC-Go dollar-metered limits.
     pub oc_go: OcGoQuotaConfig,
+    /// `[quota.zai]` — z.ai GLM Coding Plan prompt-rate limits.
+    pub zai: ZaiQuotaConfig,
 }
 
 // ── E-P6-02 T-05: BudgetConfig ────────────────────────────────────────────────

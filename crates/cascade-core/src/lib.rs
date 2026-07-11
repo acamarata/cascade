@@ -106,6 +106,7 @@ pub mod threads;
 pub mod var_substitute;
 pub mod watcher;
 pub mod worktree_store;
+pub mod za_usage;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -124,3 +125,6 @@ pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Ri
 pub use quota_store::{read_quota_store, write_quota_store};
 pub use resolution::{ResolvedCascade, Resolver};
 pub use watcher::{CascadeChanged, CascadeWatcher};
+pub use za_usage::{
+    append_record as za_append_record, read_window as za_read_window, ZaRecord, ZaWindowSummary,
+};

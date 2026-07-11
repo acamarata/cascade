@@ -48,14 +48,14 @@ use cascade_core::model_ids::MODEL_CLAUDE_HAIKU;
 use cascade_core::quota_aggregator::aggregate_quota;
 use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_core::read_claude_access_token;
-use cascade_types::accounts::{AccessMethod, AccountFamily};
+use cascade_types::accounts::{AccessMethod, AccountFamily, AccountsRegistry};
 use cascade_types::quota_store::{
     QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
     PROVIDER_OPENAI_CODEX,
 };
 
 use crate::claude_usage::fetch_claude_usage;
-use crate::config::FleetConfig;
+use crate::config::{Config, FleetConfig};
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
 
@@ -260,6 +260,11 @@ impl FleetPoller {
         let state_path = config_dir.join("quota-state.json");
         let store_path = config_dir.join("quota-store.json");
 
+        // Read the Za prompt cap once at startup; missing/invalid config → default 120.
+        let zai_prompts_per_5h = Config::load(&config_dir)
+            .map(|c| c.quota.zai.prompts_per_5h)
+            .unwrap_or(120);
+
         let sources: Vec<Box<dyn FleetSource>> = vec![
             Box::new(ClaudeMaxSource),
             Box::new(CodexSource),
@@ -277,7 +282,7 @@ impl FleetPoller {
         // interval-stale (or, on first-ever run, entirely absent) data for as
         // long as 60 s. `tick_async` is bounded by per-account network
         // timeouts inside `refresh_accounts`, so this cannot hang startup.
-        Self::tick_async(&sources, &store_path).await;
+        Self::tick_async(&sources, &store_path, zai_prompts_per_5h).await;
 
         loop {
             tokio::select! {
@@ -288,7 +293,7 @@ impl FleetPoller {
                 }
             }
 
-            Self::tick_async(&sources, &store_path).await;
+            Self::tick_async(&sources, &store_path, zai_prompts_per_5h).await;
         }
 
         info!("fleet poller stopped");
@@ -297,15 +302,20 @@ impl FleetPoller {
     /// Async tick: fetch live Claude usage, then run the synchronous quota
     /// source aggregation pass.
     ///
-    /// Inputs: `sources` — registered fleet sources; `store_path` — destination.
+    /// Inputs: `sources` — registered fleet sources; `store_path` — destination;
+    ///         `zai_prompts_per_5h` — Za prompt cap for the rolling window.
     /// Outputs: `quota.json` + `quota-store.json` updated.
-    async fn tick_async(sources: &[Box<dyn FleetSource>], store_path: &std::path::Path) {
+    async fn tick_async(
+        sources: &[Box<dyn FleetSource>],
+        store_path: &std::path::Path,
+        zai_prompts_per_5h: u32,
+    ) {
         // Refresh accounts/ CLI availability, fetch live Claude usage, and write
         // quota.json.  This must run before the quota-store aggregation so the
         // widget has fresh data even when no synchronous source has returned data.
         let accts_path = accounts_dir().join("accounts.json");
         if accts_path.exists() {
-            Self::refresh_accounts(&accts_path).await;
+            Self::refresh_accounts(&accts_path, zai_prompts_per_5h).await;
         }
         Self::tick(sources, store_path);
     }
@@ -361,21 +371,24 @@ impl FleetPoller {
     }
 
     /// Refresh `cli_available` and `key_count` in an existing `accounts/accounts.json`,
-    /// fetch live Claude usage for each discovered Claude account, and atomically
-    /// regenerate `accounts/quota.json` for the native widget.
+    /// fetch live Claude usage for each discovered Claude account, inject Za local
+    /// usage from `~/.cascade/za-usage.jsonl`, and atomically regenerate
+    /// `accounts/quota.json` for the native widget.
     ///
     /// Purpose: keeps the registry and widget data in sync with the current PATH state
     /// on each daemon tick without requiring the user to run `cascade accounts detect`.
     /// Live Claude usage is fetched via `api.anthropic.com/api/oauth/usage` for each
     /// account whose token is valid (or after a `claude -p` refresh attempt if expired).
     /// Fetched usage is written to `~/.claude/usage-cache.json` so `write_quota_json`
-    /// picks it up via its existing merge path.
+    /// picks it up via its existing merge path. Za usage is read from the local JSONL
+    /// log and patched into the same cache before `write_quota_json` runs.
     ///
-    /// Inputs:  `path` — existing `accounts/accounts.json` file.
+    /// Inputs:  `path` — existing `accounts/accounts.json` file;
+    ///          `zai_prompts_per_5h` — rolling-window prompt cap for Za accounts.
     /// Outputs: updated `accounts.json` + `quota.json` on success; warn log on error.
     /// Constraints: async; bounded per-account (10s network timeout + 45s refresh);
     ///              never overwrites existing usage with zeros on failure.
-    async fn refresh_accounts(path: &std::path::Path) {
+    async fn refresh_accounts(path: &std::path::Path, zai_prompts_per_5h: u32) {
         let mut registry = match read_accounts_registry(path) {
             Ok(r) => r,
             Err(e) => {
@@ -416,6 +429,14 @@ impl FleetPoller {
         // and write results to ~/.claude/usage-cache.json so write_quota_json
         // picks them up via its existing merge path.
         Self::fetch_and_cache_claude_usage().await;
+
+        // ── Za local usage injection ──────────────────────────────────────────
+        // Za (z.ai GLM Coding Plan) exposes no usage API; we read the local
+        // prompt log written by the CLI conductor and patch synthetic five-hour
+        // data into usage-cache.json for each configured Zai account, so
+        // write_quota_json picks it up via the existing merge path. Only
+        // writes when the log file has data — never overwrites with zeros.
+        inject_za_usage_into_cache(&registry, zai_prompts_per_5h);
 
         // Refresh quota.json (same directory as accounts.json).
         if let Some(dir) = path.parent() {
@@ -707,6 +728,108 @@ fn upsert_cache_entry(
         entries[pos] = entry;
     } else {
         entries.push(entry);
+    }
+}
+
+// ── Za usage injection ────────────────────────────────────────────────────────
+
+/// Read Za local prompt log and patch synthetic five-hour usage into
+/// `~/.claude/usage-cache.json` for each configured Zai account.
+///
+/// Purpose: since z.ai exposes no usage API, the CLI conductor records each
+/// dispatched prompt in `~/.cascade/za-usage.jsonl`. This function reads that
+/// log on every fleet tick and writes synthetic `five_hour` data into the same
+/// usage-cache that `write_quota_json` merges, so Za utilization appears in the
+/// widget without any new widget code.
+///
+/// Inputs:  `registry` — current accounts registry (to find Zai accounts);
+///          `zai_prompts_per_5h` — rolling-window prompt cap.
+/// Outputs: best-effort patch to `~/.claude/usage-cache.json`; silent on error.
+/// Constraints: never overwrites with zeros — if `read_window` returns `None`
+///              (log absent or empty), the existing cache entry is preserved.
+fn inject_za_usage_into_cache(registry: &AccountsRegistry, zai_prompts_per_5h: u32) {
+    use cascade_core::za_usage::read_window;
+
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return,
+    };
+
+    let za_log_path = home.join(".cascade").join("za-usage.jsonl");
+    let cache_path = home.join(".claude").join("usage-cache.json");
+
+    let cap = if zai_prompts_per_5h == 0 {
+        1
+    } else {
+        zai_prompts_per_5h
+    };
+
+    // Collect Zai account ids from the registry.
+    let zai_accounts: Vec<String> = registry
+        .accounts
+        .iter()
+        .filter(|a| a.family == AccountFamily::Zai)
+        .map(|a| a.id.clone())
+        .collect();
+
+    if zai_accounts.is_empty() {
+        return;
+    }
+
+    // Read the rolling 5h window from the local log (shared across all Za accounts).
+    let Some(summary) = read_window(&za_log_path, 5 * 3600) else {
+        // No log data — leave existing cache entries intact.
+        return;
+    };
+
+    let utilization = (100.0 * summary.used_prompts as f64 / cap as f64).min(100.0);
+
+    // Compute resets_at: oldest record in window + 5h → when the window opens up.
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let resets_at_epoch: Option<f64> = summary.oldest_ts_in_window.map(|oldest| {
+        let reset_ts = oldest + 5 * 3600;
+        reset_ts as f64
+    });
+    let resets_in: Option<String> = resets_at_epoch.and_then(|ra| {
+        let remaining = ra as i64 - now_secs as i64;
+        if remaining > 0 {
+            let h = remaining / 3600;
+            let m = (remaining % 3600) / 60;
+            Some(format!("{h}h {m:02}m"))
+        } else {
+            None
+        }
+    });
+
+    let now_f64 = now_secs as f64;
+
+    for account_id in &zai_accounts {
+        let entry = serde_json::json!({
+            "account":      account_id,
+            "provider":     "zai",
+            "usage": {
+                "five_hour": {
+                    "utilization": utilization,
+                    "resets_at":   resets_at_epoch,
+                    "resets_in":   resets_in
+                },
+                "seven_day":         serde_json::Value::Null,
+                "seven_day_sonnet":  serde_json::Value::Null,
+                "seven_day_opus":    serde_json::Value::Null,
+                "extra_usage":       serde_json::Value::Null
+            },
+            "last_pull_at": now_f64,
+            "quota_opaque": false,
+            "last_error":   serde_json::Value::Null
+        });
+
+        let updates = vec![(account_id.clone(), entry)];
+        if let Err(e) = merge_usage_cache_updates(&cache_path, updates) {
+            warn!(%e, account = %account_id, "fleet: failed to inject Za usage into cache");
+        }
     }
 }
 

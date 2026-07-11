@@ -354,6 +354,28 @@ fn execute_with_fallback(
                 } else {
                     print!("{output}");
                 }
+                // Za local usage tracking: record dispatched prompt in the JSONL
+                // log so the daemon can synthesise a rolling five-hour window.
+                // Best-effort — errors silently ignored (never block the caller).
+                if current.provider == Provider::Zai {
+                    if let Some(home) = dirs::home_dir() {
+                        let za_path = home.join(".cascade").join("za-usage.jsonl");
+                        let ts = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let rec = cascade_core::ZaRecord {
+                            ts,
+                            account: current.account_id.clone(),
+                            prompts: 1,
+                            est_input_tokens: (prompt.len() as u64) / 4,
+                            est_output_tokens: (output.len() as u64) / 4,
+                        };
+                        let _ = std::panic::catch_unwind(|| {
+                            cascade_core::za_append_record(&za_path, &rec);
+                        });
+                    }
+                }
                 // D9: fire-and-forget POST to daemon fleet-routing ring.
                 // Non-blocking: spawned thread; failure is silently ignored
                 // (the daemon may not be running; routing ring is best-effort).
