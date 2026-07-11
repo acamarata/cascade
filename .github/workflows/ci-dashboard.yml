@@ -49,3 +49,24 @@ jobs:
           ls apps/cascade-dashboard/dist/
           test -f apps/cascade-dashboard/dist/index.html || (echo "MISSING: dist/index.html" && exit 1)
           echo "Build verification passed"
+
+  unit-test:
+    name: Unit Tests (Node 24)
+    runs-on: [self-hosted, cam-sentry]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm --filter @cascade/dashboard test
