@@ -10,7 +10,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Users, Plug, BarChart2, Route } from 'lucide-react';
 import { TabsLayout } from '../../components/layout/TabsLayout';
-import { ProviderSettings } from '../ProviderSettings';
+import { ProviderSettings } from '../ProviderSettingsPage';
 import { UsagePage } from '../UsagePage';
 import { FleetTabContent } from './FleetTabContent';
 import { FleetRoutingView } from '../../components/fleet/FleetRoutingView';
