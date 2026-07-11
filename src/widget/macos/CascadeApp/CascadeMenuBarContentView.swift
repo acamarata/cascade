@@ -125,11 +125,22 @@ struct CascadeMenuBarContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     UsageTableHeader(showExtra: showExtra)
                     Divider().padding(.vertical, 2)
-                    ForEach(rows, id: \.entry.id) { row in
-                        UsageRow(label: row.label, entry: row.entry, showExtra: showExtra)
-                            .padding(.vertical, 3)
-                        Divider().opacity(0.3)
+                    // Self-size to fit all rows; fall back to a scrollable list
+                    // once the row count would exceed the popover's height cap.
+                    let rowsList = VStack(alignment: .leading, spacing: 0) {
+                        ForEach(rows, id: \.entry.id) { row in
+                            UsageRow(label: row.label, entry: row.entry, showExtra: showExtra)
+                                .padding(.vertical, 3)
+                            Divider().opacity(0.3)
+                        }
                     }
+                    ViewThatFits(in: .vertical) {
+                        rowsList
+                        ScrollView(.vertical, showsIndicators: false) {
+                            rowsList
+                        }
+                    }
+                    .frame(maxHeight: 460)
                 }
             }
         } else {
