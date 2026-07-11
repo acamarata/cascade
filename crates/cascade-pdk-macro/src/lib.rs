@@ -198,8 +198,17 @@ mod tests {
 
     #[test]
     fn static_plugin_ident_follows_naming_convention() {
-        assert_eq!(static_plugin_ident_name("MyTool"), "__CASCADE_PLUGIN_MYTOOL");
-        assert_eq!(static_plugin_ident_name("FooBar"), "__CASCADE_PLUGIN_FOOBAR");
-        assert_eq!(static_plugin_ident_name("Retriever"), "__CASCADE_PLUGIN_RETRIEVER");
+        assert_eq!(
+            static_plugin_ident_name("MyTool"),
+            "__CASCADE_PLUGIN_MYTOOL"
+        );
+        assert_eq!(
+            static_plugin_ident_name("FooBar"),
+            "__CASCADE_PLUGIN_FOOBAR"
+        );
+        assert_eq!(
+            static_plugin_ident_name("Retriever"),
+            "__CASCADE_PLUGIN_RETRIEVER"
+        );
     }
 }
