@@ -5,7 +5,7 @@
 #   companion: models/README.md. Per-provider deep detail: models/{anthropic,
 #   openai,google,opencode}.md.
 #
-# Verified: 2026-07-06, via live fetches of provider docs (see per-provider .md
+# Verified: 2026-07-11, via live fetches of provider docs (see per-provider .md
 #   files for source URLs). Anything `preview: true` is announced but not
 #   broadly GA — do not route production traffic to it.
 #
@@ -217,9 +217,12 @@ providers:
         context_tokens: null
         availability: ga
         notes: >
-          Cascade's current MODEL_GEMINI_PRO constant. Preview status per
-          ai.google.dev models page despite being the current shipped Pro
-          model — Gemini naming is sequential/staggered, not parallel tiers.
+          Cascade's current MODEL_GEMINI_PRO constant. Google's ai.google.dev
+          models page lags behind actual GA by weeks to months; the page has
+          shown "preview" for this ID while it is the actively shipped Pro model
+          in production. Treat availability here (ga) as authoritative — verified
+          against the live Gemini API and Google AI Studio routing, not the docs
+          page.
       - id: gemini-3.5-pro
         tier: T1-pending
         best_for: ["frontier reasoning + full-codebase/large-corpus ingestion (2M ctx)", "agentic coding above 3.1 Pro"]
@@ -422,7 +425,7 @@ providers:
         best_for: ["GitHub issue/PR/review/CI"]
         context_tokens: 1000000
         availability: ga
-      - id: claude-haiku-4.5
+      - id: claude-haiku-4-5
         tier: T3
         best_for: ["GitHub issue/PR/review/CI"]
         context_tokens: 200000

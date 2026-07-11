@@ -1077,5 +1077,8 @@ every AI tool you use can read.
 - Absorbed claw-fleet (Gemini proxy daemon) and claw-dash (dashboard web UI) into a single unified tool
 - MIT license
 
-[Unreleased]: https://github.com/acamarata/cascade/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/acamarata/cascade/compare/v1.15.2...HEAD
+[1.15.2]: https://github.com/acamarata/cascade/compare/v1.15.1...v1.15.2
+[1.15.1]: https://github.com/acamarata/cascade/compare/v1.15.0...v1.15.1
+[1.15.0]: https://github.com/acamarata/cascade/releases/tag/v1.15.0
 [0.1.0]: https://github.com/acamarata/cascade/releases/tag/v0.1.0
