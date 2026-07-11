@@ -40,12 +40,53 @@ env:
 
 jobs:
   # ── test ─────────────────────────────────────────────────────────────────
-  # Run the full test suite across 5 target triples, all natively
-  # (macOS arm64/x64, Linux x64/arm64, Windows x64). No Docker, no cross-rs —
-  # Linux aarch64 uses GitHub's native arm64 runner (ubuntu-24.04-arm).
+  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
+  # split into test-hosted (guarded by HOSTED_CI=true) — skipped on the
+  # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
   test:
     name: test (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (native, self-hosted cam-sentry)
+          - runner: [self-hosted, cam-sentry]
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Install Linux tray system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-nextest
+        run: cargo binstall --no-confirm cargo-nextest
+
+      - name: Run tests via nextest (native, all targets)
+        run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
+
+  # ── test-hosted ──────────────────────────────────────────────────────────
+  # Needs GitHub-hosted macOS/Windows runners; skipped on the private repo (no paid
+  # minutes). Flip repo var HOSTED_CI=true when public.
+  test-hosted:
+    name: test (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    if: ${{ vars.HOSTED_CI == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -58,11 +99,6 @@ jobs:
           # macOS Intel (native x86_64)
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            use-cross: false
-
-          # Linux x86_64 (native)
-          - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
             use-cross: false
 
           # Linux aarch64 — native arm64 runner (no Docker, no cross-rs)
@@ -124,11 +160,51 @@ jobs:
         run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
 
   # ── clippy ────────────────────────────────────────────────────────────────
-  # Run clippy with -D warnings across the full matrix, all natively.
-  # Linux aarch64 lints on GitHub's native arm64 runner (no Docker/cross-rs).
+  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
+  # split into clippy-hosted (guarded by HOSTED_CI=true) — skipped on the
+  # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
   clippy:
     name: clippy (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (native, self-hosted cam-sentry)
+          - runner: [self-hosted, cam-sentry]
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + target + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Install Linux tray system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Run clippy natively (all targets)
+        run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
+
+  # ── clippy-hosted ─────────────────────────────────────────────────────────
+  # Needs GitHub-hosted macOS/Windows runners; skipped on the private repo (no paid
+  # minutes). Flip repo var HOSTED_CI=true when public.
+  clippy-hosted:
+    name: clippy (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    if: ${{ vars.HOSTED_CI == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -139,10 +215,6 @@ jobs:
 
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            use-cross: false
-
-          - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
             use-cross: false
 
           - runner: ubuntu-24.04-arm
@@ -227,6 +299,13 @@ jobs:
     name: coverage
     runs-on: [self-hosted, cam-sentry]
     steps:
+      - name: Free disk space (llvm-cov instrumented build is large)
+        run: |
+          rm -rf "${{ github.workspace }}/target/llvm-cov-target" 2>/dev/null || true
+          rm -rf "${{ github.workspace }}/target/debug/incremental" 2>/dev/null || true
+          docker builder prune -af 2>/dev/null || true
+          df -h
+
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain (stable + llvm-tools-preview)
@@ -239,7 +318,7 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev libssl-dev pkg-config
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -267,12 +346,12 @@ jobs:
   # ── widget-macos ──────────────────────────────────────────────────────────
   # Build the CascadeApp + CascadeWidgetExtension Xcode project and run
   # CascadeWidgetTests on a macos-14 runner (Apple Silicon, WidgetKit support).
-  # Runs only when src/widget/macos/** or the workflow file changes to avoid
-  # burning macOS runner minutes (~10x cost vs Linux) on unrelated commits.
+  # Needs GitHub-hosted macOS runners; skipped on the private repo (no paid minutes).
+  # Flip repo var HOSTED_CI=true when public.
   widget-macos:
     name: widget-macos
     runs-on: macos-14
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -311,13 +390,12 @@ jobs:
   # ── widget-windows ────────────────────────────────────────────────────────
   # Builds the WinUI 3 / Windows App SDK 1.5 widget provider project.
   # Uses MSBuild (Visual Studio 2022) on windows-latest.
-  # Triggers only when the widget-windows project files change or when the
-  # workflow file itself changes, to avoid burning Windows runner minutes on
-  # unrelated commits.
+  # Needs GitHub-hosted Windows runners; skipped on the private repo (no paid minutes).
+  # Flip repo var HOSTED_CI=true when public.
   widget-windows:
     name: widget-windows
     runs-on: windows-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -345,11 +423,12 @@ jobs:
 
   # ── tray-windows ──────────────────────────────────────────────────────────
   # Targeted Windows x64 build for cascade-tray platform-specific code.
-  # Builds only the cascade-tray crate for x86_64-pc-windows-msvc to catch
-  # Windows-specific compilation errors early.
+  # Needs GitHub-hosted Windows runners; skipped on the private repo (no paid minutes).
+  # Flip repo var HOSTED_CI=true when public.
   tray-windows:
     name: tray-windows
     runs-on: windows-latest
+    if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -477,14 +556,32 @@ jobs:
   # A single required status check that depends on all CI jobs.
   # Configure this as the required check in branch protection rules so that
   # you only need one entry in the required-checks list.
+  #
+  # Self-hosted jobs (test, integration-tests, clippy, fmt, deny, coverage)
+  # must succeed.  Hosted-only jobs (test-hosted, clippy-hosted, widget-macos,
+  # widget-windows, tray-windows) are skipped on the private repo — skipped is
+  # acceptable; failure is not.  bench-check runs on pull_request only.
   ci-gate:
     name: ci-gate
-    needs: [test, integration-tests, clippy, fmt, deny, coverage, widget-macos, widget-windows, tray-windows, bench-check]
+    needs:
+      - test
+      - integration-tests
+      - clippy
+      - fmt
+      - deny
+      - coverage
+      - bench-check
+      - test-hosted
+      - clippy-hosted
+      - widget-macos
+      - widget-windows
+      - tray-windows
     runs-on: [self-hosted, cam-sentry]
     if: always()
     steps:
       - name: Check all CI jobs passed
         run: |
+          # Self-hosted jobs that always run on cam-sentry — must succeed.
           if [[ "${{ needs.test.result }}" != "success" ]]; then
             echo "test failed: ${{ needs.test.result }}"
             exit 1
@@ -509,22 +606,32 @@ jobs:
             echo "coverage failed: ${{ needs.coverage.result }}"
             exit 1
           fi
-          if [[ "${{ needs.widget-macos.result }}" != "success" ]]; then
-            echo "widget-macos failed: ${{ needs.widget-macos.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.widget-windows.result }}" != "success" ]]; then
-            echo "widget-windows failed: ${{ needs.widget-windows.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.tray-windows.result }}" != "success" ]]; then
-            echo "tray-windows failed: ${{ needs.tray-windows.result }}"
-            exit 1
-          fi
           # bench-check only runs on pull_request events; on push it is skipped.
           # A skipped result is acceptable here — a failure is not.
           if [[ "${{ needs.bench-check.result }}" == "failure" ]]; then
             echo "bench-check failed: ${{ needs.bench-check.result }}"
+            exit 1
+          fi
+          # Hosted-only jobs: skipped on the private repo (no paid runner minutes).
+          # Skipped is acceptable; failure is not.
+          if [[ "${{ needs.test-hosted.result }}" == "failure" ]]; then
+            echo "test-hosted failed: ${{ needs.test-hosted.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.clippy-hosted.result }}" == "failure" ]]; then
+            echo "clippy-hosted failed: ${{ needs.clippy-hosted.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.widget-macos.result }}" == "failure" ]]; then
+            echo "widget-macos failed: ${{ needs.widget-macos.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.widget-windows.result }}" == "failure" ]]; then
+            echo "widget-windows failed: ${{ needs.widget-windows.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.tray-windows.result }}" == "failure" ]]; then
+            echo "tray-windows failed: ${{ needs.tray-windows.result }}"
             exit 1
           fi
           echo "All CI jobs passed."
