@@ -16,7 +16,7 @@ on:
 
 jobs:
   model-id-gate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
 
