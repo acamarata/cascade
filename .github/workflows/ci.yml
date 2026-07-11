@@ -298,6 +298,12 @@ jobs:
   coverage:
     name: coverage
     runs-on: [self-hosted, cam-sentry]
+    # The llvm-cov instrumented build of the full workspace needs ~10GB+, which
+    # does not reliably fit on cam-sentry's 38GB disk alongside the ~19GB nSentry
+    # stack. Disabled until the volume is resized; flip repo var COVERAGE_ENABLED=true
+    # once there is headroom. (job-started/completed hooks prune target dirs, but
+    # the instrumented build peak still exceeds free space here.)
+    if: ${{ vars.COVERAGE_ENABLED == 'true' }}
     steps:
       - name: Free disk space (llvm-cov instrumented build is large)
         run: |
@@ -602,7 +608,9 @@ jobs:
             echo "deny failed: ${{ needs.deny.result }}"
             exit 1
           fi
-          if [[ "${{ needs.coverage.result }}" != "success" ]]; then
+          # coverage is guarded behind COVERAGE_ENABLED (disk-constrained box);
+          # skipped is acceptable, a real failure is not.
+          if [[ "${{ needs.coverage.result }}" == "failure" ]]; then
             echo "coverage failed: ${{ needs.coverage.result }}"
             exit 1
           fi
