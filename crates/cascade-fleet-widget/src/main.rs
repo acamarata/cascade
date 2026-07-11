@@ -51,6 +51,7 @@ fn family_label(family: &AccountFamily) -> &'static str {
         AccountFamily::Google => "Google",
         AccountFamily::Opencode => "OpenCode",
         AccountFamily::Gfp => "GFP (key pool)",
+        AccountFamily::Zai => "Za (z.ai)",
     }
 }
 
@@ -155,6 +156,7 @@ fn build_menu_content(data: &FleetData) -> (String, Vec<String>) {
         AccountFamily::Google,
         AccountFamily::Opencode,
         AccountFamily::Gfp,
+        AccountFamily::Zai,
     ] {
         let members: Vec<_> = registry
             .accounts
@@ -220,6 +222,19 @@ fn run_widget() {
                     push_state(&mut tray, &l);
                     last = Instant::now();
                 }
+                TrayAction::OpenApp => {
+                    let home = cascade_types::paths::home_dir();
+                    let app_path = home.join("Applications").join("Cascade.app");
+                    if app_path.exists() {
+                        let _ = std::process::Command::new("open")
+                            .arg("-a")
+                            .arg(&app_path)
+                            .spawn();
+                    } else {
+                        let fallback = home.join(".cascade").join("accounts");
+                        let _ = std::process::Command::new("open").arg(&fallback).spawn();
+                    }
+                }
                 _ => {}
             }
         }
@@ -282,8 +297,7 @@ fn push_state(tray: &mut cascade_tray::MacosTrayImpl, lines: &[String]) {
 
 #[cfg(not(target_os = "macos"))]
 fn run_widget() {
-    println!("cascade-fleet-widget: macOS menu-bar not available on this platform.");
-    println!("cascade-fleet-widget: Binary built successfully; run on macOS to use the widget.");
+    eprintln!("cascade-fleet-widget: tray widget is macOS-only in this build.");
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
