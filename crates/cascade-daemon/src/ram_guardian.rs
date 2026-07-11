@@ -149,6 +149,8 @@ fn sample_via_memory_pressure() -> Option<f32> {
 /// Parse the free-percentage line out of `memory_pressure -Q` output.
 ///
 /// Expected line: "System-wide memory free percentage: 81%". Pure/testable.
+// macOS-only: sole non-test caller is sample_via_memory_pressure (macOS-gated).
+#[cfg(target_os = "macos")]
 fn parse_memory_pressure_output(text: &str) -> Option<f32> {
     for line in text.lines() {
         if let Some(idx) = line.to_ascii_lowercase().find("free percentage") {
@@ -179,6 +181,8 @@ fn sample_via_vm_stat() -> Option<f32> {
 ///
 /// free% = (free + inactive + speculative) / (free + active + inactive +
 /// speculative + wired). Pure/testable.
+// macOS-only: sole non-test caller is sample_via_vm_stat (macOS-gated).
+#[cfg(target_os = "macos")]
 fn parse_vm_stat_output(text: &str) -> Option<f32> {
     let mut free = 0u64;
     let mut active = 0u64;
@@ -733,7 +737,10 @@ mod tests {
     }
 
     // ── parse_memory_pressure_output ───────────────────────────────────────
+    // macOS-only: the parsers under test are cfg-gated to macOS (their sole
+    // non-test callers are macOS-gated samplers).
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn parse_memory_pressure_typical_output() {
         let text = "The system has 17179869184 (1048576 pages with a page size of 16384).\n\
@@ -741,6 +748,7 @@ mod tests {
         assert_eq!(parse_memory_pressure_output(text), Some(81.0));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn parse_memory_pressure_missing_line_returns_none() {
         let text = "some unrelated output\n";
@@ -749,6 +757,7 @@ mod tests {
 
     // ── parse_vm_stat_output ────────────────────────────────────────────────
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn parse_vm_stat_typical_output() {
         let text = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n\
@@ -764,6 +773,7 @@ mod tests {
         assert!((pct - 50.0).abs() < 0.001);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn parse_vm_stat_empty_returns_none() {
         assert_eq!(parse_vm_stat_output(""), None);

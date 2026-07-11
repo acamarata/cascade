@@ -310,6 +310,8 @@ fn sample_via_memory_pressure() -> Option<f32> {
     parse_memory_pressure_output(&text)
 }
 
+// macOS-only: sole non-test caller is sample_via_memory_pressure (macOS-gated).
+#[cfg(target_os = "macos")]
 fn parse_memory_pressure_output(text: &str) -> Option<f32> {
     for line in text.lines() {
         if let Some(idx) = line.to_ascii_lowercase().find("free percentage") {
@@ -336,7 +338,8 @@ fn sample_via_vm_stat() -> Option<f32> {
     parse_vm_stat_output(&text)
 }
 
-#[allow(dead_code)]
+// macOS-only: sole non-test caller is sample_via_vm_stat (macOS-gated).
+#[cfg(target_os = "macos")]
 fn parse_vm_stat_output(text: &str) -> Option<f32> {
     let mut free = 0u64;
     let mut active = 0u64;
