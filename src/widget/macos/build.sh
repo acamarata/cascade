@@ -40,7 +40,7 @@ echo "[2/4] Archive complete: $ARCHIVE"
 echo "[3/4] Installing to $INSTALL_DIR/$APP_NAME ..."
 mkdir -p "$INSTALL_DIR"
 # Remove old copy if present.
-rm -rf "$INSTALL_DIR/$APP_NAME"
+rm -rf "${INSTALL_DIR:?}/$APP_NAME"
 cp -R "$ARCHIVE/Products/Applications/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
 # Ad-hoc sign the installed copy (unsigned binaries are killed by macOS).
 codesign --force --deep --sign - "$INSTALL_DIR/$APP_NAME"

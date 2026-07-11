@@ -437,7 +437,7 @@ mod tests {
     /// Marked `#[ignore]` — only run manually with `cargo test -- --ignored`.
     /// Requires ~350 MB network download on first run.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "downloads the BGE model (~1GB); run explicitly with -- --ignored"]
     async fn real_rerank_relevant_scores_higher() {
         let tmp = TempDir::new().expect("tempdir");
         let opts = BgeRerankerOptions {

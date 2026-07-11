@@ -29,7 +29,6 @@ now_epoch=$(date -u +%s)
 cutoff_epoch=$((now_epoch - MAX_AGE_DAYS * 86400))
 # Portable ISO-8601 → epoch: macOS (date -j -f) first, then GNU/Linux (date -d) on the sentry box.
 to_epoch(){ date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null || date -u -d "$1" +%s 2>/dev/null; }
-n=0
 for r in $REPOS; do
   # one entry per workflow (latest failed run), so we don't spam per-run
   gh run list --repo "$ORG/$r" --status failure --limit "$PER" \

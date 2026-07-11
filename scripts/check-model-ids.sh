@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI guard: exits 1 if one of the 8 canonical fleet model-ID string literals
 # (as currently defined in crates/cascade-types/src/model_ids.rs) is
-# hardcoded anywhere else in crates/**/*.rs instead of importing the const.
+# hardcoded anywhere in crates/**/*.rs, apps/cascade-app/src/**/*.{ts,tsx},
+# or src/widget/macos/**/*.swift instead of importing/using the constant.
 #
 # crates/cascade-types/src/model_ids.rs is the single source of truth for
 # these 8 literals (MODEL_CLAUDE_OPUS, MODEL_CLAUDE_SONNET, MODEL_CLAUDE_HAIKU,
@@ -75,13 +76,20 @@ ALT="${ESCAPED[*]}"
 unset IFS
 PATTERN="\"(${ALT})\""
 
-# Collect candidate .rs files under crates/, excluding the doctrine file,
-# any /tests/ path, and *_test.rs / test_*.rs fixture files.
+# Collect candidate source files: Rust under crates/, TS/TSX under apps/cascade-app/src/,
+# and Swift under src/widget/macos/. Exclude the doctrine file, test paths, and test files.
 mapfile -t FILES < <(
-  find crates -type f -name '*.rs' \
-    ! -path "*/tests/*" \
-    ! -name '*_test.rs' \
-    ! -name 'test_*.rs'
+  {
+    find crates -type f -name '*.rs' \
+      ! -path "*/tests/*" \
+      ! -name '*_test.rs' \
+      ! -name 'test_*.rs'
+    find apps/cascade-app/src -type f \( -name '*.ts' -o -name '*.tsx' \) \
+      ! -path '*/__tests__/*' \
+      ! -name '*.test.ts' \
+      ! -name '*.test.tsx'
+    find src/widget/macos -type f -name '*.swift' 2>/dev/null || true
+  }
 )
 
 VIOLATIONS=()
@@ -99,7 +107,8 @@ for file in "${FILES[@]}"; do
 
     trimmed="${content#"${content%%[![:space:]]*}"}"
     case "$trimmed" in
-      '///'*|'//!'*)
+      '///'*|'//!'*|'*'*)
+        # Rust doc comments (///, //!) and block-comment lines (* ...) in TS/Swift/Rust
         continue
         ;;
     esac

@@ -69,10 +69,7 @@ pub fn cascade_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generate a static instance of the plugin struct.
     // For wasm32 targets this is fine — each WASM module is single-threaded.
     let static_ident = Ident::new(
-        &format!(
-            "__CASCADE_PLUGIN_{}",
-            struct_name.to_string().to_uppercase()
-        ),
+        &static_plugin_ident_name(&struct_name.to_string()),
         Span::call_site(),
     );
 
@@ -189,4 +186,20 @@ pub fn register_provider(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn register_agent(attr: TokenStream, item: TokenStream) -> TokenStream {
     cascade_plugin(attr, item)
+}
+
+fn static_plugin_ident_name(struct_name: &str) -> String {
+    format!("__CASCADE_PLUGIN_{}", struct_name.to_uppercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_plugin_ident_follows_naming_convention() {
+        assert_eq!(static_plugin_ident_name("MyTool"), "__CASCADE_PLUGIN_MYTOOL");
+        assert_eq!(static_plugin_ident_name("FooBar"), "__CASCADE_PLUGIN_FOOBAR");
+        assert_eq!(static_plugin_ident_name("Retriever"), "__CASCADE_PLUGIN_RETRIEVER");
+    }
 }

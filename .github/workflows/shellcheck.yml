@@ -3,14 +3,10 @@ name: shellcheck
 on:
   push:
     paths:
-      - 'src/bin/**'
-      - 'install.sh'
-      - 'uninstall.sh'
+      - '**/*.sh'
   pull_request:
     paths:
-      - 'src/bin/**'
-      - 'install.sh'
-      - 'uninstall.sh'
+      - '**/*.sh'
 
 jobs:
   shellcheck:
@@ -21,8 +17,5 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
 
-      - name: Lint shell scripts
-        run: |
-          shellcheck \
-            install.sh \
-            uninstall.sh
+      - name: Lint all tracked shell scripts
+        run: git ls-files "*.sh" | xargs shellcheck

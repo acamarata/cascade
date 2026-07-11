@@ -18,7 +18,6 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BASELINE_OUT="${REPO_ROOT}/bench/baselines.json"
 CRITERION_DIR="${REPO_ROOT}/target/criterion"
 
 echo "[record_baselines] Building and running benchmarks..."
