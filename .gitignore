@@ -34,4 +34,8 @@ rustc*/
 
 # Native macOS widget build output (Xcode DerivedData / archive staging)
 src/widget/macos/build/
+
+# Linux widget build artifacts (packed bundles, not source)
+*.zip
+*.plasmoid
 /~/

@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Removed
+- `apps/cascade-widget-macos/` — duplicate SwiftPM scaffold that mirrored
+  the canonical `src/widget/macos/` Xcode project; canonical builds use
+  `src/widget/macos/build.sh` and the `CascadeWidget.xcodeproj` there.
+
 ## [1.15.2] - 2026-07-10
 
 ### Removed
