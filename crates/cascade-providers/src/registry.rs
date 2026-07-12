@@ -214,6 +214,25 @@ impl ProviderRegistry {
         map.values().map(|a| a.provider_info()).collect()
     }
 
+    /// Return `(registration_key, ProviderInfo)` pairs for every registered adapter.
+    ///
+    /// The `registration_key` is the `id` passed to [`register`] and is the key
+    /// used in [`HealthState`] maps (populated by `health_check_all`).  Callers
+    /// that join health or usage data MUST use this key rather than
+    /// `ProviderInfo::id`, which comes from the adapter itself and may differ
+    /// from the registration key.
+    ///
+    /// Order is non-deterministic (HashMap iteration order).
+    pub fn list_with_keys(&self) -> Vec<(String, ProviderInfo)> {
+        let map = self
+            .adapters
+            .read()
+            .expect("ProviderRegistry adapter lock poisoned");
+        map.iter()
+            .map(|(key, adapter)| (key.clone(), adapter.provider_info()))
+            .collect()
+    }
+
     /// Fan-out concurrent health checks across all registered adapters.
     ///
     /// The read lock is acquired only to clone Arc references; it is released

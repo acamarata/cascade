@@ -120,20 +120,9 @@ use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() {
-    // Initialize structured JSON logging before anything else so early errors
-    // are captured. Rotation and file sink are configured inside log::init.
-    // Config is not yet loaded here; pass None for both — the config-level
-    // wiring happens in the second call below once we know the config_dir.
-    if let Err(e) = log::init() {
-        eprintln!("failed to initialize logging: {e}");
-        process::exit(1);
-    }
-
-    info!(version = env!("CARGO_PKG_VERSION"), "cascaded starting");
-
-    // Resolve config dir (~/.cascade). Created by `cascade init` but we
-    // create it here as a safety net so the daemon never panics on a fresh
-    // install where `cascade init` was skipped.
+    // Resolve config dir (~/.cascade) synchronously so we can read config.toml
+    // before initializing the logging subscriber (tracing_subscriber can only be
+    // initialized once; we want to honour daemon.log_level / daemon.log_format).
     // Prefer $HOME (honoured on every platform and required for test isolation;
     // note macOS `dirs::home_dir()` ignores $HOME), then fall back to dirs.
     let home = std::env::var_os("HOME")
@@ -142,11 +131,29 @@ async fn main() {
     let config_dir = match home {
         Some(h) => h.join(".cascade"),
         None => {
-            error!("cannot determine home directory");
-            write_crash_sentinel("cannot determine home directory");
+            eprintln!("cascaded: cannot determine home directory");
             process::exit(1);
         }
     };
+
+    // Load config now (sync, falls back to Default when config.toml is absent)
+    // so log::init_with_config can honour daemon.log_level + daemon.log_format.
+    let early_cfg = config::Config::load(&config_dir).unwrap_or_default();
+
+    // Initialize structured JSON logging — honours [daemon] log_level / log_format.
+    // CASCADE_LOG_LEVEL env still wins over the config value (see log.rs).
+    if let Err(e) = log::init_with_config(
+        Some(&early_cfg.daemon.log_level),
+        Some(&early_cfg.daemon.log_format),
+    ) {
+        eprintln!("failed to initialize logging: {e}");
+        process::exit(1);
+    }
+
+    info!(version = env!("CARGO_PKG_VERSION"), "cascaded starting");
+
+    // Created by `cascade init` but we create it here as a safety net so the
+    // daemon never panics on a fresh install where `cascade init` was skipped.
     if let Err(e) = tokio::fs::create_dir_all(&config_dir).await {
         error!(%e, "failed to create ~/.cascade");
         write_crash_sentinel(&e.to_string());

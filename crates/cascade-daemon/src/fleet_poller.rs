@@ -748,7 +748,9 @@ fn upsert_cache_entry(
 /// Constraints: never overwrites with zeros — if `read_window` returns `None`
 ///              (log absent or empty), the existing cache entry is preserved.
 fn inject_za_usage_into_cache(registry: &AccountsRegistry, zai_prompts_per_5h: u32) {
-    use cascade_core::za_usage::read_window;
+    use cascade_core::za_usage::{
+        count_glm_session_turns, read_glm_exhaustion_signal, read_window,
+    };
 
     let home = match dirs::home_dir() {
         Some(h) => h,
@@ -757,6 +759,7 @@ fn inject_za_usage_into_cache(registry: &AccountsRegistry, zai_prompts_per_5h: u
 
     let za_log_path = home.join(".cascade").join("za-usage.jsonl");
     let cache_path = home.join(".claude").join("usage-cache.json");
+    let glm_config_dir = home.join(".claude-glm");
 
     let cap = if zai_prompts_per_5h == 0 {
         1
@@ -776,22 +779,62 @@ fn inject_za_usage_into_cache(registry: &AccountsRegistry, zai_prompts_per_5h: u
         return;
     }
 
-    // Read the rolling 5h window from the local log (shared across all Za accounts).
-    let Some(summary) = read_window(&za_log_path, 5 * 3600) else {
-        // No log data — leave existing cache entries intact.
-        return;
-    };
-
-    let utilization = (100.0 * summary.used_prompts as f64 / cap as f64).min(100.0);
-
-    // Compute resets_at: oldest record in window + 5h → when the window opens up.
     let now_secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let resets_at_epoch: Option<f64> = summary.oldest_ts_in_window.map(|oldest| {
-        let reset_ts = oldest + 5 * 3600;
-        reset_ts as f64
+    let now_f64 = now_secs as f64;
+
+    // ── Path 1: exhaustion signal (primary) ───────────────────────────────────
+    // Check GLM session logs for a live 429 before counting anything. If found
+    // and the reset window is in the future, clamp to 100% immediately.
+    if let Some((reset_epoch, resets_in)) = read_glm_exhaustion_signal(&glm_config_dir) {
+        let resets_at_f64 = reset_epoch as f64;
+        for account_id in &zai_accounts {
+            let entry = serde_json::json!({
+                "account":      account_id,
+                "provider":     "zai",
+                "usage": {
+                    "five_hour": {
+                        "utilization": 100.0_f64,
+                        "resets_at":   resets_at_f64,
+                        "resets_in":   resets_in
+                    },
+                    "seven_day":         serde_json::Value::Null,
+                    "seven_day_sonnet":  serde_json::Value::Null,
+                    "seven_day_opus":    serde_json::Value::Null,
+                    "extra_usage":       serde_json::Value::Null
+                },
+                "last_pull_at": now_f64,
+                "quota_opaque": false,
+                "last_error":   serde_json::Value::Null
+            });
+            let updates = vec![(account_id.clone(), entry)];
+            if let Err(e) = merge_usage_cache_updates(&cache_path, updates) {
+                warn!(%e, account = %account_id, "fleet: failed to inject Za exhaustion into cache");
+            }
+        }
+        return;
+    }
+
+    // ── Path 2: live count (not exhausted) ────────────────────────────────────
+    // Combine conductor JSONL dispatches + direct GLM session turns.
+    let summary = read_window(&za_log_path, 5 * 3600);
+    let conductor_prompts = summary.as_ref().map(|s| s.used_prompts).unwrap_or(0);
+    let glm_turns = count_glm_session_turns(&glm_config_dir, 5 * 3600);
+    let combined_count = conductor_prompts.saturating_add(glm_turns);
+
+    // If both sources are empty, preserve the existing cache entry (don't write zeros).
+    if combined_count == 0 && summary.is_none() {
+        return;
+    }
+
+    let utilization = (100.0 * combined_count as f64 / cap as f64).min(100.0);
+
+    // Compute resets_at from oldest conductor record in the window (if any).
+    let resets_at_epoch: Option<f64> = summary.as_ref().and_then(|s| {
+        s.oldest_ts_in_window
+            .map(|oldest| (oldest + 5 * 3600) as f64)
     });
     let resets_in: Option<String> = resets_at_epoch.and_then(|ra| {
         let remaining = ra as i64 - now_secs as i64;
@@ -803,8 +846,6 @@ fn inject_za_usage_into_cache(registry: &AccountsRegistry, zai_prompts_per_5h: u
             None
         }
     });
-
-    let now_f64 = now_secs as f64;
 
     for account_id in &zai_accounts {
         let entry = serde_json::json!({

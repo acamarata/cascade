@@ -154,24 +154,33 @@ impl ProviderIpcHandler {
     /// Return all registered providers with health status and today's usage.
     ///
     /// Returns an empty `Vec` (never an error) when the registry is empty.
+    ///
+    /// Health and usage are joined on the registration key (the `id` passed to
+    /// `ProviderRegistry::register`), NOT on `provider_info().id`.  The two can
+    /// differ when a provider's adapter reports a logical id that differs from the
+    /// slot key used at registration (e.g. `"gemini-free-1"` vs `"gemini"`).
+    /// Using the registration key ensures that health data written by
+    /// `health_check_all` (which is keyed by slot) is always found.
     pub async fn providers_list(&self) -> Vec<ProviderListItem> {
-        let infos = self.registry.list();
+        let entries = self.registry.list_with_keys();
         let health_guard = self.health.read().await;
         let today_usage = self.usage.all_today().await;
 
-        infos
+        entries
             .into_iter()
-            .map(|info| {
-                let health = health_guard.get(&info.id);
+            .map(|(reg_key, info)| {
+                // Join health on the registration key (slot id), not info.id.
+                let health = health_guard.get(&reg_key);
                 let (status, error_msg) = match health {
                     Some(h) if h.ok => ("healthy".to_string(), None),
                     Some(h) => ("unhealthy".to_string(), h.error_msg.clone()),
                     None => ("unknown".to_string(), None),
                 };
 
+                // Join usage on the registration key for the same reason.
                 let today_cost_usd = today_usage
                     .iter()
-                    .find(|u| u.provider_id == info.id)
+                    .find(|u| u.provider_id == reg_key)
                     .map(|u| u.cost_usd);
 
                 let auth_method = match &info.auth_method {
@@ -182,7 +191,7 @@ impl ProviderIpcHandler {
                 .to_string();
 
                 ProviderListItem {
-                    id: info.id,
+                    id: reg_key,
                     name: info.name,
                     auth_method,
                     status,
@@ -836,6 +845,62 @@ mod tests {
         assert_eq!(
             info.id, "noop",
             "Unknown provider must fall back to NoopProvider"
+        );
+    }
+
+    /// D2: providers_list joins health on the registration key, not provider_info().id.
+    ///
+    /// NoopProvider always reports `provider_info().id == "noop"`.  We register it
+    /// under key `"my-slot"`, inject a health entry under `"my-slot"`, and verify
+    /// that `providers_list` returns `status="healthy"`.  This would silently return
+    /// `status="unknown"` if the join used `info.id` ("noop") instead of the
+    /// registration key ("my-slot").
+    #[tokio::test]
+    #[serial(provider_ipc)]
+    async fn providers_list_joins_health_on_registration_key() {
+        use crate::provider_health::ProviderHealth;
+        use cascade_providers::{NoopProvider, ProviderRegistry};
+        use std::time::Instant;
+
+        let tmp = TempDir::new().unwrap();
+        let registry = Arc::new(ProviderRegistry::new());
+        let health: HealthState = Arc::new(RwLock::new(HashMap::new()));
+        let usage_path = tmp.path().join("usage.db");
+        let usage = Arc::new(UsageAccumulator::new(&usage_path).unwrap());
+
+        // Register NoopProvider under key "my-slot".
+        // NoopProvider.provider_info().id == "noop" ≠ "my-slot".
+        registry
+            .register("my-slot".into(), Arc::new(NoopProvider))
+            .expect("register must succeed on empty registry");
+
+        // Inject health under the registration key "my-slot".
+        {
+            let mut map = health.write().await;
+            map.insert(
+                "my-slot".into(),
+                ProviderHealth {
+                    ok: true,
+                    checked_at: Instant::now(),
+                    error_msg: None,
+                },
+            );
+        }
+
+        let handler = ProviderIpcHandler::new(registry, health, usage);
+        let list = handler.providers_list().await;
+
+        assert_eq!(list.len(), 1, "registry has one provider");
+        let item = &list[0];
+        assert_eq!(
+            item.id, "my-slot",
+            "ProviderListItem.id must be the registration key, got {:?}",
+            item.id
+        );
+        assert_eq!(
+            item.status, "healthy",
+            "health must be found via registration key; got {:?}",
+            item.status
         );
     }
 }

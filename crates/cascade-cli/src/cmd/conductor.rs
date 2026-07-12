@@ -29,7 +29,6 @@ use cascade_core::conductor_router::{
     select_target_with_gp, ConductorRequest, ConductorTarget, GpHealthSnapshot, ModelClass,
     Provider, QuotaAccount, QuotaSnapshot, Tier,
 };
-use cascade_core::model_ids::MODEL_GEMINI_PRO;
 use cascade_core::routing::gfp_http::{probe_gp_health, GFP_HEALTH_URL};
 use cascade_types::error::{CascadeError, Result};
 use clap::{Args, Subcommand};
@@ -685,179 +684,12 @@ fn execute_opencode(_target: &ConductorTarget, prompt: &str) -> Outcome {
     run_command(cmd, "opencode")
 }
 
-// ── Gemini backend (Gemini Pro via Antigravity / cloudcode-pa) ───────────────
+// ── Gemini backend (via agy CLI) ─────────────────────────────────────────────
 //
-// Dispatch lane for the owner's paid Google AI Pro (Google One) subscription,
-// reusing the same OAuth refresh token already captured by `cascade-agy-auth`
-// at `~/.cascade/agy-token.json` (see `src/bin/cascade-agy` for the sibling
-// quota-collector that proved this refresh + `loadCodeAssist` flow live).
-//
-// Owner-authorized personal use: the account owner explicitly authorized
-// routing their own paid Google AI Pro prompts through this token. This is
-// distinct from `cascade-providers`'s `AntigravityAdapter`, whose ToS-safety
-// gate (`inference_routing` feature, off by default) concerns routing a
-// *third party's* Antigravity subscription through Cascade — not applicable
-// here, where the owner is dispatching their own account's prompts directly.
-
-/// OAuth client used by the Antigravity desktop app (public, not secret).
-const AGY_CLIENT_ID: &str =
-    "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
-const AGY_CLIENT_SECRET: &str = "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";
-const AGY_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const AGY_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
-const AGY_USER_AGENT: &str = "antigravity/1.18.3 macos/arm64";
-/// Fallback GCP project id (used when `loadCodeAssist` doesn't return one).
-const AGY_FALLBACK_PROJECT: &str = "bamboo-precept-lgxtn";
-/// User-facing model label for Gemini Pro dispatch (current newest Pro model).
-const AGY_MODEL_LABEL: &str = MODEL_GEMINI_PRO;
-/// The `model` field cloudcode-pa expects for generateContent — proven live.
-const AGY_GENERATE_MODEL: &str = "gemini-pro-agent";
-/// Per-call timeout (each curl invocation), mirrors other lanes' bounded calls.
-const AGY_HTTP_TIMEOUT_SECS: u64 = 120;
-
-/// Path to the agy OAuth token store (`~/.cascade/agy-token.json`).
-fn agy_token_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".cascade").join("agy-token.json"))
-}
-
-/// Read the first account's refresh token + email from `agy-token.json`.
-fn read_agy_refresh_token(path: &std::path::Path) -> Option<(String, String)> {
-    let bytes = std::fs::read(path).ok()?;
-    let v: Value = serde_json::from_slice(&bytes).ok()?;
-    let acc = v.get("accounts")?.as_array()?.first()?;
-    let refresh_token = acc.get("refresh_token")?.as_str()?.to_string();
-    let email = acc
-        .get("email")
-        .and_then(|e| e.as_str())
-        .unwrap_or("")
-        .to_string();
-    Some((refresh_token, email))
-}
-
-/// POST via curl with a JSON body and bounded timeout; returns stdout on 2xx,
-/// `None` on any transport/HTTP failure (caller decides Unavailable vs Error).
-fn curl_post_json(
-    url: &str,
-    headers: &[(&str, &str)],
-    body: &str,
-    timeout_secs: u64,
-) -> std::result::Result<String, String> {
-    let curl = find_binary("curl").ok_or_else(|| "curl not found".to_string())?;
-
-    let mut cmd = StdCommand::new(&curl);
-    cmd.env("PATH", AUGMENTED_PATH).args([
-        "-s",
-        "-f",
-        "--max-time",
-        &timeout_secs.to_string(),
-        "-X",
-        "POST",
-    ]);
-    for (k, v) in headers {
-        cmd.args(["-H", &format!("{k}: {v}")]);
-    }
-    cmd.args(["-d", body, url])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    match cmd.output() {
-        Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            Err(format!(
-                "HTTP request failed (exit {}): {stderr}",
-                out.status.code().unwrap_or(-1)
-            ))
-        }
-        Err(e) => Err(format!("curl exec failed: {e}")),
-    }
-}
-
-/// Refresh the OAuth access token from a stored refresh token.
-///
-/// Mirrors `cascade-agy`'s `refresh_access()` — same client id/secret,
-/// same token endpoint. Returns `None` on any failure.
-fn agy_refresh_access_token(refresh_token: &str) -> Option<String> {
-    let form = format!(
-        "grant_type=refresh_token&refresh_token={}&client_id={}&client_secret={}",
-        urlencode(refresh_token),
-        urlencode(AGY_CLIENT_ID),
-        urlencode(AGY_CLIENT_SECRET),
-    );
-    let curl = find_binary("curl")?;
-    let mut cmd = StdCommand::new(&curl);
-    cmd.env("PATH", AUGMENTED_PATH)
-        .args([
-            "-s",
-            "-f",
-            "--max-time",
-            &AGY_HTTP_TIMEOUT_SECS.to_string(),
-            "-X",
-            "POST",
-            "-H",
-            "Content-Type: application/x-www-form-urlencoded",
-            "-d",
-            &form,
-            AGY_TOKEN_URL,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let out = cmd.output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let v: Value = serde_json::from_slice(&out.stdout).ok()?;
-    v.get("access_token")?.as_str().map(|s| s.to_string())
-}
-
-/// Minimal percent-encoding for x-www-form-urlencoded values (token/id/secret
-/// are all URL-safe-ish but may contain `+`/`/` in the refresh token).
-fn urlencode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
-/// Discover the `cloudaicompanionProject` id for this account via `loadCodeAssist`.
-/// Falls back to `AGY_FALLBACK_PROJECT` on any failure (matches `cascade-agy`).
-fn agy_load_project(access_token: &str) -> String {
-    let url = format!("{AGY_BASE_URL}/v1internal:loadCodeAssist");
-    let body = serde_json::json!({"metadata": {"ideType": "ANTIGRAVITY"}}).to_string();
-    let headers = [
-        ("Authorization", format!("Bearer {access_token}")),
-        ("Content-Type", "application/json".to_string()),
-        ("User-Agent", AGY_USER_AGENT.to_string()),
-    ];
-    let header_refs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
-
-    match curl_post_json(&url, &header_refs, &body, AGY_HTTP_TIMEOUT_SECS) {
-        Ok(resp) => {
-            let v: Value = match serde_json::from_str(&resp) {
-                Ok(v) => v,
-                Err(_) => return AGY_FALLBACK_PROJECT.to_string(),
-            };
-            match v.get("cloudaicompanionProject") {
-                Some(Value::String(s)) if !s.is_empty() => s.clone(),
-                Some(Value::Object(o)) => o
-                    .get("id")
-                    .and_then(|i| i.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(AGY_FALLBACK_PROJECT)
-                    .to_string(),
-                _ => AGY_FALLBACK_PROJECT.to_string(),
-            }
-        }
-        Err(_) => AGY_FALLBACK_PROJECT.to_string(),
-    }
-}
+// Dispatch lane for the owner's paid Google AI Pro subscription via the `agy`
+// CLI. Model display name is mapped from the canonical model id by
+// map_model_to_agy_display. The lane returns Unavailable if `agy` is not
+// found in PATH, allowing the conductor spill chain to move on.
 
 /// Extract the completion text from a `v1internal:generateContent` response.
 ///
@@ -897,81 +729,57 @@ fn extract_generate_content_text(resp: &Value) -> Option<String> {
     }
 }
 
-/// Dispatch `prompt` to Gemini Pro via the Antigravity / cloudcode-pa backend.
+/// Dispatch `prompt` to Gemini via the `agy` CLI.
 ///
-/// Flow: read `~/.cascade/agy-token.json` → refresh access token → discover
-/// `cloudaicompanionProject` via `loadCodeAssist` → POST `generateContent` →
-/// extract completion text. Any failure at any stage returns `Unavailable` so
-/// the conductor spill chain moves to the next candidate — this lane never
-/// blocks the fallback path.
-fn execute_gemini(_target: &ConductorTarget, prompt: &str) -> Outcome {
-    let Some(token_path) = agy_token_path() else {
+/// Command: `agy -p "<prompt>" --model "<display name>" --dangerously-skip-permissions
+///            --add-dir <cwd>`
+///
+/// Model display name is derived from the target model id via
+/// `map_model_to_agy_display`. Any failure returns `Unavailable` so the
+/// conductor spill chain moves to the next candidate — this lane never blocks
+/// the fallback path.
+fn execute_gemini(target: &ConductorTarget, prompt: &str) -> Outcome {
+    let Some(agy) = find_binary("agy") else {
         return Outcome::Unavailable {
-            reason: "cannot resolve home dir for agy-token.json".to_string(),
+            reason: "agy not found in PATH (run: cargo install cascade-agy or place ~/bin/agy)"
+                .to_string(),
         };
     };
-    if !token_path.is_file() {
-        return Outcome::Unavailable {
-            reason: format!(
-                "no agy token at {} (run cascade-agy-auth)",
-                token_path.display()
-            ),
-        };
+
+    let model_display = map_model_to_agy_display(&target.model);
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+
+    let mut cmd = StdCommand::new(&agy);
+    cmd.env("PATH", AUGMENTED_PATH)
+        .args(["-p", prompt])
+        .args(["--model", model_display])
+        .arg("--dangerously-skip-permissions")
+        .args(["--add-dir", cwd.to_str().unwrap_or("/tmp")])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    run_command(cmd, "agy")
+}
+
+/// Map a canonical model id to the agy CLI display name.
+fn map_model_to_agy_display(model: &str) -> &'static str {
+    if model.contains("gemini-3.5-flash") {
+        return "Gemini 3.5 Flash (High)";
     }
-
-    let Some((refresh_token, _email)) = read_agy_refresh_token(&token_path) else {
-        return Outcome::Unavailable {
-            reason: "agy-token.json present but unreadable/malformed".to_string(),
-        };
-    };
-
-    let Some(access_token) = agy_refresh_access_token(&refresh_token) else {
-        return Outcome::Unavailable {
-            reason: "agy OAuth refresh failed".to_string(),
-        };
-    };
-
-    let project = agy_load_project(&access_token);
-
-    let url = format!("{AGY_BASE_URL}/v1internal:generateContent");
-    let body = serde_json::json!({
-        "project": project,
-        "model": AGY_GENERATE_MODEL,
-        "request": {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}]
-        }
-    })
-    .to_string();
-    let headers = [
-        ("Authorization", format!("Bearer {access_token}")),
-        ("Content-Type", "application/json".to_string()),
-        ("User-Agent", AGY_USER_AGENT.to_string()),
-    ];
-    let header_refs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
-
-    match curl_post_json(&url, &header_refs, &body, AGY_HTTP_TIMEOUT_SECS) {
-        Ok(resp_str) => {
-            let resp: Value = match serde_json::from_str(&resp_str) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Outcome::Unavailable {
-                        reason: format!(
-                            "gemini ({AGY_MODEL_LABEL}) returned unparseable response: {e}"
-                        ),
-                    }
-                }
-            };
-            match extract_generate_content_text(&resp) {
-                Some(text) => Outcome::Success { output: text },
-                None => Outcome::Unavailable {
-                    reason: format!("gemini ({AGY_MODEL_LABEL}) response had no completion text"),
-                },
-            }
-        }
-        Err(e) => Outcome::Unavailable {
-            reason: format!("gemini ({AGY_MODEL_LABEL}) generateContent failed: {e}"),
-        },
+    if model.contains("gemini-3.1") {
+        return "Gemini 3.1 Pro (High)";
     }
+    if model.contains("opus") {
+        return "Claude Opus 4.6 (Thinking)";
+    }
+    if model.contains("sonnet") {
+        return "Claude Sonnet 4.6 (Thinking)";
+    }
+    if model.contains("gpt-oss-120b") {
+        return "GPT-OSS 120B (Medium)";
+    }
+    "Gemini 3.1 Pro (High)"
 }
 
 // ── GFP backend ───────────────────────────────────────────────────────────────
@@ -1526,27 +1334,52 @@ mod agy_tests {
     }
 
     #[test]
-    fn execute_gemini_unavailable_when_no_token_file() {
-        // Point at a home dir with no ~/.cascade/agy-token.json by using a
-        // target whose config_dir is irrelevant — execute_gemini reads the
-        // real home dir's agy token path. We can't easily inject a fake home
-        // dir without touching global state, so this test only exercises the
-        // "file missing" branch when the real path doesn't exist. If a real
-        // token happens to exist on the test machine, skip the assertion.
-        if let Some(p) = agy_token_path() {
-            if !p.is_file() {
-                let target = ConductorTarget {
-                    provider: Provider::Gemini,
-                    account_id: "gemini-acc1".to_string(),
-                    model: AGY_MODEL_LABEL.to_string(),
-                    config_dir: None,
-                    reason: "test".to_string(),
-                };
-                match execute_gemini(&target, "hello") {
-                    Outcome::Unavailable { .. } => {}
-                    other => panic!("expected Unavailable, got {other:?}"),
-                }
-            }
+    fn execute_gemini_unavailable_when_agy_not_in_path() {
+        // When `agy` is not found in PATH the lane returns Unavailable without
+        // blocking. Override PATH to an empty dir so find_binary("agy") returns None.
+        let target = ConductorTarget {
+            provider: Provider::Gemini,
+            account_id: "gemini-acc1".to_string(),
+            model: "gemini-3.1-pro".to_string(),
+            config_dir: None,
+            reason: "test".to_string(),
+        };
+        // Temporarily shadow PATH so agy can't be found.
+        let orig_path = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", "/dev/null");
+        let result = execute_gemini(&target, "hello");
+        std::env::set_var("PATH", orig_path);
+        match result {
+            Outcome::Unavailable { .. } => {}
+            other => panic!("expected Unavailable, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn map_model_to_agy_display_covers_all_branches() {
+        assert_eq!(
+            map_model_to_agy_display("gemini-3.5-flash-001"),
+            "Gemini 3.5 Flash (High)"
+        );
+        assert_eq!(
+            map_model_to_agy_display("gemini-3.1-pro"),
+            "Gemini 3.1 Pro (High)"
+        );
+        assert_eq!(
+            map_model_to_agy_display("claude-opus-4-6"),
+            "Claude Opus 4.6 (Thinking)"
+        );
+        assert_eq!(
+            map_model_to_agy_display("claude-sonnet-4-6"),
+            "Claude Sonnet 4.6 (Thinking)"
+        );
+        assert_eq!(
+            map_model_to_agy_display("gpt-oss-120b"),
+            "GPT-OSS 120B (Medium)"
+        );
+        assert_eq!(
+            map_model_to_agy_display("unknown-model"),
+            "Gemini 3.1 Pro (High)"
+        );
     }
 }

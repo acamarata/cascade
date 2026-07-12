@@ -111,8 +111,10 @@ pub fn init_with_config(
 
 /// Initialize the global tracing subscriber with defaults.
 ///
-/// Equivalent to `init_with_config(None, None)`.  Kept for callers that don't
-/// have a config available yet (e.g. unit tests, early boot before config load).
+/// Equivalent to `init_with_config(None, None)`.  Available for callers that don't
+/// have a config yet (e.g. unit tests).  The main daemon entry-point uses
+/// `init_with_config` directly so it can honour `[daemon] log_level / log_format`.
+#[allow(dead_code)]
 pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_with_config(None, None)
 }

@@ -38,7 +38,7 @@ struct UsageRow: View {
                 Text(label)
                     .foregroundColor(Color(hex: "#7A7F8A"))
                     .fontWeight(.medium)
-                if stale {
+                if stale && !fiveHCapped {
                     Text("*")
                         .foregroundColor(Color(hex: "#E5484D"))
                         .fontWeight(.bold)
