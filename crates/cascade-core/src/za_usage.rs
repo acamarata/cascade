@@ -335,7 +335,7 @@ fn parse_utc_datetime(s: &str) -> u64 {
         Ok(v) => v,
         Err(_) => return 0,
     };
-    if month < 1 || month > 12 || day < 1 || day > 31 {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
         return 0;
     }
     // Days from epoch to the start of the given year (Gregorian).
@@ -588,7 +588,6 @@ mod tests {
         // Use std::fs::File and set_modified if available (Rust 1.75+), else skip.
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
             let _ = six_hours_ago; // suppress warning if not used
                                    // Use utime syscall via libc-free approach: open + futimens.
                                    // Simplest: write a known-stale epoch directly via the raw mtime trick.
