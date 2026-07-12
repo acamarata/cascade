@@ -296,6 +296,7 @@ fn project_slug(project_root: &std::path::Path) -> String {
 }
 
 /// launchd label for a given project slug.
+#[cfg(target_os = "macos")]
 fn launchd_label(slug: &str) -> String {
     format!("dev.cascade.nsentry-{slug}")
 }
@@ -317,6 +318,7 @@ fn launchd_loaded(_slug: &str) -> bool {
 }
 
 /// Resolve the `cascade` binary path (used in the plist ProgramArguments).
+#[cfg(target_os = "macos")]
 fn resolve_cascade_binary() -> std::path::PathBuf {
     // Check standard install locations.
     let home = cascade_types::paths::home_dir();

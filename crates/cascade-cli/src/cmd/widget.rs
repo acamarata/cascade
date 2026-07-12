@@ -84,6 +84,7 @@ const WIDGET_LABEL: &str = "dev.cascade.fleet-widget";
 ///
 /// Search order: `~/.local/bin/cascade-fleet-widget`,
 ///               `~/.cargo/bin/cascade-fleet-widget`, PATH.
+#[cfg(target_os = "macos")]
 fn resolve_widget_binary() -> Result<std::path::PathBuf> {
     let home = cascade_types::paths::home_dir();
     let name = "cascade-fleet-widget";
@@ -272,6 +273,7 @@ fn widget_status() -> Result<()> {
 // ── Shared helper ─────────────────────────────────────────────────────────────
 
 /// Write `content` to `path` atomically via a `.tmp` sibling.
+#[cfg(target_os = "macos")]
 fn atomic_write_str(path: &std::path::Path, content: &str) -> Result<()> {
     let mut tmp_name = path.as_os_str().to_owned();
     tmp_name.push(".tmp");
