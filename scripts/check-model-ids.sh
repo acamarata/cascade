@@ -55,7 +55,13 @@ fi
 # Extract the 8 canonical literal values from `pub const MODEL_*: &str = "...";`
 # lines. Deliberately excludes DEFAULT_HARNESS_MODEL, which aliases another
 # const (`= MODEL_CLAUDE_SONNET;`) rather than declaring a new literal.
-mapfile -t LITERALS < <(
+# Portable read loop instead of `mapfile` (bash 4+ only) — macOS ships bash 3.2
+# as /bin/bash and callers may invoke this script via a bare `bash` that
+# resolves to it rather than a newer homebrew bash.
+LITERALS=()
+while IFS= read -r lit; do
+  [ -n "$lit" ] && LITERALS+=("$lit")
+done < <(
   grep -E '^pub const MODEL_[A-Z_]+: &str = "[^"]+";' "$DOCTRINE_FILE" \
     | sed -E 's/^pub const MODEL_[A-Z_]+: &str = "([^"]+)";.*/\1/'
 )
@@ -78,7 +84,10 @@ PATTERN="\"(${ALT})\""
 
 # Collect candidate source files: Rust under crates/, TS/TSX under apps/cascade-app/src/,
 # and Swift under src/widget/macos/. Exclude the doctrine file, test paths, and test files.
-mapfile -t FILES < <(
+FILES=()
+while IFS= read -r f; do
+  [ -n "$f" ] && FILES+=("$f")
+done < <(
   {
     find crates -type f -name '*.rs' \
       ! -path "*/tests/*" \

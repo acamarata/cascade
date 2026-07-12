@@ -31,6 +31,7 @@ use cascade_core::conductor_router::{
 };
 use cascade_core::routing::gfp_http::{probe_gp_health, GFP_HEALTH_URL};
 use cascade_types::error::{CascadeError, Result};
+use cascade_types::model_ids::{MODEL_GEMINI_FLASH, MODEL_GEMINI_PRO};
 use clap::{Args, Subcommand};
 use serde_json::Value;
 
@@ -769,10 +770,10 @@ fn execute_gemini_with_binary(target: &ConductorTarget, prompt: &str, bin_name: 
 
 /// Map a canonical model id to the agy CLI display name.
 fn map_model_to_agy_display(model: &str) -> &'static str {
-    if model.contains("gemini-3.5-flash") {
+    if model.contains(MODEL_GEMINI_FLASH) {
         return "Gemini 3.5 Flash (High)";
     }
-    if model.contains("gemini-3.1") {
+    if model.contains(MODEL_GEMINI_PRO) {
         return "Gemini 3.1 Pro (High)";
     }
     if model.contains("opus") {
@@ -1339,7 +1340,7 @@ mod agy_tests {
         let target = ConductorTarget {
             provider: Provider::Gemini,
             account_id: "gemini-acc1".to_string(),
-            model: "gemini-3.1-pro".to_string(),
+            model: MODEL_GEMINI_PRO.to_string(),
             config_dir: None,
             reason: "test".to_string(),
         };
@@ -1357,7 +1358,7 @@ mod agy_tests {
             "Gemini 3.5 Flash (High)"
         );
         assert_eq!(
-            map_model_to_agy_display("gemini-3.1-pro"),
+            map_model_to_agy_display(MODEL_GEMINI_PRO),
             "Gemini 3.1 Pro (High)"
         );
         assert_eq!(
