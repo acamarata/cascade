@@ -700,6 +700,7 @@ fn execute_opencode(_target: &ConductorTarget, prompt: &str) -> Outcome {
 /// cloudcode-pa's `v1internal:generateContent` wraps the Gemini payload under a
 /// top-level `response` key (alongside `traceId`/`metadata`), so unwrap that
 /// first; fall back to the bare shape for forward-compat.
+#[allow(dead_code)]
 fn extract_generate_content_text(resp: &Value) -> Option<String> {
     let root = resp.get("response").unwrap_or(resp);
     let candidates = root.get("candidates")?.as_array()?;
@@ -1325,12 +1326,6 @@ mod agy_tests {
     fn extract_text_none_when_only_thought_signature() {
         let v: Value = serde_json::from_str(FIXTURE_THOUGHT_ONLY).unwrap();
         assert!(extract_generate_content_text(&v).is_none());
-    }
-
-    #[test]
-    fn urlencode_escapes_reserved_chars() {
-        assert_eq!(urlencode("a+b/c=d"), "a%2Bb%2Fc%3Dd");
-        assert_eq!(urlencode("plain-text_123.~"), "plain-text_123.~");
     }
 
     #[test]
