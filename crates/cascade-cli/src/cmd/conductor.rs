@@ -740,7 +740,11 @@ fn extract_generate_content_text(resp: &Value) -> Option<String> {
 /// conductor spill chain moves to the next candidate — this lane never blocks
 /// the fallback path.
 fn execute_gemini(target: &ConductorTarget, prompt: &str) -> Outcome {
-    let Some(agy) = find_binary("agy") else {
+    execute_gemini_with_binary(target, prompt, "agy")
+}
+
+fn execute_gemini_with_binary(target: &ConductorTarget, prompt: &str, bin_name: &str) -> Outcome {
+    let Some(agy) = find_binary(bin_name) else {
         return Outcome::Unavailable {
             reason: "agy not found in PATH (run: cargo install cascade-agy or place ~/bin/agy)"
                 .to_string(),
@@ -1331,7 +1335,7 @@ mod agy_tests {
     #[test]
     fn execute_gemini_unavailable_when_agy_not_in_path() {
         // When `agy` is not found in PATH the lane returns Unavailable without
-        // blocking. Override PATH to an empty dir so find_binary("agy") returns None.
+        // blocking. Use a non-existent binary so find_binary returns None.
         let target = ConductorTarget {
             provider: Provider::Gemini,
             account_id: "gemini-acc1".to_string(),
@@ -1339,11 +1343,7 @@ mod agy_tests {
             config_dir: None,
             reason: "test".to_string(),
         };
-        // Temporarily shadow PATH so agy can't be found.
-        let orig_path = std::env::var("PATH").unwrap_or_default();
-        std::env::set_var("PATH", "/dev/null");
-        let result = execute_gemini(&target, "hello");
-        std::env::set_var("PATH", orig_path);
+        let result = execute_gemini_with_binary(&target, "hello", "__no_such_binary_agy__");
         match result {
             Outcome::Unavailable { .. } => {}
             other => panic!("expected Unavailable, got {other:?}"),
