@@ -13,7 +13,9 @@
 use async_trait::async_trait;
 use clap::{Args, Subcommand};
 
-use cascade_types::error::{CascadeError, Result};
+#[cfg(target_os = "macos")]
+use cascade_types::error::CascadeError;
+use cascade_types::error::Result;
 
 use super::Command;
 
