@@ -34,9 +34,10 @@ env:
 jobs:
   # ── Build CLI + daemon artifacts ───────────────────────────────────────────
   # Builds cascade (CLI) and cascaded (daemon) binaries with --release --locked.
-  # 5 targets, all built natively (no Docker/cross-rs): macos-14 ARM64,
-  # macos-15-intel x86_64, ubuntu-22.04 x86_64, ubuntu-24.04-arm aarch64,
-  # windows-2022 x86_64.
+  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
+  # split into build-cli-hosted (guarded by HOSTED_CI=true) — skipped on the
+  # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
   build-cli:
     name: Build CLI (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
@@ -44,18 +45,120 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux x86_64 (native, self-hosted cam-sentry)
+          - runner: [self-hosted, cam-sentry]
+            target: x86_64-unknown-linux-gnu
+            os: linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Install Linux system deps
+        if: matrix.os == 'linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libappindicator3-dev
+
+      - name: Build cascade + cascaded (native, all targets)
+        run: |
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-daemon
+
+      - name: Package CLI + daemon (Linux/macOS tar.gz)
+        if: matrix.os != 'windows'
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          ARTIFACT_NAME="cascade-${VERSION}-${{ matrix.target }}"
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/cascade dist/cascade
+          cp target/${{ matrix.target }}/release/cascaded dist/cascaded
+          cd dist && tar czf "${ARTIFACT_NAME}.tar.gz" cascade cascaded
+          rm cascade cascaded
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Package CLI + daemon (Windows zip)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $artifact = "cascade-${version}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/cascade.exe" dist/
+          Copy-Item "target/${{ matrix.target }}/release/cascaded.exe" dist/
+          Compress-Archive -Path dist/cascade.exe,dist/cascaded.exe -DestinationPath "dist/${artifact}.zip"
+          Remove-Item dist/cascade.exe,dist/cascaded.exe
+          "ARTIFACT_NAME=${artifact}" | Out-File -Append $env:GITHUB_ENV
+
+      # ── Sign Linux artifacts (GPG) ─────────────────────────────────────────
+      # Evaluates secret presence via output step (secrets cannot be used in
+      # `if:` expressions directly — env var bridge pattern).
+      # Gracefully skips on open-source forks without GPG_PRIVATE_KEY.
+      - name: Check GPG secret presence
+        if: matrix.os == 'linux'
+        id: gpg-check
+        run: |
+          if [ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "GPG_PRIVATE_KEY not set — skipping GPG signing for this fork."
+          fi
+
+      - name: Sign Linux artifacts (GPG)
+        if: matrix.os == 'linux' && steps.gpg-check.outputs.present == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          cd dist
+          for f in *.tar.gz *.deb *.rpm *.AppImage; do
+            [ -f "$f" ] && gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor "$f" \
+              && echo "Signed: ${f}.asc" \
+              || true
+          done
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist/
+          retention-days: 1
+
+  # ── build-cli-hosted ──────────────────────────────────────────────────────
+  # Needs GitHub-hosted macOS/Windows/aarch64-Linux runners; skipped on the
+  # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
+  build-cli-hosted:
+    name: Build CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    if: ${{ vars.HOSTED_CI == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Apple Silicon (native arm64)
           - runner: macos-14
             target: aarch64-apple-darwin
             os: macos
+          # macOS Intel (native x86_64)
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             os: macos
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            os: linux
+          # Linux aarch64 — native arm64 runner (no Docker, no cross-rs)
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             os: linux
+          # Windows x86_64 (native MSVC)
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
             os: windows
@@ -148,9 +251,12 @@ jobs:
   # ── Build Tauri desktop app (macOS + Windows) ──────────────────────────────
   # macOS: builds per-arch bundles; a separate job below lipo-combines them.
   # Windows: produces .msi + .exe installer via Tauri bundler.
+  # Needs GitHub-hosted macOS/Windows runners; skipped on the private repo (no paid
+  # minutes). Flip repo var HOSTED_CI=true when public.
   build-tauri:
     name: Build Tauri app (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
+    if: ${{ vars.HOSTED_CI == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -240,10 +346,13 @@ jobs:
   # Combines the two macOS CLI tarballs into a single universal binary tarball.
   # The universal binary is what Homebrew will point to via the Cask.
   # Fork safety: no secrets required — runs on every tag push.
+  # Needs GitHub-hosted macOS runners + macOS CLI artifacts from build-cli-hosted;
+  # skipped on the private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
   universal-macos:
     name: Build universal macOS binary
-    needs: build-cli
+    needs: build-cli-hosted
     runs-on: macos-14
+    if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -357,14 +466,21 @@ jobs:
 
   # ── Publish GitHub Release ─────────────────────────────────────────────────
   # Waits for all build + sign jobs. Uses `always()` + result checks so a
-  # graceful skip of the optional sign-windows job does not block the release.
+  # graceful skip of the optional hosted-only jobs (build-cli-hosted,
+  # build-tauri, universal-macos, sign-windows) does not block the release.
+  # Self-hosted build-cli (Linux x86_64) must succeed; hosted jobs are
+  # skipped on the private repo (no paid minutes) — skipped is acceptable,
+  # failure is not. Flip repo var HOSTED_CI=true when public.
   publish:
     name: Publish GitHub Release
-    needs: [build-cli, universal-macos, build-tauri, sign-windows]
+    needs: [build-cli, build-cli-hosted, universal-macos, build-tauri, sign-windows]
     if: >-
       always() &&
       needs.build-cli.result == 'success' &&
-      needs.universal-macos.result == 'success'
+      needs.build-cli-hosted.result != 'failure' &&
+      needs.universal-macos.result != 'failure' &&
+      needs.build-tauri.result != 'failure' &&
+      needs.sign-windows.result != 'failure'
     runs-on: [self-hosted, cam-sentry]
     permissions:
       contents: write
