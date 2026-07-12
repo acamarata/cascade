@@ -421,12 +421,17 @@ mod tests {
 
         let result = scan_dev_tree(tmp.path().to_str().unwrap()).unwrap();
 
+        // Check paths RELATIVE to the scan root — the temp root prefix itself may
+        // legitimately contain a skip-dir substring (e.g. TMPDIR=.cascade-build-tmp
+        // contains "build"), which is not a leak. Only the discovered subtree matters.
+        let root = tmp.path().to_string_lossy().into_owned();
         for home in &result {
             for p in &home.per_project_paths {
+                let rel = p.strip_prefix(&root).unwrap_or(p);
                 for skip in &["target", "dist", "build", ".next", ".git"] {
                     assert!(
-                        !p.contains(skip),
-                        "skip dir '{skip}' leaked into per_project_paths: {p}"
+                        !rel.contains(skip),
+                        "skip dir '{skip}' leaked into per_project_paths: {p} (rel: {rel})"
                     );
                 }
             }
