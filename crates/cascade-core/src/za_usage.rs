@@ -252,6 +252,9 @@ pub fn read_glm_exhaustion_signal(glm_config_dir: &Path) -> Option<(u64, String)
 /// Outputs: total assistant turns within the window; `0` on any error.
 /// Constraints: uses file mtime as timestamp (conservative: whole file in or out).
 pub fn count_glm_session_turns(glm_config_dir: &Path, window_secs: u64) -> u32 {
+    if window_secs == 0 {
+        return 0;
+    }
     let projects_dir = glm_config_dir.join("projects");
 
     let now = SystemTime::now()
