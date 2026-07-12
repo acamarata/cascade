@@ -97,19 +97,19 @@ export function accountLabel(account: AccountQuota): string {
   switch (account.provider) {
     case 'claude':
       // claude-acc1 → A1, claude-acc2 → A2 …
-      return `A${id.replace(/\D/g, '') || '1'}`
+      return `A${id.replace(/\D/g, '') || 'N'}`
     case 'codex':
-      return 'Co'
+      return 'CO'
     case 'gemini':
       return 'GP'
     case 'opencode':
-      return 'Oc'
+      return 'OC'
     case 'gfp':
       return 'GF'
     case 'zai':
     case 'glm':
       // single z.ai account → 'Za'; numbered (Z1,Z2) only with multiple
-      { const n = id.replace(/\D/g, ''); return n && n !== '1' ? `Z${n}` : 'Za' }
+      { const n = id.replace(/\D/g, ''); return n && n !== '1' ? `Z${n}` : 'ZA' }
     default:
       return account.provider.slice(0, 2).toUpperCase()
   }

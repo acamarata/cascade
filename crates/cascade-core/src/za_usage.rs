@@ -194,7 +194,7 @@ mod tests {
     fn test_count_in_window() {
         // 3 records inside 5h window + 1 record 6h old.
         let now = now_secs();
-        let records = vec![
+        let records = [
             ZaRecord {
                 ts: now - 100,
                 account: "za1".into(),
@@ -224,6 +224,7 @@ mod tests {
                 est_output_tokens: 5,
             },
         ];
+        let records = records.as_slice();
         let window_secs = 5 * 3600u64;
         let in_window: Vec<_> = records
             .iter()

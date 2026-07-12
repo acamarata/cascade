@@ -29,11 +29,11 @@ extension Color {
 
 // MARK: - Account label logic
 // Adapted from ClawFleet labelledAccounts() with new provider/label scheme:
-//   claude   → "An" (single) / "A1","A2",… (multiple)
-//   codex    → "Co" (single) / "C1","C2",… (multiple)
+//   claude   → "AN" (single) / "A1","A2",… (multiple)
+//   codex    → "CO" (single) / "C1","C2",… (multiple)
 //   gemini   → "GP" (single) / "G1","G2",… (multiple)  — Google Pro (paid Antigravity)
-//   opencode → always "Oc" (single pool, no number)
-//   zai/glm  → "Za" (single) / "Z1","Z2",… (multiple)  — z.ai GLM Coding Plan
+//   opencode → always "OC" (single pool, no number)
+//   zai/glm  → "ZA" (single) / "Z1","Z2",… (multiple)  — z.ai GLM Coding Plan
 //   gfp      → always "GF" (Google Free — Gemini Flash key pool, no number)
 // Provider display order: claude, codex, gemini(GP), opencode, zai, gfp(GF).
 // shouldAutoHide() applies only to claude rows (hide when never-pulled + all-null usage).
@@ -48,7 +48,7 @@ func shouldAutoHide(_ e: AccountEntry) -> Bool {
 /// Groups accounts by provider, drops cancelled-subscription claude rows, and
 /// assigns display labels per the Cascade labeling scheme.
 ///
-/// - Single account in a provider family → 2-letter label ("An", "Co", "GP", "Oc", "Za", "GF")
+/// - Single account in a provider family → 2-letter label ("AN", "CO", "GP", "OC", "ZA", "GF")
 /// - Multiple accounts in a family → letter + number ("A1","A2", "C1","C2", "G1","G2", "Z1","Z2")
 /// - opencode and gfp are always single-pool labels regardless of count
 func labelledAccounts(from entries: [AccountEntry]) -> [(label: String, entry: AccountEntry)] {
@@ -83,17 +83,17 @@ func labelledAccounts(from entries: [AccountEntry]) -> [(label: String, entry: A
 private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
     switch provider {
     case "opencode":
-        return group.map { _ in "Oc" }
+        return group.map { _ in "OC" }
     case "gfp":
         return group.map { _ in "GF" }
     case "claude":
         if group.count == 1 {
-            return ["An"]
+            return ["AN"]
         }
         return numberedLabels(prefix: "A", group: group)
     case "codex":
         if group.count == 1 {
-            return ["Co"]
+            return ["CO"]
         }
         return numberedLabels(prefix: "C", group: group)
     case "gemini":
@@ -103,7 +103,7 @@ private func makeLabels(provider: String, group: [AccountEntry]) -> [String] {
         return numberedLabels(prefix: "G", group: group)
     case "zai", "glm":
         if group.count == 1 {
-            return ["Za"]
+            return ["ZA"]
         }
         return numberedLabels(prefix: "Z", group: group)
     default:
