@@ -39,6 +39,14 @@ env:
   # sccache: point RUSTC_WRAPPER at the sccache binary; the sccache-action sets
   # the binary path and starts the server before any cargo invocation.
   RUSTC_WRAPPER: sccache
+  # Any job here that runs --workspace tests transitively compiles and runs
+  # crates/cascade-daemon/tests/integration.rs, which spawns a real cascaded
+  # daemon. Without this, daemon startup downloads real ONNX embedding
+  # models (~4.3GB) — filled the self-hosted runner's disk to 100% and
+  # crashed it multiple times before this was set workflow-wide (previously
+  # only set in daemon-ci.yml, which this file's own test/coverage jobs
+  # never inherited from).
+  CASCADE_OFFLINE_MODELS: "1"
 
 jobs:
   # ── test ─────────────────────────────────────────────────────────────────
