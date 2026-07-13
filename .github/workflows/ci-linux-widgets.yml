@@ -39,11 +39,11 @@ jobs:
 
       - name: Install dev dependencies
         working-directory: apps/cascade-widget-linux/gnome
-        run: pnpm install
+        run: npm install
 
       - name: Lint GJS
         working-directory: apps/cascade-widget-linux/gnome
-        run: npx eslint extension.js prefs.js
+        run: ./node_modules/.bin/eslint extension.js prefs.js
 
       - name: Pack extension
         run: bash apps/cascade-widget-linux/gnome/pack.sh
