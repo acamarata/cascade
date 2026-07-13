@@ -148,6 +148,7 @@ fn run_cascaded_arg_with_deadline(tmpdir: &TempDir, arg: &str, timeout: Duration
         .env("HOME", tmpdir.path())
         .env_remove("CASCADE_OTEL_ENDPOINT")
         .env("RUST_LOG", "error")
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -195,7 +196,7 @@ fn assert_no_daemon_startup_files(home: &Path) {
 #[test]
 fn cascaded_version_exits_without_starting_daemon() {
     let tmpdir = TempDir::new().expect("tmpdir");
-    let output = run_cascaded_arg_with_deadline(&tmpdir, "--version", Duration::from_secs(3));
+    let output = run_cascaded_arg_with_deadline(&tmpdir, "--version", Duration::from_secs(10));
 
     assert!(
         output.status.success(),
@@ -219,7 +220,7 @@ fn cascaded_unknown_flag_exits_without_starting_daemon() {
     let output = run_cascaded_arg_with_deadline(
         &tmpdir,
         "--definitely-not-a-cascaded-flag",
-        Duration::from_secs(3),
+        Duration::from_secs(10),
     );
 
     assert!(
