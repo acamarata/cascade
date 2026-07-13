@@ -67,8 +67,18 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
 
 // ── Test server factory ───────────────────────────────────────────────────
 
+/// Read the IPC auth token the daemon wrote to `<config_dir>/ipc_token`
+/// (crates/cascade-daemon/src/ipc.rs — `IpcServer::new` generates and
+/// persists it there; every connection must echo it back per the
+/// `{"auth": <token>, "rpc": <jsonrpc>}` envelope, added in 5f75f2f
+/// "auth-gate daemon write..." — this test predates that commit and was
+/// never updated, so it always got AUTH_FAILED before reaching dispatch).
+fn read_ipc_token(config_dir: &std::path::Path) -> String {
+    fs::read_to_string(config_dir.join("ipc_token")).expect("read ipc_token")
+}
+
 /// Spin up an IpcServer in a temp dir and initialise the global audit log in
-/// that same dir.  Returns (socket_path, audit_log_path, shutdown_token, handle).
+/// that same dir.  Returns (socket_path, audit_log_path, auth_token, shutdown_token, handle).
 ///
 /// audit::init uses a process-global OnceLock — first call wins.  We call init
 /// here (it is a no-op if already set) then read the active path back via
@@ -79,6 +89,7 @@ async fn start_test_server_with_audit(
 ) -> (
     PathBuf,
     PathBuf,
+    String,
     CancellationToken,
     tokio::task::JoinHandle<()>,
 ) {
@@ -115,6 +126,8 @@ async fn start_test_server_with_audit(
     .await
     .expect("IpcServer::new");
 
+    let auth_token = read_ipc_token(&config_dir);
+
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
     let socket_path = config_dir.join("daemon.sock");
@@ -131,19 +144,24 @@ async fn start_test_server_with_audit(
     }
     assert!(socket_path.exists(), "IPC socket did not appear within 2s");
 
-    (socket_path, audit_path, shutdown, handle)
+    (socket_path, audit_path, auth_token, shutdown, handle)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-/// Build a typed JSON-RPC request for a privileged method.
-fn privileged_request(method: &str) -> serde_json::Value {
+/// Build an authenticated JSON-RPC request envelope for a privileged method.
+/// The connection handler requires `{"auth": <token>, "rpc": <jsonrpc>}` for
+/// every request — see `read_ipc_token`'s doc comment.
+fn privileged_request(method: &str, token: &str) -> serde_json::Value {
     serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": {},
-        "protocol_version": 1
+        "auth": token,
+        "rpc": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": {},
+            "protocol_version": 1
+        }
     })
 }
 
@@ -163,7 +181,8 @@ fn privileged_request(method: &str) -> serde_json::Value {
 #[serial(global_env)]
 async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, audit_path, shutdown, handle) = start_test_server_with_audit(&tmp).await;
+    let (socket_path, audit_path, token, shutdown, handle) =
+        start_test_server_with_audit(&tmp).await;
 
     let methods = [
         ("gci_write", AuditOp::GciWrite),
@@ -186,7 +205,7 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
     // `cascade_resolve` now has a real handler and must NOT return -32601.
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
     for (method, _expected_op) in &methods {
-        let resp = send_request(&mut stream, privileged_request(method)).await;
+        let resp = send_request(&mut stream, privileged_request(method, &token)).await;
         // Errors are nested under "error": {"code", "message"} per the JSON-RPC
         // 2.0 envelope written by write_response() in ipc.rs.
         let code = resp
@@ -270,6 +289,7 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
     )
     .await
     .expect("IpcServer::new");
+    let token = read_ipc_token(&config_dir);
     let socket_path = config_dir.join("daemon.sock");
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -295,11 +315,14 @@ async fn non_privileged_methods_do_not_emit_audit_entries() {
     let resp = send_request(
         &mut stream,
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "unknown_nonprivileged_method",
-            "params": {},
-            "protocol_version": 1
+            "auth": token,
+            "rpc": {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "unknown_nonprivileged_method",
+                "params": {},
+                "protocol_version": 1
+            }
         }),
     )
     .await;
