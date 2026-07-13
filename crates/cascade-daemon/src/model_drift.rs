@@ -3,21 +3,24 @@
 //! # Purpose
 //!
 //! `models/models.yaml` (repo root) is the canonical "which sub has which
-//! model" source of truth referenced by ASI/PPI docs, but it is a docs-only
-//! file — it ships in the git repo, not in the compiled `cascaded` binary.
-//! To make it load-bearing at runtime (rather than a doc that silently rots),
-//! this module embeds the file at compile time via `include_str!` and, on
-//! daemon boot, compares its canonical provider-family set against the live
-//! provider set the daemon actually knows about (from `providers.json`,
-//! harness values mapped to provider families). Any drift is logged as a
-//! single concise WARN — never fatal, never blocking.
+//! model" source of truth referenced by ASI/PPI docs, but it is a docs-first
+//! file. To make it load-bearing at runtime (rather than a doc that silently
+//! rots), this module embeds the file at compile time via `include_str!`,
+//! prefers a valid refreshed cache at `~/.cascade/models.yaml`, and, on daemon
+//! boot, compares its canonical provider-family set against the live provider
+//! set the daemon actually knows about (from `providers.json`, harness values
+//! mapped to provider families). Any drift is logged as a single concise WARN
+//! — never fatal, never blocking.
 //!
 //! # Inputs / Outputs
 //!
-//! - `CANONICAL_MODELS_YAML` — the embedded contents of `models/models.yaml`,
-//!   resolved at compile time relative to this crate's `src/` directory.
-//! - `canonical_provider_families()` — parses the embedded YAML and returns
-//!   the set of top-level `providers[].name` values (e.g. "anthropic",
+//! - `CANONICAL_MODELS_YAML` — the embedded fallback contents of
+//!   `models/models.yaml`, resolved at compile time relative to this crate's
+//!   `src/` directory.
+//! - `~/.cascade/models.yaml` — optional refreshed cache written by
+//!   `cascade update models`; used only when present and parseable.
+//! - `canonical_provider_families()` — parses the cached or embedded YAML and
+//!   returns the set of top-level `providers[].name` values (e.g. "anthropic",
 //!   "openai", "google", "opencode").
 //! - `live_provider_families(harnesses)` — maps the harness values seen in
 //!   `providers.json` (`"cc" | "oc" | "codex" | "cursor" | "gemini"`) to the
@@ -29,11 +32,12 @@
 //!
 //! # Constraints
 //!
-//! - Non-fatal: a parse failure or empty live set never panics or blocks
-//!   startup — it is logged (or silently skipped for an empty live set,
-//!   which is the common default-install case) and the daemon proceeds.
-//! - Cheap: runs once at startup, in-memory string parse only, no I/O beyond
-//!   the already-embedded string constant.
+//! - Non-fatal: a cache read/parse failure, embedded parse failure, or empty
+//!   live set never panics or blocks startup — it is logged where actionable
+//!   (or silently skipped for an empty live set, which is the common
+//!   default-install case) and the daemon proceeds.
+//! - Cheap: runs once at startup; the only runtime I/O is one optional cache
+//!   read from `~/.cascade/models.yaml`.
 //! - `cursor` has no corresponding models.yaml entry today (no known model
 //!   catalog is tracked for it) — it is intentionally mapped to `None` and
 //!   excluded from the comparison rather than flagged as permanent drift.
@@ -41,6 +45,7 @@
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — cascade-daemon: models.yaml drift check (A1)
 
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 use tracing::warn;
 
@@ -68,16 +73,42 @@ struct ProviderBlock {
 
 // ── Canonical set ──────────────────────────────────────────────────────────────
 
-/// Parse [`CANONICAL_MODELS_YAML`] and return the set of provider-family
-/// names it declares (e.g. `{"anthropic", "openai", "google", "opencode"}`).
+/// Parse the refreshed `~/.cascade/models.yaml` cache when it exists and is
+/// valid, otherwise parse [`CANONICAL_MODELS_YAML`], then return the set of
+/// provider-family names it declares (e.g. `{"anthropic", "openai", "google",
+/// "opencode"}`).
 ///
-/// Returns `None` if the embedded YAML fails to parse — this should never
-/// happen in practice (the file is committed and CI-verified), but a defensive
-/// `None` keeps this module non-fatal rather than panicking on a malformed
-/// build.
+/// Returns `None` only if the embedded fallback YAML fails to parse — this
+/// should never happen in practice (the file is committed and CI-verified),
+/// but a defensive `None` keeps this module non-fatal rather than panicking on
+/// a malformed build.
 fn canonical_provider_families() -> Option<BTreeSet<String>> {
-    let parsed: ModelsYaml = serde_yaml::from_str(CANONICAL_MODELS_YAML).ok()?;
-    Some(parsed.providers.into_iter().map(|p| p.name).collect())
+    canonical_provider_families_from(&models_yaml_cache_path())
+}
+
+fn canonical_provider_families_from(cache_path: &Path) -> Option<BTreeSet<String>> {
+    if let Ok(cached) = std::fs::read_to_string(cache_path) {
+        if let Some(families) = parse_provider_families(&cached) {
+            return Some(families);
+        }
+    }
+
+    parse_provider_families(CANONICAL_MODELS_YAML)
+}
+
+fn parse_provider_families(contents: &str) -> Option<BTreeSet<String>> {
+    let parsed: ModelsYaml = serde_yaml::from_str(contents).ok()?;
+    let families: BTreeSet<String> = parsed
+        .providers
+        .into_iter()
+        .map(|p| p.name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+    (!families.is_empty()).then_some(families)
+}
+
+fn models_yaml_cache_path() -> PathBuf {
+    cascade_types::paths::global_cascade_dir().join("models.yaml")
 }
 
 // ── Live set ───────────────────────────────────────────────────────────────────
@@ -167,7 +198,7 @@ pub fn check_and_warn<'a>(harnesses: impl IntoIterator<Item = &'a str>) {
     }
 
     let Some(canonical) = canonical_provider_families() else {
-        warn!("model_drift: failed to parse embedded models/models.yaml — skipping drift check");
+        warn!("model_drift: failed to parse cached or embedded models.yaml — skipping drift check");
         return;
     };
 
@@ -195,7 +226,8 @@ mod tests {
     /// expects (e.g. `providers[].name` field renamed).
     #[test]
     fn embedded_models_yaml_parses_and_has_known_families() {
-        let families = canonical_provider_families().expect("models.yaml must parse");
+        let families =
+            parse_provider_families(CANONICAL_MODELS_YAML).expect("models.yaml must parse");
         // These four are the current canonical set (verified 2026-07-06,
         // models.yaml header). This assertion pins the expectation so a
         // silent schema change (e.g. renaming `name` to `provider_name`) is
@@ -206,6 +238,43 @@ mod tests {
                 "expected family {expected:?} missing from parsed models.yaml: {families:?}"
             );
         }
+    }
+
+    #[test]
+    fn no_cache_file_uses_embedded_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("models.yaml");
+        let expected = parse_provider_families(CANONICAL_MODELS_YAML).unwrap();
+        let families = canonical_provider_families_from(&cache_path).unwrap();
+        assert_eq!(families, expected);
+    }
+
+    #[test]
+    fn valid_cache_file_uses_cache_content() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("models.yaml");
+        std::fs::write(
+            &cache_path,
+            "providers:\n  - name: cached-provider\n  - name: cached-second\n",
+        )
+        .unwrap();
+
+        let families = canonical_provider_families_from(&cache_path).unwrap();
+        assert_eq!(
+            families,
+            BTreeSet::from(["cached-provider".to_string(), "cached-second".to_string(),])
+        );
+    }
+
+    #[test]
+    fn corrupt_cache_file_falls_back_to_embedded_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("models.yaml");
+        std::fs::write(&cache_path, "providers: [").unwrap();
+
+        let expected = parse_provider_families(CANONICAL_MODELS_YAML).unwrap();
+        let families = canonical_provider_families_from(&cache_path).unwrap();
+        assert_eq!(families, expected);
     }
 
     #[test]

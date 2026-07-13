@@ -38,6 +38,8 @@ async-trait   = { workspace = true }
 clap          = { workspace = true }
 serde         = { workspace = true }
 serde_json    = { workspace = true }
+serde_yaml    = { workspace = true }
+reqwest       = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tokio         = { workspace = true }
 uuid          = { workspace = true }
 toml          = "0.8"

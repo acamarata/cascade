@@ -1,4 +1,4 @@
-//! `cascade update check | apply | auto` — delta update commands.
+//! `cascade update check | apply | auto | models` — update commands.
 //!
 //! Purpose: User-facing interface for the update pipeline (T-P4-E04-14/16).
 //!
@@ -6,6 +6,7 @@
 //!   `cascade update check`              — query GitHub for a newer version; print result
 //!   `cascade update apply [--yes]`      — trigger full download+verify+apply via IPC
 //!   `cascade update auto [--enable|--disable]` — toggle auto_update in config.toml
+//!   `cascade update models`             — refresh ~/.cascade/models.yaml from GitHub
 //!
 //! Exit code `0` on success; `1` on daemon error.
 //!
@@ -18,9 +19,15 @@ use cascade_types::ipc::{
     UpdateCheckResult,
 };
 use clap::{Args, Subcommand};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use super::Command;
 use crate::ipc_client::IpcClient;
+
+const MODELS_YAML_URL: &str =
+    "https://raw.githubusercontent.com/acamarata/cascade/main/models/models.yaml";
+const COMPILED_MODELS_YAML: &str = include_str!("../../../../models/models.yaml");
 
 // ── Arg types ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +58,8 @@ pub enum UpdateSubcommand {
         #[arg(long, conflicts_with = "enable")]
         disable: bool,
     },
+    /// Refresh the cached fleet model roster from GitHub.
+    Models,
 }
 
 #[async_trait]
@@ -69,6 +78,7 @@ impl Command for UpdateArgs {
                     std::process::exit(1);
                 }
             }
+            Some(UpdateSubcommand::Models) => run_models().await,
         }
     }
 }
@@ -169,6 +179,167 @@ async fn run_auto(enable: bool) -> Result<()> {
     }
 }
 
+// ── models ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+struct ModelsYaml {
+    providers: Vec<ProviderBlock>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ProviderBlock {
+    name: String,
+}
+
+#[derive(Debug)]
+struct ValidatedModelsYaml {
+    provider_count: usize,
+}
+
+#[derive(Debug)]
+struct ModelsUpdateReport {
+    cache_path: PathBuf,
+    changed: bool,
+    compared_to: &'static str,
+    provider_count: usize,
+}
+
+async fn run_models() -> Result<()> {
+    match update_models_cache().await {
+        Ok(report) => {
+            let change = if report.changed {
+                "changed"
+            } else {
+                "unchanged"
+            };
+            println!(
+                "Models roster refreshed ({change} vs {}; {} providers).",
+                report.compared_to, report.provider_count
+            );
+            println!("Cache: {}", report.cache_path.display());
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Failed to update models.yaml: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn update_models_cache() -> Result<ModelsUpdateReport> {
+    let fetched = fetch_models_yaml().await?;
+    let validated = validate_models_yaml(&fetched)?;
+    let cache_path = models_cache_path();
+
+    let (baseline, compared_to) = match std::fs::read_to_string(&cache_path) {
+        Ok(cached) => (cached, "cached models.yaml"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (COMPILED_MODELS_YAML.to_string(), "compiled-in default")
+        }
+        Err(_) => (
+            COMPILED_MODELS_YAML.to_string(),
+            "compiled-in default (cache unreadable)",
+        ),
+    };
+    let changed = fetched != baseline;
+
+    write_models_cache_atomically(&cache_path, &fetched)?;
+
+    Ok(ModelsUpdateReport {
+        cache_path,
+        changed,
+        compared_to,
+        provider_count: validated.provider_count,
+    })
+}
+
+async fn fetch_models_yaml() -> Result<String> {
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()
+        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
+    let response = client
+        .get(MODELS_YAML_URL)
+        .header("User-Agent", "cascade-updater/1")
+        .send()
+        .await
+        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?
+        .error_for_status()
+        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))?;
+
+    response
+        .text()
+        .await
+        .map_err(|e| cascade_types::error::CascadeError::Other(e.to_string()))
+}
+
+fn validate_models_yaml(contents: &str) -> Result<ValidatedModelsYaml> {
+    let parsed: ModelsYaml = serde_yaml::from_str(contents).map_err(|e| {
+        cascade_types::error::CascadeError::Other(format!(
+            "fetched models.yaml is not valid YAML with providers[].name: {e}"
+        ))
+    })?;
+
+    if parsed.providers.is_empty() {
+        return Err(cascade_types::error::CascadeError::Other(
+            "fetched models.yaml has no providers".to_string(),
+        ));
+    }
+
+    for provider in &parsed.providers {
+        if provider.name.trim().is_empty() {
+            return Err(cascade_types::error::CascadeError::Other(
+                "fetched models.yaml contains a provider with an empty name".to_string(),
+            ));
+        }
+    }
+
+    Ok(ValidatedModelsYaml {
+        provider_count: parsed.providers.len(),
+    })
+}
+
+fn models_cache_path() -> PathBuf {
+    cascade_types::paths::global_cascade_dir().join("models.yaml")
+}
+
+fn write_models_cache_atomically(cache_path: &Path, contents: &str) -> Result<()> {
+    let parent = cache_path
+        .parent()
+        .expect("models.yaml cache path has parent");
+    std::fs::create_dir_all(parent).map_err(|e| cascade_types::error::CascadeError::Io {
+        path: parent.to_path_buf(),
+        operation: "create models cache directory",
+        source: e,
+    })?;
+
+    let tmp_path = cache_path.with_file_name("models.yaml.tmp");
+    let mut tmp =
+        std::fs::File::create(&tmp_path).map_err(|e| cascade_types::error::CascadeError::Io {
+            path: tmp_path.clone(),
+            operation: "create temporary models cache",
+            source: e,
+        })?;
+    tmp.write_all(contents.as_bytes())
+        .map_err(|e| cascade_types::error::CascadeError::Io {
+            path: tmp_path.clone(),
+            operation: "write temporary models cache",
+            source: e,
+        })?;
+    tmp.sync_all()
+        .map_err(|e| cascade_types::error::CascadeError::Io {
+            path: tmp_path.clone(),
+            operation: "sync temporary models cache",
+            source: e,
+        })?;
+    std::fs::rename(&tmp_path, cache_path).map_err(|e| cascade_types::error::CascadeError::Io {
+        path: cache_path.to_path_buf(),
+        operation: "replace models cache",
+        source: e,
+    })?;
+    Ok(())
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 fn ipc_client() -> Result<IpcClient> {
@@ -265,6 +436,20 @@ mod tests {
                 }
                 _ => panic!("expected Auto"),
             },
+            _ => panic!("expected Update"),
+        }
+    }
+
+    #[test]
+    fn update_models_parses() {
+        let cli = Cli::try_parse_from(["cascade", "update", "models"]).unwrap();
+        match cli.cmd {
+            crate::cmd::Commands::Update(args) => {
+                assert!(matches!(
+                    args.subcommand,
+                    Some(super::UpdateSubcommand::Models)
+                ));
+            }
             _ => panic!("expected Update"),
         }
     }
