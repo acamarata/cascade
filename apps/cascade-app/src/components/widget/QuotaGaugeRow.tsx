@@ -27,7 +27,7 @@ export const MODEL_QUOTA_ESTIMATE: Record<string, number> = {
   'claude-fable-5': 10_000_000,
   'gemini-3.1-pro': 2_000_000,
   'gemini-3.5-flash': 20_000_000,
-  'gpt-5.5': 2_000_000,
+  'gpt-5.6-sol': 2_000_000,
   // Prior-generation ids retained for historical usage rows
   'claude-sonnet-4-6': 10_000_000,
   'claude-haiku-3-5': 50_000_000,

@@ -12,7 +12,7 @@
 # Cross-reference: crates/cascade-core/src/model_ids.rs holds the Rust
 #   constants Cascade code actually imports. As of this write, those constants
 #   ARE current (claude-opus-4-8, claude-sonnet-5, claude-haiku-4-5,
-#   claude-fable-5, gpt-5.5, gemini-3.1-pro, gemini-3.5-flash, glm-5.2) — no
+#   claude-fable-5, gpt-5.6-sol, gemini-3.1-pro, gemini-3.5-flash, glm-5.2) — no
 #   drift found. Re-diff this file against model_ids.rs whenever either changes.
 #
 # Update cadence: re-verify quarterly or when a provider ships a new
@@ -92,7 +92,7 @@ providers:
     dispatch: "Codex CLI"
     models:
       - id: gpt-5.5
-        tier: T2
+        tier: T2-legacy
         best_for: ["large refactors", "holding context across big systems", "ambiguous-failure debugging", "agentic tool-checking"]
         quota_cost_weight: "$5/MTok in, $0.50 cached-in, $30/MTok out; 2x in / 1.5x out beyond 272K input tokens in one session"
         context_tokens: 400000
@@ -147,7 +147,7 @@ providers:
         tier: T1
         best_for: ["hardest problems", "complex coding", "security research", "final gates", "adversarial CR"]
         quota_cost_weight: "$5/MTok in, $30/MTok out"
-        context_tokens: 1500000
+        context_tokens: 1050000
         availability: ga
         notes: >
           GA 2026-07-09 — public rollout after US Dept. of Commerce clearance
@@ -161,7 +161,7 @@ providers:
         tier: T2
         best_for: ["balanced high-volume business tasks", "bulk execution", "internal tools", "doc analysis"]
         quota_cost_weight: "$2.50/MTok in, $15/MTok out — ~2x cheaper than 5.5, competitive perf"
-        context_tokens: null
+        context_tokens: 1050000
         availability: ga
         notes: >
           GA 2026-07-09. Balanced everyday-work tier; competitive with GPT-5.5
@@ -172,7 +172,7 @@ providers:
         tier: T3
         best_for: ["summarization", "drafting", "routine automation", "grunt", "triage"]
         quota_cost_weight: "$1/MTok in, $6/MTok out — cheapest 5.6 tier"
-        context_tokens: null
+        context_tokens: 1050000
         availability: ga
         notes: >
           GA 2026-07-09. Fastest/cheapest 5.6 tier. Cascade maps Luna→T3
@@ -383,10 +383,22 @@ providers:
     cascade_accounts: ["Copilot"]
     dispatch: "Copilot API / CLI"
     models:
-      - id: gpt-5.5
+      - id: gpt-5.6-sol
+        tier: T1
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1050000
+        availability: ga
+        notes: "Available via Copilot integration."
+      - id: gpt-5.6-terra
         tier: T2
         best_for: ["GitHub issue/PR/review/CI"]
-        context_tokens: 1000000
+        context_tokens: 1050000
+        availability: ga
+        notes: "Available via Copilot integration."
+      - id: gpt-5.6-luna
+        tier: T3
+        best_for: ["GitHub issue/PR/review/CI"]
+        context_tokens: 1050000
         availability: ga
         notes: "Available via Copilot integration."
       - id: gpt-5.3-codex

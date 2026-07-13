@@ -195,7 +195,7 @@ out = {
         "quota_hit": oc_quota_hit,
         "rolling_pct": oc_rolling_pct,
         "models_available": (
-            ["gpt-5.5", "deepseek-v4-pro", "deepseek-v4-flash"]
+            ["gpt-5.6-sol", "deepseek-v4-pro", "deepseek-v4-flash"]
             if not oc_quota_hit
             else ["deepseek-v4-flash"]
         ),

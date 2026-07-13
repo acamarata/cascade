@@ -43,8 +43,17 @@ pub const MODEL_CLAUDE_FABLE: &str = "claude-fable-5";
 
 // ── OpenAI / Codex ───────────────────────────────────────────────────────────
 
-/// GPT T2 model via Codex CLI.
-pub const MODEL_GPT: &str = "gpt-5.5";
+/// GPT T1 flagship model via Codex CLI (Sol).
+pub const MODEL_GPT_SOL: &str = "gpt-5.6-sol";
+
+/// GPT T2 balanced model via Codex CLI (Terra).
+pub const MODEL_GPT_TERRA: &str = "gpt-5.6-terra";
+
+/// GPT T3 fastest/cheapest tier via Codex CLI (Luna).
+pub const MODEL_GPT_LUNA: &str = "gpt-5.6-luna";
+
+/// GPT model via Codex CLI (default/flagship routing).
+pub const MODEL_GPT: &str = MODEL_GPT_SOL;
 
 // ── Google / Gemini ───────────────────────────────────────────────────────────
 

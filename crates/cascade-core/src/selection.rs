@@ -446,7 +446,7 @@ fn default_model_class(tier: Tier) -> ModelClass {
 /// Model-ID string for a `ModelClass`.
 ///
 /// Non-Claude model IDs:
-///   - Codex uses `gpt-5.5` (MODEL_GPT) regardless of class.
+///   - Codex uses `gpt-5.6-sol` (MODEL_GPT) regardless of class.
 ///   - Gemini T1/T2 uses `gemini-3.1-pro`; T3/Haiku uses `gemini-3.5-flash`.
 ///   - OpenCode and z.ai use `glm-5.2` (MODEL_GLM) regardless of class.
 ///   - GFP always uses `gemini-3.5-flash` (free pool, Flash only).
@@ -489,7 +489,7 @@ fn resolve_provider_model(
             (Provider::Claude, model, reason)
         }
         "codex" => {
-            // Codex uses GPT-5.5 for all tiers; class is noted for logging only.
+            // Codex uses GPT-5.6 Sol (MODEL_GPT) for all tiers; class is noted for logging only.
             let model = MODEL_GPT.to_string();
             let reason = format!(
                 "codex account `{}`, model {} (requested class={:?})",
