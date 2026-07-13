@@ -16,17 +16,18 @@ use std::path::PathBuf;
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-// Only called from `main()`, which the `--test` build of a bin-only crate
-// does not invoke — dead-code analysis has no root to reach these from
-// under `cargo test`/`clippy --all-targets`, even though `main()` uses them.
-#[cfg_attr(test, allow(dead_code))]
+// Only reachable via the macOS-only real `run_widget()` — on non-macOS,
+// `run_widget()` is a no-op stub, so this whole call chain is genuinely
+// unreachable there (in both test and non-test compiles). It is real,
+// used code on the actual shipping (macOS) binary.
+#[allow(dead_code)]
 fn accounts_path() -> PathBuf {
     cascade_types::paths::home_dir()
         .join(".cascade")
         .join("accounts.json")
 }
 
-#[cfg_attr(test, allow(dead_code))]
+#[allow(dead_code)]
 fn quota_store_path() -> PathBuf {
     cascade_types::paths::home_dir()
         .join(".cascade")
@@ -40,7 +41,7 @@ struct FleetData {
     store: Option<QuotaStore>,
 }
 
-#[cfg_attr(test, allow(dead_code))]
+#[allow(dead_code)]
 fn load_fleet_data() -> FleetData {
     FleetData {
         registry: read_accounts_registry(&accounts_path()).ok(),
@@ -49,7 +50,12 @@ fn load_fleet_data() -> FleetData {
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
+// Reachable via the macOS-only run_widget() -> build_menu_content chain, and
+// exercised directly by unit tests below — but on a non-macOS `--test` build
+// the macOS-only call chain is absent, so these read as unreachable there.
+// Real, used code on the shipping (macOS) binary.
 
+#[allow(dead_code)]
 fn family_label(family: &AccountFamily) -> &'static str {
     match family {
         AccountFamily::Claude => "Claude",
@@ -61,6 +67,7 @@ fn family_label(family: &AccountFamily) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn role_badge(role: &AccountRole) -> &'static str {
     match role {
         AccountRole::PrimaryT0 => "[PRIMARY]",
@@ -70,6 +77,7 @@ fn role_badge(role: &AccountRole) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn access_methods_concise(account: &Account) -> String {
     use cascade_types::accounts::AccessMethod;
     account
@@ -88,6 +96,7 @@ fn access_methods_concise(account: &Account) -> String {
 }
 
 /// Build a usage string for one account; returns "—" when no store data exists.
+#[allow(dead_code)]
 fn quota_summary(account: &Account, store: &Option<QuotaStore>) -> String {
     let store = match store {
         Some(s) => s,
@@ -127,6 +136,7 @@ fn quota_summary(account: &Account, store: &Option<QuotaStore>) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn format_account_line(account: &Account, store: &Option<QuotaStore>) -> String {
     format!(
         "{}  {}  {}  cli:{}  keys:{}  {}",
@@ -142,6 +152,7 @@ fn format_account_line(account: &Account, store: &Option<QuotaStore>) -> String 
 // ── Menu builder ──────────────────────────────────────────────────────────────
 
 /// Build (title, menu_lines) from current fleet data.
+#[allow(dead_code)]
 fn build_menu_content(data: &FleetData) -> (String, Vec<String>) {
     let registry = match &data.registry {
         Some(r) => r,
