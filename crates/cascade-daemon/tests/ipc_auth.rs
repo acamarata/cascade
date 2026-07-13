@@ -5,9 +5,8 @@
 //!   2. Correct auth token + Ping → {"pong":""} result.
 //!   3. Graceful drain: cancel token, wait up to 5 s, in-flight handler exits cleanly.
 //!
-//! NOTE: The auth-token and connection-pool features are planned for a later
-//! sprint (IpcServer does not yet expose `generate_and_write_token` or the
-//! semaphore cap). These tests exercise the current IpcServer API directly.
+//! NOTE: every request must be wrapped as `{"auth": <token>, "rpc": <jsonrpc>}`
+//! (auth-gate added in 5f75f2f) — see `authed_request`/`read_ipc_token` below.
 //!
 //! SPORT: .claude/docs/MASTER-DAEMON.md — ipc_auth integration test row (T-P2-E03-03)
 
@@ -48,13 +47,36 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
     serde_json::from_slice(&resp_bytes).expect("parse response JSON")
 }
 
+/// Read the IPC auth token the daemon wrote to `<config_dir>/ipc_token`.
+///
+/// Every request must be wrapped as `{"auth": <token>, "rpc": <jsonrpc>}` —
+/// see the auth-gate added in 5f75f2f. A bare `{"method": ...}` frame (the
+/// pre-auth-gate shape these tests used to send) always gets "auth failed".
+fn read_ipc_token(config_dir: &std::path::Path) -> String {
+    fs::read_to_string(config_dir.join("ipc_token")).expect("read ipc_token")
+}
+
+/// Build an authenticated JSON-RPC request envelope.
+fn authed_request(method: &str, token: &str) -> serde_json::Value {
+    serde_json::json!({
+        "auth": token,
+        "rpc": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": {},
+            "protocol_version": 1
+        }
+    })
+}
+
 // ── Test server factory ───────────────────────────────────────────────────
 
 /// Spin up an IpcServer in a background task on a tmp socket.
-/// Returns (socket_path, shutdown_token, task_handle).
+/// Returns (socket_path, auth_token, shutdown_token, task_handle).
 async fn start_test_server(
     tmp: &TempDir,
-) -> (PathBuf, CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (PathBuf, String, CancellationToken, tokio::task::JoinHandle<()>) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
@@ -69,6 +91,8 @@ async fn start_test_server(
     )
     .await
     .expect("IpcServer::new");
+
+    let token = read_ipc_token(&config_dir);
 
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -87,29 +111,43 @@ async fn start_test_server(
     }
     assert!(socket_path.exists(), "IPC socket did not appear within 2s");
 
-    (socket_path, shutdown, handle)
+    (socket_path, token, shutdown, handle)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
+
+/// Wrong auth token → -32002 error response (T-P2-E03-03 item 1).
+#[tokio::test(flavor = "multi_thread")]
+async fn test_wrong_auth_token_rejected() {
+    let tmp = TempDir::new().unwrap();
+    let (socket_path, _token, shutdown, handle) = start_test_server(&tmp).await;
+
+    let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+    let resp = send_request(&mut stream, authed_request("ping", "definitely-wrong-token")).await;
+
+    assert_eq!(
+        resp["error"]["code"].as_i64(),
+        Some(-32002),
+        "wrong auth token must yield -32002: {resp}"
+    );
+
+    shutdown.cancel();
+    let _ = tokio::time::timeout(Duration::from_secs(3), handle).await;
+}
 
 /// Ping method returns a response (smoke test: server accepts connections and
 /// responds to a known method).
 #[tokio::test(flavor = "multi_thread")]
 async fn test_ping_returns_response() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
-    let resp = send_request(
-        &mut stream,
-        serde_json::json!({ "method": "ping", "echo": null }),
-    )
-    .await;
+    let resp = send_request(&mut stream, authed_request("ping", &token)).await;
 
-    // A successful ping has no "code" error field.
     assert!(
-        resp.get("code").is_none(),
+        resp.get("error").is_none(),
         "unexpected error in ping response: {resp}"
     );
 
@@ -122,11 +160,11 @@ async fn test_ping_returns_response() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_health_returns_minimal_response() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
-    let resp = send_request(&mut stream, serde_json::json!({ "method": "health" })).await;
+    let resp = send_request(&mut stream, authed_request("health", &token)).await;
 
     // Success responses are wrapped in the JSON-RPC 2.0 envelope under "result"
     // (see write_response() in ipc.rs); errors would be nested under "error".
@@ -174,15 +212,11 @@ async fn test_health_returns_minimal_response() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_graceful_drain_completes() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     // Open a connection, send one ping, but keep the stream open.
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-    let _ = send_request(
-        &mut stream,
-        serde_json::json!({ "method": "ping", "echo": null }),
-    )
-    .await;
+    let _ = send_request(&mut stream, authed_request("ping", &token)).await;
 
     // Cancel the server. Graceful drain gives in-flight handlers up to 5 s.
     shutdown.cancel();
