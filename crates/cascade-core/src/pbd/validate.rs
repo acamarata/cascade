@@ -509,14 +509,33 @@ fn check_counts(store: &PbdStore, tree: &PhaseTree, result: &mut ValidationResul
 }
 
 fn find_sprint_dir(store: &PbdStore, sprint_id: &str) -> Option<PathBuf> {
-    // Walk phases/p*/e*/w*/sprint_id/
+    // Walk phases/p*/e*/w*/sprint_id/. store.root() also holds top-level
+    // files (INDEX.yaml, events.jsonl, current.yaml) alongside the phase
+    // dirs; fs::read_dir enumeration order is filesystem-dependent, so a
+    // non-directory entry can be seen before any phase dir. Skip non-dir
+    // entries instead of letting read_dir on a file abort the whole walk.
     let root = store.root();
-    let phase_dirs = fs::read_dir(root).ok()?;
+    let Ok(phase_dirs) = fs::read_dir(root) else {
+        return None;
+    };
     for p_entry in phase_dirs.flatten() {
-        let epic_dirs = fs::read_dir(p_entry.path()).ok()?;
+        if !p_entry.path().is_dir() {
+            continue;
+        }
+        let Ok(epic_dirs) = fs::read_dir(p_entry.path()) else {
+            continue;
+        };
         for e_entry in epic_dirs.flatten() {
-            let wave_dirs = fs::read_dir(e_entry.path()).ok()?;
+            if !e_entry.path().is_dir() {
+                continue;
+            }
+            let Ok(wave_dirs) = fs::read_dir(e_entry.path()) else {
+                continue;
+            };
             for w_entry in wave_dirs.flatten() {
+                if !w_entry.path().is_dir() {
+                    continue;
+                }
                 let candidate = w_entry.path().join(sprint_id);
                 if candidate.join("sprint.yaml").exists() {
                     return Some(candidate);
