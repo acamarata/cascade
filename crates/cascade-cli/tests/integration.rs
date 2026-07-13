@@ -68,15 +68,31 @@ fn cascaded_bin() -> PathBuf {
         .expect("expected workspace root two dirs above CARGO_MANIFEST_DIR");
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let bin = workspace_root.join("target").join(profile).join("cascaded");
+    let target_dir = workspace_root.join("target");
 
-    // Sanity check: the binary must exist.  If it does not, the caller's test
-    // will panic with a clear message rather than a cryptic "No such file" from spawn.
-    assert!(
-        bin.exists(),
-        "cascaded binary not found at {bin:?}. Run `cargo build -p cascade-daemon` first."
+    // Native builds (no `cargo build --target <triple>`) place binaries at
+    // target/<profile>/cascaded. But `cargo build --target <triple>` — even
+    // when <triple> equals the host — always nests under
+    // target/<triple>/<profile>/cascaded instead. Try native first, then
+    // search any target/<triple>/<profile>/ subdirectory for the binary.
+    let native = target_dir.join(&profile).join("cascaded");
+    if native.exists() {
+        return native;
+    }
+
+    if let Ok(entries) = std::fs::read_dir(&target_dir) {
+        for entry in entries.flatten() {
+            let candidate = entry.path().join(&profile).join("cascaded");
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    panic!(
+        "cascaded binary not found at {native:?} or under any {target_dir:?}/<triple>/{profile}/. \
+         Run `cargo build -p cascade-daemon` (add --target <triple> to match how the test binary itself was built) first."
     );
-    bin
 }
 
 // ── Daemon fixture ────────────────────────────────────────────────────────────
