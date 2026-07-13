@@ -12,6 +12,7 @@ on:
       - ".github/workflows/ci.yml"
       - "src/widget/macos/**"
       - "apps/cascade-widget-windows/**"
+      - "apps/cascade-app/src-tauri/**"
   pull_request:
     branches: [main]
     paths:
@@ -23,6 +24,7 @@ on:
       - ".github/workflows/ci.yml"
       - "src/widget/macos/**"
       - "apps/cascade-widget-windows/**"
+      - "apps/cascade-app/src-tauri/**"
 
 # Cancel in-progress runs on the same branch/PR to avoid wasted runner-minutes.
 concurrency:
