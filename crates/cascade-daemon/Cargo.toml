@@ -31,6 +31,7 @@ tokio         = { workspace = true }
 tracing       = { workspace = true }
 tracing-subscriber    = { workspace = true, features = ["env-filter", "json"] }
 tracing-appender      = "0.2"
+clap          = { workspace = true }
 tracing-opentelemetry = "0.24"
 opentelemetry         = { version = "0.23", features = ["trace"] }
 opentelemetry-otlp    = { version = "0.16", features = ["tonic", "grpc-tonic"] }

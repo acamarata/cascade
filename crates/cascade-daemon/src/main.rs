@@ -107,6 +107,7 @@ mod updates;
 use cascade_core::providers_store::read_providers_store;
 use cascade_keychain::Keychain;
 use cascade_providers::{ProviderAdapter, ProviderRegistry};
+use clap::Parser;
 #[cfg(feature = "gemini-proxy")]
 use secrecy::SecretString;
 #[cfg(feature = "gemini-proxy")]
@@ -118,8 +119,30 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-#[tokio::main]
-async fn main() {
+/// Cascade background daemon.
+#[derive(Debug, Parser)]
+#[command(
+    name = "cascaded",
+    about = "Run the Cascade background daemon",
+    version
+)]
+struct Cli {}
+
+fn main() {
+    let _cli = Cli::parse();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap_or_else(|e| {
+            eprintln!("failed to initialize tokio runtime: {e}");
+            process::exit(1);
+        });
+
+    runtime.block_on(run_daemon());
+}
+
+async fn run_daemon() {
     // Resolve config dir (~/.cascade) synchronously so we can read config.toml
     // before initializing the logging subscriber (tracing_subscriber can only be
     // initialized once; we want to honour daemon.log_level / daemon.log_format).

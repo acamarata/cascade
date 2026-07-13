@@ -23,7 +23,7 @@ use serial_test::serial;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{Child, Command},
+    process::{Child, Command, Output, Stdio},
     thread,
     time::{Duration, Instant},
 };
@@ -124,7 +124,117 @@ fn wait_for_file(path: &Path, timeout_ms: u64) -> bool {
     path.exists()
 }
 
+fn cascaded_arg_test_bin() -> PathBuf {
+    let exe_name = if cfg!(windows) {
+        "cascaded.exe"
+    } else {
+        "cascaded"
+    };
+
+    if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
+        let candidate = PathBuf::from(target_dir).join("debug").join(exe_name);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    cargo_bin("cascaded")
+}
+
+fn run_cascaded_arg_with_deadline(tmpdir: &TempDir, arg: &str, timeout: Duration) -> Output {
+    let bin = cascaded_arg_test_bin();
+    let mut child = Command::new(&bin)
+        .arg(arg)
+        .env("HOME", tmpdir.path())
+        .env_remove("CASCADE_OTEL_ENDPOINT")
+        .env("RUST_LOG", "error")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|e| panic!("failed to spawn cascaded at {}: {e}", bin.display()));
+
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if child.try_wait().expect("poll cascaded child").is_some() {
+            return child.wait_with_output().expect("collect cascaded output");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let _ = child.kill();
+    let output = child
+        .wait_with_output()
+        .expect("collect killed cascaded output");
+    panic!(
+        "{} {arg} did not exit within {:?}; status={:?}",
+        bin.display(),
+        timeout,
+        output.status
+    );
+}
+
+fn assert_no_daemon_startup_files(home: &Path) {
+    let cascade_dir = home.join(".cascade");
+
+    assert!(
+        !cascade_dir.join("daemon.pid").exists(),
+        "argument parsing should exit before writing daemon.pid"
+    );
+    assert!(
+        !cascade_dir.join("daemon.sock").exists(),
+        "argument parsing should exit before binding daemon.sock"
+    );
+    assert!(
+        !cascade_dir.join("dashboard.token").exists(),
+        "argument parsing should exit before starting the dashboard listener"
+    );
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn cascaded_version_exits_without_starting_daemon() {
+    let tmpdir = TempDir::new().expect("tmpdir");
+    let output = run_cascaded_arg_with_deadline(&tmpdir, "--version", Duration::from_secs(3));
+
+    assert!(
+        output.status.success(),
+        "cascaded --version should exit 0; stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout
+            .trim()
+            .starts_with(&format!("cascaded {}", env!("CARGO_PKG_VERSION"))),
+        "unexpected --version stdout: {stdout:?}"
+    );
+    assert_no_daemon_startup_files(tmpdir.path());
+}
+
+#[test]
+fn cascaded_unknown_flag_exits_without_starting_daemon() {
+    let tmpdir = TempDir::new().expect("tmpdir");
+    let output = run_cascaded_arg_with_deadline(
+        &tmpdir,
+        "--definitely-not-a-cascaded-flag",
+        Duration::from_secs(3),
+    );
+
+    assert!(
+        !output.status.success(),
+        "unknown flag should exit non-zero; stdout={}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unexpected argument") || stderr.contains("Usage: cascaded"),
+        "unexpected unknown-flag stderr: {stderr:?}"
+    );
+    assert_no_daemon_startup_files(tmpdir.path());
+}
 
 /// Test 1 — daemon.pid written within 500 ms of spawning the daemon.
 ///
