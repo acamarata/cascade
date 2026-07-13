@@ -85,6 +85,13 @@ jobs:
       - name: Install cargo-nextest
         run: cargo binstall --no-confirm cargo-nextest
 
+      # cascade-cli's integration tests locate the cascaded binary by a raw
+      # target/debug path (CARGO_BIN_EXE_* only covers bins in the *same*
+      # crate) — build it explicitly first so nextest's pipelined test
+      # execution can't race ahead of cascade-daemon's own build.
+      - name: Build cascade-daemon (integration test dependency)
+        run: cargo build -p cascade-daemon --target ${{ matrix.target }}
+
       - name: Run tests via nextest (native, all targets)
         run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
 
@@ -139,6 +146,13 @@ jobs:
 
       - name: Install cargo-nextest
         run: cargo binstall --no-confirm cargo-nextest
+
+      # cascade-cli's integration tests locate the cascaded binary by a raw
+      # target/debug path (CARGO_BIN_EXE_* only covers bins in the *same*
+      # crate) — build it explicitly first so nextest's pipelined test
+      # execution can't race ahead of cascade-daemon's own build.
+      - name: Build cascade-daemon (integration test dependency)
+        run: cargo build -p cascade-daemon --target ${{ matrix.target }}
 
       - name: Run tests via nextest (native, all targets)
         run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
@@ -346,6 +360,11 @@ jobs:
 
       - name: Install cargo-nextest
         run: cargo binstall --no-confirm cargo-nextest
+
+      # See the same step in the `test` job — cascade-cli's integration
+      # tests need the cascaded binary already built on disk.
+      - name: Build cascade-daemon (integration test dependency)
+        run: cargo build -p cascade-daemon
 
       - name: Run coverage
         # Uses the cargo alias defined in .cargo/config.toml:
