@@ -120,11 +120,21 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 /// Cascade background daemon.
+///
+/// `color = Never` and an explicit `term_width` disable clap's terminal-
+/// capability probing entirely — a background daemon has no controlling
+/// terminal to format for, and that probe (via the `is-terminal`/
+/// `terminal_size` machinery on the error-formatting path only, not the
+/// `--version` fast path) can hang indefinitely on certain nested/piped fd
+/// inheritance chains (observed when spawned as a subprocess-of-a-
+/// subprocess under the Rust test harness).
 #[derive(Debug, Parser)]
 #[command(
     name = "cascaded",
     about = "Run the Cascade background daemon",
-    version
+    version,
+    color = clap::ColorChoice::Never,
+    term_width = 0
 )]
 struct Cli {}
 
