@@ -219,6 +219,27 @@ async fn run_daemon() {
         error!(%e, "failed to write daemon.pid");
     }
 
+    // Install the SIGTERM/SIGINT listener NOW, immediately after daemon.pid
+    // is written — not later, inline in the big `tokio::select!` near the end
+    // of this function. Before this fix, `shutdown::wait_for_signal()` was
+    // only awaited after tray/dashboard/gemini-proxy/supervisor setup
+    // completed. daemon.pid exists (and a supervisor/test can already send
+    // SIGTERM) long before that point, so a signal arriving during startup
+    // hit the OS default disposition (terminate immediately, no cleanup):
+    // daemon.pid was never removed and last-stop.txt was never written.
+    // Observed directly: `daemon_clean_stop` failing with the daemon's own
+    // log ending right after startup, no "signal received"/"stopped cleanly"
+    // lines at all. Spawning the listener here closes that race to ~0.
+    let shutdown_token = shutdown::token();
+    {
+        let shutdown_token = shutdown_token.clone();
+        tokio::spawn(async move {
+            shutdown::wait_for_signal().await;
+            info!("signal received — initiating graceful shutdown");
+            shutdown_token.cancel();
+        });
+    }
+
     let providers_path = config_dir.join("providers.json");
     // Build a slot_id → SecretString map for the Gemini proxy.  Enabled Gemini
     // providers are enumerated from providers.json and paired positionally with
@@ -434,11 +455,6 @@ async fn run_daemon() {
     // (not a dedicated OS thread) so it plays nicely with async supervisor tasks.
     let _cache_poller_handle = cache::spawn_status_cache_poller(tray_tx.clone());
 
-    // Install per-OS signal / stop handlers so the shutdown token is
-    // propagated correctly. supervisor::run() drives the actual process
-    // management loop and blocks until shutdown is requested.
-    let shutdown_token = shutdown::token();
-
     // ── Tray action dispatcher ────────────────────────────────────────────
     // Reads TrayAction values from the tray thread and dispatches them to the
     // appropriate daemon subsystem.
@@ -580,9 +596,9 @@ async fn run_daemon() {
                 process::exit(1);
             }
         }
-        _ = shutdown::wait_for_signal() => {
-            info!("signal received — initiating graceful shutdown");
-            shutdown_token.cancel();
+        _ = shutdown_token.cancelled() => {
+            // The early-spawned listener (see above) already logged and
+            // cancelled the token; nothing further to do here.
         }
     }
 

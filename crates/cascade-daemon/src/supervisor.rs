@@ -431,8 +431,17 @@ pub async fn run(
                     // ── Embed model: lazy holder — instant mock now, real ONNX
                     //    swapped in by a background task so startup is never
                     //    blocked by the model download/load. ───────────────────
+                    //
+                    // CASCADE_OFFLINE_MODELS=1 skips the background download task.
+                    // This is a second, independent construction site from the one
+                    // in ipc.rs (this one backs the AutoRagWatcher/VolumeIndexGuard
+                    // pipeline, ipc.rs's backs RagSearchHandler) — both must honor
+                    // the same env var or CI's self-hosted runner disk fills with
+                    // ~4 GB ONNX model downloads regardless of ipc.rs's guard.
                     let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
-                    lazy_embed.spawn_load();
+                    if std::env::var("CASCADE_OFFLINE_MODELS").is_err() {
+                        lazy_embed.spawn_load();
+                    }
                     let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
 
                     // ── WorkerPool ────────────────────────────────────────────

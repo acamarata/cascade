@@ -293,9 +293,12 @@ fn daemon_clean_stop() {
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
 
     let pid_path = cascade_dir.join("daemon.pid");
-    // Wait for the daemon to finish starting.
+    // Wait for the daemon to finish starting. Widened from 8s/8s/8s — this
+    // self-hosted CI runner has shown legitimate cold-start/shutdown-flush
+    // latency well past 8s under load (same class of issue fixed for the
+    // cascaded_ arg-parsing tests: widen the budget, not the assertion).
     assert!(
-        wait_for_file(&pid_path, 8000),
+        wait_for_file(&pid_path, 15000),
         "daemon.pid must exist before we can test clean stop"
     );
 
@@ -311,14 +314,14 @@ fn daemon_clean_stop() {
 
     let _ = child.wait();
 
-    // Give the daemon up to 3 s to flush state after SIGTERM.
+    // Give the daemon time to flush state after SIGTERM.
     let stop_path = cascade_dir.join("last-stop.txt");
-    let stop_written = wait_for_file(&stop_path, 8000);
+    let stop_written = wait_for_file(&stop_path, 15000);
 
     // daemon.pid should be gone after clean stop (poll: removal follows the
     // stop marker by a small window that widens under system load).
     assert!(
-        wait_for_gone(&pid_path, 8000),
+        wait_for_gone(&pid_path, 15000),
         "daemon.pid should be removed after clean stop"
     );
     assert!(
