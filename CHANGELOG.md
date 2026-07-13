@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- **Models**: Updated GPT fleet routing to OpenAI's GPT-5.6 family (Sol, Terra, Luna). `MODEL_GPT` now defaults to the flagship `gpt-5.6-sol`, replacing `gpt-5.5`. Added `MODEL_GPT_TERRA` and `MODEL_GPT_LUNA` constants. Updated `models.yaml` context windows (1.05M tokens) and pricing for all GPT-5.6 variants.
+- **Updates**: Added `cascade update models` to refresh the cached fleet roster
+  in `~/.cascade/models.yaml`; daemon model-drift checks now prefer that valid
+  cache before falling back to the embedded default.
+
 ## [1.16.0] - 2026-07-12
 
 ### Removed
