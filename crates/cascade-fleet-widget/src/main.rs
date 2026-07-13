@@ -16,12 +16,17 @@ use std::path::PathBuf;
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
+// Only called from `main()`, which the `--test` build of a bin-only crate
+// does not invoke — dead-code analysis has no root to reach these from
+// under `cargo test`/`clippy --all-targets`, even though `main()` uses them.
+#[cfg_attr(test, allow(dead_code))]
 fn accounts_path() -> PathBuf {
     cascade_types::paths::home_dir()
         .join(".cascade")
         .join("accounts.json")
 }
 
+#[cfg_attr(test, allow(dead_code))]
 fn quota_store_path() -> PathBuf {
     cascade_types::paths::home_dir()
         .join(".cascade")
@@ -35,6 +40,7 @@ struct FleetData {
     store: Option<QuotaStore>,
 }
 
+#[cfg_attr(test, allow(dead_code))]
 fn load_fleet_data() -> FleetData {
     FleetData {
         registry: read_accounts_registry(&accounts_path()).ok(),
