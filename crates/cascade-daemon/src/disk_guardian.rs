@@ -866,48 +866,17 @@ mod tests {
         assert!(paths.iter().any(|p| p.ends_with("unrelated-dir")));
     }
 
-    /// Backdate a directory's mtime by `age` using the `touch` utility so
-    /// age-gating tests don't depend on real wall-clock sleeps.
+    /// Backdate a directory's mtime by `age` so age-gating tests don't
+    /// depend on real wall-clock sleeps. Uses `File::set_modified`
+    /// directly instead of shelling out to `touch`/`date` — the previous
+    /// implementation relied on BSD `date -r <epoch>` (macOS), which means
+    /// something entirely different on GNU date (Linux: "show FILE's
+    /// mtime", not "interpret epoch"), silently producing an empty/invalid
+    /// timestamp there.
     fn backdate(path: &Path, age: Duration) {
         let then = SystemTime::now() - age;
-        let stamp = TouchStamp::from(then);
-        let _ = std::process::Command::new("touch")
-            .arg("-t")
-            .arg(stamp.touch_fmt())
-            .arg(path)
-            .status();
-    }
-
-    /// Minimal timestamp formatter for `touch -t [[CC]YY]MMDDhhmm[.SS]`,
-    /// local to this test module — avoids pulling in a chrono dependency
-    /// just for one test helper.
-    struct TouchStamp {
-        secs_since_epoch: u64,
-    }
-
-    impl From<SystemTime> for TouchStamp {
-        fn from(t: SystemTime) -> Self {
-            let secs = t
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            TouchStamp {
-                secs_since_epoch: secs,
-            }
-        }
-    }
-
-    impl TouchStamp {
-        fn touch_fmt(&self) -> String {
-            // Use `date -r <epoch> +format` (BSD/macOS date) to render the
-            // touch-compatible timestamp without a chrono dependency.
-            let output = std::process::Command::new("date")
-                .arg("-r")
-                .arg(self.secs_since_epoch.to_string())
-                .arg("+%Y%m%d%H%M.%S")
-                .output()
-                .expect("date command should succeed");
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        if let Ok(dir) = std::fs::File::open(path) {
+            let _ = dir.set_modified(then);
         }
     }
 
