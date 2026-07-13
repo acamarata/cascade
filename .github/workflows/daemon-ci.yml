@@ -40,6 +40,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Test cascade-daemon
+        env:
+          CASCADE_OFFLINE_MODELS: "1"
         run: cargo test -p cascade-daemon --lib --test '*'
 
       - name: Test cascade-core
@@ -68,6 +70,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Test cascade-daemon
+        env:
+          CASCADE_OFFLINE_MODELS: "1"
         run: cargo test -p cascade-daemon --lib --test '*'
 
   # ── build ────────────────────────────────────────────────────────────────

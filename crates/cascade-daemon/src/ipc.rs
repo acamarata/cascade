@@ -190,11 +190,20 @@ impl IpcServer {
         // The embedder is a LazyEmbedModel (mock now, real ONNX swapped in by a
         // background task); the BGE reranker is loaded by a separate background
         // task. Both loads are offline-graceful (Err -> mock / skip, no panic).
+        //
+        // CASCADE_OFFLINE_MODELS=1 skips the background download tasks entirely.
+        // Used in CI (daemon-ci.yml) to prevent ~4 GB ONNX model downloads from
+        // filling the self-hosted runner disk during integration test runs.
+        let offline_models = std::env::var("CASCADE_OFFLINE_MODELS").is_ok();
         let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
-        lazy_embed.spawn_load();
+        if !offline_models {
+            lazy_embed.spawn_load();
+        }
         let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
         let rag_handler = RagSearchHandler::new(IndexRegistry::new(), embed);
-        rag_handler.spawn_load_reranker();
+        if !offline_models {
+            rag_handler.spawn_load_reranker();
+        }
         // Caches (T-P4-E04-10/11): chunk cache with default capacity; RAG caches
         // with default capacities. These are shared via Arc so future tickets can
         // pass them into the RAG pipeline without cloning.
