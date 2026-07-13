@@ -244,7 +244,7 @@ async fn run_daemon() {
             })
             .unwrap_or_default();
         gemini_slots.sort_by_key(|id| gemini_free_slot_number(id));
-        gemini_slots.into_iter().zip(raw_keys.into_iter()).collect()
+        gemini_slots.into_iter().zip(raw_keys).collect()
     };
 
     // First-start advisory: if keys are still only in vault.env, nudge the user
