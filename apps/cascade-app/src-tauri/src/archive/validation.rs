@@ -325,6 +325,18 @@ mod tests {
     #[test]
     #[serial(global_env)]
     fn preflight_no_write_permission() {
+        // Root bypasses POSIX permission checks entirely, so chmod 000 can't
+        // produce a permission-denied condition to detect. Self-hosted CI
+        // runners commonly run as root — skip rather than force a false pass.
+        #[cfg(unix)]
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!(
+                "skipping preflight_no_write_permission: running as root, \
+                 permissions are not enforced"
+            );
+            return;
+        }
+
         let _home = fake_home();
         let home_path = PathBuf::from(std::env::var("HOME").unwrap());
 
