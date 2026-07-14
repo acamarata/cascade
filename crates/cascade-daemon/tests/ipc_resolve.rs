@@ -44,11 +44,29 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
     serde_json::from_slice(&resp_bytes).expect("parse response JSON")
 }
 
+/// Read the IPC auth token the daemon wrote to `<config_dir>/ipc_token`.
+///
+/// Every request must be wrapped as `{"auth": <token>, "rpc": <jsonrpc>}` —
+/// see the auth-gate added in 5f75f2f.
+fn read_ipc_token(config_dir: &std::path::Path) -> String {
+    fs::read_to_string(config_dir.join("ipc_token")).expect("read ipc_token")
+}
+
+/// Wrap a bare JSON-RPC body in the required auth envelope.
+fn authed(token: &str, rpc: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({ "auth": token, "rpc": rpc })
+}
+
 // ── Test server ───────────────────────────────────────────────────────────
 
 async fn start_test_server(
     tmp: &TempDir,
-) -> (PathBuf, CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (
+    PathBuf,
+    String,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
@@ -63,6 +81,8 @@ async fn start_test_server(
     )
     .await
     .expect("IpcServer::new");
+
+    let token = read_ipc_token(&config_dir);
 
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -80,7 +100,7 @@ async fn start_test_server(
     }
     assert!(socket_path.exists(), "IPC socket did not appear within 2s");
 
-    (socket_path, shutdown, handle)
+    (socket_path, token, shutdown, handle)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -94,7 +114,7 @@ async fn start_test_server(
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_project_tier_reachable_via_cwd() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     // Create a project directory with a unique cascade marker.
     let project_dir = tmp.path().join("my-project");
@@ -112,16 +132,19 @@ async fn test_resolve_project_tier_reachable_via_cwd() {
 
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "cascade_resolve",
-            "protocol_version": 1,
-            "params": {
-                "cwd": project_dir.to_str().unwrap(),
-                "format": "markdown"
-            }
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "cascade_resolve",
+                "protocol_version": 1,
+                "params": {
+                    "cwd": project_dir.to_str().unwrap(),
+                    "format": "markdown"
+                }
+            }),
+        ),
     )
     .await;
 
@@ -159,7 +182,7 @@ async fn test_resolve_project_tier_reachable_via_cwd() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_full_merge_both_tiers_present() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     // Parent dir: acts as a higher-tier cascade (the resolver walks upward).
     let parent_dir = tmp.path().join("workspace");
@@ -187,15 +210,18 @@ async fn test_resolve_full_merge_both_tiers_present() {
 
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "cascade_resolve",
-            "protocol_version": 1,
-            "params": {
-                "cwd": project_dir.to_str().unwrap()
-            }
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "cascade_resolve",
+                "protocol_version": 1,
+                "params": {
+                    "cwd": project_dir.to_str().unwrap()
+                }
+            }),
+        ),
     )
     .await;
 
@@ -228,7 +254,7 @@ async fn test_resolve_full_merge_both_tiers_present() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_format_json_returns_parseable_json() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let project_dir = tmp.path().join("proj-json");
     fs::create_dir_all(project_dir.join(".cascade")).unwrap();
@@ -242,16 +268,19 @@ async fn test_resolve_format_json_returns_parseable_json() {
 
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "cascade_resolve",
-            "protocol_version": 1,
-            "params": {
-                "cwd": project_dir.to_str().unwrap(),
-                "format": "json"
-            }
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "cascade_resolve",
+                "protocol_version": 1,
+                "params": {
+                    "cwd": project_dir.to_str().unwrap(),
+                    "format": "json"
+                }
+            }),
+        ),
     )
     .await;
 
@@ -294,21 +323,24 @@ async fn test_resolve_format_json_returns_parseable_json() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_invalid_format_returns_32602() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "cascade_resolve",
-            "protocol_version": 1,
-            "params": {
-                "format": "xml"
-            }
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "cascade_resolve",
+                "protocol_version": 1,
+                "params": {
+                    "format": "xml"
+                }
+            }),
+        ),
     )
     .await;
 
@@ -329,7 +361,7 @@ async fn test_resolve_invalid_format_returns_32602() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_resolve_deny_unknown_fields() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
@@ -337,15 +369,18 @@ async fn test_resolve_deny_unknown_fields() {
     // will reject it and the handler returns -32602.
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "cascade_resolve",
-            "protocol_version": 1,
-            "params": {
-                "unknown_param": "oops"
-            }
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "cascade_resolve",
+                "protocol_version": 1,
+                "params": {
+                    "unknown_param": "oops"
+                }
+            }),
+        ),
     )
     .await;
 

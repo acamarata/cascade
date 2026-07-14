@@ -125,11 +125,6 @@ fn quota_store_wire() {
     let tmpdir = TempDir::new().expect("create temp home");
     let (mut child, cascade_dir) = spawn_daemon(&tmpdir);
 
-    // Write fixture quota-store.json AFTER spawning so it exists when the
-    // daemon handles the request (the daemon does not cache it on startup).
-    let quota_path = cascade_dir.join("quota-store.json");
-    write_quota_store(&quota_path, &make_quota_store()).expect("write fixture quota store");
-
     // Wait for the IPC socket to appear (daemon is ready to accept connections).
     let socket_path = cascade_dir.join("daemon.sock");
     let ready = wait_for_file(&socket_path, Duration::from_secs(10));
@@ -138,7 +133,23 @@ fn quota_store_wire() {
         panic!("IPC socket did not appear within 10 s");
     }
 
-    // Connect and send ReadQuotaStore.
+    // Write fixture quota-store.json AFTER the daemon is fully up, not just
+    // after spawning. The daemon's own fleet_poller writes an initial (empty)
+    // quota-store.json during startup, strictly before the IPC socket comes
+    // up — writing the fixture right after Command::spawn() races that write
+    // and can get clobbered depending on process-start latency. Waiting for
+    // the socket first guarantees the daemon's startup write has already
+    // happened, so the fixture written here is the one still on disk when
+    // the request below is handled (the daemon does not cache it on startup).
+    let quota_path = cascade_dir.join("quota-store.json");
+    write_quota_store(&quota_path, &make_quota_store()).expect("write fixture quota store");
+
+    // Connect and send ReadQuotaStore. Every request must be wrapped as
+    // {"auth": <token>, "rpc": <jsonrpc>} — see the auth-gate added in
+    // 5f75f2f. The daemon writes the token to <config_dir>/ipc_token before
+    // it starts listening, so it is guaranteed present once daemon.sock
+    // exists.
+    let token = fs::read_to_string(cascade_dir.join("ipc_token")).expect("read ipc_token");
     let mut stream = UnixStream::connect(&socket_path).expect("connect to IPC socket");
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -146,7 +157,10 @@ fn quota_store_wire() {
 
     let response = ipc_round_trip(
         &mut stream,
-        &serde_json::json!({ "method": "read_quota_store" }),
+        &serde_json::json!({
+            "auth": token,
+            "rpc": { "method": "read_quota_store" }
+        }),
     );
 
     // Shut down daemon before asserting so it does not linger on failure.

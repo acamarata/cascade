@@ -51,13 +51,31 @@ async fn send_request(stream: &mut UnixStream, rpc: serde_json::Value) -> serde_
     serde_json::from_slice(&resp_bytes).expect("parse response JSON")
 }
 
+/// Read the IPC auth token the daemon wrote to `<config_dir>/ipc_token`.
+///
+/// Every request must be wrapped as `{"auth": <token>, "rpc": <jsonrpc>}` —
+/// see the auth-gate added in 5f75f2f.
+fn read_ipc_token(config_dir: &std::path::Path) -> String {
+    fs::read_to_string(config_dir.join("ipc_token")).expect("read ipc_token")
+}
+
+/// Wrap a bare JSON-RPC body in the required auth envelope.
+fn authed(token: &str, rpc: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({ "auth": token, "rpc": rpc })
+}
+
 // ── Test server factory ───────────────────────────────────────────────────
 
 /// Spin up an IpcServer in a background task on a tmp socket.
-/// Returns (socket_path, shutdown_token, task_handle).
+/// Returns (socket_path, auth_token, shutdown_token, task_handle).
 async fn start_test_server(
     tmp: &TempDir,
-) -> (PathBuf, CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (
+    PathBuf,
+    String,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
@@ -72,6 +90,8 @@ async fn start_test_server(
     )
     .await
     .expect("IpcServer::new");
+
+    let token = read_ipc_token(&config_dir);
 
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -90,7 +110,7 @@ async fn start_test_server(
     }
     assert!(socket_path.exists(), "IPC socket did not appear within 2s");
 
-    (socket_path, shutdown, handle)
+    (socket_path, token, shutdown, handle)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -104,7 +124,7 @@ async fn start_test_server(
 #[tokio::test(flavor = "multi_thread")]
 async fn test_typed_unknown_field_returns_structured_error() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
@@ -113,13 +133,16 @@ async fn test_typed_unknown_field_returns_structured_error() {
     // deny_unknown_fields on the typed Request<P> envelope.
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "nonexistent_method",
-            "unknown_field_xyz": true,
-            "protocol_version": 1
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "nonexistent_method",
+                "unknown_field_xyz": true,
+                "protocol_version": 1
+            }),
+        ),
     )
     .await;
 
@@ -142,7 +165,7 @@ async fn test_typed_unknown_field_returns_structured_error() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_typed_unknown_method_returns_method_not_found() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
@@ -152,12 +175,15 @@ async fn test_typed_unknown_method_returns_method_not_found() {
     // deserialize_request succeeds and we reach the Ok(typed_req) branch.
     let resp = send_request(
         &mut stream,
-        serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "nonexistent_typed_method",
-            "protocol_version": 1
-        }),
+        authed(
+            &token,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "nonexistent_typed_method",
+                "protocol_version": 1
+            }),
+        ),
     )
     .await;
 
@@ -181,18 +207,21 @@ async fn test_typed_unknown_method_returns_method_not_found() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_legacy_ping_still_works_through_typed_routing() {
     let tmp = TempDir::new().unwrap();
-    let (socket_path, shutdown, handle) = start_test_server(&tmp).await;
+    let (socket_path, token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
     let resp = send_request(
         &mut stream,
-        serde_json::json!({ "method": "ping", "echo": null }),
+        authed(
+            &token,
+            serde_json::json!({ "method": "ping", "echo": null }),
+        ),
     )
     .await;
 
     assert!(
-        resp.get("code").is_none(),
+        resp.get("error").is_none(),
         "legacy ping unexpectedly returned an error: {resp}"
     );
 

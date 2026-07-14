@@ -76,7 +76,12 @@ fn authed_request(method: &str, token: &str) -> serde_json::Value {
 /// Returns (socket_path, auth_token, shutdown_token, task_handle).
 async fn start_test_server(
     tmp: &TempDir,
-) -> (PathBuf, String, CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (
+    PathBuf,
+    String,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let config_dir = tmp.path().join(".cascade");
     fs::create_dir_all(&config_dir).unwrap();
 
@@ -123,7 +128,11 @@ async fn test_wrong_auth_token_rejected() {
     let (socket_path, _token, shutdown, handle) = start_test_server(&tmp).await;
 
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-    let resp = send_request(&mut stream, authed_request("ping", "definitely-wrong-token")).await;
+    let resp = send_request(
+        &mut stream,
+        authed_request("ping", "definitely-wrong-token"),
+    )
+    .await;
 
     assert_eq!(
         resp["error"]["code"].as_i64(),
