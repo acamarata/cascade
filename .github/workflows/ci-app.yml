@@ -142,7 +142,11 @@ jobs:
         run: pnpm --filter @cascade/app run build
 
       - name: Build Tauri app (debug)
-        run: cargo tauri build --debug --manifest-path apps/cascade-app/src-tauri/Cargo.toml
+        # `cargo tauri` requires a separately cargo-installed `cargo-tauri` binary
+        # that isn't on this runner. `@tauri-apps/cli` is already a devDependency
+        # (installed above via `pnpm install`) — use the JS-wrapped CLI instead,
+        # which auto-detects `src-tauri/` relative to the app's own directory.
+        run: pnpm --filter @cascade/app run tauri:build -- --debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
@@ -198,7 +202,7 @@ jobs:
         run: pnpm --filter @cascade/app run build
 
       - name: Build Tauri app (debug)
-        run: cargo tauri build --debug --manifest-path apps/cascade-app/src-tauri/Cargo.toml
+        run: pnpm --filter @cascade/app run tauri:build -- --debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
