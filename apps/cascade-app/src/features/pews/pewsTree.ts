@@ -19,36 +19,30 @@
  * SPORT: MASTER-COMPONENTS.md — pewsTree (E-P8-05)
  */
 
-import type {
-  PewsTree,
-  PhaseView,
-  TicketView,
-  TicketStatus,
-  PhaseTemporal,
-} from '../../types/pbd'
+import type { PewsTree, PhaseView, TicketView, TicketStatus, PhaseTemporal } from '../../types/pbd'
 import { classifyPhase } from '../../types/pbd'
 
 // ── Status color maps ─────────────────────────────────────────────────────────
 
 /** Visual color per ticket status — used for node coloring and badges. */
 export const TICKET_STATUS_COLORS: Record<string, string> = {
-  planned: '#6b7280',   // gray-500
-  queue: '#8b5cf6',     // violet-500
-  active: '#3b82f6',    // blue-500
-  review: '#f59e0b',    // amber-500
-  blocked: '#ef4444',   // red-500
-  done: '#22c55e',      // green-500
-  archived: '#374151',  // gray-700
+  planned: '#6b7280', // gray-500
+  queue: '#8b5cf6', // violet-500
+  active: '#3b82f6', // blue-500
+  review: '#f59e0b', // amber-500
+  blocked: '#ef4444', // red-500
+  done: '#22c55e', // green-500
+  archived: '#374151', // gray-700
 }
 
 /** Visual color per phase status. */
 export const PHASE_STATUS_COLORS: Record<string, string> = {
-  planning: '#6b7280',     // gray-500
+  planning: '#6b7280', // gray-500
   ready_to_build: '#8b5cf6', // violet-500
-  building: '#3b82f6',     // blue-500
-  qa: '#f59e0b',           // amber-500
-  shipped: '#22c55e',      // green-500
-  archived: '#374151',     // gray-700
+  building: '#3b82f6', // blue-500
+  qa: '#f59e0b', // amber-500
+  shipped: '#22c55e', // green-500
+  archived: '#374151', // gray-700
 }
 
 /** Visual color per epic status. */
@@ -157,7 +151,7 @@ export interface OptimisticStatusChange {
  */
 export function applyOptimisticStatusChange(
   tree: PewsTree,
-  change: OptimisticStatusChange,
+  change: OptimisticStatusChange
 ): PewsTree {
   return {
     ...tree,
@@ -170,9 +164,7 @@ export function applyOptimisticStatusChange(
           sprints: wave.sprints.map((sprint) => ({
             ...sprint,
             tickets: sprint.tickets.map((ticket) =>
-              ticket.id === change.ticketId
-                ? { ...ticket, status: change.newStatus }
-                : ticket,
+              ticket.id === change.ticketId ? { ...ticket, status: change.newStatus } : ticket
             ),
           })),
         })),
@@ -191,10 +183,7 @@ export function applyOptimisticStatusChange(
  * In practice, consumers call `pbdGetTree()` on pbd://changed events, so
  * reconcile is only needed for explicit rollback on error.
  */
-export function reconcileOnError(
-  tree: PewsTree,
-  change: OptimisticStatusChange,
-): PewsTree {
+export function reconcileOnError(tree: PewsTree, change: OptimisticStatusChange): PewsTree {
   return applyOptimisticStatusChange(tree, {
     ticketId: change.ticketId,
     newStatus: change.previousStatus,

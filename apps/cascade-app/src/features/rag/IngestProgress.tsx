@@ -70,9 +70,7 @@ export function IngestProgress({ progress, active }: IngestProgressProps) {
         />
       </div>
 
-      {done && (
-        <p className="mt-1.5 text-xs text-green-600 dark:text-green-400">Index complete.</p>
-      )}
+      {done && <p className="mt-1.5 text-xs text-green-600 dark:text-green-400">Index complete.</p>}
     </div>
   )
 }

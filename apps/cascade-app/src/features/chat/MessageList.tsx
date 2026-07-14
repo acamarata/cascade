@@ -39,7 +39,7 @@ function UserBubble({ content }: { content: string }) {
         className={cn(
           'max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-sm',
           'bg-gradient-to-br from-primary to-primary/90 text-primary-foreground',
-          'whitespace-pre-wrap break-words leading-relaxed',
+          'whitespace-pre-wrap break-words leading-relaxed'
         )}
       >
         {content}
@@ -68,7 +68,7 @@ function AssistantBubble({
         className={cn(
           'max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm',
           'bg-muted/40 text-foreground border border-border/30',
-          'break-words leading-relaxed',
+          'break-words leading-relaxed'
         )}
       >
         <MarkdownMessage content={content} />

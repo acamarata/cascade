@@ -42,12 +42,7 @@ export interface ProjectSelectorProps {
  * Inputs:  value, onChange, projects, loading.
  * Outputs: A <select> picker and optional free-text override input.
  */
-export function ProjectSelector({
-  value,
-  onChange,
-  projects,
-  loading,
-}: ProjectSelectorProps) {
+export function ProjectSelector({ value, onChange, projects, loading }: ProjectSelectorProps) {
   // manual = true → show the free-text input instead of the combobox.
   const [manual, setManual] = useState(false)
 

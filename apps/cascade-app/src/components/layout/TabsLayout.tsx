@@ -43,7 +43,7 @@ export function TabsLayout({ tabs, activeTab, onTabChange, children }: TabsLayou
                 'border-b-2 -mb-px',
                 isActive
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               )}
             >
               {Icon && <Icon className="w-4 h-4" />}

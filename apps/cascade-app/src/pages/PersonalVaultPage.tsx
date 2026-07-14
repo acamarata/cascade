@@ -14,18 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import {
-  Brain,
-  FolderOpen,
-  RefreshCw,
-  Settings2,
-  UserCircle2,
-  FileText,
-} from 'lucide-react'
-import {
-  PersonalVaultProvider,
-  usePersonalVault,
-} from '../context/PersonalVaultContext'
+import { Brain, FolderOpen, RefreshCw, Settings2, UserCircle2, FileText } from 'lucide-react'
+import { PersonalVaultProvider, usePersonalVault } from '../context/PersonalVaultContext'
 import { VaultNavigator } from '../components/vault/VaultNavigator'
 import { MarkdownEditor } from '../features/vault/editor/MarkdownEditor'
 import { MarkdownPreview } from '../components/vault/MarkdownPreview'
@@ -209,15 +199,8 @@ function PersonalEditorView() {
 
 function PersonalVaultPageInner() {
   const [activeTab, setActiveTab] = useState<PanelTab>('files')
-  const {
-    error,
-    loading,
-    memoryIndex,
-    memoryLoading,
-    memoryError,
-    setCurrentFile,
-    pciRoot,
-  } = usePersonalVault()
+  const { error, loading, memoryIndex, memoryLoading, memoryError, setCurrentFile, pciRoot } =
+    usePersonalVault()
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

@@ -24,16 +24,17 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Network,
-  RefreshCw,
-} from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Network, RefreshCw } from 'lucide-react'
 
 import { homeDir } from '@tauri-apps/api/path'
-import type { PhaseView, EpicView, WaveView, SprintView, TicketView, TicketStatus } from '../../types/pbd'
+import type {
+  PhaseView,
+  EpicView,
+  WaveView,
+  SprintView,
+  TicketView,
+  TicketStatus,
+} from '../../types/pbd'
 import { TICKET_STATUSES } from '../../types/pbd'
 import { usePewsTree } from './usePewsTree'
 import {
@@ -160,9 +161,7 @@ function TicketRow({
               {ticket.id}
             </span>
             {/* Title */}
-            <span className="truncate text-xs font-medium text-foreground">
-              {ticket.title}
-            </span>
+            <span className="truncate text-xs font-medium text-foreground">{ticket.title}</span>
             {/* Weight badge */}
             {ticket.weight && (
               <span className="shrink-0 rounded bg-border px-1 py-0.5 text-[9px] text-muted-foreground">
@@ -188,9 +187,7 @@ function TicketRow({
             <p className="mt-0.5 text-[10px] text-destructive">{ticket.blockedReason}</p>
           )}
           {/* Note */}
-          {ticket.note && (
-            <p className="mt-0.5 text-[10px] text-muted-foreground">{ticket.note}</p>
-          )}
+          {ticket.note && <p className="mt-0.5 text-[10px] text-muted-foreground">{ticket.note}</p>}
           {/* Depends-on edges */}
           {dependsOnTitles.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
@@ -582,10 +579,7 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
   }, [initialPhaseRoot])
 
   // Project registry — drives the ProjectSelector combobox.
-  const {
-    projects: registryProjects,
-    loading: registryLoading,
-  } = useProjectRegistry()
+  const { projects: registryProjects, loading: registryLoading } = useProjectRegistry()
 
   // Derive the project id from the current path for BuildProgressPanel.
   const activeProject = registryProjects.find((p) => p.path === phaseRoot)
@@ -608,7 +602,7 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
         setPendingTicketId(null)
       }
     },
-    [updateTicketStatus],
+    [updateTicketStatus]
   )
 
   // Derived data
@@ -690,10 +684,7 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
 
       {/* Build progress panel — shown only when the active project is building */}
       {isBuilding && activeProject && (
-        <BuildProgressPanel
-          projectPath={phaseRoot}
-          projectId={activeProject.id}
-        />
+        <BuildProgressPanel projectPath={phaseRoot} projectId={activeProject.id} />
       )}
 
       {/* Body */}
@@ -714,10 +705,7 @@ export function PewsTreePanel({ initialPhaseRoot }: PewsTreePanelProps) {
 
           {/* Error */}
           {!loading && error && (
-            <div
-              className="flex h-full flex-col items-center justify-center gap-3"
-              role="alert"
-            >
+            <div className="flex h-full flex-col items-center justify-center gap-3" role="alert">
               <p className="text-sm text-destructive">Failed to load PEWS tree</p>
               <p className="max-w-sm text-center text-xs text-muted-foreground">{error}</p>
               <button

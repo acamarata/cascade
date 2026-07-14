@@ -347,9 +347,19 @@ async fn b_context_slice_tool() {
 /// command.  The live MCP server's PromptRegistry uses a different (older)
 /// static registry; this test exercises `PromptsHandler` directly — the same
 /// code path the handlers/prompts module exposes to the full server.
+///
+/// Needs a fixture HOME with at least one tier file present — with no tiers
+/// found, `harness_setup` correctly returns a "create a `.cascade/` dir first"
+/// message instead (see `handlers/prompts.rs`), which isn't what this test
+/// exercises. A bare CI runner HOME has no `~/.claude/CLAUDE.md`, so this must
+/// not depend on ambient dev-machine state — same fixture as `a_resource_surface`.
 #[test]
+#[serial(global_env)]
 fn c_harness_setup_prompt() {
     use cascade_mcp::handlers::prompts::PromptsHandler;
+
+    let (tmp, _project_dir) = build_fixture_project();
+    std::env::set_var("HOME", tmp.path());
 
     let handler = PromptsHandler::new();
 

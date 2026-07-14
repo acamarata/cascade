@@ -26,6 +26,63 @@ RUST_LOG=debug cargo test -- --nocapture
 
 ---
 
+## Local dev on an external volume: full-workspace test hang
+
+If your checkout lives on an external/USB volume (e.g. macOS with the repo under
+`/Volumes/<disk>/...`), `cargo nextest run --workspace` and `cargo test --workspace`
+can hang for many minutes during the link step, with no CPU usage and no output —
+the linker process sits in macOS's uninterruptible-sleep I/O wait state and even
+`kill -9` won't clear it immediately.
+
+**Root cause:** `cascade-daemon` (a workspace member, so it's built by any
+`--workspace` command) enables `cascade-rag`'s `fastembed` + `reranker` features
+by default (see `crates/cascade-daemon/Cargo.toml`). Those features pull in the
+`fastembed` crate, which bundles ONNX runtime and model binaries — producing
+large static-link artifacts. When `CARGO_TARGET_DIR` (Cargo's default `target/`,
+under the repo root) lives on a USB-attached external volume, the final link step
+against those large objects is disk-I/O-bound at USB speeds and can stall for
+much longer than local SSD linking, especially when the internal boot volume is
+also near capacity (check with `df -h /`).
+
+CI is not affected — GitHub-hosted runners always build on local (fast) disk.
+This is a local-machine, external-volume-only issue.
+
+**Working recipe (three options, in order of preference):**
+
+1. **Relocate the target dir to an internal volume** (recommended — biggest win,
+   no source changes):
+
+   ```bash
+   export CARGO_TARGET_DIR="$HOME/.cargo-target/cascade"
+   cargo nextest run --workspace
+   ```
+
+   Add the export to your shell profile so it's automatic for this checkout.
+   The linker now writes/reads its intermediate and final artifacts on fast
+   internal storage instead of over USB.
+
+2. **Cap parallel build jobs** if you still see stalls (reduces concurrent I/O
+   pressure against the external volume during linking):
+
+   ```bash
+   export CARGO_BUILD_JOBS=4   # tune down from the default (num CPUs)
+   ```
+
+3. **Test without the heavy RAG embedding path** when you don't need it, by
+   scoping to specific packages instead of `--workspace`:
+
+   ```bash
+   cargo nextest run -p cascade-rag --no-default-features
+   cargo nextest run --workspace --exclude cascade-daemon
+   ```
+
+Combine (1) and (2) for the most reliable full-workspace run on an external
+volume. `.config/nextest.toml`'s `slow-timeout` (30s/3 periods) still applies as
+a safety net for individual hung tests, but it cannot recover a stalled linker
+process running before any test binary starts — that's what this recipe fixes.
+
+---
+
 ## Test structure
 
 Each crate has two types of tests:

@@ -14,14 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  BookOpen,
-  ChevronDown,
-  ChevronRight,
-  GitMerge,
-  RefreshCw,
-  Search,
-} from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronRight, GitMerge, RefreshCw, Search } from 'lucide-react'
 import type { TierContent, TierDiff, TierLabel } from '../types/instructions'
 import { TIER_DESCRIPTIONS, TIER_LABELS } from '../types/instructions'
 import {
@@ -97,10 +90,7 @@ function TierCard({ tier }: { tier: TierContent }) {
 
       {/* Content */}
       {expanded && (
-        <div
-          id={`tier-content-${tier.tier}`}
-          className="border-t border-border bg-muted/20"
-        >
+        <div id={`tier-content-${tier.tier}`} className="border-t border-border bg-muted/20">
           {tier.error ? (
             <p className="px-4 py-3 text-sm text-destructive" role="alert">
               {tier.error}
@@ -125,10 +115,7 @@ function TierCard({ tier }: { tier: TierContent }) {
 function SearchView({ tiers }: { tiers: TierContent[] }) {
   const [query, setQuery] = useState('')
 
-  const result = useMemo(
-    () => searchInstructions(tiers, query),
-    [tiers, query]
-  )
+  const result = useMemo(() => searchInstructions(tiers, query), [tiers, query])
 
   function highlight(text: string, start: number, end: number): React.ReactNode {
     if (!query || start >= end) return text
@@ -171,7 +158,7 @@ function SearchView({ tiers }: { tiers: TierContent[] }) {
           </p>
         ) : result.hits.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground" aria-live="polite">
-            No matches found for "{query}".
+            No matches found for &quot;{query}&quot;.
           </p>
         ) : (
           result.hits.map((hit, i) => (
@@ -200,10 +187,7 @@ function SearchView({ tiers }: { tiers: TierContent[] }) {
 function DiffView({ tiers }: { tiers: TierContent[] }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
 
-  const diff: TierDiff = useMemo(
-    () => computeTierDiff(tiers, selectedIdx),
-    [tiers, selectedIdx]
-  )
+  const diff: TierDiff = useMemo(() => computeTierDiff(tiers, selectedIdx), [tiers, selectedIdx])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -228,9 +212,7 @@ function DiffView({ tiers }: { tiers: TierContent[] }) {
               aria-pressed={selectedIdx === idx}
             >
               <TierBadge tier={label} size="xs" />
-              {!t?.present && (
-                <span className="ml-auto text-muted-foreground/50">–</span>
-              )}
+              {!t?.present && <span className="ml-auto text-muted-foreground/50">–</span>}
             </button>
           )
         })}
@@ -244,7 +226,11 @@ function DiffView({ tiers }: { tiers: TierContent[] }) {
             {diff.newLineCount} new lines · {diff.inheritedLineCount} inherited from prior tiers
           </span>
         </div>
-        <div className="flex-1 overflow-y-auto font-mono text-xs leading-relaxed" role="region" aria-label="Tier diff">
+        <div
+          className="flex-1 overflow-y-auto font-mono text-xs leading-relaxed"
+          role="region"
+          aria-label="Tier diff"
+        >
           {diff.lines.length === 0 ? (
             <p className="px-4 py-8 text-center text-muted-foreground">
               {tiers.find((t) => t.tier === diff.tier)?.present
@@ -269,7 +255,9 @@ function DiffView({ tiers }: { tiers: TierContent[] }) {
                 >
                   {line.isNew ? '+' : ' '}
                 </span>
-                <span className={line.isNew ? 'text-green-800 dark:text-green-200' : 'text-foreground'}>
+                <span
+                  className={line.isNew ? 'text-green-800 dark:text-green-200' : 'text-foreground'}
+                >
                   {line.text || ' '}
                 </span>
               </div>
@@ -314,9 +302,7 @@ export function InstructionsPage() {
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-6 py-3">
         <BookOpen className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <h1 className="text-lg font-semibold">Instructions</h1>
-        <span className="text-sm text-muted-foreground">
-          CASCADE.md across 6 tiers
-        </span>
+        <span className="text-sm text-muted-foreground">CASCADE.md across 6 tiers</span>
         {!loading && tiers.length > 0 && (
           <span className="ml-1 text-sm text-muted-foreground">
             · {presentCount}/{TIER_LABELS.length} tiers resolved

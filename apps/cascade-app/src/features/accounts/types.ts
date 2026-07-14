@@ -107,9 +107,11 @@ export function accountLabel(account: AccountQuota): string {
     case 'gfp':
       return 'GF'
     case 'zai':
-    case 'glm':
+    case 'glm': {
       // single z.ai account → 'Za'; numbered (Z1,Z2) only with multiple
-      { const n = id.replace(/\D/g, ''); return n && n !== '1' ? `Z${n}` : 'ZA' }
+      const n = id.replace(/\D/g, '')
+      return n && n !== '1' ? `Z${n}` : 'ZA'
+    }
     default:
       return account.provider.slice(0, 2).toUpperCase()
   }

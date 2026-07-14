@@ -51,8 +51,7 @@ export type CascadeMode = 'normal' | 'personal'
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-const isTauri =
-  typeof window !== 'undefined' && '__TAURI__' in window
+const isTauri = typeof window !== 'undefined' && '__TAURI__' in window
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -189,7 +188,7 @@ export function usePersonalEncryptedVault(): {
       }
       return id
     },
-    [selectedCollection, mode],
+    [selectedCollection, mode]
   )
 
   // ------------------------------------------------------------------

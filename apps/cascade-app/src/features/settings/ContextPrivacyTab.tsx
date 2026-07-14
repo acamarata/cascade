@@ -98,8 +98,8 @@ export function ContextPrivacyTab({
           className="font-mono text-xs"
         />
         <p className="text-xs text-muted-foreground">
-          Override the default ~/Sites/ root used to resolve project context. Leave blank to use
-          the system default.
+          Override the default ~/Sites/ root used to resolve project context. Leave blank to use the
+          system default.
         </p>
       </div>
 
@@ -131,8 +131,7 @@ export function ContextPrivacyTab({
           </button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Persist Personal-mode chat history to Cascade memory. Off: history stays on this
-          device.
+          Persist Personal-mode chat history to Cascade memory. Off: history stays on this device.
         </p>
       </div>
 

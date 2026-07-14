@@ -72,6 +72,8 @@ export function useAccounts(): UseAccountsResult {
   const [allAccounts, setAllAccounts] = useState<AccountQuota[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Ticks alongside the poll so `isLive` never reads `Date.now()` during render.
+  const [now, setNow] = useState(0)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -87,8 +89,10 @@ export function useAccounts(): UseAccountsResult {
   }, [])
 
   useEffect(() => {
+    setNow(Date.now())
     void fetchAll()
     const id = setInterval(() => {
+      setNow(Date.now())
       void fetchAll()
     }, POLL_INTERVAL_MS)
     return () => clearInterval(id)
@@ -97,7 +101,7 @@ export function useAccounts(): UseAccountsResult {
   const accounts = allAccounts.filter(isAuthenticated)
   const needsAuth = allAccounts.filter((acc) => !isAuthenticated(acc))
   const lastUpdated = freshestPullAt(allAccounts)
-  const isLive = lastUpdated != null && Date.now() - lastUpdated < FRESHNESS_THRESHOLD_MS
+  const isLive = lastUpdated != null && now - lastUpdated < FRESHNESS_THRESHOLD_MS
 
   return { accounts, needsAuth, isLive, lastUpdated, loading, error, refetch: fetchAll }
 }

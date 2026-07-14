@@ -84,9 +84,7 @@ async function fetchProjects(): Promise<RegistryProject[]> {
       let pctDone = 0
       let openFindings = 0
       try {
-        const pr = await fetch(
-          `${DAEMON_BASE}/api/projects/${encodeURIComponent(entry.id)}/phase`,
-        )
+        const pr = await fetch(`${DAEMON_BASE}/api/projects/${encodeURIComponent(entry.id)}/phase`)
         if (pr.ok) {
           const ps = (await pr.json()) as DaemonPhaseStatus
           phaseStatus = ps.phase_status ?? null
@@ -107,7 +105,7 @@ async function fetchProjects(): Promise<RegistryProject[]> {
         pctDone,
         openFindings,
       }
-    }),
+    })
   )
 
   return withPhase

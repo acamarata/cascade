@@ -80,7 +80,9 @@ function MiniBar({ label, pct, ariaLabel }: MiniBarProps) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {label}
+        </span>
         <span className="text-[10px] font-bold text-foreground/80 tabular-nums">{pct}%</span>
       </div>
       <div
@@ -92,7 +94,10 @@ function MiniBar({ label, pct, ariaLabel }: MiniBarProps) {
         aria-valuemax={100}
       >
         <div
-          className={['h-full rounded-full transition-all duration-500 ease-out', barColor(pct)].join(' ')}
+          className={[
+            'h-full rounded-full transition-all duration-500 ease-out',
+            barColor(pct),
+          ].join(' ')}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -103,7 +108,12 @@ function MiniBar({ label, pct, ariaLabel }: MiniBarProps) {
 /** Small colored account-id badge, matching the AccountsPage table convention. */
 function AccountBadge({ acc }: { acc: AccountQuota }) {
   return (
-    <span className={['rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', getProviderBadgeStyles(acc.provider)].join(' ')}>
+    <span
+      className={[
+        'rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+        getProviderBadgeStyles(acc.provider),
+      ].join(' ')}
+    >
       {accountLabel(acc)}
     </span>
   )
@@ -125,7 +135,14 @@ function AccountRow({ acc, countdown }: AccountRowProps) {
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-xs font-medium text-foreground min-w-0">
           <AccountBadge acc={acc} />
-          {acc.email ? <span className="text-xs text-muted-foreground/70 font-normal truncate max-w-[140px]" title={acc.email}>{acc.email}</span> : null}
+          {acc.email ? (
+            <span
+              className="text-xs text-muted-foreground/70 font-normal truncate max-w-[140px]"
+              title={acc.email}
+            >
+              {acc.email}
+            </span>
+          ) : null}
         </span>
         <span className="text-[10px] font-medium text-muted-foreground/80 bg-muted/60 px-2 py-0.5 rounded-full tabular-nums">
           {hasReset ? `resets in ${formatCountdown(countdown)}` : 'no reset'}
@@ -223,7 +240,10 @@ export function FleetQuotaPanel() {
           className="text-muted-foreground hover:text-foreground transition-colors p-1 hover:bg-muted rounded-md"
           aria-label="Refresh fleet quota"
         >
-          <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} aria-hidden="true" />
+          <RefreshCw
+            className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')}
+            aria-hidden="true"
+          />
         </button>
       </div>
 

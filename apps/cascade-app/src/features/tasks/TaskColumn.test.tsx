@@ -38,7 +38,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('To Do')).toBeInTheDocument()
     expect(screen.getByLabelText('0 tasks')).toBeInTheDocument()
@@ -56,7 +56,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('No tasks here')).toBeInTheDocument()
   })
@@ -74,7 +74,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('First')).toBeInTheDocument()
     expect(screen.getByText('Second')).toBeInTheDocument()
@@ -94,7 +94,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={vi.fn()}
-      />,
+      />
     )
     fireEvent.click(screen.getByLabelText('Add task to To Do'))
     expect(screen.getByRole('textbox', { name: 'New task title' })).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={onAddTask}
-      />,
+      />
     )
     fireEvent.click(screen.getByLabelText('Add task to To Do'))
     fireEvent.change(screen.getByRole('textbox', { name: 'New task title' }), {
@@ -135,7 +135,7 @@ describe('TaskColumn', () => {
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
         onAddTask={vi.fn()}
-      />,
+      />
     )
     fireEvent.click(screen.getByLabelText('Add task to To Do'))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))

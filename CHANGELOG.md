@@ -6,6 +6,86 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- Fixed a `.gitleaks.toml` scope violation: an out-of-scope pass had blanket
+  allowlisted 6 paths beyond the single ticketed finding
+  (`crates/cascade-core/src/middleware/post.rs:539`), including 2 files
+  (`src/bin/cascade-agy`, `src/bin/cascade-agy-auth`) without individual
+  verification. Re-verified every entry individually by removing the
+  allowlist and re-running `gitleaks detect` raw: all 6 are confirmed
+  non-secrets (synthetic AWS/API-key-shaped test fixtures in
+  `client_leak.rs`/`secret_scan.rs`/`tool/tests.rs`/`redaction.rs`, and
+  Google's publicly-documented Antigravity desktop OAuth client id/secret in
+  `cascade-agy`/`cascade-agy-auth` — not production credentials). Each entry
+  now has an accurate, verified rationale comment instead of a blanket
+  description. `gitleaks detect --source . --no-git` now reports "no leaks
+  found".
+- Bumped `ring` 0.17.9 -> 0.17.13/0.17.14 to clear RUSTSEC-2025-0009 (AES
+  encryption panic when overflow checking is enabled). `cascade-providers`
+  directly depends on ring; transitive dependency in the workspace. Pinned to
+  ^0.17.13 in `crates/cascade-providers/Cargo.toml` and workspace-wide in
+  `Cargo.lock`. Verified: only one ring version in workspace (0.17.14 via
+  Cargo.lock resolution of ^0.17.13).
+- Bumped transitive `quinn-proto` 0.11.14 -> 0.11.16 to clear RUSTSEC-2026-0185
+  (remote memory exhaustion, high severity). No direct workspace dependency on
+  `quinn`/`quinn-proto` exists; the fix is a `Cargo.lock`-only update via
+  `cargo update -p quinn-proto`.
+- Bumped `pdf-extract` to 0.12 (replacing `lopdf` 0.34) in `crates/cascade-rag`,
+  gated behind the optional `pdf-parser` feature, to clear RUSTSEC-2026-0187.
+- Bumped `wasmtime`/`wasmtime-wasi` 36.0.11 -> 36.0.12 (exact pin in the
+  workspace root and `crates/cascade-pdk/Cargo.toml`) to clear
+  RUSTSEC-2026-0188 (WASI hard-link/rename FilePerms bypass).
+- Reconciled transitive `quick-xml` versions: `plist` 1.9.0 -> 1.10.0 (pulled
+  in by `tauri`) now shares the 0.41.0 line already used by `calamine`,
+  clearing RUSTSEC-2026-0194/0195 for two of the three previously co-installed
+  versions. The third, `quick-xml` 0.36.2 via `docx-rs` 0.4.20, has no
+  upstream fix available (docx-rs still pins `^0.36`); added to the
+  `cargo-audit` ignore-list in `.github/workflows/security.yml` with a
+  documented risk rationale (DoS-class only, local user-supplied DOCX
+  ingestion, no RCE/memory-corruption path).
+- Bumped `memmap2` 0.9.10 -> 0.9.11 (RUSTSEC-2026-0186, unsound pointer
+  offset) and `spin` 0.9.8 -> 0.9.9 (yanked version).
+- Added `RUSTSEC-2017-0008` (serial) and `RUSTSEC-2026-0192` (ttf-parser) to
+  the `cargo-audit` ignore-list — both unmaintained with no newer release
+  available; documented alongside the existing GTK-tray-icon-chain entries.
+- Fixed `apps/cascade-dashboard`'s `vite`/`vitest` (5.3.4/1.6.1 -> 6.4.3/3.2.6,
+  matching `cascade-app`'s already-fixed versions) and `@vitest/coverage-v8`
+  (mismatched 4.1.8 pinned against vitest 1.x -> 3.2.6 to match) — cleared
+  the critical Vitest-UI arbitrary-file-read advisory and the Vite Windows
+  `server.fs.deny` bypass, plus their transitive esbuild findings. `pnpm
+  audit` now reports zero vulnerabilities workspace-wide.
+- Removed the hardcoded `pnpm/action-setup@v2` `version: 9` pin from the
+  `npm-audit` CI job (`.github/workflows/security.yml`) in favor of
+  `corepack enable`, matching the rest of the workspace's CI convention (see
+  `ci-standard.md`: pinned pnpm versions desync from the lockfile and break
+  CI when pnpm releases a new major).
+
+### Fixed
+- Reordered `daemon-ci.yml`'s "Assert lean binary excludes network surfaces"
+  step to run immediately after the lean/default-features build, before the
+  subsequent all-features build overwrites `target/debug/cascaded` — the
+  assert was silently checking the all-features binary, causing a false
+  "network symbols found" failure on every run.
+- Split `ci-app.yml`'s `build-matrix` job (macOS/Ubuntu/Windows Tauri builds)
+  into `build-linux` (self-hosted, always runs) and `build-hosted`
+  (macOS/Windows, gated behind `vars.HOSTED_CI`) — this is a private repo, so
+  the previous unconditional matrix was spending paid GitHub-hosted minutes
+  and failing outright once the account's spending limit was hit.
+- Fixed 5 React purity/refs lint violations in `apps/cascade-app`
+  (`useAccounts.ts`, `useChat.ts`, `usePewsTree.ts`, `useIngestProgress.ts`):
+  moved `Date.now()` calls and ref writes out of the render body into
+  effects or callback-time state, per `react-hooks/purity` and
+  `react-hooks/refs`.
+- Fixed an intermittent `markdownPreview.test.tsx` flake (reproduced in
+  ~20-30% of isolated runs): a fire-and-forget `userEvent.click(...)` could
+  reject after the test's jsdom environment tore down. Switched to the
+  synchronous `fireEvent.click`.
+- Fixed `cascade-mcp`'s `c_harness_setup_prompt` e2e test, which depended on
+  ambient dev-machine state (`~/.claude/CLAUDE.md`) rather than a fixture —
+  passed locally for every developer but failed on a clean CI runner HOME
+  with no cascade tier files present. Now uses the same fixture HOME as
+  `a_resource_surface`.
+
 ### Changed
 - **Models**: Updated GPT fleet routing to OpenAI's GPT-5.6 family (Sol, Terra, Luna). `MODEL_GPT` now defaults to the flagship `gpt-5.6-sol`, replacing `gpt-5.5`. Added `MODEL_GPT_TERRA` and `MODEL_GPT_LUNA` constants. Updated `models.yaml` context windows (1.05M tokens) and pricing for all GPT-5.6 variants.
 - **Updates**: Added `cascade update models` to refresh the cached fleet roster

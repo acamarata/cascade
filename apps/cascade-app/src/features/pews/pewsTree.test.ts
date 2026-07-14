@@ -397,7 +397,9 @@ describe('reconcileOnError', () => {
             makeEpic({
               waves: [
                 makeWave({
-                  sprints: [makeSprint({ tickets: [makeTicket({ id: 'T-001', status: 'active' })] })],
+                  sprints: [
+                    makeSprint({ tickets: [makeTicket({ id: 'T-001', status: 'active' })] }),
+                  ],
                 }),
               ],
             }),
@@ -622,9 +624,7 @@ describe('PEWS tree from multi-phase fixture', () => {
                 makeSprint({
                   id: 'S-P3-01',
                   waveId: 'W-P3-01',
-                  tickets: [
-                    makeTicket({ id: 'T-P3-01', status: 'planned', sprintId: 'S-P3-01' }),
-                  ],
+                  tickets: [makeTicket({ id: 'T-P3-01', status: 'planned', sprintId: 'S-P3-01' })],
                 }),
               ],
             }),

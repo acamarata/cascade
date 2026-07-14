@@ -123,7 +123,13 @@ describe('applyClientFilter', () => {
   const tasks: Task[] = [
     makeTask({ id: '1', title: 'Rust kanban task', tags: ['rust', 'ui'], status: 'todo' }),
     makeTask({ id: '2', title: 'Another task', tags: ['python'], status: 'done' }),
-    makeTask({ id: '3', title: 'Third item', tags: ['rust'], status: 'backlog', assignee: 'alice@example.com' }),
+    makeTask({
+      id: '3',
+      title: 'Third item',
+      tags: ['rust'],
+      status: 'backlog',
+      assignee: 'alice@example.com',
+    }),
   ]
 
   it('returns all tasks with empty filter and text', () => {
@@ -164,10 +170,7 @@ describe('applyClientFilter', () => {
 
 describe('uniqueTags', () => {
   it('extracts unique sorted tags', () => {
-    const tasks: Task[] = [
-      makeTask({ tags: ['rust', 'wasm'] }),
-      makeTask({ tags: ['rust', 'ui'] }),
-    ]
+    const tasks: Task[] = [makeTask({ tags: ['rust', 'wasm'] }), makeTask({ tags: ['rust', 'ui'] })]
     expect(uniqueTags(tasks)).toEqual(['rust', 'ui', 'wasm'])
   })
 
@@ -189,10 +192,7 @@ describe('uniqueProjects', () => {
   })
 
   it('excludes empty project string', () => {
-    const tasks: Task[] = [
-      makeTask({ project: '' }),
-      makeTask({ project: 'cascade' }),
-    ]
+    const tasks: Task[] = [makeTask({ project: '' }), makeTask({ project: 'cascade' })]
     expect(uniqueProjects(tasks)).toEqual(['cascade'])
   })
 })

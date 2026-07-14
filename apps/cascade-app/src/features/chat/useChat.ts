@@ -42,9 +42,7 @@ const GP_PROXY_URL = 'http://127.0.0.1:3762'
 /** Canonical Sonnet model id (cascade-core::model_ids::MODEL_CLAUDE_SONNET). */
 const DEFAULT_CHAT_MODEL = 'claude-sonnet-5'
 const DAEMON_BASE_URL =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-    ? 'http://127.0.0.1:9761'
-    : ''
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window ? 'http://127.0.0.1:9761' : ''
 
 // ── Privacy: protected namespaces ─────────────────────────────────────────────
 
@@ -62,10 +60,7 @@ export function isProtectedNamespace(namespace?: string): boolean {
   if (!namespace) return false
   const ns = namespace.trim().toLowerCase()
   return (
-    ns === 'private' ||
-    ns.endsWith(':private') ||
-    ns === 'personal' ||
-    ns.startsWith('personal:')
+    ns === 'private' || ns.endsWith(':private') || ns === 'personal' || ns.startsWith('personal:')
   )
 }
 
@@ -96,7 +91,7 @@ const DEV_REFUSAL =
 const COMMON_RULES = [
   'You are a read-only question-answering and planning assistant. You never write, edit, generate, or apply code, and you never execute commands.',
   `If the user asks you to write or edit code, or perform any development/coding task, refuse with exactly this sentence and nothing else: "${DEV_REFUSAL}"`,
-  "If you do not know or cannot verify a fact, say so plainly — never guess or fabricate an answer.",
+  'If you do not know or cannot verify a fact, say so plainly — never guess or fabricate an answer.',
 ].join(' ')
 
 /**
@@ -128,7 +123,7 @@ export function buildSystemPrompt(namespace?: string): string {
 
   // Default: personal / personal:private / personal:topic:<id> / unset.
   return [
-    'You are the Cascade Personal assistant, scoped to the user\'s personal thread and local vault.',
+    "You are the Cascade Personal assistant, scoped to the user's personal thread and local vault.",
     'Scope: personal-life topics only — never answer questions about unrelated codebases or general software development.',
     COMMON_RULES,
   ].join(' ')
@@ -151,14 +146,30 @@ export function isProviderTrustedForSensitive(providerId?: string | null): boole
 
 // ── SSE event types (daemon fallback) ─────────────────────────────────────────
 
-export interface ServedByEvent   { type: 'served_by';   provider: string }
-export interface TokenEvent      { type: 'token';        text: string; content?: string }
-export interface ToolResultEvent { type: 'tool_result';  name?: string; tool_name?: string; [k: string]: unknown }
-export interface ErrorEvent      { type: 'error';        message: string }
-export interface DoneEvent       { type: 'done' }
+export interface ServedByEvent {
+  type: 'served_by'
+  provider: string
+}
+export interface TokenEvent {
+  type: 'token'
+  text: string
+  content?: string
+}
+export interface ToolResultEvent {
+  type: 'tool_result'
+  name?: string
+  tool_name?: string
+  [k: string]: unknown
+}
+export interface ErrorEvent {
+  type: 'error'
+  message: string
+}
+export interface DoneEvent {
+  type: 'done'
+}
 
-export type ChatStreamEvent =
-  | ServedByEvent | TokenEvent | ToolResultEvent | ErrorEvent | DoneEvent
+export type ChatStreamEvent = ServedByEvent | TokenEvent | ToolResultEvent | ErrorEvent | DoneEvent
 
 // ── SSE parser (daemon fallback) ──────────────────────────────────────────────
 
@@ -168,7 +179,10 @@ export function parseSseLine(rawLine: string): ChatStreamEvent | null {
 
   let eventType: string | null = null
   for (const line of trimmed.split('\n')) {
-    if (line.startsWith('event:')) { eventType = line.slice(6).trim(); break }
+    if (line.startsWith('event:')) {
+      eventType = line.slice(6).trim()
+      break
+    }
   }
   for (const line of trimmed.split('\n')) {
     if (!line.startsWith('data:')) continue
@@ -179,16 +193,21 @@ export function parseSseLine(rawLine: string): ChatStreamEvent | null {
       const resolvedType = (eventType ?? parsed['type']) as string | undefined
       if (!resolvedType) return null
       return { ...parsed, type: resolvedType } as ChatStreamEvent
-    } catch { /* malformed */ }
+    } catch {
+      /* malformed */
+    }
   }
   return null
 }
 
 export function streamingReducer(accumulated: string, event: ChatStreamEvent): string {
   if (event.type === 'token') {
-    const frag = typeof event.text === 'string' ? event.text
-      : typeof (event as TokenEvent).content === 'string' ? (event as TokenEvent).content!
-      : ''
+    const frag =
+      typeof event.text === 'string'
+        ? event.text
+        : typeof (event as TokenEvent).content === 'string'
+          ? (event as TokenEvent).content!
+          : ''
     return accumulated + frag
   }
   return accumulated
@@ -214,19 +233,23 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
   const [servedBy, setServedBy] = useState<string | null>(null)
   const toolResultsRef = useRef<unknown[]>([])
   const abortRef = useRef<AbortController | null>(null)
+  // Timestamp for the in-progress streaming message — captured once when
+  // streaming starts (see sendMessage below), never read via Date.now() at render time.
+  const [streamingStartTs, setStreamingStartTs] = useState(0)
 
-  const allMessages: ChatMessage[] = streamingContent !== null
-    ? [
-        ...messages,
-        {
-          role: 'assistant' as const,
-          content: streamingContent,
-          ts: Date.now(),
-          servedBy: servedBy ?? undefined,
-          isLocalFallback: false,
-        },
-      ]
-    : messages
+  const allMessages: ChatMessage[] =
+    streamingContent !== null
+      ? [
+          ...messages,
+          {
+            role: 'assistant' as const,
+            content: streamingContent,
+            ts: streamingStartTs,
+            servedBy: servedBy ?? undefined,
+            isLocalFallback: false,
+          },
+        ]
+      : messages
 
   const sendMessage = useCallback(
     async (content: string, provider?: string): Promise<void> => {
@@ -238,6 +261,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
       setIsStreaming(true)
       setError(null)
       setStreamingContent('')
+      setStreamingStartTs(Date.now())
       toolResultsRef.current = []
 
       const controller = new AbortController()
@@ -288,7 +312,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
             if (gpRes.ok) {
               type AnthropicContent = { type: string; text?: string }
               type AnthropicResponse = { content?: AnthropicContent[]; model?: string }
-              const body = await gpRes.json() as AnthropicResponse
+              const body = (await gpRes.json()) as AnthropicResponse
               const textBlock = body.content?.find((b) => b.type === 'text')
               accumulated = textBlock?.text ?? ''
               resolvedProvider = `gp:${body.model ?? 'gemini-2.0-flash'}`
@@ -340,6 +364,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
           const decoder = new TextDecoder()
           let buffer = ''
 
+          // eslint-disable-next-line no-constant-condition -- standard SSE reader loop, exited via `break` below
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
@@ -349,7 +374,10 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
             for (const part of parts) {
               const event = parseSseLine(part)
               if (!event) continue
-              if (event.type === 'done') { reader.cancel(); break }
+              if (event.type === 'done') {
+                reader.cancel()
+                break
+              }
               if (event.type === 'served_by') {
                 resolvedProvider = event.provider
                 setServedBy(event.provider)
@@ -385,7 +413,7 @@ export function useChat(sessionId: string, namespace?: string): UseChatResult {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isStreaming, messages, namespace, sessionId, append],
+    [isStreaming, messages, namespace, sessionId, append]
   )
 
   const clearMessages = useCallback(() => {

@@ -32,12 +32,17 @@ interface TaskCardProps {
  * <TaskCard task={t} onEdit={edit} onDelete={del} onDragStart={start} />
  * ```
  */
-export function TaskCard({ task, onEdit, onDelete, onDragStart }: TaskCardProps): React.ReactElement {
+export function TaskCard({
+  task,
+  onEdit,
+  onDelete,
+  onDragStart,
+}: TaskCardProps): React.ReactElement {
   return (
     <div
       draggable
       aria-label={`Task: ${task.title}`}
-      role="article"
+      role="button"
       tabIndex={0}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -66,7 +71,10 @@ export function TaskCard({ task, onEdit, onDelete, onDragStart }: TaskCardProps)
           <button
             type="button"
             aria-label={`Edit ${task.title}`}
-            onClick={(e) => { e.stopPropagation(); onEdit(task) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(task)
+            }}
             className="rounded p-0.5 hover:bg-accent text-muted-foreground hover:text-foreground"
           >
             <Pencil className="h-3 w-3" aria-hidden="true" />
@@ -74,7 +82,10 @@ export function TaskCard({ task, onEdit, onDelete, onDragStart }: TaskCardProps)
           <button
             type="button"
             aria-label={`Delete ${task.title}`}
-            onClick={(e) => { e.stopPropagation(); onDelete(task.id) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(task.id)
+            }}
             className="rounded p-0.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-3 w-3" aria-hidden="true" />

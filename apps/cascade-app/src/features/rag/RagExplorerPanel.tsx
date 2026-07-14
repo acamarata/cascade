@@ -32,12 +32,26 @@ import { useIngestProgress } from './useIngestProgress'
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 export function RagExplorerPanel() {
-  const { sources, loading: sourcesLoading, error: sourcesError, refetch: refetchSources } =
-    useRagSources()
-  const { citations, loading: searchLoading, error: searchError, queryMs, search, clear } =
-    useRagSearch()
-  const { stats, loading: statsLoading, error: statsError, refetch: refetchStats } =
-    useRagIndexStats()
+  const {
+    sources,
+    loading: sourcesLoading,
+    error: sourcesError,
+    refetch: refetchSources,
+  } = useRagSources()
+  const {
+    citations,
+    loading: searchLoading,
+    error: searchError,
+    queryMs,
+    search,
+    clear,
+  } = useRagSearch()
+  const {
+    stats,
+    loading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useRagIndexStats()
 
   // Called when ingest completes — refresh sources + stats
   const handleIngestComplete = useCallback(() => {
@@ -58,6 +72,16 @@ export function RagExplorerPanel() {
       })
   }, [])
 
+  // ── Ingest trigger ─────────────────────────────────────────────────────────
+
+  const triggerIngest = useCallback(async (path: string) => {
+    try {
+      await invoke('rag_ingest_file', { path })
+    } catch (_err) {
+      // Daemon not yet wired (T-P4-E01-29) — progress event won't fire; graceful.
+    }
+  }, [])
+
   // ── Wire Tauri 2 file-drop event ──────────────────────────────────────────
   const unlistenRef = useRef<(() => void) | undefined>(undefined)
 
@@ -69,7 +93,7 @@ export function RagExplorerPanel() {
           if (Array.isArray(paths) && paths.length > 0) {
             void triggerIngest(paths[0]!)
           }
-        }),
+        })
       )
       .then((fn) => {
         unlistenRef.current = fn
@@ -81,23 +105,13 @@ export function RagExplorerPanel() {
     return () => {
       unlistenRef.current?.()
     }
-  }, [])
-
-  // ── Ingest trigger ─────────────────────────────────────────────────────────
-
-  const triggerIngest = useCallback(async (path: string) => {
-    try {
-      await invoke('rag_ingest_file', { path })
-    } catch (_err) {
-      // Daemon not yet wired (T-P4-E01-29) — progress event won't fire; graceful.
-    }
-  }, [])
+  }, [triggerIngest])
 
   const handleDrop = useCallback(
     (path: string) => {
       void triggerIngest(path)
     },
-    [triggerIngest],
+    [triggerIngest]
   )
 
   // ── Render ─────────────────────────────────────────────────────────────────

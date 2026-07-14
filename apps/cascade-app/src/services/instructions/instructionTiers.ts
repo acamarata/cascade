@@ -45,9 +45,7 @@ async function defaultResolve(tier: string): Promise<string> {
 export async function fetchAllTiers(
   resolveFn: (tier: string) => Promise<string> = defaultResolve
 ): Promise<TierContent[]> {
-  const results = await Promise.allSettled(
-    TIER_LABELS.map((label) => resolveFn(label))
-  )
+  const results = await Promise.allSettled(TIER_LABELS.map((label) => resolveFn(label)))
 
   return TIER_LABELS.map((label, i) => {
     const result = results[i]

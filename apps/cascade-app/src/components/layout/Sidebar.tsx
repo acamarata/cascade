@@ -79,7 +79,11 @@ export function Sidebar() {
     >
       {/* Logo / app name */}
       <div className="flex h-12 items-center gap-2 border-b border-border px-3">
-        <MountainSnow className="h-5 w-5 shrink-0" style={{ color: '#4F9BE8' }} aria-hidden="true" />
+        <MountainSnow
+          className="h-5 w-5 shrink-0"
+          style={{ color: '#4F9BE8' }}
+          aria-hidden="true"
+        />
         {!collapsed && <span className="text-sm font-semibold tracking-tight">Cascade</span>}
       </div>
 

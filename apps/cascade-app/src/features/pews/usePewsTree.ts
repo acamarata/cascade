@@ -27,15 +27,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import type { PewsTree, TicketStatus } from '../../types/pbd'
-import {
-  pbdGetTree,
-  pbdUpdateTicketStatus,
-  pbdWatch,
-} from '../../types/pbd'
-import {
-  applyOptimisticStatusChange,
-  mergeSyncEvent,
-} from './pewsTree'
+import { pbdGetTree, pbdUpdateTicketStatus, pbdWatch } from '../../types/pbd'
+import { applyOptimisticStatusChange, mergeSyncEvent } from './pewsTree'
 
 // ── Return type ───────────────────────────────────────────────────────────────
 
@@ -50,11 +43,7 @@ export interface UsePewsTreeResult {
    * Optimistically update a ticket status.
    * Applies the change immediately; persists via IPC; rolls back on error.
    */
-  updateTicketStatus: (
-    ticketId: string,
-    newStatus: TicketStatus,
-    note?: string,
-  ) => Promise<void>
+  updateTicketStatus: (ticketId: string, newStatus: TicketStatus, note?: string) => Promise<void>
   /** Re-fetch the tree manually (e.g. on retry). */
   refetch: () => Promise<void>
 }
@@ -75,7 +64,9 @@ export function usePewsTree(phaseRoot: string): UsePewsTreeResult {
   // Track whether the watcher has been installed for the current phaseRoot.
   const watchInstalledRef = useRef(false)
   const phaseRootRef = useRef(phaseRoot)
-  phaseRootRef.current = phaseRoot
+  useEffect(() => {
+    phaseRootRef.current = phaseRoot
+  }, [phaseRoot])
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -189,7 +180,7 @@ export function usePewsTree(phaseRoot: string): UsePewsTreeResult {
         throw err
       }
     },
-    [phaseRoot, fetchTree],
+    [phaseRoot, fetchTree]
   )
 
   return { tree, loading, error, updateTicketStatus, refetch }

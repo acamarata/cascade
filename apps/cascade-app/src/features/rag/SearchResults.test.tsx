@@ -33,9 +33,7 @@ const TWO_CITATIONS = [CITATION_A, CITATION_B]
 
 describe('SearchResults', () => {
   it('renders null when no citations, no loading, no error', () => {
-    const { container } = render(
-      <SearchResults citations={[]} loading={false} error={null} />,
-    )
+    const { container } = render(<SearchResults citations={[]} loading={false} error={null} />)
     expect(container.firstChild).toBeNull()
   })
 
@@ -105,28 +103,19 @@ describe('SearchResults', () => {
   })
 
   it('shows query latency when queryMs is provided', () => {
-    render(
-      <SearchResults citations={[CITATION_A]} loading={false} error={null} queryMs={42} />,
-    )
+    render(<SearchResults citations={[CITATION_A]} loading={false} error={null} queryMs={42} />)
     expect(screen.getByText('42ms')).toBeTruthy()
   })
 
   it('does not show latency when queryMs is null', () => {
-    render(
-      <SearchResults citations={[CITATION_A]} loading={false} error={null} queryMs={null} />,
-    )
+    render(<SearchResults citations={[CITATION_A]} loading={false} error={null} queryMs={null} />)
     expect(screen.queryByText(/ms$/)).toBeNull()
   })
 
   it('calls onOpenFile when the file path button is clicked', async () => {
     const handler = vi.fn()
     render(
-      <SearchResults
-        citations={[CITATION_A]}
-        loading={false}
-        error={null}
-        onOpenFile={handler}
-      />,
+      <SearchResults citations={[CITATION_A]} loading={false} error={null} onOpenFile={handler} />
     )
     const btn = screen.getByRole('button', { name: /open setup\.md in vault/i })
     await userEvent.click(btn)
@@ -136,7 +125,7 @@ describe('SearchResults', () => {
 
   it('does not show the ExternalLink icon when onOpenFile is absent', () => {
     const { container } = render(
-      <SearchResults citations={[CITATION_A]} loading={false} error={null} />,
+      <SearchResults citations={[CITATION_A]} loading={false} error={null} />
     )
     // When no onOpenFile, the button aria-label is missing the "Open ... in vault" text.
     expect(screen.queryByRole('button', { name: /open .* in vault/i })).toBeNull()
@@ -146,7 +135,7 @@ describe('SearchResults', () => {
 
   it('renders multiple data-testid=citation-card elements', () => {
     const { container } = render(
-      <SearchResults citations={TWO_CITATIONS} loading={false} error={null} />,
+      <SearchResults citations={TWO_CITATIONS} loading={false} error={null} />
     )
     expect(container.querySelectorAll('[data-testid="citation-card"]')).toHaveLength(2)
   })

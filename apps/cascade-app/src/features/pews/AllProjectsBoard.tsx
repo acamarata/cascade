@@ -30,13 +30,20 @@ import { useProjectRegistry, type RegistryProject } from './useProjectRegistry'
  */
 function lifecycleColor(status: string | null): { text: string; bg: string } {
   switch (status) {
-    case 'planning':       return { text: 'text-violet-400', bg: 'bg-violet-400/15' }
-    case 'ready_to_build': return { text: 'text-blue-400',   bg: 'bg-blue-400/15' }
-    case 'building':       return { text: 'text-amber-400',  bg: 'bg-amber-400/15' }
-    case 'qa':             return { text: 'text-cyan-400',   bg: 'bg-cyan-400/15' }
-    case 'shipped':        return { text: 'text-green-400',  bg: 'bg-green-400/15' }
-    case 'archived':       return { text: 'text-muted-foreground', bg: 'bg-muted/40' }
-    default:               return { text: 'text-muted-foreground', bg: 'bg-muted/20' }
+    case 'planning':
+      return { text: 'text-violet-400', bg: 'bg-violet-400/15' }
+    case 'ready_to_build':
+      return { text: 'text-blue-400', bg: 'bg-blue-400/15' }
+    case 'building':
+      return { text: 'text-amber-400', bg: 'bg-amber-400/15' }
+    case 'qa':
+      return { text: 'text-cyan-400', bg: 'bg-cyan-400/15' }
+    case 'shipped':
+      return { text: 'text-green-400', bg: 'bg-green-400/15' }
+    case 'archived':
+      return { text: 'text-muted-foreground', bg: 'bg-muted/40' }
+    default:
+      return { text: 'text-muted-foreground', bg: 'bg-muted/20' }
   }
 }
 
@@ -277,11 +284,7 @@ export function AllProjectsBoard({ onOpenProject }: AllProjectsBoardProps) {
             </thead>
             <tbody>
               {projects.map((project) => (
-                <ProjectRow
-                  key={project.id}
-                  project={project}
-                  onOpen={onOpenProject}
-                />
+                <ProjectRow key={project.id} project={project} onOpen={onOpenProject} />
               ))}
             </tbody>
           </table>

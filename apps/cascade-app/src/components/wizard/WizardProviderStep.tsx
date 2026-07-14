@@ -281,7 +281,17 @@ export function WizardProviderStep() {
   // not string[]. Map to ids so downstream code is unaffected.
   const refreshProviders = React.useCallback(async () => {
     try {
-      const result = await invoke<Array<{ id: string; name: string; auth_method: string; status: string; error_msg?: string; today_cost_usd?: number }> | undefined>('cascade_providers_list')
+      const result = await invoke<
+        | Array<{
+            id: string
+            name: string
+            auth_method: string
+            status: string
+            error_msg?: string
+            today_cost_usd?: number
+          }>
+        | undefined
+      >('cascade_providers_list')
       // Guard: IPC may return undefined when command is a stub — treat as empty list
       const items = Array.isArray(result) ? result : []
       const ids = items.map((item) => item.id)
@@ -328,7 +338,8 @@ export function WizardProviderStep() {
     async function runAutoAuthScan() {
       try {
         // cascade_auto_auth_scan returns an array of detected account descriptors.
-        const accounts = await invoke<Array<{ account_email: string; provider: string }>>('cascade_auto_auth_scan')
+        const accounts =
+          await invoke<Array<{ account_email: string; provider: string }>>('cascade_auto_auth_scan')
         if (cancelled) return
         if (Array.isArray(accounts) && accounts.length > 0) {
           setAutoAuthAccounts(accounts.map((a) => a.account_email ?? a.provider))

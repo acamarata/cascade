@@ -32,12 +32,24 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn()
 // The default jsdom stub in some vitest configs doesn't implement removeItem/clear.
 class FakeStorage implements Storage {
   private store: Record<string, string> = {}
-  get length() { return Object.keys(this.store).length }
-  key(index: number): string | null { return Object.keys(this.store)[index] ?? null }
-  getItem(k: string): string | null { return this.store[k] ?? null }
-  setItem(k: string, v: string) { this.store[k] = v }
-  removeItem(k: string) { delete this.store[k] }
-  clear() { this.store = {} }
+  get length() {
+    return Object.keys(this.store).length
+  }
+  key(index: number): string | null {
+    return Object.keys(this.store)[index] ?? null
+  }
+  getItem(k: string): string | null {
+    return this.store[k] ?? null
+  }
+  setItem(k: string, v: string) {
+    this.store[k] = v
+  }
+  removeItem(k: string) {
+    delete this.store[k]
+  }
+  clear() {
+    this.store = {}
+  }
 }
 
 const fakeLocalStorage = new FakeStorage()
@@ -45,8 +57,12 @@ const fakeSessionStorage = new FakeStorage()
 Object.defineProperty(window, 'localStorage', { value: fakeLocalStorage, writable: true })
 Object.defineProperty(window, 'sessionStorage', { value: fakeSessionStorage, writable: true })
 
-function clearLocalStorage() { fakeLocalStorage.clear() }
-function clearSessionStorage() { fakeSessionStorage.clear() }
+function clearLocalStorage() {
+  fakeLocalStorage.clear()
+}
+function clearSessionStorage() {
+  fakeSessionStorage.clear()
+}
 
 // ── 1. parseSseLine ──────────────────────────────────────────────────────────
 
@@ -197,9 +213,7 @@ describe('useChatHistory', () => {
   })
 
   it('loads history from localStorage on mount', () => {
-    const stored: ChatMessage[] = [
-      { role: 'user', content: 'persisted', ts: 100 },
-    ]
+    const stored: ChatMessage[] = [{ role: 'user', content: 'persisted', ts: 100 }]
     localStorage.setItem('cascade-chat-history-load-session', JSON.stringify(stored))
     const { result } = renderHook(() => useChatHistory('load-session'))
     expect(result.current.messages).toHaveLength(1)
@@ -223,11 +237,7 @@ describe('useChatHistory personalChatSync gating', () => {
   /** Route the mocked Tauri IPC: get_settings → consent fixture, else providers. */
   function mockSettings(personalChatSync: boolean) {
     invokeMock.mockImplementation((cmd: string) =>
-      Promise.resolve(
-        cmd === 'get_settings'
-          ? { memory: { personalChatSync } }
-          : PROVIDERS_FIXTURE,
-      ),
+      Promise.resolve(cmd === 'get_settings' ? { memory: { personalChatSync } } : PROVIDERS_FIXTURE)
     )
   }
 
@@ -268,9 +278,7 @@ describe('useChatHistory personalChatSync gating', () => {
     await flush()
     expect(fetchMock).not.toHaveBeenCalled()
     // Still persisted locally.
-    const stored = JSON.parse(
-      localStorage.getItem('cascade-chat-history-sync-off') ?? '[]',
-    )
+    const stored = JSON.parse(localStorage.getItem('cascade-chat-history-sync-off') ?? '[]')
     expect(stored).toHaveLength(1)
   })
 
@@ -288,7 +296,7 @@ describe('useChatHistory personalChatSync gating', () => {
     })
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(
-        (c) => (c[1] as RequestInit | undefined)?.method === 'POST',
+        (c) => (c[1] as RequestInit | undefined)?.method === 'POST'
       )
       expect(post).toBeTruthy()
       const body = JSON.parse((post![1] as RequestInit).body as string)
@@ -306,7 +314,7 @@ describe('useChatHistory personalChatSync gating', () => {
     })
     await waitFor(() => {
       const del = fetchMock.mock.calls.find(
-        (c) => (c[1] as RequestInit | undefined)?.method === 'DELETE',
+        (c) => (c[1] as RequestInit | undefined)?.method === 'DELETE'
       )
       expect(del).toBeTruthy()
       const url = String(del![0])
@@ -346,7 +354,7 @@ describe('useChatHistory personalChatSync gating', () => {
     await waitFor(() => {
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('server history may persist'),
-        expect.anything(),
+        expect.anything()
       )
     })
     expect(result.current.messages).toHaveLength(0)
@@ -364,9 +372,7 @@ describe('useChatHistory personalChatSync gating', () => {
 
   it('private namespace never contacts the daemon even with consent on', async () => {
     mockSettings(true)
-    const { result } = renderHook(() =>
-      useChatHistory('priv-session', 'personal:private'),
-    )
+    const { result } = renderHook(() => useChatHistory('priv-session', 'personal:private'))
     await flush()
     act(() => {
       result.current.append({ role: 'user', content: 'x', ts: 1 })
@@ -414,8 +420,15 @@ describe('isProviderTrustedForSensitive', () => {
       expect(isProviderTrustedForSensitive(id)).toBe(true)
     }
     for (const id of [
-      'gemini', 'gp-pool', 'openai', 'codex', 'oc-go', 'gfp', 'generic-openai',
-      'noop-x', '',
+      'gemini',
+      'gp-pool',
+      'openai',
+      'codex',
+      'oc-go',
+      'gfp',
+      'generic-openai',
+      'noop-x',
+      '',
     ]) {
       expect(isProviderTrustedForSensitive(id)).toBe(false)
     }
@@ -457,15 +470,17 @@ describe('useChat GP fast-path privacy gate', () => {
   })
 
   it('protected namespace: never touches :3762, goes straight to the daemon', async () => {
-    fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(
-        sseResponse(
-          'event: served_by\ndata: {"provider":"anthropic"}\n\n',
-          'data: {"type":"token","text":"ok"}\n\n',
-          'data: [DONE]\n\n',
-        ),
-      ),
-    )
+    fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          sseResponse(
+            'event: served_by\ndata: {"provider":"anthropic"}\n\n',
+            'data: {"type":"token","text":"ok"}\n\n',
+            'data: [DONE]\n\n'
+          )
+        )
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const { result } = renderHook(() => useChat('priv-chat', 'personal:private'))
@@ -475,9 +490,7 @@ describe('useChat GP fast-path privacy gate', () => {
 
     const urls = fetchMock.mock.calls.map((c) => String(c[0]))
     expect(urls.some((u) => u.includes(':3762'))).toBe(false)
-    const chatCall = fetchMock.mock.calls.find((c) =>
-      String(c[0]).includes('/api/chat'),
-    )
+    const chatCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/api/chat'))
     expect(chatCall).toBeTruthy()
     const body = JSON.parse((chatCall![1] as RequestInit).body as string)
     expect(body.namespace).toBe('personal:private')
@@ -538,9 +551,7 @@ describe('ProviderBadge', () => {
   })
 
   it('has correct aria-label for local fallback', () => {
-    const { container } = render(
-      <ProviderBadge servedBy="local:llama3" isLocalFallback={true} />,
-    )
+    const { container } = render(<ProviderBadge servedBy="local:llama3" isLocalFallback={true} />)
     const badge = container.firstChild as HTMLElement
     expect(badge.getAttribute('aria-label')).toContain('local fallback')
   })
@@ -559,9 +570,7 @@ vi.mock('./MarkdownMessage', () => ({
 describe('MessageList', () => {
   it('shows empty-state prompt when no messages', () => {
     render(<MessageList messages={[]} isStreaming={false} />)
-    expect(
-      screen.getByText(/Ask anything about your cascade context/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Ask anything about your cascade context/i)).toBeInTheDocument()
   })
 
   it('renders user messages', () => {
@@ -612,46 +621,50 @@ import { ProviderSelector } from './ProviderSelector'
 
 describe('ProviderSelector', () => {
   it('renders with Auto option by default', async () => {
-    render(
-      <ProviderSelector selectedProvider={null} onSelect={() => {}} />,
-    )
+    render(<ProviderSelector selectedProvider={null} onSelect={() => {}} />)
     // The SelectTrigger shows the current value
     expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('calls onSelect with null when "auto" is chosen', async () => {
     const onSelect = vi.fn()
-    render(
-      <ProviderSelector selectedProvider="anthropic" onSelect={onSelect} />,
-    )
+    render(<ProviderSelector selectedProvider="anthropic" onSelect={onSelect} />)
     // Verify component renders without crash
     expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('warns when an untrusted provider is pinned in a protected namespace', () => {
     render(
-      <ProviderSelector selectedProvider="gp-pool" onSelect={() => {}} namespace="personal:private" />,
+      <ProviderSelector
+        selectedProvider="gp-pool"
+        onSelect={() => {}}
+        namespace="personal:private"
+      />
     )
     expect(screen.getByRole('alert')).toHaveTextContent(/untrusted pin/i)
   })
 
   it('does not warn when the pinned provider is trusted (protected namespace)', () => {
     render(
-      <ProviderSelector selectedProvider="anthropic" onSelect={() => {}} namespace="personal" />,
+      <ProviderSelector selectedProvider="anthropic" onSelect={() => {}} namespace="personal" />
     )
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('does not warn for an untrusted pin outside a protected namespace', () => {
     render(
-      <ProviderSelector selectedProvider="gp-pool" onSelect={() => {}} namespace="projects:cascade" />,
+      <ProviderSelector
+        selectedProvider="gp-pool"
+        onSelect={() => {}}
+        namespace="projects:cascade"
+      />
     )
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('does not warn when no provider is pinned (auto), even in a protected namespace', () => {
     render(
-      <ProviderSelector selectedProvider={null} onSelect={() => {}} namespace="personal:private" />,
+      <ProviderSelector selectedProvider={null} onSelect={() => {}} namespace="personal:private" />
     )
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
@@ -672,7 +685,7 @@ describe('ChatPage', () => {
     return render(
       <BrowserRouter>
         <ChatPage />
-      </BrowserRouter>,
+      </BrowserRouter>
     )
   }
 
@@ -683,9 +696,7 @@ describe('ChatPage', () => {
 
   it('shows empty-state prompt initially', () => {
     renderChatPage()
-    expect(
-      screen.getByText(/Ask anything about your cascade context/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Ask anything about your cascade context/i)).toBeInTheDocument()
   })
 
   it('renders the message input', () => {
@@ -713,9 +724,7 @@ describe('ChatPage', () => {
     const newChatBtn = screen.getByRole('button', { name: /new chat/i })
     fireEvent.click(newChatBtn)
     // Still shows empty state after clearing
-    expect(
-      screen.getByText(/Ask anything about your cascade context/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Ask anything about your cascade context/i)).toBeInTheDocument()
   })
 
   it('input is accessible with correct aria-label', () => {

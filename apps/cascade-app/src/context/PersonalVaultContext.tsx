@@ -142,13 +142,8 @@ interface PersonalVaultProviderProps {
   initialPciPath?: string
 }
 
-export function PersonalVaultProvider({
-  children,
-  initialPciPath,
-}: PersonalVaultProviderProps) {
-  const [pciRoot, setPciRootState] = useState<string>(
-    initialPciPath ?? resolvePciRoot()
-  )
+export function PersonalVaultProvider({ children, initialPciPath }: PersonalVaultProviderProps) {
+  const [pciRoot, setPciRootState] = useState<string>(initialPciPath ?? resolvePciRoot())
   const [treeData, setTreeData] = useState<VaultNode | null>(null)
   const [currentFile, setCurrentFileState] = useState<string | null>(null)
   const [currentContent, setCurrentContent] = useState<string | null>(null)
@@ -266,11 +261,7 @@ export function PersonalVaultProvider({
     memoryError,
   }
 
-  return (
-    <PersonalVaultContext.Provider value={value}>
-      {children}
-    </PersonalVaultContext.Provider>
-  )
+  return <PersonalVaultContext.Provider value={value}>{children}</PersonalVaultContext.Provider>
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────

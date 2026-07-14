@@ -12,7 +12,7 @@
  * SPORT: MASTER-COMPONENTS.md — TaskColumn (E-P8-02)
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type { Task, TaskStatus } from '../../types/task'
 import { TaskCard } from './TaskCard'
@@ -53,10 +53,19 @@ export function TaskColumn({
   const [addingTitle, setAddingTitle] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const columnRef = useRef<HTMLDivElement>(null)
+  const addInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus the inline "add card" input when the form opens — replaces the
+  // autoFocus prop (jsx-a11y/no-autofocus) with an explicit, opt-in effect.
+  useEffect(() => {
+    if (showAdd) {
+      addInputRef.current?.focus()
+    }
+  }, [showAdd])
 
   function computeDropIndex(e: React.DragEvent<HTMLDivElement>): number {
     if (!columnRef.current) return tasks.length
-    const cards = columnRef.current.querySelectorAll<HTMLElement>('[role="article"]')
+    const cards = columnRef.current.querySelectorAll<HTMLElement>('[role="button"]')
     let idx = tasks.length
     for (let i = 0; i < cards.length; i++) {
       const rect = cards[i].getBoundingClientRect()
@@ -97,9 +106,7 @@ export function TaskColumn({
   // Keyboard move within column: focus management on arrow keys
   function handleColumnKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (!columnRef.current) return
-    const cards = Array.from(
-      columnRef.current.querySelectorAll<HTMLElement>('[role="article"]'),
-    )
+    const cards = Array.from(columnRef.current.querySelectorAll<HTMLElement>('[role="button"]'))
     const focused = document.activeElement
     const idx = cards.indexOf(focused as HTMLElement)
     if (idx === -1) return
@@ -131,7 +138,8 @@ export function TaskColumn({
       {/* Card list — drop zone */}
       <div
         ref={columnRef}
-        role="list"
+        role="toolbar"
+        aria-orientation="vertical"
         aria-label={`${label} tasks`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -173,7 +181,7 @@ export function TaskColumn({
           className="border-t border-border p-2 flex flex-col gap-1.5"
         >
           <input
-            autoFocus
+            ref={addInputRef}
             type="text"
             placeholder="Card title…"
             value={addingTitle}

@@ -24,7 +24,9 @@ interface UseIngestProgressResult {
 export function useIngestProgress(onComplete?: () => void): UseIngestProgressResult {
   const [progress, setProgress] = useState<RagIngestProgress | null>(null)
   const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
 
   const clearProgress = useCallback(() => setProgress(null), [])
 
@@ -42,7 +44,7 @@ export function useIngestProgress(onComplete?: () => void): UseIngestProgressRes
             // Clear progress after a short delay so the user sees 100%.
             setTimeout(clearProgress, 1500)
           }
-        }),
+        })
       )
       .then((fn) => {
         unlisten = fn

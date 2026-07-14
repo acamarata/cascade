@@ -85,20 +85,26 @@ export function useTasks({ project }: UseTasksOptions = {}): UseTasksResult {
 
   const createTask = useCallback(
     async (params: TaskCreateParams): Promise<Task> => {
-      const res = await invoke<TaskResult>('task_create', params as unknown as Record<string, unknown>)
+      const res = await invoke<TaskResult>(
+        'task_create',
+        params as unknown as Record<string, unknown>
+      )
       refetch()
       return res.task
     },
-    [refetch],
+    [refetch]
   )
 
   const updateTask = useCallback(
     async (params: TaskUpdateParams): Promise<Task> => {
-      const res = await invoke<TaskResult>('task_update', params as unknown as Record<string, unknown>)
+      const res = await invoke<TaskResult>(
+        'task_update',
+        params as unknown as Record<string, unknown>
+      )
       refetch()
       return res.task
     },
-    [refetch],
+    [refetch]
   )
 
   const deleteTask = useCallback(
@@ -107,16 +113,19 @@ export function useTasks({ project }: UseTasksOptions = {}): UseTasksResult {
       refetch()
       return res.deleted
     },
-    [refetch],
+    [refetch]
   )
 
   const moveTask = useCallback(
     async (params: TaskMoveParams): Promise<Task> => {
-      const res = await invoke<TaskResult>('task_move', params as unknown as Record<string, unknown>)
+      const res = await invoke<TaskResult>(
+        'task_move',
+        params as unknown as Record<string, unknown>
+      )
       refetch()
       return res.task
     },
-    [refetch],
+    [refetch]
   )
 
   return { tasks, loading, error, refetch, createTask, updateTask, deleteTask, moveTask }

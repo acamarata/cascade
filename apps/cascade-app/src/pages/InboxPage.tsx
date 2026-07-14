@@ -98,7 +98,10 @@ function InboxItemRow({ item, expanded, onToggle }: InboxItemRowProps): React.Re
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {!item.read && (
-            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" aria-label="Unread" />
+            <span
+              className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-500"
+              aria-label="Unread"
+            />
           )}
           <span
             className={[
@@ -225,7 +228,7 @@ export function InboxPage(): React.ReactElement {
             <p className="text-sm text-muted-foreground">No messages</p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2" role="list">
+          <ul className="flex flex-col gap-2">
             {items.map((item) => (
               <li key={item.id}>
                 <InboxItemRow

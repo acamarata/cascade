@@ -215,7 +215,9 @@ export function AccountsPage(): React.ReactElement {
                         {accountLabel(acc)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground capitalize font-medium">{acc.provider}</td>
+                    <td className="px-4 py-3 text-muted-foreground capitalize font-medium">
+                      {acc.provider}
+                    </td>
 
                     {pool ? (
                       /* GP pool row — spans quota columns with capacity summary */
@@ -228,13 +230,19 @@ export function AccountsPage(): React.ReactElement {
                       </td>
                     ) : (
                       <>
-                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(fiveH)}`}>
+                        <td
+                          className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(fiveH)}`}
+                        >
                           {pct(fiveH)}
                         </td>
-                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(wk)}`}>
+                        <td
+                          className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(wk)}`}
+                        >
                           {pct(wk)}
                         </td>
-                        <td className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(credit)}`}>
+                        <td
+                          className={`px-4 py-3 text-right font-bold tabular-nums ${utilColor(credit)}`}
+                        >
                           {credit == null ? '—' : pct(credit)}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">
@@ -301,12 +309,24 @@ export function AccountsPage(): React.ReactElement {
                       {accountLabel(acc)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground capitalize font-medium">{acc.provider}</td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">—</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">—</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">—</td>
+                  <td className="px-4 py-3 text-muted-foreground capitalize font-medium">
+                    {acc.provider}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">
+                    —
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">
+                    —
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-muted-foreground">
+                    —
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">
+                    —
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground/80 tabular-nums font-medium">
+                    —
+                  </td>
                   <td className="px-4 py-3">
                     <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border bg-amber-500/10 text-amber-500 border-amber-500/20">
                       Needs sign-in

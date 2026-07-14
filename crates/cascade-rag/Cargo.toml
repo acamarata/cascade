@@ -63,16 +63,24 @@ tree-sitter-javascript = { workspace = true, optional = true }
 scraper = { version = "0.20", optional = true }
 
 # Optional: pure-Rust PDF text-layer extraction (feature = "pdf-parser")
-# T-P4-E01-17: pdf-extract 0.7 (MIT, no native deps)
-pdf-extract = { version = "0.7", optional = true }
+# T-P4-E01-17: pdf-extract (MIT, no native deps)
+# T-P7-E02-01: bumped to 0.12 to pull lopdf past 0.34.0 (RUSTSEC-2026-0187, stack
+# overflow via deeply nested PDF objects). pdf-extract 0.7.x pinned lopdf 0.34.0
+# transitively with no way to override it without a direct lopdf dep.
+pdf-extract = { version = "0.12", optional = true }
 
 # Optional: DOCX paragraph text extraction (feature = "docx-parser")
 # T-P4-E01-18: docx-rs 0.4 (MIT, pure Rust). Exposes read_docx() for reading.
 docx-rs = { version = "0.4", optional = true }
 
 # Optional: XLSX/XLS spreadsheet text extraction (feature = "xlsx-parser")
-# T-P4-E01-19: calamine 0.24 (MIT, pure Rust reader for Excel formats).
-calamine = { version = "0.24", optional = true }
+# T-P4-E01-19 / T-P7-E02-02: calamine 0.36 (MIT, pure Rust reader for Excel formats).
+# Bumped from 0.24 to reconcile transitive quick-xml (0.24 pulled quick-xml 0.31.0,
+# vulnerable to RUSTSEC-2026-0194/0195; 0.36 pulls a patched quick-xml 0.41.0).
+# NOTE: docx-rs 0.4.20 (below) still hard-pins quick-xml ^0.36 and is the latest
+# published docx-rs release — that leg of the advisory cannot be closed by a
+# version bump alone. See T-P7-E02-02 ticket notes.
+calamine = { version = "0.36", optional = true }
 
 [features]
 default = []

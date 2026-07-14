@@ -49,11 +49,15 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
   const [ipcError, setIpcError] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   // Optimistic local columns (overrides hook data during in-flight drag)
-  const [optimisticColumns, setOptimisticColumns] = useState<ReturnType<typeof groupByColumn> | null>(null)
+  const [optimisticColumns, setOptimisticColumns] = useState<ReturnType<
+    typeof groupByColumn
+  > | null>(null)
 
-  const { tasks, loading, error, refetch, createTask, updateTask, deleteTask, moveTask } = useTasks({
-    project: selectedProject || undefined,
-  })
+  const { tasks, loading, error, refetch, createTask, updateTask, deleteTask, moveTask } = useTasks(
+    {
+      project: selectedProject || undefined,
+    }
+  )
 
   // Reset optimistic state when real tasks arrive
   useEffect(() => {
@@ -72,7 +76,7 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
 
   const columns = useMemo(
     () => optimisticColumns ?? groupByColumn(filtered),
-    [optimisticColumns, filtered],
+    [optimisticColumns, filtered]
   )
 
   // ── Drag handlers ────────────────────────────────────────────────────────────
@@ -104,12 +108,14 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
         refetch()
       }
     },
-    [draggedId, filtered, optimisticColumns, moveTask, refetch],
+    [draggedId, filtered, optimisticColumns, moveTask, refetch]
   )
 
   // ── Card actions ─────────────────────────────────────────────────────────────
 
-  async function handleSave(params: Parameters<typeof createTask>[0] | Parameters<typeof updateTask>[0]) {
+  async function handleSave(
+    params: Parameters<typeof createTask>[0] | Parameters<typeof updateTask>[0]
+  ) {
     try {
       if ('id' in params) {
         await updateTask(params as Parameters<typeof updateTask>[0])
@@ -153,7 +159,10 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
         {/* Project selector */}
         <div className="flex items-center gap-1.5">
-          <label htmlFor="project-select" className="text-xs font-medium text-muted-foreground sr-only">
+          <label
+            htmlFor="project-select"
+            className="text-xs font-medium text-muted-foreground sr-only"
+          >
             Project
           </label>
           <select
@@ -165,14 +174,19 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
           >
             <option value="">All Projects</option>
             {allProjects.map((p) => (
-              <option key={p} value={p}>{p}</option>
+              <option key={p} value={p}>
+                {p}
+              </option>
             ))}
           </select>
         </div>
 
         {/* Text search */}
         <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
             type="search"
             value={textFilter}
@@ -195,7 +209,9 @@ export function KanbanBoard({ initialProject }: KanbanBoardProps): React.ReactEl
             >
               <option value="">All tags</option>
               {allTags.map((tag) => (
-                <option key={tag} value={tag}>{tag}</option>
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
               ))}
             </select>
           </div>

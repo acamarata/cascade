@@ -68,10 +68,7 @@ export function ProviderSelector({ selectedProvider, onSelect, namespace }: Prov
   return (
     <div className="flex items-center gap-1.5">
       <Select value={selectedProvider ?? 'auto'} onValueChange={handleChange}>
-        <SelectTrigger
-          className="h-7 text-xs w-32 shrink-0"
-          aria-label="Select provider"
-        >
+        <SelectTrigger className="h-7 text-xs w-32 shrink-0" aria-label="Select provider">
           <SelectValue placeholder="Auto" />
         </SelectTrigger>
         <SelectContent>
@@ -94,7 +91,7 @@ export function ProviderSelector({ selectedProvider, onSelect, namespace }: Prov
           title="This provider is not trusted for private chat — this conversation will be sent to it because you pinned it. Unpin to stay on trusted providers."
           className={cn(
             'inline-flex items-center gap-1 text-[0.6rem] rounded-full px-1.5 py-0.5',
-            'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+            'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
           )}
         >
           <TriangleAlert className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />

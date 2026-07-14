@@ -17,11 +17,24 @@ export type PhaseStatus = 'planning' | 'ready_to_build' | 'building' | 'qa' | 's
 export type EpicStatus = 'planned' | 'active' | 'done' | 'archived'
 export type WaveStatus = 'queued' | 'active' | 'qa' | 'done'
 export type SprintStatus = 'queued' | 'active' | 'qa' | 'done'
-export type TicketStatus = 'planned' | 'queue' | 'active' | 'review' | 'blocked' | 'done' | 'archived'
+export type TicketStatus =
+  | 'planned'
+  | 'queue'
+  | 'active'
+  | 'review'
+  | 'blocked'
+  | 'done'
+  | 'archived'
 
 /** All valid status values for a given hierarchy level. */
 export const TICKET_STATUSES: TicketStatus[] = [
-  'planned', 'queue', 'active', 'review', 'blocked', 'done', 'archived',
+  'planned',
+  'queue',
+  'active',
+  'review',
+  'blocked',
+  'done',
+  'archived',
 ]
 
 // ---------------------------------------------------------------------------
@@ -35,7 +48,7 @@ export type PhaseTemporal = 'past' | 'current' | 'future'
 export function classifyPhase(
   phaseId: string,
   phaseStatus: string,
-  currentPhaseId: string | null | undefined,
+  currentPhaseId: string | null | undefined
 ): PhaseTemporal {
   if (phaseId === currentPhaseId) return 'current'
   if (phaseStatus === 'shipped' || phaseStatus === 'archived') return 'past'
@@ -148,7 +161,7 @@ export function pbdUpdateTicketStatus(
   phaseRoot: string,
   ticketId: string,
   status: TicketStatus,
-  note?: string,
+  note?: string
 ): Promise<TicketStatusUpdateResult> {
   return invoke<TicketStatusUpdateResult>('pbd_update_ticket_status', {
     phaseRoot,
@@ -161,10 +174,7 @@ export function pbdUpdateTicketStatus(
 /**
  * List tickets with optional status filter.
  */
-export function pbdListTickets(
-  phaseRoot: string,
-  status?: TicketStatus,
-): Promise<TicketView[]> {
+export function pbdListTickets(phaseRoot: string, status?: TicketStatus): Promise<TicketView[]> {
   return invoke<TicketView[]>('pbd_list_tickets', {
     phaseRoot,
     status: status ?? null,

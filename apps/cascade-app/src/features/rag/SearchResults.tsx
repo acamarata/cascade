@@ -153,12 +153,7 @@ export function SearchResults({
       {/* Citation list */}
       <div role="list" aria-label="Citations" className="flex flex-col gap-3">
         {citations.map((c, i) => (
-          <CitationCard
-            key={`${c.path}-${i}`}
-            citation={c}
-            rank={i + 1}
-            onOpenFile={onOpenFile}
-          />
+          <CitationCard key={`${c.path}-${i}`} citation={c} rank={i + 1} onOpenFile={onOpenFile} />
         ))}
       </div>
     </section>

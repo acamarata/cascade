@@ -55,9 +55,7 @@ export interface UseChatHistoryResult {
 const MAX_MESSAGES = 50
 
 const DAEMON_BASE_URL =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-    ? 'http://127.0.0.1:9761'
-    : ''
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window ? 'http://127.0.0.1:9761' : ''
 
 /** Build the localStorage key for a given session. */
 function storageKey(sessionId: string): string {
@@ -144,10 +142,7 @@ export async function loadPersonalChatSync(): Promise<boolean> {
   }
 }
 
-export function useChatHistory(
-  sessionId: string,
-  namespace?: string,
-): UseChatHistoryResult {
+export function useChatHistory(sessionId: string, namespace?: string): UseChatHistoryResult {
   const ns = namespace ?? 'personal'
   // Private/incognito chat (Personal mode's Private toggle): local-only,
   // never touches the daemon's long-term memory store at all.
@@ -158,9 +153,7 @@ export function useChatHistory(
   // partition). The in-app chat always scopes itself as "cascade-app".
   const scope = 'cascade-app'
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    loadFromStorage(sessionId),
-  )
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadFromStorage(sessionId))
 
   // Consent for syncing the "personal" namespace to the daemon. null =
   // settings not yet resolved (treated as no consent — no daemon calls).
@@ -181,8 +174,7 @@ export function useChatHistory(
   // Server persistence is active only when not private AND either the
   // namespace is non-personal (meta / dev-*) or the user has explicitly
   // enabled personal chat sync in Settings (memory.personalChatSync).
-  const serverSync =
-    !isPrivate && (memoryNs !== 'personal' || personalSyncConsent === true)
+  const serverSync = !isPrivate && (memoryNs !== 'personal' || personalSyncConsent === true)
 
   // On mount / sessionId change: try API first, fall back to localStorage.
   // Sessions without active server persistence (private, or personal without
@@ -251,7 +243,7 @@ export function useChatHistory(
         return next
       })
     },
-    [sessionId, memoryNs, optIn, serverSync],
+    [sessionId, memoryNs, optIn, serverSync]
   )
 
   const clear = useCallback(() => {
@@ -268,15 +260,14 @@ export function useChatHistory(
             namespace: memoryNs,
             opt_in: String(optIn),
           })
-          const res = await fetch(
-            `${DAEMON_BASE_URL}/api/memory/chat?${params.toString()}`,
-            { method: 'DELETE' },
-          )
+          const res = await fetch(`${DAEMON_BASE_URL}/api/memory/chat?${params.toString()}`, {
+            method: 'DELETE',
+          })
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
         } catch (e) {
           console.warn(
             'Failed to clear chat history on the daemon — server history may persist.',
-            e,
+            e
           )
         }
       })()

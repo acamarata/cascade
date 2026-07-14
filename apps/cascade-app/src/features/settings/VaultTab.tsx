@@ -127,7 +127,10 @@ export function VaultTab() {
           Vault integration not yet wired to the daemon.
         </div>
       ) : loadError ? (
-        <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {loadError}
         </div>
       ) : keys.length === 0 ? (

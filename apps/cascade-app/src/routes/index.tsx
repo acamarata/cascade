@@ -86,7 +86,10 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
         {/* Hub: accounts, provider settings, usage consolidated */}
         <Route path="/accounts" element={<AccountsHub />} />
         {/* Backward-compat redirect — provider settings moved into accounts hub */}
-        <Route path="/settings/providers" element={<Navigate to="/accounts?tab=providers" replace />} />
+        <Route
+          path="/settings/providers"
+          element={<Navigate to="/accounts?tab=providers" replace />}
+        />
 
         {/* Hub: settings, templates, library, cascade meta consolidated */}
         <Route path="/settings" element={<SettingsHub />} />

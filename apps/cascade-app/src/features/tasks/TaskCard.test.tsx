@@ -27,26 +27,12 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 
 describe('TaskCard', () => {
   it('renders the task title', () => {
-    render(
-      <TaskCard
-        task={makeTask()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onDragStart={vi.fn()}
-      />,
-    )
+    render(<TaskCard task={makeTask()} onEdit={vi.fn()} onDelete={vi.fn()} onDragStart={vi.fn()} />)
     expect(screen.getByText('Test card')).toBeInTheDocument()
   })
 
   it('renders tag chips', () => {
-    render(
-      <TaskCard
-        task={makeTask()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onDragStart={vi.fn()}
-      />,
-    )
+    render(<TaskCard task={makeTask()} onEdit={vi.fn()} onDelete={vi.fn()} onDragStart={vi.fn()} />)
     expect(screen.getByText('rust')).toBeInTheDocument()
     expect(screen.getByText('ui')).toBeInTheDocument()
   })
@@ -58,7 +44,7 @@ describe('TaskCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('urgent')).toBeInTheDocument()
   })
@@ -70,7 +56,7 @@ describe('TaskCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
-      />,
+      />
     )
     // Shows first segment before @
     expect(screen.getByText('alice')).toBeInTheDocument()
@@ -79,12 +65,7 @@ describe('TaskCard', () => {
   it('calls onDelete when delete button is clicked', () => {
     const onDelete = vi.fn()
     render(
-      <TaskCard
-        task={makeTask()}
-        onEdit={vi.fn()}
-        onDelete={onDelete}
-        onDragStart={vi.fn()}
-      />,
+      <TaskCard task={makeTask()} onEdit={vi.fn()} onDelete={onDelete} onDragStart={vi.fn()} />
     )
     fireEvent.click(screen.getByLabelText('Delete Test card'))
     expect(onDelete).toHaveBeenCalledWith('task-1')
@@ -92,29 +73,15 @@ describe('TaskCard', () => {
 
   it('calls onEdit when edit button is clicked', () => {
     const onEdit = vi.fn()
-    render(
-      <TaskCard
-        task={makeTask()}
-        onEdit={onEdit}
-        onDelete={vi.fn()}
-        onDragStart={vi.fn()}
-      />,
-    )
+    render(<TaskCard task={makeTask()} onEdit={onEdit} onDelete={vi.fn()} onDragStart={vi.fn()} />)
     fireEvent.click(screen.getByLabelText('Edit Test card'))
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }))
   })
 
   it('calls onEdit on Enter key press', () => {
     const onEdit = vi.fn()
-    render(
-      <TaskCard
-        task={makeTask()}
-        onEdit={onEdit}
-        onDelete={vi.fn()}
-        onDragStart={vi.fn()}
-      />,
-    )
-    const card = screen.getByRole('article', { name: 'Task: Test card' })
+    render(<TaskCard task={makeTask()} onEdit={onEdit} onDelete={vi.fn()} onDragStart={vi.fn()} />)
+    const card = screen.getByRole('button', { name: 'Task: Test card' })
     fireEvent.keyDown(card, { key: 'Enter' })
     expect(onEdit).toHaveBeenCalled()
   })
@@ -126,7 +93,7 @@ describe('TaskCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('+2')).toBeInTheDocument()
   })
@@ -138,7 +105,7 @@ describe('TaskCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('Test card')).toBeInTheDocument()
   })

@@ -14,10 +14,7 @@
  */
 
 import { useState } from 'react'
-import {
-  usePersonalEncryptedVault,
-  type CascadeMode,
-} from './usePersonalEncryptedVault'
+import { usePersonalEncryptedVault, type CascadeMode } from './usePersonalEncryptedVault'
 
 // ---------------------------------------------------------------------------
 // Sensitivity badge colour mapping
@@ -121,9 +118,7 @@ export function PersonalEncryptedVaultPanel() {
         {/* Collection list */}
         <div className="flex-1 overflow-auto p-2">
           {collections.length === 0 && !loading && (
-            <p className="text-xs text-muted-foreground px-2 py-4">
-              No collections found.
-            </p>
+            <p className="text-xs text-muted-foreground px-2 py-4">No collections found.</p>
           )}
           {collections.map((col) => (
             <button
@@ -160,9 +155,7 @@ export function PersonalEncryptedVaultPanel() {
 
         {/* Loading indicator */}
         {loading && (
-          <p className="px-4 pt-3 text-xs text-muted-foreground animate-pulse">
-            Loading…
-          </p>
+          <p className="px-4 pt-3 text-xs text-muted-foreground animate-pulse">Loading…</p>
         )}
 
         {!selectedCollection && !loading && (
@@ -177,9 +170,7 @@ export function PersonalEncryptedVaultPanel() {
             {/* Records table                                             */}
             {/* -------------------------------------------------------- */}
             <section>
-              <h2 className="text-sm font-semibold mb-2">
-                Records — {selectedCollection}
-              </h2>
+              <h2 className="text-sm font-semibold mb-2">Records — {selectedCollection}</h2>
               {records.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No records in this collection.</p>
               ) : (
@@ -234,9 +225,7 @@ export function PersonalEncryptedVaultPanel() {
                   rows={4}
                   className="w-full rounded border border-border bg-background px-3 py-2 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-                {jsonError && (
-                  <p className="text-xs text-destructive">{jsonError}</p>
-                )}
+                {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
                 <button
                   type="submit"
                   disabled={submitting || !jsonInput.trim()}

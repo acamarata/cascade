@@ -34,7 +34,9 @@ const STATUS_CLASSES: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_CLASSES[status] ?? STATUS_CLASSES['pending']!
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}
+    >
       {status}
     </span>
   )
@@ -118,7 +120,7 @@ export function SourceList({ sources, loading, error, onDrop }: SourceListProps)
         if (path) onDrop(path)
       }
     },
-    [onDrop],
+    [onDrop]
   )
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -171,28 +173,16 @@ export function SourceList({ sources, loading, error, onDrop }: SourceListProps)
           <table className="w-full text-sm" aria-label="Indexed sources">
             <thead className="bg-muted/40">
               <tr>
-                <th
-                  scope="col"
-                  className="px-4 py-2 text-left font-medium text-muted-foreground"
-                >
+                <th scope="col" className="px-4 py-2 text-left font-medium text-muted-foreground">
                   Path
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-2 text-right font-medium text-muted-foreground"
-                >
+                <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
                   Chunks
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-2 text-left font-medium text-muted-foreground"
-                >
+                <th scope="col" className="px-4 py-2 text-left font-medium text-muted-foreground">
                   Indexed
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-2 text-left font-medium text-muted-foreground"
-                >
+                <th scope="col" className="px-4 py-2 text-left font-medium text-muted-foreground">
                   Status
                 </th>
               </tr>

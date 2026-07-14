@@ -51,7 +51,10 @@ export interface BuildProgressPanelProps {
  * TODO(pews-04): Add fleet account/model column once the daemon exposes it in
  *   the phase-status or a new /api/projects/:id/build endpoint.
  */
-export function BuildProgressPanel({ projectPath: _projectPath, projectId }: BuildProgressPanelProps) {
+export function BuildProgressPanel({
+  projectPath: _projectPath,
+  projectId,
+}: BuildProgressPanelProps) {
   const [status, setStatus] = useState<DaemonPhaseStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -78,7 +81,7 @@ export function BuildProgressPanel({ projectPath: _projectPath, projectId }: Bui
     async function poll() {
       try {
         const res = await fetch(
-          `${DAEMON_BASE}/api/projects/${encodeURIComponent(projectId)}/phase`,
+          `${DAEMON_BASE}/api/projects/${encodeURIComponent(projectId)}/phase`
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const ps = (await res.json()) as DaemonPhaseStatus
@@ -119,10 +122,7 @@ export function BuildProgressPanel({ projectPath: _projectPath, projectId }: Bui
       {/* Build indicator */}
       <div className="flex shrink-0 flex-col items-center gap-1">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400/15">
-          <Loader2
-            className="h-4 w-4 animate-spin text-amber-400"
-            aria-hidden="true"
-          />
+          <Loader2 className="h-4 w-4 animate-spin text-amber-400" aria-hidden="true" />
         </div>
         <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-400">
           Building

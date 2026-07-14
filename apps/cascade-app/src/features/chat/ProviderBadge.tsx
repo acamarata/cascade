@@ -30,7 +30,7 @@ export function ProviderBadge({ servedBy, isLocalFallback, className }: Provider
         isLocalFallback
           ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
           : 'bg-muted text-muted-foreground border border-muted-foreground/20',
-        className,
+        className
       )}
       title={isLocalFallback ? `Local LLM fallback: ${displayName}` : `Served by: ${displayName}`}
       aria-label={`Served by ${displayName}${isLocalFallback ? ' (local fallback)' : ''}`}
@@ -41,9 +41,7 @@ export function ProviderBadge({ servedBy, isLocalFallback, className }: Provider
         <Cloud className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
       )}
       <span>{displayName}</span>
-      {isLocalFallback && (
-        <span className="text-[0.55rem] opacity-70">local</span>
-      )}
+      {isLocalFallback && <span className="text-[0.55rem] opacity-70">local</span>}
     </div>
   )
 }

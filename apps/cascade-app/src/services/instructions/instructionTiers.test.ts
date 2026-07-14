@@ -7,11 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  fetchAllTiers,
-  searchInstructions,
-  computeTierDiff,
-} from './instructionTiers'
+import { fetchAllTiers, searchInstructions, computeTierDiff } from './instructionTiers'
 import type { TierContent } from '../../types/instructions'
 import { TIER_LABELS } from '../../types/instructions'
 

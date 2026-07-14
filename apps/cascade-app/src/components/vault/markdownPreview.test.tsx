@@ -11,8 +11,7 @@
 
 import '@testing-library/jest-dom'
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { useState } from 'react'
 import { renderMarkdown } from './MarkdownPreview'
 import {
@@ -210,7 +209,9 @@ describe('Preview toggle logic', () => {
     }
     render(<ToggleHost />)
     expect(screen.getByTestId('state').textContent).toBe('visible')
-    userEvent.click(screen.getByTestId('toggle'))
-    // Note: userEvent.click is async but for state we can use fireEvent
+    // fireEvent is synchronous — avoids the dangling userEvent promise that can
+    // reject after jsdom teardown and flake the suite (observed intermittently).
+    fireEvent.click(screen.getByTestId('toggle'))
+    expect(screen.getByTestId('state').textContent).toBe('hidden')
   })
 })

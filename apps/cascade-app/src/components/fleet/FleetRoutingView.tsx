@@ -131,11 +131,20 @@ export function FleetRoutingView() {
                   const statusClasses = statusColor(acc.status)
 
                   return (
-                    <tr key={acc.account} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
+                    <tr
+                      key={acc.account}
+                      className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors"
+                    >
                       <td className="py-2.5 px-4 font-mono font-bold text-foreground">{label}</td>
-                      <td className="py-2.5 px-4 text-muted-foreground capitalize">{acc.provider}</td>
-                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">{fhPct}</td>
-                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">{sdPct}</td>
+                      <td className="py-2.5 px-4 text-muted-foreground capitalize">
+                        {acc.provider}
+                      </td>
+                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">
+                        {fhPct}
+                      </td>
+                      <td className="py-2.5 px-4 text-right tabular-nums font-medium text-foreground">
+                        {sdPct}
+                      </td>
                       <td className="py-2.5 px-4">
                         <span
                           className={[
@@ -165,7 +174,9 @@ export function FleetRoutingView() {
             Recent Routing Decisions
           </h3>
           {!reachable && (
-            <span className="text-[10px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">(daemon unreachable)</span>
+            <span className="text-[10px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+              (daemon unreachable)
+            </span>
           )}
         </div>
 
@@ -197,7 +208,9 @@ export function FleetRoutingView() {
                     <td className="py-2.5 px-4 text-muted-foreground font-mono whitespace-nowrap">
                       {ev.account_id}
                     </td>
-                    <td className="py-2.5 px-4 text-muted-foreground/90 leading-relaxed">{ev.reason}</td>
+                    <td className="py-2.5 px-4 text-muted-foreground/90 leading-relaxed">
+                      {ev.reason}
+                    </td>
                   </tr>
                 ))}
               </tbody>

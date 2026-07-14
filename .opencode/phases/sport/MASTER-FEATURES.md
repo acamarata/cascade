@@ -276,6 +276,14 @@
 | F-SEC-AUDIT-LOG | Tamper-evident audit log | Append-only JSONL, SHA-256 chain integrity, 0600 permissions | 🔲 Planned | P2-E07 |
 | F-SEC-KEY-MIGRATION | vault.env → keychain migration | First-run migration offer from vault.env to OS keychain; vault.env fallback retained | 🔲 Planned | P2-E07 |
 | F-SEC-CORS | Dashboard CORS policy | Allow-list origin (`http://127.0.0.1:9761` only); no wildcard | 🔲 Planned | P2-E07 |
+| F-SEC-QUINN-PROTO | Upgrade quinn-proto past 0.11.14 (RUSTSEC-2026-0185) | Bumped transitive `quinn-proto` to 0.11.16 (remote memory exhaustion, high severity); `Cargo.lock`-only, no direct dependency | ✅ Done | T-P7-E02-03 |
+| F-SEC-LOPDF | Upgrade lopdf past 0.34.0 (RUSTSEC-2026-0187) | Replaced with `pdf-extract` 0.12, gated behind optional `pdf-parser` feature in `cascade-rag` | ✅ Done | T-P7-E02-01 |
+| F-SEC-QUICK-XML | Reconcile co-installed quick-xml versions | plist 1.9.0->1.10.0 unified onto the 0.41.0 line (clears RUSTSEC-2026-0194/0195 for plist+calamine); docx-rs's 0.36.2 has no upstream fix, added to cargo-audit ignore-list with documented rationale | ✅ Done | T-P7-E02-02 |
+| F-SEC-WASMTIME-WASI | Real wasmtime/wasmtime-wasi upgrade (RUSTSEC-2026-0188) | Exact-pin bump 36.0.11->36.0.12 in workspace root + cascade-pdk/Cargo.toml | ✅ Done | T-P7-E02-04 |
+| F-SEC-RING | Address ring 0.17.9 advisory (RUSTSEC-2025-0009) | Already resolved via prior Cargo.lock update to 0.17.14; verified no residual advisory | ✅ Done | T-P7-E02-05 |
+| F-SEC-AUDIT-IGNORE-LIST | Fix cargo-audit CI ignore-list to not mask active vulns | Documented every ignored RUSTSEC ID with a reason comment in security.yml; added memmap2 (0.9.10->0.9.11) + spin (0.9.8->0.9.9) real fixes; added serial/ttf-parser (genuinely unmaintained, no fix) to the documented ignore-list | ✅ Done | T-P7-E02-06 |
+| F-SEC-NODE-ADVISORIES | Fix Node dependency advisories (13 findings) | cascade-app already fixed (vite 6.4.3/vitest 3.2.6); cascade-dashboard was the actual remaining gap (vite 5.3.4/vitest 1.6.1, plus a mismatched coverage-v8@4 pinned against vitest@1) — bumped to match cascade-app, `pnpm audit` now clean workspace-wide | ✅ Done | T-P7-E02-07 |
+| F-SEC-NPM-AUDIT-CI | Fix CI npm-audit ENOLOCK job | security.yml already used `pnpm audit` (not npm audit); the real bug was a hardcoded `pnpm/action-setup@v2 version:9` pin — removed in favor of `corepack enable` | ✅ Done | T-P7-E02-08 |
 
 ### 7e. Distribution & Ops
 
@@ -298,6 +306,11 @@
 | F-DIST-CI-RELEASE | Release CI/CD | GitHub Actions matrix: macOS ARM/x64, Linux x64/ARM64, Windows x64; sign + package + publish on tag | ✅ Done | T-P4-E05-18 |
 | F-OBS-TRACING | OpenTelemetry tracing | OTel spans across daemon + CLI; structured JSON logs; 7-day rotation | 🔲 Planned | P2-E01 |
 | F-OBS-HEALTHCHECK | Health endpoint | `/health` returns `{status:'ok'}` only; no internal stats leaked | 🔲 Planned | P2-E07 |
+| F-CI-ESLINT-PURITY | Fix 5 impure-render / ref-write eslint errors | useAccounts/useChat/usePewsTree/useIngestProgress — moved Date.now() calls and ref writes out of render into effects/callback-time state | ✅ Done | T-P7-E01-03 |
+| F-CI-MARKDOWNPREVIEW-FLAKE | Confirm or fix markdownPreview.test.tsx jsdom flake | Reproduced (~20-30% of isolated runs, unhandled rejection from a fire-and-forget userEvent.click after teardown); fixed via synchronous fireEvent.click | ✅ Done | T-P7-E01-06 |
+| F-CI-LEAN-BINARY-ASSERT-ORDER | Fix daemon-ci.yml lean-binary assert running against the wrong build | "Assert lean binary excludes network surfaces" ran after the all-features build had already overwritten target/debug/cascaded; reordered to run right after the lean build | ✅ Done | E-P7-01/W-01 |
+| F-CI-APP-HOSTED-BILLING | Fix ci-app.yml spending unconditional paid GitHub-hosted minutes | Private repo was running macOS/Ubuntu/Windows Tauri builds unconditionally on GitHub-hosted runners; split into self-hosted build-linux (always-on) + gated build-hosted (vars.HOSTED_CI, macOS/Windows only) | ✅ Done | E-P7-01/W-01 |
+| F-CI-MCP-HARNESS-FIXTURE | Fix cascade-mcp c_harness_setup_prompt ambient-state dependency | Test depended on `~/.claude/CLAUDE.md` existing on the runner; always passed on dev machines, failed on a clean CI HOME. Uses the same fixture HOME as a_resource_surface now | ✅ Done | E-P7-01/W-01 |
 
 ---
 

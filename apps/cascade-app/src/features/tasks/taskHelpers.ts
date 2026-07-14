@@ -70,7 +70,7 @@ export function groupByColumn(tasks: Task[]): TaskColumns {
 export function applyClientFilter(
   tasks: Task[],
   filter: Partial<TaskFilter>,
-  text: string,
+  text: string
 ): Task[] {
   let result = tasks
 
@@ -91,9 +91,7 @@ export function applyClientFilter(
   if (text.trim()) {
     const q = text.trim().toLowerCase()
     result = result.filter(
-      (t) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.description ?? '').toLowerCase().includes(q),
+      (t) => t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q)
     )
   }
 
@@ -127,7 +125,7 @@ export interface DragMoveParams {
  */
 export function computeDragOrder(
   columns: TaskColumns,
-  { taskId, toStatus, toIndex }: DragMoveParams,
+  { taskId, toStatus, toIndex }: DragMoveParams
 ): { newOrder: number; updatedColumns: TaskColumns } {
   // Clone the columns shallowly.
   const updated: TaskColumns = { ...columns }
@@ -151,7 +149,7 @@ export function computeDragOrder(
   const destCol = updated[toStatus]
   const clampedIdx = Math.max(0, Math.min(toIndex, destCol.length))
   const prev = destCol[clampedIdx - 1]?.order ?? 0
-  const next = destCol[clampedIdx]?.order ?? (prev + 2000)
+  const next = destCol[clampedIdx]?.order ?? prev + 2000
   const newOrder = Math.floor((prev + next) / 2) || clampedIdx * 1000
 
   // Insert the moved task.

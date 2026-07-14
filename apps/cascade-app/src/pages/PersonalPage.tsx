@@ -29,9 +29,7 @@ interface PersonalThread {
 }
 
 const DAEMON_BASE_URL =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-    ? 'http://127.0.0.1:9761'
-    : ''
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window ? 'http://127.0.0.1:9761' : ''
 
 type Tab = 'threads' | 'vault'
 
@@ -71,7 +69,9 @@ export function PersonalPage() {
     setDetailError(null)
     ;(async () => {
       try {
-        const res = await fetch(`${DAEMON_BASE_URL}/api/personal/threads/${encodeURIComponent(selected)}`)
+        const res = await fetch(
+          `${DAEMON_BASE_URL}/api/personal/threads/${encodeURIComponent(selected)}`
+        )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = (await res.json()) as PersonalThread
         if (!cancelled) setSelectedThread(data)
@@ -122,9 +122,7 @@ export function PersonalPage() {
               <h1 className="text-sm font-semibold">Personal</h1>
             </div>
             <div className="flex-1 overflow-auto p-2">
-              {error && (
-                <p className="text-xs text-muted-foreground px-2 py-4">{error}</p>
-              )}
+              {error && <p className="text-xs text-muted-foreground px-2 py-4">{error}</p>}
               {!error && threads.length === 0 && (
                 <p className="text-xs text-muted-foreground px-2 py-4">
                   No threads yet. Start a personal chat.

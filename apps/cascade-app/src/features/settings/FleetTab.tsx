@@ -58,8 +58,7 @@ export function FleetTab() {
   }
 
   const isDefault = (model: string) =>
-    MODEL_QUOTA_ESTIMATE[model] !== undefined &&
-    estimates[model] === MODEL_QUOTA_ESTIMATE[model]
+    MODEL_QUOTA_ESTIMATE[model] !== undefined && estimates[model] === MODEL_QUOTA_ESTIMATE[model]
 
   return (
     <div className="space-y-6">
@@ -67,8 +66,8 @@ export function FleetTab() {
         <div>
           <h2 className="text-base font-semibold text-foreground">Fleet Quota Estimates</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Per-model token quota estimates used for gauge calculations. Overrides persist
-            in browser storage; Reset reverts to built-in defaults.
+            Per-model token quota estimates used for gauge calculations. Overrides persist in
+            browser storage; Reset reverts to built-in defaults.
           </p>
         </div>
         <button
@@ -118,7 +117,9 @@ export function FleetTab() {
                       autoFocus
                     />
                   ) : (
-                    <span className={isDefault(model) ? 'text-muted-foreground' : 'text-foreground'}>
+                    <span
+                      className={isDefault(model) ? 'text-muted-foreground' : 'text-foreground'}
+                    >
                       {formatTokens(estimates[model] ?? 0)}
                       {!isDefault(model) && (
                         <span className="ml-1 text-[10px] text-yellow-500">(custom)</span>

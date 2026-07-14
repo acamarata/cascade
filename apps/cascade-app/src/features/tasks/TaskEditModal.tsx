@@ -13,7 +13,13 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { Task, TaskStatus, TaskPriority, TaskCreateParams, TaskUpdateParams } from '../../types/task'
+import type {
+  Task,
+  TaskStatus,
+  TaskPriority,
+  TaskCreateParams,
+  TaskUpdateParams,
+} from '../../types/task'
 import { BOARD_COLUMNS, COLUMN_LABELS } from '../../types/task'
 
 interface TaskEditModalProps {
@@ -36,7 +42,12 @@ const PRIORITIES: TaskPriority[] = ['low', 'med', 'high', 'urgent']
  * <TaskEditModal task={null} defaultProject="cascade" onSave={...} onClose={...} />
  * ```
  */
-export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: TaskEditModalProps): React.ReactElement {
+export function TaskEditModal({
+  task,
+  defaultProject = '',
+  onSave,
+  onClose,
+}: TaskEditModalProps): React.ReactElement {
   const isEdit = task !== null
   const ref = useRef<HTMLDivElement>(null)
 
@@ -100,7 +111,9 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
     /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
       role="presentation"
     >
       <div
@@ -119,14 +132,15 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <h2 className="mb-5 text-lg font-semibold">
-          {isEdit ? 'Edit Task' : 'New Task'}
-        </h2>
+        <h2 className="mb-5 text-lg font-semibold">{isEdit ? 'Edit Task' : 'New Task'}</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Title */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-title">
+            <label
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+              htmlFor="task-title"
+            >
               Title <span aria-hidden="true">*</span>
             </label>
             <input
@@ -142,7 +156,10 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
 
           {/* Description */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-desc">
+            <label
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+              htmlFor="task-desc"
+            >
               Description
             </label>
             <textarea
@@ -158,7 +175,10 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
           {/* Row: Project + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-project">
+              <label
+                className="mb-1 block text-xs font-medium text-muted-foreground"
+                htmlFor="task-project"
+              >
                 Project
               </label>
               <input
@@ -171,7 +191,10 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-status">
+              <label
+                className="mb-1 block text-xs font-medium text-muted-foreground"
+                htmlFor="task-status"
+              >
                 Status
               </label>
               <select
@@ -181,7 +204,9 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
                 className="w-full rounded border border-border bg-muted/30 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {BOARD_COLUMNS.map((s) => (
-                  <option key={s} value={s}>{COLUMN_LABELS[s]}</option>
+                  <option key={s} value={s}>
+                    {COLUMN_LABELS[s]}
+                  </option>
                 ))}
               </select>
             </div>
@@ -190,7 +215,10 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
           {/* Row: Priority + Assignee */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-priority">
+              <label
+                className="mb-1 block text-xs font-medium text-muted-foreground"
+                htmlFor="task-priority"
+              >
                 Priority
               </label>
               <select
@@ -200,12 +228,17 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
                 className="w-full rounded border border-border bg-muted/30 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                  <option key={p} value={p}>
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-assignee">
+              <label
+                className="mb-1 block text-xs font-medium text-muted-foreground"
+                htmlFor="task-assignee"
+              >
                 Assignee
               </label>
               <input
@@ -221,7 +254,10 @@ export function TaskEditModal({ task, defaultProject = '', onSave, onClose }: Ta
 
           {/* Tags */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="task-tags">
+            <label
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+              htmlFor="task-tags"
+            >
               Tags <span className="font-normal">(comma-separated)</span>
             </label>
             <input

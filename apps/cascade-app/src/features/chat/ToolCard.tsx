@@ -43,7 +43,7 @@ export function ToolCard({ toolName, result }: ToolCardProps) {
         'my-1.5 rounded-lg border text-xs',
         isError
           ? 'border-destructive/40 bg-destructive/5'
-          : 'border-muted-foreground/20 bg-muted/40',
+          : 'border-muted-foreground/20 bg-muted/40'
       )}
     >
       <div className="px-3 py-2 space-y-1.5">
@@ -55,7 +55,7 @@ export function ToolCard({ toolName, result }: ToolCardProps) {
               'text-[0.65rem] px-1.5 py-0 leading-none rounded-full font-medium',
               isError
                 ? 'bg-destructive/20 text-destructive'
-                : 'bg-secondary text-secondary-foreground',
+                : 'bg-secondary text-secondary-foreground'
             )}
           >
             {isError ? 'error' : 'success'}
@@ -66,7 +66,7 @@ export function ToolCard({ toolName, result }: ToolCardProps) {
             className={cn(
               'cursor-pointer select-none text-muted-foreground/70',
               'hover:text-muted-foreground transition-colors list-none',
-              'flex items-center gap-1 text-[0.7rem]',
+              'flex items-center gap-1 text-[0.7rem]'
             )}
           >
             <span className="group-open:hidden">▶ show result</span>
@@ -75,7 +75,7 @@ export function ToolCard({ toolName, result }: ToolCardProps) {
           <pre
             className={cn(
               'mt-1.5 overflow-x-auto rounded bg-zinc-900 p-2 text-[0.7rem]',
-              'leading-relaxed text-zinc-200 max-h-48',
+              'leading-relaxed text-zinc-200 max-h-48'
             )}
           >
             {jsonText}

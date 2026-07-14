@@ -52,11 +52,12 @@ export function StatusBar() {
   // health check is erroring out.
   const effectiveStatus = isLive ? 'connected' : status
 
-  const pingText = isLive && lastUpdated
-    ? `Quota data: live (updated ${new Date(lastUpdated).toLocaleTimeString()})`
-    : lastPing
-      ? `Last ping: ${new Date(lastPing).toLocaleTimeString()}`
-      : 'No ping yet'
+  const pingText =
+    isLive && lastUpdated
+      ? `Quota data: live (updated ${new Date(lastUpdated).toLocaleTimeString()})`
+      : lastPing
+        ? `Last ping: ${new Date(lastPing).toLocaleTimeString()}`
+        : 'No ping yet'
 
   const mcpText =
     status === 'connected' && data && 'mcpPort' in data && data.mcpPort

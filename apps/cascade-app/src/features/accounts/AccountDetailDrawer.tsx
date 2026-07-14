@@ -39,7 +39,13 @@ interface AccountDetailDrawerProps {
 }
 
 /** One labelled quota window row. */
-function WindowRow({ label, win }: { label: string; win?: QuotaWindow | null }): React.ReactElement {
+function WindowRow({
+  label,
+  win,
+}: {
+  label: string
+  win?: QuotaWindow | null
+}): React.ReactElement {
   return (
     <div className="flex items-center justify-between border-b border-border/50 py-2">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -74,11 +80,7 @@ export function AccountDetailDrawer({
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        aria-hidden="true"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={onClose} />
 
       {/* Panel */}
       <aside
@@ -138,8 +140,8 @@ export function AccountDetailDrawer({
                 </span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground/70 italic">
-                {gfpCapacity(account.key_count)} · Gemini Flash free tier · round-robin ·
-                1,500 req/day per key · 15 RPM per key
+                {gfpCapacity(account.key_count)} · Gemini Flash free tier · round-robin · 1,500
+                req/day per key · 15 RPM per key
               </p>
             </>
           ) : (

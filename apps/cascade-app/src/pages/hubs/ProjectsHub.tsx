@@ -54,7 +54,7 @@ export default function ProjectsHub() {
         return next
       })
     },
-    [setSearchParams],
+    [setSearchParams]
   )
 
   return (

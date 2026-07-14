@@ -39,10 +39,7 @@ function CodeBlock({ inline, className, children, ...rest }: CodeProps) {
 
   if (inline) {
     return (
-      <code
-        className="bg-muted px-1 rounded font-mono text-[0.85em]"
-        {...rest}
-      >
+      <code className="bg-muted px-1 rounded font-mono text-[0.85em]" {...rest}>
         {children}
       </code>
     )
@@ -62,7 +59,7 @@ function CodeBlock({ inline, className, children, ...rest }: CodeProps) {
         className={cn(
           'absolute top-2 right-2 z-10 px-2 py-0.5 text-xs rounded',
           'bg-zinc-700 text-zinc-200 hover:bg-zinc-600 transition-colors',
-          'opacity-0 group-hover:opacity-100 focus:opacity-100',
+          'opacity-0 group-hover:opacity-100 focus:opacity-100'
         )}
         aria-label="Copy code"
         type="button"

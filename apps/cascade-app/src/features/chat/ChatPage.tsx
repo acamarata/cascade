@@ -150,7 +150,7 @@ export function ChatPage() {
     useShallow((s) => ({
       selectedTopicId: s.selectedTopicId,
       setSelectedTopic: s.setSelectedTopic,
-    })),
+    }))
   )
 
   // Init scope from URL param on first render. All three scopes are real,
@@ -206,8 +206,10 @@ export function ChatPage() {
             ? `personal:topic:${selectedTopicId}`
             : 'personal'
 
-  const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } =
-    useChat(sessionId, namespace)
+  const { messages, isStreaming, error, servedBy, sendMessage, clearMessages } = useChat(
+    sessionId,
+    namespace
+  )
 
   // Consume a `seed` URL param (e.g. from AllProjectsBoard's "Plan" action:
   // `/chat?scope=projects&seed=<prompt>`) — auto-send it once as the first
@@ -221,7 +223,7 @@ export function ChatPage() {
         next.delete('seed')
         return next
       },
-      { replace: true },
+      { replace: true }
     )
     void sendMessage(seed, selectedProvider ?? undefined)
     // Only run once on mount — sendMessage/selectedProvider are read at call time.
@@ -243,7 +245,9 @@ export function ChatPage() {
     const id = newSessionId()
     try {
       window.sessionStorage.setItem(SESSION_STORAGE_KEY, id)
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setSessionId(id)
   }
 
@@ -281,7 +285,7 @@ export function ChatPage() {
       <div
         className={cn(
           'flex items-center justify-between px-4 py-2 shrink-0',
-          'border-b border-border bg-card',
+          'border-b border-border bg-card'
         )}
       >
         <div className="flex items-center gap-2">
@@ -296,7 +300,7 @@ export function ChatPage() {
                 'text-[10px] px-2.5 py-0.5 rounded-full font-bold border tracking-wide uppercase shadow-sm',
                 isLocalFallback
                   ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]',
+                  : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]'
               )}
               aria-label={`Served by ${lastServedBy}${isLocalFallback ? ' (local fallback)' : ''}`}
             >
@@ -342,7 +346,7 @@ export function ChatPage() {
                 'px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200',
                 chatScope === s
                   ? 'bg-background text-foreground shadow-sm border border-border/40'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {s === 'personal' ? 'Personal' : s === 'cascade' ? 'Cascade' : 'Projects'}
@@ -358,13 +362,15 @@ export function ChatPage() {
               type="button"
               onClick={handleTogglePrivate}
               aria-pressed={isPrivate}
-              aria-label={isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'}
+              aria-label={
+                isPrivate ? 'Private chat is on — click to turn off' : 'Turn on private chat'
+              }
               title="Private: not saved to chat history or Cascade memory. Messages are still processed by the selected model provider."
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-200 border',
                 isPrivate
                   ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.1)]'
-                  : 'text-muted-foreground border-border/40 hover:bg-accent/50 hover:text-foreground',
+                  : 'text-muted-foreground border-border/40 hover:bg-accent/50 hover:text-foreground'
               )}
             >
               <Lock className="h-3 w-3" aria-hidden="true" />
@@ -395,28 +401,29 @@ export function ChatPage() {
       )}
 
       {/* ── Error banner ───────────────────────────────────────── */}
-      {error && (() => {
-        const isConnectionError = /connection refused|failed to fetch|network error|econnrefused/i.test(error)
-        return isConnectionError ? (
-          <div
-            role="alert"
-            className="px-4 py-2.5 text-xs bg-amber-500/10 border-b border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0"
-          >
-            <span className="font-medium">Cascade daemon is not running.</span>{' '}
-            Start it with:{' '}
-            <code className="font-mono bg-amber-500/15 px-1 py-0.5 rounded text-amber-800 dark:text-amber-300">
-              cascade daemon start
-            </code>
-          </div>
-        ) : (
-          <div
-            role="alert"
-            className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-b border-destructive/20 shrink-0"
-          >
-            {error}
-          </div>
-        )
-      })()}
+      {error &&
+        (() => {
+          const isConnectionError =
+            /connection refused|failed to fetch|network error|econnrefused/i.test(error)
+          return isConnectionError ? (
+            <div
+              role="alert"
+              className="px-4 py-2.5 text-xs bg-amber-500/10 border-b border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0"
+            >
+              <span className="font-medium">Cascade daemon is not running.</span> Start it with:{' '}
+              <code className="font-mono bg-amber-500/15 px-1 py-0.5 rounded text-amber-800 dark:text-amber-300">
+                cascade daemon start
+              </code>
+            </div>
+          ) : (
+            <div
+              role="alert"
+              className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-b border-destructive/20 shrink-0"
+            >
+              {error}
+            </div>
+          )
+        })()}
 
       {/* ── Message list ───────────────────────────────────────── */}
       <div className="flex-1 overflow-hidden">

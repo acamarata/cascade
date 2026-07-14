@@ -100,7 +100,9 @@ export function SearchPage() {
 
       {/* States */}
       {status === 'idle' && (
-        <p className="text-sm text-gray-400 text-center mt-8">Type to search your cascade context</p>
+        <p className="text-sm text-gray-400 text-center mt-8">
+          Type to search your cascade context
+        </p>
       )}
 
       {status === 'loading' && (
