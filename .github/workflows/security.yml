@@ -157,7 +157,28 @@ jobs:
         if: steps.check-npm.outputs.exists == 'true'
         # --audit-level high: fail only on high and critical advisories.
         # Run from workspace root so pnpm resolves dependencies correctly.
-        run: pnpm audit --audit-level high
+        #
+        # WORKAROUND (pnpm/pnpm#11265): npmjs.org retired the legacy audit
+        # endpoints pnpm's audit command depends on (HTTP 410, "Use the bulk
+        # advisory endpoint instead"). The real fix requires pnpm 11.x, which
+        # has its own reported regression (drops the `overrides` section from
+        # pnpm-lock.yaml) -- not a safe unilateral repo-wide tooling bump.
+        # Until pnpm ships a 10.x-line fix or we deliberately upgrade, treat
+        # ONLY the specific "endpoint retired" failure as non-blocking (so an
+        # upstream outage doesn't gate merges); any other pnpm audit failure
+        # (a real vulnerability finding) still fails the job.
+        run: |
+          set +e
+          output=$(pnpm audit --audit-level high 2>&1)
+          exit_code=$?
+          echo "$output"
+          if [ $exit_code -ne 0 ]; then
+            if echo "$output" | grep -q "ERR_PNPM_AUDIT_BAD_RESPONSE"; then
+              echo "::warning::pnpm audit endpoint is retired upstream (pnpm/pnpm#11265) -- treating as non-blocking until pnpm ships a fix. This does NOT mean dependencies are vulnerability-free; re-enable strict failure once resolved."
+              exit 0
+            fi
+            exit $exit_code
+          fi
 
   # ── Summary ────────────────────────────────────────────────────────────────
   # A single required status check that depends on all security jobs.
