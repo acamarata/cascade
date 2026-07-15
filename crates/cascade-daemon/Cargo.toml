@@ -24,6 +24,7 @@ async-trait       = { workspace = true }
 cascade-tray      = { workspace = true }
 cascade-keychain  = { path = "../cascade-keychain", version = "1.5.0" }
 cascade-audit     = { path = "../cascade-audit", version = "1.5.0" }
+cascade-harness   = { workspace = true }
 cascade-providers = { workspace = true }
 cascade-local-llm = { path = "../cascade-local-llm", version = "1.5.0", optional = true }
 secrecy       = "0.8"
@@ -74,6 +75,9 @@ blake3        = "1"
 tempfile      = "3"
 # auto-01: cron schedule parsing for scheduler.rs (mirrors cascade-types dep)
 cron          = "0.12"
+# T-P7-E04-01: LocalToolInvoker grep/glob support
+regex         = { workspace = true }
+walkdir       = { workspace = true }
 
 [features]
 tcp-ipc = []

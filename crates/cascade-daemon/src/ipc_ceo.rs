@@ -18,14 +18,15 @@
 //!
 //! SPORT: cascade-daemon / ipc_ceo — E-P6-04
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 #[cfg(test)]
 use cascade_agents::ceo::MockPlanner;
 use cascade_agents::ceo::{CeoOrchestrator, FounderDirective, Plan, Planner, SubGoal};
-use cascade_agents::context::{AgentRunContext, StepOutcome, ToolCall};
-use cascade_agents::executor::{AgentExecutorBuilder, ExecutorError, ProviderRouter, ToolInvoker};
+use cascade_agents::context::{AgentRunContext, StepOutcome};
+use cascade_agents::executor::{AgentExecutorBuilder, ExecutorError, ProviderRouter};
 use cascade_agents::registry::AgentRegistry;
 use cascade_agents::spec::{builtin_ceo, builtin_coder, AgentRole, AgentSpec};
 use cascade_providers::ProviderRegistry;
@@ -34,7 +35,7 @@ use serde_json::Value;
 use tracing::info;
 use uuid::Uuid;
 
-// ── FallbackRouter / FallbackInvoker (honest errors when no registry wired) ───
+// ── FallbackRouter (honest errors when no registry wired) ────────────────────
 
 /// Fallback provider: no provider configured for this runtime.
 ///
@@ -57,19 +58,13 @@ impl ProviderRouter for FallbackRouter {
     }
 }
 
-/// Fallback tool invoker: no tool dispatch wired.
-struct FallbackInvoker;
-
-#[async_trait]
-impl ToolInvoker for FallbackInvoker {
-    async fn invoke(&self, call: &ToolCall) -> Result<String, ExecutorError> {
-        Ok(format!(
-            "[cascade] tool '{}' is not yet implemented in this build. \
-             The tool call has been noted but no action was taken.",
-            call.tool_id
-        ))
-    }
-}
+// NOTE: the former `FallbackInvoker` (a second fake "not yet implemented" tool
+// invoker duplicating `automation_router::SafeToolInvoker`) has been removed
+// (T-P7-E04-02). `build_executor` now always dispatches tool calls through the
+// same real `LocalToolInvoker` (wrapped in `SafetyGate`) regardless of whether
+// a `ProviderRegistry` is wired — tool execution does not depend on the LLM
+// provider being present, only the *router* (provider-backed vs. fallback)
+// differs by that condition.
 
 // ── DefaultDaemonPlanner ──────────────────────────────────────────────────────
 
@@ -137,9 +132,9 @@ impl CeoRuntime {
     /// Create a `CeoRuntime` wired to a real `ProviderRegistry`.
     ///
     /// Uses `RegistryRouter` (from `automation_router`) for provider steps and
-    /// `SafeToolInvoker` for tool dispatch — the same pair that `AutomationRunner`
-    /// uses. When the registry has no healthy provider, the executor sees a clear
-    /// `ProviderFailed` error instead of a silent synthetic success.
+    /// `SafetyGate<LocalToolInvoker>` for tool dispatch. When the registry has
+    /// no healthy provider, the executor sees a clear `ProviderFailed` error
+    /// instead of a silent synthetic success.
     pub fn with_registry(
         session_base_dir: Option<std::path::PathBuf>,
         provider_registry: Arc<ProviderRegistry>,
@@ -166,22 +161,46 @@ impl CeoRuntime {
 
     /// Build a fresh executor for a new session.
     ///
-    /// When `provider_registry` is set, uses `RegistryRouter` + `SafeToolInvoker`
-    /// (real provider-backed execution). Otherwise uses `FallbackRouter` +
-    /// `FallbackInvoker` (honest errors, no misleading synthetic output).
+    /// When `provider_registry` is set, uses `RegistryRouter` (real
+    /// provider-backed LLM steps). Otherwise uses `FallbackRouter` (honest
+    /// "no provider configured" errors, never a misleading synthetic success).
+    ///
+    /// Tool dispatch is always the same real invoker regardless of provider
+    /// wiring: `LocalToolInvoker` (native file/bash/grep/glob execution)
+    /// wrapped in `SafetyGate` (deny-list + path-sandbox + real
+    /// `cascade-audit` logging enforced before any I/O runs). There is no
+    /// longer a second, separate fake tool invoker for the no-registry case —
+    /// consolidating on one real invoker per T-P7-E04-02.
     fn build_executor(&self) -> Arc<cascade_agents::executor::AgentExecutor> {
-        use crate::automation_router::{RegistryRouter, SafeToolInvoker};
+        use crate::automation_router::{
+            LocalCapabilitySet, LocalToolInvoker, RegistryRouter, SafetyGate,
+        };
+
+        // Sandbox root: the CEO session base dir when configured (typically
+        // `~/.cascade/agents/sessions`), else the current working directory.
+        // Either way `SafetyGate`'s `PathSandbox` still rejects any path
+        // outside this root, and its deny-list + audit layers apply
+        // unconditionally regardless of the chosen root.
+        let sandbox_root = self
+            .session_base_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+        let tool_invoker = Arc::new(SafetyGate::new(
+            Arc::new(LocalToolInvoker::new(LocalCapabilitySet::all())),
+            sandbox_root,
+            "cascade-daemon-ceo",
+        ));
 
         Arc::new(match &self.provider_registry {
             Some(pr) => AgentExecutorBuilder::default()
                 .provider_router(Arc::new(RegistryRouter::new(Arc::clone(pr))))
-                .tool_invoker(Arc::new(SafeToolInvoker))
+                .tool_invoker(tool_invoker)
                 .max_steps(10)
                 .token_budget(50_000)
                 .build(),
             None => AgentExecutorBuilder::default()
                 .provider_router(Arc::new(FallbackRouter))
-                .tool_invoker(Arc::new(FallbackInvoker))
+                .tool_invoker(tool_invoker)
                 .max_steps(10)
                 .token_budget(50_000)
                 .build(),
@@ -401,5 +420,45 @@ mod tests {
     fn ceo_status_before_directive_errors() {
         let runtime = CeoRuntime::new(None);
         assert!(handle_ceo_status(&runtime).is_err());
+    }
+
+    // ── T5: build_executor no longer wires a fake FallbackInvoker ─────────────
+
+    /// Regression guard for T-P7-E04-02: `build_executor` must not panic (the
+    /// `SafetyGate<LocalToolInvoker>` construction must succeed) whether or not
+    /// a `ProviderRegistry` is wired, and directive dispatch must still
+    /// complete end-to-end through the real (non-fake) tool-dispatch path.
+    ///
+    /// This is a structural/regression test, not a tool-invocation test — the
+    /// `MockPlanner`-driven sub-goal never emits a tool call (no live LLM is
+    /// wired here), so the ReAct loop never reaches `invoker.invoke()`. The
+    /// `LocalToolInvoker` tool-dispatch behavior itself (fs/bash/grep/glob,
+    /// capability gating, personal-scope refusal) is exhaustively covered by
+    /// the 7 unit tests in `automation_router::tests` (T-P7-E04-01); this test
+    /// only confirms the executor-construction wiring in `ipc_ceo` succeeds
+    /// and that no separate fake invoker is on the path.
+    #[tokio::test]
+    #[serial(global_env)]
+    async fn build_executor_wires_without_fallback_invoker() {
+        let runtime = make_runtime();
+        // Two calls to build_executor (no-registry path) must both succeed —
+        // this exercises the `SafetyGate::new` construction (PathSandbox
+        // canonicalization) that replaced the old `Arc::new(FallbackInvoker)`.
+        let _exec1 = runtime.build_executor();
+        let _exec2 = runtime.build_executor();
+
+        // End-to-end smoke: a directive still dispatches successfully through
+        // the new wiring (FallbackRouter for the provider step, since no
+        // ProviderRegistry is configured in this test runtime).
+        let params = CeoDirectiveParams {
+            goal: "verify real invoker wiring".into(),
+            constraints: vec![],
+            session_id: None,
+        };
+        let result = handle_ceo_directive(&runtime, params).await.unwrap();
+        assert!(
+            result.get("sessionId").is_some(),
+            "directive dispatch must still succeed after removing FallbackInvoker"
+        );
     }
 }

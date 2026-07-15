@@ -517,13 +517,28 @@ pub async fn run(
     // RegistryRouter::step(), which calls pick_for_chat() on the live registry.
     // If no provider is registered the step returns ProviderFailed (graceful).
     {
-        use crate::automation_router::{RegistryRouter, SafeToolInvoker};
+        use crate::automation_router::{RegistryRouter, SafeToolInvoker, SafetyGate};
         use cascade_agents::automation::{AutomationRunner, NoopSink};
         use cascade_agents::chain::ChainExecutor;
         use cascade_agents::executor::AgentExecutor;
 
         let real_router = Arc::new(RegistryRouter::new(Arc::clone(&provider_registry)));
-        let safe_invoker = Arc::new(SafeToolInvoker);
+        // Wrap SafeToolInvoker in SafetyGate so all three safety layers
+        // (deny-list, path sandbox, real audit log) are already enforced on
+        // this daemon-wide AutomationRunner. SafeToolInvoker is today an
+        // inert "not yet implemented" stub (every call returns a fixed
+        // error string and performs no I/O) so there is no active exploit
+        // path, but wrapping it now means the safety gate is in place
+        // BEFORE any real tool implementation is ever wired in here. The
+        // sandbox root is "." because no per-session project base dir
+        // exists in this scope yet — the live runner (when activated) will
+        // receive a real project root per automation task and be
+        // re-wrapped at that point.
+        let safe_invoker = Arc::new(SafetyGate::new(
+            Arc::new(SafeToolInvoker),
+            ".",
+            "cascade-daemon-automation-runner",
+        ));
 
         let agent_exec = Arc::new(
             AgentExecutor::builder()
