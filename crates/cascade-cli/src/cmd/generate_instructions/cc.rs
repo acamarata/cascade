@@ -29,8 +29,7 @@ pub(super) fn generate_cc(
 
     let mut any_written = false;
 
-    // 1. CLAUDE.md — append header block + tier instructions (idempotent)
-    let header_block = render_cc_header(tier, mcp_server_url);
+    // 1. CLAUDE.md — inject cascade header block (idempotent).
     let existing_claude = if claude_md.exists() {
         fs::read_to_string(&claude_md).map_err(|e| CascadeError::Io {
             path: claude_md.clone(),
@@ -40,6 +39,13 @@ pub(super) fn generate_cc(
     } else {
         String::new()
     };
+
+    // Only materialize the tier instruction text when we are creating a fresh
+    // CLAUDE.md. When appending to a pre-existing (hand-authored) CLAUDE.md the
+    // harness already reads that file's instructions natively, so re-embedding
+    // them here would duplicate the entire file's content into itself.
+    let include_instructions = existing_claude.is_empty();
+    let header_block = render_cc_header(tier, mcp_server_url, include_instructions);
 
     if existing_claude.contains(CASCADE_HEADER_MARKER) {
         // Already injected — idempotent skip
@@ -96,7 +102,14 @@ pub(super) fn generate_cc(
 /// Render the CC CLAUDE.md header block for a tier.
 ///
 /// The block is wrapped in cascade markers for idempotency detection.
-fn render_cc_header(tier: &TierResult, mcp_server_url: &str) -> String {
+///
+/// When `include_instructions` is true the tier's own instruction text is
+/// embedded (used when materializing a brand-new CLAUDE.md). When false only
+/// the MCP pointer section is emitted — this is the correct behavior when the
+/// block is appended to a pre-existing hand-authored CLAUDE.md, which the
+/// harness already reads natively; embedding the instructions there would
+/// duplicate the file's content into itself.
+fn render_cc_header(tier: &TierResult, mcp_server_url: &str, include_instructions: bool) -> String {
     let tier_name = tier.tier.acronym().to_uppercase();
     let tier_desc = tier.tier.description();
     let instr = tier.instructions.trim();
@@ -115,7 +128,7 @@ fn render_cc_header(tier: &TierResult, mcp_server_url: &str) -> String {
         mcp_server_url = mcp_server_url,
     );
 
-    if !instr.is_empty() {
+    if include_instructions && !instr.is_empty() {
         block.push_str(&format!("\n{instr}\n"));
     }
 

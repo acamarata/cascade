@@ -387,3 +387,57 @@ fn oc_project_instructions_dry_run_no_write() {
         "dry-run must not write project opencode.json"
     );
 }
+
+// ── test 11: regression — appending to a pre-existing CLAUDE.md must not ───
+//    duplicate the tier's own instruction text into the file.
+
+/// When CLAUDE.md already exists (hand-authored) and is also the tier's own
+/// instruction source, generate_cc injects only the MCP pointer block — it must
+/// NOT re-embed the tier instructions, which would duplicate the file's content
+/// into itself.
+///
+/// WHY: live bug 2026-07-14 — `cascade generate-instructions` duplicated the
+/// entire GCI file content when injecting the Cascade Context section into
+/// `~/.claude/CLAUDE.md`.
+#[test]
+#[serial(global_env)]
+fn cc_append_to_existing_does_not_duplicate_instructions() {
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let tmp = TempDir::new().unwrap();
+    std::env::set_var("HOME", tmp.path().to_str().unwrap());
+
+    // A pre-existing hand-authored CLAUDE.md whose body is ALSO the tier's
+    // instruction source (mirrors the real GCI, where ~/.claude/CLAUDE.md is the
+    // tier's own instructions).
+    let hand_authored = "# Global Instructions\n\nUNIQUE_GCI_BODY_LINE do the thing.\n";
+    let claude_dir = tmp.path().join(".claude");
+    fs::create_dir_all(&claude_dir).unwrap();
+    fs::write(claude_dir.join("CLAUDE.md"), hand_authored).unwrap();
+
+    let cascade_dir = tmp.path().join(".cascade");
+    fs::create_dir_all(&cascade_dir).unwrap();
+    let tier = fake_tier_result(CascadeTier::Gci, &cascade_dir, hand_authored);
+
+    generate_cc(&tier, tmp.path(), "unix://~/.cascade/cascade.sock", false)
+        .expect("generate_cc should succeed");
+
+    let content = fs::read_to_string(claude_dir.join("CLAUDE.md")).unwrap();
+
+    // The hand-authored body must appear exactly once — not duplicated.
+    assert_eq!(
+        content.matches("UNIQUE_GCI_BODY_LINE").count(),
+        1,
+        "tier instructions must not be duplicated into the existing CLAUDE.md:\n{content}"
+    );
+    // The MCP pointer section must still be injected.
+    assert!(
+        content.contains("cascade.search"),
+        "MCP pointer must still be injected: {content}"
+    );
+    assert!(
+        content.contains(CASCADE_HEADER_MARKER),
+        "cascade marker must be present"
+    );
+}
