@@ -16,8 +16,10 @@ use async_trait::async_trait;
 use clap::{Args, Subcommand};
 
 use cascade_core::{
-    build::{BuildConfig, BuildEngine, MockDispatcher},
-    pbd::{store::resolve_phases_root, NoExternalChecks, PbdStore},
+    build::{BuildConfig, BuildEngine, FleetDispatcher, MockDispatcher},
+    pbd::{
+        store::resolve_phases_root, BuildCheck, NoExternalChecks, PbdStore, RealExternalChecks,
+    },
 };
 use cascade_types::error::Result;
 
@@ -47,8 +49,9 @@ pub enum BuildSubcmd {
     /// Dispatches tickets in topological order, runs EOSt per step, EOT per
     /// ticket, EOS per sprint, EOW per wave, EOE per epic, and finally EOP.
     ///
-    /// TODO(pews-02): wire real fleet dispatcher once agent-process harness lands.
-    /// Currently uses MockDispatcher which marks tickets done without agent calls.
+    /// Pass `--mock` for a dry run (MockDispatcher + NoExternalChecks) or
+    /// `--real` to dispatch actual fleet agents gated by RealExternalChecks
+    /// (unless `--skip-externals` is also passed).
     Run(BuildRunArgs),
 }
 
@@ -57,13 +60,13 @@ pub struct BuildRunArgs {
     /// Phase ID to run (e.g. `p2`).
     pub phase: String,
 
-    /// Use the mock dispatcher (required until the real fleet dispatcher ships).
-    ///
-    /// The real agent-process harness is not yet implemented (TODO pews-02).
-    /// Passing `--mock` makes the intent explicit and prevents accidental
-    /// invocations that would silently mark tickets done without agent calls.
+    /// Use the mock dispatcher (marks tickets done without agent calls, for tests/dry-runs).
     #[arg(long)]
     pub mock: bool,
+
+    /// Use the real fleet dispatcher (dispatches agents to run actual tickets).
+    #[arg(long)]
+    pub real: bool,
 }
 
 #[async_trait]
@@ -75,22 +78,46 @@ impl Command for BuildArgs {
 
         match &self.subcommand {
             BuildSubcmd::Run(args) => {
-                if !args.mock {
-                    return Err(cascade_types::error::CascadeError::Other(
-                        "the real fleet dispatcher is not yet implemented (TODO pews-02); \
-                         pass --mock to use MockDispatcher (marks tickets done without agent calls)"
-                            .into(),
-                    ));
+                // Ensure exactly one dispatcher is selected
+                match (args.mock, args.real) {
+                    (false, false) => {
+                        return Err(cascade_types::error::CascadeError::Other(
+                            "must specify a dispatcher: use --mock (marks tickets done without agents, for tests/dry-runs) \
+                             or --real (dispatches agents to run actual tickets)"
+                                .into(),
+                        ));
+                    }
+                    (true, true) => {
+                        return Err(cascade_types::error::CascadeError::Other(
+                            "cannot use both --mock and --real; choose one dispatcher"
+                                .into(),
+                        ));
+                    }
+                    _ => {}
                 }
 
                 let config = BuildConfig {
                     skip_externals: self.skip_externals,
                 };
 
-                // TODO(pews-02): replace MockDispatcher with a real fleet-backed
-                // dispatcher once the agent-process harness lands (pews-03).
-                let checks = NoExternalChecks;
-                let engine = BuildEngine::new(store, MockDispatcher, checks, config);
+                // External checks: real build/test verification gates `--real` runs
+                // unless explicitly skipped; `--mock` and `--skip-externals` always
+                // get the no-op provider so tests/dry-runs stay side-effect-free.
+                let use_real_checks = args.real && !self.skip_externals;
+
+                let engine = if args.real {
+                    if use_real_checks {
+                        let checks = RealExternalChecks::new().with_build(BuildCheck::new(
+                            "workspace-build",
+                            "cargo build --workspace",
+                        ));
+                        BuildEngine::new(store, FleetDispatcher, checks, config)
+                    } else {
+                        BuildEngine::new(store, FleetDispatcher, NoExternalChecks, config)
+                    }
+                } else {
+                    BuildEngine::new(store, MockDispatcher, NoExternalChecks, config)
+                };
 
                 eprintln!("cascade build: running phase {} …", args.phase);
                 let result = engine.run_phase(&args.phase).await?;
