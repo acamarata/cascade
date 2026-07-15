@@ -146,7 +146,12 @@ jobs:
         # that isn't on this runner. `@tauri-apps/cli` is already a devDependency
         # (installed above via `pnpm install`) — use the JS-wrapped CLI instead,
         # which auto-detects `src-tauri/` relative to the app's own directory.
-        run: pnpm --filter @cascade/app run tauri:build -- --debug
+        # NOTE: pnpm always inserts a literal `--` before passthrough args (pnpm
+        # 10.x behavior), so `run tauri:build -- --debug` resolves to
+        # `tauri build -- --debug`, which makes tauri forward `--debug` straight
+        # to `cargo build` as a raw arg (cargo rejects it: "unexpected argument").
+        # Use a dedicated script instead of passthrough args to avoid this.
+        run: pnpm --filter @cascade/app run tauri:build:debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
@@ -202,7 +207,7 @@ jobs:
         run: pnpm --filter @cascade/app run build
 
       - name: Build Tauri app (debug)
-        run: pnpm --filter @cascade/app run tauri:build -- --debug
+        run: pnpm --filter @cascade/app run tauri:build:debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
