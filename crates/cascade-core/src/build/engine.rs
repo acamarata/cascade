@@ -26,8 +26,8 @@ use crate::pbd::{
     store::PbdStore,
 };
 
-use super::{dispatch::classify_ticket, topo::topological_sort};
 pub use super::dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
+use super::{dispatch::classify_ticket, topo::topological_sort};
 
 /// Configuration for a [`BuildEngine`] run.
 #[derive(Default)]

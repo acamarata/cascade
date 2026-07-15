@@ -105,10 +105,7 @@ mod tests {
 
     #[test]
     fn topological_sort_detects_cycle() {
-        let tickets = vec![
-            make_ticket("ta", vec!["tb"]),
-            make_ticket("tb", vec!["ta"]),
-        ];
+        let tickets = vec![make_ticket("ta", vec!["tb"]), make_ticket("tb", vec!["ta"])];
         assert!(
             topological_sort(&tickets).is_err(),
             "cycle should be detected"

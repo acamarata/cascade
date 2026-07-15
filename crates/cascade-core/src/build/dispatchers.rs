@@ -166,11 +166,11 @@ impl TicketDispatcher for FleetDispatcher {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::{
         dispatch::cli_binary_for_task_class,
         test_support::{mk_store, seed_phase},
     };
+    use super::*;
     use serial_test::serial;
     use tempfile::TempDir;
 
