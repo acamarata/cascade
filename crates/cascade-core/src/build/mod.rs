@@ -7,14 +7,24 @@
 //! testable without real agent processes.
 //!
 //! ## Sub-modules
-//! - [`engine`] — `BuildEngine`, `TicketDispatcher`, `MockDispatcher`
-//! - [`dispatch`] — ticket-weight → `TaskClass` mapping (INTERIM table)
+//! - [`engine`] — `BuildConfig` and core `BuildEngine` orchestration
+//! - [`dispatchers`] — `TicketDispatcher`, `MockDispatcher`, and `FleetDispatcher`
+//! - [`dispatch`] — ticket-weight → `TaskClass` mapping (INTERIM table) + fleet CLI-shelling
+//! - [`topo`] — internal topological ticket ordering
 //!
 //! ## SPORT
 //! MASTER-CRATES.md — cascade-core: build module (pews-02)
 
 pub mod dispatch;
+pub mod dispatchers;
 pub mod engine;
+pub mod topo;
 
-pub use dispatch::classify_ticket;
-pub use engine::{BuildConfig, BuildEngine, MockDispatcher, TicketDispatcher};
+#[cfg(test)]
+mod engine_tests;
+#[cfg(test)]
+mod test_support;
+
+pub use dispatch::{classify_ticket, cli_binary_for_task_class, run_fleet_cli, FleetOutcome};
+pub use dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
+pub use engine::{BuildConfig, BuildEngine};
