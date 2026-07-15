@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- `cascade link --tool aider` now creates `.aider.md` (the instruction file Aider
+  reads via `--read`) instead of `.aider.conf.yml` (Aider's tool config file, which
+  the spec explicitly leaves independent). Spec references: `04-cascade-nomenclature-spec.md`
+  § 2, `06-cascade-code-apps-support.md` Aider row. (T-P7-E23-03)
+
 ### Security
 - Fixed a `.gitleaks.toml` scope violation: an out-of-scope pass had blanket
   allowlisted 6 paths beyond the single ticketed finding
@@ -61,6 +67,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   CI when pnpm releases a new major).
 
 ### Fixed
+- **Documentation**: Audited the four launch wiki pages against the current CLI
+  and installer source; corrected installer/init semantics, tier paths and merge
+  order, generated harness outputs, and stale or nonexistent command syntax.
+- `cascade-daemon`: `CeoRuntime::build_executor` (`ipc_ceo.rs`) now dispatches
+  tool calls through the real `LocalToolInvoker` (wrapped in `SafetyGate` for
+  deny-list + path-sandbox + real `cascade-audit` logging) instead of the
+  duplicate `FallbackInvoker`, which has been deleted. Tool dispatch no longer
+  depends on whether a `ProviderRegistry` is wired — only the LLM-step router
+  (`RegistryRouter` vs. `FallbackRouter`) still branches on that.
 - Reordered `daemon-ci.yml`'s "Assert lean binary excludes network surfaces"
   step to run immediately after the lean/default-features build, before the
   subsequent all-features build overwrites `target/debug/cascaded` — the
@@ -87,10 +102,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   `a_resource_surface`.
 
 ### Changed
+- **Documentation**: Corrected `04-cascade-nomenclature-spec.md` § 5 wizard phase
+  count from 8 to 10 phases to match the real `WizardStep` enum
+  (`Welcome=1..Done=10`, confirmed in `types.ts`, `stepLabels.ts`, and 10 phase
+  component files under `phases/`). `05-cascade-product-architecture.md` § 5 is
+  now the declared canonical source for wizard phase detail; doc 04 § 5 defers to
+  it.
+- **Documentation**: Reconciled the obsolete future `v0.1.0` FOSS-launch
+  framing with the workspace's 1.16.0 version line. The public repository and
+  public CI mean the FOSS public launch is complete; remaining signing,
+  enrollment, and package-channel work is post-launch distribution hardening.
 - **Models**: Updated GPT fleet routing to OpenAI's GPT-5.6 family (Sol, Terra, Luna). `MODEL_GPT` now defaults to the flagship `gpt-5.6-sol`, replacing `gpt-5.5`. Added `MODEL_GPT_TERRA` and `MODEL_GPT_LUNA` constants. Updated `models.yaml` context windows (1.05M tokens) and pricing for all GPT-5.6 variants.
 - **Updates**: Added `cascade update models` to refresh the cached fleet roster
   in `~/.cascade/models.yaml`; daemon model-drift checks now prefer that valid
   cache before falling back to the embedded default.
+- **Build**: `cascade build run --real` now wires `RealExternalChecks`
+  (real `cargo build --workspace` check) instead of the hardcoded
+  `NoExternalChecks` stub, so `--real` runs actually gate ticket completion on
+  a passing build. `--mock` and `--skip-externals` keep the no-op provider.
 
 ## [1.16.0] - 2026-07-12
 

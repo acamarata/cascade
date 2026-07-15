@@ -7,7 +7,7 @@
 //! - `claude`    → `CLAUDE.md`
 //! - `opencode`  → `AGENTS.md`
 //! - `cursor`    → `.cursorrules`
-//! - `aider`     → `.aider.conf.yml`
+//! - `aider`     → `.aider.md`   (Aider reads this via --read; .aider.conf.yml is tool config, not instructions)
 //! - `codex`     → `AGENTS.md` (same as opencode)
 //! - `continue`  → `.continuerc.json` (stub)
 
@@ -23,6 +23,7 @@ use super::Command;
 #[derive(Debug, Args)]
 pub struct LinkArgs {
     /// AI tool to link. Supported: claude, opencode, cursor, aider, codex, continue.
+    /// aider creates `.aider.md` (the instruction file, not `.aider.conf.yml`).
     #[arg(long)]
     pub tool: String,
 
@@ -75,7 +76,7 @@ fn tool_link_name(tool: &str) -> Result<&'static str> {
         "claude" => Ok("CLAUDE.md"),
         "opencode" | "codex" => Ok("AGENTS.md"),
         "cursor" => Ok(".cursorrules"),
-        "aider" => Ok(".aider.conf.yml"),
+        "aider" => Ok(".aider.md"),
         "continue" => Ok(".continuerc.json"),
         other => Err(CascadeError::ConfigInvalidValue {
             key: "tool".into(),

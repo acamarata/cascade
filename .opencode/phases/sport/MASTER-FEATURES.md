@@ -19,7 +19,7 @@
 
 | ID | Feature | Description | Status | Delivers |
 |---|---|---|---|---|
-| F-IDENTITY-FOSS | FOSS, MIT license | All Cascade code MIT; no telemetry; user owns data | ✅ Done | Architecture |
+| F-IDENTITY-FOSS | FOSS, MIT license | All Cascade code MIT; no telemetry; user owns data; public GitHub repo + public CI establish that the FOSS public launch is complete (the old `v0.1.0` wording is not a pending milestone) | ✅ Done | Architecture + T-P7-E23-06 |
 | F-IDENTITY-FILE-BASED | File-based, no server DB | All state in `.cascade/` flat files; SQLite for search only; no Postgres | ✅ Done | Architecture |
 | F-IDENTITY-PLUGIN | Plugin-extensible via WASM | Third-party data sources, tools, widget components via WASM sandbox | 🔲 Planned | P4-E03 |
 | F-IDENTITY-HARNESS-AGNOSTIC | Harness-agnostic core | Core cascade resolution works identically with CC, OC, Codex, and any future harness | 🔲 Planned | P4-E02 |
@@ -102,6 +102,10 @@
 | F-DAEMON-STATUS-CACHE | Status cache file | `~/.cascade/cache.json` schema v1 written by daemon; consumed by all widgets | 🔲 Planned | P2-E02 |
 | F-DAEMON-AUDIT-LOG | Append-only audit log | JSONL at `~/.cascade/audit.log` (0600); chain integrity via SHA-256 chaining | 🔲 Planned | P2-E07 |
 | F-DAEMON-KEYCHAIN | OS keychain integration | `cascade-keychain` crate: macOS Security, Linux Secret Service, Windows Credential Manager | 🔲 Planned | P2-E07 |
+| F-DAEMON-LOCAL-TOOL-INVOKER | LocalToolInvoker for core tools | `ToolInvoker` impl for file read/write, bash exec, grep/glob behind the sensitivity firewall + capability gating | ✅ Done | T-P7-E04-01 |
+| F-DAEMON-LOCAL-TOOL-INVOKER-WIRED | Wire into executor, remove duplicate FallbackInvoker | `CeoRuntime::build_executor` (`ipc_ceo.rs`) now dispatches through `SafetyGate<LocalToolInvoker>`; deleted the duplicate fake `FallbackInvoker` so there is one real tool-dispatch path regardless of `ProviderRegistry` wiring | ✅ Done | T-P7-E04-02 |
+| F-BUILD-REAL-EXTERNAL-CHECKS | Wire RealExternalChecks into cascade build run | `cascade build run --real` gates on real build/test checks (RealExternalChecks) instead of NoExternalChecks; `--mock`/`--skip-externals` keep the no-op provider | ✅ Done | T-P7-E03-02 |
+| F-BUILD-REAL-FLAG | Add --real flag to cascade build run | `cascade build run <phase>` requires an explicit `--real` (FleetDispatcher) or `--mock` (MockDispatcher) flag; no-flag case gives a clear, non-refusing error explaining both options instead of hard-refusing | ✅ Done | T-P7-E03-04 |
 
 ### 5b. CLI (`cascade`)
 
@@ -169,6 +173,9 @@
 | F-APP-RAG-EXPLORER | RAG explorer panel | Browse and query local RAG index; drag-and-drop ingest; tier enable/disable | 🔲 Planned | P4-E01 |
 | F-APP-PROVIDER-SETTINGS | Provider settings page | List/add/remove/test AI providers; connection status; model routing table | 🔲 Planned | P3-E04 |
 | F-APP-SETTINGS | Settings: configure everything | Full settings parity: Gemini Pool, provider keys/OAuth, harness bridges, `.cascade` tiers, hooks, scheduled tasks, plugins, vault, MCP servers | 🔲 Planned | P3-E07 |
+| F-APP-PAID-MODEL-SAFETY-COVERAGE | Verify paid-model-safety UX switches coverage | 🟡 Gap confirmed: `ContextPrivacyTab.tsx` has no master “Disable all paid models” switch, free-only mode, or GCP billing wizard/entry point, and the settings/runtime schema has no paid-safety enforcement wiring. Fix requires cross-cutting schema, routing enforcement, and billing-wizard work beyond this S-sized audit. | 🟡 Partial | T-P7-E23-05 |
+| F-CLI-LINK-RESTORE-AUDIT | Verify cascade link/restore + symlink-bridge coverage | Code audit complete. `cascade link --tool` is real for all five tools; `cascade restore --tool` is fully implemented (manifest-based, atomic, HOME-confined, tested). One bug fixed: aider was mapped to `.aider.conf.yml` (the config file) instead of `.aider.md` (the instruction file). Fixed in `cmd/link.rs`. `create_siblings` in cascade-core creates only CLAUDE.md + AGENTS.md on init (not .cursorrules/.aider.md); spec says all four should be auto-created — logged as a follow-up (larger change, not S-weight). | ✅ Done | T-P7-E23-03 |
+| F-CLI-LINK-TIER1-CONFLATION | Clarify Tier-1 symlink-bridge vs provider-adapter | Determination complete. Two completely separate systems: (1) **Symlink-bridge** (`cmd/link.rs`, `cascade-core/symlinks.rs`, `cmd/init.rs`) — creates filesystem symlinks inside `.cascade/` (CLAUDE.md/AGENTS.md/…→CASCADE.md) so tools read cascade instructions transparently; no inference involved. (2) **Provider-adapters** (`cascade-providers/src/adapters/`) — implement `ProviderAdapter` for AI inference routing; Cursor/Antigravity are detect+config-generation only (ToS, no inference), OpenCode/Anthropic/etc. are real inference adapters. doc-06's Tier-1 description (“CLAUDE.md/AGENTS.md symlink-bridge + OpenCode mode-template installer”) refers exclusively to system (1). The adapters directory is system (2). No conflation in the code — only a gap in doc-06 which does not acknowledge the separate adapter-based MCP config-generation path for Cursor/Antigravity. | ✅ Done | T-P7-E23-04 |
 | F-APP-AUTO-UPDATE | Self-update | Tauri updater + GitHub Releases (signed); in-app update notification | ✅ Done | T-P4-E05-18 (release.yml signed updater artifacts) |
 
 ### 6b. Onboarding Wizard
@@ -184,6 +191,7 @@
 | F-WIZARD-DAEMON-INSTALL | Daemon + widget install | Phase 9: install LaunchAgent/systemd/Windows Service; install OS widgets; start daemon | 🔲 Planned | P3-E03 |
 | F-WIZARD-GEMINI-POOL | Build Gemini Pool | Wizard-guided: per-Gmail-account OAuth → GCP project → Gemini API key → add to Pool | 🔲 Planned | P3-E03 + P3-E04 |
 | F-WIZARD-REVERSIBLE | Full reversibility | `cascade uninstall --full` restores all archived legacy homes and removes symlinks | 🔲 Planned | P3-E03 |
+| F-DOC-WIZARD-PHASE-COUNT | Reconcile onboarding wizard phase-count mismatch across docs | Corrected `04-cascade-nomenclature-spec.md` § 5 from 8-phase to 10-phase table to match `WizardStep` enum (`Welcome=1..Done=10` in `types.ts`/`stepLabels.ts`); `05-cascade-product-architecture.md` § 5 declared canonical; doc 04 § 5 defers to it | ✅ Done | T-P7-E23-02 |
 
 ### 6c. OS Widgets
 
@@ -304,6 +312,7 @@
 | F-DIST-SIGNING-WINDOWS | Windows Authenticode | SignPath.io FOSS cert; USER-AUTH project creation gate | ✅ Done | T-P4-E05-07 (USER-AUTH SignPath enrollment pending) |
 | F-DIST-SIGNING-LINUX | Linux GPG signing | GPG release key per-distro; fingerprint in README | ✅ Done | T-P4-E05-05 + T-P4-E05-08 |
 | F-DIST-CI-RELEASE | Release CI/CD | GitHub Actions matrix: macOS ARM/x64, Linux x64/ARM64, Windows x64; sign + package + publish on tag | ✅ Done | T-P4-E05-18 |
+| F-DOC-LAUNCH-WIKI | Confirm/complete the 4 launch wiki pages | Audited Installation, CLI Reference, Cascade Concepts, and Quickstart against current CLI and installer source; corrected drift and completed the launch guidance | ✅ Done | T-P7-E23-01 |
 | F-OBS-TRACING | OpenTelemetry tracing | OTel spans across daemon + CLI; structured JSON logs; 7-day rotation | 🔲 Planned | P2-E01 |
 | F-OBS-HEALTHCHECK | Health endpoint | `/health` returns `{status:'ok'}` only; no internal stats leaked | 🔲 Planned | P2-E07 |
 | F-CI-ESLINT-PURITY | Fix 5 impure-render / ref-write eslint errors | useAccounts/useChat/usePewsTree/useIngestProgress — moved Date.now() calls and ref writes out of render into effects/callback-time state | ✅ Done | T-P7-E01-03 |
@@ -351,7 +360,7 @@ Items explicitly deferred beyond P4 or assigned to the ClawDE fork. Do not build
 | 3. Knowledge & Memory | 0 | 0 | 14 | 0 | 0 | 14 |
 | 4. Fleet, Quota & Gemini Pool | 0 | 0 | 9 | 0 | 0 | 9 |
 | 5. Daemon, CLI & Harness Bridge | 0 | 0 | 37 | 0 | 0 | 37 |
-| 6. Tauri App + Wizard + Widgets | 0 | 0 | 36 | 0 | 0 | 36 |
+| 6. Tauri App + Wizard + Widgets | 2 | 1 | 34 | 0 | 0 | 37 |
 | 7. RAG, MCP, Plugins, Dist & Ops | 0 | 0 | 62 | 0 | 18 | 80 |
 | 8. Deferred / Future | 0 | 0 | 0 | 0 | 19 | 19 |
 | **Total** | **5** | **0** | **169** | **0** | **39** | **213** |

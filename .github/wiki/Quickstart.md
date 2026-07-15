@@ -1,53 +1,53 @@
 # Quickstart
 
-Get Cascade working in about 5 minutes.
+Get a project-level Cascade setup working in about five minutes.
 
 ---
 
 ## Step 1: Install
 
-Run the one-liner for your platform. See [Installation](Installation.md) for Homebrew, Scoop, AUR, and build-from-source options.
+Run the installer for your platform. See [Installation](Installation.md) for package-manager and source-build options.
 
 **macOS / Linux:**
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.sh | sh
 ```
 
 **Windows:**
+
 ```powershell
 irm https://raw.githubusercontent.com/acamarata/cascade/main/scripts/install.ps1 | iex
 ```
 
-Both scripts install the `cascade` binary, register the background daemon, and run a basic setup. When they finish, confirm the binary is on your PATH:
+The scripts install both `cascade` and `cascaded`, register the user-scoped daemon service, run `cascade init --accept-defaults` in the current directory, and run `cascade verify`. Daemon registration or initialization can be skipped with installer environment variables, but verification always runs and reports failures as warnings.
+
+Confirm the CLI is on PATH:
 
 ```sh
 cascade --version
 ```
 
+On Windows, open a new terminal first if the installer added the PATH entry.
+
 ---
 
-## Step 2: Initialize a project
+## Step 2: Initialize the project
 
-Navigate to the directory you want to set up, then run:
+Move to the project and explicitly select the canonical `.cascade` folder:
 
 ```sh
 cd ~/my-project
-cascade init --accept-defaults
+cascade init . --accept-defaults --folder .cascade
 ```
 
-`--accept-defaults` skips all prompts and uses sensible defaults. It creates a `.cascade/` directory with a `CASCADE.md` skeleton and the standard subdirectories.
-
-To connect a cloud provider at the same time:
-
-```sh
-cascade init --accept-defaults --provider anthropic --api-key sk-ant-...
-```
+The positional path defaults to the current directory. `--accept-defaults` makes reruns safe: it heals missing standard directories and leaves existing files alone. Initialization creates `.cascade/CASCADE.md`, standard working subdirectories, built-in skill and agent files, a local `.gitignore`, and `CLAUDE.md`/`AGENTS.md` sibling links inside `.cascade/`.
 
 ---
 
 ## Step 3: Add a rule
 
-Open `.cascade/CASCADE.md` in any editor. The file is plain Markdown. Add one rule:
+Edit `.cascade/CASCADE.md`. It is plain Markdown; for example:
 
 ```markdown
 # My project context
@@ -55,66 +55,87 @@ Open `.cascade/CASCADE.md` in any editor. The file is plain Markdown. Add one ru
 Always write tests before implementation.
 ```
 
-Save the file. That rule is now part of your project's cascade at the PRC (Per-Repo Cascade) tier.
+At a Git repository root, `cascade init` labels this as PRC (Per-Repo Cascade) context.
 
 ---
 
-## Step 4: Generate harness files
+## Step 4: Connect a provider
 
-Run:
+The verification gate requires either a connected cloud provider or an installed local model. To connect a cloud provider:
 
 ```sh
+cascade provider add --kind anthropic --api-key YOUR_API_KEY
+```
+
+Supported provider kinds are `anthropic`, `openai`, `gemini`, `openrouter`, `groq`, `mistral`, `deepseek`, `together`, and `cohere`. The key is validated and stored in the OS keychain rather than a plaintext project file.
+
+---
+
+## Step 5: Generate harness files
+
+Preview the changes, then generate for Claude Code and OpenCode:
+
+```sh
+cascade generate-instructions --dry-run
 cascade generate-instructions
 ```
 
-This reads your `.cascade/CASCADE.md` and writes the files each tool expects:
+For the project tier, the default `both` mode manages:
 
-- `.claude/CLAUDE.md` — picked up by Claude Code on next launch
-- `.opencode/AGENTS.md` — picked up by OpenCode on next launch
-- `.cursorrules` — picked up by Cursor (if enabled in config)
+- `.claude/CLAUDE.md`, `.claude/AGENTS.md`, and `.claude/settings.json` for Claude Code.
+- `.cascade/opencode-instructions.md` and `opencode.json` for OpenCode, plus the Cascade entry in `~/.config/opencode/opencode.json`.
 
-Open your project in Claude Code (or any connected tool). The rule you just wrote appears in its context.
+Generation preserves unrelated JSON settings. An instruction file that already has the Cascade marker is skipped on rerun rather than refreshed; use `--dry-run` to see which targets will change. Use `--harness cc` or `--harness oc` to target only one harness.
 
 ---
 
-## Step 5: Verify
+## Step 6: Verify
 
 ```sh
 cascade verify
 ```
 
-`cascade verify` checks six requirements and exits 0 only when all pass:
+The command checks:
 
-- `.cascade/` directory exists and is readable
-- Cascade resolves to non-empty output for the current directory
-- Daemon is reachable on its socket
-- At least one AI provider is configured
-- `config.toml` parses cleanly
-- OS keychain is accessible
+- The active AI folder and readable `CASCADE.md`.
+- A non-empty resolved cascade.
+- The daemon socket (warning by default, failure with `--require-daemon`).
+- A connected cloud provider or installed local model.
+- Valid `config.toml` syntax.
+- OS keychain access.
 
-If any check fails, run `cascade doctor` for a detailed report with suggested fixes.
+The exit code is zero when none of the six checks is `FAIL`; warnings are allowed. Run `cascade doctor` for the broader diagnostic report.
 
 ---
 
-## Step 6: Search your context
+## Step 7: Resolve and search
 
-The daemon indexes your cascade files in the background. Once indexed, search across all tiers:
+Inspect the exact merged instructions first:
+
+```sh
+cascade resolve
+```
+
+The current CLI search ranks matching paragraphs from the resolved cascade by keyword occurrence:
 
 ```sh
 cascade search "authentication"
-cascade search "how should I handle errors in this project"
+cascade search "how should I handle errors" --top 5
+cascade search "lessons" --scope memory
 ```
 
-Search uses FTS5 keyword matching combined with BGE-M3 dense embeddings and RRF fusion. Results are ranked by relevance. The index updates automatically when any `.cascade/CASCADE.md` file changes.
+`--scope memory` searches Markdown files in the nearest `.cascade/memory/` directory. Use `--json` for structured search output.
 
 ---
 
 ## What to do next
 
-- Add rules at other tiers. A global rule lives at `~/.cascade/CASCADE.md` and applies everywhere on your machine. A repo-specific rule lives at `.cascade/CASCADE.md` inside that repo and applies only there.
-- Connect more tools. Run `cascade link --tool cursor` to generate `.cursorrules`, or `cascade link --tool aider` for `.aider.conf.md`.
-- Install a plugin. Run `cascade plugin list` to see what is loaded, and `cascade plugin install <path>` to add your own.
-- Read the [Cascade Concepts](Cascade-Concepts.md) page to understand how tiers merge and what wins when two tiers conflict.
+- Add global rules in `~/.cascade/CASCADE.md`, or app-specific rules in an app's `.cascade/CASCADE.md`.
+- Preview a single tier with `cascade generate-instructions --tier prc --dry-run`.
+- Configure MCP clients with `cascade mcp setup --list`, then `cascade mcp setup --tool <TOOL>`.
+- Create compatibility links with `cascade link --tool cursor` or `cascade link --tool aider`.
+- Inspect installed plugins with `cascade plugin list`, or scaffold one with `cascade plugin new <NAME> --no-interactive`.
+- Read [Cascade Concepts](Cascade-Concepts.md) for merge and generation semantics.
 
 ---
 
