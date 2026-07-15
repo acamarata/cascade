@@ -73,10 +73,14 @@ ignore = [
     "RUSTSEC-2025-0098", "RUSTSEC-2025-0100",
     # ── ring: AES panic ONLY under overflow-checks (debug). Release builds unaffected.
     "RUSTSEC-2025-0009",
-    # ── lopdf 0.34 (transitive via pdf-extract → cascade-rag): stack overflow on
+    # ── lopdf 0.42 (transitive via pdf-extract → cascade-rag): stack overflow on
     #    deeply-nested crafted PDF. No fix released; cascade-rag only parses PDFs
     #    the user explicitly adds to the RAG index (not untrusted network input).
     "RUSTSEC-2026-0187",
+    # ── ttf-parser 0.25.1 (transitive via lopdf → pdf-extract → cascade-rag):
+    #    unmaintained, no safe upgrade available. Same threat model as the lopdf
+    #    entry above — only parses PDFs the user explicitly adds to the RAG index.
+    "RUSTSEC-2026-0192",
     # ── quick-xml 0.31/0.36/0.39 (transitive via tauri/plist and pdf-extract):
     #    quadratic-time dup-attr check + unbounded namespace-decl allocation. Plist
     #    inputs are bundled at build time (Tauri codegen) — not untrusted runtime data.

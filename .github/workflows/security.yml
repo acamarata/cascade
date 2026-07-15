@@ -117,6 +117,13 @@ jobs:
           # GITLEAKS_LICENSE is required for private repos on the free tier.
           # Set it in repo secrets if running on a private repository.
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          # The action's internal sarif-artifact upload crashes on this
+          # self-hosted runner ("rootDirectory: /root is not a parent
+          # directory of the file: /mnt/ci/work-cascade/...") regardless of
+          # whether leaks are found — a HOME vs GITHUB_WORKSPACE path mismatch
+          # in its bundled @actions/artifact version. Disable the upload;
+          # gitleaks still fails the job on any real detection either way.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
 
   # ── npm-audit ──────────────────────────────────────────────────────────────
   # Checks the Tauri frontend dependencies (apps/cascade-app/package.json).
