@@ -614,6 +614,7 @@ pub type DelegateTarget = Box<dyn DelegateLane>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn unavail_reason(av: &LaneAvailability) -> &str {
         match av {
@@ -757,7 +758,12 @@ mod tests {
 
     // ── find_binary_opt ────────────────────────────────────────────────────
 
+    /// `#[serial(env_path)]`: this resolves `echo` via real PATH lookup —
+    /// without this guard, a concurrently-running PATH-mutating test
+    /// (build/dispatchers.rs, build/engine.rs) can point PATH at a directory
+    /// with no `echo`, making the lookup fail.
     #[test]
+    #[serial(env_path)]
     fn find_binary_opt_finds_echo() {
         #[cfg(unix)]
         {

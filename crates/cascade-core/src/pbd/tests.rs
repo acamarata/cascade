@@ -729,8 +729,11 @@ mod tests {
         }
     }
 
+    // Also locks `env_path`: this spawns a real `true` command resolved via
+    // PATH — without it, a concurrently-running PATH-mutating test
+    // (build/dispatchers.rs, build/engine.rs) can make the spawn fail.
     #[test]
-    #[serial(global_env)]
+    #[serial(global_env, env_path)]
     fn test_real_external_checks_passing_command_allows_gate() {
         let tmp = TempDir::new().unwrap();
         let store = mk_store(&tmp);

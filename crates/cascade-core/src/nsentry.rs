@@ -441,6 +441,7 @@ pub fn manifest_size(id: &str, project_slug: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     // Stable vector: SHA-256("testhost-testuser") hex[..12]
@@ -503,7 +504,13 @@ mod tests {
     }
 
     /// Use rsync from a local path (no SSH) to verify the full copy+dedup flow.
+    ///
+    /// `#[serial(env_path)]`: this spawns real `rsync` resolved via PATH —
+    /// without this guard, a concurrently-running PATH-mutating test
+    /// (build/dispatchers.rs, build/engine.rs) can point PATH at a directory
+    /// with no `rsync`, making the spawn fail with `NotFound`.
     #[test]
+    #[serial(env_path)]
     fn sync_local_source_copies_md_and_deduplicates() {
         // Source directory: two .md + one .txt.
         let src = TempDir::new().unwrap();

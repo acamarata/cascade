@@ -764,6 +764,7 @@ fn build_model_matrix() -> Vec<ModelMatrixEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
 
@@ -936,16 +937,30 @@ mod tests {
     /// a test environment with no matching `~/.claude*` dir) and there is no
     /// legacy cache entry to fall back on. GFP is `true` only when its
     /// `key_count` is nonzero.
+    ///
+    /// `#[serial(env_path)]`: `write_quota_json` calls `discover_external()`,
+    /// which probes PATH for real CLI binaries — without this guard, a
+    /// concurrently-running PATH-mutating test (build/dispatchers.rs,
+    /// build/engine.rs) can make this test see a fake `claude`/`opencode`
+    /// binary and wrongly assert `authenticated=true`.
     #[test]
+    #[serial(env_path)]
     fn authenticated_field_defaults_conservative() {
         use cascade_types::accounts::{Account, AccountRole};
 
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("quota.json");
 
+        // "claude-acc987" deliberately takes the `starts_with("claude-acc")`
+        // branch (checks ~/.claude-acc987), NOT the "primary/default" fallback
+        // branch (checks ~/.claude). The fallback branch would resolve to a
+        // REAL directory on any machine that has ever used Claude Code
+        // locally (the developer's own ~/.claude), making this test
+        // machine-dependent and CI-only-green. An account-id number this high
+        // is guaranteed not to exist anywhere real.
         let mut registry = default_registry();
         registry.accounts.push(Account {
-            id: "claude-does-not-exist-on-this-box".to_string(),
+            id: "claude-acc987".to_string(),
             family: AccountFamily::Claude,
             subscription: "anthropic-max".to_string(),
             access_methods: vec![],

@@ -343,10 +343,18 @@ fn tail_lines(text: &str, n: usize) -> String {
 mod tests {
     use super::*;
     use crate::pbd::protocol::{ExternalChecks, NoExternalChecks};
+    use serial_test::serial;
 
     // ── BuildCheck ────────────────────────────────────────────────────────────
+    //
+    // `#[serial(env_path)]` on every test below that spawns a real shell
+    // command: without it, a concurrently-running PATH-mutating test
+    // (build/dispatchers.rs, build/engine.rs) can point PATH at a directory
+    // with none of `sh`/`true`/`false`/`echo`, making the spawn fail with
+    // `NotFound` instead of exercising the intended pass/fail behavior.
 
     #[test]
+    #[serial(env_path)]
     fn build_check_passes_on_true_command() {
         let check = BuildCheck::new("pass", "true");
         let result = check.run();
@@ -355,6 +363,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env_path)]
     fn build_check_fails_on_false_command() {
         let check = BuildCheck::new("fail", "false");
         let result = check.run();
@@ -363,6 +372,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env_path)]
     fn build_check_captures_stderr_tail_on_failure() {
         let check = BuildCheck::new("stderr", "echo error-marker >&2 && exit 1");
         let result = check.run();
@@ -384,6 +394,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(env_path)]
     fn real_checks_collects_failures() {
         let checks = RealExternalChecks::new()
             .with_build(BuildCheck::new("ok", "true"))
