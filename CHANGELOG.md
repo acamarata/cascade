@@ -6,6 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- `cascade build run --real` now treats fleet-agent exit status and explicit
+  `CASCADE_STEP_COMPLETE:<step-id>` stdout markers as the authoritative step
+  result, persists `pending -> running -> passed/failed` transitions, and runs
+  injected external CR/QA checks before accepting completion. (T-P7-E03-03)
+- Real fleet builds now resume from persisted step status without redispatching
+  `passed`/`skipped` work, recover interrupted or failed steps, and retry
+  transient nonzero CLI exits at most three times before persisting failure.
+  (T-P7-E03-05)
+- Added an opt-in, temp-isolated three-ticket `cascade build run --real` CLI
+  acceptance harness plus a matching MockDispatcher toy-phase integration test.
+  The real harness verifies agent-created file contents as well as persisted
+  ticket and step states; it remains gated on an available cheap-tier account.
+  (T-P7-E03-06)
+
 ### Fixed
 - `cascade link --tool aider` now creates `.aider.md` (the instruction file Aider
   reads via `--read`) instead of `.aider.conf.yml` (Aider's tool config file, which
