@@ -242,8 +242,16 @@ impl BgeM3Embedder {
             });
         }
 
-        std::fs::create_dir_all(&model_dir)
-            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
+        // Prepare the cache dir robustly: a dangling symlink (e.g. the models
+        // dir points at an unmounted external volume) errors clearly here rather
+        // than looking empty and triggering a redundant multi-GB re-download
+        // into an abandoned temp `.part` dir.
+        super::model_cache::ensure_cache_dir_ready(&model_dir).map_err(|e| {
+            CascadeError::EmbeddingFailed {
+                provider: MODEL_ID.into(),
+                detail: format!("model cache dir not ready: {e}"),
+            }
+        })?;
 
         info!(model_dir = %model_dir.display(), "initialising BGE-M3 / MultilingualE5Large provider");
 

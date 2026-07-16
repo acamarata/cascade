@@ -195,7 +195,10 @@ impl IpcServer {
         // Used in CI (daemon-ci.yml) to prevent ~4 GB ONNX model downloads from
         // filling the self-hosted runner disk during integration test runs.
         let offline_models = std::env::var("CASCADE_OFFLINE_MODELS").is_ok();
-        let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
+        // Shared process-global embedder: the same instance backs the indexer
+        // WorkerPool (supervisor.rs). spawn_load() is idempotent, so the real
+        // ONNX model is downloaded/warmed exactly once per process.
+        let lazy_embed = cascade_rag::embed::LazyEmbedModel::shared();
         if !offline_models {
             lazy_embed.spawn_load();
         }

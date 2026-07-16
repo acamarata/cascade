@@ -57,6 +57,24 @@ pub enum ModelCacheError {
         /// The cache directory where the model is expected.
         cache_dir: PathBuf,
     },
+
+    /// The model cache directory is a symlink whose target is unreadable — most
+    /// commonly because the volume it points at (e.g. an external drive) is
+    /// temporarily unmounted. Erroring here is deliberate: the alternative is
+    /// that the dir *looks* empty, which would kick off a redundant multi-GB
+    /// re-download into a temp dir that gets abandoned when the volume returns.
+    #[error(
+        "model cache dir {path} is a symlink to an unreadable target ({target}) — \
+         the volume may be unmounted; refusing to re-download",
+        path = path.display(),
+        target = target.display()
+    )]
+    CacheDirUnreadable {
+        /// The symlink path (e.g. `~/.cascade/models`).
+        path: PathBuf,
+        /// The (unreadable) symlink target.
+        target: PathBuf,
+    },
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -103,6 +121,54 @@ pub fn is_model_cached(model_id: &str) -> bool {
     match model_cache_dir() {
         Ok(base) => base.join(model_id).exists(),
         Err(_) => false,
+    }
+}
+
+/// Prepare the model cache directory for use, failing loudly on a
+/// dangling/unreadable symlink instead of silently triggering a re-download.
+///
+/// Behaviour:
+///
+/// 1. If `dir` is a symlink, verify its target is readable (i.e. the volume is
+///    mounted). A dangling symlink (unmounted external drive) returns
+///    [`ModelCacheError::CacheDirUnreadable`] rather than being treated as an
+///    empty cache — which is what triggered the abandoned multi-GB `.part`
+///    downloads under `/private/var/folders/.../T/`.
+/// 2. Otherwise `create_dir_all` the directory. An `AlreadyExists` error (the
+///    common case when `dir` is a symlink pointing at an existing directory, or
+///    the dir already exists) is treated as success — a plain `create_dir_all`
+///    was returning `File exists (os error 17)` and aborting model init.
+///
+/// Callers should invoke this before handing the path to fastembed's
+/// `with_cache_dir`.
+pub fn ensure_cache_dir_ready(dir: &std::path::Path) -> Result<(), ModelCacheError> {
+    // A symlink whose target does not resolve == unmounted/unreadable volume.
+    // `symlink_metadata` inspects the link itself; `metadata` follows it.
+    if let Ok(link_meta) = std::fs::symlink_metadata(dir) {
+        if link_meta.file_type().is_symlink() {
+            let target = std::fs::read_link(dir).unwrap_or_else(|_| dir.to_path_buf());
+            // Following the link fails when the target volume is gone.
+            if std::fs::metadata(dir).is_err() {
+                return Err(ModelCacheError::CacheDirUnreadable {
+                    path: dir.to_path_buf(),
+                    target,
+                });
+            }
+            // Target is readable: the (symlinked) directory already exists, so
+            // there is nothing to create. Returning here avoids the EEXIST that
+            // `create_dir_all` raises on some platforms for symlink-to-dir.
+            return Ok(());
+        }
+    }
+
+    match std::fs::create_dir_all(dir) {
+        Ok(()) => Ok(()),
+        // A pre-existing directory is fine; only surface other IO errors.
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(ModelCacheError::CacheDirUnreadable {
+            path: dir.to_path_buf(),
+            target: std::io::Error::to_string(&e).into(),
+        }),
     }
 }
 
@@ -221,6 +287,53 @@ mod tests {
         assert!(
             msg.contains("/tmp/.cascade/models"),
             "error message must contain cache_dir; got: {msg}"
+        );
+    }
+
+    // ── ensure_cache_dir_ready ────────────────────────────────────────────────
+
+    /// A normal (non-existent) directory is created successfully.
+    #[test]
+    fn ensure_ready_creates_missing_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("models");
+        assert!(!target.exists());
+        ensure_cache_dir_ready(&target).expect("should create missing dir");
+        assert!(target.is_dir(), "dir must exist after ensure_ready");
+    }
+
+    /// A symlink pointing at an existing directory succeeds WITHOUT an EEXIST
+    /// error (regression: plain create_dir_all raised `File exists (os error 17)`
+    /// on a symlink-to-dir, aborting model init).
+    #[cfg(unix)]
+    #[test]
+    fn ensure_ready_symlink_to_existing_dir_is_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real-models");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = dir.path().join("models-link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        ensure_cache_dir_ready(&link).expect("symlink-to-existing-dir must be OK");
+    }
+
+    /// A dangling symlink (target missing — models on an unmounted volume) errors
+    /// with `CacheDirUnreadable` instead of being treated as an empty cache that
+    /// triggers a redundant re-download.
+    #[cfg(unix)]
+    #[test]
+    fn ensure_ready_dangling_symlink_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_target = dir.path().join("unmounted-volume").join("models");
+        let link = dir.path().join("models-link");
+        // Symlink to a path that does not exist → simulates an unmounted volume.
+        std::os::unix::fs::symlink(&missing_target, &link).unwrap();
+
+        let err = ensure_cache_dir_ready(&link)
+            .expect_err("dangling symlink must error, not silently re-download");
+        assert!(
+            matches!(err, ModelCacheError::CacheDirUnreadable { .. }),
+            "expected CacheDirUnreadable, got: {err:?}"
         );
     }
 

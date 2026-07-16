@@ -140,8 +140,15 @@ impl BgeReranker {
             )));
         }
 
-        std::fs::create_dir_all(&model_dir)
-            .map_err(|e| CascadeError::io(&model_dir, "create-models-dir", e))?;
+        // Prepare the cache dir robustly (see BgeM3Embedder::new): a dangling
+        // symlink to an unmounted volume errors clearly instead of triggering a
+        // redundant multi-GB re-download, and a symlink-to-existing-dir no longer
+        // aborts init with `File exists (os error 17)`.
+        crate::embed::model_cache::ensure_cache_dir_ready(&model_dir).map_err(|e| {
+            CascadeError::Other(format!(
+                "reranker[{MODEL_ID}] model cache dir not ready: {e}"
+            ))
+        })?;
 
         info!(
             model_dir = %model_dir.display(),

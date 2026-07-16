@@ -385,7 +385,16 @@ pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
 /// incompatible mid-flight.
 pub struct LazyEmbedModel {
     inner: std::sync::RwLock<std::sync::Arc<dyn EmbedModel>>,
+    /// Set once the real-model background load has been kicked off, so repeated
+    /// `spawn_load()` calls (e.g. from two daemon construction sites sharing the
+    /// same instance) do not each download/initialise the multi-GB ONNX model.
+    load_started: std::sync::atomic::AtomicBool,
 }
+
+/// Process-global shared holder, so every subsystem in the daemon (RAG search
+/// handler, indexer worker pool, …) uses ONE embedder instance and the real
+/// model is downloaded and warmed exactly once per process.
+static SHARED_EMBED: std::sync::OnceLock<std::sync::Arc<LazyEmbedModel>> = std::sync::OnceLock::new();
 
 impl std::fmt::Debug for LazyEmbedModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -408,7 +417,17 @@ impl LazyEmbedModel {
     pub fn new_mock() -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self {
             inner: std::sync::RwLock::new(std::sync::Arc::new(MockEmbedModel::new(1024))),
+            load_started: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+
+    /// Return the process-global shared lazy embedder, constructing it on first
+    /// call. All daemon subsystems should use this instead of `new_mock()` so
+    /// the real ONNX model is loaded and warmed exactly ONCE per process rather
+    /// than once per construction site (previously ipc.rs and supervisor.rs each
+    /// built and downloaded their own copy).
+    pub fn shared() -> std::sync::Arc<Self> {
+        std::sync::Arc::clone(SHARED_EMBED.get_or_init(Self::new_mock))
     }
 
     /// Spawn a background tokio task that loads the real embedder and swaps it in.
@@ -422,6 +441,16 @@ impl LazyEmbedModel {
     /// A tokio runtime must be active when this is called (it uses
     /// `tokio::spawn`).
     pub fn spawn_load(self: &std::sync::Arc<Self>) {
+        // Idempotent: only the first caller kicks off the real-model load. When
+        // the shared instance is used by multiple subsystems, each may call
+        // spawn_load(); without this guard they would each trigger a full
+        // multi-GB download/init in parallel.
+        if self
+            .load_started
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return;
+        }
         let this = std::sync::Arc::clone(self);
         tokio::spawn(async move {
             let real = default_embed_model().await;
@@ -496,7 +525,9 @@ pub mod multivector;
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use cascade_types::{EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind};
-pub use model_cache::{is_model_cached, model_cache_dir, ModelCacheError};
+pub use model_cache::{
+    ensure_cache_dir_ready, is_model_cached, model_cache_dir, ModelCacheError,
+};
 pub use store::{
     delete_embeddings_by_source, query_dense_knn, store_embeddings, validate_dense_dim, DENSE_DIM,
 };

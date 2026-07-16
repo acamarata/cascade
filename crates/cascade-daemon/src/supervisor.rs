@@ -433,12 +433,12 @@ pub async fn run(
                     //    blocked by the model download/load. ───────────────────
                     //
                     // CASCADE_OFFLINE_MODELS=1 skips the background download task.
-                    // This is a second, independent construction site from the one
-                    // in ipc.rs (this one backs the AutoRagWatcher/VolumeIndexGuard
-                    // pipeline, ipc.rs's backs RagSearchHandler) — both must honor
-                    // the same env var or CI's self-hosted runner disk fills with
-                    // ~4 GB ONNX model downloads regardless of ipc.rs's guard.
-                    let lazy_embed = cascade_rag::embed::LazyEmbedModel::new_mock();
+                    // This backs the AutoRagWatcher/VolumeIndexGuard pipeline;
+                    // ipc.rs's RagSearchHandler uses the SAME shared instance so
+                    // the ~4 GB ONNX model is downloaded/warmed only once per
+                    // process (previously each site built its own copy — the log
+                    // showed two "initialising BGE-M3" per daemon start).
+                    let lazy_embed = cascade_rag::embed::LazyEmbedModel::shared();
                     if std::env::var("CASCADE_OFFLINE_MODELS").is_err() {
                         lazy_embed.spawn_load();
                     }
