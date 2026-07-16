@@ -17,9 +17,7 @@ use cascade_agents::grants::{AccessLevel, ToolGrant};
 use cascade_agents::spec::{builtin_coder, AgentRole};
 use cascade_agents::task::{AgentTask, TaskStatus};
 use cascade_agents::tool_registry::{ToolDescriptor, ToolRegistry};
-use cascade_daemon::automation_router::{
-    LocalCapabilitySet, LocalToolInvoker, SafetyGate,
-};
+use cascade_daemon::automation_router::{LocalCapabilitySet, LocalToolInvoker, SafetyGate};
 
 struct ToolLoopProvider {
     input_path: PathBuf,
@@ -194,7 +192,11 @@ async fn executor_runs_real_file_bash_file_loop_under_safety_gate() {
         .expect("guarded tool loop should complete");
 
     assert_eq!(result.status, TaskStatus::Done);
-    assert_eq!(provider.calls(), 4, "provider should run exactly four steps");
+    assert_eq!(
+        provider.calls(),
+        4,
+        "provider should run exactly four steps"
+    );
     assert_eq!(
         std::fs::read_to_string(output_path).expect("read written output"),
         "firewall-input\nbash-stage-ok\n"

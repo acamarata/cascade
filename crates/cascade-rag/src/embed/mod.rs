@@ -394,7 +394,8 @@ pub struct LazyEmbedModel {
 /// Process-global shared holder, so every subsystem in the daemon (RAG search
 /// handler, indexer worker pool, …) uses ONE embedder instance and the real
 /// model is downloaded and warmed exactly once per process.
-static SHARED_EMBED: std::sync::OnceLock<std::sync::Arc<LazyEmbedModel>> = std::sync::OnceLock::new();
+static SHARED_EMBED: std::sync::OnceLock<std::sync::Arc<LazyEmbedModel>> =
+    std::sync::OnceLock::new();
 
 impl std::fmt::Debug for LazyEmbedModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -525,9 +526,7 @@ pub mod multivector;
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use cascade_types::{EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind};
-pub use model_cache::{
-    ensure_cache_dir_ready, is_model_cached, model_cache_dir, ModelCacheError,
-};
+pub use model_cache::{ensure_cache_dir_ready, is_model_cached, model_cache_dir, ModelCacheError};
 pub use store::{
     delete_embeddings_by_source, query_dense_knn, store_embeddings, validate_dense_dim, DENSE_DIM,
 };

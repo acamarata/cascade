@@ -61,12 +61,7 @@ impl BuildEngine {
     ///
     /// `dispatcher` — ticket execution seam.
     /// `checks` — external gate seam (pass [`NoExternalChecks`] for dry runs).
-    pub fn new<D, C>(
-        store: PbdStore,
-        dispatcher: D,
-        checks: C,
-        config: BuildConfig,
-    ) -> Self
+    pub fn new<D, C>(store: PbdStore, dispatcher: D, checks: C, config: BuildConfig) -> Self
     where
         D: TicketDispatcher + 'static,
         C: ExternalChecks + 'static,
@@ -328,8 +323,7 @@ impl BuildEngine {
         for step in &active_steps {
             if matches!(
                 step.status,
-                crate::pbd::schema::StepStatus::Pending
-                    | crate::pbd::schema::StepStatus::Failed
+                crate::pbd::schema::StepStatus::Pending | crate::pbd::schema::StepStatus::Failed
             ) {
                 self.store.transition_step(
                     phase_id,
@@ -350,7 +344,10 @@ impl BuildEngine {
             wave_id,
             sprint_id,
             &ticket,
-            &active_steps.iter().map(|step| step.id.as_str()).collect::<Vec<_>>(),
+            &active_steps
+                .iter()
+                .map(|step| step.id.as_str())
+                .collect::<Vec<_>>(),
         );
         let mut attempt = 0;
         let outcome = loop {
@@ -382,9 +379,8 @@ impl BuildEngine {
         match outcome {
             FleetOutcome::Success { stdout } => {
                 let completed = completion_markers(&stdout);
-                let gate_context = format!(
-                    "{phase_id}/{epic_id}/{wave_id}/{sprint_id}/{ticket_id}/steps"
-                );
+                let gate_context =
+                    format!("{phase_id}/{epic_id}/{wave_id}/{sprint_id}/{ticket_id}/steps");
                 let gate_errors = if self.config.skip_externals {
                     Vec::new()
                 } else {
@@ -417,13 +413,7 @@ impl BuildEngine {
                         crate::pbd::schema::StepStatus::Failed
                     };
                     self.store.transition_step(
-                        phase_id,
-                        epic_id,
-                        wave_id,
-                        sprint_id,
-                        ticket_id,
-                        &step.id,
-                        status,
+                        phase_id, epic_id, wave_id, sprint_id, ticket_id, &step.id, status,
                     )?;
                 }
 
@@ -479,11 +469,9 @@ impl BuildEngine {
             let ticket = self
                 .store
                 .load_ticket(phase_id, epic_id, wave_id, sprint_id, ticket_id)?;
-            if ticket
-                .steps
-                .iter()
-                .any(|step| step.id == step_id && step.status == crate::pbd::schema::StepStatus::Running)
-            {
+            if ticket.steps.iter().any(|step| {
+                step.id == step_id && step.status == crate::pbd::schema::StepStatus::Running
+            }) {
                 self.store.transition_step(
                     phase_id,
                     epic_id,
@@ -515,7 +503,10 @@ fn fleet_prompt(
         .map(|step| format!("- {}: {}", step.id, step.title))
         .collect::<Vec<_>>()
         .join("\n");
-    let ticket_note = ticket.note.as_deref().unwrap_or("No additional ticket instructions.");
+    let ticket_note = ticket
+        .note
+        .as_deref()
+        .unwrap_or("No additional ticket instructions.");
 
     format!(
         "Execute the self-contained ticket {ticket_id} ({title}) in phase {phase_id}/{epic_id}/{wave_id}/{sprint_id}.\n\
@@ -589,7 +580,9 @@ mod tests {
         for binary in ["claude", "opencode"] {
             let path = directory.join(binary);
             fs::write(&path, format!("#!/bin/sh\n{body}\n")).expect("write fake fleet CLI");
-            let mut permissions = fs::metadata(&path).expect("fake CLI metadata").permissions();
+            let mut permissions = fs::metadata(&path)
+                .expect("fake CLI metadata")
+                .permissions();
             permissions.set_mode(0o755);
             fs::set_permissions(path, permissions).expect("make fake CLI executable");
         }
@@ -660,7 +653,11 @@ mod tests {
         .await
         .expect("real phase run");
 
-        assert!(result.success, "phase gate should pass: {:?}", result.errors);
+        assert!(
+            result.success,
+            "phase gate should pass: {:?}",
+            result.errors
+        );
         assert_eq!(first_step_status(phases_root.clone()), StepStatus::Passed);
         let transitions = event_transitions(&phases_root);
         assert!(transitions.contains(&("pending".into(), "running".into())));
@@ -728,15 +725,10 @@ mod tests {
         seed_phase(&store);
         let phases_root = store.root().to_path_buf();
 
-        let error = BuildEngine::new(
-            store,
-            FleetDispatcher,
-            RejectChecks,
-            BuildConfig::default(),
-        )
-        .run_phase("p1")
-        .await
-        .expect_err("rejected gate must fail the phase run");
+        let error = BuildEngine::new(store, FleetDispatcher, RejectChecks, BuildConfig::default())
+            .run_phase("p1")
+            .await
+            .expect_err("rejected gate must fail the phase run");
 
         assert!(error.to_string().contains("external step gate blocked"));
         assert_eq!(first_step_status(phases_root.clone()), StepStatus::Failed);
@@ -899,7 +891,11 @@ esac"#,
         .await
         .expect("resumed phase run");
 
-        assert!(result.success, "resumed phase should close: {:?}", result.errors);
+        assert!(
+            result.success,
+            "resumed phase should close: {:?}",
+            result.errors
+        );
         let resumed = PbdStore::new(phases_root)
             .load_ticket("p1", "e01", "w01", "s01", "t01")
             .expect("load resumed ticket");

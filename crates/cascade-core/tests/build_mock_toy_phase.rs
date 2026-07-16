@@ -103,15 +103,10 @@ async fn mock_dispatcher_remains_green_on_three_ticket_toy_phase() {
     store.init().expect("initialize toy store");
     seed_toy_phase(&store);
 
-    let result = BuildEngine::new(
-        store,
-        MockDispatcher,
-        NoExternalChecks,
-        Default::default(),
-    )
-    .run_phase("p-toy")
-    .await
-    .expect("run toy phase through mock dispatcher");
+    let result = BuildEngine::new(store, MockDispatcher, NoExternalChecks, Default::default())
+        .run_phase("p-toy")
+        .await
+        .expect("run toy phase through mock dispatcher");
 
     assert!(result.success, "phase gate errors: {:?}", result.errors);
     let persisted = PbdStore::new(phases_root);

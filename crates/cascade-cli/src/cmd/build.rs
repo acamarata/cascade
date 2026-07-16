@@ -17,9 +17,7 @@ use clap::{Args, Subcommand};
 
 use cascade_core::{
     build::{BuildConfig, BuildEngine, FleetDispatcher, MockDispatcher},
-    pbd::{
-        store::resolve_phases_root, BuildCheck, NoExternalChecks, PbdStore, RealExternalChecks,
-    },
+    pbd::{store::resolve_phases_root, BuildCheck, NoExternalChecks, PbdStore, RealExternalChecks},
 };
 use cascade_types::error::Result;
 
@@ -89,8 +87,7 @@ impl Command for BuildArgs {
                     }
                     (true, true) => {
                         return Err(cascade_types::error::CascadeError::Other(
-                            "cannot use both --mock and --real; choose one dispatcher"
-                                .into(),
+                            "cannot use both --mock and --real; choose one dispatcher".into(),
                         ));
                     }
                     _ => {}

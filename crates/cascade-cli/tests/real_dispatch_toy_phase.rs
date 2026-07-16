@@ -184,24 +184,16 @@ fn real_cli_dispatches_isolated_three_ticket_toy_phase() {
     wrapper_permissions.set_mode(0o700);
     fs::set_permissions(&opencode_wrapper, wrapper_permissions)
         .expect("make opencode wrapper executable");
-    let isolated_path = std::env::join_paths(
-        std::iter::once(agent_bin_root.clone()).chain(std::env::split_paths(
-            &std::env::var_os("PATH").expect("PATH is required"),
-        )),
-    )
+    let isolated_path = std::env::join_paths(std::iter::once(agent_bin_root.clone()).chain(
+        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is required")),
+    ))
     .expect("construct isolated PATH");
     let store = PbdStore::new(&phases_root);
     store.init().expect("initialize isolated real toy store");
     let expected_evidence = seed_real_toy_phase(&store, &evidence_root);
 
     let output = Command::new(cascade_bin())
-        .args([
-            "build",
-            "run",
-            "p-real-toy",
-            "--real",
-            "--phases",
-        ])
+        .args(["build", "run", "p-real-toy", "--real", "--phases"])
         .arg(&phases_root)
         .env("PATH", isolated_path)
         .output()
@@ -224,22 +216,15 @@ fn real_cli_dispatches_isolated_three_ticket_toy_phase() {
 
     for (index, (expected, path)) in expected_evidence.iter().enumerate() {
         let ticket_id = format!("t{:02}", index + 1);
-        let evidence = fs::read_to_string(path)
-            .unwrap_or_else(|error| panic!("real agent evidence missing at {}: {error}", path.display()));
+        let evidence = fs::read_to_string(path).unwrap_or_else(|error| {
+            panic!("real agent evidence missing at {}: {error}", path.display())
+        });
         assert_eq!(evidence.trim(), expected);
         let ticket = store
-            .load_ticket(
-                "p-real-toy",
-                "e-toy",
-                "w-toy",
-                "s-toy",
-                &ticket_id,
-            )
+            .load_ticket("p-real-toy", "e-toy", "w-toy", "s-toy", &ticket_id)
             .expect("load real-dispatched toy ticket");
         assert_eq!(ticket.status, TicketStatus::Done);
         assert_eq!(ticket.steps[0].status, StepStatus::Passed);
-        println!(
-            "verified {ticket_id}: evidence={expected}, ticket=done, step=passed"
-        );
+        println!("verified {ticket_id}: evidence={expected}, ticket=done, step=passed");
     }
 }
