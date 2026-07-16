@@ -218,9 +218,11 @@ impl Resolver {
     fn discover_tier_paths(&self, cwd: &Path) -> Vec<(CascadeTier, PathBuf)> {
         let mut results: Vec<(CascadeTier, PathBuf)> = Vec::new();
 
-        // GCI lives at $HOME.
-        if let Some(home) = dirs_home() {
-            results.push((CascadeTier::Gci, home));
+        // GCI lives at $HOME. Canonicalize so the comparison below (which
+        // excludes HOME from the intermediate walk) is robust against symlinks.
+        let home = dirs_home().map(|h| std::fs::canonicalize(&h).unwrap_or(h));
+        if let Some(ref h) = home {
+            results.push((CascadeTier::Gci, h.clone()));
         }
 
         // PCI lives one level above project directories (e.g. ~/Sites/).
@@ -244,6 +246,17 @@ impl Resolver {
         for ancestor in &ancestors {
             if tier_idx >= tier_sequence.len() {
                 break;
+            }
+            // Skip $HOME itself: `~/.cascade/` is already claimed as the GCI
+            // tier above. Without this guard it was ALSO assigned to the first
+            // intermediate slot (PCI), so the GCI global file was loaded twice —
+            // once as GCI, once as PCI — making every GCI block look like it was
+            // duplicated into PCI. That produced phantom "Cross-tier duplication
+            // (Pci → Gci)" findings for content that never existed in the real
+            // personal tier, and shifted the true Downloads/Sites tiers down by
+            // one slot (Downloads mislabelled APC, etc.).
+            if home.as_deref() == Some(ancestor.as_path()) {
+                continue;
             }
             if ancestor
                 .join(cascade_types::paths::CASCADE_DIR_NAME)
@@ -280,4 +293,74 @@ impl Resolver {
 /// Returns the user home directory, or `None` if it cannot be determined.
 fn dirs_home() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn mk_cascade(dir: &Path) {
+        let c = dir.join(".cascade");
+        fs::create_dir_all(&c).unwrap();
+        fs::write(c.join("CASCADE.md"), "# tier\n").unwrap();
+    }
+
+    /// Regression (Bug 3): `$HOME` must be assigned ONLY the GCI tier. It must
+    /// NOT also be consumed as the first intermediate (PCI) slot — otherwise the
+    /// GCI global file is loaded twice and every GCI block looks duplicated into
+    /// PCI, producing phantom "Cross-tier duplication (Pci → Gci)" findings.
+    #[test]
+    #[serial_test::serial(global_env)]
+    fn home_is_gci_only_not_also_pci() {
+        let tmp = TempDir::new().unwrap();
+        // Canonicalize so it matches the ancestor walk (which canonicalizes cwd).
+        let home = std::fs::canonicalize(tmp.path()).unwrap();
+        let downloads = home.join("Downloads");
+        let proj = downloads.join("proj");
+        fs::create_dir_all(&proj).unwrap();
+        mk_cascade(&home); // ~/.cascade      → GCI
+        mk_cascade(&downloads); // ~/Downloads/.cascade → PCI (personal)
+        mk_cascade(&proj); // project             → APC slot (next)
+
+        let prev = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let resolver = Resolver::new();
+        let candidates = resolver.discover_tier_paths(&proj);
+
+        match prev {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+
+        // HOME appears exactly once, and only as GCI.
+        let home_entries: Vec<_> = candidates.iter().filter(|(_, p)| *p == home).collect();
+        assert_eq!(
+            home_entries.len(),
+            1,
+            "HOME must appear exactly once (as GCI), got: {candidates:#?}"
+        );
+        assert_eq!(
+            home_entries[0].0,
+            CascadeTier::Gci,
+            "HOME must be classified GCI only"
+        );
+
+        // The real personal dir (~/Downloads) takes the PCI slot, not HOME.
+        let pci = candidates.iter().find(|(t, _)| *t == CascadeTier::Pci);
+        assert_eq!(
+            pci.map(|(_, p)| p.clone()),
+            Some(downloads.clone()),
+            "PCI slot must be ~/Downloads, not ~/ (the GCI global)"
+        );
+        // No intermediate tier may point back at HOME.
+        assert!(
+            !candidates
+                .iter()
+                .any(|(t, p)| *t != CascadeTier::Gci && *p == home),
+            "no intermediate tier may reuse the HOME dir: {candidates:#?}"
+        );
+    }
 }

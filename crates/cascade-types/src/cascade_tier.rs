@@ -9,8 +9,8 @@
 //!
 //! ```text
 //! GCI  (~/.cascade/)                all tools, all projects
-//!  └─ PCI  (~/<project-group>/.cascade/)  all projects in a group
-//!      └─ APC  (~/<sites>/.cascade/)      all coding projects
+//!  └─ PCI  (~/Downloads/.cascade/)  personal/individual scope
+//!      └─ APC  (~/Sites/.cascade/)      all coding projects
 //!          └─ PPC  (<project>/.cascade/)  single project (multi-repo)
 //!              └─ PRC  (<repo>/.cascade/) single repo
 //!                  └─ PAC  (<app>/.cascade/)  single app within a repo
@@ -35,12 +35,12 @@ pub enum CascadeTier {
     /// Applies to all tools and all projects. Highest precedence.
     Gci,
 
-    /// Project-group Cascade Instructions — e.g. `~/Sites/.cascade/`.
-    /// Applies to a named group of projects (equivalent to old ASI layer).
+    /// Personal Cascade Instructions — e.g. `~/Downloads/.cascade/`.
+    /// Applies to the user's personal/individual scope (locked/sensitive).
     Pci,
 
-    /// All-Projects Cascade — e.g. a team-wide shared directory.
-    /// Sits between a project group and an individual project.
+    /// All-Projects Cascade — e.g. `~/Sites/.cascade/`.
+    /// Applies to all coding projects (the parent of every per-project cascade).
     Apc,
 
     /// Per-Project Cascade — `<project-root>/.cascade/`.
@@ -73,7 +73,7 @@ impl CascadeTier {
     pub fn description(&self) -> &'static str {
         match self {
             Self::Gci => "Global Cascade Instructions (~/.cascade/)",
-            Self::Pci => "Project-group Cascade Instructions",
+            Self::Pci => "Personal Cascade Instructions",
             Self::Apc => "All-Projects Cascade",
             Self::Ppc => "Per-Project Cascade",
             Self::Prc => "Per-Repo Cascade",

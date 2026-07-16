@@ -153,15 +153,58 @@ fn extract_path_refs(text: &str) -> Vec<String> {
 
 /// Resolve a raw path reference to an absolute [`PathBuf`].
 ///
-/// If `raw` is already absolute it is returned as-is.  Otherwise it is joined
-/// onto `base_dir`.
+/// Resolution rules, in order:
+///
+/// 1. A `~/`-prefixed reference (or a bare `~`) is expanded against `$HOME`.
+///    These are already absolute-ish paths — they must NOT be joined onto the
+///    tier's `.cascade/` directory. (Without this, a reference such as
+///    `~/.claude/references/foo.md` was concatenated verbatim onto the cascade
+///    root, producing a nonsense path like `<cascade_root>/~/.claude/...` that
+///    can never exist, so every `~/`-prefixed reference was wrongly reported as
+///    dangling.)
+/// 2. An already-absolute path (leading `/`) is returned as-is.
+/// 3. Anything else is treated as relative and joined onto `base_dir`.
 fn resolve_ref(raw: &str, base_dir: &Path) -> PathBuf {
+    // Strip markdown code-span backticks and surrounding quotes that commonly
+    // wrap references in instruction text (e.g. `-> `~/.claude/foo.md``). Also
+    // strip a single trailing sentence punctuation mark. Without this the token
+    // still carries a leading backtick, so tilde/absolute detection below fails.
+    let raw = raw
+        .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+        .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | ')'))
+        .trim_matches(|c| c == '`' || c == '"' || c == '\'');
+
+    // ── Rule 1: tilde expansion ──────────────────────────────────────────────
+    if raw == "~" {
+        if let Some(home) = home_dir() {
+            return home;
+        }
+    }
+    if let Some(rest) = raw.strip_prefix("~/") {
+        if let Some(home) = home_dir() {
+            return home.join(rest);
+        }
+        // No $HOME available: fall through and treat the remainder as a path
+        // rooted at "/" so it is still checked as an absolute-ish reference
+        // rather than being joined onto the cascade root.
+        return PathBuf::from("/").join(rest);
+    }
+
+    // ── Rules 2 & 3: absolute vs relative ────────────────────────────────────
     let p = Path::new(raw);
     if p.is_absolute() {
         p.to_path_buf()
     } else {
         base_dir.join(p)
     }
+}
+
+/// Returns the user's home directory via `$HOME` (Unix) or `USERPROFILE` (Windows).
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(PathBuf::from)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -308,6 +351,79 @@ mod tests {
         let findings = lint_dangling(&resolved);
         assert_eq!(findings.len(), 1, "load_when missing path must be flagged");
         assert_eq!(findings[0].raw_ref, "references/missing.md");
+    }
+
+    // ── Test: tilde-prefixed reference expands against $HOME ─────────────────
+
+    /// A `~/`-prefixed reference must be expanded to `$HOME/...` and checked
+    /// there — NOT joined onto the tier's `.cascade/` directory.
+    ///
+    /// WHY (regression): previously `~/.claude/refs/x.md` fell into the relative
+    /// branch and became `<cascade_dir>/~/.claude/refs/x.md`, which never exists,
+    /// so every `~/`-prefixed pointer was reported as dangling regardless of the
+    /// real target's existence.
+    #[test]
+    #[serial_test::serial(global_env)]
+    fn tilde_ref_expands_against_home_and_is_not_flagged_when_present() {
+        let tmp = TempDir::new().unwrap();
+        // Point HOME at the tempdir so the expanded path lands somewhere we
+        // control. Serialised against other env-mutating tests is unnecessary
+        // here because we read HOME immediately after setting it.
+        let home = tmp.path().to_path_buf();
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        // Create ~/.claude/references/exists.md under the fake HOME.
+        let target_dir = home.join(".claude").join("references");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("exists.md"), "content").unwrap();
+
+        let cascade_dir = home.join("proj").join(".cascade");
+        fs::create_dir_all(&cascade_dir).unwrap();
+        let instructions = "See detail.\n-> `~/.claude/references/exists.md`";
+        let resolved = make_resolved_with_dir(instructions, &cascade_dir);
+        let findings = lint_dangling(&resolved);
+
+        // Restore HOME before asserting (panic safety).
+        match prev_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert!(
+            findings.is_empty(),
+            "existing ~/-prefixed ref must not be flagged: {findings:#?}"
+        );
+    }
+
+    /// A missing `~/`-prefixed reference is flagged, and the resolved path is the
+    /// $HOME-expanded path (never the `<cascade_dir>/~/...` concatenation).
+    #[test]
+    #[serial_test::serial(global_env)]
+    fn tilde_ref_missing_is_flagged_with_home_expanded_path() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().to_path_buf();
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
+
+        let cascade_dir = home.join("proj").join(".cascade");
+        fs::create_dir_all(&cascade_dir).unwrap();
+        let instructions = "-> ~/.claude/references/ghost.md";
+        let resolved = make_resolved_with_dir(instructions, &cascade_dir);
+        let findings = lint_dangling(&resolved);
+
+        let expected = home.join(".claude").join("references").join("ghost.md");
+
+        match prev_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+
+        assert_eq!(findings.len(), 1, "missing ~/-ref must be flagged");
+        assert_eq!(
+            findings[0].resolved_path, expected,
+            "resolved path must be $HOME-expanded, not joined onto the cascade dir"
+        );
     }
 
     // ── Test 6: extract_path_refs deduplication ───────────────────────────────

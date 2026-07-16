@@ -64,6 +64,18 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Canonicalizes `path` for tier comparison, resolving symlinks (e.g. a
+/// `~/Sites -> /Volumes/X9/Sites` symlink) so that a path passed in as the
+/// symlink and a CWD already resolved to the target compare equal.
+///
+/// Falls back to the input path unchanged when canonicalization fails — the
+/// target does not exist (tempfile-based tests) or the volume is unmounted.
+/// This keeps behaviour identical to the previous literal comparison in those
+/// cases rather than introducing a hard failure.
+fn canon(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// A single discovered tier entry: the tier classification and the absolute
 /// path to the `.cascade/` directory (not the `CASCADE.md` file itself).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,15 +200,24 @@ impl TierDiscovery {
     /// | Path | Default tier | Notes |
     /// |---|---|---|
     /// | `~` | [`CascadeTier::Gci`] | home = GCI always |
-    /// | `~/Sites` | [`CascadeTier::Pci`] | all-projects parent |
-    /// | `~/Sites/<project>` | [`CascadeTier::Apc`] | project root |
-    /// | `~/Downloads` | [`CascadeTier::Pac`] | **personal scope** — locked/sensitive |
-    /// | `~/Downloads/**` | [`CascadeTier::Pac`] | sub-paths also personal-scope |
+    /// | `~/Sites` | [`CascadeTier::Apc`] | all-projects parent (all coding projects) |
+    /// | `~/Sites/<project>` | [`CascadeTier::Ppc`] | per-project root (multi-repo project) |
+    /// | `~/Downloads` | [`CascadeTier::Pci`] | **personal scope** — locked/sensitive |
+    /// | `~/Downloads/**` | [`CascadeTier::Pci`] | sub-paths also personal-scope |
     ///
-    /// `~/Downloads` is classified as [`CascadeTier::Pac`] (personal/app-level)
-    /// to signal that it carries the user's personal threaded memory.  The
+    /// `~/Sites` is the **All-Projects Cascade** ([`CascadeTier::Apc`]) — the
+    /// parent that governs every coding project. A single directory beneath it
+    /// (e.g. `~/Sites/nself`) is a **Per-Project Cascade** ([`CascadeTier::Ppc`]),
+    /// covering all repos within that one multi-repo project.
+    ///
+    /// `~/Downloads` is classified as [`CascadeTier::Pci`] (Personal Cascade) to
+    /// signal that it carries the user's personal threaded memory.  The
     /// sensitivity firewall then treats any content from this scope as
     /// [`cascade_core::sensitivity::ContentSensitivity::Sensitive`].
+    ///
+    /// Path comparisons are made on canonicalized paths so that a symlinked
+    /// `~/Sites` (e.g. `~/Sites -> /Volumes/X9/Sites`) still matches a CWD that
+    /// the OS has already resolved to the symlink target.
     ///
     /// Environment-variable overrides (`CASCADE_APC_PATH`, `with_sites()`) always
     /// win over the defaults.
@@ -208,29 +229,40 @@ impl TierDiscovery {
             home.join("Sites")
         };
 
-        if path == home {
+        // Canonicalize for comparison so symlinked roots resolve. `~/Sites` is
+        // commonly a symlink to external storage (e.g. /Volumes/X9/Sites); the
+        // OS resolves the CWD to the target, so a literal `==` against the
+        // symlink path would never match and every project would fall through to
+        // the Ppc catch-all. `canon()` falls back to the input path when the
+        // target does not exist (e.g. in tempfile-based tests).
+        let path_c = canon(path);
+        let sites_c = canon(&sites);
+        let home_c = canon(home);
+
+        if path_c == home_c {
             return CascadeTier::Gci;
         }
 
-        // ── Mac / personal-scope default: ~/Downloads → Pac (personal) ────────
+        // ── Personal-scope default: ~/Downloads → Pci (personal) ─────────────
         // Checked before Sites so the personal scope always wins even if someone
         // sets CASCADE_APC_PATH to something that overlaps.
-        let downloads = home.join("Downloads");
-        if path == downloads || path.starts_with(&downloads) {
+        let downloads = canon(&home.join("Downloads"));
+        if path_c == downloads || path_c.starts_with(&downloads) {
             // Personal scope: all content here is treated as sensitive by the
-            // sensitivity firewall.  We use PAC tier to signal this is a locked
-            // per-user context rather than a project-level configuration.
-            return CascadeTier::Pac;
-        }
-
-        // Detect `Sites/` root (PCI level — parent of all APC projects)
-        if path == sites {
+            // sensitivity firewall.  Pci (Personal Cascade Instructions) marks
+            // this as a locked per-user context rather than a project-level one.
             return CascadeTier::Pci;
         }
 
-        // Detect one level beneath Sites/ (project root → APC)
-        if path.parent() == Some(sites.as_path()) {
+        // Detect `Sites/` root → Apc (All-Projects Cascade, parent of all
+        // per-project cascades).
+        if path_c == sites_c {
             return CascadeTier::Apc;
+        }
+
+        // Detect one level beneath Sites/ (a single multi-repo project root → Ppc).
+        if path_c.parent() == Some(sites_c.as_path()) {
+            return CascadeTier::Ppc;
         }
 
         // If there is a git root at this level, it could be PPC or PRC.
@@ -329,23 +361,65 @@ mod tests {
     }
 
     #[test]
-    fn sites_project_dir_classified_as_apc() {
+    fn sites_root_classified_as_apc() {
+        // ~/Sites itself is the All-Projects Cascade (governs all coding projects).
         let root = TempDir::new().unwrap();
         let (home, sites, _) = make_home_tree(root.path());
-        let proj = sites.join("myproject");
+
+        let discovery = TierDiscovery::new().with_home(home.clone());
+        let tier = discovery.classify_tier(&sites, &home);
+        assert_eq!(
+            tier,
+            CascadeTier::Apc,
+            "~/Sites should classify as APC (all-projects cascade)"
+        );
+    }
+
+    #[test]
+    fn sites_project_dir_classified_as_ppc() {
+        // A single multi-repo project under ~/Sites (e.g. ~/Sites/nself) is the
+        // Per-Project Cascade.
+        let root = TempDir::new().unwrap();
+        let (home, sites, _) = make_home_tree(root.path());
+        let proj = sites.join("nself");
         fs::create_dir_all(&proj).unwrap();
 
         let discovery = TierDiscovery::new().with_home(home.clone());
         let tier = discovery.classify_tier(&proj, &home);
         assert_eq!(
             tier,
-            CascadeTier::Apc,
-            "~/Sites/<project> should classify as APC"
+            CascadeTier::Ppc,
+            "~/Sites/<project> should classify as PPC (per-project cascade)"
         );
     }
 
     #[test]
-    fn downloads_dir_classified_as_pac_personal_scope() {
+    fn sites_symlink_still_classified_as_apc() {
+        // Regression: ~/Sites is frequently a symlink to external storage. When
+        // the CWD is already resolved to the symlink target, classification must
+        // still match ~/Sites → APC (not fall through to the Ppc catch-all).
+        let root = TempDir::new().unwrap();
+        let home = root.path().join("home");
+        let external = root.path().join("external-volume").join("Sites");
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        // Create the ~/Sites symlink pointing at the external target.
+        let sites_link = home.join("Sites");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&external, &sites_link).unwrap();
+
+        let discovery = TierDiscovery::new().with_home(home.clone());
+        // Classify the RESOLVED target path (what the OS gives as CWD).
+        let tier = discovery.classify_tier(&external, &home);
+        assert_eq!(
+            tier,
+            CascadeTier::Apc,
+            "resolved ~/Sites symlink target should still classify as APC"
+        );
+    }
+
+    #[test]
+    fn downloads_dir_classified_as_pci_personal_scope() {
         let root = TempDir::new().unwrap();
         let (home, _, downloads) = make_home_tree(root.path());
 
@@ -353,13 +427,13 @@ mod tests {
         let tier = discovery.classify_tier(&downloads, &home);
         assert_eq!(
             tier,
-            CascadeTier::Pac,
-            "~/Downloads should classify as PAC (personal scope)"
+            CascadeTier::Pci,
+            "~/Downloads should classify as PCI (personal scope)"
         );
     }
 
     #[test]
-    fn downloads_subdir_also_classified_as_pac() {
+    fn downloads_subdir_also_classified_as_pci() {
         let root = TempDir::new().unwrap();
         let (home, _, downloads) = make_home_tree(root.path());
         let subdir = downloads.join("personal").join("threads");
@@ -369,8 +443,8 @@ mod tests {
         let tier = discovery.classify_tier(&subdir, &home);
         assert_eq!(
             tier,
-            CascadeTier::Pac,
-            "~/Downloads/** should also classify as PAC (personal scope)"
+            CascadeTier::Pci,
+            "~/Downloads/** should also classify as PCI (personal scope)"
         );
     }
 
@@ -397,11 +471,18 @@ mod tests {
         let discovery = TierDiscovery::new()
             .with_home(home.clone())
             .with_sites(custom_sites.clone());
+        // Under the custom sites root: the root itself is APC, a project beneath
+        // it is PPC.
+        assert_eq!(
+            discovery.classify_tier(&custom_sites, &home),
+            CascadeTier::Apc,
+            "custom sites override: the sites root should be APC"
+        );
         let tier = discovery.classify_tier(&proj, &home);
         assert_eq!(
             tier,
-            CascadeTier::Apc,
-            "custom sites override: project under custom sites dir should be APC"
+            CascadeTier::Ppc,
+            "custom sites override: project under custom sites dir should be PPC"
         );
     }
 
