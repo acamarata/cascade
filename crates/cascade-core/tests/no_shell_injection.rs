@@ -59,11 +59,30 @@ fn is_test_support_file(path: &Path) -> bool {
 /// — and is passed as a SINGLE argument via `.arg("-c").arg(&self.command)`,
 /// NOT assembled with `format!` interpolation. The interpolation vector this
 /// guard primarily defends against (`"-c"` + `format!`) is therefore still
-/// enforced here, and every other crate file remains fully scanned. This
-/// exemption is intentionally narrow: it matches exactly one audited file.
+/// enforced here, and every other crate file remains fully scanned.
+///
+/// Audited exemption: the daemon's `bash_exec` tool-invoker capability.
+///
+/// `cascade-daemon/src/automation_router.rs` (`LocalToolInvoker::bash_exec`)
+/// deliberately spawns `bash -c <command>` to run an AI-supplied shell
+/// command on the caller's behalf — pipes/redirects/`&&` require a real
+/// shell, which an argument-array exec cannot express. The injection surface
+/// is closed by `SafetyGate`, which runs deny-list pattern matching on the
+/// command BEFORE `bash_exec` is ever reached (see `SafetyGate`'s doc
+/// comment in that file, and `cascade-daemon/tests/no_shell_injection.rs`
+/// for the crate-local static audit enforcing this stays the sole shell
+/// launcher in that crate).
+///
+/// Both exemptions are intentionally narrow: each matches exactly one
+/// audited file.
 fn is_audited_shell_runner(path: &Path) -> bool {
-    path.file_name().and_then(|n| n.to_str()) == Some("external_checks.rs")
-        && path.components().any(|c| c.as_os_str() == "pbd")
+    let is_pbd_external_checks = path.file_name().and_then(|n| n.to_str())
+        == Some("external_checks.rs")
+        && path.components().any(|c| c.as_os_str() == "pbd");
+    let is_daemon_bash_exec = path.file_name().and_then(|n| n.to_str())
+        == Some("automation_router.rs")
+        && path.components().any(|c| c.as_os_str() == "cascade-daemon");
+    is_pbd_external_checks || is_daemon_bash_exec
 }
 
 #[test]
