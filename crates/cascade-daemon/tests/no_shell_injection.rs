@@ -67,12 +67,55 @@ fn arg_array_does_not_execute_shell_metacharacters() {
     );
 }
 
+/// Marker comment that must appear on the line immediately above an
+/// otherwise-banned `arg("-c")` / `Command::new("bash"|"sh")` line for it to
+/// be exempt from the two static audits below.
+///
+/// There is exactly one legitimate use in this crate: `automation_router::
+/// bash_exec`, the audited `bash_exec` tool-invoker capability. It must
+/// invoke a real shell to support pipes/redirects/`&&` in an AI-supplied
+/// command string — an arg-array exec cannot express that. The injection
+/// surface is closed by `SafetyGate`, which runs deny-list pattern matching
+/// on the command BEFORE `bash_exec` is ever reached (see `SafetyGate`'s doc
+/// comment in `automation_router.rs`). This marker keeps that exception
+/// singular and self-documenting instead of silently disabling the audit.
+const SHELL_EXEC_ALLOW_MARKER: &str = "SAFETY-GATE-AUDITED-SHELL-EXEC";
+
+/// True if `line_no` (0-indexed) in `lines` is part of a statement/chain that
+/// sits directly below a contiguous block of `//` comment lines containing
+/// the allowlist marker. Walks upward through fluent `.method(...)`
+/// continuation lines and still-open `let ... = ...(` lines (no trailing
+/// `;`), then through the comment block above them, so a multi-line
+/// justification comment above a multi-line chained call is matched.
+fn is_marker_exempt(lines: &[&str], line_no: usize) -> bool {
+    let mut i = line_no;
+    while i > 0 {
+        i -= 1;
+        let raw = lines[i];
+        let trimmed = raw.trim_start();
+        if trimmed.starts_with("//") {
+            if raw.contains(SHELL_EXEC_ALLOW_MARKER) {
+                return true;
+            }
+            continue;
+        }
+        let is_chain_continuation = trimmed.starts_with('.') || !raw.trim_end().ends_with(';');
+        if is_chain_continuation {
+            continue;
+        }
+        break;
+    }
+    false
+}
+
 /// Static audit: confirm that no source file in the daemon crate passes `-c` as
-/// a shell-interpreter flag in a `Command` invocation.
+/// a shell-interpreter flag in a `Command` invocation, except the single
+/// marker-allowlisted `bash_exec` call site.
 ///
 /// This complements the runtime test above. It searches the daemon's `src/`
-/// directory for the pattern `arg("-c")` and fails if any match is found,
-/// providing an early-warning regression gate.
+/// directory for the pattern `arg("-c")` and fails if any unmarked match is
+/// found, providing an early-warning regression gate against a SECOND,
+/// unaudited shell launcher being added anywhere else.
 #[test]
 fn no_arg_dash_c_in_daemon_sources() {
     // Locate the daemon src/ dir relative to the manifest dir injected by Cargo.
@@ -83,10 +126,11 @@ fn no_arg_dash_c_in_daemon_sources() {
 
     // Walk every .rs file under src/.
     walk_rs_files(&src_dir, &mut |path, content| {
-        for (line_no, line) in content.lines().enumerate() {
+        let lines: Vec<&str> = content.lines().collect();
+        for (line_no, line) in lines.iter().enumerate() {
             // Match `.arg("-c")` — the POSIX sh / bash shell-mode flag.
             // We allow `args(["/c", ...])` (Windows cmd.exe) which is different.
-            if line.contains(r#"arg("-c")"#) {
+            if line.contains(r#"arg("-c")"#) && !is_marker_exempt(&lines, line_no) {
                 violations.push(format!(
                     "{}:{}: {}",
                     path.display(),
@@ -99,14 +143,15 @@ fn no_arg_dash_c_in_daemon_sources() {
 
     assert!(
         violations.is_empty(),
-        "Found arg(\"-c\") shell-mode flag in daemon sources — potential injection risk:\n{}",
+        "Found unaudited arg(\"-c\") shell-mode flag in daemon sources — potential injection risk:\n{}",
         violations.join("\n")
     );
 }
 
 /// Static audit: confirm no `Command::new("sh")` or `Command::new("bash")` in
 /// daemon sources (these are the launchers that, combined with `-c`, create the
-/// injection surface).
+/// injection surface), except the single marker-allowlisted `bash_exec` call
+/// site (see `SHELL_EXEC_ALLOW_MARKER`).
 #[test]
 fn no_shell_launcher_in_daemon_sources() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -116,7 +161,11 @@ fn no_shell_launcher_in_daemon_sources() {
     let mut violations: Vec<String> = Vec::new();
 
     walk_rs_files(&src_dir, &mut |path, content| {
-        for (line_no, line) in content.lines().enumerate() {
+        let lines: Vec<&str> = content.lines().collect();
+        for (line_no, line) in lines.iter().enumerate() {
+            if is_marker_exempt(&lines, line_no) {
+                continue;
+            }
             for launcher in &shell_launchers {
                 if line.contains(launcher) {
                     violations.push(format!(
@@ -132,7 +181,7 @@ fn no_shell_launcher_in_daemon_sources() {
 
     assert!(
         violations.is_empty(),
-        "Found shell launcher in daemon sources — POSIX shell exec not allowed:\n{}",
+        "Found unaudited shell launcher in daemon sources — POSIX shell exec not allowed:\n{}",
         violations.join("\n")
     );
 }

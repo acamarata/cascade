@@ -395,6 +395,18 @@ impl LocalToolInvoker {
     async fn bash_exec(&self, call: &ToolCall) -> Result<String, ExecutorError> {
         self.require(LocalCapability::BashExec, &call.tool_id)?;
         let command = Self::arg_str(&call.args, "command", &call.tool_id)?.to_string();
+        // SAFETY-GATE-AUDITED-SHELL-EXEC: this is the one deliberate shell
+        // launcher in cascade-daemon. `bash_exec` exists to run an
+        // AI-supplied shell command string (pipes/redirects/&&) on the
+        // caller's behalf, which requires a real shell — an arg-array exec
+        // cannot express that. The injection surface this opens is closed by
+        // `SafetyGate`, which every `ToolInvoker` wrapping this router runs
+        // through: deny-list pattern matching (`SimplePolicyEvaluator`) on
+        // `command` happens BEFORE this function is ever reached (see the
+        // `SafetyGate` doc comment below). Do not add a second shell
+        // launcher anywhere else in this crate — route it through here so it
+        // stays behind the same gate. See `no_shell_injection.rs` for the
+        // static audit that enforces this file stays the sole exception.
         let output = tokio::process::Command::new("bash")
             .arg("-c")
             .arg(&command)
