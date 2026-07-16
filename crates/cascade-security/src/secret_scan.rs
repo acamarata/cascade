@@ -101,7 +101,7 @@ static PATTERNS: Lazy<Vec<Pattern>> = Lazy::new(|| {
 
 /// Return true if the matched value looks like a placeholder (not a real secret).
 fn is_placeholder(value: &str) -> bool {
-    let v = value.trim_matches(|c| c == '"' || c == '\'');
+    let v = value.trim_matches(['"', '\'']);
     // Common placeholder strings
     let placeholders = [
         "your-api-key",
@@ -143,7 +143,7 @@ fn is_placeholder(value: &str) -> bool {
 
 /// Redact a secret value: show first 4 chars + "***".
 fn redact(value: &str) -> String {
-    let stripped = value.trim_matches(|c| c == '"' || c == '\'');
+    let stripped = value.trim_matches(['"', '\'']);
     if stripped.len() <= 4 {
         return "****".to_string();
     }

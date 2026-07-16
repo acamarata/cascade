@@ -716,11 +716,7 @@ pub fn collect_gfp_keys_from_path(vault_path: &Path, seen: &mut std::collections
         let t = t.strip_prefix("export ").unwrap_or(t);
         let mut parts = t.splitn(2, '=');
         let k = parts.next().unwrap_or("").trim();
-        let v = parts
-            .next()
-            .unwrap_or("")
-            .trim()
-            .trim_matches(|c| c == '"' || c == '\'');
+        let v = parts.next().unwrap_or("").trim().trim_matches(['"', '\'']);
         let named_key = k.starts_with("GEMINI_FREE_KEY_")
             || k.starts_with("GEMINI_KEY_")
             || k.starts_with("GEMINI_API_KEY_");

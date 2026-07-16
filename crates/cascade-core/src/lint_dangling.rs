@@ -170,9 +170,9 @@ fn resolve_ref(raw: &str, base_dir: &Path) -> PathBuf {
     // strip a single trailing sentence punctuation mark. Without this the token
     // still carries a leading backtick, so tilde/absolute detection below fails.
     let raw = raw
-        .trim_matches(|c| c == '`' || c == '"' || c == '\'')
-        .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | ')'))
-        .trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        .trim_matches(['`', '"', '\''])
+        .trim_end_matches(['.', ',', ';', ':', ')'])
+        .trim_matches(['`', '"', '\'']);
 
     // ── Rule 1: tilde expansion ──────────────────────────────────────────────
     if raw == "~" {
