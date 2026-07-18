@@ -87,7 +87,19 @@ fn agy_fallback_requested() -> bool {
 /// Fallback seam for when the GFP pool is exhausted and `CASCADE_GFP_FALLBACK
 /// =agy` is set.
 ///
-/// DEFERRED — not wired. The agy lane (`execute_gemini` in
+/// RATIFIED (T-P7-E06-01, decision ticket): fail-loud-by-design is the FINAL
+/// state for this seam, not a stopgap awaiting the paid agy lane. It matches
+/// the project's never-silent-paid-fallback philosophy — a user must
+/// explicitly opt in (via CASCADE_GFP_FALLBACK=agy) and get an explicit,
+/// actionable 503 rather than have their request silently routed to a paid
+/// lane or silently dropped. The existing fail-loud test coverage
+/// (exhausted_response tests below) is the acceptance bar for this decision
+/// and needs no further code change under it. Building the real agy bridge
+/// remains possible later, but is a separate, explicitly-scoped feature
+/// ticket if the decision is ever reversed — not an implicit TODO here.
+///
+/// Everything below this point describes why the bridge is real, untested
+/// surface (DEFERRED, not wired). The agy lane (`execute_gemini` in
 /// `cascade-cli/src/cmd/conductor.rs`) is a synchronous, `curl`-subprocess-based
 /// OAuth client (refresh-token exchange → `loadCodeAssist` project discovery →
 /// `v1internal:generateContent`, all via blocking `std::process::Command`
