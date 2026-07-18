@@ -136,6 +136,14 @@ pub struct IpcServer {
     /// Provider IPC handler (D2): routes cascade_providers_* commands.
     /// Shared via Arc so connection tasks can call provider commands concurrently.
     provider_handler: Arc<ProviderIpcHandler>,
+    /// Per-provider hard-stop budget limits loaded from config.toml at startup.
+    /// Used by `budget_check` to enforce token/USD caps without reading the
+    /// config file on every IPC call.  Defaults to all-disabled when config.toml
+    /// is absent or unparseable.
+    budget_config: crate::config::BudgetConfig,
+    /// Daemon runtime state: typed quota snapshot buffer and worker pool.
+    /// Shared with the fleet poller and supervisor via Arc<Mutex>.
+    daemon_state: Arc<tokio::sync::Mutex<crate::state::DaemonState>>,
 }
 
 impl IpcServer {
@@ -267,6 +275,15 @@ impl IpcServer {
             usage_acc,
         ));
 
+        // Load BudgetConfig from config.toml; fall back to all-disabled defaults
+        // if the file is absent or malformed (daemon must not fail to start on
+        // a bad budget config).
+        let budget_config = crate::config::Config::load(&config_dir)
+            .unwrap_or_default()
+            .budget;
+
+        let daemon_state = Arc::new(tokio::sync::Mutex::new(crate::state::DaemonState::new()));
+
         Ok(Self {
             socket_path,
             auth_token: token,
@@ -281,6 +298,8 @@ impl IpcServer {
             ceo_runtime,
             task_store,
             provider_handler,
+            budget_config,
+            daemon_state,
         })
     }
 
@@ -897,44 +916,39 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 return Response::ok(result_value);
             }
 
-            // ── E-P6-02 T-06: Multi-provider quota IPC methods ────────────
+            // ── E-P6-02 T-06 / T-P7-E05-01: Multi-provider quota IPC methods ──
             match typed_req.method.as_str() {
                 "update_quota_state" => {
                     let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
-                    // Home dir for config_dir resolution.
-                    let home_dir = std::env::var_os("HOME")
-                        .map(std::path::PathBuf::from)
-                        .or_else(dirs::home_dir)
-                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-                    let config_dir = home_dir.join(".cascade");
                     let max_snapshots = 1000;
-                    // We don't have DaemonState here in IpcServer; use a stub path.
-                    // In a full wire this would pull from server.daemon_state.
-                    // For now write directly so the IPC path is exercised.
-                    // Full daemon_state wiring deferred to E-P6-03 (supervisor wire).
                     use cascade_types::quota_store::QuotaState as TypedQuotaState;
-                    match serde_json::from_value::<TypedQuotaState>(params_val) {
+                    let snap = match serde_json::from_value::<TypedQuotaState>(params_val) {
                         Err(e) => return Response::err(-32602, format!("invalid QuotaState: {e}")),
-                        Ok(snap) => {
-                            // Build a minimal single-snapshot store and write it.
-                            let store = cascade_core::quota_aggregator::aggregate_quota(
-                                &[snap],
-                                max_snapshots,
-                            );
-                            let path = config_dir.join("quota-store.json");
-                            match cascade_core::quota_store::write_quota_store(&path, &store) {
-                                Ok(()) => {
-                                    return Response::ok(
-                                        serde_json::json!({ "status": "updated" }),
-                                    );
-                                }
-                                Err(e) => {
-                                    return Response::err(
-                                        -32603,
-                                        format!("failed to write quota-store: {e:?}"),
-                                    );
-                                }
-                            }
+                        Ok(s) => s,
+                    };
+                    // Push the snapshot into DaemonState's typed buffer, then
+                    // aggregate all buffered snapshots and write quota-store.json.
+                    let store = {
+                        let mut state = server.daemon_state.lock().await;
+                        state.push_typed_snapshot(snap, max_snapshots);
+                        cascade_core::quota_aggregator::aggregate_quota(
+                            &state.quota_snapshot_buffer,
+                            max_snapshots,
+                        )
+                    };
+                    // Write from socket_path parent (config_dir).
+                    let config_dir = server
+                        .socket_path
+                        .parent()
+                        .unwrap_or(std::path::Path::new("."));
+                    let path = config_dir.join("quota-store.json");
+                    match cascade_core::quota_store::write_quota_store(&path, &store) {
+                        Ok(()) => return Response::ok(serde_json::json!({"status": "updated"})),
+                        Err(e) => {
+                            return Response::err(
+                                -32603,
+                                format!("failed to write quota-store: {e:?}"),
+                            )
                         }
                     }
                 }
@@ -951,15 +965,13 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                             "missing required param: provider".to_string(),
                         );
                     }
-                    // Read the current quota store.
-                    let home_dir = std::env::var_os("HOME")
-                        .map(std::path::PathBuf::from)
-                        .or_else(dirs::home_dir)
-                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-                    let path = home_dir.join(".cascade/quota-store.json");
+                    let config_dir = server
+                        .socket_path
+                        .parent()
+                        .unwrap_or(std::path::Path::new("."));
+                    let path = config_dir.join("quota-store.json");
                     match cascade_core::quota_store::read_quota_store(&path) {
                         Err(_) => {
-                            // No store yet — return "no accounts" response.
                             return Response::ok(serde_json::json!({
                                 "account_id": null,
                                 "exhausted": true,
@@ -981,12 +993,11 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                                 return Response::err(-32602, format!("invalid params: {e}"));
                             }
                         };
-                    // Read quota store.
-                    let home_dir = std::env::var_os("HOME")
-                        .map(std::path::PathBuf::from)
-                        .or_else(dirs::home_dir)
-                        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-                    let path = home_dir.join(".cascade/quota-store.json");
+                    let config_dir = server
+                        .socket_path
+                        .parent()
+                        .unwrap_or(std::path::Path::new("."));
+                    let path = config_dir.join("quota-store.json");
                     let store =
                         cascade_core::quota_store::read_quota_store(&path).unwrap_or_else(|_| {
                             cascade_core::quota_store::QuotaStore {
@@ -999,10 +1010,12 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                                 rolling_history: vec![],
                             }
                         });
-                    // Use default BudgetConfig (limits disabled) since we don't have
-                    // the config in IpcServer currently. Full config wiring in E-P6-03.
-                    let config = crate::config::BudgetConfig::default();
-                    let result = crate::ipc_handlers::handle_budget_check(params, &config, &store);
+                    // Use the BudgetConfig loaded from config.toml at daemon startup.
+                    let result = crate::ipc_handlers::handle_budget_check(
+                        params,
+                        &server.budget_config,
+                        &store,
+                    );
                     return Response::ok(result);
                 }
                 _ => {}
@@ -1040,47 +1053,311 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 _ => {}
             }
 
+            // ── gci_write / symlink_create / symlink_delete / key_rotation ──
             use cascade_audit::AuditOp;
             match typed_req.method.as_str() {
                 "gci_write" => {
-                    crate::audit::record(
-                        AuditOp::GciWrite,
-                        "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
-                    );
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let path = params_val
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let content = params_val
+                        .get("content")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
+
+                    // No path → documented no-op (mirrors dashboard.rs gci_write_file).
+                    let Some(path) = path else {
+                        crate::audit::record(
+                            AuditOp::GciWrite,
+                            "cascaded",
+                            "gci_write",
+                            "no-op: no path supplied",
+                        );
+                        return Response::ok(serde_json::json!({"written": true}));
+                    };
+
+                    let home = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir);
+                    let Some(home) = home else {
+                        crate::audit::record(
+                            AuditOp::GciWrite,
+                            "cascaded",
+                            "gci_write",
+                            "error: HOME not set",
+                        );
+                        return Response::err(-32603, "HOME not set".to_string());
+                    };
+                    let base = home.join(".claude");
+                    if let Err(e) = std::fs::create_dir_all(&base) {
+                        return Response::err(-32603, format!("cannot create GCI base dir: {e}"));
+                    }
+                    let target = match ipc_resolve_gci_target(&base, &path) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::GciWrite,
+                                "cascaded",
+                                "gci_write",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(-32602, e);
+                        }
+                    };
+                    match ipc_write_atomic(&target, content.as_bytes()) {
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::GciWrite,
+                                "cascaded",
+                                "gci_write",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(-32603, format!("write failed: {e}"));
+                        }
+                        Ok(()) => {
+                            // When writing CASCADE.md, create sibling symlinks so
+                            // every AI tool finds its preferred filename.
+                            if target
+                                .file_name()
+                                .map(|n| n == "CASCADE.md")
+                                .unwrap_or(false)
+                            {
+                                let parent =
+                                    target.parent().unwrap_or_else(|| std::path::Path::new("."));
+                                for name in &["CLAUDE.md", "AGENTS.md", ".cursorrules", ".aider.md"]
+                                {
+                                    let link = parent.join(name);
+                                    let _ = std::fs::remove_file(&link);
+                                    #[cfg(unix)]
+                                    let _ = std::os::unix::fs::symlink("CASCADE.md", &link);
+                                }
+                            }
+                            let note =
+                                format!("wrote {} bytes to {}", content.len(), target.display());
+                            crate::audit::record(AuditOp::GciWrite, "cascaded", "gci_write", &note);
+                            return Response::ok(serde_json::json!({
+                                "written": true,
+                                "path": target.to_string_lossy(),
+                            }));
+                        }
+                    }
                 }
                 "symlink_create" => {
-                    crate::audit::record(
-                        AuditOp::SymlinkCreate,
-                        "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
-                    );
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let link_str = match params_val.get("link").and_then(|v| v.as_str()) {
+                        Some(s) => s.to_string(),
+                        None => {
+                            crate::audit::record(
+                                AuditOp::SymlinkCreate,
+                                "cascaded",
+                                "symlink_create",
+                                "error: missing param 'link'",
+                            );
+                            return Response::err(
+                                -32602,
+                                "missing required param: link".to_string(),
+                            );
+                        }
+                    };
+                    let target_str = match params_val.get("target").and_then(|v| v.as_str()) {
+                        Some(s) => s.to_string(),
+                        None => {
+                            crate::audit::record(
+                                AuditOp::SymlinkCreate,
+                                "cascaded",
+                                "symlink_create",
+                                "error: missing param 'target'",
+                            );
+                            return Response::err(
+                                -32602,
+                                "missing required param: target".to_string(),
+                            );
+                        }
+                    };
+
+                    let home = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir);
+                    let Some(home) = home else {
+                        crate::audit::record(
+                            AuditOp::SymlinkCreate,
+                            "cascaded",
+                            "symlink_create",
+                            "error: HOME not set",
+                        );
+                        return Response::err(-32603, "HOME not set".to_string());
+                    };
+                    let base = home.join(".claude");
+                    if let Err(e) = std::fs::create_dir_all(&base) {
+                        return Response::err(-32603, format!("cannot create GCI base dir: {e}"));
+                    }
+                    let link_path = match ipc_resolve_gci_target(&base, &link_str) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::SymlinkCreate,
+                                "cascaded",
+                                "symlink_create",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(-32602, e);
+                        }
+                    };
+                    if let Some(parent) = link_path.parent() {
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            return Response::err(-32603, format!("cannot create parent dir: {e}"));
+                        }
+                    }
+                    let _ = std::fs::remove_file(&link_path);
+
+                    #[cfg(unix)]
+                    let symlink_result = std::os::unix::fs::symlink(&target_str, &link_path);
+                    #[cfg(not(unix))]
+                    let symlink_result: std::io::Result<()> = Err(std::io::Error::new(
+                        std::io::ErrorKind::Unsupported,
+                        "symlink_create requires a Unix host",
+                    ));
+
+                    match symlink_result {
+                        Ok(()) => {
+                            let note = format!("created {} -> {}", link_path.display(), target_str);
+                            crate::audit::record(
+                                AuditOp::SymlinkCreate,
+                                "cascaded",
+                                "symlink_create",
+                                &note,
+                            );
+                            return Response::ok(serde_json::json!({
+                                "created": true,
+                                "link": link_str,
+                                "target": target_str,
+                            }));
+                        }
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::SymlinkCreate,
+                                "cascaded",
+                                "symlink_create",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(-32603, format!("symlink failed: {e}"));
+                        }
+                    }
                 }
                 "symlink_delete" => {
+                    let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
+                    let link_str = match params_val.get("link").and_then(|v| v.as_str()) {
+                        Some(s) => s.to_string(),
+                        None => {
+                            crate::audit::record(
+                                AuditOp::SymlinkDelete,
+                                "cascaded",
+                                "symlink_delete",
+                                "error: missing param 'link'",
+                            );
+                            return Response::err(
+                                -32602,
+                                "missing required param: link".to_string(),
+                            );
+                        }
+                    };
+
+                    let home = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .or_else(dirs::home_dir);
+                    let Some(home) = home else {
+                        crate::audit::record(
+                            AuditOp::SymlinkDelete,
+                            "cascaded",
+                            "symlink_delete",
+                            "error: HOME not set",
+                        );
+                        return Response::err(-32603, "HOME not set".to_string());
+                    };
+                    let base = home.join(".claude");
+                    if let Err(e) = std::fs::create_dir_all(&base) {
+                        return Response::err(-32603, format!("cannot create GCI base dir: {e}"));
+                    }
+                    let link_path = match ipc_resolve_gci_target(&base, &link_str) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::SymlinkDelete,
+                                "cascaded",
+                                "symlink_delete",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(-32602, e);
+                        }
+                    };
+                    let del_result = std::fs::remove_file(&link_path);
+                    let deleted = match &del_result {
+                        Ok(()) => true,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+                        Err(_) => false,
+                    };
+                    if deleted {
+                        let note = format!("deleted {}", link_path.display());
+                        crate::audit::record(
+                            AuditOp::SymlinkDelete,
+                            "cascaded",
+                            "symlink_delete",
+                            &note,
+                        );
+                        return Response::ok(
+                            serde_json::json!({"deleted": true, "link": link_str}),
+                        );
+                    }
+                    let e = del_result.unwrap_err();
                     crate::audit::record(
                         AuditOp::SymlinkDelete,
                         "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                        "symlink_delete",
+                        &format!("error: {e}"),
                     );
-                }
-                "cascade_resolve" => {
-                    crate::audit::record(
-                        AuditOp::CascadeResolve,
-                        "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
-                    );
+                    return Response::err(-32603, format!("delete failed: {e}"));
                 }
                 "key_rotation" => {
-                    crate::audit::record(
-                        AuditOp::KeyRotation,
-                        "cascaded",
-                        &typed_req.method,
-                        "typed-dispatch-hook: METHOD_NOT_FOUND (handler pending E-07+)",
+                    // Generate a new IPC auth token, write to disk.
+                    // The in-memory token is not hot-swapped; the new token takes
+                    // effect when the daemon is restarted (prevents live token
+                    // invalidation for an in-flight caller that just authenticated).
+                    let config_dir = server
+                        .socket_path
+                        .parent()
+                        .unwrap_or(std::path::Path::new("."));
+                    let new_token = format!(
+                        "{}{}",
+                        uuid::Uuid::new_v4().simple(),
+                        uuid::Uuid::new_v4().simple()
                     );
+                    let token_path = config_dir.join("ipc_token");
+                    match std::fs::write(&token_path, &new_token) {
+                        Ok(()) => {
+                            crate::audit::record(
+                                AuditOp::KeyRotation,
+                                "cascaded",
+                                "key_rotation",
+                                "ipc_token rotated; restart required for new token",
+                            );
+                            return Response::ok(serde_json::json!({"rotated": true}));
+                        }
+                        Err(e) => {
+                            crate::audit::record(
+                                AuditOp::KeyRotation,
+                                "cascaded",
+                                "key_rotation",
+                                &format!("error: {e}"),
+                            );
+                            return Response::err(
+                                -32603,
+                                format!("failed to write ipc_token: {e}"),
+                            );
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -1347,6 +1624,73 @@ async fn dispatch_cache(
     }
 }
 
+// ── GCI helpers (IPC-local, mirrors dashboard.rs private helpers) ────────────
+
+/// Resolve `requested` against `base` (`~/.claude`), rejecting traversal and
+/// paths that escape the base directory.  Mirrors `dashboard::resolve_gci_target`.
+fn ipc_resolve_gci_target(base: &std::path::Path, requested: &str) -> Result<PathBuf, String> {
+    if requested.trim().is_empty() {
+        return Err("path must not be empty".to_string());
+    }
+    let req_path = std::path::Path::new(requested);
+    if req_path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("access denied: path traversal ('..') is not allowed".to_string());
+    }
+    let candidate = if req_path.is_absolute() {
+        req_path.to_path_buf()
+    } else {
+        base.join(req_path)
+    };
+    let canonical_base = std::fs::canonicalize(base)
+        .map_err(|e| format!("cannot resolve GCI base directory: {e}"))?;
+
+    // Canonicalize the nearest existing ancestor; the target itself may not exist yet.
+    let mut existing = candidate.as_path();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        if existing.exists() {
+            break;
+        }
+        match (existing.file_name(), existing.parent()) {
+            (Some(name), Some(parent)) => {
+                tail.push(name.to_os_string());
+                existing = parent;
+            }
+            _ => break,
+        }
+    }
+    let canonical_anc =
+        std::fs::canonicalize(existing).map_err(|e| format!("cannot resolve path: {e}"))?;
+    if !canonical_anc.starts_with(&canonical_base) {
+        return Err("access denied: path is outside the allowed GCI directory".to_string());
+    }
+    let mut resolved = canonical_anc;
+    for part in tail.into_iter().rev() {
+        resolved.push(part);
+    }
+    Ok(resolved)
+}
+
+/// Write `bytes` to `target` atomically via a sibling `.tmp` file + rename.
+/// Mirrors `dashboard::write_file_atomic`.
+fn ipc_write_atomic(target: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut tmp_name = target
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    tmp_name.push(".tmp");
+    let tmp_path = target.with_file_name(tmp_name);
+    std::fs::write(&tmp_path, bytes)?;
+    std::fs::rename(&tmp_path, target)?;
+    Ok(())
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1513,5 +1857,93 @@ mod tests {
 
         drop(client);
         task.await.unwrap().unwrap();
+    }
+
+    // ── Quota + budget wiring unit tests (T-P7-E05-01) ──────────────────
+
+    #[test]
+    fn ipc_server_loads_budget_config_default_when_no_config_toml() {
+        // When config.toml is absent, BudgetConfig::default() applies (all limits = 0 = disabled).
+        let tmp = tempfile::TempDir::new().unwrap();
+        let config = crate::config::Config::load(tmp.path()).unwrap_or_default();
+        assert_eq!(config.budget.claude_max_hourly_token_limit, 0);
+        assert_eq!(config.budget.oc_go_hourly_usd_limit, 0.0);
+        assert_eq!(config.budget.oc_go_monthly_usd_limit, 0.0);
+    }
+
+    #[test]
+    fn daemon_state_push_typed_snapshot_accumulates() {
+        let mut state = crate::state::DaemonState::new();
+        assert_eq!(state.quota_snapshot_buffer.len(), 0);
+        let snap = cascade_types::quota_store::QuotaState {
+            account_id: "acc-1".to_string(),
+            harness: "cc".to_string(),
+            provider: "claude".to_string(),
+            ts: 0,
+            models: std::collections::HashMap::new(),
+        };
+        state.push_typed_snapshot(snap.clone(), 10);
+        assert_eq!(state.quota_snapshot_buffer.len(), 1);
+        state.push_typed_snapshot(snap, 10);
+        assert_eq!(state.quota_snapshot_buffer.len(), 2);
+    }
+
+    // ── ipc_resolve_gci_target / ipc_write_atomic unit tests ─────────────
+
+    #[test]
+    fn resolve_gci_target_rejects_dotdot() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path().join("claude");
+        std::fs::create_dir_all(&base).unwrap();
+        let result = ipc_resolve_gci_target(&base, "../../etc/passwd");
+        assert!(result.is_err(), "dotdot traversal must be rejected");
+        assert!(
+            result.unwrap_err().contains("traversal"),
+            "error must mention traversal"
+        );
+    }
+
+    #[test]
+    fn resolve_gci_target_rejects_absolute_outside_base() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path().join("claude");
+        std::fs::create_dir_all(&base).unwrap();
+        let result = ipc_resolve_gci_target(&base, "/etc/passwd");
+        assert!(
+            result.is_err(),
+            "absolute path outside base must be rejected"
+        );
+    }
+
+    #[test]
+    fn resolve_gci_target_accepts_relative_path() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path().join("claude");
+        std::fs::create_dir_all(&base).unwrap();
+        let result = ipc_resolve_gci_target(&base, "rules/foo.md");
+        assert!(result.is_ok(), "valid relative path must be accepted");
+        let resolved = result.unwrap();
+        // Canonicalize base for comparison: on macOS /var → /private/var symlink
+        // means the raw `base` and the canonicalized `resolved` may differ in prefix.
+        let canonical_base = std::fs::canonicalize(&base).unwrap();
+        assert!(
+            resolved.starts_with(&canonical_base),
+            "resolved path must stay inside base: resolved={resolved:?} base={canonical_base:?}"
+        );
+    }
+
+    #[test]
+    fn write_atomic_creates_file_and_content() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let target = tmp.path().join("sub/dir/test.md");
+        ipc_write_atomic(&target, b"hello world").expect("write must succeed");
+        let content = std::fs::read_to_string(&target).expect("must be readable after write");
+        assert_eq!(content, "hello world");
+        // No stray .tmp files
+        let tmp_path = target.with_file_name("test.md.tmp");
+        assert!(
+            !tmp_path.exists(),
+            ".tmp file must be cleaned up after rename"
+        );
     }
 }

@@ -5,16 +5,18 @@
 //!   `audit::record()` call when routed through `try_typed_dispatch`.
 //!   Resolves P2 residue E07-17.
 //!
-//! Implementation note: four of the five ops (gci_write, symlink_create,
-//!   symlink_delete, key_rotation) still return METHOD_NOT_FOUND (-32601) —
-//!   their real handlers are pending in later epics.  `cascade_resolve` now
-//!   has a real handler (E-P5-02) that returns a success response; its audit
-//!   entry is emitted after the successful operation (write-then-audit ordering).
-//!
-//! Approach: spin up a real IpcServer against a temp dir that has a real audit
-//!   log path; send each of the five method names via the socket; then open the
-//!   audit log directly and verify (a) entries were appended and (b)
-//!   `AuditLog::verify_chain()` returns Ok with no violations.
+//! Implementation note (T-P7-E05-03): all five methods now have real handlers.
+//!   Sending `params: {}` (empty) exercises the no-op / param-validation paths:
+//!   - `gci_write {}` → no path → documented no-op success {"written": true}
+//!   - `symlink_create {}` → missing "link" param → -32602 invalid params
+//!   - `symlink_delete {}` → missing "link" param → -32602 invalid params
+//!   - `key_rotation {}` → no required params → success {"rotated": true}
+//!   - `cascade_resolve {}` → success (real handler, E-P5-02)
+//!     All five paths still emit an audit record before returning.
+//!     Approach: spin up a real IpcServer against a temp dir that has a real audit
+//!     log path; send each of the five method names via the socket; then open the
+//!     audit log directly and verify (a) entries were appended and (b)
+//!     `AuditLog::verify_chain()` returns Ok with no violations.
 //!
 //! The audit log is initialised inside the daemon's main() in production; here
 //!   we initialise it directly using `cascade_daemon::audit::init_for_test` —
@@ -170,10 +172,9 @@ fn privileged_request(method: &str, token: &str) -> serde_json::Value {
 /// Sending each of the five privileged method names through the IPC socket
 /// should (a) emit an audit entry for each and (b) verify_chain() returns Ok.
 ///
-/// Four methods (gci_write, symlink_create, symlink_delete, key_rotation)
-/// still return METHOD_NOT_FOUND (-32601) — their handlers are pending.
-/// `cascade_resolve` has a real handler (E-P5-02) and returns a success
-/// response; it is still audited (write-then-audit ordering).
+/// All five methods now have real handlers (T-P7-E05-03).  Sending `params: {}`
+/// exercises the no-op / param-validation paths — see the module-level doc for
+/// the expected response per method.
 // multi_thread: IpcServer::new initialises the RAG reranker, which uses
 // tokio::task::block_in_place — illegal on the default current-thread test
 // runtime (and the real daemon runs multi-threaded).
@@ -200,9 +201,11 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
         .filter(|l| !l.trim().is_empty())
         .count();
 
-    // Send each privileged method.
-    // Four still-pending methods must return METHOD_NOT_FOUND (-32601).
-    // `cascade_resolve` now has a real handler and must NOT return -32601.
+    // Send each privileged method with empty params.
+    // All five now have real handlers; none should return METHOD_NOT_FOUND (-32601).
+    //
+    // Expected codes with params={}: gci_write→success, symlink_create→-32602,
+    // symlink_delete→-32602, cascade_resolve→success, key_rotation→success.
     let mut stream = UnixStream::connect(&socket_path).await.unwrap();
     for (method, _expected_op) in &methods {
         let resp = send_request(&mut stream, privileged_request(method, &token)).await;
@@ -212,20 +215,12 @@ async fn privileged_methods_emit_audit_entries_and_chain_verifies() {
             .get("error")
             .and_then(|e| e.get("code"))
             .and_then(|c| c.as_i64());
-        if *method == "cascade_resolve" {
-            // Real handler: must succeed (no error code).
-            assert!(
-                code.is_none(),
-                "cascade_resolve has a real handler and must NOT return an error; got: {resp}"
-            );
-        } else {
-            // Pending handler: must return METHOD_NOT_FOUND.
-            assert_eq!(
-                code,
-                Some(-32601),
-                "method {method} should return METHOD_NOT_FOUND (-32601), got: {resp}"
-            );
-        }
+        // No method should return METHOD_NOT_FOUND — all have real handlers now.
+        assert_ne!(
+            code,
+            Some(-32601),
+            "method {method} should not return METHOD_NOT_FOUND; all handlers are real now; got: {resp}"
+        );
     }
     drop(stream);
 

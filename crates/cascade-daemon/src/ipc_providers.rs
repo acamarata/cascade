@@ -120,6 +120,47 @@ struct OAuthPending {
     error: Option<String>,
 }
 
+// ── NoopReason ────────────────────────────────────────────────────────────────
+
+/// Why a provider slot was registered with [`NoopProvider`] instead of a real
+/// adapter.
+///
+/// Tracked by [`ProviderIpcHandler`] and surfaced in [`providers_list()`] so
+/// the user-facing status clearly distinguishes "configured but not yet
+/// connected" from "genuinely healthy" or "unhealthy".
+#[derive(Debug, Clone)]
+pub enum NoopReason {
+    /// OAuth callback completed but the token-injection path is not yet wired.
+    /// The slot exists; a real adapter will replace it once tokens are exchanged.
+    OAuthPending,
+    /// Generic OpenAI-compatible endpoint registered without a concrete adapter.
+    /// The URL is stored; the adapter must be added separately.
+    GenericEndpoint,
+    /// Provider ID family is unknown; no adapter could be constructed.
+    /// A concrete adapter must be added or the ID corrected.
+    UnknownFamily,
+}
+
+impl NoopReason {
+    fn status_str(&self) -> &'static str {
+        "configured_not_connected"
+    }
+
+    fn detail(&self) -> &'static str {
+        match self {
+            NoopReason::OAuthPending => {
+                "OAuth token injection pending — real adapter replaces slot after token exchange"
+            }
+            NoopReason::GenericEndpoint => {
+                "generic endpoint placeholder — no concrete adapter wired yet"
+            }
+            NoopReason::UnknownFamily => {
+                "no adapter for this provider family; add a concrete adapter or correct the id"
+            }
+        }
+    }
+}
+
 // ── ProviderIpcHandler ────────────────────────────────────────────────────────
 
 /// Shared handler struct injected into both the daemon IPC path and the Tauri
@@ -132,6 +173,10 @@ pub struct ProviderIpcHandler {
     usage: Arc<UsageAccumulator>,
     #[allow(dead_code)]
     oauth_pending: Arc<Mutex<HashMap<String, OAuthPending>>>,
+    /// Tracks why a slot was registered with `NoopProvider` instead of a real
+    /// adapter.  Consulted by `providers_list()` to emit a meaningful status
+    /// string distinct from the health-based "healthy"/"unhealthy"/"unknown".
+    noop_reasons: Arc<Mutex<HashMap<String, NoopReason>>>,
 }
 
 impl ProviderIpcHandler {
@@ -146,6 +191,7 @@ impl ProviderIpcHandler {
             health,
             usage,
             oauth_pending: Arc::new(Mutex::new(HashMap::new())),
+            noop_reasons: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -165,16 +211,28 @@ impl ProviderIpcHandler {
         let entries = self.registry.list_with_keys();
         let health_guard = self.health.read().await;
         let today_usage = self.usage.all_today().await;
+        let noop_guard = self.noop_reasons.lock().await;
 
         entries
             .into_iter()
             .map(|(reg_key, info)| {
-                // Join health on the registration key (slot id), not info.id.
-                let health = health_guard.get(&reg_key);
-                let (status, error_msg) = match health {
-                    Some(h) if h.ok => ("healthy".to_string(), None),
-                    Some(h) => ("unhealthy".to_string(), h.error_msg.clone()),
-                    None => ("unknown".to_string(), None),
+                // Noop-reason check takes priority over the health-based status.
+                // A slot registered as NoopProvider is "configured_not_connected",
+                // not "healthy"/"unhealthy"/"unknown" — those health codes apply
+                // only to real adapters that can be health-checked meaningfully.
+                let (status, error_msg) = if let Some(reason) = noop_guard.get(&reg_key) {
+                    (
+                        reason.status_str().to_string(),
+                        Some(reason.detail().to_string()),
+                    )
+                } else {
+                    // Join health on the registration key (slot id), not info.id.
+                    let health = health_guard.get(&reg_key);
+                    match health {
+                        Some(h) if h.ok => ("healthy".to_string(), None),
+                        Some(h) => ("unhealthy".to_string(), h.error_msg.clone()),
+                        None => ("unknown".to_string(), None),
+                    }
                 };
 
                 // Join usage on the registration key for the same reason.
@@ -241,10 +299,14 @@ impl ProviderIpcHandler {
             return Err(format!("provider not found: {id}"));
         }
 
-        // Remove from health cache.
+        // Remove from health cache and noop-reason map.
         {
             let mut guard = self.health.write().await;
             guard.remove(id);
+        }
+        {
+            let mut noop = self.noop_reasons.lock().await;
+            noop.remove(id);
         }
 
         // Delete keychain secret; not-found is OK (may be OAuth or keyless).
@@ -299,6 +361,11 @@ impl ProviderIpcHandler {
         // after (CR-A: plaintext must not linger once stored).
         let adapter: Arc<dyn cascade_providers::ProviderAdapter> = build_adapter_for_id(&id, &key);
 
+        // Detect noop before zeroing the key (the check uses the adapter, not
+        // the key itself).  provider_info().id == "noop" means build_adapter_for_id
+        // fell through to the unknown-family fallback.
+        let is_noop = adapter.provider_info().id == "noop";
+
         // Zeroize the key from the local binding immediately after adapter
         // construction.  SAFETY: key is a valid UTF-8 String; overwriting bytes
         // with 0 is safe since we never use `key` again after this point.
@@ -314,7 +381,15 @@ impl ProviderIpcHandler {
             .register(id.clone(), adapter)
             .map_err(|e| format!("registry register: {e}"))?;
 
-        info!(provider_id = %id, "provider API key stored and real adapter registered");
+        if is_noop {
+            self.noop_reasons
+                .lock()
+                .await
+                .insert(id.clone(), NoopReason::UnknownFamily);
+            warn!(provider_id = %id, "providers_add_apikey: unknown family — registered as NoopProvider (UnknownFamily)");
+        } else {
+            info!(provider_id = %id, "provider API key stored and real adapter registered");
+        }
         Ok(())
     }
 
@@ -362,6 +437,7 @@ impl ProviderIpcHandler {
         {
             let pending_map = self.oauth_pending.clone();
             let registry = self.registry.clone();
+            let noop_reasons = self.noop_reasons.clone();
             let pid = provider_id.clone();
 
             tokio::spawn(async move {
@@ -420,18 +496,23 @@ impl ProviderIpcHandler {
                 // OAuth adapters do not carry a static API key — we register a
                 // NoopProvider here as a placeholder and expect the caller to
                 // supply an access token through a dedicated OAuth token-injection
-                // path once the PKCE exchange completes.  A warn is emitted to
-                // make the gap visible in logs until that path is implemented.
+                // path once the PKCE exchange completes.  NoopReason::OAuthPending
+                // is recorded so providers_list() surfaces "configured_not_connected"
+                // instead of the misleading "unknown" health status.
                 {
                     let map = pending_map.lock().await;
                     if let Some(p) = map.get(&pid) {
                         if p.connected {
                             warn!(
                                 provider_id = %pid,
-                                "OAuth provider registered as NoopProvider placeholder — \
+                                "OAuth provider registered as NoopProvider placeholder (OAuthPending) — \
                                  wire token injection to replace with real adapter"
                             );
                             let _ = registry.register(pid.clone(), Arc::new(NoopProvider));
+                            noop_reasons
+                                .lock()
+                                .await
+                                .insert(pid.clone(), NoopReason::OAuthPending);
                             info!(provider_id = %pid, "OAuth provider registered after callback");
                         }
                     }
@@ -518,12 +599,19 @@ impl ProviderIpcHandler {
             .register(id.clone(), Arc::new(NoopProvider))
             .map_err(|e| format!("registry register: {e}"))?;
 
+        // Record GenericEndpoint so providers_list() shows "configured_not_connected"
+        // rather than the health-based "unknown" for this placeholder slot.
+        self.noop_reasons
+            .lock()
+            .await
+            .insert(id.clone(), NoopReason::GenericEndpoint);
+
         info!(
             provider_id = %id,
             base_url = %base_url,
             model_id = %model_id,
             display_name = ?display_name,
-            "generic provider registered"
+            "generic provider registered (NoopProvider placeholder, GenericEndpoint)"
         );
         Ok(())
     }
@@ -846,6 +934,88 @@ mod tests {
             info.id, "noop",
             "Unknown provider must fall back to NoopProvider"
         );
+    }
+
+    // ── NoopReason / configured_not_connected status tests ────────────────────
+
+    /// providers_add_generic registers a GenericEndpoint noop reason and
+    /// providers_list must return status="configured_not_connected".
+    #[tokio::test]
+    #[serial(provider_ipc)]
+    async fn providers_add_generic_status_is_configured_not_connected() {
+        let tmp = TempDir::new().unwrap();
+        let handler = make_handler(&tmp);
+        handler
+            .providers_add_generic(
+                "http://localhost:8080".into(),
+                None,
+                "llama3".into(),
+                Some("Local Llama".into()),
+            )
+            .await
+            .unwrap();
+
+        let list = handler.providers_list().await;
+        assert_eq!(list.len(), 1);
+        assert_eq!(
+            list[0].status, "configured_not_connected",
+            "generic provider must not claim healthy/unknown; got {:?}",
+            list[0].status
+        );
+        assert!(
+            list[0].error_msg.is_some(),
+            "error_msg must explain why the provider is not connected"
+        );
+    }
+
+    /// When providers_remove is called for a generic provider the noop reason
+    /// is cleaned up — re-registering it shows no stale reason.
+    #[tokio::test]
+    #[serial(provider_ipc)]
+    async fn providers_remove_clears_noop_reason() {
+        let tmp = TempDir::new().unwrap();
+        let handler = make_handler(&tmp);
+        handler
+            .providers_add_generic("http://localhost:9090".into(), None, "phi".into(), None)
+            .await
+            .unwrap();
+
+        let list_before = handler.providers_list().await;
+        assert_eq!(list_before[0].status, "configured_not_connected");
+
+        handler.providers_remove(&list_before[0].id).await.unwrap();
+
+        // Registry is empty; noop_reasons should be clear.
+        let list_after = handler.providers_list().await;
+        assert!(list_after.is_empty(), "provider must be gone after remove");
+
+        // Re-register directly (bypassing add_generic) to verify no stale reason.
+        let plain_id = list_before[0].id.clone();
+        handler
+            .registry
+            .register(plain_id.clone(), Arc::new(cascade_providers::NoopProvider))
+            .unwrap();
+        let list_reregistered = handler.providers_list().await;
+        assert_eq!(
+            list_reregistered[0].status, "unknown",
+            "re-registered slot with no noop_reason must show 'unknown' (health not set)"
+        );
+    }
+
+    /// NoopReason::detail() produces non-empty strings for all variants.
+    #[test]
+    fn noop_reason_detail_all_variants_non_empty() {
+        for reason in [
+            NoopReason::OAuthPending,
+            NoopReason::GenericEndpoint,
+            NoopReason::UnknownFamily,
+        ] {
+            assert!(
+                !reason.status_str().is_empty(),
+                "status_str must be non-empty"
+            );
+            assert!(!reason.detail().is_empty(), "detail must be non-empty");
+        }
     }
 
     /// D2: providers_list joins health on the registration key, not provider_info().id.

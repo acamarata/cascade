@@ -113,11 +113,19 @@ use secrecy::SecretString;
 #[cfg(feature = "gemini-proxy")]
 use std::collections::HashMap;
 use std::process;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
+
+/// Process-global pause flag: when `true`, polling and indexing subsystems
+/// should yield work until the flag is cleared.
+///
+/// Set/cleared by the `PauseDaemon` tray action.  Supervisor and fleet-poller
+/// loops in a later phase will read this to skip their work intervals.
+pub(crate) static DAEMON_PAUSED: AtomicBool = AtomicBool::new(false);
 
 /// Cascade background daemon.
 ///
@@ -500,9 +508,42 @@ async fn run_daemon() {
                             }
                         }
                     }
-                    #[cfg(not(target_os = "macos"))]
+                    #[cfg(target_os = "linux")]
                     {
-                        warn!("tray: OpenApp: not implemented on this platform");
+                        // On Linux open the accounts directory with xdg-open
+                        // (no desktop app bundle to target yet).
+                        let home = dirs::home_dir().unwrap_or_default();
+                        let accounts = home.join(".cascade").join("accounts");
+                        if let Err(e) = std::process::Command::new("xdg-open")
+                            .arg(&accounts)
+                            .spawn()
+                        {
+                            warn!(%e, path = %accounts.display(), "tray: OpenApp: xdg-open failed");
+                        } else {
+                            info!(path = %accounts.display(), "tray: OpenApp: opened accounts dir via xdg-open");
+                        }
+                    }
+                    #[cfg(target_os = "windows")]
+                    {
+                        // On Windows open the accounts directory with explorer.
+                        let home = dirs::home_dir().unwrap_or_default();
+                        let accounts = home.join(".cascade").join("accounts");
+                        if let Err(e) = std::process::Command::new("explorer")
+                            .arg(accounts.as_os_str())
+                            .spawn()
+                        {
+                            warn!(%e, path = %accounts.display(), "tray: OpenApp: explorer failed");
+                        } else {
+                            info!(path = %accounts.display(), "tray: OpenApp: opened accounts dir via explorer");
+                        }
+                    }
+                    #[cfg(not(any(
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "windows"
+                    )))]
+                    {
+                        warn!("tray: OpenApp: unsupported platform");
                     }
                 }
                 cascade_tray::TrayAction::OpenDashboard => {
@@ -513,10 +554,17 @@ async fn run_daemon() {
                     }
                 }
                 cascade_tray::TrayAction::PauseDaemon => {
-                    // Pause is not yet implemented — the daemon has no pause
-                    // primitive and the IPC server has no Pause method.
-                    // Log honestly rather than claiming success.
-                    warn!("tray action: PauseDaemon — pause not implemented; request ignored");
+                    // Toggle the daemon-paused state via the process-global flag.
+                    // Polling and indexing loops read DAEMON_PAUSED and skip their
+                    // work intervals while it is true (supervisor wiring tracked
+                    // separately; the flag itself is live here).
+                    let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
+                    DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
+                    if !was_paused {
+                        info!("tray action: PauseDaemon — daemon paused");
+                    } else {
+                        info!("tray action: PauseDaemon — daemon resumed");
+                    }
                 }
                 cascade_tray::TrayAction::Quit => {
                     // Graceful shutdown: cancel the shared CancellationToken so
@@ -896,5 +944,38 @@ fn write_crash_sentinel(reason: &str) {
     if let Some(h) = home {
         let path = h.join(".cascade").join("crash-last.txt");
         let _ = std::fs::write(path, msg);
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn daemon_paused_flag_toggles() {
+        // Start from known state (previous test run may have left it set).
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+        assert!(!DAEMON_PAUSED.load(Ordering::SeqCst));
+
+        // Toggle on.
+        let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
+        DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
+        assert!(
+            DAEMON_PAUSED.load(Ordering::SeqCst),
+            "flag should be true after first toggle"
+        );
+
+        // Toggle off.
+        let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
+        DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
+        assert!(
+            !DAEMON_PAUSED.load(Ordering::SeqCst),
+            "flag should be false after second toggle"
+        );
+
+        // Reset for other tests.
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
     }
 }

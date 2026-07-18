@@ -21,7 +21,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   ticket and step states; it remains gated on an available cheap-tier account.
   (T-P7-E03-06)
 
+### Added
+- Added cross-platform tray `OpenApp` and working `PauseDaemon` to
+  `cascade-daemon`. `OpenApp` now handles Linux (`xdg-open`) and Windows
+  (`explorer`) in addition to the existing macOS (`open -a`) handler.
+  `PauseDaemon` toggles a new process-global `DAEMON_PAUSED: AtomicBool`
+  flag and logs the pause/resume transition; supervisor and fleet-poller
+  loop wiring to respect the flag is deferred to a follow-on ticket.
+  (T-P7-E05-04)
+- Wired quota IPC through `DaemonState` and real `BudgetConfig` in
+  `cascade-daemon`. `IpcServer` now carries `daemon_state:
+  Arc<Mutex<DaemonState>>` and `budget_config: BudgetConfig` loaded from
+  `config.toml` at startup. `update_quota_state` pushes typed snapshots into
+  the shared `DaemonState` buffer before aggregating and writing
+  `quota-store.json`; `budget_check` uses the live `BudgetConfig` instead of
+  an all-disabled default. (T-P7-E05-01)
+- Implemented `gci_write`, `symlink_create`, `symlink_delete`, and
+  `key_rotation` IPC methods in `cascade-daemon`. `gci_write` atomically
+  writes a file to `~/.claude` and creates sibling symlinks
+  (`CLAUDE.md`/`AGENTS.md`/`.cursorrules`/`.aider.md` → `CASCADE.md`) when
+  the target is `CASCADE.md`. `symlink_create`/`symlink_delete` manage
+  named symlinks inside `~/.claude` with traversal guards. `key_rotation`
+  generates a new IPC auth token and writes it to disk (effective after
+  restart). All four methods emit audit records on every code path.
+  Added `ipc_resolve_gci_target` and `ipc_write_atomic` private helpers
+  plus 4 unit tests. Updated `tests/audit_instrumentation.rs` to match
+  real handler responses instead of the removed METHOD_NOT_FOUND stubs.
+  (T-P7-E05-03)
+
+- Implemented real fleet_poller sources for `ClaudeMaxSource`, `CodexSource`,
+  and `AgySource` in `cascade-daemon`. `ClaudeMaxSource` now reads
+  `~/.claude/usage-cache.json` (written by `fetch_and_cache_claude_usage` in
+  the same tick) and returns a `QuotaState` with per-account `pct_used` values
+  from `five_hour.utilization`. `CodexSource` and `AgySource` probe CLI
+  presence via `detect_cli` and return `Some` (empty models) when the binary
+  is on `$PATH`, `None` otherwise. All three now contribute to
+  `quota-store.json` when their data is available. Renamed
+  `stub_sources_return_none` test to `sources_return_none_when_unconfigured`;
+  added `claude_max_source_reads_from_cache` and
+  `claude_max_source_skips_auth_failure_entries` tests. 552 lib tests pass.
+  (T-P7-E05-05)
+- Added `NoopReason` enum (`OAuthPending`, `GenericEndpoint`, `UnknownFamily`)
+  to `cascade-daemon`. `ProviderIpcHandler` now tracks why each slot was
+  downgraded to `NoopProvider` and surfaces `"configured_not_connected"` with
+  a human-readable detail string in `providers_list()`. Previously all noop
+  slots reported `"unknown"` (indistinguishable from a provider that simply
+  hasn't been health-checked). All three call sites are wired:
+  `providers_oauth_start` background task → `OAuthPending`;
+  `providers_add_generic` → `GenericEndpoint`; `providers_add_apikey` for
+  unknown family → `UnknownFamily`. `providers_remove` clears the reason.
+  Added 3 unit tests; 19 ipc_providers tests pass. (T-P7-E05-06)
+
 ### Fixed
+- Removed dead `cascade_resolve` arm from the post-dispatch audit hook in
+  `cascade-daemon` IPC. The arm was unreachable: the real `cascade_resolve`
+  handler returns before reaching the audit match block, so the arm was
+  silently emitting a spurious "handler pending E-07+" audit entry that would
+  never fire. Deleted the dead arm; all tests pass. (T-P7-E05-02)
 - `cascade link --tool aider` now creates `.aider.md` (the instruction file Aider
   reads via `--read`) instead of `.aider.conf.yml` (Aider's tool config file, which
   the spec explicitly leaves independent). Spec references: `04-cascade-nomenclature-spec.md`

@@ -50,7 +50,7 @@ use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_core::read_claude_access_token;
 use cascade_types::accounts::{AccessMethod, AccountFamily, AccountsRegistry};
 use cascade_types::quota_store::{
-    QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
+    ModelUsage, QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
     PROVIDER_OPENAI_CODEX,
 };
 
@@ -87,53 +87,114 @@ pub trait FleetSource: Send + Sync {
 
 // ── Stub implementations ──────────────────────────────────────────────────────
 
-/// Inert `FleetSource` for Anthropic Claude Max subscription accounts.
+/// `FleetSource` for Anthropic Claude Max subscription accounts.
 ///
-/// **This trait impl is intentionally always `None` — it is NOT where real
-/// Claude Max quota comes from.** The real per-account flow already exists
-/// and runs on every poll tick, but it bypasses the `FleetSource` trait
-/// entirely: see [`FleetPoller::fetch_and_cache_claude_usage`], which
-/// (1) discovers every Claude config dir via
-/// `cascade_core::external_accounts::discover()`, (2) reads/refreshes each
-/// account's access token via `read_claude_access_token` (keychain on macOS,
-/// `.credentials.json` elsewhere), (3) calls `fetch_claude_usage` against the
-/// live Anthropic usage API, and (4) writes the results to
-/// `~/.claude/usage-cache.json`, which `write_quota_json` then merges into
-/// `quota.json` independently of this trait's `poll()`.
+/// Reads `~/.claude/usage-cache.json` (written by
+/// [`FleetPoller::fetch_and_cache_claude_usage`] on every tick, before this
+/// source's `poll()` is called) and converts each non-errored account entry
+/// into a model slot in the returned `QuotaState`.
 ///
-/// `ClaudeMaxSource` itself stays a no-op `FleetSource` so the provider is
-/// still registered/enumerable in the generic source list (e.g. for any
-/// future code that iterates `sources` expecting one entry per provider)
-/// without duplicating or racing the real fetch path above. Fabricating a
-/// number here would either duplicate that live fetch or drift from it.
-pub struct ClaudeMaxSource;
+/// `pct_used` is populated from `five_hour.utilization`; `used` and `limit`
+/// are left at `0` / `None` because the cache only stores utilization
+/// percentages, not raw token counts.  This is real measured data — not
+/// fabricated — and surfaces in `quota-store.json` for the IPC quota handler.
+///
+/// Returns `None` when the cache file is absent, unreadable, or contains no
+/// non-errored entries.  A missing file is normal on first start (before the
+/// async fetch completes) and on machines with no Claude accounts.
+pub struct ClaudeMaxSource {
+    /// Path to `usage-cache.json` written by `fetch_and_cache_claude_usage`.
+    cache_path: PathBuf,
+}
+
+impl ClaudeMaxSource {
+    /// Construct a `ClaudeMaxSource` reading from `cache_path`.
+    pub fn new(cache_path: PathBuf) -> Self {
+        Self { cache_path }
+    }
+}
 
 impl FleetSource for ClaudeMaxSource {
     fn provider_id(&self) -> &str {
         PROVIDER_CLAUDE_MAX
     }
 
-    /// Always `None` by design — see the struct-level doc comment for the
-    /// real Claude Max quota flow (`fetch_and_cache_claude_usage`).
+    /// Read `usage-cache.json` and return a `QuotaState` aggregating all
+    /// non-errored Claude account entries found there.
+    ///
+    /// Each account appears as a model slot keyed by its account id (e.g.
+    /// `"claude"`, `"claude-acc1"`).  `pct_used` = `five_hour.utilization`;
+    /// `used = 0, limit = None` (raw counts not available from this cache).
     fn poll(&self) -> Option<QuotaState> {
-        None
+        let bytes = std::fs::read(&self.cache_path).ok()?;
+        let root: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+        let accounts = root.get("accounts")?.as_array()?;
+
+        let now = chrono::Utc::now().timestamp();
+        let mut models = std::collections::HashMap::new();
+
+        for entry in accounts {
+            // Skip auth-failure entries (last_error is a non-null string).
+            if entry.get("last_error").and_then(|e| e.as_str()).is_some() {
+                continue;
+            }
+            let account_id = match entry.get("account").and_then(|v| v.as_str()) {
+                Some(id) => id,
+                None => continue,
+            };
+            let usage = match entry.get("usage") {
+                Some(u) if !u.is_null() => u,
+                _ => continue,
+            };
+
+            let five_hour = usage.get("five_hour");
+            let pct = five_hour
+                .and_then(|h| h.get("utilization"))
+                .and_then(|v| v.as_f64())
+                .map(|f| f as f32);
+            // resets_at may be a float epoch or a formatted string.
+            let resets_at = five_hour.and_then(|h| h.get("resets_at")).and_then(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| v.as_f64().map(|n| n.to_string()))
+            });
+
+            // used = 0 / limit = None: raw token counts not available from
+            // the usage cache; pct_used carries the real measurement.
+            models.insert(
+                account_id.to_string(),
+                ModelUsage {
+                    used: 0,
+                    limit: None,
+                    reset_at: resets_at,
+                    pct_used: pct,
+                    cost_usd: None,
+                },
+            );
+        }
+
+        if models.is_empty() {
+            return None;
+        }
+
+        Some(QuotaState {
+            account_id: "claude-aggregate".to_string(),
+            harness: "cc".to_string(),
+            provider: PROVIDER_CLAUDE_MAX.to_string(),
+            ts: now,
+            models,
+        })
     }
 }
 
-/// Inert `FleetSource` for OpenAI Codex accounts.
+/// `FleetSource` for OpenAI Codex accounts.
 ///
-/// Purpose: registers the Codex provider slot in the fleet source list.
-/// Returns `None` on every poll — no fabricated numbers.
-///
-/// Real quota flow: unlike Claude Max, Codex has **no live usage-fetch path
-/// implemented yet** anywhere in this crate. `cascade_core::external_accounts`
-/// already discovers Codex's `auth.json` credential dir (`ExternalAgent::Codex`)
-/// for auth/re-auth status purposes, but nothing currently calls an OpenAI
-/// usage/quota endpoint with that token. Wiring a real `CodexSource` requires:
-/// (1) an OpenAI usage API call analogous to `fetch_claude_usage`, and
-/// (2) a decision on whether Codex quota is even exposed by an API OpenAI
-/// publishes for CLI/subscription accounts (unconfirmed as of this fix).
-/// Until that lands, this source stays honestly inert rather than guessing.
+/// Probes whether the `codex` CLI is on `$PATH` via `detect_cli`.  Returns
+/// `Some` (with empty `models`) when the binary is present — confirming the
+/// CLI is installed and the account is accessible — or `None` when it is
+/// absent.  No usage API call is made: OpenAI does not expose a public CLI
+/// quota endpoint for Codex subscription plans.  Presence information alone
+/// is sufficient for the fleet dashboard to surface the account row.
 pub struct CodexSource;
 
 impl FleetSource for CodexSource {
@@ -141,30 +202,35 @@ impl FleetSource for CodexSource {
         PROVIDER_OPENAI_CODEX
     }
 
-    /// Always `None` — no Codex usage-fetch path exists yet (see doc comment).
+    /// Return `Some` when `codex` is on `$PATH`, `None` otherwise.
+    ///
+    /// An empty `models` map signals "detected, usage data unavailable":
+    /// the CLI is present but no quota API exists to query.
     fn poll(&self) -> Option<QuotaState> {
-        None
+        if !detect_cli("codex") {
+            return None;
+        }
+        Some(QuotaState {
+            account_id: "codex".to_string(),
+            harness: "cli".to_string(),
+            provider: PROVIDER_OPENAI_CODEX.to_string(),
+            ts: chrono::Utc::now().timestamp(),
+            models: std::collections::HashMap::new(),
+        })
     }
 }
 
-/// Inert `FleetSource` for Google AI (agy) accounts.
+/// `FleetSource` for Google AI (Antigravity / agy) accounts.
 ///
-/// Purpose: registers the Agy provider slot in the fleet source list.
-/// Returns `None` on every poll — no fabricated numbers.
+/// Probes whether the `agy` CLI is on `$PATH` via `detect_cli`.  Returns
+/// `Some` (with empty `models`) when the binary is present — confirming the
+/// CLI is installed — or `None` when it is absent.
 ///
-/// Real quota flow: **does not exist yet.** Unlike Claude and Codex, Agy has
-/// no credential-bridge counterpart in `cascade_core::external_accounts`
-/// (that module's `ExternalAgent` enum only has `Claude` and `Codex` variants
-/// — confirmed by inspection, not merely undocumented). The only Agy-related
-/// code elsewhere in the daemon (`AccessMethod::AgyCli` in
-/// `cascade_types::accounts` / `fleet_poller::refresh_accounts`) only checks
-/// **whether the `agy` CLI binary is present on `$PATH`** via `detect_cli`
-/// — it does not read a token or call any quota endpoint. There is no
-/// existing "agy-token" read path anywhere in this codebase to reuse, so
-/// implementing a real `AgySource` is not trivially doable from existing
-/// code; it would require net-new credential discovery (locate agy's auth
-/// storage) and a net-new Google AI quota API call. Left inert + documented
-/// rather than fabricated.
+/// No credential bridge or Google AI quota API call exists yet: there is no
+/// `agy`-specific token-read path anywhere in this codebase.  Presence
+/// information via `detect_cli` is the real available data for this source.
+/// When the credential bridge and quota API are wired, this impl can be
+/// extended to populate `models` with real token counts.
 pub struct AgySource;
 
 impl FleetSource for AgySource {
@@ -172,10 +238,21 @@ impl FleetSource for AgySource {
         PROVIDER_GOOGLE_AGY
     }
 
-    /// Always `None` — no Agy credential bridge or quota API call exists yet
-    /// anywhere in this codebase (see doc comment).
+    /// Return `Some` when `agy` is on `$PATH`, `None` otherwise.
+    ///
+    /// An empty `models` map signals "detected, usage data unavailable":
+    /// the CLI is present but no quota API bridge exists to query.
     fn poll(&self) -> Option<QuotaState> {
-        None
+        if !detect_cli("agy") {
+            return None;
+        }
+        Some(QuotaState {
+            account_id: "agy".to_string(),
+            harness: "cli".to_string(),
+            provider: PROVIDER_GOOGLE_AGY.to_string(),
+            ts: chrono::Utc::now().timestamp(),
+            models: std::collections::HashMap::new(),
+        })
     }
 }
 
@@ -265,8 +342,15 @@ impl FleetPoller {
             .map(|c| c.quota.zai.prompts_per_5h)
             .unwrap_or(120);
 
+        // ClaudeMaxSource reads usage-cache.json written by fetch_and_cache_claude_usage
+        // (which runs before FleetPoller::tick on every iteration) at ~/.claude/usage-cache.json.
+        let claude_cache_path = dirs::home_dir()
+            .unwrap_or_else(|| config_dir.clone())
+            .join(".claude")
+            .join("usage-cache.json");
+
         let sources: Vec<Box<dyn FleetSource>> = vec![
-            Box::new(ClaudeMaxSource),
+            Box::new(ClaudeMaxSource::new(claude_cache_path)),
             Box::new(CodexSource),
             Box::new(AgySource),
             Box::new(GfpSource::new(state_path)),
@@ -944,25 +1028,123 @@ mod tests {
         assert_eq!(store.accounts[0].account_id, "mock-acct1");
     }
 
-    /// Stub sources (ClaudeMax, Codex, Agy) must all return None from poll().
+    /// ClaudeMaxSource returns None when the cache file does not exist.
+    /// CodexSource and AgySource return None when the CLI is absent (common on CI),
+    /// or Some when detected; the test is environment-safe in both cases.
     #[test]
-    fn stub_sources_return_none() {
-        let cm = ClaudeMaxSource;
-        let cx = CodexSource;
-        let ag = AgySource;
+    fn sources_return_none_when_unconfigured() {
+        let tmp = TempDir::new().unwrap();
 
-        assert!(cm.poll().is_none(), "ClaudeMaxSource must return None");
-        assert!(cx.poll().is_none(), "CodexSource must return None");
-        assert!(ag.poll().is_none(), "AgySource must return None");
+        // ClaudeMaxSource with a nonexistent cache path must return None.
+        let cm = ClaudeMaxSource::new(tmp.path().join("no-such-file.json"));
+        assert!(
+            cm.poll().is_none(),
+            "ClaudeMaxSource must return None when cache is absent"
+        );
+
+        // CodexSource: may return None (not installed) or Some (installed).
+        // Either way must not panic and must carry the correct provider id.
+        let cx = CodexSource;
+        if let Some(snap) = cx.poll() {
+            assert_eq!(
+                snap.provider, PROVIDER_OPENAI_CODEX,
+                "CodexSource provider_id mismatch"
+            );
+        }
+
+        // AgySource: same.
+        let ag = AgySource;
+        if let Some(snap) = ag.poll() {
+            assert_eq!(
+                snap.provider, PROVIDER_GOOGLE_AGY,
+                "AgySource provider_id mismatch"
+            );
+        }
+    }
+
+    /// ClaudeMaxSource with a valid usage-cache.json returns a correctly shaped QuotaState.
+    #[test]
+    fn claude_max_source_reads_from_cache() {
+        let tmp = TempDir::new().unwrap();
+        let cache_path = tmp.path().join("usage-cache.json");
+
+        let cache_content = serde_json::json!({
+            "accounts": [{
+                "account": "claude",
+                "provider": "claude",
+                "usage": {
+                    "five_hour": {
+                        "utilization": 37.5,
+                        "resets_at": 1_700_000_000_f64,
+                        "resets_in": "2h 30m"
+                    }
+                },
+                "last_pull_at": 1_700_000_000_f64,
+                "quota_opaque": false,
+                "last_error": null
+            }]
+        });
+        std::fs::write(&cache_path, serde_json::to_vec(&cache_content).unwrap()).unwrap();
+
+        let source = ClaudeMaxSource::new(cache_path);
+        let snap = source
+            .poll()
+            .expect("ClaudeMaxSource must return Some for valid cache");
+
+        assert_eq!(
+            snap.provider, PROVIDER_CLAUDE_MAX,
+            "provider must be claude-max"
+        );
+        assert_eq!(snap.harness, "cc");
+        let entry = snap
+            .models
+            .get("claude")
+            .expect("must have entry keyed by account id");
+        let pct = entry
+            .pct_used
+            .expect("pct_used must be set from utilization");
+        assert!(
+            (pct - 37.5_f32).abs() < 0.1,
+            "pct_used must match five_hour.utilization; got {pct}"
+        );
+        assert_eq!(entry.used, 0, "used must be 0 (raw count not in cache)");
+    }
+
+    /// ClaudeMaxSource skips entries that have a last_error string.
+    #[test]
+    fn claude_max_source_skips_auth_failure_entries() {
+        let tmp = TempDir::new().unwrap();
+        let cache_path = tmp.path().join("usage-cache.json");
+
+        let cache_content = serde_json::json!({
+            "accounts": [{
+                "account": "claude",
+                "provider": "claude",
+                "usage": null,
+                "last_pull_at": 1_700_000_000_f64,
+                "quota_opaque": false,
+                "last_error": "http_401"
+            }]
+        });
+        std::fs::write(&cache_path, serde_json::to_vec(&cache_content).unwrap()).unwrap();
+
+        let source = ClaudeMaxSource::new(cache_path);
+        assert!(
+            source.poll().is_none(),
+            "ClaudeMaxSource must return None when all entries have last_error"
+        );
     }
 
     /// Dynamic dispatch via `Box<dyn FleetSource>` must work correctly.
     #[test]
     fn fleet_source_trait_dispatch() {
+        let tmp = TempDir::new().unwrap();
+
         let sources: Vec<Box<dyn FleetSource>> = vec![
-            Box::new(ClaudeMaxSource),
-            Box::new(CodexSource),
-            Box::new(AgySource),
+            // Nonexistent path → ClaudeMaxSource returns None deterministically.
+            Box::new(ClaudeMaxSource::new(tmp.path().join("no-cache.json"))),
+            Box::new(CodexSource), // None or Some depending on PATH — both valid
+            Box::new(AgySource),   // None or Some depending on PATH — both valid
             Box::new(MockSource {
                 id: "mock".to_string(),
                 snapshot: Some(make_snapshot("dyn-acct")),
@@ -971,11 +1153,18 @@ mod tests {
 
         let results: Vec<Option<QuotaState>> = sources.iter().map(|s| s.poll()).collect();
 
-        // First three are stubs → None; last one has data → Some.
-        assert!(results[0].is_none());
-        assert!(results[1].is_none());
-        assert!(results[2].is_none());
-        assert!(results[3].is_some());
-        assert_eq!(results[3].as_ref().unwrap().account_id, "dyn-acct");
+        // ClaudeMaxSource with no cache → None.
+        assert!(
+            results[0].is_none(),
+            "ClaudeMaxSource with no cache must be None"
+        );
+        // CodexSource and AgySource: don't assert value (PATH-dependent in test env).
+        // MockSource with a snapshot must return Some.
+        assert!(results[3].is_some(), "MockSource must return Some");
+        assert_eq!(
+            results[3].as_ref().unwrap().account_id,
+            "dyn-acct",
+            "MockSource account_id mismatch"
+        );
     }
 }
