@@ -18,18 +18,21 @@
 //!   (macOS) and checking for `cursorAuth.cachedEmail`.
 //! - `provider_info` — returns static metadata so the system knows Cursor is
 //!   a recognised subscription.
-//! - `available_models` — returns the well-known Cursor model identifiers
-//!   (informational; not routable).
+//! - `available_models` — returns an empty list: no Cursor model is routable
+//!   through this adapter.
 //! - `complete` / `complete_stream` — always returns
 //!   `ProviderError::UnsupportedTaskType` explaining that inference routing is
-//!   disabled by default to protect ToS compliance.
+//!   not implemented for this adapter, by design.
 //!
-//! ## Inference routing stub (OFF by default)
+//! ## Inference routing — intentionally not implemented
 //!
-//! Real inference routing (if Cursor ever exposes a public API) is gated behind
-//! `#[cfg(feature = "inference_routing")]`.  This feature is NOT enabled in the
-//! default build — it exists only as documentation of how routing would work.
-//! Never enable this feature without explicit legal review of Cursor's ToS.
+//! This adapter implements no inference routing and exposes no feature flag
+//! for it.  Cursor provides no public inference API, and routing completions
+//! through a paid Cursor subscription from a third-party tool would violate
+//! Cursor's ToS (§ API Resale / Unauthorized Access) — it is out of scope for
+//! this adapter by product design.  `complete` / `complete_stream` therefore
+//! always return `ProviderError::UnsupportedTaskType` with a message pointing
+//! at the config-generation path.
 //!
 //! ## Config generation
 //!
@@ -42,10 +45,10 @@
 //!
 //! - `health_check`: filesystem read — returns `Ok(())` if Cursor is detected
 //!   with an authenticated session, else `Err(CredentialNotFound)`.
-//! - `complete`: always `Err(UnsupportedTaskType)` unless `inference_routing`
-//!   feature is enabled (stub only, see above).
+//! - `complete`: always `Err(UnsupportedTaskType)` — inference routing is
+//!   not implemented (see above).
 //! - `complete_stream`: same.
-//! - `available_models`: static list of Cursor subscription models.
+//! - `available_models`: always an empty list (nothing is routable).
 //!
 //! # Constraints
 //!
@@ -71,15 +74,14 @@ use crate::{
 
 const PROVIDER_ID: &str = "cursor";
 
-/// Error message returned by `complete` / `complete_stream` when inference
-/// routing is disabled (default).
+/// Error message returned by `complete` / `complete_stream` — this adapter
+/// implements no inference routing, by design.
 const ROUTING_DISABLED_MSG: &str = "\
-Cursor inference routing is disabled by default (ToS compliance). \
-Cascade integrates with Cursor via config generation only: \
+Cursor inference routing is not implemented — out of scope for this adapter \
+by design (ToS compliance: Cursor exposes no public inference API). \
+Cascade integrates with Cursor via detection and config generation only: \
 run `cascade harness generate --harness cursor` to write \
-`.cursor/rules/cascade.mdc` which wires Cascade context into Cursor. \
-Direct inference routing would require Cursor to expose a public API and \
-explicit ToS clearance — see cfg(feature = \"inference_routing\") stub.";
+`.cursor/rules/cascade.mdc` which wires Cascade context into Cursor.";
 
 // ── CursorAdapter ─────────────────────────────────────────────────────────────
 
@@ -185,22 +187,12 @@ impl Default for CursorAdapter {
 
 #[async_trait]
 impl ProviderAdapter for CursorAdapter {
-    /// Always returns `UnsupportedTaskType` — inference routing is disabled.
+    /// Always returns `UnsupportedTaskType` — inference routing is not
+    /// implemented for this adapter (out of scope by design).
     ///
     /// The error message explains the ToS rationale and the correct integration
     /// path (`cascade harness generate --harness cursor`).
     async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
-        #[cfg(feature = "inference_routing")]
-        {
-            // STUB: inference routing would POST to Cursor's internal API here.
-            // This feature is intentionally undocumented and not enabled in any
-            // release build. Enabling it without Cursor's explicit API authorisation
-            // constitutes a ToS violation (§ Unauthorized API Access).
-            return Err(ProviderError::UnsupportedTaskType(
-                "inference_routing feature is a stub — not implemented".into(),
-            ));
-        }
-        #[cfg(not(feature = "inference_routing"))]
         Err(ProviderError::UnsupportedTaskType(
             ROUTING_DISABLED_MSG.into(),
         ))
@@ -217,31 +209,14 @@ impl ProviderAdapter for CursorAdapter {
         ))
     }
 
-    /// Return the known Cursor subscription model identifiers (informational).
+    /// Returns an empty list — no Cursor model is routable through this adapter.
     ///
-    /// These model IDs are what Cursor exposes in its UI — not routable through
-    /// this adapter.
+    /// Per the `ProviderAdapter` contract, `available_models` feeds the routing
+    /// model-picker; this adapter routes no inference, so it exposes no
+    /// routable models.  Cursor's subscription model lineup is managed by
+    /// Cursor itself and is not part of what detection reads.
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        Ok(vec![
-            ModelInfo {
-                id: "claude-sonnet-4-5".into(),
-                name: "Claude Sonnet 4.5 (via Cursor)".into(),
-                context_window: 200_000,
-                supports_streaming: false,
-            },
-            ModelInfo {
-                id: "gpt-4o".into(),
-                name: "GPT-4o (via Cursor)".into(),
-                context_window: 128_000,
-                supports_streaming: false,
-            },
-            ModelInfo {
-                id: "gemini-2.5-pro".into(),
-                name: "Gemini 2.5 Pro (via Cursor)".into(),
-                context_window: 1_000_000,
-                supports_streaming: false,
-            },
-        ])
+        Ok(vec![])
     }
 
     /// Detect whether Cursor is installed and has an authenticated session.
@@ -449,14 +424,13 @@ mod tests {
     // ── available_models ─────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn available_models_returns_non_empty() {
+    async fn available_models_is_empty_no_routable_models() {
         let adapter = CursorAdapter::new();
         let models = adapter.available_models().await.unwrap();
-        assert!(!models.is_empty());
-        // All model ids should be non-empty strings
-        for m in &models {
-            assert!(!m.id.is_empty());
-        }
+        assert!(
+            models.is_empty(),
+            "detection-only adapter must expose no routable models, got: {models:?}"
+        );
     }
 
     // ── provider_info ─────────────────────────────────────────────────────────

@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- Cursor and Antigravity provider adapters now honestly reflect their
+  detect+config-only scope: the unreachable `inference_routing` cfg-feature
+  stub blocks ("stub — not implemented") and the now-meaningless
+  `inference_routing` Cargo feature were removed; `complete`/
+  `complete_stream` unconditionally return an accurate
+  `UnsupportedTaskType` error; and `available_models` returns an empty list
+  (per the `ProviderAdapter` contract it feeds the routing model-picker, and
+  no subscription model is routable through these adapters). Antigravity's
+  module doc now also disambiguates it from the real `agy`-CLI Gemini
+  dispatch path in `cascade-cli`'s conductor. (T-P7-E12-01, T-P7-E12-02)
+
 ### Added
 - `cascade build run --real` now treats fleet-agent exit status and explicit
   `CASCADE_STEP_COMPLETE:<step-id>` stdout markers as the authoritative step

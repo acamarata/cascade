@@ -18,16 +18,23 @@
 //!   `~/Library/Application Support/Antigravity/config.json`).
 //! - `provider_info` — returns static metadata so the system knows Antigravity
 //!   is a recognised subscription.
-//! - `available_models` — returns placeholder model identifiers (informational).
+//! - `available_models` — returns an empty list: no Antigravity model is
+//!   routable through this adapter.
 //! - `complete` / `complete_stream` — always returns
 //!   `ProviderError::UnsupportedTaskType` explaining that inference routing is
-//!   disabled by default to protect ToS compliance.
+//!   not implemented for this adapter, by design.
 //!
-//! ## Inference routing stub (OFF by default)
+//! ## Inference routing — intentionally not implemented
 //!
-//! Real inference routing is gated behind `#[cfg(feature = "inference_routing")]`.
-//! This feature is NOT enabled in the default build — it exists only as
-//! documentation. Never enable without explicit legal review of Antigravity's ToS.
+//! This adapter implements no inference routing and exposes no feature flag
+//! for it: routing completions through a paid Antigravity subscription from a
+//! third-party tool would violate Antigravity's ToS (Unauthorized API Access /
+//! Subscription Resale) and is out of scope for this adapter by product design.
+//!
+//! NOTE: this file is the *subscription detection* adapter only. The real
+//! Antigravity-CLI dispatch path (Gemini via the `agy` CLI) lives separately
+//! in `cascade-cli`'s conductor (`Provider::Gemini` / `execute_gemini`) — the
+//! two must not be conflated.
 //!
 //! ## Config generation
 //!
@@ -38,9 +45,10 @@
 //! # Inputs / Outputs
 //!
 //! - `health_check`: filesystem read — returns `Ok(())` if installed+authed.
-//! - `complete`: always `Err(UnsupportedTaskType)` (routing disabled by default).
+//! - `complete`: always `Err(UnsupportedTaskType)` — inference routing is
+//!   not implemented (see above).
 //! - `complete_stream`: same.
-//! - `available_models`: static placeholder list.
+//! - `available_models`: always an empty list (nothing is routable).
 //!
 //! # Constraints
 //!
@@ -65,15 +73,14 @@ use crate::{
 
 const PROVIDER_ID: &str = "antigravity";
 
-/// Error message returned by `complete` / `complete_stream` when inference
-/// routing is disabled (default).
+/// Error message returned by `complete` / `complete_stream` — this adapter
+/// implements no inference routing, by design.
 const ROUTING_DISABLED_MSG: &str = "\
-Antigravity inference routing is disabled by default (ToS compliance). \
-Cascade integrates with Antigravity via config generation only: \
-run `cascade harness generate --harness antigravity` to write \
-`.antigravity/cascade-rules.md` which wires Cascade context into Antigravity. \
-Direct inference routing would require Antigravity to expose a public API and \
-explicit ToS clearance — see cfg(feature = \"inference_routing\") stub.";
+Antigravity inference routing is not implemented — out of scope for this \
+adapter by design (ToS compliance). Cascade integrates with Antigravity via \
+detection and config generation only: run \
+`cascade harness generate --harness antigravity` to write \
+`.antigravity/cascade-rules.md` which wires Cascade context into Antigravity.";
 
 // ── AntigravityAdapter ────────────────────────────────────────────────────────
 
@@ -171,17 +178,9 @@ impl Default for AntigravityAdapter {
 
 #[async_trait]
 impl ProviderAdapter for AntigravityAdapter {
-    /// Always returns `UnsupportedTaskType` — inference routing is disabled.
+    /// Always returns `UnsupportedTaskType` — inference routing is not
+    /// implemented for this adapter (out of scope by design).
     async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
-        #[cfg(feature = "inference_routing")]
-        {
-            // STUB: inference routing would POST to Antigravity's internal API here.
-            // Not implemented — see module doc for ToS rationale.
-            return Err(ProviderError::UnsupportedTaskType(
-                "inference_routing feature is a stub — not implemented".into(),
-            ));
-        }
-        #[cfg(not(feature = "inference_routing"))]
         Err(ProviderError::UnsupportedTaskType(
             ROUTING_DISABLED_MSG.into(),
         ))
@@ -198,14 +197,15 @@ impl ProviderAdapter for AntigravityAdapter {
         ))
     }
 
-    /// Return placeholder model identifiers for Antigravity subscriptions.
+    /// Returns an empty list — no Antigravity model is routable through this
+    /// adapter.
+    ///
+    /// Per the `ProviderAdapter` contract, `available_models` feeds the routing
+    /// model-picker; this adapter routes no inference, so it exposes no
+    /// routable models.  Detection reads only the config.json auth fields —
+    /// no model lineup — from the local Antigravity install.
     async fn available_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        Ok(vec![ModelInfo {
-            id: "antigravity-subscription".into(),
-            name: "Antigravity Subscription Models".into(),
-            context_window: 200_000,
-            supports_streaming: false,
-        }])
+        Ok(vec![])
     }
 
     /// Detect whether Antigravity is installed and authenticated.
@@ -396,13 +396,13 @@ mod tests {
     // ── available_models ─────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn available_models_non_empty() {
+    async fn available_models_is_empty_no_routable_models() {
         let adapter = AntigravityAdapter::new();
         let models = adapter.available_models().await.unwrap();
-        assert!(!models.is_empty());
-        for m in &models {
-            assert!(!m.id.is_empty());
-        }
+        assert!(
+            models.is_empty(),
+            "detection-only adapter must expose no routable models, got: {models:?}"
+        );
     }
 
     // ── provider_info ─────────────────────────────────────────────────────────
