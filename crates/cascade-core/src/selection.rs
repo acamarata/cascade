@@ -291,6 +291,7 @@ const ACCOUNT_SPILL_ORDER: &[(&str, Provider)] = &[
     ("glm-acc1", Provider::Zai),
     ("opencode-acc1", Provider::OpenCode),
     ("opencode", Provider::OpenCode),
+    ("gemini-acc1", Provider::Gemini),
     ("gemini-agt", Provider::Gemini),
     ("codex-acc1", Provider::Codex),
     ("codex", Provider::Codex),
@@ -579,7 +580,7 @@ mod tests {
                 entry("glm-acc1", "zai", "ok"),
                 entry("opencode-acc1", "opencode", "ok"),
                 entry("opencode", "opencode", "ok"),
-                entry("gemini-agt", "gemini", "ok"),
+                entry("gemini-acc1", "gemini", "ok"),
                 entry("codex-acc1", "codex", "ok"),
                 entry("codex", "codex", "ok"),
                 claude_entry("claude2", "/home/user/.claude2", 10.0, 20.0),
@@ -648,7 +649,7 @@ mod tests {
             "glm-acc1",
             "opencode-acc1",
             "opencode",
-            "gemini-agt",
+            "gemini-acc1",
             "codex-acc1",
             "codex",
         ] {
@@ -686,7 +687,7 @@ mod tests {
             target.reason
         );
         assert!(
-            target.reason.contains("gemini-agt"),
+            target.reason.contains("gemini-acc1"),
             "reason: {}",
             target.reason
         );
@@ -710,7 +711,7 @@ mod tests {
             "glm-acc1",
             "opencode-acc1",
             "opencode",
-            "gemini-agt",
+            "gemini-acc1",
             "codex-acc1",
             "codex",
         ] {
@@ -752,9 +753,32 @@ mod tests {
         }
         let target =
             select_account(&req(Tier::T2), &snap, &GpHealthSnapshot::default()).expect("target");
-        assert_eq!(target.account_id, "gemini-agt");
+        assert_eq!(target.account_id, "gemini-acc1");
         assert_eq!(target.provider, Provider::Gemini);
         assert_eq!(target.model, MODEL_GEMINI_PRO);
+    }
+
+    /// Regression test for a real bug (T-P7-E12, found 2026-08-15):
+    /// ACCOUNT_SPILL_ORDER listed the Gemini account as "gemini-agt", but the
+    /// real quota.json account is "gemini-acc1" — the exact-string `.find()`
+    /// at the spill-order resolution step never matched, so the Gemini/agy
+    /// lane was silently unreachable in the natural (non-override) spill
+    /// chain even though quota.json reported it healthy at 0% utilization.
+    /// Only `--account gemini-acc1` (the override path) ever selected it.
+    /// This test locks the real account name into the spill order directly,
+    /// independent of `full_snapshot()`'s fixture data, so a future rename of
+    /// either side alone cannot silently reintroduce the mismatch.
+    #[test]
+    fn account_spill_order_gemini_entry_matches_real_account_name() {
+        assert!(
+            ACCOUNT_SPILL_ORDER
+                .iter()
+                .any(|(id, p)| *id == "gemini-acc1" && *p == Provider::Gemini),
+            "ACCOUNT_SPILL_ORDER must contain (\"gemini-acc1\", Provider::Gemini) — \
+             that is the real account id `agy` account in ~/.cascade/accounts/quota.json \
+             uses in production; a mismatched id here silently removes the Gemini lane \
+             from natural spill selection (see T-P7-E12 finding)."
+        );
     }
 
     #[test]
@@ -764,7 +788,7 @@ mod tests {
             "glm-acc1",
             "opencode-acc1",
             "opencode",
-            "gemini-agt",
+            "gemini-acc1",
             "codex-acc1",
             "codex",
         ] {

@@ -82,6 +82,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   reads via `--read`) instead of `.aider.conf.yml` (Aider's tool config file, which
   the spec explicitly leaves independent). Spec references: `04-cascade-nomenclature-spec.md`
   § 2, `06-cascade-code-apps-support.md` Aider row. (T-P7-E23-03)
+- `CascadeTierTree`'s "Create" button now actually scaffolds the missing tier's
+  `.cascade/` directory (subdirs, skill suite, agents, `CASCADE.md`, tool symlinks,
+  `.gitignore`) instead of only opening the parent directory in Finder. The
+  scaffolding reuses `cascade init`'s own logic via a new shared
+  `scaffold_ai_folder()` function and a new `create_cascade_tier` Tauri command,
+  so a tier created from the desktop app is byte-identical to one created from the
+  CLI. (T-P7-E10-03)
+- VaultContext's dev-fixture fallback now requires both Tauri-runtime absence AND
+  `import.meta.env.DEV` (previously gated only on Tauri absence, so a production
+  build outside a Tauri webview could serve fake vault data). A visible amber
+  `DevFixtureBanner` is now rendered whenever fixture data is active. (T-P7-E10-04)
+- Fixed a one-token account-id typo in Conductor's fleet spill order:
+  `ACCOUNT_SPILL_ORDER` referenced the Gemini/agy account as `"gemini-agt"`,
+  but the real account in `~/.cascade/accounts/quota.json` is `"gemini-acc1"`.
+  The exact-string match at spill-order resolution never matched, so the
+  Gemini/agy lane was silently unreachable in natural (non-override) spill
+  selection — `--account gemini-acc1` (the override path) always worked,
+  masking the bug. The two unit tests exercising this path used the same
+  wrong name in their own fixtures, so they passed against themselves without
+  catching the mismatch against the real account name. Added a regression
+  test that checks the spill order directly against the real name so this
+  can't silently reintroduce.
 
 ### Security
 - Removed the unused `cascade_core::security::oauth` module, whose HMAC and
