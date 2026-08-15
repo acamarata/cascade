@@ -1,21 +1,22 @@
 /**
  * Purpose: Cascade Tiers tab — renders the six-tier cascade chain as a vertical
  *   CSS tree. Existing tiers (exists:true) shown in green; missing tiers in
- *   gray with a "Create" button that generates the .cascade/ stub.
+ *   gray with a "Create" button that actually scaffolds the tier.
  * Inputs:  projectRoot — absolute path to inspect (from props/selector).
  *          get_cascade_tier_tree IPC via getCascadeTierTree(root).
  * Outputs: Ordered list of 6 tier rows with status indicators.
  * Constraints:
  *   - Auto-refreshes on focus.
  *   - No graph lib — pure CSS vertical list.
- *   - "Create" opens the path in Finder (file creation is not yet wired in P3).
- * SPORT: MASTER-COMPONENTS.md — CascadeTierTree (T-P3-E07-13)
+ *   - "Create" scaffolds the tier's real .cascade/ structure via
+ *     create_cascade_tier (T-P7-E10-03), reusing `cascade init`'s own
+ *     scaffolding logic, then refreshes the tree.
+ * SPORT: MASTER-COMPONENTS.md — CascadeTierTree (T-P3-E07-13, T-P7-E10-03)
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Circle, FolderPlus, Loader2 } from 'lucide-react'
-import { open } from '@tauri-apps/plugin-shell'
-import { getCascadeTierTree } from '../../types/maps'
+import { createCascadeTier, getCascadeTierTree } from '../../types/maps'
 import type { TierEntry } from '../../types/maps'
 import { tierExists, tierLabel } from './mapTransforms'
 
@@ -33,15 +34,22 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
   PAC: 'Per-app Cascade Instructions',
 }
 
-function TierRow({ entry }: { entry: TierEntry }) {
+function TierRow({ entry, onCreated }: { entry: TierEntry; onCreated: () => void }) {
   const exists = tierExists(entry)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
-  function handleCreate() {
-    // Open the parent directory; actual file creation is deferred to Settings (E-07 W-05).
-    const dir = entry.path.replace(/\/[^/]+$/, '')
-    open(dir).catch(() => {
-      /* ignore */
-    })
+  async function handleCreate() {
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await createCascadeTier(entry.tier, entry.path)
+      onCreated()
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreating(false)
+    }
   }
 
   return (
@@ -76,18 +84,28 @@ function TierRow({ entry }: { entry: TierEntry }) {
             {entry.path}
           </p>
         )}
+        {createError && (
+          <p className="mt-0.5 truncate text-[10px] text-destructive" role="alert">
+            {createError}
+          </p>
+        )}
       </div>
 
       {/* Create button for missing tiers */}
       {!exists && (
         <button
           type="button"
-          onClick={handleCreate}
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+          onClick={() => void handleCreate()}
+          disabled={creating}
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={`Create ${entry.tier} at ${entry.path}`}
         >
-          <FolderPlus className="h-3 w-3" aria-hidden="true" />
-          Create
+          {creating ? (
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+          ) : (
+            <FolderPlus className="h-3 w-3" aria-hidden="true" />
+          )}
+          {creating ? 'Creating…' : 'Create'}
         </button>
       )}
     </li>
@@ -178,7 +196,7 @@ export function CascadeTierTree({ projectRoot }: CascadeTierTreeProps) {
         aria-label="Cascade tier chain, outermost to innermost"
       >
         {tiers.map((entry) => (
-          <TierRow key={entry.tier} entry={entry} />
+          <TierRow key={entry.tier} entry={entry} onCreated={() => void loadData()} />
         ))}
       </ol>
 

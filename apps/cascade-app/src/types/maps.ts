@@ -125,3 +125,21 @@ export function getCascadeTierTree(root: string): Promise<TierEntry[]> {
 export function getPewsDag(phaseRoot: string): Promise<GraphData> {
   return invoke<GraphData>('get_pews_dag', { phaseRoot })
 }
+
+/** Result of {@link createCascadeTier}: the relative paths of everything created. */
+export interface CreateTierResult {
+  dirsCreated: string[]
+  filesWritten: string[]
+}
+
+/**
+ * Scaffold a missing cascade tier's `.cascade/` directory in place —
+ * directories, skill suite, agents, `CASCADE.md`, tool symlinks, `.gitignore`.
+ * Idempotent: safe to call again on a tier that already has some pieces.
+ *
+ * @param tier One of `TierEntry.tier` — GCI, PCI, APC, PPC, PRC, PAC.
+ * @param path The tier's expected `CASCADE.md` path, from `TierEntry.path`.
+ */
+export function createCascadeTier(tier: TierEntry['tier'], path: string): Promise<CreateTierResult> {
+  return invoke<CreateTierResult>('create_cascade_tier', { tier, path })
+}

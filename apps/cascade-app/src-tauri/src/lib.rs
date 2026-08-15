@@ -235,6 +235,8 @@ pub fn run() {
             commands::maps::get_project_graph,
             commands::maps::get_cascade_tier_tree,
             commands::maps::get_pews_dag,
+            // T-P7-E10-03: real tier scaffolding for CascadeTierTree's Create button
+            commands::maps::create_cascade_tier,
             // T-P4-E01-27: RAG Explorer IPC stubs
             rag_commands::rag_list_sources,
             rag_commands::rag_ingest_file,

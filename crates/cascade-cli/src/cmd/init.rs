@@ -234,128 +234,13 @@ impl Command for InitArgs {
             );
         }
 
-        // 7. Scaffold directories (idempotent — create_dir_all is a no-op if already present).
-        let mut dirs_created: Vec<String> = Vec::new();
-        for sub in SUBDIRS {
-            let dir = ai_dir.join(sub);
-            if !dir.exists() {
-                std::fs::create_dir_all(&dir).map_err(|e| CascadeError::Io {
-                    path: dir.clone(),
-                    operation: "create_dir_all",
-                    source: e,
-                })?;
-                dirs_created.push(format!("{}/{}/", folder_name, sub));
-            } else {
-                // Ensure it's a directory even if it previously existed.
-                std::fs::create_dir_all(&dir).map_err(|e| CascadeError::Io {
-                    path: dir.clone(),
-                    operation: "heal_dir",
-                    source: e,
-                })?;
-            }
-        }
-        // Ensure the root AI dir itself exists.
-        if !ai_dir.exists() {
-            std::fs::create_dir_all(&ai_dir).map_err(|e| CascadeError::Io {
-                path: ai_dir.clone(),
-                operation: "create ai_dir",
-                source: e,
-            })?;
-            dirs_created.push(format!("{}/", folder_name));
-        }
-
-        // 7b. Install skill suite (idempotent — skips files that already exist).
-        let mut files_written: Vec<String> = Vec::new();
-        {
-            use cascade_harness::skills::{install_suite, SkillSuite};
-            let suite = match self.system {
-                Some(SkillSystem::Pews) => SkillSuite::Pews,
-                Some(SkillSystem::Personal) => SkillSuite::Personal,
-                None => {
-                    // Auto-detect: git repo → pews; else → personal.
-                    if ai_dir
-                        .parent()
-                        .map(|p| p.join(".git").is_dir())
-                        .unwrap_or(false)
-                    {
-                        SkillSuite::Pews
-                    } else {
-                        SkillSuite::Personal
-                    }
-                }
-            };
-            let skills_dir = ai_dir.join(cascade_types::paths::subdirs::SKILLS);
-            if let Ok(installed) = install_suite(suite, &skills_dir) {
-                for f in &installed {
-                    files_written.push(format!(
-                        "{}/{}/{}",
-                        folder_name,
-                        cascade_types::paths::subdirs::SKILLS,
-                        f
-                    ));
-                }
-            }
-            // Security suite is universal — install alongside whichever system suite was chosen.
-            if let Ok(installed) = install_suite(SkillSuite::Security, &skills_dir) {
-                for f in &installed {
-                    files_written.push(format!(
-                        "{}/{}/{}",
-                        folder_name,
-                        cascade_types::paths::subdirs::SKILLS,
-                        f
-                    ));
-                }
-            }
-        }
-
-        // 7c. Install built-in agents (idempotent — skips files that already exist).
-        {
-            use cascade_harness::agents::install_agents;
-            let agents_dir = ai_dir.join(cascade_types::paths::subdirs::AGENTS);
-            if let Ok(installed) = install_agents(&agents_dir) {
-                for f in &installed {
-                    files_written.push(format!(
-                        "{}/{}/{}",
-                        folder_name,
-                        cascade_types::paths::subdirs::AGENTS,
-                        f
-                    ));
-                }
-            }
-        }
-
-        // 8. Write CASCADE.md (idempotent — skip if exists and not --force).
-        let cascade_md = ai_dir.join(CASCADE_MD_NAME);
-        if !cascade_md.exists() || self.force {
-            let content = starter_template(tier_label, &folder_name);
-            std::fs::write(&cascade_md, content).map_err(|e| CascadeError::Io {
-                path: cascade_md.clone(),
-                operation: "write CASCADE.md",
-                source: e,
-            })?;
-            files_written.push(format!("{}/{}", folder_name, CASCADE_MD_NAME));
-        }
-
-        // 9. Create CLAUDE.md and AGENTS.md symlinks.
-        let claude_link = ai_dir.join(CLAUDE_MD_NAME);
-        let agents_link = ai_dir.join(AGENTS_MD_NAME);
-        let symlinks_were_missing = !claude_link.exists() || !agents_link.exists();
-        cascade_core::symlinks::create_siblings(&ai_dir, self.force)?;
-        if symlinks_were_missing || self.force {
-            files_written.push(format!("{}/{}", folder_name, CLAUDE_MD_NAME));
-            files_written.push(format!("{}/{}", folder_name, AGENTS_MD_NAME));
-        }
-
-        // 10. Write .gitignore (idempotent).
-        let gitignore = ai_dir.join(".gitignore");
-        if !gitignore.exists() || self.force {
-            std::fs::write(&gitignore, GITIGNORE_CONTENT).map_err(|e| CascadeError::Io {
-                path: gitignore,
-                operation: "write .gitignore",
-                source: e,
-            })?;
-            files_written.push(format!("{}/.gitignore", folder_name));
-        }
+        // 7-10. Scaffold the AI folder (shared with the Tauri create_cascade_tier
+        // command — see scaffold_ai_folder below). Idempotent: heals missing
+        // pieces without overwriting existing files (unless --force).
+        let scaffold =
+            scaffold_ai_folder(&ai_dir, &folder_name, tier_label, self.force, self.system)?;
+        let dirs_created = scaffold.dirs_created;
+        let mut files_written = scaffold.files_written;
 
         // 11. Write config.toml model hint if --model is provided.
         if let Some(model_id) = &self.model {
@@ -560,6 +445,159 @@ impl InitArgs {
         }
         Ok(())
     }
+}
+
+// ── AI-folder scaffolding ─────────────────────────────────────────────────────
+
+/// Result of [`scaffold_ai_folder`]: the relative paths of everything created.
+pub struct ScaffoldResult {
+    pub dirs_created: Vec<String>,
+    pub files_written: Vec<String>,
+}
+
+/// Scaffold an AI folder's directories, skill suite, agents, `CASCADE.md`,
+/// tool symlinks, and `.gitignore`.
+///
+/// Shared between `cascade init`'s own `run()` and the Tauri
+/// `create_cascade_tier` command (T-P7-E10-03), so both entry points scaffold
+/// a tier identically instead of duplicating the logic.
+///
+/// Idempotent: heals missing pieces without overwriting existing files unless
+/// `force` is `true`.
+pub fn scaffold_ai_folder(
+    ai_dir: &Path,
+    folder_name: &str,
+    tier_label: &'static str,
+    force: bool,
+    system: Option<SkillSystem>,
+) -> Result<ScaffoldResult> {
+    // 7. Scaffold directories (idempotent — create_dir_all is a no-op if already present).
+    let mut dirs_created: Vec<String> = Vec::new();
+    for sub in SUBDIRS {
+        let dir = ai_dir.join(sub);
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir).map_err(|e| CascadeError::Io {
+                path: dir.clone(),
+                operation: "create_dir_all",
+                source: e,
+            })?;
+            dirs_created.push(format!("{folder_name}/{sub}/"));
+        } else {
+            // Ensure it's a directory even if it previously existed.
+            std::fs::create_dir_all(&dir).map_err(|e| CascadeError::Io {
+                path: dir.clone(),
+                operation: "heal_dir",
+                source: e,
+            })?;
+        }
+    }
+    // Ensure the root AI dir itself exists.
+    if !ai_dir.exists() {
+        std::fs::create_dir_all(ai_dir).map_err(|e| CascadeError::Io {
+            path: ai_dir.to_path_buf(),
+            operation: "create ai_dir",
+            source: e,
+        })?;
+        dirs_created.push(format!("{folder_name}/"));
+    }
+
+    // 7b. Install skill suite (idempotent — skips files that already exist).
+    let mut files_written: Vec<String> = Vec::new();
+    {
+        use cascade_harness::skills::{install_suite, SkillSuite};
+        let suite = match system {
+            Some(SkillSystem::Pews) => SkillSuite::Pews,
+            Some(SkillSystem::Personal) => SkillSuite::Personal,
+            None => {
+                // Auto-detect: git repo → pews; else → personal.
+                if ai_dir
+                    .parent()
+                    .map(|p| p.join(".git").is_dir())
+                    .unwrap_or(false)
+                {
+                    SkillSuite::Pews
+                } else {
+                    SkillSuite::Personal
+                }
+            }
+        };
+        let skills_dir = ai_dir.join(cascade_types::paths::subdirs::SKILLS);
+        if let Ok(installed) = install_suite(suite, &skills_dir) {
+            for f in &installed {
+                files_written.push(format!(
+                    "{}/{}/{}",
+                    folder_name,
+                    cascade_types::paths::subdirs::SKILLS,
+                    f
+                ));
+            }
+        }
+        // Security suite is universal — install alongside whichever system suite was chosen.
+        if let Ok(installed) = install_suite(SkillSuite::Security, &skills_dir) {
+            for f in &installed {
+                files_written.push(format!(
+                    "{}/{}/{}",
+                    folder_name,
+                    cascade_types::paths::subdirs::SKILLS,
+                    f
+                ));
+            }
+        }
+    }
+
+    // 7c. Install built-in agents (idempotent — skips files that already exist).
+    {
+        use cascade_harness::agents::install_agents;
+        let agents_dir = ai_dir.join(cascade_types::paths::subdirs::AGENTS);
+        if let Ok(installed) = install_agents(&agents_dir) {
+            for f in &installed {
+                files_written.push(format!(
+                    "{}/{}/{}",
+                    folder_name,
+                    cascade_types::paths::subdirs::AGENTS,
+                    f
+                ));
+            }
+        }
+    }
+
+    // 8. Write CASCADE.md (idempotent — skip if exists and not --force).
+    let cascade_md = ai_dir.join(CASCADE_MD_NAME);
+    if !cascade_md.exists() || force {
+        let content = starter_template(tier_label, folder_name);
+        std::fs::write(&cascade_md, content).map_err(|e| CascadeError::Io {
+            path: cascade_md.clone(),
+            operation: "write CASCADE.md",
+            source: e,
+        })?;
+        files_written.push(format!("{folder_name}/{CASCADE_MD_NAME}"));
+    }
+
+    // 9. Create CLAUDE.md and AGENTS.md symlinks.
+    let claude_link = ai_dir.join(CLAUDE_MD_NAME);
+    let agents_link = ai_dir.join(AGENTS_MD_NAME);
+    let symlinks_were_missing = !claude_link.exists() || !agents_link.exists();
+    cascade_core::symlinks::create_siblings(ai_dir, force)?;
+    if symlinks_were_missing || force {
+        files_written.push(format!("{folder_name}/{CLAUDE_MD_NAME}"));
+        files_written.push(format!("{folder_name}/{AGENTS_MD_NAME}"));
+    }
+
+    // 10. Write .gitignore (idempotent).
+    let gitignore = ai_dir.join(".gitignore");
+    if !gitignore.exists() || force {
+        std::fs::write(&gitignore, GITIGNORE_CONTENT).map_err(|e| CascadeError::Io {
+            path: gitignore,
+            operation: "write .gitignore",
+            source: e,
+        })?;
+        files_written.push(format!("{folder_name}/.gitignore"));
+    }
+
+    Ok(ScaffoldResult {
+        dirs_created,
+        files_written,
+    })
 }
 
 // ── Tier detection ────────────────────────────────────────────────────────────

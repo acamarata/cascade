@@ -2,12 +2,17 @@
  * Purpose: Shared vault context — provides tree data, current file selection,
  *   and content for the vault navigator and read-only note viewer.
  *   Calls vault_list IPC on mount / refresh; vault_read on file open.
- *   Falls back to a hard-coded fixture when window.__TAURI__ is undefined
- *   (browser-based Vitest / Storybook dev).
+ *   Falls back to a hard-coded fixture only when BOTH the Tauri runtime is
+ *   absent AND import.meta.env.DEV is true (browser-based Vitest / Storybook /
+ *   `vite dev`). A visible DevFixtureBanner is rendered while fixture data is
+ *   active so mock data is never confused with real vault contents.
  * Inputs:  VaultProviderProps.defaultRoot — vault root path (default: ~/.cascade)
  * Outputs: VaultContextValue exposed via useVault() hook.
- * Constraints: No circular re-renders — setCurrentFile only triggers vault_read,
- *   not a full tree reload.  vault_watch integration is additive (T-P3-E06-01).
+ * Constraints:
+ *   - No circular re-renders — setCurrentFile only triggers vault_read,
+ *     not a full tree reload.  vault_watch integration is additive (T-P3-E06-01).
+ *   - Fixture data requires `!isTauri() && import.meta.env.DEV`; a production
+ *     build outside Tauri raises an error instead of serving fake data.
  * SPORT: MASTER-COMPONENTS.md — VaultContext (T-P3-E06-02)
  */
 
@@ -16,86 +21,23 @@ import { invoke } from '@tauri-apps/api/core'
 import type { VaultNode, MemoryEntry } from '../types/vault'
 import { openDailyNote as _openDailyNote } from '../services/vault/dailyNotes'
 import { buildMemoryIndex } from '../services/vault/memoryAggregator'
-
-// ── Mock IPC fixture ─────────────────────────────────────────────────────────
-
-/** Hard-coded tree returned when __TAURI__ is absent (dev/Vitest). */
-export const VAULT_FIXTURE: VaultNode = {
-  name: '.cascade',
-  path: '~/.cascade',
-  isDir: true,
-  children: [
-    {
-      name: 'GCI',
-      path: '~/.cascade/GCI',
-      isDir: true,
-      children: [
-        {
-          name: 'CLAUDE.md',
-          path: '~/.cascade/GCI/CLAUDE.md',
-          isDir: false,
-          children: [],
-        },
-        {
-          name: 'rules.md',
-          path: '~/.cascade/GCI/rules.md',
-          isDir: false,
-          children: [],
-        },
-      ],
-    },
-    {
-      name: 'PCI',
-      path: '~/.cascade/PCI',
-      isDir: true,
-      children: [
-        {
-          name: 'project.md',
-          path: '~/.cascade/PCI/project.md',
-          isDir: false,
-          children: [],
-        },
-      ],
-    },
-    {
-      name: 'APC',
-      path: '~/.cascade/APC',
-      isDir: true,
-      children: [],
-    },
-    {
-      name: 'PPC',
-      path: '~/.cascade/PPC',
-      isDir: true,
-      children: [],
-    },
-    {
-      name: 'PRC',
-      path: '~/.cascade/PRC',
-      isDir: true,
-      children: [
-        {
-          name: 'repo.md',
-          path: '~/.cascade/PRC/repo.md',
-          isDir: false,
-          children: [],
-        },
-      ],
-    },
-    {
-      name: 'PAC',
-      path: '~/.cascade/PAC',
-      isDir: true,
-      children: [],
-    },
-  ],
-}
+import { DevFixtureBanner, VAULT_FIXTURE } from './vaultFixture'
 
 // ── IPC helpers ──────────────────────────────────────────────────────────────
 
 /** Returns true when running inside the Tauri webview. */
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window
+}
+
+/**
+ * Returns true when Vite built this bundle in dev mode (`import.meta.env.DEV`).
+ * Fixture data is only ever served when `!isTauri() && isDev()` both hold, so a
+ * production build running outside a Tauri webview cannot accidentally show
+ * fake vault contents.
+ */
+function isDev(): boolean {
+  return Boolean(import.meta.env.DEV)
 }
 
 async function ipcVaultList(root: string): Promise<VaultNode> {
@@ -119,6 +61,12 @@ export interface VaultContextValue {
   loading: boolean
   /** Last error message, or null. */
   error: string | null
+  /**
+   * True when the provider is serving the dev fixture instead of real Tauri
+   * IPC. Consumers may use this to gate dev-only affordances; VaultProvider
+   * also renders {@link DevFixtureBanner} while this is true.
+   */
+  usingFixture: boolean
   /** Re-fetches the vault tree from IPC. */
   refreshTree: () => Promise<void>
   /**
@@ -183,6 +131,7 @@ export function VaultProvider({
   const [currentContent, setCurrentContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [usingFixture, setUsingFixture] = useState(false)
   const [onOpenNote, setOnOpenNote] = useState<((path: string, content: string) => void) | null>(
     null
   )
@@ -195,7 +144,20 @@ export function VaultProvider({
     setLoading(true)
     setError(null)
     try {
-      const node = isTauri() ? await ipcVaultList(defaultRoot) : VAULT_FIXTURE
+      let node: VaultNode
+      if (isTauri()) {
+        node = await ipcVaultList(defaultRoot)
+        setUsingFixture(false)
+      } else if (isDev()) {
+        // Dev-only fixture: requires BOTH Tauri-runtime absence AND a dev build.
+        node = VAULT_FIXTURE
+        setUsingFixture(true)
+      } else {
+        // Production build running outside a Tauri webview — never serve fake data.
+        throw new Error(
+          'Vault IPC unavailable: not running inside the Tauri app and this is not a dev build.'
+        )
+      }
       setTreeData(node)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -214,9 +176,13 @@ export function VaultProvider({
         let content: string
         if (isTauri()) {
           content = await ipcVaultRead(path)
-        } else {
-          // Dev fixture: return a stub based on the path
+        } else if (isDev()) {
+          // Dev-only fixture: requires BOTH Tauri-runtime absence AND a dev build.
           content = `# ${path.split('/').pop() ?? 'Note'}\n\n_Mock content for ${path}_`
+        } else {
+          throw new Error(
+            'Vault IPC unavailable: not running inside the Tauri app and this is not a dev build.'
+          )
         }
         setCurrentContent(content)
         if (onOpenNote) {
@@ -276,6 +242,7 @@ export function VaultProvider({
     currentContent,
     loading,
     error,
+    usingFixture,
     refreshTree,
     setCurrentFile,
     onOpenNote,
@@ -289,7 +256,12 @@ export function VaultProvider({
     openTodayNote,
   }
 
-  return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
+  return (
+    <VaultContext.Provider value={value}>
+      {usingFixture && <DevFixtureBanner />}
+      {children}
+    </VaultContext.Provider>
+  )
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
