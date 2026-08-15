@@ -25,6 +25,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   (T-P7-E13-04)
 
 ### Changed
+- Nomic/Jina embedding providers now fail loud at provider-selection time
+  instead of surfacing a generic `EmbeddingFailed` deep in the embed call
+  path. `NomicProvider::new`/`JinaProvider::new` return
+  `Err(CascadeError::Other)` with a clear "not available in this build"
+  message referencing E-P7-20, and a new
+  `cascade_rag::embed::validate_provider_kind(ProviderKind)` capability
+  check rejects Nomic/Jina at config-validation time. The `EmbedModel`
+  methods still return `EmbedError::Unimplemented` as a defense-in-depth
+  fallback. Full Nomic/Jina implementation remains tracked in E-P7-20.
+  (T-P7-E14-01)
 - Router unification (T-P7-E13-01): confirmed `crate::selection` was already
   the canonical account-selection module (an earlier E1-S6 pass had already
   reduced `conductor_router` to a thin wrapper and folded `RoutingTable`'s

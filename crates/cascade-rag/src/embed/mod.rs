@@ -295,6 +295,52 @@ pub(crate) fn fnv1a_32(s: &str) -> u32 {
         .fold(FNV_BASIS, |h, b| (h ^ (b as u32)).wrapping_mul(FNV_PRIME))
 }
 
+// ── Provider capability check (selection-time) ───────────────────────────────
+
+/// Validate that `kind` is an embedding provider available in this build.
+///
+/// # Purpose
+///
+/// Capability check for provider-SELECTION time (config validation / provider
+/// construction), so choosing a not-yet-implemented provider fails loud
+/// immediately with a clear, actionable error rather than a generic
+/// `EmbeddingFailed` surfacing deep in the embed call path (T-P7-E14-01).
+///
+/// # Currently available local provider
+///
+/// - [`ProviderKind::BgeM3`] — backed by [`bge_m3::BgeM3Embedder`] (the ONNX
+///   init path reports its own error if the `fastembed` cargo feature is off
+///   or the model cannot be loaded).
+///
+/// # Not available in this build
+///
+/// - [`ProviderKind::Nomic`] and [`ProviderKind::Jina`] are stub providers
+///   whose `EmbedModel` methods return [`EmbedError::Unimplemented`]. Selecting
+///   either via config is rejected here. Full implementation is tracked in
+///   E-P7-20 (Deferred-Backlog Group B).
+///
+/// Other cloud providers (`OpenAi`, `Cohere`, `Voyage`, `Gemini`, `E5Mistral`,
+/// `LocalOnnx`) are not constructed by cascade-rag's local embed factory; their
+/// availability is the caller's responsibility (e.g. cascade-providers), so
+/// this check returns `Ok` for them rather than over-reaching.
+///
+/// # Errors
+///
+/// Returns [`CascadeError::Other`] with a clear "not available in this build"
+/// message for [`ProviderKind::Nomic`] and [`ProviderKind::Jina`].
+pub fn validate_provider_kind(kind: ProviderKind) -> cascade_types::error::Result<()> {
+    match kind {
+        ProviderKind::Nomic | ProviderKind::Jina => Err(CascadeError::Other(format!(
+            "embedding provider '{}' is not available in this build — full implementation is \
+             tracked in E-P7-20 (Deferred-Backlog Group B). Use 'bge-m3' (the default) instead.",
+            kind.config_key()
+        ))),
+        // BgeM3 is the only local provider constructed by cascade-rag; other
+        // kinds are out of scope for this local-embed capability check.
+        _ => Ok(()),
+    }
+}
+
 // ── Default embed model factory ───────────────────────────────────────────────
 
 /// Return the best available [`EmbedModel`] for production use.
@@ -756,6 +802,56 @@ mod tests {
         let vecs = result.unwrap();
         assert_eq!(vecs.len(), 1);
         assert_eq!(vecs[0].len(), 1024);
+    }
+
+    // ── validate_provider_kind (selection-time capability check) ─────────────
+
+    /// `validate_provider_kind` must reject Nomic with a clear "not available
+    /// in this build" error referencing E-P7-20 — not a generic deep-stack
+    /// error (T-P7-E14-01).
+    #[test]
+    fn validate_provider_kind_rejects_nomic() {
+        let err = super::validate_provider_kind(ProviderKind::Nomic)
+            .expect_err("nomic must be rejected at selection time");
+        match err {
+            CascadeError::Other(msg) => {
+                assert!(
+                    msg.contains("not available in this build"),
+                    "nomic rejection must say 'not available in this build', got: {msg}"
+                );
+                assert!(
+                    msg.contains("E-P7-20"),
+                    "nomic rejection must reference E-P7-20, got: {msg}"
+                );
+            }
+            other => panic!("expected CascadeError::Other for nomic, got {other:?}"),
+        }
+    }
+
+    /// `validate_provider_kind` must reject Jina with the same clear error.
+    #[test]
+    fn validate_provider_kind_rejects_jina() {
+        let err = super::validate_provider_kind(ProviderKind::Jina)
+            .expect_err("jina must be rejected at selection time");
+        match err {
+            CascadeError::Other(msg) => {
+                assert!(
+                    msg.contains("not available in this build"),
+                    "jina rejection must say 'not available in this build', got: {msg}"
+                );
+                assert!(msg.contains("jina"), "must name jina, got: {msg}");
+            }
+            other => panic!("expected CascadeError::Other for jina, got {other:?}"),
+        }
+    }
+
+    /// `validate_provider_kind` must accept BgeM3 (the implemented local
+    /// provider). The fastembed-feature runtime concern is handled separately
+    /// by `BgeM3Embedder::new`, not by this build-capability check.
+    #[test]
+    fn validate_provider_kind_accepts_bge_m3() {
+        super::validate_provider_kind(ProviderKind::BgeM3)
+            .expect("bge-m3 is available in this build and must pass validation");
     }
 
     // ── LazyEmbedModel ────────────────────────────────────────────────────────
