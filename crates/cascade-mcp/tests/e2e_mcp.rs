@@ -473,11 +473,17 @@ async fn tools_list_returns_all_tools() {
                 "tools/list must return result: {val}"
             );
             let tools = val["result"]["tools"].as_array().expect("tools array");
-            // 18 tools: 10 original + 8 PBD tools (E-P8-04)
+            // 24 tools as of 2026-08-15 (P7 E-P7-08 verification pass): count
+            // drifted upward across several already-merged phases (security
+            // audit/secret-scan tools, full memory CRUD set, PBD tooling) without
+            // this regression guard being updated. Verified via a direct source
+            // grep for `"cascade.*"` tool-name string literals that all 24 are
+            // distinct, real registrations, not duplicates. Bump this count
+            // deliberately (not silently) whenever a new tool is registered.
             assert_eq!(
                 tools.len(),
-                18,
-                "expected exactly 18 tools, got {}",
+                24,
+                "expected exactly 24 tools, got {}",
                 tools.len()
             );
 

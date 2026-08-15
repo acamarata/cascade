@@ -254,20 +254,22 @@ pub fn run() {
             commands::wizard_state::wizard_merge_audit_append,
             commands::wizard_state::wizard_state_reset,
             // additional frontend commands (wizard + providers)
-            commands::symlinks::shell_open,
             commands::symlinks::symlink_integrity_check,
             commands::symlinks::daemon_watch_register,
             commands::merge::ai_merge_section,
             commands::providers::local_llm_detect,
-            commands::providers::oauth_pkce_flow,
-            commands::providers::api_key_connect,
-            commands::providers::config_detect_connect,
+            // T-P7-E08-07: removed dead OAuth stub trio (oauth_pkce_flow,
+            // api_key_connect, config_detect_connect) — zero frontend callers;
+            // real OAuth flow uses cascade_providers_oauth_start/_oauth_status.
             // E-P8-05: PBD PEWS tree + mutation commands
             commands::pbd::pbd_get_tree,
             commands::pbd::pbd_get_current,
             commands::pbd::pbd_update_ticket_status,
             commands::pbd::pbd_list_tickets,
             commands::pbd::pbd_watch,
+            // T-P7-E08-01: Credentials vault.env read-only IPC commands
+            commands::vault_env::vault_path,
+            commands::vault_env::read_vault_keys,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

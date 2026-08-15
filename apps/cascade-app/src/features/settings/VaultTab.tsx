@@ -19,8 +19,6 @@ import { Button } from '@/components/ui/button'
 
 // ── IPC helpers ───────────────────────────────────────────────────────────────
 
-// TODO(rust-wave): implement read_vault_keys + vault_path IPC in src-tauri.
-
 function isMissingCommandError(err: unknown): boolean {
   const msg = String(err).toLowerCase()
   return msg.includes('not found') || msg.includes('unknown command') || msg.includes('no such')

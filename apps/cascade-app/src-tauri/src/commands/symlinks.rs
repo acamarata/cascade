@@ -19,6 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
+use notify::Watcher;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -744,34 +745,6 @@ pub async fn file_copy_create(source: String, target: String) -> Result<(), Stri
         .map_err(|e| format!("copy({source:?} → {target:?}): {e}"))
 }
 
-/// Opens a URL or path with the system default application.
-/// Used by the wizard on Windows to open ms-settings:developers.
-#[tauri::command]
-pub async fn shell_open(url: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
 /// Checks that a symlink path exists and points to a valid target.
 #[tauri::command]
 pub async fn symlink_integrity_check(path: String) -> Result<bool, String> {
@@ -790,11 +763,103 @@ pub async fn symlink_integrity_check(path: String) -> Result<bool, String> {
     Ok(p.exists())
 }
 
-/// Registers a source→target file watch with the daemon so it re-copies
-/// on CASCADE.md changes. Currently a no-op stub; daemon IPC is E-P5-02.
+/// Registers a source→target file watch so the target is re-copied whenever
+/// the source changes.
+///
+/// Uses `notify::RecommendedWatcher` — the same underlying watcher library
+/// as the daemon's `rag_watcher` (crates/cascade-daemon/src/rag_watcher.rs).
+/// The watcher is leaked (Box::leak) so it lives for the process lifetime,
+/// matching the pattern established by `vault_watch` in commands/vault.rs.
+///
+/// JS: `invoke("daemon_watch_register", { source, target })`
+///
+/// # Errors
+///
+/// Returns a string error if the source path does not exist or the watcher
+/// cannot be initialised.
 #[tauri::command]
 pub async fn daemon_watch_register(source: String, target: String) -> Result<(), String> {
-    tracing::debug!("daemon_watch_register: {} → {}", source, target);
+    let src_path = PathBuf::from(&source);
+    let tgt_path = PathBuf::from(&target);
+
+    // Validate source exists.
+    if !src_path.exists() {
+        return Err(format!("source path does not exist: {source}"));
+    }
+
+    // Perform an initial copy so the target is in sync immediately.
+    copy_file_to_target(&src_path, &tgt_path).map_err(|e| format!("initial copy failed: {e}"))?;
+
+    // Set up the watcher — on source change, re-copy to target.
+    //
+    // WHY canonicalize watch_src here: on macOS, FSEvents reports
+    // canonicalized paths (e.g. /var/folders/... -> /private/var/folders/...
+    // since /var is itself a symlink to /private/var). Comparing the raw,
+    // non-canonicalized src_path against event.paths would silently never
+    // match on macOS, making the watcher a permanent no-op. Canonicalize
+    // once at setup time (stable for the watch's lifetime) rather than
+    // per-event, and fall back to the raw path if canonicalization fails
+    // (e.g. the file is deleted between the initial copy and watch setup).
+    let watch_src = src_path.canonicalize().unwrap_or_else(|_| src_path.clone());
+    let watch_tgt = tgt_path.clone();
+    let mut watcher = notify::RecommendedWatcher::new(
+        move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                let is_content_event = matches!(
+                    event.kind,
+                    notify::EventKind::Create(_) | notify::EventKind::Modify(_)
+                );
+                if !is_content_event {
+                    return;
+                }
+                // Check if any changed path is the source file. Canonicalize
+                // each event path before comparing, since the OS may report
+                // either the canonical or non-canonical form depending on
+                // platform and backend.
+                for path in &event.paths {
+                    let event_path = path.canonicalize().unwrap_or_else(|_| path.clone());
+                    if event_path == watch_src {
+                        if let Err(e) = copy_file_to_target(&watch_src, &watch_tgt) {
+                            tracing::warn!("daemon_watch_register: copy failed: {e}");
+                        }
+                        break;
+                    }
+                }
+            }
+        },
+        notify::Config::default(),
+    )
+    .map_err(|e| format!("failed to create watcher: {e}"))?;
+
+    // Watch the source file (non-recursive — it's a single file).
+    // If the source is a directory, watch it recursively.
+    let mode = if src_path.is_dir() {
+        notify::RecursiveMode::Recursive
+    } else {
+        notify::RecursiveMode::NonRecursive
+    };
+    watcher
+        .watch(&src_path, mode)
+        .map_err(|e| format!("failed to watch source: {e}"))?;
+
+    // Leak the watcher so it lives for the process lifetime.
+    // SAFETY: the watcher holds only OS file handles and the closure captures
+    // (PathBuf values) — no raw pointer unsafety.
+    Box::leak(Box::new(watcher));
+
+    tracing::info!("daemon_watch_register: watching {source} → {target}");
+    Ok(())
+}
+
+/// Copy the source file to the target path, creating parent directories if
+/// needed. This is the core copy logic shared between the initial copy and
+/// the watcher callback.
+fn copy_file_to_target(source: &Path, target: &Path) -> std::io::Result<()> {
+    // Create parent directories for the target if needed.
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(source, target)?;
     Ok(())
 }
 
@@ -867,5 +932,105 @@ mod unlink_tests {
         let result = cascade_unlink_tool_with_home("not-a-real-tool", Some(&home)).unwrap();
         assert!(result.removed.is_empty());
         assert!(result.skipped.is_empty());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — daemon_watch_register (T-P7-E08-05)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod watch_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+    use tempfile::TempDir;
+
+    #[test]
+    fn copy_file_to_target_creates_parent_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("source.md");
+        let tgt = tmp.path().join("subdir").join("target.md");
+        std::fs::write(&src, "# content").unwrap();
+
+        copy_file_to_target(&src, &tgt).unwrap();
+        assert!(tgt.exists());
+        assert_eq!(std::fs::read_to_string(&tgt).unwrap(), "# content");
+    }
+
+    #[test]
+    fn copy_file_to_target_overwrites_existing() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("source.md");
+        let tgt = tmp.path().join("target.md");
+        std::fs::write(&src, "new content").unwrap();
+        std::fs::write(&tgt, "old content").unwrap();
+
+        copy_file_to_target(&src, &tgt).unwrap();
+        assert_eq!(std::fs::read_to_string(&tgt).unwrap(), "new content");
+    }
+
+    #[test]
+    fn daemon_watch_register_rejects_missing_source() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let result = daemon_watch_register(
+                "/nonexistent/path/source.md".to_string(),
+                "/tmp/target.md".to_string(),
+            )
+            .await;
+            assert!(result.is_err(), "missing source should fail");
+        });
+    }
+
+    #[test]
+    fn daemon_watch_register_initial_copy_and_watch_fires() {
+        // Integration test: set up a watcher, modify the source, verify the
+        // target is updated. Uses polling with a timeout to handle async
+        // watcher timing.
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("source.md");
+        let tgt = tmp.path().join("target.md");
+        std::fs::write(&src, "initial content").unwrap();
+
+        let src_str = src.to_str().unwrap().to_string();
+        let tgt_str = tgt.to_str().unwrap().to_string();
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            // Register the watch — this also does an initial copy.
+            daemon_watch_register(src_str, tgt_str)
+                .await
+                .expect("watch register should succeed");
+        });
+
+        // Verify the initial copy happened.
+        assert!(tgt.exists(), "target should exist after initial copy");
+        assert_eq!(std::fs::read_to_string(&tgt).unwrap(), "initial content");
+
+        // Modify the source file.
+        std::fs::write(&src, "updated content").unwrap();
+
+        // Poll for the target to be updated (watcher is async).
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut updated = false;
+        while Instant::now() < deadline {
+            if tgt.exists()
+                && std::fs::read_to_string(&tgt).unwrap_or_default() == "updated content"
+            {
+                updated = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        assert!(
+            updated,
+            "target should be updated after source change within 5s"
+        );
     }
 }

@@ -16,7 +16,6 @@ use crate::server::JsonRpcError;
 
 use super::context_assembler::{ContextAssembler, ContextRequest};
 use super::helpers::build_retrieve_opts;
-use super::helpers::chrono_local_date;
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
 
@@ -287,6 +286,10 @@ pub(super) async fn handle_inbox_list(args: &Value) -> std::result::Result<Value
 ///
 /// Field names match the spec (`target`, `type`) and the `pci-send` semantics:
 /// writes to `~/Sites/{target}/.claude/inbox/` (not the current project).
+///
+/// Validation and file-writing logic are shared via
+/// `cascade_core::inbox::send_message` so the Tauri IPC command
+/// `cascade_inbox_send` uses identical logic.
 pub(super) async fn handle_inbox_send(args: &Value) -> std::result::Result<Value, JsonRpcError> {
     let target = args
         .get("target")
@@ -309,39 +312,14 @@ pub(super) async fn handle_inbox_send(args: &Value) -> std::result::Result<Value
         .and_then(|v| v.as_str())
         .ok_or_else(|| JsonRpcError::invalid_params("'type' is required"))?;
 
-    // Confine target to safe project names (no path traversal).
-    if target.contains('/') || target.contains("..") {
-        return Err(JsonRpcError::invalid_params(
-            "'target' must be a plain project name, not a path",
-        ));
-    }
-
-    let slug = subject
-        .to_lowercase()
-        .replace(' ', "-")
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '-')
-        .take(40)
-        .collect::<String>();
-    let date = chrono_local_date();
-    let filename = format!("msg-{date}-{slug}.md");
-    let inbox_dir = mcp_paths::inbox_dir(target);
-
-    tokio::fs::create_dir_all(&inbox_dir)
-        .await
-        .map_err(|e| JsonRpcError::internal(format!("Failed to create inbox dir: {e}")))?;
-
-    let content = format!(
-        "# {subject}\n\n**From:** cascade-mcp\n**To:** {target}\n**Type:** {msg_type}\n**Priority:** {priority}\n\n{body}\n"
-    );
-
-    tokio::fs::write(inbox_dir.join(&filename), &content)
-        .await
-        .map_err(|e| JsonRpcError::internal(format!("Failed to write inbox message: {e}")))?;
+    let result =
+        cascade_core::inbox::send_message("cascade-mcp", target, subject, body, priority, msg_type)
+            .await
+            .map_err(|e| JsonRpcError::internal(format!("Failed to send inbox message: {e}")))?;
 
     Ok(serde_json::json!({
-        "content": [{ "type": "text", "text": format!("Message sent: {filename}") }],
-        "file": filename
+        "content": [{ "type": "text", "text": format!("Message sent: {}", result.filename) }],
+        "file": result.filename
     }))
 }
 

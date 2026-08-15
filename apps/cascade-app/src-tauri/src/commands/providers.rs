@@ -325,37 +325,3 @@ pub async fn local_llm_detect() -> Result<serde_json::Value, String> {
     }
     Ok(serde_json::json!({ "type": "none" }))
 }
-
-/// OAuth PKCE flow stub. Full implementation requires a registered OAuth app.
-#[tauri::command]
-pub async fn oauth_pkce_flow(
-    provider_id: String,
-    _client_id: Option<String>,
-    _scopes: Option<Vec<String>>,
-) -> Result<serde_json::Value, String> {
-    Err(format!(
-        "OAuth PKCE flow not yet configured for provider '{}'",
-        provider_id
-    ))
-}
-
-/// Validates an API key by testing a lightweight request against the provider.
-#[tauri::command]
-pub async fn api_key_connect(
-    provider_id: String,
-    api_key: String,
-    endpoint: Option<String>,
-) -> Result<serde_json::Value, String> {
-    debug!("api_key_connect: provider={}", provider_id);
-    let _ = (api_key, endpoint);
-    Ok(
-        serde_json::json!({ "success": false, "error": "api_key_connect: use provider settings to add keys" }),
-    )
-}
-
-/// Detects an already-configured provider from disk config.
-#[tauri::command]
-pub async fn config_detect_connect(provider_id: String) -> Result<serde_json::Value, String> {
-    debug!("config_detect_connect: provider={}", provider_id);
-    Ok(serde_json::json!({ "success": false, "detected": false }))
-}

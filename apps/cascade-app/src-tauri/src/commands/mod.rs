@@ -71,6 +71,8 @@ pub mod tasks;
 pub mod pbd;
 // Wizard state persistence + dry-run log + merge audit (fix-6 wizard end-to-end)
 pub mod wizard_state;
+// T-P7-E08-01: Credentials vault.env read-only IPC commands (vault_path, read_vault_keys)
+pub mod vault_env;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — keep every previously-public item at its original path

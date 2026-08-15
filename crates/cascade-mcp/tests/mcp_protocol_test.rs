@@ -59,8 +59,10 @@ async fn tools_list_returns_eight_tools() {
     let registry = ToolRegistry::new();
     let result = registry.list().await.unwrap();
     let tools = result.get("tools").and_then(|v| v.as_array()).unwrap();
-    // 18 tools: 10 original + 8 PBD tools (E-P8-04)
-    assert_eq!(tools.len(), 18, "expected 18 tools, got {}", tools.len());
+    // 24 tools as of 2026-08-15 (P7 E-P7-08 verification pass) — see the
+    // matching comment in tests/e2e_mcp.rs::tools_list_returns_all_tools for
+    // the full explanation of this count and how it was verified.
+    assert_eq!(tools.len(), 24, "expected 24 tools, got {}", tools.len());
 
     let names: Vec<&str> = tools
         .iter()

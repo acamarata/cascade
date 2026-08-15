@@ -48,6 +48,7 @@ pub(super) fn call_tool_error(msg: &str) -> Value {
 ///
 /// Uses `SystemTime` to avoid pulling in the `time` or `chrono` crates.
 /// Accurate to the year; precise enough for inbox filenames.
+#[allow(dead_code)] // used in tests; inbox send now uses cascade_core::inbox::send_message
 pub(super) fn chrono_local_date() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     // Seconds since Unix epoch.

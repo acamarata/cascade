@@ -9,7 +9,6 @@
  * Constraints: Requires a running Tauri 2 context (invoke not available in plain
  *   browser). Each method wraps invoke in error-catching that re-throws as
  *   CascadeIpcError — never swallows errors silently.
- *   cascade_inbox_send returns NotImplemented until T-P4-E01.
  * SPORT: MASTER-LIBS.md — ipc client, src/lib/ipc/client.ts
  */
 
@@ -135,8 +134,9 @@ export const ipc = {
      *          body — full message body.
      *          priority? — "critical" | "high" | "medium" | "low" (default: "medium").
      * Outputs: InboxSendAck — { id, path } of the written message file.
-     * Constraints: NOT IMPLEMENTED — stubs until T-P4-E01 adds the daemon handler.
-     *   Throws CascadeIpcError("NotImplemented") until then.
+     * Constraints: Validates target/subject/body/priority; writes a PCI markdown
+     *   file to ~/Sites/{to}/.claude/inbox/. Throws CascadeIpcError on validation
+     *   or I/O failure.
      * SPORT: MASTER-COMMANDS.md — cascade_inbox_send
      */
     send(to: string, subject: string, body: string, priority?: string): Promise<InboxSendAck> {

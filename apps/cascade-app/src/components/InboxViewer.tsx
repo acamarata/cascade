@@ -1,6 +1,6 @@
 /**
- * Purpose: Inbox viewer — list and read PCI inbox messages from registered paths.
- * Inputs:  Inbox paths from AppConfig; messages fetched via `list_inbox` command
+ * Purpose: Inbox viewer — list and read PCI inbox messages from the daemon.
+ * Inputs:  Messages fetched via `cascade_inbox_list` command
  * Outputs: Prioritized message list with subject, sender, type, preview
  * Constraints:
  *   - Refreshes on mount and every 30s.
@@ -11,8 +11,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { get as getConfig } from '../lib/config'
 import { Inbox, RefreshCw, AlertTriangle, ArrowUp, Minus, ArrowDown } from 'lucide-react'
+import type { InboxSummaryResult } from '../types/ipc'
 
 interface InboxMessage {
   id: string
@@ -50,6 +50,23 @@ const priorityMeta: Record<
   },
 }
 
+/**
+ * Normalize a daemon priority string to the union type expected by the UI.
+ * Unknown values default to "low".
+ */
+function normalizePriority(p: string): InboxMessage['priority'] {
+  switch (p.toLowerCase()) {
+    case 'critical':
+      return 'critical'
+    case 'high':
+      return 'high'
+    case 'medium':
+      return 'medium'
+    default:
+      return 'low'
+  }
+}
+
 export function InboxViewer() {
   const [messages, setMessages] = useState<InboxMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -61,13 +78,17 @@ export function InboxViewer() {
     setIsLoading(true)
     setError(null)
     try {
-      // Get registered inbox paths from config, then fetch messages for each.
-      const config = await getConfig()
-      const allMessages: InboxMessage[] = []
-      for (const path of config.inbox_paths) {
-        const msgs = await invoke<InboxMessage[]>('list_inbox', { inboxPath: path })
-        allMessages.push(...msgs)
-      }
+      // Fetch all inbox messages from the daemon via cascade_inbox_list.
+      const result = await invoke<InboxSummaryResult>('cascade_inbox_list')
+      const allMessages: InboxMessage[] = (result.items ?? []).map((item) => ({
+        id: item.id,
+        subject: item.subject,
+        from: item.from,
+        priority: normalizePriority(item.priority),
+        message_type: 'info',
+        created_at: item.created,
+        body_preview: '',
+      }))
       // Sort: critical → high → medium → low, then by created_at desc.
       const order = { critical: 0, high: 1, medium: 2, low: 3 }
       allMessages.sort((a, b) => {

@@ -20,6 +20,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 import { invoke } from '@tauri-apps/api/core'
 import { ipc } from './client'
 import { CascadeIpcError } from '../../types/errors'
+import type { InboxSendAck } from '../../types/ipc'
 
 const mockInvoke = invoke as MockedFunction<typeof invoke>
 
@@ -116,14 +117,11 @@ describe('ipc.inbox.list', () => {
 
 describe('ipc.inbox.send', () => {
   it('calls invoke("cascade_inbox_send") with to/subject/body/priority args', async () => {
-    // stub returns NotImplemented — still verify the invoke call shape
-    mockInvoke.mockRejectedValueOnce(
-      'NotImplemented: cascade_inbox_send — awaits T-P4-E01 daemon inbox_send method'
-    )
+    const ack: InboxSendAck = { id: 'test-subject', path: '/tmp/msg-test-subject.md' }
+    mockInvoke.mockResolvedValueOnce(ack)
 
-    await expect(ipc.inbox.send('nself', 'Test', 'Body', 'medium')).rejects.toMatchObject({
-      code: 'NotImplemented',
-    })
+    const result = await ipc.inbox.send('nself', 'Test', 'Body', 'medium')
+    expect(result).toEqual(ack)
     expect(mockInvoke).toHaveBeenCalledWith('cascade_inbox_send', {
       to: 'nself',
       subject: 'Test',

@@ -119,11 +119,12 @@ pub async fn cascade_inbox_list(
 /// Send (write) a message into a project inbox.
 /// JS: `invoke("cascade_inbox_send", { to, subject, body, priority? })`
 ///
-/// NOTE: the `inbox_send` JSON-RPC method is not yet in the daemon contract
-/// (ipc.rs schema v1 defines inbox_summary only). This stub returns
-/// NotImplemented until T-P4-E01 adds the server-side handler and the
-/// corresponding ipc.rs types. The parameter struct is defined here so the
-/// TypeScript bindings (T-P3-E01-07) can be written against a stable shape.
+/// Writes a PCI-format markdown message to `~/Sites/{to}/.claude/inbox/`.
+/// The validation and file-writing logic is shared with the MCP
+/// `cascade.inbox.send` tool handler via `cascade_core::inbox::send_message`.
+///
+/// `priority` defaults to `"medium"` when omitted. `msg_type` defaults to
+/// `"info"` (the frontend does not currently send a type field).
 #[tauri::command]
 pub async fn cascade_inbox_send(
     to: String,
@@ -132,11 +133,24 @@ pub async fn cascade_inbox_send(
     priority: Option<String>,
     _state: State<'_, AppState>,
 ) -> Result<InboxSendAck, CascadeError> {
-    // Suppress unused-variable warnings while this stub is pending.
-    let _ = (to, subject, body, priority);
-    Err(CascadeError::NotImplemented(
-        "cascade_inbox_send — awaits T-P4-E01 daemon inbox_send method".to_string(),
-    ))
+    let priority = priority.unwrap_or_else(|| "medium".to_string());
+    let msg_type = "info".to_string();
+
+    let result = cascade_core::inbox::send_message(
+        "cascade-app",
+        &to,
+        &subject,
+        &body,
+        &priority,
+        &msg_type,
+    )
+    .await
+    .map_err(|e| CascadeError::Custom(e.to_string()))?;
+
+    Ok(InboxSendAck {
+        id: result.slug,
+        path: result.path.to_string_lossy().into_owned(),
+    })
 }
 
 /// Read a memory file from a project's `.claude/memory/` directory.
