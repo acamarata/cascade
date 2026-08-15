@@ -242,7 +242,14 @@ export function SettingsPanel({ initialTab }: SettingsPanelProps = {}) {
             </TabsContent>
 
             <TabsContent value="widgets" className="mt-0 focus-visible:outline-none">
-              <WidgetsTab draft={draft.widgets} />
+              <WidgetsTab
+                draft={draft.widgets}
+                isSaving={isSaving}
+                error={null}
+                onUpdate={(v) => updateSection('widgets', v)}
+                onSave={() => handleSave('widgets')}
+                onDiscard={handleDiscard}
+              />
             </TabsContent>
 
             <TabsContent value="vault" className="mt-0 focus-visible:outline-none">

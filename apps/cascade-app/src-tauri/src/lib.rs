@@ -270,6 +270,8 @@ pub fn run() {
             // T-P7-E08-01: Credentials vault.env read-only IPC commands
             commands::vault_env::vault_path,
             commands::vault_env::read_vault_keys,
+            // T-P7-E10-02: Harness config-file auto-detection
+            commands::harness::detect_harness_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

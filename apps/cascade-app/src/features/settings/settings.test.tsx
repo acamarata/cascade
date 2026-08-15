@@ -384,3 +384,180 @@ describe('McpServersTab smoke', () => {
     expect(screen.getByText(/no mcp servers configured/i)).toBeInTheDocument()
   })
 })
+
+// ---------------------------------------------------------------------------
+// WidgetsTab
+// ---------------------------------------------------------------------------
+
+describe('WidgetsTab', () => {
+  it('renders empty state message when no widgets configured', async () => {
+    const { WidgetsTab } = await import('./WidgetsTab')
+    render(
+      <WidgetsTab
+        draft={{ positions: {} }}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/no widgets configured/i)).toBeInTheDocument()
+  })
+
+  it('renders geometry editor rows for existing widgets', async () => {
+    const { WidgetsTab } = await import('./WidgetsTab')
+    render(
+      <WidgetsTab
+        draft={{
+          positions: {
+            'macos-widget': { x: 10, y: 20, width: 320, height: 200 },
+          },
+        }}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(screen.getByText('macos-widget')).toBeInTheDocument()
+    expect(document.getElementById('widget-macos-widget-x')).toBeInTheDocument()
+    expect(document.getElementById('widget-macos-widget-y')).toBeInTheDocument()
+    expect(document.getElementById('widget-macos-widget-width')).toBeInTheDocument()
+    expect(document.getElementById('widget-macos-widget-height')).toBeInTheDocument()
+  })
+
+  it('calls onUpdate with new widget when Add is clicked', async () => {
+    const { WidgetsTab } = await import('./WidgetsTab')
+    const onUpdate = vi.fn()
+    render(
+      <WidgetsTab
+        draft={{ positions: {} }}
+        isSaving={false}
+        error={null}
+        onUpdate={onUpdate}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const slugInput = document.getElementById('new-widget-slug') as HTMLInputElement
+    fireEvent.change(slugInput, { target: { value: 'linux-widget' } })
+    fireEvent.click(screen.getByText(/add widget/i))
+    expect(onUpdate).toHaveBeenCalledOnce()
+    const arg = onUpdate.mock.calls[0][0]
+    expect(arg.positions).toHaveProperty('linux-widget')
+    expect(arg.positions['linux-widget']).toEqual({ x: 100, y: 100, width: 320, height: 200 })
+  })
+
+  it('calls onUpdate with updated geometry when a field changes', async () => {
+    const { WidgetsTab } = await import('./WidgetsTab')
+    const onUpdate = vi.fn()
+    render(
+      <WidgetsTab
+        draft={{
+          positions: {
+            'macos-widget': { x: 10, y: 20, width: 320, height: 200 },
+          },
+        }}
+        isSaving={false}
+        error={null}
+        onUpdate={onUpdate}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const xInput = document.getElementById('widget-macos-widget-x') as HTMLInputElement
+    fireEvent.change(xInput, { target: { value: '42' } })
+    expect(onUpdate).toHaveBeenCalledOnce()
+    const arg = onUpdate.mock.calls[0][0]
+    expect(arg.positions['macos-widget'].x).toBe(42)
+  })
+
+  it('calls onSave when Save button clicked', async () => {
+    const { WidgetsTab } = await import('./WidgetsTab')
+    const onSave = vi.fn()
+    render(
+      <WidgetsTab
+        draft={{ positions: {} }}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={onSave}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText(/save widgets/i))
+    expect(onSave).toHaveBeenCalledOnce()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HarnessBridgesTab
+// ---------------------------------------------------------------------------
+
+describe('HarnessBridgesTab', () => {
+  it('renders three harness rows with Auto-Detect buttons enabled', async () => {
+    const { HarnessBridgesTab } = await import('./HarnessBridgesTab')
+    render(
+      <HarnessBridgesTab
+        draft={{}}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('Auto-detect Claude Code (CC) config path')).not.toBeDisabled()
+    expect(screen.getByLabelText('Auto-detect OpenCode (OC) config path')).not.toBeDisabled()
+    expect(screen.getByLabelText('Auto-detect Codex config path')).not.toBeDisabled()
+  })
+
+  it('shows "requires desktop app" when Auto-Detect clicked outside Tauri', async () => {
+    const { HarnessBridgesTab } = await import('./HarnessBridgesTab')
+    render(
+      <HarnessBridgesTab
+        draft={{}}
+        isSaving={false}
+        error={null}
+        onUpdate={vi.fn()}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByLabelText('Auto-detect Claude Code (CC) config path'))
+    expect(await screen.findByText(/requires the desktop app/i)).toBeInTheDocument()
+  })
+
+  it('calls invoke and fills path when Auto-Detect finds a config in Tauri env', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const { HarnessBridgesTab } = await import('./HarnessBridgesTab')
+
+    // Simulate Tauri runtime
+    ;(window as unknown as Record<string, unknown>).__TAURI__ = {}
+
+    const mockInvoke = vi.mocked(invoke)
+    mockInvoke.mockResolvedValueOnce('/home/user/.claude/settings.json')
+
+    const onUpdate = vi.fn()
+    render(
+      <HarnessBridgesTab
+        draft={{}}
+        isSaving={false}
+        error={null}
+        onUpdate={onUpdate}
+        onSave={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByLabelText('Auto-detect Claude Code (CC) config path'))
+    expect(await screen.findByText(/Detected:.*settings\.json/)).toBeInTheDocument()
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ ccConfigPath: '/home/user/.claude/settings.json' })
+    )
+
+    // Cleanup
+    delete (window as unknown as Record<string, unknown>).__TAURI__
+  })
+})

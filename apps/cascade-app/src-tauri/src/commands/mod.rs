@@ -73,6 +73,8 @@ pub mod pbd;
 pub mod wizard_state;
 // T-P7-E08-01: Credentials vault.env read-only IPC commands (vault_path, read_vault_keys)
 pub mod vault_env;
+// T-P7-E10-02: Harness config-file auto-detection (detect_harness_path)
+pub mod harness;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — keep every previously-public item at its original path

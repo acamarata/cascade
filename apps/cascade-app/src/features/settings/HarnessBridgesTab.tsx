@@ -1,23 +1,23 @@
 /**
  * Purpose: Settings tab for harness bridge config-file paths.
  *   Each harness (CC, OC, Codex) has a path Input, a Browse button (Tauri dialog.open),
- *   and a disabled Detect button until daemon support lands.
+ *   and an Auto-Detect button that calls the detect_harness_path Tauri command.
  * Inputs:  draft HarnessBridgesSettings; saveSection callback.
  * Outputs: <section> with three path rows; saves via update_settings { harnessBridges }.
  * Constraints:
  *   - Tauri file picker via @tauri-apps/plugin-dialog (dialog.open).
- *   - detect_harness_path IPC is not wired yet.
+ *   - Auto-Detect calls detect_harness_path IPC (T-P7-E10-02).
  *   - Falls back gracefully when Tauri is not available (browser/Vitest).
  *   - WCAG 2.1 AA: all inputs labelled; focus ring on all interactive elements.
  * SPORT: MASTER-COMPONENTS.md — HarnessBridgesTab — T-P3-E07-15
  */
 
-import { FolderOpen, Crosshair } from 'lucide-react'
+import { useState } from 'react'
+import { FolderOpen, Crosshair, Loader2 } from 'lucide-react'
+import { invoke } from '@tauri-apps/api/core'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import type { HarnessBridgesSettings } from '@/types/settings'
-
-// TODO(rust-wave): implement detect_harness_path IPC in src-tauri.
 
 // ── Tauri file picker (guard for browser env) ─────────────────────────────────
 
@@ -32,6 +32,13 @@ async function pickFile(): Promise<string | null> {
   }
 }
 
+// ── Tauri runtime guard ───────────────────────────────────────────────────────
+
+/** Returns true when running inside the Tauri webview. */
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI__' in window
+}
+
 // ── Single harness row ────────────────────────────────────────────────────────
 
 interface HarnessRowProps {
@@ -43,9 +50,34 @@ interface HarnessRowProps {
 }
 
 function HarnessRow({ id, label, slug, value, onChange }: HarnessRowProps) {
+  const [detecting, setDetecting] = useState(false)
+  const [detectMsg, setDetectMsg] = useState<string | null>(null)
+
   async function handleBrowse() {
     const path = await pickFile()
     if (path) onChange(path)
+  }
+
+  async function handleDetect() {
+    setDetectMsg(null)
+    if (!isTauri()) {
+      setDetectMsg('Auto-detect requires the desktop app.')
+      return
+    }
+    setDetecting(true)
+    try {
+      const result = await invoke<string | null>('detect_harness_path', { harness: slug })
+      if (result) {
+        onChange(result)
+        setDetectMsg(`Detected: ${result}`)
+      } else {
+        setDetectMsg('No config file found at common install locations.')
+      }
+    } catch (err) {
+      setDetectMsg(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDetecting(false)
+    }
   }
 
   return (
@@ -75,14 +107,31 @@ function HarnessRow({ id, label, slug, value, onChange }: HarnessRowProps) {
         <button
           type="button"
           aria-label={`Auto-detect ${label}`}
-          disabled
-          title="Detection pending daemon support"
+          onClick={handleDetect}
+          disabled={detecting}
           className="flex items-center justify-center h-9 px-3 gap-1.5 rounded-md border border-input bg-transparent text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
         >
-          <Crosshair className="h-4 w-4" aria-hidden="true" />
-          Detection pending daemon support
+          {detecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Crosshair className="h-4 w-4" aria-hidden="true" />
+          )}
+          Auto-Detect
         </button>
       </div>
+      {detectMsg && (
+        <p
+          role="status"
+          aria-live="polite"
+          className={`text-xs ${
+            detectMsg.startsWith('Detected:')
+              ? 'text-green-600'
+              : 'text-muted-foreground'
+          }`}
+        >
+          {detectMsg}
+        </p>
+      )}
     </div>
   )
 }
@@ -116,7 +165,7 @@ export function HarnessBridgesTab({
         Harness Bridges
       </h2>
       <p className="text-sm text-muted-foreground">
-        Point each harness at its config file. Auto-detection is pending daemon support.
+        Point each harness at its config file. Click Auto-Detect to scan common install locations.
       </p>
 
       <HarnessRow
