@@ -16,8 +16,9 @@
 //!
 //! Constraints:
 //!   - Uses cascade_db::content_hash (BLAKE3) for archive integrity.
-//!   - Never reads vault.env or *.key/*.pem unless --include-secrets is passed.
-//!   - TODO(rag-16): gating on rag-16 sensitive-data API hook when that module lands.
+//!   - Never includes vault.env, *.key/*.pem, or files whose CONTENT looks like
+//!     credentials (AWS keys, PEM private keys, JWTs, high-entropy secret
+//!     assignments) unless --include-secrets is passed.
 //!
 //! SPORT: cascade-cli / export (data-01)
 
@@ -45,11 +46,37 @@ const FORMAT_VERSION: u32 = 1;
 const MANIFEST_FILENAME: &str = "manifest.json";
 
 /// Secret-adjacent file name patterns excluded unless --include-secrets is set.
-/// TODO(rag-16): replace this static list with the rag-16 sensitive-data hook.
+/// Fast path only — the content-aware scan below catches everything else.
 const SECRET_PATTERNS: &[&str] = &["vault.env", ".env", "credentials"];
 
 /// Secret-adjacent file extensions excluded unless --include-secrets is set.
 const SECRET_EXTENSIONS: &[&str] = &["key", "pem", "p12", "pfx", "crt", "cer"];
+
+/// Maximum file size scanned by the content-aware secret heuristic (bytes).
+/// Larger files are presumed data (DBs, model caches), not credentials.
+const SECRET_SCAN_MAX_BYTES: u64 = 64 * 1024;
+
+/// Minimum Shannon entropy (bits/char) for an assignment value to count as a
+/// secret. Random base64/hex runs ≈4.0+; natural-language text ≈<3.5.
+const SECRET_ENTROPY_THRESHOLD: f64 = 4.0;
+
+/// Minimum length of a candidate secret value. Short values ("secret",
+/// "hunter2") are not high-entropy material regardless of entropy.
+const SECRET_MIN_VALUE_LEN: usize = 20;
+
+/// Variable-name fragments marking an assignment as secret-adjacent.
+const SECRET_NAME_MARKERS: &[&str] = &[
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "api_key",
+    "apikey",
+    "private_key",
+    "access_key",
+    "credential",
+    "auth",
+];
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
@@ -194,7 +221,8 @@ impl Command for ExportArgs {
 
         if !self.include_secrets {
             println!(
-                "Note: credential/key files were excluded. Use --include-secrets to include them."
+                "Note: credential/key files (matched by name or content) were excluded. \
+                 Use --include-secrets to include them."
             );
         }
 
@@ -370,7 +398,9 @@ fn collect_recursive(
 }
 
 /// Returns true if the file looks like a credential/secret.
-/// TODO(rag-16): replace with rag-16 sensitive-data hook once that module lands.
+///
+/// Two layers: the filename fast path (name/extension patterns above), then a
+/// content-aware scan for known secret formats and high-entropy assignments.
 fn is_sensitive(name: &str, path: &Path) -> bool {
     let lower = name.to_lowercase();
     for pattern in SECRET_PATTERNS {
@@ -386,7 +416,176 @@ fn is_sensitive(name: &str, path: &Path) -> bool {
             }
         }
     }
-    false
+    content_looks_secret(path)
+}
+
+// ── Content-aware secret detection ────────────────────────────────────────────
+
+/// Read the file and run the content heuristic. Binary or oversized files are
+/// presumed non-secret (credentials are small text files).
+fn content_looks_secret(path: &Path) -> bool {
+    let Ok(meta) = fs::metadata(path) else {
+        return false;
+    };
+    if meta.len() > SECRET_SCAN_MAX_BYTES {
+        return false;
+    }
+    let Ok(bytes) = fs::read(path) else {
+        return false;
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return false; // binary — not an env/PEM/JWT file
+    };
+    text_looks_secret(&text)
+}
+
+/// True if the text contains recognizable credential material.
+fn text_looks_secret(text: &str) -> bool {
+    if text.contains("-----BEGIN") && text.contains("PRIVATE KEY-----") {
+        return true;
+    }
+    text.lines().any(|line| {
+        let line = line.trim();
+        known_token_in_line(line) || secret_assignment_in_line(line)
+    })
+}
+
+/// True if the line embeds a well-known token format (AWS key IDs, GitHub /
+/// Slack / Google tokens, JWTs) anywhere in its text.
+fn known_token_in_line(line: &str) -> bool {
+    // AWS access key IDs: AKIA/ASIA + 16 A-Z0-9 = 20 chars total.
+    for prefix in ["AKIA", "ASIA"] {
+        if has_prefixed_token(line, prefix, 20, |c| {
+            c.is_ascii_uppercase() || c.is_ascii_digit()
+        }) {
+            return true;
+        }
+    }
+    // GitHub tokens: ghp_/gho_/ghu_/ghs_/ghr_ + 36+ alphanumerics.
+    for prefix in ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"] {
+        if has_prefixed_token(line, prefix, 41, |c| c.is_ascii_alphanumeric() || c == '_') {
+            return true;
+        }
+    }
+    // GitHub fine-grained PATs.
+    if has_prefixed_token(line, "github_pat_", 60, |c| {
+        c.is_ascii_alphanumeric() || c == '_'
+    }) {
+        return true;
+    }
+    // Slack tokens: xox[bapors]-...
+    for prefix in ["xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxo-", "xoxs-"] {
+        if has_prefixed_token(line, prefix, 25, |c| c.is_ascii_alphanumeric() || c == '-') {
+            return true;
+        }
+    }
+    // Google API keys: AIza + 35 base64ish chars.
+    if has_prefixed_token(line, "AIza", 39, |c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '-'
+    }) {
+        return true;
+    }
+    jwt_in_line(line)
+}
+
+/// Does `line` contain `prefix` followed by at least `min_total_len - prefix.len()`
+/// consecutive chars accepted by `charset`?
+fn has_prefixed_token(
+    line: &str,
+    prefix: &str,
+    min_total_len: usize,
+    charset: impl Fn(char) -> bool,
+) -> bool {
+    let Some(idx) = line.find(prefix) else {
+        return false;
+    };
+    let rest = &line[idx + prefix.len()..];
+    let tok_len = rest.chars().take_while(|&c| charset(c)).count();
+    prefix.len() + tok_len >= min_total_len
+}
+
+/// True if the line contains a JWT: three base64url segments joined by dots,
+/// header and payload both starting with the "eyJ" marker.
+fn jwt_in_line(line: &str) -> bool {
+    let Some(idx) = line.find("eyJ") else {
+        return false;
+    };
+    let bytes = line.as_bytes();
+    let mut i = idx;
+    let mut segment_starts: Vec<usize> = Vec::new();
+    for seg in 0..3 {
+        let start = i;
+        segment_starts.push(start);
+        while i < bytes.len()
+            && (bytes[i].is_ascii_alphanumeric() || matches!(bytes[i], b'-' | b'_'))
+        {
+            i += 1;
+        }
+        let seg_len = i - start;
+        // Header/payload segments of a real JWT are >= 10 chars; the signature
+        // segment may be shorter but must be non-empty.
+        if seg_len < if seg < 2 { 10 } else { 1 } {
+            return false;
+        }
+        if seg < 2 {
+            if i >= bytes.len() || bytes[i] != b'.' {
+                return false;
+            }
+            i += 1; // skip the dot
+        }
+    }
+    // Both the header and the payload must start with the base64-of-{" marker.
+    segment_starts.len() == 3 && line[segment_starts[1]..].starts_with("eyJ")
+}
+
+/// True if the line is an assignment (`NAME=VALUE`, `NAME: VALUE`) whose name
+/// is secret-adjacent and whose value is long, restricted-charset, and
+/// high-entropy.
+fn secret_assignment_in_line(line: &str) -> bool {
+    let Some((name, value)) = split_assignment(line) else {
+        return false;
+    };
+    let name_lower = name.to_lowercase();
+    if !SECRET_NAME_MARKERS.iter().any(|m| name_lower.contains(m)) {
+        return false;
+    }
+    let value = value.trim().trim_matches('"').trim_matches('\'');
+    value.len() >= SECRET_MIN_VALUE_LEN
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '-'))
+        && shannon_entropy(value) >= SECRET_ENTROPY_THRESHOLD
+}
+
+/// Split `NAME=VALUE` / `NAME: VALUE` into halves; None if no separator.
+fn split_assignment(line: &str) -> Option<(&str, &str)> {
+    let idx = line.find('=').or_else(|| line.find(':'))?;
+    let (name, value) = line.split_at(idx);
+    let value = value.get(1..).unwrap_or("");
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some((name, value))
+}
+
+/// Shannon entropy (bits per character) of a string.
+fn shannon_entropy(s: &str) -> f64 {
+    if s.is_empty() {
+        return 0.0;
+    }
+    let mut counts = std::collections::HashMap::new();
+    for c in s.chars() {
+        *counts.entry(c).or_insert(0u32) += 1;
+    }
+    let len = s.chars().count() as f64;
+    counts
+        .values()
+        .map(|&n| {
+            let p = n as f64 / len;
+            -p * p.log2()
+        })
+        .sum()
 }
 
 /// Append raw bytes as a tar entry with the given path name.
@@ -669,5 +868,98 @@ mod tests {
             msg.contains("integrity check failed"),
             "error should mention integrity check: {msg}"
         );
+    }
+
+    // ── Content-aware secret detection (T-P7-E07-05) ─────────────────────────
+
+    #[test]
+    fn text_looks_secret_detects_known_formats() {
+        // AWS access key pair.
+        assert!(text_looks_secret("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"));
+        // PEM private key.
+        assert!(text_looks_secret(
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA7...\n-----END RSA PRIVATE KEY-----"
+        ));
+        // JWT.
+        assert!(text_looks_secret(
+            "authorization: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        ));
+        // GitHub token.
+        assert!(text_looks_secret(
+            "github_token: ghp_16C7e42F292c6912E7710c838347Ae178B4a"
+        ));
+        // Slack token.
+        assert!(text_looks_secret(
+            "xoxb-123456789012-1234567890123-abcDEFabcDEFabcDEFabcDEF"
+        ));
+        // High-entropy assignment with a secret-adjacent name.
+        assert!(text_looks_secret(
+            "api_secret=wJalrXUtnFEMI-K7MDENG-bPxRfiCYEXAMPLEKEY"
+        ));
+    }
+
+    #[test]
+    fn text_looks_secret_ignores_benign_text() {
+        // Ordinary markdown notes.
+        assert!(!text_looks_secret(
+            "# Decisions\n\nUse BLAKE3 for hashing because it is fast and audited.\n"
+        ));
+        // Assignment with a secret-ish name but a low-entropy short value.
+        assert!(!text_looks_secret("password=hunter2"));
+        // Assignment with a long value that is natural language (spaces break
+        // the restricted charset).
+        assert!(!text_looks_secret(
+            "auth_note=remember to rotate the keys every quarter please"
+        ));
+        // Prose mentioning token formats without embedding one.
+        assert!(!text_looks_secret(
+            "Tokens starting with AKIA are AWS access key IDs; never commit them."
+        ));
+        // Base64-looking but low-entropy repeated runs.
+        assert!(!text_looks_secret("secret=aaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    }
+
+    #[test]
+    fn shannon_entropy_bounds() {
+        assert_eq!(shannon_entropy(""), 0.0);
+        // Single repeated char: zero entropy.
+        assert_eq!(shannon_entropy("aaaaaaaa"), 0.0);
+        // Two evenly-mixed chars: exactly 1 bit.
+        assert!((shannon_entropy("abababab") - 1.0).abs() < 1e-9);
+    }
+
+    /// A credential file under an UNLISTED name must be excluded by the
+    /// content scan; benign files alongside it must still be included.
+    #[test]
+    fn export_excludes_unlisted_name_secret_file_by_content() {
+        let td = TempDir::new().unwrap();
+        let source = td.path().join(".cascade");
+        make_fake_cascade(&source);
+        // Unlisted filename, no secret extension — only content can catch it.
+        fs::write(
+            source.join("deploy-settings.conf"),
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\nregion=us-east-1\n",
+        )
+        .unwrap();
+
+        let archive_bytes = build_archive(&source, false).unwrap();
+        let manifest = extract_manifest(&archive_bytes).unwrap();
+        assert!(
+            !manifest
+                .files
+                .iter()
+                .any(|f| f.contains("deploy-settings.conf")),
+            "unlisted-name credential file must be excluded by content scan"
+        );
+        // Benign files are unaffected.
+        assert!(manifest.files.iter().any(|f| f.contains("decisions.md")));
+
+        // --include-secrets still lets it through.
+        let archive_bytes = build_archive(&source, true).unwrap();
+        let manifest = extract_manifest(&archive_bytes).unwrap();
+        assert!(manifest
+            .files
+            .iter()
+            .any(|f| f.contains("deploy-settings.conf")));
     }
 }

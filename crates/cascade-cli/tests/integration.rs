@@ -134,6 +134,21 @@ fn daemon_fixture() -> (Child, TempDir) {
     let cascade_dir = home.join(".cascade");
     std::fs::create_dir_all(&cascade_dir).expect("create .cascade dir");
 
+    let daemon_child = spawn_daemon_in(home);
+
+    (daemon_child, temp_dir)
+}
+
+/// Spawn `cascaded` with `HOME` set to `home` and wait for its socket.
+///
+/// The caller is responsible for creating `<home>/.cascade/` (and any config
+/// the daemon must observe at startup — config.toml, scheduler.db, ...) BEFORE
+/// calling this, because the supervisor loads config once at start.
+///
+/// Writes the PID file so `cascade daemon stop` can find the process.
+fn spawn_daemon_in(home: &std::path::Path) -> Child {
+    let cascade_dir = home.join(".cascade");
+
     // Spawn cascaded with an isolated HOME.  We use the daemon directly (not via
     // `cascade daemon start`) so that we hold a `Child` handle for the lifetime
     // of the test.  The `--wait` variant daemonizes the child and makes the
@@ -162,7 +177,7 @@ fn daemon_fixture() -> (Child, TempDir) {
         daemon_child.id()
     );
 
-    (daemon_child, temp_dir)
+    daemon_child
 }
 
 // ── Helper: run cascade subcommand with isolated HOME ────────────────────────
@@ -447,4 +462,188 @@ fn test_no_stray_sockets_after_teardown() {
     let _ = daemon.kill();
     let _ = daemon.wait();
     // TempDir drop removes the isolated home directory.
+}
+
+// ── Search (T-P7-E07-03) ──────────────────────────────────────────────────────
+
+/// `cascade search` with a live daemon and a seeded project index must use the
+/// daemon's `rag.search` IPC, not the inline keyword fallback.
+///
+/// Proven by output shape: daemon results cite the source file
+/// (`<path>:<line>` with an RRF float score), while the inline fallback only
+/// prints paragraph text from the resolved cascade text.  The seeded doc lives
+/// outside the resolved cascade text, so the inline path could never cite it.
+#[test]
+fn test_search_via_daemon_uses_rag_ipc() {
+    let (mut daemon, temp) = daemon_fixture();
+
+    // Project dir with a doc to index.  The daemon resolves the project index
+    // at <project>/.cascade/index/cascade.db — seed it from the test process
+    // with the same IngestPipeline the daemon's ingest path uses.
+    let project = temp.path().join("project");
+    let index_dir = project.join(".cascade").join("index");
+    std::fs::create_dir_all(&index_dir).expect("mkdir project index dir");
+    let doc = project.join("notes.md");
+    std::fs::write(
+        &doc,
+        "# Notes\n\n## Bearings\n\nThe widget assembly line requires greased bearings before every startup.\n\n## Coatings\n\nPaint must fully dry between coats.\n",
+    )
+    .expect("write doc");
+
+    {
+        let db_path = index_dir.join("cascade.db");
+        let conn = cascade_db::open_configured(&db_path).expect("open index db");
+        // Same schema setup IndexManager::open performs before any ingest.
+        cascade_rag::run_migrations(&conn).expect("index migrations");
+        let embed: std::sync::Arc<dyn cascade_rag::embed::EmbedModel> =
+            std::sync::Arc::new(cascade_rag::embed::MockEmbedModel::default());
+        let pipeline = cascade_rag::ingest::IngestPipeline::new(
+            conn,
+            embed,
+            cascade_rag::ingest::IngestConfig::default(),
+        );
+        let result = pipeline
+            .ingest_file(&doc)
+            .expect("seed ingest must succeed");
+        assert!(!result.skipped, "seed ingest must not be skipped");
+        assert!(
+            result.chunks_created > 0,
+            "seed ingest must create chunks, got {result:?}"
+        );
+    }
+
+    let out = Command::new(cascade_bin())
+        .args(["search", "greased bearings startup", "--top", "5"])
+        .env("HOME", temp.path())
+        .current_dir(&project)
+        .output()
+        .expect("run cascade search");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "cascade search should exit 0; stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        stdout.contains("notes.md"),
+        "daemon rag.search results must cite the source file; stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        !stdout.contains("No results"),
+        "seeded doc must be found via the daemon; stdout={stdout:?} stderr={stderr:?}"
+    );
+
+    let _ = daemon.kill();
+    let _ = daemon.wait();
+}
+
+/// A task registered in the daemon's scheduler.db must actually fire: the
+/// daemon runs the registered command (`cascade backup run --cwd <project>`)
+/// and a real snapshot appears under `<HOME>/.cascade/backups/`.
+///
+/// Uses the same registration shape `cascade backup schedule` writes —
+/// Interval schedule, arg-array, this very `cascade` binary as the command —
+/// but with next_run = None (due immediately) and a 1 s poll interval so the
+/// test does not wait 30 s + 1 h.
+#[test]
+fn test_scheduled_backup_task_fires_end_to_end() {
+    let temp_dir = TempDir::new().expect("create temp dir");
+    let home = temp_dir.path();
+    let cascade_dir = home.join(".cascade");
+    std::fs::create_dir_all(&cascade_dir).expect("create .cascade dir");
+
+    // Project tier with a readable instruction file to back up.
+    let project = temp_dir.path().join("project");
+    std::fs::create_dir_all(project.join(".cascade")).expect("mkdir project .cascade");
+    std::fs::write(project.join(".cascade").join("CASCADE.md"), "# backed up\n")
+        .expect("write CASCADE.md");
+
+    // Fast scheduler polling so the due task fires within seconds.
+    std::fs::write(
+        cascade_dir.join("config.toml"),
+        "[scheduler]\npoll_interval_secs = 1\n",
+    )
+    .expect("write config.toml");
+
+    // Seed scheduler.db with a due backup task (same shape as
+    // `cascade backup schedule` registers, minus the future next_run).
+    {
+        use cascade_core::task_store::TaskStore;
+        use cascade_types::scheduled_task::{ScheduleSpec, ScheduledTask};
+        use std::sync::{Arc, Mutex};
+
+        let conn = cascade_db::open_configured(cascade_dir.join("scheduler.db"))
+            .expect("open scheduler.db");
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                schedule_json TEXT NOT NULL,
+                command TEXT NOT NULL,
+                args_json TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                last_run TEXT,
+                next_run TEXT,
+                status_json TEXT NOT NULL
+            );",
+        )
+        .expect("create scheduled_tasks table");
+
+        let store = TaskStore::new(Arc::new(Mutex::new(conn)));
+        let task = ScheduledTask::new(
+            "cascade-backup",
+            ScheduleSpec::Interval { secs: 3600 },
+            cascade_bin().display().to_string(),
+            vec![
+                "backup".into(),
+                "run".into(),
+                "--cwd".into(),
+                project.display().to_string(),
+            ],
+        );
+        // next_run stays None => due on the scheduler's next poll.
+        store.insert(&task).expect("insert backup task");
+    }
+
+    let mut daemon = spawn_daemon_in(home);
+
+    // Wait for the scheduled backup to fire: a snapshot of CASCADE.md must
+    // appear under <HOME>/.cascade/backups/<TIER>/snapshot-*/.
+    let backups_root = cascade_dir.join("backups");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut snapshot_file: Option<PathBuf> = None;
+    while snapshot_file.is_none() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(200));
+        if let Ok(tiers) = std::fs::read_dir(&backups_root) {
+            for tier in tiers.flatten() {
+                if let Ok(snaps) = std::fs::read_dir(tier.path()) {
+                    for snap in snaps.flatten() {
+                        let f = snap.path().join("CASCADE.md");
+                        if f.is_file() {
+                            snapshot_file = Some(f);
+                            break;
+                        }
+                    }
+                }
+                if snapshot_file.is_some() {
+                    break;
+                }
+            }
+        }
+    }
+
+    let f = snapshot_file.unwrap_or_else(|| {
+        panic!(
+            "scheduled backup did not fire within 30 s; backups_root={:?} exists={}",
+            backups_root,
+            backups_root.exists()
+        )
+    });
+    let content = std::fs::read_to_string(&f).expect("read snapshot CASCADE.md");
+    assert_eq!(content, "# backed up\n");
+
+    let _ = daemon.kill();
+    let _ = daemon.wait();
 }

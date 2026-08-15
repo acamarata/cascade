@@ -76,12 +76,78 @@ fn daemon_is_running() -> bool {
     cascade_types::paths::daemon_socket().exists()
 }
 
-/// Send the query to the daemon over the Unix socket and print results.
+/// Send the query to the daemon's `rag.search` IPC and print ranked citations.
+///
+/// The daemon runs the real retrieval pipeline (FTS5 BM25 + dense vector KNN +
+/// RRF fusion) against the project's `.cascade/index/cascade.db`, so results
+/// are semantic, not just keyword-frequency ranked.
+///
+/// Falls back to [`search_inline`] only when the daemon is genuinely
+/// unavailable (no auth token, connection failure, or RPC error) — search must
+/// still work with the daemon down.
 async fn search_via_daemon(query: &str, top: usize, json: bool) -> Result<()> {
-    // Full IPC implementation lives in E7 (cascade-rag + daemon socket).
-    // For now, log a TODO and fall through to inline search.
-    tracing::debug!("daemon search not yet implemented; falling back to inline");
-    search_inline(query, top, json).await
+    use std::path::PathBuf;
+
+    let client = match crate::ipc_client::IpcClient::new() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon IPC unavailable; falling back to inline search");
+            return search_inline(query, top, json).await;
+        }
+    };
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let params = serde_json::json!({
+        "query": query,
+        "project_root": cwd.display().to_string(),
+        "k": top as u32,
+        "config": {
+            "fts5_enabled": true,
+            "vec_enabled": true,
+            "rerank_enabled": false,
+        },
+    });
+
+    let resp: serde_json::Value = match client.send("rag.search", params).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon rag.search failed; falling back to inline search");
+            return search_inline(query, top, json).await;
+        }
+    };
+
+    let citations: Vec<serde_json::Value> = resp
+        .get("citations")
+        .and_then(|c| c.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if citations.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            println!("No results for: {}", query);
+        }
+        return Ok(());
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&citations).unwrap_or_else(|_| "[]".into())
+        );
+    } else {
+        // RagCitation serialises with #[serde(rename_all = "camelCase")].
+        for c in &citations {
+            let score = c.get("rrfScore").and_then(|s| s.as_f64()).unwrap_or(0.0);
+            let path = c.get("sourcePath").and_then(|p| p.as_str()).unwrap_or("?");
+            let line = c.get("lineStart").and_then(|l| l.as_u64()).unwrap_or(0);
+            let snippet = c.get("snippet").and_then(|s| s.as_str()).unwrap_or("");
+            println!("[{score:.4}] {}:{}", path, line);
+            println!("  {}\n", snippet);
+        }
+    }
+    Ok(())
 }
 
 /// In-process keyword search over the resolved cascade text.

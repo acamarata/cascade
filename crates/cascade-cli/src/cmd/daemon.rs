@@ -308,12 +308,38 @@ fn send_sigterm(pid: u32) -> Result<()> {
 
 #[cfg(not(unix))]
 fn send_sigterm(pid: u32) -> Result<()> {
-    // Windows: use TerminateProcess via std.
+    // Windows: open the process with PROCESS_TERMINATE, wrap the raw handle
+    // in std::process::Child (its `kill` calls TerminateProcess and Drop
+    // closes the handle), then kill it.
     use std::os::windows::io::FromRawHandle;
-    let _ = pid;
-    Err(CascadeError::Other(
-        "daemon stop on Windows not yet implemented".into(),
-    ))
+    use std::process::Child;
+
+    const PROCESS_TERMINATE: u32 = 0x0001;
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(
+            desired_access: u32,
+            inherit_handle: i32,
+            process_id: u32,
+        ) -> *mut std::ffi::c_void;
+        fn GetLastError() -> u32;
+    }
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+        if handle.is_null() {
+            return Err(CascadeError::Other(format!(
+                "OpenProcess({}) failed: Windows error {}",
+                pid,
+                GetLastError()
+            )));
+        }
+        let child = Child::from_raw_handle(handle);
+        child
+            .kill()
+            .map_err(|e| CascadeError::Other(format!("TerminateProcess({}) failed: {}", pid, e)))
+    }
 }
 
 /// Detach the child process from the parent's process group on Unix.

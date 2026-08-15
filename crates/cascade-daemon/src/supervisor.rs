@@ -447,6 +447,9 @@ pub async fn run(
                     // ── WorkerPool ────────────────────────────────────────────
                     let pool =
                         Arc::new(WorkerPool::new(WorkerPoolConfig::default(), embed.clone()));
+                    // Register the pool so `rag.queue_depth` IPC reports live
+                    // back-pressure to `cascade status` (T-P7-E07-02).
+                    ipc.set_worker_pool(Arc::clone(&pool)).await;
 
                     // ── VolumeWatcher + VolumeIndexGuard ─────────────────────
                     let (vol_watcher, vol_rx) = VolumeWatcher::new(

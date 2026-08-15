@@ -26,8 +26,8 @@
 //! ```
 //! Fields are sourced from: project config.toml (shard_count, incremental_enabled),
 //! cascade_state.db (indexed_docs), a stats file written by the daemon
-//! (`last_index_stats.json` in the index root), and a worker queue depth stub
-//! (0 when the daemon is not reachable via IPC).
+//! (`last_index_stats.json` in the index root), and the daemon's live
+//! `rag.queue_depth` IPC endpoint (0 when the daemon is not reachable).
 
 use std::path::PathBuf;
 
@@ -109,9 +109,27 @@ impl RagStatus {
             indexed_docs,
             last_index_duration_ms,
             incremental_enabled,
-            worker_queue_depth: 0, // stub: live value requires IPC to daemon (T-P4-E04-03)
+            worker_queue_depth: 0,
         }
     }
+}
+
+/// Fetch the live embed-worker queue depth from the daemon via IPC
+/// (`rag.queue_depth`, T-P7-E07-02).
+///
+/// Returns `None` when the daemon is unreachable or the IPC call fails for
+/// any reason — the caller then keeps the local default of 0.  Silent by
+/// design: `cascade status` must never fail (or print daemon diagnostics)
+/// because of this optional enrichment.
+async fn fetch_worker_queue_depth() -> Option<usize> {
+    let client = crate::ipc_client::IpcClient::new().ok()?;
+    let resp: serde_json::Value = client
+        .send("rag.queue_depth", serde_json::Value::Null)
+        .await
+        .ok()?;
+    resp.get("worker_queue_depth")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
 }
 
 #[async_trait]
@@ -144,7 +162,14 @@ impl Command for StatusArgs {
                 })
                 .collect();
 
-            let rag = RagStatus::load(&cwd);
+            let mut rag = RagStatus::load(&cwd);
+            // Enrich with the live queue depth when the daemon is reachable;
+            // otherwise keep the local default of 0.
+            if daemon_ok {
+                if let Some(depth) = fetch_worker_queue_depth().await {
+                    rag.worker_queue_depth = depth;
+                }
+            }
             let out = serde_json::json!({
                 "daemon": daemon_ok,
                 "tiers": tier_json,

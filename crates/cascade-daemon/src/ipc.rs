@@ -311,6 +311,15 @@ impl IpcServer {
         self.daemon_shutdown = Some(token);
     }
 
+    /// Register the RAG embed [`WorkerPool`] so the `rag.queue_depth` IPC
+    /// endpoint reports live back-pressure (T-P7-E07-02).
+    ///
+    /// Call from supervisor.rs after the pool is created.  Without this the
+    /// endpoint always reports 0 (no pool active).
+    pub async fn set_worker_pool(&self, pool: Arc<cascade_rag::workers::WorkerPool>) {
+        self.daemon_state.lock().await.worker_pool = Some(pool);
+    }
+
     /// Bind the Unix socket and serve connections until `shutdown` fires.
     pub async fn serve(self, shutdown: CancellationToken) -> Result<(), DaemonError> {
         #[cfg(unix)]
@@ -800,6 +809,14 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
             // ── Cache methods (T-P4-E04-11) ───────────────────────────────
             if typed_req.method.starts_with("cache.") {
                 return dispatch_cache(server, &typed_req.method, typed_req.params).await;
+            }
+
+            // ── RAG status method (T-P7-E07-02) ─────────────────────────
+            // Live embed-worker queue depth from DaemonState.  Must precede the
+            // rag.* family dispatch below, which does not own the worker pool.
+            if typed_req.method == "rag.queue_depth" {
+                let depth = server.daemon_state.lock().await.worker_queue_depth();
+                return Response::ok(serde_json::json!({ "worker_queue_depth": depth }));
             }
 
             // ── RAG methods (T-P4-E01-29) ─────────────────────────────────
@@ -1945,5 +1962,115 @@ mod tests {
             !tmp_path.exists(),
             ".tmp file must be cleaned up after rename"
         );
+    }
+
+    // ── rag.queue_depth (T-P7-E07-02) ─────────────────────────────────────
+
+    /// Embed model that sleeps per batch so the pool has observable in-flight
+    /// work while we assert on queue depth.
+    struct SlowEmbed;
+
+    impl cascade_rag::embed::EmbedModel for SlowEmbed {
+        fn embed_dense(
+            &self,
+            texts: &[&str],
+        ) -> std::result::Result<Vec<Vec<f32>>, cascade_rag::embed::EmbedError> {
+            std::thread::sleep(std::time::Duration::from_millis(750));
+            Ok(texts.iter().map(|_| vec![0.0; 8]).collect())
+        }
+
+        fn embed_sparse(
+            &self,
+            texts: &[&str],
+        ) -> std::result::Result<Vec<Vec<(u32, f32)>>, cascade_rag::embed::EmbedError> {
+            std::thread::sleep(std::time::Duration::from_millis(750));
+            Ok(texts.iter().map(|_| Vec::new()).collect())
+        }
+
+        fn dim(&self) -> usize {
+            8
+        }
+
+        fn model_id(&self) -> &str {
+            "slow-test-embed"
+        }
+    }
+
+    /// `rag.queue_depth` must report 0 when idle / no pool, and > 0 while the
+    /// registered pool has an in-flight embedding backlog.
+    #[tokio::test]
+    async fn rag_queue_depth_reports_live_backlog() {
+        use cascade_rag::workers::{RawDoc, WorkerPool, WorkerPoolConfig};
+
+        let frame = br#"{"jsonrpc":"2.0","id":1,"method":"rag.queue_depth","protocol_version":1}"#;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+
+        // No pool registered yet — depth is 0.
+        let resp = try_typed_dispatch(&server, frame).await;
+        match resp {
+            Response::Ok(v) => assert_eq!(
+                v["worker_queue_depth"].as_u64(),
+                Some(0),
+                "no pool registered: depth must be 0, got {v}"
+            ),
+            Response::Error { code, message } => {
+                panic!("expected ok response, got error {code}: {message}")
+            }
+        }
+
+        let pool = Arc::new(WorkerPool::new(
+            WorkerPoolConfig {
+                max_embed_workers: 2,
+                embed_batch_size: 1,
+                max_queue_depth: 8,
+            },
+            Arc::new(SlowEmbed),
+        ));
+        server.set_worker_pool(Arc::clone(&pool)).await;
+
+        // Pool registered but idle — still 0.
+        let resp = try_typed_dispatch(&server, frame).await;
+        match resp {
+            Response::Ok(v) => assert_eq!(
+                v["worker_queue_depth"].as_u64(),
+                Some(0),
+                "idle pool: depth must be 0, got {v}"
+            ),
+            Response::Error { code, message } => {
+                panic!("expected ok response, got error {code}: {message}")
+            }
+        }
+
+        // Submit a batch of 4 docs (batch size 1 → 4 queued chunks) on a
+        // background thread; the slow model keeps them in-flight.
+        let docs: Vec<RawDoc> = (0..4).map(|i| RawDoc::new(i, format!("doc {i}"))).collect();
+        let bg_pool = Arc::clone(&pool);
+        let handle = std::thread::spawn(move || bg_pool.embed_batch(docs));
+
+        // Bounded wait until the pool reports a backlog directly.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while pool.queue_depth() == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            pool.queue_depth() > 0,
+            "pool must report a backlog while slow embed is in-flight"
+        );
+
+        // The IPC endpoint must surface the same live value.
+        let resp = try_typed_dispatch(&server, frame).await;
+        match resp {
+            Response::Ok(v) => assert!(
+                v["worker_queue_depth"].as_u64().unwrap_or(0) > 0,
+                "backlogged pool: depth must be > 0, got {v}"
+            ),
+            Response::Error { code, message } => {
+                panic!("expected ok response, got error {code}: {message}")
+            }
+        }
+
+        handle.join().expect("background embed must finish");
     }
 }
