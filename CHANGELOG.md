@@ -7,6 +7,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Changed
+- Router unification (T-P7-E13-01): confirmed `crate::selection` was already
+  the canonical account-selection module (an earlier E1-S6 pass had already
+  reduced `conductor_router` to a thin wrapper and folded `RoutingTable`'s
+  role into feeding live GP-pool health, not competing routing). Closed the
+  one remaining real gap — `select_target_for_prompt`'s sensitivity-firewall
+  logic still lived inline in `conductor_router.rs` — by moving it verbatim
+  into a new `selection::select_account_for_prompt`; `conductor_router` is
+  now 100% pass-through delegation with zero owned selection logic. No
+  routing decisions changed: verified via test-name diff (863 → 866, zero
+  removed, 3 added) and confirming all 4 pre-existing sensitivity tests
+  (which exercise real behavior through the shim) still pass unchanged.
 - Cursor and Antigravity provider adapters now honestly reflect their
   detect+config-only scope: the unreachable `inference_routing` cfg-feature
   stub blocks ("stub — not implemented") and the now-meaningless

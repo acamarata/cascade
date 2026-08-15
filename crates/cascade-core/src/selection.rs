@@ -8,6 +8,19 @@
 //     six `TaskClass` semantics onto tiers via [`tier_for_task_class`].
 //   - The daemon chat path consumes [`preferred_chat_provider`] for its
 //     GP-first-for-chat account choice.
+//   - [`select_account_for_prompt`] is the sensitivity-firewalled entry for
+//     callers that dispatch RAW prompt text (moved here from conductor_router
+//     in T-P7-E13-01 so every selection entry point lives in the canonical
+//     module and the conductor_router wrapper is pure pass-through).
+//
+//   T-P7-E13-01 re-verification (2026-08-15): this module IS the canonical
+//   selector. The audit's "3 unreconciled routing systems" premise (2026-07-02)
+//   was resolved by E1-S6 (commit ad96f04): `conductor_router` is a thin
+//   compatibility shim over `select_account`; `Router::select` resolves
+//   TaskClass semantics through `tier_for_task_class` + the shared spill
+//   engine; `routing_table::RoutingTable` is NOT a task router — it is the GP
+//   key-pool rotation structure that FEEDS [`gp_health_from_slots`] into this
+//   module. No behavior changed in T-P7-E13-01; only code motion + docs.
 //
 //   Spill order (user decree 2026-07):
 //   gfp(GP, T3/Haiku only) → zai → opencode → gemini → codex →
@@ -38,6 +51,9 @@ use crate::model_ids::{
 };
 use crate::routing::task_class::TaskClass;
 use crate::routing_table::ProviderSlot;
+use crate::sensitivity::{
+    classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity,
+};
 
 // ── Public types (canonical definitions — re-exported by conductor_router) ────
 
@@ -405,6 +421,49 @@ pub fn select_account(
         model,
         reason,
     })
+}
+
+// ── Prompt-gated selection (sensitivity firewall) ─────────────────────────────
+
+/// [`select_account`] with a content-sensitivity firewall (T-P7-E13-01 —
+/// moved verbatim from `conductor_router::select_target_for_prompt`, which is
+/// now a thin shim over this canonical entry point).
+///
+/// Inputs: `prompt` — the RAW prompt text about to be delegated. Callers that
+///         dispatch coding/delegation tasks must classify the prompt body
+///         itself (it may carry PII / VA / health / financial content) before
+///         any untrusted provider is allowed to receive it.
+///
+/// Behavior: classifies `prompt` via [`classify_sensitivity`]. When `Public`,
+/// behaves identically to [`select_account`]. When `Sensitive`, every
+/// untrusted-provider account (per [`provider_is_trusted_for_sensitive`] —
+/// everything except Claude/local) is excluded from the spill candidate pool
+/// BEFORE selection, so the shared spill engine can only ever return a trusted
+/// target. If no trusted candidate remains, returns `None` (fail closed —
+/// never leak sensitive content to an untrusted lane).
+pub fn select_account_for_prompt(
+    req: &SelectionRequest,
+    quota: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
+    prompt: &str,
+) -> Option<SelectionTarget> {
+    let sensitivity = classify_sensitivity(prompt);
+    if sensitivity == ContentSensitivity::Public {
+        return select_account(req, quota, gp);
+    }
+
+    // Sensitive: only offer trusted-provider accounts to the spill engine.
+    let trusted_accounts: Vec<QuotaAccount> = quota
+        .accounts
+        .iter()
+        .filter(|a| provider_is_trusted_for_sensitive(&a.provider))
+        .cloned()
+        .collect();
+    let trusted_snapshot = QuotaSnapshot {
+        accounts: trusted_accounts,
+    };
+
+    select_account(req, &trusted_snapshot, gp)
 }
 
 // ── Chat preference (daemon chat path) ────────────────────────────────────────
@@ -1106,5 +1165,74 @@ mod tests {
         assert_eq!(target.account_id, "glm-acc1");
         assert_eq!(target.provider, Provider::Zai);
         assert_eq!(target.model, MODEL_GLM);
+    }
+
+    // ── Prompt-gated selection (T-P7-E13-01 move from conductor_router) ──────
+
+    /// Sensitive prompt + only untrusted lanes → refuse (`None`), never leak.
+    #[test]
+    fn for_prompt_sensitive_refuses_when_only_untrusted_lanes() {
+        // Deliberately narrow snapshot with ONLY untrusted-for-sensitive
+        // providers (codex, gemini, gfp) — no claude/claude2. Using
+        // full_snapshot() here (which includes trusted claude/claude2) would
+        // make this test assert something false: with a trusted lane present
+        // the correct behavior is to SELECT it, not refuse (see
+        // for_prompt_sensitive_skips_untrusted_and_selects_trusted below).
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                entry("codex-acc1", "codex", "ok"),
+                entry("gemini-acc1", "gemini", "ok"),
+                entry("gfp-pool", "gfp", "pool"),
+            ],
+        };
+        let target = select_account_for_prompt(
+            &req(Tier::T2),
+            &snapshot,
+            &GpHealthSnapshot::default(),
+            "my ssn is 123-45-6789, please format this VA claim letter",
+        );
+        assert!(
+            target.is_none(),
+            "sensitive content must refuse rather than leak to an untrusted lane"
+        );
+    }
+
+    /// Sensitive prompt + trusted lanes present → skip every untrusted lane
+    /// and land on the first TRUSTED candidate (claude2 per spill order).
+    #[test]
+    fn for_prompt_sensitive_skips_untrusted_and_selects_trusted() {
+        let target = select_account_for_prompt(
+            &req(Tier::T2),
+            &full_snapshot(),
+            &GpHealthSnapshot::default(),
+            "patient diagnosis: PTSD, medical record attached",
+        )
+        .expect("trusted lane should still be selected for sensitive content");
+        assert_eq!(target.account_id, "claude2");
+        assert_eq!(target.provider, Provider::Claude);
+    }
+
+    /// Public prompt → identical to plain `select_account` (first in spill
+    /// order, untrusted lanes allowed).
+    #[test]
+    fn for_prompt_public_matches_plain_select_account() {
+        let prompt = "refactor the auth module to use JWT";
+        let gated = select_account_for_prompt(
+            &req(Tier::T2),
+            &full_snapshot(),
+            &GpHealthSnapshot::default(),
+            prompt,
+        )
+        .expect("gated target");
+        let plain = select_account(
+            &req(Tier::T2),
+            &full_snapshot(),
+            &GpHealthSnapshot::default(),
+        )
+        .expect("plain target");
+        assert_eq!(gated.account_id, plain.account_id);
+        assert_eq!(gated.provider, plain.provider);
+        assert_eq!(gated.model, plain.model);
+        assert_eq!(gated.reason, plain.reason);
     }
 }

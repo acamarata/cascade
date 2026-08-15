@@ -6,6 +6,13 @@
 //   is a thin wrapper that preserves the original public API exactly:
 //   `select_target(&ConductorRequest, &QuotaSnapshot) -> Option<ConductorTarget>`.
 //
+//   T-P7-E13-01 (2026-08-15): every entry point in this module is now pure
+//   pass-through delegation to `crate::selection` — including
+//   `select_target_for_prompt`, whose sensitivity-firewall body moved to the
+//   canonical `selection::select_account_for_prompt`. This module owns NO
+//   selection logic; it exists only so `cascade-cli`'s conductor path compiles
+//   unchanged against its original API shape.
+//
 //   Worker spill order is delegated to `crate::selection`: gfp(GP, T3/Haiku
 //   only) → zai → opencode → gemini → codex → claude2(A2) → claude(A1) LAST.
 //   Any account whose five_hour or seven_day utilization is >= 100, or whose
@@ -23,9 +30,6 @@
 // SPORT: MASTER-CLI.md — cascade delegate / conductor_router
 
 use crate::selection::{self, SelectionRequest};
-use crate::sensitivity::{
-    classify_sensitivity, provider_is_trusted_for_sensitive, ContentSensitivity,
-};
 
 // Canonical type definitions moved to `crate::selection` (E1-S6); re-exported
 // here so existing consumers (`cascade-cli` conductor) compile unchanged.
@@ -99,18 +103,7 @@ pub fn select_target_with_gp(
     quota: &QuotaSnapshot,
     gp: &GpHealthSnapshot,
 ) -> Option<ConductorTarget> {
-    let sel_req = SelectionRequest {
-        tier: req.tier,
-        model_class: req.model_class,
-        account_override: req.account_override.clone(),
-    };
-    selection::select_account(&sel_req, quota, gp).map(|t| ConductorTarget {
-        provider: t.provider,
-        account_id: t.account_id,
-        config_dir: t.config_dir,
-        model: t.model,
-        reason: t.reason,
-    })
+    selection::select_account(&to_selection_req(req), quota, gp).map(to_conductor_target)
 }
 
 /// [`select_target_with_gp`] with a content-sensitivity firewall (parity with
@@ -122,14 +115,11 @@ pub fn select_target_with_gp(
 ///         request, not just chat messages), so it must be classified before
 ///         any untrusted provider is allowed to receive it.
 ///
-/// Behavior: classifies `prompt` via [`crate::sensitivity::classify_sensitivity`].
-/// When `Public`, behaves identically to [`select_target_with_gp`]. When
-/// `Sensitive`, every untrusted-provider account (per
-/// [`crate::sensitivity::provider_is_trusted_for_sensitive`] — everything
-/// except Claude/local) is excluded from the spill candidate pool BEFORE
-/// selection, so the shared spill engine can only ever return a trusted
-/// target. If no trusted candidate remains, returns `None` (fail closed —
-/// never leak sensitive content to an untrusted lane).
+/// Behavior: see [`crate::selection::select_account_for_prompt`] (the
+/// canonical implementation this delegates to — T-P7-E13-01). Public prompt
+/// → identical to [`select_target_with_gp`]; Sensitive prompt → untrusted
+/// providers excluded before selection, `None` (fail closed) if no trusted
+/// candidate remains.
 ///
 /// This is the gated entry point conductor callers SHOULD use; the raw
 /// [`select_target_with_gp`] / [`select_target`] remain available for
@@ -141,23 +131,32 @@ pub fn select_target_for_prompt(
     gp: &GpHealthSnapshot,
     prompt: &str,
 ) -> Option<ConductorTarget> {
-    let sensitivity = classify_sensitivity(prompt);
-    if sensitivity == ContentSensitivity::Public {
-        return select_target_with_gp(req, quota, gp);
+    selection::select_account_for_prompt(&to_selection_req(req), quota, gp, prompt)
+        .map(to_conductor_target)
+}
+
+// ── Shim mapping helpers ──────────────────────────────────────────────────────
+
+/// Map the wrapper's request shape onto the canonical selection request.
+fn to_selection_req(req: &ConductorRequest) -> SelectionRequest {
+    SelectionRequest {
+        tier: req.tier,
+        model_class: req.model_class,
+        account_override: req.account_override.clone(),
     }
+}
 
-    // Sensitive: only offer trusted-provider accounts to the spill engine.
-    let trusted_accounts: Vec<QuotaAccount> = quota
-        .accounts
-        .iter()
-        .filter(|a| provider_is_trusted_for_sensitive(&a.provider))
-        .cloned()
-        .collect();
-    let trusted_snapshot = QuotaSnapshot {
-        accounts: trusted_accounts,
-    };
-
-    select_target_with_gp(req, &trusted_snapshot, gp)
+/// Map a canonical [`selection::SelectionTarget`] onto the wrapper's public
+/// target shape (field-for-field identical; a distinct type only to preserve
+/// the pre-E1-S6 API).
+fn to_conductor_target(t: crate::selection::SelectionTarget) -> ConductorTarget {
+    ConductorTarget {
+        provider: t.provider,
+        account_id: t.account_id,
+        config_dir: t.config_dir,
+        model: t.model,
+        reason: t.reason,
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
