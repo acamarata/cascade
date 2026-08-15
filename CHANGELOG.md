@@ -96,6 +96,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   Added 3 unit tests; 19 ipc_providers tests pass. (T-P7-E05-06)
 
 ### Fixed
+- Conductor's spill loop-guard (T-P7-E13-02) used fragile `starts_with`
+  prefix matching to detect whether an account had already been tried
+  (`tried.iter().any(|t| t.starts_with(&next.account_id))`), which had a
+  real bug: a tried entry for `claude2` false-matched the prefix check for
+  `claude`, terminating the spill chain one lane early. Replaced with a
+  typed `LaneFailure`/`TriedLane` classification and exact account-id
+  equality; the exhausted-message and JSON `fallbacks_tried` output formats
+  are unchanged. No other spill/fallback decision logic changed.
 - Removed dead `cascade_resolve` arm from the post-dispatch audit hook in
   `cascade-daemon` IPC. The arm was unreachable: the real `cascade_resolve`
   handler returns before reaching the audit match block, so the arm was

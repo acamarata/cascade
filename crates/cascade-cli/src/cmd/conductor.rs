@@ -301,6 +301,72 @@ pub enum Outcome {
     Error { message: String },
 }
 
+/// Typed classification of a spillable failure (CFC-04, T-P7-E13-02).
+///
+/// Each lane that the spill chain skips is recorded with one of these kinds,
+/// assigned at the failure's point of origin. This replaces the old
+/// `Vec<String>` of formatted `"account (reason)"` entries whose only
+/// machine-readable consumer compared account ids by string PREFIX —
+/// fragile because a shorter id (`claude`) prefix-matched a longer
+/// previously-tried id (`claude2`) and broke the spill loop early.
+#[derive(Debug, Clone)]
+pub enum LaneFailure {
+    /// Backend CLI absent, unreachable, or the process failed to exec/spill.
+    Unavailable { reason: String },
+    /// Sensitivity firewall: Sensitive prompt on an untrusted provider.
+    SensitiveFirewall { provider: Provider },
+}
+
+impl LaneFailure {
+    /// Human/JSON rendering of the failure reason.
+    fn reason_text(&self) -> String {
+        match self {
+            LaneFailure::Unavailable { reason } => reason.clone(),
+            LaneFailure::SensitiveFirewall { provider } => format!(
+                "sensitive-content firewall: {} is not a trusted provider",
+                provider.as_str()
+            ),
+        }
+    }
+}
+
+/// One lane the spill chain has already tried and skipped past.
+#[derive(Debug, Clone)]
+pub struct TriedLane {
+    pub account_id: String,
+    pub failure: LaneFailure,
+}
+
+impl TriedLane {
+    /// Display form: `"account_id (reason)"` — byte-identical to the
+    /// pre-E13-02 `tried` string format, so exhausted-messages and JSON
+    /// envelopes are unchanged.
+    fn describe(&self) -> String {
+        format!("{} ({})", self.account_id, self.failure.reason_text())
+    }
+}
+
+/// Cycle guard over the typed tried-lane records (T-P7-E13-02).
+///
+/// Exact account-id equality only — never prefix matching. See
+/// [`LaneFailure`] for why the old `starts_with` form was fragile.
+fn lane_already_tried(tried: &[TriedLane], account_id: &str) -> bool {
+    tried.iter().any(|lane| lane.account_id == account_id)
+}
+
+/// `fallbacks_tried` entries for messages/JSON envelopes.
+fn tried_display(tried: &[TriedLane]) -> Vec<String> {
+    tried.iter().map(TriedLane::describe).collect()
+}
+
+/// One dispatch attempt against the current lane, classified at its point
+/// of origin (T-P7-E13-02): either the executor actually ran, or the
+/// sensitivity firewall blocked the lane before any dispatch.
+enum LaneAttempt {
+    Ran(Outcome),
+    BlockedByFirewall { provider: Provider },
+}
+
 /// Execute `prompt` against `target`, falling back through remaining candidates
 /// in the spill order if the primary returns `Unavailable`.
 fn execute_with_fallback(
@@ -311,7 +377,7 @@ fn execute_with_fallback(
     prompt: &str,
     json_output: bool,
 ) -> Result<()> {
-    let mut tried: Vec<String> = Vec::new();
+    let mut tried: Vec<TriedLane> = Vec::new();
     let mut current = initial_target;
 
     // Sensitivity firewall — parity with the chat path (routing/router.rs).
@@ -325,21 +391,22 @@ fn execute_with_fallback(
         == cascade_core::sensitivity::ContentSensitivity::Sensitive;
 
     loop {
-        let result = if sensitive
+        // Classify-then-execute (T-P7-E13-02): each spillable failure gets a
+        // typed LaneFailure at its point of origin. The spill/fallback
+        // DECISION logic is unchanged — firewall blocks and executor
+        // Unavailables both still spill; executor Errors are still fatal.
+        let attempt = if sensitive
             && !cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive(
                 current.provider.as_str(),
             ) {
-            Outcome::Unavailable {
-                reason: format!(
-                    "sensitive-content firewall: {} is not a trusted provider",
-                    current.provider.as_str()
-                ),
+            LaneAttempt::BlockedByFirewall {
+                provider: current.provider,
             }
         } else {
-            execute_target(&current, prompt)
+            LaneAttempt::Ran(execute_target(&current, prompt))
         };
-        match result {
-            Outcome::Success { output } => {
+        let failure = match attempt {
+            LaneAttempt::Ran(Outcome::Success { output }) => {
                 if json_output {
                     println!(
                         "{}",
@@ -347,7 +414,7 @@ fn execute_with_fallback(
                             "provider": current.provider.as_str(),
                             "account_id": current.account_id,
                             "model": current.model,
-                            "fallbacks_tried": tried,
+                            "fallbacks_tried": tried_display(&tried),
                             "output": output,
                         })
                     );
@@ -388,53 +455,22 @@ fn execute_with_fallback(
                 });
                 return Ok(());
             }
-            Outcome::Unavailable { reason } => {
+            LaneAttempt::Ran(Outcome::Unavailable { reason }) => {
                 eprintln!(
                     "cascade conductor: {} unavailable ({}), trying next...",
                     current.account_id, reason
                 );
-                tried.push(format!("{} ({})", current.account_id, reason));
-
-                // Mark the failed account as saturated in a mutable copy and
-                // re-run routing to get the next target.
-                let mut snapshot_copy = snapshot.clone();
-                if let Some(entry) = snapshot_copy
-                    .accounts
-                    .iter_mut()
-                    .find(|a| a.account == current.account_id)
-                {
-                    entry.status = "unavailable".to_string();
-                }
-
-                let next_req = ConductorRequest {
-                    tier: req.tier,
-                    model_class: req.model_class,
-                    account_override: None,
-                };
-
-                let Some(next) = select_target_with_gp(&next_req, &snapshot_copy, gp) else {
-                    let msg = format!(
-                        "cascade conductor: all backends exhausted (tried: {})",
-                        tried.join(", ")
-                    );
-                    if json_output {
-                        println!(
-                            "{}",
-                            serde_json::json!({"error": msg, "fallbacks_tried": tried})
-                        );
-                    } else {
-                        eprintln!("{msg}");
-                    }
-                    std::process::exit(1);
-                };
-
-                // Skip if we already tried this one (safety guard).
-                if tried.iter().any(|t| t.starts_with(&next.account_id)) {
-                    break;
-                }
-                current = next;
+                LaneFailure::Unavailable { reason }
             }
-            Outcome::Error { message } => {
+            LaneAttempt::BlockedByFirewall { provider } => {
+                eprintln!(
+                    "cascade conductor: {} unavailable ({}), trying next...",
+                    current.account_id,
+                    LaneFailure::SensitiveFirewall { provider }.reason_text()
+                );
+                LaneFailure::SensitiveFirewall { provider }
+            }
+            LaneAttempt::Ran(Outcome::Error { message }) => {
                 let msg = format!(
                     "cascade conductor: backend `{}` error: {}",
                     current.account_id, message
@@ -442,22 +478,72 @@ fn execute_with_fallback(
                 if json_output {
                     println!(
                         "{}",
-                        serde_json::json!({"error": msg, "fallbacks_tried": tried})
+                        serde_json::json!({"error": msg, "fallbacks_tried": tried_display(&tried)})
                     );
                 } else {
                     eprintln!("{msg}");
                 }
                 std::process::exit(1);
             }
+        };
+
+        tried.push(TriedLane {
+            account_id: current.account_id.clone(),
+            failure,
+        });
+
+        // Mark the failed account as saturated in a mutable copy and
+        // re-run routing to get the next target.
+        let mut snapshot_copy = snapshot.clone();
+        if let Some(entry) = snapshot_copy
+            .accounts
+            .iter_mut()
+            .find(|a| a.account == current.account_id)
+        {
+            entry.status = "unavailable".to_string();
         }
+
+        let next_req = ConductorRequest {
+            tier: req.tier,
+            model_class: req.model_class,
+            account_override: None,
+        };
+
+        let Some(next) = select_target_with_gp(&next_req, &snapshot_copy, gp) else {
+            let msg = format!(
+                "cascade conductor: all backends exhausted (tried: {})",
+                tried_display(&tried).join(", ")
+            );
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::json!({"error": msg, "fallbacks_tried": tried_display(&tried)})
+                );
+            } else {
+                eprintln!("{msg}");
+            }
+            std::process::exit(1);
+        };
+
+        // Skip if we already tried this one (cycle guard, T-P7-E13-02:
+        // exact account-id equality over typed records — never the old
+        // `starts_with` prefix compare, which let a short id like
+        // `claude` false-match a tried `claude2` and end the spill early).
+        if lane_already_tried(&tried, &next.account_id) {
+            break;
+        }
+        current = next;
     }
 
     let msg = format!(
         "cascade conductor: all backends exhausted (tried: {})",
-        tried.join(", ")
+        tried_display(&tried).join(", ")
     );
     if json_output {
-        println!("{}", serde_json::json!({"error": msg}));
+        println!(
+            "{}",
+            serde_json::json!({"error": msg, "fallbacks_tried": tried_display(&tried)})
+        );
     } else {
         eprintln!("{msg}");
     }
@@ -1214,6 +1300,56 @@ fn ping_gfp() -> Option<(bool, u64)> {
 #[cfg(test)]
 mod agy_tests {
     use super::*;
+
+    // ── Loop-guard / structured failure classification (T-P7-E13-02) ─────────
+
+    /// Regression for the fragile prefix guard: a previously-tried `claude2`
+    /// must NOT count as `claude` already tried. The old
+    /// `t.starts_with(&next.account_id)` over `"claude2 (reason)"` returned
+    /// TRUE for `claude`, ending the spill loop one lane early.
+    #[test]
+    fn cycle_guard_no_prefix_false_match_between_account_ids() {
+        let tried = vec![TriedLane {
+            account_id: "claude2".to_string(),
+            failure: LaneFailure::Unavailable {
+                reason: "claude binary not found in PATH".to_string(),
+            },
+        }];
+        // `claude` was never tried — the guard must NOT fire.
+        assert!(!lane_already_tried(&tried, "claude"));
+        // Exact id does fire.
+        assert!(lane_already_tried(&tried, "claude2"));
+    }
+
+    /// The display form must stay byte-identical to the pre-E13-02
+    /// `"account (reason)"` format (consumed by exhausted-messages and the
+    /// JSON `fallbacks_tried` envelope).
+    #[test]
+    fn tried_lane_describe_keeps_legacy_string_format() {
+        let lane = TriedLane {
+            account_id: "codex-acc1".to_string(),
+            failure: LaneFailure::Unavailable {
+                reason: "codex binary not found in PATH".to_string(),
+            },
+        };
+        assert_eq!(
+            lane.describe(),
+            "codex-acc1 (codex binary not found in PATH)"
+        );
+    }
+
+    /// The firewall failure renders the same reason string the pre-E13-02
+    /// inline format! produced.
+    #[test]
+    fn lane_failure_sensitive_firewall_reason_matches_legacy_text() {
+        let f = LaneFailure::SensitiveFirewall {
+            provider: Provider::Gemini,
+        };
+        assert_eq!(
+            f.reason_text(),
+            "sensitive-content firewall: gemini is not a trusted provider"
+        );
+    }
 
     /// Captured (shape-accurate, values synthesized) `v1internal:generateContent`
     /// response fixture: a leading thought-signature-only part (no visible
