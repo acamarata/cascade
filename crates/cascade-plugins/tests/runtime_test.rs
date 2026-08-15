@@ -10,6 +10,9 @@ use cascade_plugins::{
     manifest::{JsonPermissions, PluginManifest, PluginType},
     runtime::{PluginError, PluginSandbox, PLUGIN_FUEL_LIMIT},
 };
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use tracing_subscriber::fmt::MakeWriter;
 use wasmtime::Val;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -63,7 +66,159 @@ fn tight_loop_wat() -> Vec<u8> {
     .expect("tight_loop WAT must be valid")
 }
 
+fn host_calls_wat() -> Vec<u8> {
+    wat::parse_str(
+        r#"
+        (module
+          (import "cascade:plugins/host" "log"
+            (func $log (param i32 i32 i32)))
+          (import "cascade:plugins/host" "kv-get"
+            (func $kv_get (param i32 i32 i32) (result i32)))
+          (import "cascade:plugins/host" "kv-set"
+            (func $kv_set (param i32 i32 i32 i32)))
+
+          (memory (export "memory") 1)
+          (data (i32.const 0) "actual guest memory log payload")
+          (data (i32.const 64) "roundtrip-key")
+          (data (i32.const 96) "42")
+
+          (func (export "emit-log")
+            i32.const 3
+            i32.const 0
+            i32.const 31
+            call $log)
+
+          (func (export "set-value")
+            i32.const 64
+            i32.const 13
+            i32.const 96
+            i32.const 2
+            call $kv_set)
+
+          (func (export "get-value") (result i32)
+            (local $len i32)
+            i32.const 64
+            i32.const 13
+            i32.const 128
+            call $kv_get
+            local.set $len
+
+            local.get $len
+            i32.const 2
+            i32.eq
+            i32.const 128
+            i32.load8_u
+            i32.const 52
+            i32.eq
+            i32.and
+            i32.const 129
+            i32.load8_u
+            i32.const 50
+            i32.eq
+            i32.and)
+        )
+        "#,
+    )
+    .expect("host-calls WAT must be valid")
+}
+
+#[derive(Clone, Default)]
+struct CapturedLogs(Arc<Mutex<Vec<u8>>>);
+
+impl CapturedLogs {
+    fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+struct CapturedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+impl Write for CapturedLogWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for CapturedLogs {
+    type Writer = CapturedLogWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        CapturedLogWriter(Arc::clone(&self.0))
+    }
+}
+
 // ── T-P4-E03-04 Tests ─────────────────────────────────────────────────────────
+
+#[tokio::test(flavor = "current_thread")]
+async fn host_log_reads_guest_memory_and_kv_persists_across_calls_and_reload() {
+    let wasm = host_calls_wat();
+    let temp = tempfile::tempdir().unwrap();
+    let data_dir = temp.path().join("plugin-data");
+    let sandbox = PluginSandbox::new(PluginType::ToolIntegration).unwrap();
+    let plugin = sandbox
+        .load_with_permissions_and_data_dir(
+            &wasm,
+            "host-calls-test",
+            JsonPermissions::default(),
+            None,
+            &data_dir,
+        )
+        .unwrap();
+
+    let logs = CapturedLogs::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(logs.clone())
+        .with_ansi(false)
+        .without_time()
+        .finish();
+    // This test uses a current-thread runtime so the thread-local subscriber
+    // remains installed while the async wasmtime call is polled.
+    let subscriber_guard = tracing::subscriber::set_default(subscriber);
+    plugin.call("emit-log", &[]).await.unwrap();
+    drop(subscriber_guard);
+    assert!(
+        logs.text().contains("actual guest memory log payload"),
+        "host log output did not contain the guest-memory message: {}",
+        logs.text()
+    );
+
+    plugin.call("set-value", &[]).await.unwrap();
+    let result = plugin.call("get-value", &[]).await.unwrap();
+    assert!(matches!(result.as_slice(), [Val::I32(1)]));
+    drop(plugin);
+
+    let reloaded = sandbox
+        .load_with_permissions_and_data_dir(
+            &wasm,
+            "host-calls-test",
+            JsonPermissions::default(),
+            None,
+            &data_dir,
+        )
+        .unwrap();
+    let result = reloaded.call("get-value", &[]).await.unwrap();
+    assert!(matches!(result.as_slice(), [Val::I32(1)]));
+
+    let db_path = data_dir.join("plugin-kv.sqlite3");
+    assert!(
+        db_path.is_file(),
+        "KV database was not created under plugin data dir"
+    );
+    let conn = rusqlite::Connection::open(db_path).unwrap();
+    let stored: Vec<u8> = conn
+        .query_row(
+            "SELECT value FROM plugin_kv WHERE key = 'roundtrip-key'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stored, b"42");
+}
 
 /// Test (a): load hello.wat and call `hello` — must return i32 42.
 #[tokio::test]

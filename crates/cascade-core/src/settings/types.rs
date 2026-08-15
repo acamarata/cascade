@@ -22,8 +22,14 @@
 //!
 //! - Every field carries `#[serde(default)]` so loading an old file that
 //!   predates a new field never panics.
-//! - API key fields are `Option<String>` (never required) and default to
-//!   `None`. Vault encryption is deferred to P4.
+//! - `ProvidersSettings`'s `anthropic`/`openai`/`codex`/`google` fields are
+//!   `Option<String>`/`Vec<String>` and default to empty — they are NOT the
+//!   real credential storage path (verified T-P7-E11-06). Real provider
+//!   credentials go through the OS keychain via `cascade-keychain`
+//!   (`cascade-providers` never writes secrets to disk directly); these
+//!   fields are unused dead weight on the settings.json schema and would
+//!   sit in PLAINTEXT if anything ever populated them. Do not write real
+//!   keys into them.
 //! - Unknown fields are preserved via `#[serde(flatten)]` on an extra
 //!   `serde_json::Map` so future-schema fields round-trip without loss.
 //!
@@ -122,7 +128,12 @@ pub struct ProjectMapSettings {
 /// Per-provider API keys and routing defaults.
 ///
 /// All key fields are `Option<String>` — absent = not configured.
-/// Vault encryption is deferred to P4.
+///
+/// WHY these fields are never actually populated in practice (verified
+/// T-P7-E11-06): real credentials go through the OS keychain via
+/// `cascade-keychain`, not this struct — it round-trips to plaintext
+/// `~/.cascade/settings.json`. Kept for schema-compat (old files may still
+/// have these keys); do not add new code paths that write real secrets here.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[derive(Default)]

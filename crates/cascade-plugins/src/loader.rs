@@ -219,11 +219,12 @@ impl PluginLoader {
             })?;
 
         let loaded = sandbox
-            .load_with_permissions(
+            .load_with_permissions_and_data_dir(
                 &wasm_bytes,
                 &manifest.id,
                 manifest.permissions.clone(),
                 None,
+                &plugin_dir.join("data"),
             )
             .map_err(|e| PluginLoadError::SandboxError {
                 id: manifest.id.clone(),

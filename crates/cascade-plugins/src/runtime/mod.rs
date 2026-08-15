@@ -20,6 +20,7 @@
 
 pub mod wasi_ctx;
 
+use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -30,6 +31,7 @@ use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 
 use crate::manifest::{JsonPermissions, PluginManifest, PluginType};
 use crate::sandbox::ResourceLimits;
+use crate::wit_bindings::{register_host_functions, PluginKvStore};
 
 pub use wasi_ctx::build_wasi_ctx;
 
@@ -74,6 +76,10 @@ pub enum PluginError {
     #[error("plugin WASI context error: {0}")]
     WasiContext(String),
 
+    /// The plugin's persistent data location could not be resolved safely.
+    #[error("plugin data store error: {0}")]
+    DataStore(String),
+
     /// Underlying wasmtime / anyhow error.
     #[error("plugin engine error: {0}")]
     Engine(#[from] anyhow::Error),
@@ -102,6 +108,10 @@ pub struct RuntimeStoreData {
     pub wasi: WasiP1Ctx,
     /// wasmtime resource limiter (memory cap enforcement).
     pub limits: StoreLimits,
+    /// Plugin identifier included in host-side log records.
+    pub plugin_name: String,
+    /// Persistent key-value store scoped to this plugin's data directory.
+    pub kv_store: PluginKvStore,
 }
 
 // ── LoadedPlugin ─────────────────────────────────────────────────────────────
@@ -123,6 +133,8 @@ pub struct LoadedPlugin {
     permissions: JsonPermissions,
     /// Fuel limit override (defaults to `PLUGIN_FUEL_LIMIT`).
     fuel_limit: u64,
+    /// Persistent key-value store shared by all invocations of this plugin.
+    kv_store: PluginKvStore,
 }
 
 impl LoadedPlugin {
@@ -195,6 +207,7 @@ impl PluginSandbox {
         let module = Module::from_binary(&self.engine, wasm_bytes)
             .map_err(|e| PluginError::Compile(e.to_string()))?;
 
+        let data_dir = default_plugin_data_dir(&manifest.name)?;
         Ok(LoadedPlugin {
             name: manifest.name.clone(),
             engine: self.engine.clone(),
@@ -202,6 +215,7 @@ impl PluginSandbox {
             limits: self.default_limits.clone(),
             permissions: JsonPermissions::default(),
             fuel_limit: PLUGIN_FUEL_LIMIT,
+            kv_store: PluginKvStore::new(data_dir),
         })
     }
 
@@ -216,6 +230,30 @@ impl PluginSandbox {
         permissions: JsonPermissions,
         fuel_limit: Option<u64>,
     ) -> Result<LoadedPlugin, PluginError> {
+        let data_dir = default_plugin_data_dir(name)?;
+        self.load_with_permissions_and_data_dir(
+            wasm_bytes,
+            name,
+            permissions,
+            fuel_limit,
+            &data_dir,
+        )
+    }
+
+    /// Load a plugin and place its persistent KV database under `data_dir`.
+    ///
+    /// The production loader passes `<plugin-dir>/data` so custom plugin roots
+    /// and test fixtures remain self-contained. Callers without an owning
+    /// directory can use [`Self::load_with_permissions`], which resolves the
+    /// canonical `~/.cascade/plugins/<name>/data` location.
+    pub fn load_with_permissions_and_data_dir(
+        &self,
+        wasm_bytes: &[u8],
+        name: &str,
+        permissions: JsonPermissions,
+        fuel_limit: Option<u64>,
+        data_dir: &Path,
+    ) -> Result<LoadedPlugin, PluginError> {
         let module = Module::from_binary(&self.engine, wasm_bytes)
             .map_err(|e| PluginError::Compile(e.to_string()))?;
 
@@ -226,8 +264,26 @@ impl PluginSandbox {
             limits: self.default_limits.clone(),
             permissions,
             fuel_limit: fuel_limit.unwrap_or(PLUGIN_FUEL_LIMIT),
+            kv_store: PluginKvStore::new(data_dir),
         })
     }
+}
+
+fn default_plugin_data_dir(name: &str) -> Result<PathBuf, PluginError> {
+    let mut components = Path::new(name).components();
+    if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some() {
+        return Err(PluginError::DataStore(format!(
+            "plugin name '{name}' is not a safe data-directory component"
+        )));
+    }
+    let home = dirs::home_dir().ok_or_else(|| {
+        PluginError::DataStore("cannot resolve home directory for plugin data".to_owned())
+    })?;
+    Ok(home
+        .join(".cascade")
+        .join("plugins")
+        .join(name)
+        .join("data"))
 }
 
 // ── LoadedPlugin: call_export ─────────────────────────────────────────────────
@@ -262,6 +318,8 @@ impl LoadedPlugin {
             RuntimeStoreData {
                 wasi,
                 limits: store_limits,
+                plugin_name: self.name.clone(),
+                kv_store: self.kv_store.clone(),
             },
         );
         store.limiter(|data| &mut data.limits);
@@ -275,6 +333,8 @@ impl LoadedPlugin {
         // means the WASI functions exist but return EPERM for ungated paths).
         preview1::add_to_linker_async(&mut linker, |data| &mut data.wasi)
             .context("failed to add WASI to linker")?;
+        register_host_functions(&mut linker)
+            .context("failed to add Cascade plugin host functions to linker")?;
 
         let instance = linker
             .instantiate_async(&mut store, &self.module)
@@ -342,6 +402,8 @@ impl LoadedPlugin {
             RuntimeStoreData {
                 wasi,
                 limits: store_limits,
+                plugin_name: self.name.clone(),
+                kv_store: self.kv_store.clone(),
             },
         );
         store.limiter(|data| &mut data.limits);
@@ -352,6 +414,8 @@ impl LoadedPlugin {
         let mut linker: Linker<RuntimeStoreData> = Linker::new(&self.engine);
         preview1::add_to_linker_async(&mut linker, |data| &mut data.wasi)
             .context("failed to add WASI to linker")?;
+        register_host_functions(&mut linker)
+            .context("failed to add Cascade plugin host functions to linker")?;
 
         let instance = linker
             .instantiate_async(&mut store, &self.module)

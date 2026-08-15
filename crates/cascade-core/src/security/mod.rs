@@ -11,7 +11,6 @@
 //! | [`keychain`] | OS keychain integration — implements `KeyStorage` from `cascade-types` |
 //! | [`audit`] | Tamper-evident hash-chain audit log |
 //! | [`env_allowlist`] | Env var injection guard applied at daemon startup |
-//! | [`oauth`] | OAuth callback HMAC state validation |
 //! | [`mcp_envelope`] | MCP JSON-RPC 2025-03 envelope schema validation |
 //! | [`secrets_scanner`] | Regex + entropy patterns for cloud provider access keys and secrets |
 //! | [`rag_poisoning`] | RAG ingestion/retrieval scan profiles against prompt injection |
@@ -20,7 +19,7 @@
 //!
 //! Each module maps to one or more STRIDE letters:
 //!
-//! - **S** Spoofing: `keychain`, `oauth` (identity verification)
+//! - **S** Spoofing: `keychain` (identity verification)
 //! - **T** Tampering: `validator`, `mcp_envelope` (input integrity)
 //! - **R** Repudiation: `audit` (append-only tamper-evident log)
 //! - **I** Info disclosure: `sanitizer`, `secrets_scanner` (output scanning)
@@ -41,7 +40,6 @@ pub mod audit;
 pub mod env_allowlist;
 pub mod keychain;
 pub mod mcp_envelope;
-pub mod oauth;
 pub mod path_guard;
 pub mod rag_poisoning;
 pub mod sanitizer;

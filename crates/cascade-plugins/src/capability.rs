@@ -5,8 +5,9 @@
 //!   to prevent escape attacks (H3 fix).
 //! Inputs: plugin manifest `[capabilities]` section + user config overrides.
 //! Outputs: `CapabilitySet` — the intersection of requested and granted caps.
-//! Constraints: `ipc_cascade` is reserved in v0.1.0 (not implemented); runtime
-//!   returns an actionable message if declared. No `unsafe` without SAFETY comment.
+//! Constraints: `fs_exec`, `net_listen`, `ipc_cascade`, and `mcp_invoke` are
+//!   reserved (not implemented); runtime returns an actionable message if any
+//!   is requested. No `unsafe` without SAFETY comment.
 //! SPORT: cascade-plugins / capability model
 
 use serde::{Deserialize, Serialize};
@@ -105,10 +106,7 @@ pub enum CapabilityError {
     )]
     PathDenied { plugin: String, path: PathBuf },
 
-    #[error(
-        "capability '{cap:?}' is reserved in v0.1.0 and not yet implemented; \
-         it will be available in v0.2.0"
-    )]
+    #[error("capability '{cap:?}' is reserved and not implemented by this Cascade host")]
     Reserved { cap: Capability },
 
     #[error("failed to resolve canonical path for '{path}': {source}")]
@@ -141,6 +139,18 @@ impl DeclaredCapabilities {
         let mut set = CapabilitySet::default();
 
         // Reserved capabilities — emit actionable message if declared.
+        if self.fs_exec.is_some() {
+            return Err(CapabilityError::Reserved {
+                cap: Capability::FsExec,
+            });
+        }
+
+        if self.net_listen.unwrap_or(false) {
+            return Err(CapabilityError::Reserved {
+                cap: Capability::NetListen,
+            });
+        }
+
         if self.ipc_cascade.unwrap_or(false) {
             return Err(CapabilityError::Reserved {
                 cap: Capability::IpcCascade,
@@ -234,10 +244,40 @@ mod tests {
             }
         ));
         let msg = err.to_string();
-        assert!(
-            msg.contains("v0.2.0"),
-            "error should mention upcoming version: {msg}"
-        );
+        assert!(msg.contains("reserved"));
+        assert!(msg.contains("not implemented"));
+    }
+
+    #[test]
+    fn test_fs_exec_reserved() {
+        let caps = DeclaredCapabilities {
+            fs_exec: Some(vec!["bin".to_owned()]),
+            ..Default::default()
+        };
+        let err = caps.resolve(false).unwrap_err();
+        assert!(matches!(
+            err,
+            CapabilityError::Reserved {
+                cap: Capability::FsExec
+            }
+        ));
+        assert!(err.to_string().contains("not implemented"));
+    }
+
+    #[test]
+    fn test_net_listen_reserved() {
+        let caps = DeclaredCapabilities {
+            net_listen: Some(true),
+            ..Default::default()
+        };
+        let err = caps.resolve(false).unwrap_err();
+        assert!(matches!(
+            err,
+            CapabilityError::Reserved {
+                cap: Capability::NetListen
+            }
+        ));
+        assert!(err.to_string().contains("not implemented"));
     }
 
     #[test]

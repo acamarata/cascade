@@ -77,8 +77,8 @@ fn ipc_cascade_reserved_produces_actionable_error() {
     let err = caps.resolve(false).unwrap_err();
     let msg = err.to_string();
     assert!(
-        msg.contains("v0.2.0"),
-        "error must reference upcoming version so plugin authors know when it lands: {msg}"
+        msg.contains("reserved") && msg.contains("not implemented"),
+        "error must explain that the capability is reserved and unavailable: {msg}"
     );
 }
 

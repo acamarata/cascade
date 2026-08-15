@@ -269,6 +269,10 @@
 | F-PLUGIN-PDK | Plugin development kit | `cascade plugin new` (cargo-generate), test harness, `cascade plugin test` | 🔲 Planned | P4-E03 |
 | F-PLUGIN-DATA-SOURCES | First-party data source plugins | GitHub Issues, Linear, Jira, GitLab | 🔲 Planned | P4-E03 |
 | F-PLUGIN-REGISTRY-CLI | Plugin registry CLI | `cascade plugin install/remove`; local `~/.cascade/plugins/` registry | 🔲 Planned | P4-E03 |
+| F-PLUGIN-HOST-KV-LOG | Implement real KV/log in cascade-plugins WIT bindings | Host log imports read bounds-checked guest linear memory; plugin-scoped KV values persist in `<plugin-dir>/data/plugin-kv.sqlite3` across calls and reloads | ✅ Done | T-P7-E11-01 |
+| F-PLUGIN-RESERVED-CAPS | Reclassify FsExec/NetListen as reserved capabilities | Manifests requesting either unimplemented capability fail explicitly with `CapabilityError::Reserved` | ✅ Done | T-P7-E11-02 |
+| F-CORE-DEAD-WATCHER | Delete dead cascade_core watcher module | Removed superseded no-op watcher scaffold; daemon RAG and volume watchers remain the active implementations | ✅ Done | T-P7-E11-03 |
+| F-CORE-DEAD-OAUTH | Delete dead fake OAuth module in cascade-core | Removed unwired placeholder crypto; production OAuth/PKCE remains in cascade-providers | ✅ Done | T-P7-E11-04 |
 | F-PLUGIN-MARKETPLACE | Remote plugin marketplace | Hosted CDN discovery, ratings, `cascade plugin publish` | 🚫 Deferred | P5 |
 | F-PLUGIN-SIGNING | Plugin signing/notarization | Code-signing for plugins in public registry | 🚫 Deferred | P5 |
 

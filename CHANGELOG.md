@@ -84,6 +84,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   § 2, `06-cascade-code-apps-support.md` Aider row. (T-P7-E23-03)
 
 ### Security
+- Removed the unused `cascade_core::security::oauth` module, whose HMAC and
+  SHA-256 functions were explicitly fake placeholders. Production OAuth/PKCE
+  remains in `cascade-providers::oauth` and is unchanged. (T-P7-E11-04)
+- Removed the unused `cascade_core::watcher` scaffold and its misleading
+  no-op `CascadeWatcher`; the functional daemon `rag_watcher` and
+  `volume_watcher` implementations remain unchanged. (T-P7-E11-03)
+- Changed `fs_exec` and `net_listen` plugin capability requests from silently
+  ineffective declarations to explicit `CapabilityError::Reserved` failures,
+  consistent with the other unimplemented reserved capabilities. (T-P7-E11-02)
+- Replaced the `cascade-plugins` WASM host's hardcoded log stub and empty/no-op
+  KV imports with bounds-checked guest-memory access and a per-plugin SQLite
+  store at `<plugin-dir>/data/plugin-kv.sqlite3`. Both `LoadedPlugin` call paths
+  now register the host imports; an integration fixture verifies the actual
+  guest log message and KV persistence across calls and reload. (T-P7-E11-01)
 - Fixed a `.gitleaks.toml` scope violation: an out-of-scope pass had blanket
   allowlisted 6 paths beyond the single ticketed finding
   (`crates/cascade-core/src/middleware/post.rs:539`), including 2 files

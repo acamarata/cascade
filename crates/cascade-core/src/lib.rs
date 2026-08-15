@@ -1,24 +1,22 @@
 //! # cascade-core
 //!
-//! Cascade discovery, resolution, file watching, and runtime state management.
+//! Cascade discovery, resolution, and runtime state management.
 //!
 //! This crate owns the six-tier cascade lifecycle:
 //! 1. **Discovery** (`discovery`) — walk CWD upward, locate `.cascade/CASCADE.md`
 //!    at each tier (GCI → PCI → APC → PPC → PRC → PAC).
 //! 2. **Resolution** (`resolution`) — merge discovered tiers in priority order
 //!    (GCI highest) and return a [`ResolvedCascade`].
-//! 3. **File watching** (`watcher`) — subscribe to `notify` events for any
-//!    `.cascade/CASCADE.md` path; emit [`CascadeChanged`] on modification.
-//! 4. **Symlink management** (`symlinks`) — create/verify/repair the AGENTS.md,
+//! 3. **Symlink management** (`symlinks`) — create/verify/repair the AGENTS.md,
 //!    CLAUDE.md, and `.cursorrules` siblings that point to CASCADE.md.
-//! 5. **Derived-file regeneration** (`derived`) — rebuild non-markdown
+//! 4. **Derived-file regeneration** (`derived`) — rebuild non-markdown
 //!    tool formats (`.aider.conf.yml`, `.cursorrules` text body) when the
 //!    source CASCADE.md changes.
-//! 6. **Inbox protocol** (`inbox`) — read/write/route PPI/PRI/PAI messages
+//! 5. **Inbox protocol** (`inbox`) — read/write/route PPI/PRI/PAI messages
 //!    under `.cascade/inbox/`.
-//! 7. **Memory files** (`memory`) — read/write decisions.md, lessons.md,
+//! 6. **Memory files** (`memory`) — read/write decisions.md, lessons.md,
 //!    patterns.md under `.cascade/memory/`.
-//! 8. **Resolution cache** (`cache`) — persist the merged cascade to
+//! 7. **Resolution cache** (`cache`) — persist the merged cascade to
 //!    `.cascade/temp/.resolved-cascade.md` so downstream tools can read it
 //!    without re-walking the filesystem.
 //!
@@ -104,7 +102,6 @@ pub mod taxonomy;
 pub mod templates;
 pub mod threads;
 pub mod var_substitute;
-pub mod watcher;
 pub mod worktree_store;
 pub mod za_usage;
 
@@ -124,7 +121,6 @@ pub use hook_store::HookStore;
 pub use injection_scan::{scan_for_injection, InjectionMatch, InjectionReport, Risk, Sensitivity};
 pub use quota_store::{read_quota_store, write_quota_store};
 pub use resolution::{ResolvedCascade, Resolver};
-pub use watcher::{CascadeChanged, CascadeWatcher};
 pub use za_usage::{
     append_record as za_append_record, read_window as za_read_window, ZaRecord, ZaWindowSummary,
 };
