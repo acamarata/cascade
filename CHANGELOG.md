@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- Conductor `execute_*` dispatches (`claude`/`codex`/`opencode`/`agy`) are now
+  wrapped in a real subprocess timeout (`LANE_TIMEOUT_CLI`/
+  `LANE_TIMEOUT_GEMINI`, 300s each, matching agy's own `--print-timeout`
+  default) instead of blocking the whole spill chain forever on a hung
+  external CLI process. Ticket asked for `tokio::time::timeout`, but the
+  execute_* path is synchronous `std::process::Command`, which that can't
+  interrupt — used the existing spawn+`try_wait`+kill pattern instead, the
+  correct synchronous equivalent. A timeout is now a normal spillable
+  failure (`"timed out after Ns"`), feeding the same loop-guard as any other
+  unavailable lane. (T-P7-E13-03)
+- New `cascade conductor fanout` mode: dispatches a single prompt to N
+  distinct accounts in parallel (spill order, sensitivity firewall
+  respected) and aggregates results — first-success by default, or every
+  result with `--all`. Purely additive; the existing sequential
+  `execute_with_fallback` spill path is unchanged and remains the default.
+  (T-P7-E13-04)
+
 ### Changed
 - Router unification (T-P7-E13-01): confirmed `crate::selection` was already
   the canonical account-selection module (an earlier E1-S6 pass had already

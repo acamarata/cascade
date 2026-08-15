@@ -79,6 +79,15 @@ pub struct ConductorArgs {
 pub enum ConductorCommands {
     /// Probe each provider and report available/unavailable + latency.
     Selftest,
+    /// Dispatch a single task to N accounts/models in parallel (fan-out).
+    Fanout {
+        /// Number of parallel lanes to dispatch to (default 2).
+        #[arg(long, value_name = "N", default_value = "2")]
+        count: usize,
+        /// Collect all lane results instead of returning the first success.
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 /// Clap-compatible tier arg.
@@ -114,6 +123,13 @@ impl Command for ConductorArgs {
         if let Some(ConductorCommands::Selftest) = &self.command {
             return run_selftest(self.json);
         }
+
+        // Fan-out subcommand (T-P7-E13-04): parallel dispatch to N lanes.
+        let (fanout_count, fanout_all) = match &self.command {
+            Some(ConductorCommands::Fanout { count, all }) => (*count, *all),
+            _ => (0, false),
+        };
+        let is_fanout = fanout_count > 0;
 
         // Conductor invocation: requires --tier and a prompt.
         let tier = match self.tier {
@@ -169,6 +185,37 @@ impl Command for ConductorArgs {
         };
 
         if self.dry_run {
+            if is_fanout {
+                let targets = select_fanout_targets(&req, &snapshot, &gp, &prompt, fanout_count);
+                if self.json {
+                    let lanes: Vec<_> = targets
+                        .iter()
+                        .map(|t| {
+                            serde_json::json!({
+                                "provider": t.provider.as_str(),
+                                "account_id": t.account_id,
+                                "model": t.model,
+                                "reason": t.reason,
+                            })
+                        })
+                        .collect();
+                    println!(
+                        "{}",
+                        serde_json::json!({"dry_run": true, "fanout": true, "lanes": lanes})
+                    );
+                } else {
+                    println!("fan-out to {} lane(s):", targets.len());
+                    for t in &targets {
+                        println!(
+                            "  {} ({}, model: {})",
+                            t.account_id,
+                            t.provider.as_str(),
+                            t.model
+                        );
+                    }
+                }
+                return Ok(());
+            }
             if self.json {
                 println!(
                     "{}",
@@ -189,7 +236,18 @@ impl Command for ConductorArgs {
             return Ok(());
         }
 
-        // Execute — with fallback on Unavailable.
+        // Execute — fan-out (parallel) or fallback (sequential spill).
+        if is_fanout {
+            return execute_fanout(
+                &req,
+                &snapshot,
+                &gp,
+                &prompt,
+                fanout_count,
+                fanout_all,
+                self.json,
+            );
+        }
         execute_with_fallback(&req, &snapshot, &gp, target, &prompt, self.json)
     }
 }
@@ -550,6 +608,236 @@ fn execute_with_fallback(
     std::process::exit(1);
 }
 
+// ── Parallel fan-out executor (T-P7-E13-04, CFC-06) ──────────────────────────
+//
+// An ADDITIONAL mode alongside `execute_with_fallback` (sequential spill).
+// Dispatches a single task to N accounts/models simultaneously and aggregates
+// results. Does NOT replace the spill path — both modes coexist.
+
+/// Select up to `count` distinct targets for parallel fan-out, in spill order.
+///
+/// Iteratively calls `select_target_with_gp`, marking each selected account as
+/// unavailable in a mutable copy so the next call returns the next candidate.
+/// Respects the sensitivity firewall: when `prompt` is Sensitive, untrusted
+/// providers are excluded from the candidate pool before selection (same
+/// guard as `execute_with_fallback`).
+fn select_fanout_targets(
+    req: &ConductorRequest,
+    snapshot: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
+    prompt: &str,
+    count: usize,
+) -> Vec<ConductorTarget> {
+    let sensitive = cascade_core::sensitivity::classify_sensitivity(prompt)
+        == cascade_core::sensitivity::ContentSensitivity::Sensitive;
+
+    let mut working = snapshot.clone();
+    if sensitive {
+        working.accounts.retain(|a| {
+            cascade_core::sensitivity::registry_provider_is_trusted_for_sensitive(
+                a.provider.as_str(),
+            )
+        });
+    }
+
+    let mut targets = Vec::with_capacity(count);
+    let mut tried_ids: Vec<String> = Vec::new();
+
+    for _ in 0..count {
+        let next_req = ConductorRequest {
+            tier: req.tier,
+            model_class: req.model_class,
+            account_override: None,
+        };
+        let Some(target) = select_target_with_gp(&next_req, &working, gp) else {
+            break;
+        };
+        if tried_ids.contains(&target.account_id) {
+            break;
+        }
+        tried_ids.push(target.account_id.clone());
+        if let Some(entry) = working
+            .accounts
+            .iter_mut()
+            .find(|a| a.account == target.account_id)
+        {
+            entry.status = "unavailable".to_string();
+        }
+        targets.push(target);
+    }
+    targets
+}
+
+/// One lane's result from a parallel fan-out dispatch.
+struct FanoutLaneResult {
+    target: ConductorTarget,
+    outcome: Outcome,
+}
+
+/// Dispatch `prompt` to `targets` in parallel and collect all lane results.
+///
+/// Each lane runs on its own OS thread (the execute_* path is synchronous).
+/// Results arrive in completion order — NOT dispatch order.
+fn dispatch_fanout_parallel(targets: &[ConductorTarget], prompt: &str) -> Vec<FanoutLaneResult> {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel();
+    for target in targets {
+        let prompt = prompt.to_string();
+        let target = target.clone();
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let outcome = execute_target(&target, &prompt);
+            let _ = tx.send(FanoutLaneResult { target, outcome });
+        });
+    }
+    drop(tx);
+    rx.into_iter().collect()
+}
+
+/// Render an `Outcome` as a JSON value for fan-out result envelopes.
+fn outcome_to_json(outcome: &Outcome) -> Value {
+    match outcome {
+        Outcome::Success { output } => serde_json::json!({"status": "success", "output": output}),
+        Outcome::Unavailable { reason } => {
+            serde_json::json!({"status": "unavailable", "reason": reason})
+        }
+        Outcome::Error { message } => serde_json::json!({"status": "error", "message": message}),
+    }
+}
+
+/// One-line summary of an `Outcome` for error messages.
+fn outcome_summary(outcome: &Outcome) -> String {
+    match outcome {
+        Outcome::Success { .. } => "success".to_string(),
+        Outcome::Unavailable { reason } => format!("unavailable: {reason}"),
+        Outcome::Error { message } => format!("error: {message}"),
+    }
+}
+
+/// Execute `prompt` against up to `count` targets in parallel, aggregating
+/// results (T-P7-E13-04, CFC-06).
+///
+/// Aggregation modes:
+/// - First-success (`all_results=false`, default): returns the first
+///   successful lane's output; remaining lanes are discarded (their threads
+///   finish on their own).
+/// - All-results (`all_results=true`): collects every lane's outcome and
+///   prints them as a JSON array or per-lane text blocks.
+///
+/// The existing `execute_with_fallback` spill path is NOT affected — this is
+/// an additional mode selected by the `fanout` subcommand.
+fn execute_fanout(
+    req: &ConductorRequest,
+    snapshot: &QuotaSnapshot,
+    gp: &GpHealthSnapshot,
+    prompt: &str,
+    count: usize,
+    all_results: bool,
+    json_output: bool,
+) -> Result<()> {
+    let targets = select_fanout_targets(req, snapshot, gp, prompt, count);
+    if targets.is_empty() {
+        let msg = "cascade conductor: no available backend for fan-out \
+                   (all accounts saturated or unavailable)";
+        if json_output {
+            println!("{}", serde_json::json!({"error": msg}));
+        } else {
+            eprintln!("{msg}");
+        }
+        std::process::exit(1);
+    }
+
+    eprintln!(
+        "cascade conductor: fan-out to {} lane(s): {}",
+        targets.len(),
+        targets
+            .iter()
+            .map(|t| t.account_id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    let results = dispatch_fanout_parallel(&targets, prompt);
+
+    if all_results {
+        if json_output {
+            let entries: Vec<_> = results
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "provider": r.target.provider.as_str(),
+                        "account_id": r.target.account_id,
+                        "model": r.target.model,
+                        "outcome": outcome_to_json(&r.outcome),
+                    })
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::json!({"fanout": true, "results": entries})
+            );
+        } else {
+            for r in &results {
+                match &r.outcome {
+                    Outcome::Success { output } => {
+                        println!(
+                            "=== {} ({}) ===\n{}",
+                            r.target.account_id,
+                            r.target.provider.as_str(),
+                            output
+                        );
+                    }
+                    Outcome::Unavailable { reason } => {
+                        eprintln!("{} unavailable: {}", r.target.account_id, reason);
+                    }
+                    Outcome::Error { message } => {
+                        eprintln!("{} error: {}", r.target.account_id, message);
+                    }
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // First-success mode: return the first successful lane.
+    let mut failures = Vec::new();
+    for r in results {
+        if let Outcome::Success { output } = r.outcome {
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "fanout": true,
+                        "provider": r.target.provider.as_str(),
+                        "account_id": r.target.account_id,
+                        "model": r.target.model,
+                        "output": output,
+                    })
+                );
+            } else {
+                print!("{output}");
+            }
+            return Ok(());
+        }
+        failures.push((r.target, r.outcome));
+    }
+
+    let msg = format!(
+        "cascade conductor: all fan-out lanes failed ({})",
+        failures
+            .iter()
+            .map(|(t, o)| format!("{}: {}", t.account_id, outcome_summary(o)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    if json_output {
+        println!("{}", serde_json::json!({"error": msg}));
+    } else {
+        eprintln!("{msg}");
+    }
+    std::process::exit(1);
+}
+
 /// Execute a prompt against a specific `ConductorTarget`.
 ///
 /// Returns `Outcome::Unavailable` when the CLI binary is absent or unreachable,
@@ -719,7 +1007,7 @@ fn execute_claude(target: &ConductorTarget, prompt: &str) -> Outcome {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    run_command(cmd, "claude")
+    run_command(cmd, "claude", LANE_TIMEOUT_CLI)
 }
 
 // ── Codex backend ─────────────────────────────────────────────────────────────
@@ -744,7 +1032,7 @@ fn execute_codex(_target: &ConductorTarget, prompt: &str) -> Outcome {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    run_command(cmd, "codex")
+    run_command(cmd, "codex", LANE_TIMEOUT_CLI)
 }
 
 // ── OpenCode backend ──────────────────────────────────────────────────────────
@@ -768,7 +1056,7 @@ fn execute_opencode(_target: &ConductorTarget, prompt: &str) -> Outcome {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    run_command(cmd, "opencode")
+    run_command(cmd, "opencode", LANE_TIMEOUT_CLI)
 }
 
 // ── Gemini backend (via agy CLI) ─────────────────────────────────────────────
@@ -851,7 +1139,7 @@ fn execute_gemini_with_binary(target: &ConductorTarget, prompt: &str, bin_name: 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    run_command(cmd, "agy")
+    run_command(cmd, "agy", LANE_TIMEOUT_GEMINI)
 }
 
 /// Map a canonical model id to the agy CLI display name.
@@ -1025,42 +1313,137 @@ fn post_routing_event(task_class: &str, account_id: &str, model: &str, reason: &
     let _ = cmd.output();
 }
 
+// ── Per-lane dispatch timeouts (T-P7-E13-03) ──────────────────────────────────
+//
+// One-shot `-p`/`--print`/`exec`/`run` CLI calls, not long agentic sessions.
+// A lane that hasn't returned by its deadline is killed and treated as
+// `Outcome::Unavailable` ("timed out after Ns"), feeding into the typed
+// `LaneFailure::Unavailable` spill path (T-P7-E13-02) so the fan-out/spill
+// chain continues instead of hanging forever (CFC-01).
+//
+// The Gemini lane matches agy's own `--print-timeout` default of 5 minutes
+// (per agy --help). The other lanes use the same 5-minute budget — generous
+// for a one-shot print-mode call, short enough that a genuinely hung process
+// is reaped before it stalls the user's workflow.
+
+/// Maximum wait for a Claude/Codex/OpenCode one-shot CLI call.
+const LANE_TIMEOUT_CLI: Duration = Duration::from_secs(300);
+
+/// Maximum wait for a Gemini (agy) one-shot CLI call — matches agy's
+/// `--print-timeout` default.
+const LANE_TIMEOUT_GEMINI: Duration = Duration::from_secs(300);
+
 // ── Shared run helper ─────────────────────────────────────────────────────────
 
-/// Run a prepared `StdCommand`, return `Outcome`.
-fn run_command(mut cmd: StdCommand, name: &str) -> Outcome {
-    match cmd.output() {
-        Ok(out) => {
-            if out.status.success() {
-                Outcome::Success {
-                    output: String::from_utf8_lossy(&out.stdout).to_string(),
-                }
-            } else {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                // Distinguish "binary not found / permission denied" from logical errors.
-                if stderr.contains("No such file") || stderr.contains("Permission denied") {
-                    Outcome::Unavailable {
-                        reason: format!("{name}: {}", stderr.trim()),
-                    }
-                } else {
-                    Outcome::Error {
-                        message: format!(
-                            "exit {}: {} {}",
-                            out.status.code().unwrap_or(-1),
-                            stderr.trim(),
-                            stdout.trim()
-                        ),
-                    }
-                }
+/// Run a prepared `StdCommand` bounded by `timeout`, return `Outcome`.
+///
+/// Spawns the child and polls `try_wait()` in 150 ms intervals. If the
+/// deadline expires the child is killed and the lane returns
+/// `Outcome::Unavailable` with a `"timed out after Ns"` reason — feeding
+/// into the typed `LaneFailure::Unavailable` spill path (T-P7-E13-02/03)
+/// so the fan-out/spill chain continues instead of hanging forever (CFC-01).
+///
+/// stdout and stderr are drained in separate threads to avoid pipe-buffer
+/// deadlock when the child emits more than 64 KB before exiting.
+///
+/// # Why not `tokio::time::timeout`?
+///
+/// The execute_* path is synchronous (`std::process::Command`, not
+/// `tokio::process`). `tokio::time::timeout` wrapping a blocking
+/// `.output()` call cannot interrupt the subprocess — the blocking thread
+/// stays alive and the hung CLI keeps running. The spawn + `try_wait` +
+/// kill pattern (already used by `output_bounded` for selftest probes in
+/// this file) is the correct synchronous equivalent: it actually reaps the
+/// hung process.
+fn run_command(mut cmd: StdCommand, name: &str, timeout: Duration) -> Outcome {
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Outcome::Unavailable {
+                reason: format!("{name} binary not found: {e}"),
             }
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Outcome::Unavailable {
-            reason: format!("{name} binary not found: {e}"),
-        },
-        Err(e) => Outcome::Unavailable {
-            reason: format!("{name} exec failed: {e}"),
-        },
+        Err(e) => {
+            return Outcome::Unavailable {
+                reason: format!("{name} exec failed: {e}"),
+            }
+        }
+    };
+
+    // Drain stdout/stderr concurrently so a large output cannot fill the
+    // OS pipe buffer (64 KB) and deadlock the child before it exits.
+    let stdout_handle = child.stdout.take();
+    let stderr_handle = child.stderr.take();
+    let stdout_thread = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        if let Some(mut s) = stdout_handle {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let stderr_thread = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        if let Some(mut s) = stderr_handle {
+            let _ = s.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    // NOTE: drain threads are intentionally NOT joined here.
+                    // A killed shell wrapper (e.g. `#!/bin/sh\nsleep 30`)
+                    // may leave a grandchild holding the pipe write end, so
+                    // join would block until that grandchild exits. The
+                    // JoinHandle drops detach the threads; they clean up
+                    // when the pipe closes.
+                    return Outcome::Unavailable {
+                        reason: format!("timed out after {}s", timeout.as_secs()),
+                    };
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            Err(e) => {
+                return Outcome::Unavailable {
+                    reason: format!("{name} wait failed: {e}"),
+                };
+            }
+        }
+    };
+
+    let stdout_buf = stdout_thread.join().unwrap_or_default();
+    let stderr_buf = stderr_thread.join().unwrap_or_default();
+
+    if status.success() {
+        Outcome::Success {
+            output: String::from_utf8_lossy(&stdout_buf).to_string(),
+        }
+    } else {
+        let stderr = String::from_utf8_lossy(&stderr_buf);
+        let stdout = String::from_utf8_lossy(&stdout_buf);
+        // Distinguish "binary not found / permission denied" from logical errors.
+        if stderr.contains("No such file") || stderr.contains("Permission denied") {
+            Outcome::Unavailable {
+                reason: format!("{name}: {}", stderr.trim()),
+            }
+        } else {
+            Outcome::Error {
+                message: format!(
+                    "exit {}: {} {}",
+                    status.code().unwrap_or(-1),
+                    stderr.trim(),
+                    stdout.trim()
+                ),
+            }
+        }
     }
 }
 
@@ -1300,6 +1683,7 @@ fn ping_gfp() -> Option<(bool, u64)> {
 #[cfg(test)]
 mod agy_tests {
     use super::*;
+    use serial_test::serial;
 
     // ── Loop-guard / structured failure classification (T-P7-E13-02) ─────────
 
@@ -1513,5 +1897,209 @@ mod agy_tests {
             map_model_to_agy_display("unknown-model"),
             "Gemini 3.1 Pro (High)"
         );
+    }
+
+    // ── Per-lane timeout (T-P7-E13-03) ──────────────────────────────────────
+
+    /// A hung subprocess must be killed when the lane timeout expires,
+    /// returning `Unavailable` with a "timed out after Ns" reason so the
+    /// spill chain continues instead of blocking forever.
+    #[test]
+    fn run_command_timeout_kills_hung_subprocess() {
+        // A shell script that sleeps well past the test timeout (1 s).
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script = dir.path().join("hangy");
+        std::fs::write(&script, "#!/bin/sh\nsleep 30\n").expect("write script");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&script).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script, perms).expect("chmod");
+        }
+
+        let mut cmd = StdCommand::new(&script);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let start = Instant::now();
+        let outcome = run_command(cmd, "hangy", Duration::from_secs(1));
+        let elapsed = start.elapsed();
+
+        match outcome {
+            Outcome::Unavailable { reason } => {
+                assert!(
+                    reason.contains("timed out"),
+                    "expected 'timed out' in reason, got: {reason}"
+                );
+            }
+            other => panic!("expected Unavailable (timeout), got {other:?}"),
+        }
+        // Should have returned in ~1 s, not 30 s.
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "timeout took {elapsed:?} — expected ~1 s"
+        );
+    }
+
+    /// A fast-completing subprocess must NOT be killed by the timeout —
+    /// guards against a false-timeout regression.
+    #[test]
+    fn run_command_fast_completion_not_killed() {
+        let mut cmd = StdCommand::new("sh");
+        cmd.args(["-c", "echo hello"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let outcome = run_command(cmd, "fast", Duration::from_secs(30));
+        match outcome {
+            Outcome::Success { output } => {
+                assert_eq!(output.trim(), "hello");
+            }
+            other => panic!("expected Success, got {other:?}"),
+        }
+    }
+
+    // ── Parallel fan-out executor (T-P7-E13-04) ──────────────────────────────
+
+    /// Helper: build a healthy QuotaAccount.
+    fn fanout_account(id: &str, provider: &str, config_dir: Option<&str>) -> QuotaAccount {
+        QuotaAccount {
+            account: id.to_string(),
+            provider: provider.to_string(),
+            status: "ok".to_string(),
+            five_hour_utilization: Some(10.0),
+            seven_day_utilization: Some(10.0),
+            config_dir: config_dir.map(PathBuf::from),
+        }
+    }
+
+    /// Fan-out target selection returns N distinct targets in spill order.
+    #[test]
+    fn select_fanout_targets_returns_distinct_in_spill_order() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                fanout_account("codex", "codex", None),
+                fanout_account("claude2", "claude", Some("/tmp/.claude2")),
+                fanout_account("claude", "claude", Some("/tmp/.claude")),
+            ],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot::default();
+        let targets = select_fanout_targets(&req, &snapshot, &gp, "hello world", 3);
+
+        assert!(!targets.is_empty(), "should have at least one target");
+        assert!(targets.len() <= 3, "should not exceed requested count");
+
+        // All account IDs must be distinct (no lane dispatched twice).
+        let ids: Vec<&str> = targets.iter().map(|t| t.account_id.as_str()).collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        assert_eq!(ids.len(), unique.len(), "fan-out targets must be distinct");
+    }
+
+    /// Fan-out with a sensitive prompt excludes untrusted providers.
+    #[test]
+    fn select_fanout_targets_sensitive_prompt_excludes_untrusted() {
+        let snapshot = QuotaSnapshot {
+            accounts: vec![
+                fanout_account("claude", "claude", Some("/tmp/.claude")),
+                fanout_account("gemini-acc1", "gemini", None),
+                fanout_account("codex", "codex", None),
+            ],
+        };
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot::default();
+        let sensitive_prompt = "my SSN is 123-45-6789 and VA file number is 12345678";
+        let targets = select_fanout_targets(&req, &snapshot, &gp, sensitive_prompt, 5);
+
+        assert!(
+            !targets.is_empty(),
+            "should have at least the claude target"
+        );
+        for t in &targets {
+            assert_eq!(
+                t.provider,
+                Provider::Claude,
+                "sensitive prompt must only fan-out to trusted providers, got {}",
+                t.provider.as_str()
+            );
+        }
+    }
+
+    /// Parallel fan-out dispatch: N lanes run concurrently and results are
+    /// collected. Uses mock CLI scripts to exercise the real dispatch path.
+    #[test]
+    #[serial]
+    fn dispatch_fanout_parallel_collects_results_from_multiple_lanes() {
+        // Create mock "claude" and "codex" scripts that produce distinct output.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let claude_script = dir.path().join("claude");
+        std::fs::write(&claude_script, "#!/bin/sh\necho 'from-claude'\n").expect("write");
+        let codex_script = dir.path().join("codex");
+        std::fs::write(&codex_script, "#!/bin/sh\necho 'from-codex'\n").expect("write");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for script in [&claude_script, &codex_script] {
+                let mut perms = std::fs::metadata(script).expect("metadata").permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(script, perms).expect("chmod");
+            }
+        }
+
+        // Prepend the temp dir to PATH so find_binary finds our mock scripts.
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{}:{}", dir.path().display(), old_path);
+        std::env::set_var("PATH", &new_path);
+
+        // Also need a config_dir for the Claude lane (execute_claude requires
+        // one). The temp dir works — apply_cascade_env silently ignores a
+        // missing cascade-env.sh.
+        let claude_config = dir.path().join(".claude-config");
+        std::fs::create_dir_all(&claude_config).expect("mkdir");
+
+        let targets = vec![
+            ConductorTarget {
+                provider: Provider::Claude,
+                account_id: "claude".to_string(),
+                model: "claude-sonnet-4-6".to_string(),
+                config_dir: Some(claude_config),
+                reason: "test".to_string(),
+            },
+            ConductorTarget {
+                provider: Provider::Codex,
+                account_id: "codex".to_string(),
+                model: "gpt-5".to_string(),
+                config_dir: None,
+                reason: "test".to_string(),
+            },
+        ];
+
+        let results = dispatch_fanout_parallel(&targets, "hello");
+
+        std::env::set_var("PATH", &old_path);
+
+        // Both lanes should complete with Success.
+        assert_eq!(results.len(), 2, "both lanes should return results");
+        for r in &results {
+            match &r.outcome {
+                Outcome::Success { output } => {
+                    assert!(
+                        output.contains("from-"),
+                        "lane {} should have mock output, got: {output}",
+                        r.target.account_id
+                    );
+                }
+                other => panic!(
+                    "lane {} expected Success, got {other:?}",
+                    r.target.account_id
+                ),
+            }
+        }
     }
 }
