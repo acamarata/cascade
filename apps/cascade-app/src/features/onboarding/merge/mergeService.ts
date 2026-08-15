@@ -26,7 +26,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { MergeRequest, MergeResult, MergeSection, MergeSourceFile } from './types'
 import type { ProviderRoutingContext } from './providerRouter'
-import { getActiveProvider } from './providerRouter'
+import { getActiveProvider, GEMINI_MODEL_ID } from './providerRouter'
 import { buildMergePrompts, PROMPT_VERSION } from './prompts/merge-v1'
 import type { WizardStep } from '@/features/onboarding/types'
 
@@ -94,7 +94,7 @@ export async function mergeForTier(
 
   // If provider is GeminiPool, delegate entirely to the Tauri run_ai_merge command.
   // The Rust side calls localhost:3761 directly and handles retry + parsing.
-  if (provider.name === 'gemini-2.0-flash') {
+  if (provider.name === GEMINI_MODEL_ID) {
     return runViaTauri(tier, sourceFiles, systemPrompt, userPrompt, promptHash)
   }
 

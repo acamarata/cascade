@@ -65,6 +65,11 @@ chrono     = { version = "0.4", features = ["serde"] }
 tempfile    = "3"
 serial_test = "3"
 
+# T-P7-E09-05: Windows service install support for install_daemon.
+# Only compiled on Windows targets; no effect on macOS/Linux builds.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-service = "0.8"
+
 # Bundle metadata — Tauri 2 reads these from tauri.conf.json, not here.
 # Listed for reference so tooling (cargo-bundle, auditing) can locate them.
 # Canonical source: tauri.conf.json § bundle

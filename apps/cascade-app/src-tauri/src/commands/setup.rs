@@ -203,19 +203,78 @@ pub async fn download_local_model(variant: String) -> Result<LocalModelDownloadR
     })
 }
 
-/// Install the cascaded daemon as a user launchd agent (macOS) or equivalent.
+/// Install the cascaded daemon as a user launchd agent (macOS), Windows service,
+/// or Linux systemd user unit.
 ///
-/// Purpose: write the platform plist / unit file under the user's HOME and load it,
-///          so cascaded starts on login without requiring root/admin.
-/// Inputs: none (plist template is embedded; label is fixed to "dev.cascade.daemon")
+/// Purpose: write the platform-native service definition under the user's HOME
+///          and start it, so cascaded starts on login without requiring root/admin.
+/// Inputs: none (service definition is embedded; label is fixed to "dev.cascade.daemon")
 /// Outputs: DaemonInstallResult { success, plistPath, message }
-/// Constraints: writes only within ~/Library/LaunchAgents; atomic write (tmp+rename);
-///              no shell-string injection; no admin required.
-/// SPORT: T-P3-E03-08
+/// Constraints:
+///   - macOS: writes only within ~/Library/LaunchAgents; atomic write (tmp+rename);
+///     no shell-string injection; no admin required.
+///   - Windows: registers a Windows service via the SCM (requires admin UAC);
+///     uses the windows-service crate.
+///   - Linux: writes the existing packaging/aur/cascade@.service unit to
+///     ~/.config/systemd/user/ and enables it via systemctl --user.
+///   - Does NOT touch the separate CLI `cascade daemon install` path.
+/// SPORT: T-P3-E03-08 / T-P7-E09-05
 #[tauri::command]
 pub async fn install_daemon() -> Result<DaemonInstallResult, String> {
     let home = get_home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
 
+    #[cfg(target_os = "macos")]
+    {
+        return install_daemon_macos(&home).await;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        return install_daemon_windows(&home).await;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        return install_daemon_linux(&home).await;
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        Err("install_daemon: unsupported platform".to_string())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// macOS: LaunchAgent (unchanged from original implementation)
+// ---------------------------------------------------------------------------
+
+/// The existing systemd user unit file content from packaging/aur/cascade@.service.
+/// Embedded at compile time so the desktop app does not need the packaging dir
+/// at runtime. T-P7-E09-05 wires the Linux install path to this existing unit.
+#[cfg(any(target_os = "linux", doc))]
+const SYSTEMD_UNIT_CONTENT: &str = r#"[Unit]
+Description=Cascade AI context daemon
+Documentation=https://github.com/acamarata/cascade/wiki
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cascaded
+Restart=on-failure
+RestartSec=5s
+# Allow user's home directory access for cascade root discovery
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target
+"#;
+
+/// Install cascaded as a macOS LaunchAgent (user-level, no admin required).
+///
+/// Writes the plist to ~/Library/LaunchAgents/dev.cascade.daemon.plist and loads
+/// it via `launchctl load -w`. This is the original macOS path, unchanged.
+#[cfg(target_os = "macos")]
+async fn install_daemon_macos(home: &std::path::Path) -> Result<DaemonInstallResult, String> {
     // Confine write target to ~/Library/LaunchAgents.
     let launch_agents_dir = home.join("Library").join("LaunchAgents");
     fs::create_dir_all(&launch_agents_dir)
@@ -292,6 +351,158 @@ pub async fn install_daemon() -> Result<DaemonInstallResult, String> {
         success: true,
         plist_path: plist_path.to_string_lossy().to_string(),
         message,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Windows: Windows service via SCM (requires admin UAC)
+// ---------------------------------------------------------------------------
+
+/// Install cascaded as a Windows service via the Service Control Manager.
+///
+/// Registers the service with `ServiceStartType::AutoStart` so it starts at
+/// boot, matching the macOS `RunAtLoad` + `KeepAlive` behavior. Requires
+/// admin privileges (UAC prompt). Uses the `windows-service` crate.
+///
+/// **Manual verification required:** This code cannot be tested on macOS.
+/// It must be verified on a Windows machine with admin privileges.
+#[cfg(target_os = "windows")]
+async fn install_daemon_windows(home: &std::path::Path) -> Result<DaemonInstallResult, String> {
+    use std::ffi::OsString;
+    use windows_service::service::{
+        ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType, ServiceType,
+    };
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+
+    const SERVICE_NAME: &str = "CascadeDaemon";
+    const SERVICE_DISPLAY_NAME: &str = "Cascade AI Context Daemon";
+    const SERVICE_DESCRIPTION: &str =
+        "Cascade AI context daemon — local DB-free context manager for Claude Code Extension.";
+
+    // Resolve the daemon binary path.
+    let daemon_bin = home.join(".local").join("bin").join("cascaded.exe");
+
+    // Connect to the local Service Control Manager.
+    let manager_access = ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE;
+    let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)
+        .map_err(|e| format!("failed to connect to Service Control Manager: {e}"))?;
+
+    let service_info = ServiceInfo {
+        name: OsString::from(SERVICE_NAME),
+        display_name: OsString::from(SERVICE_DISPLAY_NAME),
+        service_type: ServiceType::OWN_PROCESS,
+        start_type: ServiceStartType::AutoStart,
+        error_control: ServiceErrorControl::Normal,
+        executable_path: daemon_bin.clone(),
+        launch_arguments: vec!["serve".to_string()],
+        dependencies: vec![],
+        account_name: None, // run as LocalSystem
+        account_password: None,
+    };
+
+    // Create or open the service (idempotent: if already exists, open it).
+    let service_access =
+        ServiceAccess::CHANGE_CONFIG | ServiceAccess::START | ServiceAccess::QUERY_STATUS;
+    let service = service_manager
+        .create_service(&service_info, service_access)
+        .or_else(|_| service_manager.open_service(SERVICE_NAME, service_access))
+        .map_err(|e| format!("failed to create or open service: {e}"))?;
+
+    // Set the service description.
+    service
+        .set_description(SERVICE_DESCRIPTION)
+        .map_err(|e| format!("failed to set service description: {e}"))?;
+
+    // Start the service.
+    let start_result = service.start(Vec::new());
+    let message = match start_result {
+        Ok(_) => "cascaded daemon installed and started as Windows service".to_string(),
+        Err(e) => {
+            format!("service registered but failed to start (it will start on next boot): {e}")
+        }
+    };
+
+    Ok(DaemonInstallResult {
+        success: true,
+        plist_path: format!(r"\\.\{}\{}", "Services", SERVICE_NAME),
+        message,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Linux: systemd user unit (wired to existing packaging/aur/cascade@.service)
+// ---------------------------------------------------------------------------
+
+/// Install cascaded as a Linux systemd user unit.
+///
+/// Writes the existing `packaging/aur/cascade@.service` unit file content to
+/// `~/.config/systemd/user/cascade@.service`, then runs
+/// `systemctl --user daemon-reload` and `systemctl --user enable --now
+/// cascade@default.service`. No root required (user-level systemd).
+///
+/// **Manual verification required:** This code cannot be fully tested on macOS.
+/// It must be verified on a Linux machine with systemd user units enabled.
+#[cfg(target_os = "linux")]
+async fn install_daemon_linux(home: &std::path::Path) -> Result<DaemonInstallResult, String> {
+    // Write the existing systemd unit file to the user's systemd directory.
+    let systemd_user_dir = home.join(".config").join("systemd").join("user");
+    fs::create_dir_all(&systemd_user_dir)
+        .map_err(|e| format!("failed to create systemd user directory: {}", e))?;
+
+    let unit_path = systemd_user_dir.join("cascade@.service");
+
+    // Atomic write: tmp → rename.
+    let tmp_path = {
+        let mut p = unit_path.as_os_str().to_owned();
+        p.push(".tmp");
+        PathBuf::from(p)
+    };
+    fs::write(&tmp_path, SYSTEMD_UNIT_CONTENT)
+        .map_err(|e| format!("failed to write systemd unit: {}", e))?;
+    fs::rename(&tmp_path, &unit_path)
+        .map_err(|e| format!("failed to finalize systemd unit: {}", e))?;
+
+    // Reload systemd to pick up the new unit.
+    let reload_result = std::process::Command::new("systemctl")
+        .args(["--user", "daemon-reload"])
+        .output();
+
+    let mut messages = Vec::new();
+
+    match reload_result {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => messages.push(format!(
+            "systemctl --user daemon-reload returned non-zero: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Err(e) => messages.push(format!("systemctl not available: {e}")),
+    }
+
+    // Enable and start the service instance (cascade@default.service).
+    // The `--now` flag both enables and starts in one command.
+    let enable_result = std::process::Command::new("systemctl")
+        .args(["--user", "enable", "--now", "cascade@default.service"])
+        .output();
+
+    match enable_result {
+        Ok(out) if out.status.success() => {
+            messages.push("cascaded daemon installed and started as systemd user unit".to_string());
+        }
+        Ok(out) => {
+            messages.push(format!(
+                "unit written but systemctl enable --now returned non-zero: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Err(e) => {
+            messages.push(format!("systemctl not available: {e}"));
+        }
+    }
+
+    Ok(DaemonInstallResult {
+        success: true,
+        plist_path: unit_path.to_string_lossy().to_string(),
+        message: messages.join("; "),
     })
 }
 

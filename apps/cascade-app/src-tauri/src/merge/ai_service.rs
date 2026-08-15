@@ -4,7 +4,7 @@
 //   parses the structured MergeResult from the response.
 //
 // Provider priority (per T-P3-E03-25 spec):
-//   1. GeminiPool  — POST http://127.0.0.1:3761/v1beta/models/gemini-2.0-flash:generateContent
+//   1. GeminiPool  — POST http://127.0.0.1:3761/v1beta/models/gemini-flash-latest:generateContent
 //   2. Anthropic   — stub (E-04 fills credentials; returns Err here)
 //   3. OpenAI      — stub (E-04 fills credentials; returns Err here)
 //   4. Local model — stub (E-04 implements cascade_local_model; returns Err here)
@@ -41,9 +41,13 @@ use crate::scanner::types::ToolId;
 // ---------------------------------------------------------------------------
 
 const GEMINI_HEALTH_URL: &str = "http://127.0.0.1:3761/health";
+// URL model segment mirrors MODEL_GEMINI_FLASH_LATEST (cascade_types::model_ids).
+// Cannot use format!() in a const, so the literal must stay in sync with the constant.
 const GEMINI_GENERATE_URL: &str =
-    "http://127.0.0.1:3761/v1beta/models/gemini-2.0-flash:generateContent";
-const MODEL_GEMINI: &str = "gemini-2.0-flash";
+    "http://127.0.0.1:3761/v1beta/models/gemini-flash-latest:generateContent";
+/// Model ID for MergeResult.model_used — routed through the shared model_ids
+/// constants module per the no-hardcoded-model-IDs doctrine.
+const MODEL_GEMINI: &str = cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
 const TIMEOUT_SECS: u64 = 60;
 const MAX_RETRIES: u32 = 3;

@@ -63,6 +63,14 @@ pub const MODEL_GEMINI_PRO: &str = "gemini-3.1-pro";
 /// Gemini T3 key-pool model for cheap grunt work (GFP pool).
 pub const MODEL_GEMINI_FLASH: &str = "gemini-3.5-flash";
 
+/// Gemini Flash auto-tracking alias used by the GFP proxy (localhost:3761)
+/// and the Anthropic-compat translation layer. Google's `-latest` aliases
+/// always resolve to the current Flash version without needing a
+/// retirement-driven edit. Mirrors the raw literals in
+/// `cascade-daemon/src/proxy/anthropic_compat.rs:map_model()`.
+/// Used by the frontend merge providerRouter and the Rust ai_service.
+pub const MODEL_GEMINI_FLASH_LATEST: &str = "gemini-flash-latest";
+
 // ── OpenCode / GLM ───────────────────────────────────────────────────────────
 
 /// GLM T2 model via OpenCode Run.

@@ -64,7 +64,7 @@ pub use types::{
 };
 
 // E-03 exports — auto_auth types live in cascade-types; re-export for convenience.
-pub use auto_auth_import::scan_all;
+pub use auto_auth_import::{import_accounts, scan_all};
 pub use cascade_types::auto_auth::{AuthSource, AuthType, DiscoveredAccount, ImportResult};
 
 pub use google_oauth::{validate_gemini_key, GoogleOAuthClient, GoogleToken};

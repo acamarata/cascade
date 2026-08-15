@@ -13,11 +13,12 @@
 //!
 //! All commands are wired in `lib.rs` invoke_handler per the existing pattern.
 
-use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use cascade_providers::google_provision::GoogleProvisionClient;
 use cascade_providers::validate_gemini_key;
+use cascade_providers::{import_accounts, scan_all};
+use cascade_types::auto_auth::{DiscoveredAccount, ImportResult};
 use cascade_types::pool::{GeminiKeyEntry, GeminiPoolConfig, RegisterResult};
 use cascade_types::provision::{ProvisionMode, ProvisionRequest, ProvisionResult, ProvisionStatus};
 
@@ -317,40 +318,43 @@ fn pool_reload_signal() {}
 /// Scan installed harnesses for known accounts and API keys.
 ///
 /// # Purpose
-/// Calls all five harness scanners (CC, OpenCode, Codex, Cursor, env vars)
-/// and returns the merged `DiscoveredAccount` list. Read-only — no harness
-/// config file is ever written.
+/// Calls all harness scanners (Claude Code, OpenCode, Codex, Cursor,
+/// Antigravity, env vars) via `cascade_providers::scan_all` and returns the
+/// merged `DiscoveredAccount` list. Read-only — no harness config file is
+/// ever written. Only invoked on explicit user trigger from the onboarding
+/// wizard (never auto-scans without consent).
 ///
 /// JS: `invoke("cascade_auto_auth_scan")`
-/// FILL: T-P3-E03-41 — delegate to daemon IPC auto_auth_scan handler.
 #[tauri::command]
 pub async fn cascade_auto_auth_scan(
     _state: State<'_, AppState>,
-) -> Result<Vec<AutoAuthDiscoveredAccount>, CascadeError> {
-    // FILL: T-P3-E03-41 — call daemon IPC cascade_auto_auth_scan.
-    Ok(vec![])
+) -> Result<Vec<DiscoveredAccount>, CascadeError> {
+    // Delegate to the real scanner in cascade-providers (T-P7-E09-01).
+    // scan_all is sync (filesystem + env reads only); run on the async runtime.
+    let accounts = tokio::task::spawn_blocking(scan_all)
+        .await
+        .map_err(|e| CascadeError::Custom(format!("auto_auth_scan task panicked: {e}")))?;
+    Ok(accounts)
 }
 
 /// Import selected discovered accounts into cascade-keychain.
 ///
 /// # Purpose
-/// For each importable EnvApiKey account in `selected`, reads the env var
-/// value and stores it in cascade-keychain under the appropriate provider key.
+/// For each importable `EnvApiKey` account in `selected`, delegates to
+/// `cascade_providers::import_accounts` which reads the env var value and
+/// stores it in cascade-keychain under the appropriate provider key.
+/// Non-importable accounts are skipped. Only imports accounts the user
+/// explicitly selected in the wizard — never imports without consent.
 ///
 /// JS: `invoke("cascade_auto_auth_import", { selected })`
-/// FILL: T-P3-E03-41 — delegate to daemon IPC auto_auth_import handler.
 #[tauri::command]
 pub async fn cascade_auto_auth_import(
-    selected: Vec<AutoAuthDiscoveredAccount>,
+    selected: Vec<DiscoveredAccount>,
     _state: State<'_, AppState>,
-) -> Result<AutoAuthImportResult, CascadeError> {
-    let _ = selected;
-    // FILL: T-P3-E03-41 — call daemon IPC cascade_auto_auth_import.
-    Ok(AutoAuthImportResult {
-        imported: vec![],
-        skipped: vec![],
-        errors: vec![],
-    })
+) -> Result<ImportResult, CascadeError> {
+    // Delegate to the real importer in cascade-providers (T-P7-E09-01).
+    let result = import_accounts(selected).await;
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------
@@ -384,26 +388,122 @@ pub async fn cascade_providers_health(
 // ---------------------------------------------------------------------------
 // Local response types (Tauri-native, not in cascade_types)
 // ---------------------------------------------------------------------------
+// Note: AutoAuthDiscoveredAccount and AutoAuthImportResult were removed in
+// T-P7-E09-01. The real DiscoveredAccount and ImportResult types from
+// cascade_types::auto_auth are now used directly (the app already depends on
+// cascade-types). Their serde shape is identical (camelCase), so the IPC
+// contract is unchanged for frontend consumers.
 
-/// Frontend-facing DiscoveredAccount shape (mirrors cascade_types::auto_auth).
-///
-/// Defined here to avoid adding a cascade-types dependency to the app crate
-/// before T-P3-E03-41 wires it through the daemon IPC layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutoAuthDiscoveredAccount {
-    pub source: String,
-    pub email_or_hint: String,
-    pub provider: String,
-    pub auth_type: String,
-    pub importable: bool,
-}
+// ---------------------------------------------------------------------------
+// Tests — auto_auth scan/import delegation (T-P7-E09-01)
+// ---------------------------------------------------------------------------
 
-/// Frontend-facing ImportResult shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutoAuthImportResult {
-    pub imported: Vec<String>,
-    pub skipped: Vec<String>,
-    pub errors: Vec<String>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cascade_types::auto_auth::{AuthSource, AuthType};
+    use serial_test::serial;
+
+    /// scan_all (the function cascade_auto_auth_scan delegates to) must find
+    /// a real fixture credential set via an env var. This verifies the
+    /// delegation path is wired — the Tauri command is a thin wrapper around
+    /// scan_all, so testing scan_all directly proves the command works.
+    #[test]
+    #[serial(global_env)]
+    fn scan_finds_real_fixture_credential() {
+        // Clear all API key env vars to ensure deterministic state.
+        std::env::remove_var("OPENAI_API_KEY");
+        std::env::remove_var("GOOGLE_API_KEY");
+        std::env::remove_var("GEMINI_API_KEY");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-fixture-test-key");
+
+        let accounts = scan_all();
+
+        std::env::remove_var("ANTHROPIC_API_KEY");
+
+        // scan_all must find the env var credential.
+        let env_account = accounts
+            .iter()
+            .find(|a| a.source == AuthSource::EnvVar && a.provider == "anthropic");
+        assert!(
+            env_account.is_some(),
+            "scan_all must find ANTHROPIC_API_KEY env credential; got {:?} accounts",
+            accounts.len()
+        );
+        let acc = env_account.unwrap();
+        assert_eq!(acc.auth_type, AuthType::EnvApiKey);
+        assert!(acc.importable, "env API keys must be importable");
+        assert_eq!(acc.email_or_hint, "env: ANTHROPIC_API_KEY");
+        // SECURITY: the key value must NOT appear in the hint.
+        assert!(!acc.email_or_hint.contains("sk-ant-fixture"));
+    }
+
+    /// import_accounts (the function cascade_auto_auth_import delegates to)
+    /// must successfully import a fixture env API key credential. This
+    /// verifies the import delegation path is wired end-to-end.
+    #[test]
+    #[serial(global_env)]
+    fn import_succeeds_for_fixture_credential() {
+        std::env::remove_var("OPENAI_API_KEY");
+        std::env::remove_var("GOOGLE_API_KEY");
+        std::env::remove_var("GEMINI_API_KEY");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-fixture-import-key");
+
+        // Build the DiscoveredAccount that scan_all would produce for this
+        // env var, then import it (exactly what the wizard flow does).
+        let account = DiscoveredAccount {
+            source: AuthSource::EnvVar,
+            email_or_hint: "env: ANTHROPIC_API_KEY".to_string(),
+            provider: "anthropic".to_string(),
+            auth_type: AuthType::EnvApiKey,
+            importable: true,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(import_accounts(vec![account]));
+
+        std::env::remove_var("ANTHROPIC_API_KEY");
+
+        // Import succeeds (imported=1) or errors on keychain access (CI as
+        // root) — both are valid; a panic or empty result is not.
+        assert!(
+            result.imported.len() == 1 || !result.errors.is_empty(),
+            "expected imported=1 or an error string; got {:?}",
+            result
+        );
+        assert!(
+            result.skipped.is_empty(),
+            "importable account must not be skipped"
+        );
+        // SECURITY: the key value must NOT appear in any result string.
+        assert!(!result
+            .imported
+            .join("")
+            .contains("sk-ant-fixture-import-key"));
+        assert!(!result.errors.join("").contains("sk-ant-fixture-import-key"));
+    }
+
+    /// Non-importable accounts (e.g. Claude Code OAuth) must be skipped, not
+    /// imported. This verifies the import path respects the importable flag.
+    #[test]
+    #[serial(global_env)]
+    fn import_skips_non_importable_accounts() {
+        let account = DiscoveredAccount {
+            source: AuthSource::ClaudeCode,
+            email_or_hint: "cc@example.com".to_string(),
+            provider: "anthropic".to_string(),
+            auth_type: AuthType::OAuthToken,
+            importable: false,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(import_accounts(vec![account]));
+
+        assert!(
+            result.imported.is_empty(),
+            "non-importable must not be imported"
+        );
+        assert_eq!(result.skipped.len(), 1, "non-importable must be skipped");
+        assert!(result.errors.is_empty());
+    }
 }

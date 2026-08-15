@@ -5,64 +5,50 @@
  *
  * Provider priority (per T-P3-E03-25 spec):
  *   1. GeminiPool  — proxy running at localhost:3761 (auto-detected via /health)
- *   2. Anthropic   — API key present in wizard state (stub: E-04 fills credential flow)
- *   3. OpenAI      — API key present in wizard state (stub: E-04 fills credential flow)
- *   4. Local model — downloaded local model (stub: E-04 implements cascade_local_model command)
- *
- * Inputs:  WizardState (providerConnected flag + future provider credential fields).
- * Outputs: Provider | null — null means no provider available.
+ *   2. Anthropic   — API key in wizard state or OAuth-connected via cascade_providers_oauth_status
+ *   3. OpenAI      — API key in wizard state or OAuth-connected via cascade_providers_oauth_status
+ *   4. Local model — detected via local_llm_detect Tauri command (Ollama/llama.cpp)
  *
  * Constraints:
- *   - No API keys stored here; credentials flow through WizardState / E-04 OAuth.
- *   - GeminiPool detection uses a fast health-check fetch (800 ms timeout).
- *   - All provider calls return a raw string (the model's text response).
- *   - Retry logic lives in mergeService.ts, not here.
+ *   - No API keys stored here; credentials flow through ProviderRoutingContext.
+ *   - Scoped to onboarding needs only — general-purpose routing is E-P7-13.
  *
  * SPORT: MASTER-COMPONENTS.md — providerRouter — merge/providerRouter.ts
- * Task: T-P3-E03-25
+ * Task: T-P3-E03-25 / T-P7-E09-07
  */
 
+import { invoke } from '@tauri-apps/api/core'
 import type { MergeRequest } from './types'
-
-// ---------------------------------------------------------------------------
-// Provider interface
-// ---------------------------------------------------------------------------
 
 /** Identifies a provider by name (used in MergeResult.modelUsed). */
 export type ProviderId = 'gemini-pool' | 'anthropic' | 'openai' | 'local'
 
-/**
- * A callable AI provider abstraction.
- *
- * @param name - Provider/model identifier (stored in MergeResult.modelUsed).
- * @param call - Sends a MergeRequest to the provider and returns the raw model text.
- */
+/** A callable AI provider abstraction. */
 export interface Provider {
   name: string
   call(request: MergeRequest): Promise<string>
 }
 
-// ---------------------------------------------------------------------------
-// WizardState shape (minimal — only the fields this module needs)
-// ---------------------------------------------------------------------------
-
 /** Minimal view of WizardState needed for provider routing. */
 export interface ProviderRoutingContext {
   /** True once the user connected at least one provider in step 2. */
   providerConnected: boolean
-  // E-04 will add: anthropicApiKey?: string, openaiApiKey?: string, localModelReady?: boolean
+  /** Anthropic API key (if connected via API key in the wizard). */
+  anthropicApiKey?: string
+  /** OpenAI API key (if connected via API key in the wizard). */
+  openaiApiKey?: string
+  /** True if a local model was downloaded and is ready. */
+  localModelReady?: boolean
 }
 
-// ---------------------------------------------------------------------------
-// Gemini Pool provider
-// ---------------------------------------------------------------------------
+// ── Gemini Pool provider ─────────────────────────────────────────────────────
 
 const GEMINI_HEALTH_URL = 'http://127.0.0.1:3761/health'
-const GEMINI_GENERATE_URL = 'http://127.0.0.1:3761/v1beta/models/gemini-2.0-flash:generateContent'
-const GEMINI_MODEL_ID = 'gemini-2.0-flash'
+// Mirrors cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST. Exported for mergeService.ts.
+export const GEMINI_MODEL_ID = 'gemini-flash-latest'
+const GEMINI_GENERATE_URL = `http://127.0.0.1:3761/v1beta/models/${GEMINI_MODEL_ID}:generateContent`
 const HEALTH_TIMEOUT_MS = 800
 
-/** Returns true if the Gemini proxy is reachable. */
 async function isGeminiPoolAvailable(): Promise<boolean> {
   try {
     const controller = new AbortController()
@@ -75,7 +61,6 @@ async function isGeminiPoolAvailable(): Promise<boolean> {
   }
 }
 
-/** Build a GeminiPool provider instance. */
 function makeGeminiPoolProvider(): Provider {
   return {
     name: GEMINI_MODEL_ID,
@@ -85,128 +70,182 @@ function makeGeminiPoolProvider(): Provider {
         systemInstruction: { parts: [{ text: request.systemPrompt }] },
         generationConfig: { responseMimeType: 'application/json' },
       }
-
       const resp = await fetch(GEMINI_GENERATE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-
-      if (!resp.ok) {
-        throw new Error(`Gemini proxy returned HTTP ${resp.status}`)
-      }
-
+      if (!resp.ok) throw new Error(`Gemini proxy returned HTTP ${resp.status}`)
       const json = (await resp.json()) as {
-        candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> }
-        }>
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
       }
-
-      const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      return text
+      return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
     },
   }
 }
 
-// ---------------------------------------------------------------------------
-// Stub providers (E-04 fills real implementations)
-// ---------------------------------------------------------------------------
+// ── Anthropic provider (Messages API) ─────────────────────────────────────────
 
-/** Anthropic API stub — E-04 fills OAuth + messages.create. */
-function makeAnthropicProvider(_apiKey: string): Provider {
+const ANTHROPIC_MODEL_ID = 'claude-sonnet-4-5'
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+
+function makeAnthropicProvider(apiKey: string): Provider {
   return {
-    name: 'claude-3-5-sonnet',
-    async call(_request: MergeRequest): Promise<string> {
-      throw new Error('Anthropic provider not yet implemented. Connect via E-04 OAuth flow.')
+    name: ANTHROPIC_MODEL_ID,
+    async call(request: MergeRequest): Promise<string> {
+      const resp = await fetch(ANTHROPIC_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL_ID,
+          max_tokens: 8192,
+          system: request.systemPrompt,
+          messages: [{ role: 'user', content: request.userPrompt }],
+        }),
+      })
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => '')
+        throw new Error(`Anthropic API returned HTTP ${resp.status}: ${errBody}`)
+      }
+      const json = (await resp.json()) as {
+        content?: Array<{ type: string; text?: string }>
+      }
+      return json.content?.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('') ?? ''
     },
   }
 }
 
-/** OpenAI API stub — E-04 fills OAuth + chat.completions.create. */
-function makeOpenAIProvider(_apiKey: string): Provider {
+// ── OpenAI provider (Chat Completions API) ────────────────────────────────────
+
+const OPENAI_MODEL_ID = 'gpt-4o'
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
+
+function makeOpenAIProvider(apiKey: string): Provider {
   return {
-    name: 'gpt-4o',
-    async call(_request: MergeRequest): Promise<string> {
-      throw new Error('OpenAI provider not yet implemented. Connect via E-04 OAuth flow.')
+    name: OPENAI_MODEL_ID,
+    async call(request: MergeRequest): Promise<string> {
+      const resp = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL_ID,
+          messages: [
+            { role: 'system', content: request.systemPrompt },
+            { role: 'user', content: request.userPrompt },
+          ],
+        }),
+      })
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => '')
+        throw new Error(`OpenAI API returned HTTP ${resp.status}: ${errBody}`)
+      }
+      const json = (await resp.json()) as {
+        choices?: Array<{ message?: { content?: string } }>
+      }
+      return json.choices?.[0]?.message?.content ?? ''
     },
   }
 }
 
-/** Local model stub — E-04 implements cascade_local_model Tauri command. */
-function makeLocalProvider(): Provider {
+// ── Local model provider (Ollama via local_llm_detect) ────────────────────────
+
+const LOCAL_MODEL_ID = 'llama-3.2-3b'
+
+interface LocalLlmDetectResult {
+  type: string
+  endpoint?: string
+  detected_port?: number
+}
+
+async function detectLocalLlm(): Promise<LocalLlmDetectResult | null> {
+  try {
+    const result = await invoke<LocalLlmDetectResult>('local_llm_detect')
+    if (result && result.type && result.type !== 'none') return result
+  } catch {
+    // local_llm_detect unavailable — non-blocking
+  }
+  return null
+}
+
+function makeLocalProvider(endpoint: string): Provider {
   return {
-    name: 'local-model',
-    async call(_request: MergeRequest): Promise<string> {
-      throw new Error(
-        'Local model provider not yet implemented. E-04 will implement the Tauri command.'
-      )
+    name: LOCAL_MODEL_ID,
+    async call(request: MergeRequest): Promise<string> {
+      const resp = await fetch(`${endpoint}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: LOCAL_MODEL_ID,
+          prompt: request.userPrompt,
+          system: request.systemPrompt,
+          stream: false,
+        }),
+      })
+      if (!resp.ok) throw new Error(`Local LLM at ${endpoint} returned HTTP ${resp.status}`)
+      const json = (await resp.json()) as { response?: string }
+      return json.response ?? ''
     },
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+// ── Credential accessors + OAuth check ────────────────────────────────────────
+
+function getAnthropicApiKey(ctx: ProviderRoutingContext): string | null {
+  return ctx.anthropicApiKey ?? null
+}
+
+function getOpenAIApiKey(ctx: ProviderRoutingContext): string | null {
+  return ctx.openaiApiKey ?? null
+}
+
+/** Check if a provider is OAuth-connected via cascade_providers_oauth_status. */
+async function isOAuthConnected(providerId: string): Promise<boolean> {
+  try {
+    const status = await invoke<string>('cascade_providers_oauth_status', { id: providerId })
+    return status === 'connected'
+  } catch {
+    return false
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 /**
  * Determine the active AI provider from the wizard context.
- *
  * Returns the first available provider in priority order, or null if none.
- * Performs an async health check for GeminiPool.
- *
- * @param ctx - Minimal wizard state needed for routing.
  */
 export async function getActiveProvider(ctx: ProviderRoutingContext): Promise<Provider | null> {
-  if (!ctx.providerConnected) {
-    return null
-  }
+  if (!ctx.providerConnected) return null
 
   // 1. GeminiPool (localhost proxy — highest priority; no credentials needed)
-  if (await isGeminiPoolAvailable()) {
-    return makeGeminiPoolProvider()
-  }
+  if (await isGeminiPoolAvailable()) return makeGeminiPoolProvider()
 
-  // 2. Anthropic API key (stub until E-04)
+  // 2. Anthropic — API key in context OR OAuth-connected via daemon
   const anthropicKey = getAnthropicApiKey(ctx)
-  if (anthropicKey) {
-    return makeAnthropicProvider(anthropicKey)
+  if (anthropicKey) return makeAnthropicProvider(anthropicKey)
+  if (await isOAuthConnected('anthropic')) {
+    // OAuth-connected: daemon has the token. Actual AI call through the daemon
+    // is E-P7-13's scope; for onboarding, surface the provider as available.
+    return makeAnthropicProvider('')
   }
 
-  // 3. OpenAI API key (stub until E-04)
+  // 3. OpenAI — API key in context OR OAuth-connected via daemon
   const openaiKey = getOpenAIApiKey(ctx)
-  if (openaiKey) {
-    return makeOpenAIProvider(openaiKey)
+  if (openaiKey) return makeOpenAIProvider(openaiKey)
+  if (await isOAuthConnected('openai')) return makeOpenAIProvider('')
+
+  // 4. Local model — detected via local_llm_detect Tauri command
+  if (ctx.localModelReady) {
+    const localLlm = await detectLocalLlm()
+    if (localLlm?.endpoint) return makeLocalProvider(localLlm.endpoint)
   }
 
-  // 4. Local model (stub until E-04)
-  if (isLocalModelReady(ctx)) {
-    return makeLocalProvider()
-  }
-
   return null
-}
-
-// ---------------------------------------------------------------------------
-// Credential accessors (stubs — E-04 populates WizardState with real keys)
-// ---------------------------------------------------------------------------
-
-/** Extract Anthropic API key from wizard state (E-04 adds this field). */
-function getAnthropicApiKey(ctx: ProviderRoutingContext): string | null {
-  // E-04: return (ctx as WizardStateWithCredentials).anthropicApiKey ?? null
-  void ctx
-  return null
-}
-
-/** Extract OpenAI API key from wizard state (E-04 adds this field). */
-function getOpenAIApiKey(ctx: ProviderRoutingContext): string | null {
-  // E-04: return (ctx as WizardStateWithCredentials).openaiApiKey ?? null
-  void ctx
-  return null
-}
-
-/** Check if a local model is downloaded and ready (E-04 adds this field). */
-function isLocalModelReady(ctx: ProviderRoutingContext): boolean {
-  // E-04: return (ctx as WizardStateWithCredentials).localModelReady ?? false
-  void ctx
-  return false
 }

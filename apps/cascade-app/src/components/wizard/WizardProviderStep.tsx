@@ -41,6 +41,27 @@ import { WizardStep } from '@/features/onboarding/types'
 type ProviderId = 'gemini' | 'anthropic' | 'openai' | 'opencode'
 type ConnectStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
+// ---------------------------------------------------------------------------
+// Auto-auth types (mirror cascade_types::auto_auth via Tauri IPC camelCase)
+// ---------------------------------------------------------------------------
+
+type AuthSource = 'claudeCode' | 'openCode' | 'codex' | 'cursor' | 'antigravity' | 'envVar'
+type AuthType = 'oAuthToken' | 'apiKey' | 'envApiKey'
+
+interface DiscoveredAccount {
+  source: AuthSource
+  emailOrHint: string
+  provider: string
+  authType: AuthType
+  importable: boolean
+}
+
+interface ImportResult {
+  imported: string[]
+  skipped: string[]
+  errors: string[]
+}
+
 interface ProviderDef {
   id: ProviderId
   name: string
@@ -259,7 +280,7 @@ export function WizardProviderStep() {
   const [connectedProviders, setConnectedProviders] = React.useState<string[]>([])
 
   /** Auto-detected credentials found by cascade_auto_auth_scan. */
-  const [autoAuthAccounts, setAutoAuthAccounts] = React.useState<string[]>([])
+  const [autoAuthAccounts, setAutoAuthAccounts] = React.useState<DiscoveredAccount[]>([])
 
   /** Whether the "import existing credentials" banner is visible. */
   const [showAutoAuthBanner, setShowAutoAuthBanner] = React.useState(false)
@@ -337,12 +358,11 @@ export function WizardProviderStep() {
 
     async function runAutoAuthScan() {
       try {
-        // cascade_auto_auth_scan returns an array of detected account descriptors.
-        const accounts =
-          await invoke<Array<{ account_email: string; provider: string }>>('cascade_auto_auth_scan')
+        // cascade_auto_auth_scan returns DiscoveredAccount[] (camelCase IPC).
+        const accounts = await invoke<DiscoveredAccount[]>('cascade_auto_auth_scan')
         if (cancelled) return
         if (Array.isArray(accounts) && accounts.length > 0) {
-          setAutoAuthAccounts(accounts.map((a) => a.account_email ?? a.provider))
+          setAutoAuthAccounts(accounts)
           setShowAutoAuthBanner(true)
         }
       } catch {
@@ -388,10 +408,13 @@ export function WizardProviderStep() {
       ) {
         setErrors((prev) => ({ ...prev, [id]: 'Invalid API key or authorization denied.' }))
       } else if (msg.includes('not found') || msg.includes('No such command')) {
-        // IPC stub absent — treat as connected for wizard progress (graceful fallback)
-        setStatuses((prev) => ({ ...prev, [id]: 'connected' }))
-        setConnectedProviders((prev) => [...new Set([...prev, id])])
-        updateState({ providerConnected: true })
+        // Honest failure: the provider command or daemon is not available.
+        // Do NOT fake success — surface an actionable message so the user can
+        // fix the underlying issue (install the daemon, restart it, etc.).
+        setErrors((prev) => ({
+          ...prev,
+          [id]: 'Provider connection failed: the Cascade daemon is not running or the provider command is not available. Start the daemon (cascade daemon start) and try again.',
+        }))
       } else {
         setErrors((prev) => ({ ...prev, [id]: `Connection failed: ${msg}` }))
       }
@@ -434,14 +457,16 @@ export function WizardProviderStep() {
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="flex-1">
-            We found existing credentials ({autoAuthAccounts.join(', ')}) — import them?
+            We found existing credentials ({autoAuthAccounts.map((a) => a.emailOrHint).join(', ')}) — import them?
           </span>
           <button
             type="button"
             aria-label="Import existing credentials from detected harnesses"
             onClick={async () => {
               try {
-                await invoke<void>('cascade_auto_auth_import')
+                await invoke<ImportResult>('cascade_auto_auth_import', {
+                  selected: autoAuthAccounts,
+                })
                 await refreshProviders()
               } catch {
                 // Import failed — user can connect manually

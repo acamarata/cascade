@@ -322,6 +322,43 @@ describe('Wizard step 2 — ProviderConnect', () => {
 
     await assertStep(1)
   })
+
+  it('does not fake success when provider command returns "not found" (T-P7-E09-03)', async () => {
+    // Simulate a missing/unwired provider command — the backend rejects with
+    // a "not found" error. The wizard must NOT mark the provider as connected.
+    overrideCommand('cascade_providers_connect', () => {
+      throw new Error('command not found: cascade_providers_connect is not available')
+    })
+
+    renderWizard()
+    await assertStep(1)
+    await skipSteps(1)
+    await assertStep(2)
+
+    const user = userEvent.setup()
+
+    // Find the Anthropic API key input and Connect button.
+    const anthropicInput = screen.getByLabelText(/anthropic api key/i)
+    await user.type(anthropicInput, 'sk-ant-test-key')
+
+    const connectBtn = screen.getByRole('button', { name: /connect anthropic/i })
+    await user.click(connectBtn)
+
+    // The provider must show an honest error — NOT a "Connected" badge.
+    await waitFor(
+      () => {
+        // Error message must be visible and actionable (mentions daemon).
+        const errorMsg = screen.getByRole('alert')
+        expect(errorMsg.textContent).toMatch(/daemon/i)
+      },
+      { timeout: 4000 },
+    )
+
+    // Crucially: no "Connected" badge for Anthropic must appear.
+    // The false-success bug would have shown "Connected" here.
+    const connectedBadges = screen.queryAllByText(/^connected$/i)
+    expect(connectedBadges).toHaveLength(0)
+  })
 })
 
 // ---------------------------------------------------------------------------

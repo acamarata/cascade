@@ -93,7 +93,7 @@ export interface MergeSection {
  * @param tier         - Which wizard tier this merge covers (maps to a WizardStep).
  * @param sections     - All sections produced by the AI pass, pending user review.
  * @param generatedAt  - ISO-8601 timestamp when the AI call completed.
- * @param modelUsed    - Provider/model identifier (e.g. "gemini-2.0-flash", "claude-opus-4").
+ * @param modelUsed    - Provider/model identifier (e.g. "gemini-flash-latest", "claude-opus-4").
  * @param promptHash   - SHA-256 hex of MergeRequest.userPrompt; used to detect re-run identity.
  */
 export interface MergeResult {
