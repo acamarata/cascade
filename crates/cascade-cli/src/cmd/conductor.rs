@@ -288,20 +288,22 @@ fn build_prompt(prompt_text: &Option<String>, prompt_file: &Option<PathBuf>) -> 
 /// Load `~/.cascade/accounts/quota.json` and build an injectable `QuotaSnapshot`.
 /// Returns an empty snapshot on any I/O or parse error (routing then returns None).
 fn load_quota_snapshot() -> QuotaSnapshot {
-    let path = quota_json_path();
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => return QuotaSnapshot::default(),
-    };
-    let v: Value = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(_) => return QuotaSnapshot::default(),
-    };
+    try_load_quota_snapshot_from(&quota_json_path()).unwrap_or_default()
+}
 
-    let accounts_arr = match v.get("accounts").and_then(|a| a.as_array()) {
-        Some(a) => a,
-        None => return QuotaSnapshot::default(),
-    };
+/// Best-effort load of a `QuotaSnapshot` from an explicit `quota.json` path.
+///
+/// Unlike [`load_quota_snapshot`] (which collapses every failure into an empty
+/// snapshot — correct at startup, where "unreadable" genuinely means "route
+/// against nothing"), this returns `None` on any I/O or parse failure so the
+/// caller can distinguish "failed to re-read" from "no accounts exist". The
+/// mid-run re-check (CFC-05, T-P7-E13-07) needs that distinction: a failed
+/// re-read must fall back to the in-memory snapshot, not empty the spill pool.
+fn try_load_quota_snapshot_from(path: &Path) -> Option<QuotaSnapshot> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+
+    let accounts_arr = v.get("accounts").and_then(|a| a.as_array())?;
 
     let accounts: Vec<QuotaAccount> = accounts_arr
         .iter()
@@ -343,7 +345,7 @@ fn load_quota_snapshot() -> QuotaSnapshot {
         })
         .collect();
 
-    QuotaSnapshot { accounts }
+    Some(QuotaSnapshot { accounts })
 }
 
 // ── Executor ──────────────────────────────────────────────────────────────────
@@ -423,6 +425,44 @@ fn tried_display(tried: &[TriedLane]) -> Vec<String> {
 enum LaneAttempt {
     Ran(Outcome),
     BlockedByFirewall { provider: Provider },
+}
+
+/// Build the working snapshot for the next spill-target selection, refreshing
+/// quota state from disk (CFC-05, T-P7-E13-07).
+///
+/// The spill loop loads `quota.json` once at startup, but quota state is shared
+/// with other writers (daemon utilization updates, concurrent conductor runs).
+/// Between spill attempts — each potentially minutes long — a lane can become
+/// saturated on disk while still looking healthy in the in-memory snapshot.
+/// This re-reads `quota_path` so the next selection sees current utilization.
+///
+/// Tried-lane bookkeeping (T-P7-E13-02) is re-applied on top of whichever
+/// snapshot wins: every account in `tried` is marked `unavailable`, so a
+/// refresh can never resurrect an already-failed lane. Note this marks ALL
+/// tried lanes, not just the most recent one — the disk snapshot carries none
+/// of this process's local markings, so partial re-application would let an
+/// earlier-failed lane be re-selected and end the spill via the cycle guard.
+///
+/// Best-effort: when the re-read fails for any reason (missing file, I/O
+/// error, torn JSON from a concurrent writer mid-write), `fallback` — the
+/// caller's existing in-memory snapshot — is used instead. A failed refresh
+/// must never hard-fail the spill loop.
+fn refresh_snapshot_preserving_tried(
+    quota_path: &Path,
+    fallback: &QuotaSnapshot,
+    tried: &[TriedLane],
+) -> QuotaSnapshot {
+    let mut working = try_load_quota_snapshot_from(quota_path).unwrap_or_else(|| fallback.clone());
+    for lane in tried {
+        if let Some(entry) = working
+            .accounts
+            .iter_mut()
+            .find(|a| a.account == lane.account_id)
+        {
+            entry.status = "unavailable".to_string();
+        }
+    }
+    working
 }
 
 /// Execute `prompt` against `target`, falling back through remaining candidates
@@ -550,16 +590,14 @@ fn execute_with_fallback(
             failure,
         });
 
-        // Mark the failed account as saturated in a mutable copy and
-        // re-run routing to get the next target.
-        let mut snapshot_copy = snapshot.clone();
-        if let Some(entry) = snapshot_copy
-            .accounts
-            .iter_mut()
-            .find(|a| a.account == current.account_id)
-        {
-            entry.status = "unavailable".to_string();
-        }
+        // Mid-run quota re-check (CFC-05, T-P7-E13-07): re-read quota.json
+        // before selecting the next spill target, so a lane that became
+        // saturated after the startup snapshot (daemon utilization update,
+        // concurrent conductor run) is skipped. Best-effort — a failed
+        // re-read falls back to the in-memory startup snapshot. Tried-lane
+        // bookkeeping (T-P7-E13-02) is re-applied on top of the refreshed
+        // snapshot so no already-failed lane is re-selected.
+        let snapshot_copy = refresh_snapshot_preserving_tried(&quota_json_path(), snapshot, &tried);
 
         let next_req = ConductorRequest {
             tier: req.tier,
@@ -1944,8 +1982,8 @@ mod agy_tests {
     /// guards against a false-timeout regression.
     #[test]
     fn run_command_fast_completion_not_killed() {
-        let mut cmd = StdCommand::new("sh");
-        cmd.args(["-c", "echo hello"])
+        let mut cmd = StdCommand::new("echo");
+        cmd.arg("hello")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let outcome = run_command(cmd, "fast", Duration::from_secs(30));
@@ -2101,5 +2139,187 @@ mod agy_tests {
                 ),
             }
         }
+    }
+
+    // ── Mid-run quota re-check (T-P7-E13-07, CFC-05) ──────────────────────────
+
+    /// Helper: write a synthetic quota.json (`{"accounts": [...]}`) into `dir`
+    /// and return its path. Overwrites any previous file — used to simulate
+    /// another process (daemon utilization update, concurrent conductor run)
+    /// changing quota state mid-run.
+    fn write_quota_json(dir: &Path, accounts_json: &str) -> PathBuf {
+        let path = dir.join("quota.json");
+        std::fs::write(&path, format!(r#"{{"accounts": [{accounts_json}]}}"#))
+            .expect("write quota.json");
+        path
+    }
+
+    /// Helper: one quota.json account entry with utilization numbers.
+    fn quota_entry_json(account: &str, provider: &str, status: &str, fh: f64, sd: f64) -> String {
+        format!(
+            r#"{{"account": "{account}", "provider": "{provider}", "status": "{status}", "usage": {{"five_hour": {{"utilization": {fh}}}, "seven_day": {{"utilization": {sd}}}}}}}"#
+        )
+    }
+
+    /// `try_load_quota_snapshot_from` parses the full account shape and
+    /// returns None — NOT an empty snapshot — when the file is missing or
+    /// malformed. The distinction is what the mid-run re-check's best-effort
+    /// fallback depends on (empty would mean "no backends", exhausting the
+    /// spill chain on a transient I/O failure).
+    #[test]
+    fn try_load_quota_snapshot_from_parses_or_returns_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write_quota_json(
+            dir.path(),
+            r#"{"account": "claude2", "provider": "claude", "status": "ok", "config_dir": "/tmp/.claude2", "usage": {"five_hour": {"utilization": 42.5}, "seven_day": {"utilization": 7.25}}}"#,
+        );
+
+        let snap = try_load_quota_snapshot_from(&path).expect("should parse");
+        assert_eq!(snap.accounts.len(), 1);
+        let a = &snap.accounts[0];
+        assert_eq!(a.account, "claude2");
+        assert_eq!(a.provider, "claude");
+        assert_eq!(a.status, "ok");
+        assert_eq!(
+            a.config_dir.as_deref(),
+            Some(std::path::Path::new("/tmp/.claude2"))
+        );
+        assert_eq!(a.five_hour_utilization, Some(42.5));
+        assert_eq!(a.seven_day_utilization, Some(7.25));
+
+        // Missing file → None.
+        let missing = dir.path().join("nope.json");
+        assert!(try_load_quota_snapshot_from(&missing).is_none());
+
+        // Torn JSON (concurrent writer mid-write) → None.
+        std::fs::write(&path, r#"{"accounts": [{"account": "claude2""#).expect("torn write");
+        assert!(try_load_quota_snapshot_from(&path).is_none());
+    }
+
+    /// The CFC-05 acceptance: a lane saturated by ANOTHER process after the
+    /// startup snapshot was loaded must not be selected as the next spill
+    /// target — the spill loop re-reads quota.json between attempts.
+    #[test]
+    fn midrun_quota_reread_reflects_saturation_change_in_next_selection() {
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        // Startup state: claude2 + claude both healthy.
+        let quota_path = write_quota_json(
+            dir.path(),
+            &[
+                quota_entry_json("claude2", "claude", "ok", 10.0, 20.0),
+                quota_entry_json("claude", "claude", "ok", 5.0, 10.0),
+            ]
+            .join(","),
+        );
+        let startup = try_load_quota_snapshot_from(&quota_path).expect("startup snapshot");
+
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot::default();
+
+        // Spill attempt 1 selects claude2 (first in spill order).
+        let first = select_target_with_gp(&req, &startup, &gp).expect("first target");
+        assert_eq!(first.account_id, "claude2");
+
+        // claude2 goes Unavailable; while the spill loop is between attempts,
+        // another process saturates `claude` and a healthy codex lane appears.
+        let tried = vec![TriedLane {
+            account_id: "claude2".to_string(),
+            failure: LaneFailure::Unavailable {
+                reason: "claude binary not found in PATH".to_string(),
+            },
+        }];
+        write_quota_json(
+            dir.path(),
+            &[
+                quota_entry_json("claude2", "claude", "ok", 10.0, 20.0),
+                quota_entry_json("claude", "claude", "ok", 100.0, 100.0),
+                r#"{"account": "codex-acc1", "provider": "codex", "status": "ok"}"#.to_string(),
+            ]
+            .join(","),
+        );
+
+        // The next selection reflects the on-disk change: saturated `claude`
+        // is skipped, tried `claude2` stays excluded, codex wins.
+        let refreshed = refresh_snapshot_preserving_tried(&quota_path, &startup, &tried);
+        let next = select_target_with_gp(&req, &refreshed, &gp).expect("next target");
+        assert_eq!(
+            next.account_id, "codex-acc1",
+            "mid-run saturation of `claude` must be visible to the spill loop"
+        );
+
+        // Control (the CFC-05 bug): the stale startup snapshot — what the
+        // pre-fix spill loop selected against — would dispatch to the
+        // now-saturated `claude`.
+        let mut stale = startup.clone();
+        if let Some(entry) = stale.accounts.iter_mut().find(|a| a.account == "claude2") {
+            entry.status = "unavailable".to_string();
+        }
+        let stale_next = select_target_with_gp(&req, &stale, &gp).expect("stale control target");
+        assert_eq!(
+            stale_next.account_id, "claude",
+            "control: stale snapshot would pick the lane saturated mid-run"
+        );
+    }
+
+    /// Best-effort fallback: when the re-read fails (file removed, torn JSON)
+    /// the spill loop keeps using the in-memory startup snapshot — it does
+    /// NOT hard-fail or empty the pool — and ALL tried lanes stay excluded
+    /// across the refresh (T-P7-E13-02 bookkeeping preservation).
+    #[test]
+    fn midrun_quota_reread_falls_back_and_keeps_all_tried_lanes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let quota_path = write_quota_json(
+            dir.path(),
+            &[
+                quota_entry_json("claude2", "claude", "ok", 10.0, 20.0),
+                quota_entry_json("claude", "claude", "ok", 5.0, 10.0),
+                r#"{"account": "codex-acc1", "provider": "codex", "status": "ok"}"#.to_string(),
+            ]
+            .join(","),
+        );
+        let startup = try_load_quota_snapshot_from(&quota_path).expect("startup snapshot");
+
+        let req = ConductorRequest {
+            tier: Tier::T2,
+            model_class: None,
+            account_override: None,
+        };
+        let gp = GpHealthSnapshot::default();
+
+        // Two lanes already tried and skipped (typed T-P7-E13-02 records).
+        let tried = vec![
+            TriedLane {
+                account_id: "claude2".to_string(),
+                failure: LaneFailure::Unavailable {
+                    reason: "claude binary not found in PATH".to_string(),
+                },
+            },
+            TriedLane {
+                account_id: "claude".to_string(),
+                failure: LaneFailure::Unavailable {
+                    reason: "timed out after 300s".to_string(),
+                },
+            },
+        ];
+
+        // Re-read failure #1: quota.json removed between attempts.
+        std::fs::remove_file(&quota_path).expect("remove quota.json");
+        let refreshed = refresh_snapshot_preserving_tried(&quota_path, &startup, &tried);
+        let next = select_target_with_gp(&req, &refreshed, &gp).expect("fallback target");
+        assert_eq!(
+            next.account_id, "codex-acc1",
+            "failed re-read must fall back to the in-memory snapshot, not empty the pool"
+        );
+
+        // Re-read failure #2: torn JSON from a concurrent writer mid-write.
+        std::fs::write(&quota_path, r#"{"accounts": [{"account": "claude2""#).expect("torn write");
+        let refreshed = refresh_snapshot_preserving_tried(&quota_path, &startup, &tried);
+        let next = select_target_with_gp(&req, &refreshed, &gp).expect("fallback target (torn)");
+        assert_eq!(next.account_id, "codex-acc1");
     }
 }

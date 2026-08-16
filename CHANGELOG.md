@@ -6,7 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- Conductor spill loop (`execute_with_fallback`) now re-reads
+  `~/.cascade/accounts/quota.json` before each spill-target selection (CFC-05)
+  instead of routing against the snapshot loaded once at startup — a lane
+  saturated mid-run by another process (daemon utilization update, concurrent
+  conductor run) is now skipped. The re-read is best-effort: any I/O or parse
+  failure (missing file, torn JSON from a concurrent writer mid-write) falls
+  back to the in-memory startup snapshot rather than emptying the spill pool,
+  and the typed tried-lane bookkeeping (T-P7-E13-02) is re-applied on top of
+  the refreshed snapshot — now marking ALL tried lanes, not just the most
+  recent failure, which also fixes premature spill exhaustion when two or more
+  lanes had already failed. Verified 2026-08-15: build/test/clippy clean.
+  (T-P7-E13-07)
+
 ### Added
+- **Periodic auto-update loop** (T-P7-E12-06, 2026-08-15): the daemon now
+  runs a real 24-h background loop when `[updates] auto = true`. Every tick
+  calls `check_for_update` / `apply_update` for the binary and separately
+  refreshes `~/.cascade/models.yaml` from GitHub. The loop starts 10 minutes
+  after daemon boot to avoid hitting the network on every restart. All fetch
+  failures (including the private-repo 404 documented in T-P7-E12-04) are
+  non-fatal: logged at WARN, compiled-in `models.yaml` fallback preserved,
+  loop continues at the next 24-h cadence. `get_auto_update` in
+  `cascade-daemon/src/updates/ipc_handlers.rs` now has a real production
+  caller; its `#[allow(dead_code)]` attribute has been removed.
 - Conductor `execute_*` dispatches (`claude`/`codex`/`opencode`/`agy`) are now
   wrapped in a real subprocess timeout (`LANE_TIMEOUT_CLI`/
   `LANE_TIMEOUT_GEMINI`, 300s each, matching agy's own `--print-timeout`

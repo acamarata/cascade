@@ -579,6 +579,36 @@ pub async fn run(
         info!("automation_runner: instantiated with RegistryRouter (real provider path — auto-02)");
     }
 
+    // ── Periodic auto-update loop (T-P7-E12-06) ──────────────────────────────
+    // Fires once every 24 h (with a 10-minute stagger after daemon boot so
+    // the daemon settles before hitting the network). When `[updates] auto`
+    // is true, runs one binary check/apply cycle and refreshes
+    // ~/.cascade/models.yaml.  All fetch failures are non-fatal: logged at
+    // WARN; the compiled-in models.yaml fallback is preserved.
+    {
+        use crate::updates::ipc_handlers::auto_update_tick;
+        use std::time::Duration;
+
+        const STAGGER: Duration = Duration::from_secs(10 * 60); // 10 min
+        const CADENCE: Duration = Duration::from_secs(24 * 60 * 60); // 24 h
+
+        let au_shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = tokio::time::sleep(STAGGER) => {}
+                _ = au_shutdown.cancelled() => { return; }
+            }
+            loop {
+                auto_update_tick().await;
+                tokio::select! {
+                    _ = tokio::time::sleep(CADENCE) => {}
+                    _ = au_shutdown.cancelled() => { break; }
+                }
+            }
+        });
+        info!("auto_update: periodic loop spawned (24 h cadence, 10 min startup stagger)");
+    }
+
     // ── Main event loop ───────────────────────────────────────────────────────
     tokio::select! {
         result = ipc.serve(shutdown.clone()) => {

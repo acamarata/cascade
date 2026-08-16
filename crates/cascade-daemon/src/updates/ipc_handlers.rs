@@ -616,7 +616,6 @@ pub fn set_auto_update(enable: bool) -> Result<UpdateAutoResult, std::io::Error>
 }
 
 /// Read the current `[updates] auto` value (defaults to `false` if unset).
-#[allow(dead_code)]
 pub fn get_auto_update() -> bool {
     let config_path = cascade_config_dir().join("config.toml");
     let raw = std::fs::read_to_string(&config_path).unwrap_or_default();
@@ -625,6 +624,131 @@ pub fn get_auto_update() -> bool {
         .and_then(|t| t.get("auto"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+// ── Models-cache refresh (T-P7-E12-06) ───────────────────────────────────────
+//
+// The daemon background loop (supervisor.rs) calls `refresh_models_cache` once
+// per 24-h tick when `[updates] auto = true`. Failures are non-fatal: the
+// compiled-in canonical fallback is preserved — we only write on success.
+//
+// `CASCADE_MODELS_YAML_URL` overrides the default URL for local testing without
+// touching call sites (mirrors the `CASCADE_UPDATE_API_BASE` pattern above).
+
+const MODELS_YAML_URL: &str =
+    "https://raw.githubusercontent.com/acamarata/cascade/main/models/models.yaml";
+
+fn models_yaml_url() -> String {
+    std::env::var("CASCADE_MODELS_YAML_URL").unwrap_or_else(|_| MODELS_YAML_URL.to_string())
+}
+
+#[derive(serde::Deserialize)]
+struct ModelsYaml {
+    providers: Vec<ProviderBlock>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProviderBlock {
+    name: String,
+}
+
+async fn fetch_models_yaml() -> Result<String, String> {
+    let url = models_yaml_url();
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("failed to build HTTP client: {e}"))?;
+    let resp = client
+        .get(&url)
+        .header("User-Agent", "cascade-updater/1")
+        .send()
+        .await
+        .map_err(|e| format!("models.yaml fetch failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("models.yaml fetch returned error status: {e}"))?;
+    resp.text()
+        .await
+        .map_err(|e| format!("failed to read models.yaml response body: {e}"))
+}
+
+fn validate_models_yaml_contents(contents: &str) -> Result<usize, String> {
+    let parsed: ModelsYaml = serde_yaml::from_str(contents)
+        .map_err(|e| format!("fetched models.yaml is not valid YAML with providers[].name: {e}"))?;
+    if parsed.providers.is_empty() {
+        return Err("fetched models.yaml has no providers".to_string());
+    }
+    for p in &parsed.providers {
+        if p.name.trim().is_empty() {
+            return Err("fetched models.yaml has a provider with an empty name".to_string());
+        }
+    }
+    Ok(parsed.providers.len())
+}
+
+fn write_models_cache_to_path(cache_path: &std::path::Path, contents: &str) -> Result<(), String> {
+    use std::io::Write;
+    let parent = cache_path
+        .parent()
+        .expect("models.yaml cache path has parent");
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("failed to create models cache dir: {e}"))?;
+    let tmp = cache_path.with_file_name("models.yaml.tmp");
+    let mut f = std::fs::File::create(&tmp)
+        .map_err(|e| format!("failed to create temp models file: {e}"))?;
+    f.write_all(contents.as_bytes())
+        .map_err(|e| format!("failed to write temp models file: {e}"))?;
+    f.sync_all()
+        .map_err(|e| format!("failed to sync temp models file: {e}"))?;
+    std::fs::rename(&tmp, cache_path)
+        .map_err(|e| format!("failed to rename models.yaml.tmp → models.yaml: {e}"))
+}
+
+/// Fetch `models.yaml` from GitHub, validate it, and atomically write it to
+/// `~/.cascade/models.yaml`. Returns `Err(reason)` on any failure — the
+/// compiled-in fallback is preserved (nothing is written on failure).
+pub(crate) async fn refresh_models_cache() -> Result<(), String> {
+    let fetched = fetch_models_yaml().await?;
+    validate_models_yaml_contents(&fetched)?;
+    let cache_path = cascade_config_dir().join("models.yaml");
+    write_models_cache_to_path(&cache_path, &fetched)
+}
+
+/// Execute one pass of the auto-update loop (binary check/apply + models
+/// refresh).  No-ops when `[updates] auto = false`.
+///
+/// Exposed as `pub(crate)` so the supervisor loop and unit tests call the
+/// same code path — behaviour is identical whether triggered by the timer or
+/// by a test.
+pub(crate) async fn auto_update_tick() {
+    if !get_auto_update() {
+        return;
+    }
+
+    // Binary update: non-fatal — a failed apply is logged and we still
+    // proceed to the models refresh.
+    let apply_result = apply_update().await;
+    if apply_result.ok {
+        match apply_result.snapshot_id.as_deref() {
+            Some(_) => {
+                let v = apply_result
+                    .installed_version
+                    .as_deref()
+                    .unwrap_or("unknown");
+                info!(version = %v, "auto_update: binary updated");
+            }
+            None => info!("auto_update: binary already up to date"),
+        }
+    } else {
+        let err = apply_result.error.as_deref().unwrap_or("unknown");
+        warn!(error = %err, "auto_update: binary update check/apply failed (non-fatal)");
+    }
+
+    // Models refresh: non-fatal — logged and continued.
+    match refresh_models_cache().await {
+        Ok(()) => info!("auto_update: models.yaml refreshed"),
+        Err(e) => warn!(error = %e, "auto_update: models.yaml refresh failed (non-fatal)"),
+    }
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -817,5 +941,184 @@ mod tests {
         // may or may not find a real one on PATH in CI — just assert this
         // doesn't panic and returns a coherent Option.
         let _ = resolve_cascade_cli_path(&cascaded);
+    }
+
+    // ── validate_models_yaml_contents ────────────────────────────────────────
+
+    #[test]
+    fn validate_models_yaml_accepts_valid_yaml() {
+        let yaml = "providers:\n  - name: claude\n  - name: gemini\n";
+        let count = super::validate_models_yaml_contents(yaml).expect("valid yaml");
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn validate_models_yaml_rejects_empty_providers() {
+        let yaml = "providers: []\n";
+        assert!(super::validate_models_yaml_contents(yaml).is_err());
+    }
+
+    #[test]
+    fn validate_models_yaml_rejects_provider_with_empty_name() {
+        let yaml = "providers:\n  - name: ''\n";
+        assert!(super::validate_models_yaml_contents(yaml).is_err());
+    }
+
+    #[test]
+    fn validate_models_yaml_rejects_non_yaml() {
+        assert!(super::validate_models_yaml_contents("not { valid: yaml: [}").is_err());
+    }
+
+    // ── refresh_models_cache (wiremock) ───────────────────────────────────────
+
+    #[tokio::test]
+    #[serial]
+    async fn refresh_models_cache_writes_file_on_valid_response() {
+        let server = wiremock::MockServer::start().await;
+        let valid_yaml = "providers:\n  - name: claude\n  - name: gemini\n";
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(valid_yaml))
+            .mount(&server)
+            .await;
+
+        let dir = tempfile::tempdir().expect("tmpdir");
+        std::env::set_var("HOME", dir.path());
+        std::env::set_var("CASCADE_MODELS_YAML_URL", server.uri());
+
+        let result = super::refresh_models_cache().await;
+
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+        std::env::remove_var("HOME");
+
+        assert!(
+            result.is_ok(),
+            "refresh_models_cache should succeed: {result:?}"
+        );
+        let written = std::fs::read_to_string(dir.path().join(".cascade").join("models.yaml"))
+            .expect("models.yaml must be written");
+        assert!(written.contains("claude"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn refresh_models_cache_returns_err_on_fetch_failure() {
+        // Nothing listening — connect fails immediately.
+        std::env::set_var("CASCADE_MODELS_YAML_URL", "http://127.0.0.1:1/models.yaml");
+        let result = super::refresh_models_cache().await;
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+        assert!(
+            result.is_err(),
+            "fetch failure must surface as Err (non-fatal)"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn refresh_models_cache_returns_err_on_invalid_yaml() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("not valid yaml }{"))
+            .mount(&server)
+            .await;
+
+        std::env::set_var("CASCADE_MODELS_YAML_URL", server.uri());
+        let result = super::refresh_models_cache().await;
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+
+        assert!(
+            result.is_err(),
+            "invalid YAML must surface as Err (non-fatal)"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn refresh_models_cache_returns_err_on_404() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        std::env::set_var("CASCADE_MODELS_YAML_URL", server.uri());
+        let result = super::refresh_models_cache().await;
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+
+        assert!(
+            result.is_err(),
+            "404 (e.g. private-repo) must surface as Err (non-fatal)"
+        );
+    }
+
+    // ── auto_update_tick (integration-style) ─────────────────────────────────
+
+    #[tokio::test]
+    #[serial]
+    async fn auto_update_tick_calls_models_refresh_when_auto_enabled() {
+        // Point the GitHub API at a mock that reports the current version
+        // (no update available — avoids any binary download attempt).
+        let api_server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/releases/latest"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")),
+                    "assets": []
+                })),
+            )
+            .mount(&api_server)
+            .await;
+
+        let models_server = wiremock::MockServer::start().await;
+        let valid_yaml = "providers:\n  - name: claude\n";
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(valid_yaml))
+            .expect(1) // must be called exactly once
+            .mount(&models_server)
+            .await;
+
+        let dir = tempfile::tempdir().expect("tmpdir");
+        std::env::set_var("HOME", dir.path());
+        std::env::set_var("CASCADE_UPDATE_API_BASE", api_server.uri());
+        std::env::set_var("CASCADE_MODELS_YAML_URL", models_server.uri());
+
+        // Enable auto-update in the tmp home dir.
+        super::set_auto_update(true).expect("set auto=true");
+        assert!(super::get_auto_update(), "auto must be true");
+
+        super::auto_update_tick().await;
+
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+        std::env::remove_var("CASCADE_UPDATE_API_BASE");
+        std::env::remove_var("HOME");
+
+        // wiremock verifies the `expect(1)` on drop — models URL was called.
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn auto_update_tick_skips_when_auto_disabled() {
+        let models_server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string("providers:\n  - name: claude\n"),
+            )
+            .expect(0) // must NOT be called
+            .mount(&models_server)
+            .await;
+
+        let dir = tempfile::tempdir().expect("tmpdir");
+        std::env::set_var("HOME", dir.path());
+        std::env::set_var("CASCADE_MODELS_YAML_URL", models_server.uri());
+
+        // Explicitly disable auto-update.
+        super::set_auto_update(false).expect("set auto=false");
+
+        super::auto_update_tick().await;
+
+        std::env::remove_var("CASCADE_MODELS_YAML_URL");
+        std::env::remove_var("HOME");
+        // wiremock verifies expect(0) on drop.
     }
 }
