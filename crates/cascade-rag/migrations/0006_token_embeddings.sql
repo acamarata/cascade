@@ -1,5 +1,6 @@
 -- Migration 0006: rag_token_embeddings
--- Adds per-token vector storage for BGE-M3 multi-vector (ColBERT-style) late interaction.
+-- Adds per-word E5 proxy vector storage for MaxSim late interaction.
+-- This is not native BGE-M3 ColBERT output.
 -- Gated behind feature flag `rag-multivec` — this migration only runs when the feature
 -- is enabled at runtime (see db/migrations.rs).
 --

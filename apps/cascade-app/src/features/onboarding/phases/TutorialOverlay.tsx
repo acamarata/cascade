@@ -47,7 +47,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'rag-explorer',
     title: 'RAG Explorer',
     description:
-      'Search and retrieve documents from your knowledge base. Powered by BGE-M3 embeddings and FTS5 full-text search.',
+      'Search and retrieve documents from your knowledge base. Powered by Multilingual E5 Large embeddings and FTS5 full-text search.',
     targetSelector: '[data-tutorial="rag-explorer"]', // Nav item for RAG route
     position: 'bottom',
   },

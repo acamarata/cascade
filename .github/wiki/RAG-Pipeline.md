@@ -11,7 +11,7 @@ The pipeline has three tiers:
 | Tier | Method | Description |
 |---|---|---|
 | T1 FTS5 | Keyword | SQLite FTS5 full-text search over tokenized text |
-| T2 Dense | Embeddings | BGE-M3 ONNX model, 1024-dimensional float vectors |
+| T2 Dense | Embeddings | Multilingual E5 Large ONNX model, 1024-dimensional float vectors |
 | T3 RRF | Fusion | Reciprocal Rank Fusion merges T1 and T2 result lists |
 
 Each tier runs independently. The RRF step weights and merges them into a single ranked list.
@@ -24,7 +24,7 @@ Each tier runs independently. The RRF step weights and merges them into a single
 
 2. **Chunking** - text is split by heading boundaries (`##` sections), with a max chunk size of 512 tokens. Overlap between chunks is 64 tokens.
 
-3. **Embedding** - each chunk is embedded using the BGE-M3 model loaded from an ONNX file bundled with the binary. On first run, the model is extracted to `~/.cascade/models/`. Embedding runs in a background thread pool.
+3. **Embedding** - each chunk is embedded using Multilingual E5 Large through fastembed's ONNX runtime. The legacy `bge-m3` configuration key selects this compatibility mode; Cascade does not currently run native BGE-M3. Model artifacts are cached under `~/.cascade/models/`, and embedding runs in a background thread pool.
 
 4. **Storage** - embeddings are stored in SQLite with the `sqlite-vec` extension. FTS5 tokens are stored in a separate virtual table in the same database.
 
@@ -49,7 +49,7 @@ With RAG disabled, `cascade search` still works but uses keyword matching only (
 
 | Component | Typical size |
 |---|---|
-| BGE-M3 ONNX model | ~560 MB (downloaded once, stored in `~/.cascade/models/`) |
+| Multilingual E5 Large ONNX model | Downloaded once and stored in `~/.cascade/models/` |
 | SQLite database | ~2–20 MB per 100 instruction files |
 | FTS5 index | ~1–5 MB per 100 files |
 
@@ -129,7 +129,7 @@ cascade daemon restart
 
 **Model download is slow**
 
-BGE-M3 (~560 MB) downloads on first run. The download uses the same network as any `cargo install`. Once cached in `~/.cascade/models/`, it is not re-downloaded.
+Multilingual E5 Large downloads on first use. The `bge-m3` setting is the backward-compatible configuration key for this E5-based mode. Once cached in `~/.cascade/models/`, the model is not re-downloaded.
 
 **High memory usage**
 

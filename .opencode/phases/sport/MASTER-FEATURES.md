@@ -220,8 +220,12 @@
 | ID | Feature | Description | Status | Delivers |
 |---|---|---|---|---|
 | F-RAG-FTS5 | FTS5 keyword index | SQLite FTS5 with porter tokenizer, stemming, prefix matching | 🔲 Planned | P4-E01 |
-| F-RAG-BGE-M3 | BGE-M3 dense embeddings | fastembed-rs (ONNX); local-only; multilingual; ~500MB model | 🔲 Planned | P4-E01 |
-| F-RAG-SPARSE | Sparse embeddings (SPLADE/BM25) | BGE-M3 sparse output stored alongside dense vectors | 🔲 Planned | P4-E01 |
+| F-RAG-BGE-M3 | E5 Large dense embeddings (`bge-m3` compatibility key) | fastembed-rs (ONNX); local-only; multilingual; native BGE-M3 remains deferred to E-P7-20 | ✅ Done | T-P7-E14-02 |
+| F-RAG-FASTEMBED-FAIL-LOUD | Reject dense embedding without fastembed | Feature-disabled builds return an explicit capability error instead of zero vectors | ✅ Done | T-P7-E14-03 |
+| F-RAG-RERANKER-FAIL-LOUD | Reject BGE reranking without reranker support | Feature-disabled builds return an explicit capability error instead of mock scores | ✅ Done | T-P7-E14-04 |
+| F-RAG-MOCK-FALLBACK-STATUS | Surface lazy embedding degradation | Failed real-model init logs a warning and appears in daemon/CLI status | ✅ Done | T-P7-E14-05 |
+| F-RAG-DEFERRED-TODO-AUDIT | Verify HyDE/feedback deferral tracking | HyDE is tracked by T-P7-E20-01; feedback projection/LoRA training is absent from the current backlog and E-P7-20 scope | ⚠️ Gap recorded | T-P7-E14-06 / T-P7-E20-01 |
+| F-RAG-SPARSE | Sparse retrieval | TF-IDF ships today; native BGE-M3/SPLADE output remains deferred to E-P7-20 | 🟡 Partial | P4-E01 / E-P7-20 |
 | F-RAG-SQLITE-VEC | sqlite-vec vector store | Dense vector store on top of SQLite; no external DB | 🔲 Planned | P4-E01 |
 | F-RAG-RRF | RRF hybrid merger | Reciprocal Rank Fusion (k=60) across FTS5 + dense + sparse scores | 🔲 Planned | P4-E01 |
 | F-RAG-RERANKER | bge-reranker-v2-m3 | Cross-encoder reranker via ONNX; opt-in; +~200MB | 🔲 Planned | P4-E01 |
@@ -231,7 +235,7 @@
 | F-RAG-AUTO-INDEX | Auto-RAG indexer | File watcher auto-indexes `.claude/memory/`, `.claude/planning/`, `.github/wiki/`, `docs/` | 🔲 Planned | P4-E01 |
 | F-RAG-DND | Drag-and-drop ingest | Add any file to the index via Cascade.app drag-and-drop | 🔲 Planned | P4-E01 |
 | F-RAG-EXTERNAL-DRIVE | External drive index | Point index root at any path (e.g. `/Volumes/X9/`); daemon handles mount/unmount | 🔲 Planned | P4-E01 |
-| F-RAG-MULTIVEC | Multi-vec ColBERT | BGE-M3 multi-vector mode for best recall+precision (highest disk cost) | 🔲 Planned | P4-E01 |
+| F-RAG-MULTIVEC | Multi-vec MaxSim | Per-word E5 proxy is feature-gated; native BGE-M3/ColBERT remains deferred to E-P7-20 | 🟡 Partial | P4-E01 / E-P7-20 |
 | F-RAG-EVAL | Offline eval harness | precision@k, recall@k, MRR, NDCG against golden query set | 🔲 Planned | P4-E01 |
 | F-RAG-INCR-INDEX | Incremental indexing | Index only changed files; file-hash diffing | 🔲 Planned | P4-E04 |
 | F-RAG-LRU-CACHE | LRU query cache | In-memory LRU cache for repeated queries | 🔲 Planned | P4-E04 |

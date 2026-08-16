@@ -437,9 +437,13 @@ pub async fn run(
                     // ipc.rs's RagSearchHandler uses the SAME shared instance so
                     // the ~4 GB ONNX model is downloaded/warmed only once per
                     // process (previously each site built its own copy — the log
-                    // showed two "initialising BGE-M3" per daemon start).
+                    // showed two embedding-model initialisations per daemon start).
                     let lazy_embed = cascade_rag::embed::LazyEmbedModel::shared();
-                    if std::env::var("CASCADE_OFFLINE_MODELS").is_err() {
+                    if std::env::var("CASCADE_OFFLINE_MODELS").is_ok() {
+                        lazy_embed.engage_mock_fallback(
+                            "CASCADE_OFFLINE_MODELS is set; real embedding-model loading was skipped",
+                        );
+                    } else {
                         lazy_embed.spawn_load();
                     }
                     let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;

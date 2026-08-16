@@ -2,7 +2,7 @@
 //!
 //! # Purpose
 //!
-//! Resolves the on-disk cache directory for BGE-M3 (and other ONNX model)
+//! Resolves the on-disk cache directory for local ONNX embedding model
 //! artifacts. The actual HTTP download is delegated to fastembed-rs
 //! (`InitOptions::with_cache_dir`); this module only answers two questions:
 //!
@@ -52,7 +52,7 @@ pub enum ModelCacheError {
         cache_dir = cache_dir.display()
     )]
     ModelNotDownloaded {
-        /// The model identifier (e.g. `"BAAI/bge-m3"`).
+        /// The model identifier (e.g. `"intfloat/multilingual-e5-large"`).
         model_id: String,
         /// The cache directory where the model is expected.
         cache_dir: PathBuf,

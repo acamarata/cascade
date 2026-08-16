@@ -177,4 +177,4 @@ These are the steps you must take to publish the v0.1.0 release. Steps 1–3 can
 
 ## Version Recommendation
 
-Recommend releasing as **v0.1.0** (initial public FOSS release). No API stability guarantees implied at this version. The daemon, CLI, and GUI are functional but the RAG embedding tier requires the BGE-M3 model download on first run, which is documented in the wiki.
+Recommend releasing as **v0.1.0** (initial public FOSS release). No API stability guarantees implied at this version. The daemon, CLI, and GUI are functional but the RAG embedding tier requires the Multilingual E5 Large model download on first run, which is documented in the wiki.

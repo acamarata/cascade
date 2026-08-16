@@ -91,7 +91,7 @@ static PROMPTS: &[PromptEntry] = &[
     (
         "cascade-search",
         "Search the Cascade corpus and inject the top-ranked results as context. \
-         Uses hybrid RRF search (BGE-M3 + FTS5) over the watched instruction files.",
+         Uses hybrid RRF search (Multilingual E5 Large + FTS5) over the watched instruction files.",
         &[
             ("query", "What to search for in the Cascade corpus.", true),
             ("limit", "Maximum number of results to include (default: 5).", false),

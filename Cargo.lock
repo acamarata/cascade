@@ -1673,6 +1673,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "tracing-subscriber",
  "tree-sitter",
  "tree-sitter-javascript",
  "tree-sitter-python",

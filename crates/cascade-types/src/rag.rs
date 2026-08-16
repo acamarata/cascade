@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// RAG/RRF serve status returned by GET /api/gci/rag-status.
 ///
 /// P3 stub: serving=false, index_count=0, index_size_bytes=0, last_indexed=None.
-/// P4 will populate real values from the BGE-M3 + FTS5 + sqlite-vec pipeline.
+/// Populated by the Multilingual E5 Large + FTS5 + sqlite-vec pipeline.
 ///
 /// ## Query cache fields (T-P4-E04-08)
 ///

@@ -1,6 +1,7 @@
 -- Migration 0004: rag_embeddings + rag_sparse_embeddings
 -- Requires: sqlite-vec extension loaded at runtime (feature = "vec").
--- rag_embeddings uses vec0 virtual table with float[1024] matching BGE-M3
+-- rag_embeddings uses vec0 virtual table with float[1024] matching the
+-- default Multilingual E5 Large model
 -- dense output dimension. The vec0 rowid maps 1-to-1 to rag_chunks.id.
 CREATE VIRTUAL TABLE IF NOT EXISTS rag_embeddings USING vec0 (
     rowid      INTEGER PRIMARY KEY,

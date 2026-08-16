@@ -1,24 +1,27 @@
-//! BGE-M3 embedding provider via fastembed-rs (ONNX inference).
+//! Multilingual E5 Large embedding provider via fastembed-rs (ONNX inference).
 //!
 //! # Purpose
 //!
-//! Implements [`EmbedModel`] and [`EmbeddingProvider`] for the BGE-M3 family
-//! using local ONNX inference.  No API keys, no network after first download.
+//! Implements [`EmbedModel`] and [`EmbeddingProvider`] for the legacy
+//! `bge-m3` compatibility mode using local ONNX inference.  The selected dense
+//! model is `intfloat/multilingual-e5-large`, not BGE-M3.  No API keys, no
+//! network after first download.
 //!
 //! # Dense vs Sparse
 //!
-//! BGE-M3 (BAAI General Embedding M3) supports dense, sparse (SPLADE), and
-//! multi-vector (ColBERT) modes.  This implementation provides:
+//! This compatibility mode provides:
 //!
-//! - **Dense**: 1024-dimensional float vectors via fastembed-rs ONNX session.
-//! - **Sparse**: TF-IDF with FNV-1a stable token hashing (see note below).
+//! - **Dense**: Multilingual E5 Large 1024-dimensional float vectors via a
+//!   fastembed-rs ONNX session.
+//! - **Sparse**: TF-IDF with FNV-1a stable token hashing, not BGE-M3 SPLADE.
+//! - **Multi-vector**: an optional per-word E5 dense-call proxy, not ColBERT.
 //!
 //! ## fastembed-rs model note (T-P4-E01-04 gap / rag-02 verification)
 //!
 //! fastembed 4.9.1 does **not** expose `EmbeddingModel::BGEM3`.  The best
 //! available 1024-dim multilingual model is `EmbeddingModel::MultilingualE5Large`
 //! (intfloat/multilingual-e5-large, dim=1024).  It covers 100+ languages and
-//! is the closest available proxy to BGE-M3 dense output within fastembed 4.9.1.
+//! is the dense model this compatibility mode actually runs.
 //!
 //! TODO(rag-02): BGE-M3 not in fastembed 4.9.1 — upgrade when fastembed
 //!   ships EmbeddingModel::BGEM3; replace MultilingualE5Large + this comment.
@@ -62,8 +65,10 @@
 //! SPORT: MASTER-LIBS.md → cascade-rag::embed::bge_m3
 
 use async_trait::async_trait;
+#[cfg(feature = "fastembed")]
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(feature = "fastembed")]
 use std::sync::Mutex;
 use tracing::{info, instrument};
 // `warn!` fires only in the no-fastembed stub branch.
@@ -72,13 +77,20 @@ use tracing::warn;
 
 use cascade_types::{
     error::{CascadeError, Result},
-    EmbedOpts, EmbedUsage, Embedding, EmbeddingProvider, ProviderKind,
+    EmbedOpts, Embedding, EmbeddingProvider, ProviderKind,
 };
+
+#[cfg(feature = "fastembed")]
+use cascade_types::EmbedUsage;
 
 use super::{sparse_tfidf_single, EmbedError, EmbedModel};
 
 #[cfg(feature = "fastembed")]
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+
+#[cfg(not(feature = "fastembed"))]
+const FASTEMBED_DISABLED_DETAIL: &str =
+    "dense embedding unavailable: cascade-rag was built without the 'fastembed' feature";
 
 /// Batch size for fastembed ONNX calls.
 ///
@@ -88,8 +100,8 @@ const DEFAULT_BATCH_SIZE: usize = 32;
 
 /// Dense embedding dimension.
 ///
-/// MultilingualE5Large produces 1024-dim vectors, matching the BGE-M3 target.
-/// TODO(rag-02): BGE-M3 not in fastembed 4.9.1; using MultilingualE5Large (1024-d).
+/// MultilingualE5Large produces the 1024-dim vectors used by this compatibility
+/// mode. True BGE-M3 remains a separate E-P7-20 upgrade.
 const BGE_M3_DIM: usize = 1024;
 
 /// Stable model identifier string used in logs, metrics, and error messages.
@@ -99,16 +111,20 @@ const MODEL_ID: &str = "bge-m3";
 ///
 /// E5 models expect a task-specific prefix for query vectors.  Document
 /// vectors use `DOCUMENT_INSTRUCTION`.  Using task prefixes matches the
-/// intfloat/multilingual-e5-large recommended usage and replicates the
-/// BGE-M3 instruction pattern.
+/// intfloat/multilingual-e5-large recommended usage.
+#[cfg(feature = "fastembed")]
 const QUERY_INSTRUCTION: &str = "query: ";
 
 /// Document instruction prefix for multilingual-e5-large.
+#[cfg(feature = "fastembed")]
 const DOCUMENT_INSTRUCTION: &str = "passage: ";
 
 // ── BgeM3Embedder ─────────────────────────────────────────────────────────────
 
-/// Local BGE-M3 embedding provider backed by fastembed-rs.
+/// Local Multilingual E5 Large provider behind the legacy `BgeM3Embedder` API.
+///
+/// The type and its `bge-m3` model identifier remain stable for configuration
+/// and cache compatibility; they do not mean that a genuine BGE-M3 model runs.
 ///
 /// # Usage
 ///
@@ -146,20 +162,23 @@ pub struct BgeM3Embedder {
     /// Resolved path to the model cache directory.
     model_dir: PathBuf,
     /// Batch size for ONNX inference calls.
+    #[cfg(feature = "fastembed")]
     batch_size: usize,
     /// Content-hash embed cache: blake3 hex → dense vector.
     ///
     /// Avoids re-embedding identical text chunks on repeated indexing runs.
     /// Cache hits > 90% expected on incremental re-index of unchanged documents.
+    #[cfg(feature = "fastembed")]
     embed_cache: Mutex<HashMap<String, Vec<f32>>>,
 }
 
 impl std::fmt::Debug for BgeM3Embedder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BgeM3Embedder")
-            .field("model_dir", &self.model_dir)
-            .field("batch_size", &self.batch_size)
-            .finish_non_exhaustive()
+        let mut debug = f.debug_struct("BgeM3Embedder");
+        debug.field("model_dir", &self.model_dir);
+        #[cfg(feature = "fastembed")]
+        debug.field("batch_size", &self.batch_size);
+        debug.finish_non_exhaustive()
     }
 }
 
@@ -253,7 +272,7 @@ impl BgeM3Embedder {
             }
         })?;
 
-        info!(model_dir = %model_dir.display(), "initialising BGE-M3 / MultilingualE5Large provider");
+        info!(model_dir = %model_dir.display(), "initialising Multilingual E5 Large provider (bge-m3 compatibility key)");
 
         #[cfg(feature = "fastembed")]
         {
@@ -273,7 +292,7 @@ impl BgeM3Embedder {
 
             // Warm-up: one dummy embed to pre-allocate ONNX buffers.
             let _ = model.embed(vec!["warm-up".to_string()], Some(1));
-            info!("MultilingualE5Large warm-up complete (proxying BGE-M3, 1024-dim)");
+            info!("Multilingual E5 Large warm-up complete (1024-dim)");
 
             return Ok(Self {
                 model,
@@ -285,12 +304,8 @@ impl BgeM3Embedder {
 
         #[cfg(not(feature = "fastembed"))]
         {
-            warn!("fastembed feature not enabled; BgeM3Embedder will return zero dense vectors");
-            Ok(Self {
-                model_dir,
-                batch_size: opts.batch_size,
-                embed_cache: Mutex::new(HashMap::new()),
-            })
+            warn!("fastembed feature not enabled; dense embedding requests will fail explicitly");
+            Ok(Self { model_dir })
         }
     }
 }
@@ -298,6 +313,7 @@ impl BgeM3Embedder {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Compute blake3 hex hash for a string (content-hash cache key).
+#[cfg(any(feature = "fastembed", test))]
 fn blake3_hex(s: &str) -> String {
     blake3::hash(s.as_bytes()).to_hex().to_string()
 }
@@ -306,6 +322,7 @@ fn blake3_hex(s: &str) -> String {
 ///
 /// If the vector is the zero vector (norm < 1e-12), it is left unchanged to
 /// avoid NaN.
+#[cfg(any(feature = "fastembed", test))]
 fn l2_normalize(v: &mut [f32]) {
     let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
     if norm < 1e-12 {
@@ -320,6 +337,7 @@ fn l2_normalize(v: &mut [f32]) {
 ///
 /// Returns the truncated, renormalised vector.  If `dim >= v.len()`, the
 /// original vector is returned (still renormalised).
+#[cfg(any(feature = "fastembed", test))]
 pub(crate) fn truncate_and_normalize(v: Vec<f32>, dim: usize) -> Vec<f32> {
     let mut out: Vec<f32> = if dim < v.len() {
         v.into_iter().take(dim).collect()
@@ -420,8 +438,10 @@ impl EmbedModel for BgeM3Embedder {
 
         #[cfg(not(feature = "fastembed"))]
         {
-            // Stub: zero vectors when feature is off.
-            Ok(texts.iter().map(|_| vec![0.0f32; BGE_M3_DIM]).collect())
+            Err(EmbedError::InferenceFailed {
+                model_id: MODEL_ID.into(),
+                detail: FASTEMBED_DISABLED_DETAIL.into(),
+            })
         }
     }
 
@@ -471,11 +491,11 @@ impl EmbeddingProvider for BgeM3Embedder {
             return Ok(vec![]);
         }
 
-        let is_query = opts.usage == EmbedUsage::Query;
-        let truncate = opts.truncate_dim;
-
         #[cfg(feature = "fastembed")]
         {
+            let is_query = opts.usage == EmbedUsage::Query;
+            let truncate = opts.truncate_dim;
+
             if is_query {
                 // Query path: prepend QUERY_INSTRUCTION directly, bypassing the
                 // document-instruction wrapper inside embed_dense.
@@ -528,17 +548,11 @@ impl EmbeddingProvider for BgeM3Embedder {
 
         #[cfg(not(feature = "fastembed"))]
         {
-            // Stub: zero vectors.
-            Ok(texts
-                .iter()
-                .map(|_| {
-                    let dim = truncate.unwrap_or(BGE_M3_DIM);
-                    Embedding {
-                        values: vec![0.0f32; dim],
-                        token_count: None,
-                    }
-                })
-                .collect())
+            let _ = opts;
+            Err(CascadeError::EmbeddingFailed {
+                provider: MODEL_ID.into(),
+                detail: FASTEMBED_DISABLED_DETAIL.into(),
+            })
         }
     }
 
@@ -557,6 +571,13 @@ impl EmbeddingProvider for BgeM3Embedder {
 mod tests {
     use super::*;
     use crate::embed::MockEmbedModel;
+
+    #[cfg(not(feature = "fastembed"))]
+    fn no_fastembed_embedder() -> BgeM3Embedder {
+        BgeM3Embedder {
+            model_dir: PathBuf::new(),
+        }
+    }
 
     // ── Unit tests that do NOT require a model download ───────────────────────
 
@@ -602,6 +623,43 @@ mod tests {
             .embed_sparse(&["cascade retrieval augmented generation"])
             .unwrap();
         assert!(!sparse[0].is_empty(), "sparse output must not be empty");
+    }
+
+    #[cfg(not(feature = "fastembed"))]
+    #[test]
+    fn dense_embedding_without_fastembed_fails_loud() {
+        let err = no_fastembed_embedder()
+            .embed_dense(&["must not become a zero vector"])
+            .unwrap_err();
+
+        match err {
+            EmbedError::InferenceFailed { model_id, detail } => {
+                assert_eq!(model_id, MODEL_ID);
+                assert_eq!(detail, FASTEMBED_DISABLED_DETAIL);
+            }
+            other => panic!("expected InferenceFailed, got {other:?}"),
+        }
+    }
+
+    #[cfg(not(feature = "fastembed"))]
+    #[tokio::test]
+    async fn provider_embedding_without_fastembed_returns_cascade_error() {
+        let embedder = no_fastembed_embedder();
+        let err = EmbeddingProvider::embed(
+            &embedder,
+            &["must not become a zero vector"],
+            &EmbedOpts::default(),
+        )
+        .await
+        .unwrap_err();
+
+        match err {
+            CascadeError::EmbeddingFailed { provider, detail } => {
+                assert_eq!(provider, MODEL_ID);
+                assert_eq!(detail, FASTEMBED_DISABLED_DETAIL);
+            }
+            other => panic!("expected EmbeddingFailed, got {other:?}"),
+        }
     }
 
     /// BUG #1 REGRESSION: offline_guard must fire BEFORE create_dir_all.
@@ -700,6 +758,7 @@ mod tests {
     ///
     /// E5 models use task-specific prefixes; both must be distinct so that
     /// query embedding differs from document embedding at the model level.
+    #[cfg(feature = "fastembed")]
     #[test]
     fn query_instruction_differs_from_document_instruction() {
         assert_ne!(

@@ -12,7 +12,7 @@ No. Cascade generates tool-specific files alongside your existing ones, or can m
 
 **Is my data sent to any server?**
 
-No. Cascade is fully local. The RAG index, embeddings, and instruction files live on your disk. The BGE-M3 model runs locally via ONNX. The MCP server only listens on `127.0.0.1` by default. There is no telemetry unless you explicitly opt in during onboarding. See [Privacy](Privacy.md) and [Telemetry Consent](Telemetry-Consent.md).
+No. Cascade is fully local. The RAG index, embeddings, and instruction files live on your disk. The Multilingual E5 Large model runs locally via ONNX. The MCP server only listens on `127.0.0.1` by default. There is no telemetry unless you explicitly opt in during onboarding. See [Privacy](Privacy.md) and [Telemetry Consent](Telemetry-Consent.md).
 
 ---
 

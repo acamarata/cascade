@@ -50,6 +50,10 @@ use fastembed::{RerankInitOptions, RerankerModel, TextRerank};
 /// Stable model identifier string used in logs, metrics, and error messages.
 const MODEL_ID: &str = "bge-reranker-v2-m3";
 
+#[cfg(not(feature = "reranker"))]
+const RERANKER_DISABLED_DETAIL: &str =
+    "reranking unavailable: cascade-rag was built without the 'reranker' feature";
+
 // ── Options ───────────────────────────────────────────────────────────────────
 
 /// Options for initialising [`BgeReranker`].
@@ -70,8 +74,8 @@ pub struct BgeRerankerOptions {
 /// BGE Reranker v2-m3 backed by fastembed-rs ONNX cross-encoder inference.
 ///
 /// Requires the `reranker` feature flag.  Without it, the struct still
-/// compiles but all rerank calls return candidates in their original order
-/// with linearly decreasing mock scores.
+/// compiles but non-empty rerank requests fail with an explicit capability
+/// error; it never manufactures relevance scores.
 ///
 /// # Memory footprint
 ///
@@ -177,7 +181,7 @@ impl BgeReranker {
 
         #[cfg(not(feature = "reranker"))]
         {
-            warn!("reranker feature not enabled; BgeReranker will return stub scores");
+            warn!("reranker feature not enabled; rerank requests will fail explicitly");
             Ok(Self { model_dir })
         }
     }
@@ -195,9 +199,8 @@ impl Reranker for BgeReranker {
     ///
     /// # Feature flag
     ///
-    /// When the `reranker` feature is **disabled**, candidates are returned in
-    /// their original insertion order with linearly decreasing mock scores (same
-    /// behaviour as [`cascade_types::NoopReranker`]).
+    /// When the `reranker` feature is **disabled**, non-empty requests return a
+    /// clear [`CascadeError`] instead of fabricated relevance scores.
     #[instrument(skip(self, candidates), fields(n = candidates.len()))]
     async fn rerank(
         &self,
@@ -254,21 +257,10 @@ impl Reranker for BgeReranker {
 
         #[cfg(not(feature = "reranker"))]
         {
-            // Stub: return candidates in input order with linearly decreasing
-            // mock scores.  Identical behaviour to NoopReranker.
-            let take = opts.top_k.unwrap_or(candidates.len());
-            let n = candidates.len();
-            let results = candidates
-                .iter()
-                .take(take)
-                .enumerate()
-                .map(|(i, chunk)| RerankResult {
-                    chunk: chunk.clone(),
-                    score: 1.0 - (i as f32 / n.max(1) as f32),
-                    rank: i,
-                })
-                .collect();
-            Ok(results)
+            let _ = opts;
+            Err(CascadeError::Other(format!(
+                "reranker[{MODEL_ID}] {RERANKER_DISABLED_DETAIL}"
+            )))
         }
     }
 
@@ -287,6 +279,13 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use tempfile::TempDir;
+
+    #[cfg(not(feature = "reranker"))]
+    fn no_reranker_feature() -> BgeReranker {
+        BgeReranker {
+            model_dir: PathBuf::new(),
+        }
+    }
 
     /// Build a minimal Chunk fixture for testing.
     fn make_chunk(text: &str) -> Chunk {
@@ -326,7 +325,8 @@ mod tests {
         };
         let result = BgeReranker::new(opts).await;
         // With the `reranker` feature this is Err (no model + offline_guard);
-        // without it, construction succeeds with stub scores. Either way: no panic.
+        // without it, construction succeeds but non-empty calls fail explicitly.
+        // Either way: no panic.
         let _ = result;
     }
 
@@ -340,10 +340,9 @@ mod tests {
         let _ = assert_arc_reranker as fn(Arc<dyn Reranker>);
     }
 
-    /// Stub (non-fastembed) path: empty candidates returns empty results.
-    ///
-    /// Tests the empty-slice guard via NoopReranker, which is the spec-equivalent
-    /// stub contract when the `reranker` feature is disabled.
+    /// The explicit NoopReranker remains available for callers that deliberately
+    /// want a no-op implementation; this is distinct from BgeReranker's
+    /// feature-disabled error path.
     #[tokio::test]
     async fn empty_candidates_returns_empty() {
         let noop = cascade_types::NoopReranker;
@@ -354,11 +353,9 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    /// Noop ordering: NoopReranker preserves insertion order with scores
-    /// descending — same contract as the stub path in BgeReranker when the
-    /// `reranker` feature is disabled.
+    /// NoopReranker preserves insertion order with descending placeholder scores.
     #[tokio::test]
-    async fn noop_ordering_matches_stub_contract() {
+    async fn noop_reranker_preserves_order() {
         let chunks: Vec<Chunk> = vec![
             make_chunk("first passage"),
             make_chunk("second passage"),
@@ -392,6 +389,24 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "reranker"))]
+    #[tokio::test]
+    async fn rerank_without_feature_fails_loud() {
+        let chunks = vec![make_chunk("a candidate that must not receive a fake score")];
+        let err = no_reranker_feature()
+            .rerank("query", &chunks, &RerankOpts::default())
+            .await
+            .unwrap_err();
+
+        match err {
+            CascadeError::Other(detail) => {
+                assert!(detail.contains(MODEL_ID));
+                assert!(detail.contains(RERANKER_DISABLED_DETAIL));
+            }
+            other => panic!("expected explicit reranker capability error, got {other:?}"),
+        }
+    }
+
     /// top_k is honoured — only opts.top_k results are returned.
     #[tokio::test]
     async fn top_k_is_honoured() {
@@ -410,8 +425,7 @@ mod tests {
         assert_eq!(results.len(), 3, "top_k=3 should yield 3 results");
     }
 
-    /// Batch reranking: multiple calls produce consistent results (deterministic
-    /// for the stub / noop path).
+    /// Batch reranking: multiple NoopReranker calls produce consistent results.
     #[tokio::test]
     async fn batch_ordering_is_deterministic() {
         let chunks: Vec<Chunk> = vec![

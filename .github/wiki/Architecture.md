@@ -32,7 +32,7 @@ Cascade is built as a set of cooperating components. This page describes how the
 │  │  cascade-rag                                           │  │
 │  │  - SQLite + sqlite-vec (vector store)                  │  │
 │  │  - FTS5 (full-text index)                              │  │
-│  │  - BGE-M3 embedding (local, via ONNX)                  │  │
+│  │  - E5 Large embedding (local, via ONNX)                │  │
 │  │  - RRF fusion (hybrid dense + sparse retrieval)        │  │
 │  │  - Chunker, retriever, reranker traits                 │  │
 │  └───────────────────────────────────────────────────────┘  │
@@ -63,7 +63,7 @@ This crate also owns the tier taxonomy types and the file format parser.
 
 The retrieval layer. It maintains a SQLite database (at `~/.cascade/index.db`) with two parallel indexes:
 
-- A vector index (`sqlite-vec`) for dense semantic search using BGE-M3 embeddings, computed locally via ONNX Runtime.
+- A vector index (`sqlite-vec`) for dense semantic search using Multilingual E5 Large embeddings, computed locally via ONNX Runtime.
 - An FTS5 full-text index for keyword search.
 
 Queries combine both via Reciprocal Rank Fusion (RRF), which tends to outperform either approach alone on mixed queries.

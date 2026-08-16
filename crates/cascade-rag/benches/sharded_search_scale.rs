@@ -113,7 +113,7 @@ impl EmbedModel for StubEmbedder {
 ///
 /// Uses `batch_size=1000` to avoid embedding an enormous slice in one call.
 /// Shard count is fixed at 8 (matches a realistic production deployment with
-/// per-topic sharding). Dimension is 1024 (BGE-M3 dense output width).
+/// per-topic sharding). Dimension is 1024 (default E5 Large output width).
 fn populate_index(root: &Path, n_docs: usize) -> ShardedIndex {
     const SHARD_COUNT: usize = 8;
     const DIM: usize = 1024;

@@ -8,7 +8,7 @@ Cascade is designed for local-first operation. This page explains what data stay
 
 - All `.cascade/` instruction files and `CASCADE.md` sources
 - The RAG index (SQLite database in `~/.cascade/`)
-- The BGE-M3 ONNX model (stored in `~/.cascade/models/`)
+- The Multilingual E5 Large ONNX model (stored in `~/.cascade/models/`)
 - All search queries and results
 - Memory files, inbox messages, and snapshots
 - Daemon logs

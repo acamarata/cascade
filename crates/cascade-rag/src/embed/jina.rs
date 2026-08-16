@@ -53,7 +53,8 @@ impl JinaProvider {
     pub fn new() -> Result<Self> {
         Err(CascadeError::Other(
             "embedding provider 'jina' is not available in this build — full implementation is \
-             tracked in E-P7-20 (Deferred-Backlog Group B). Use 'bge-m3' (the default) instead."
+             tracked in E-P7-20 (Deferred-Backlog Group B). Use 'bge-m3' (the default \
+             Multilingual E5 Large compatibility mode) instead."
                 .to_string(),
         ))
     }

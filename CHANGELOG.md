@@ -25,6 +25,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   (T-P7-E13-04)
 
 ### Changed
+- Audited the HyDE and feedback-training TODO deferrals without changing their
+  implementation. The repository has no current `DEFERRED-BACKLOG.md`; its only
+  matching file is the explicitly superseded
+  `DEFERRED-BACKLOG-2026-06-18.md`. That archive and current E-P7-20 ticket
+  `T-P7-E20-01` cover HyDE activation, but neither the current E-P7-20 roadmap
+  scope nor its 28 tickets covers the feedback-trained projection/LoRA pass.
+  The missing feedback-training cross-reference is therefore recorded as a
+  planning discrepancy rather than falsely closed. (T-P7-E14-06)
+- Corrected the RAG embedding model's public labeling across docs, UI copy,
+  configuration guidance, logs, and rendered Rust documentation: the stable
+  `bge-m3` provider/configuration key currently runs Multilingual E5 Large for
+  1024-dimensional dense vectors, TF-IDF for sparse vectors, and an optional
+  per-word E5 proxy for MaxSim multi-vector retrieval. It no longer presents
+  those paths as native BGE-M3/SPLADE/ColBERT; true support remains tracked in
+  E-P7-20. Internal enum names, cache keys, and configuration compatibility are
+  unchanged. (T-P7-E14-02)
 - Nomic/Jina embedding providers now fail loud at provider-selection time
   instead of surfacing a generic `EmbeddingFailed` deep in the embed call
   path. `NomicProvider::new`/`JinaProvider::new` return
@@ -124,6 +140,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   Added 3 unit tests; 19 ipc_providers tests pass. (T-P7-E05-06)
 
 ### Fixed
+- The daemon's lazy embedding fallback is now observable instead of silently
+  degrading retrieval quality. `LazyEmbedModel` tracks `loading`, `ready`, and
+  `degraded` states; a failed real-model init (or explicit offline-model mode)
+  atomically engages the degraded flag and logs a warning naming the active
+  `MockEmbedModel` fallback. Authenticated daemon status IPC exposes the state,
+  and `cascade status` / `cascade status --json` show the degraded condition
+  (and return a failing status while it is active). A simulated init-failure
+  test captures and asserts the warning. (T-P7-E14-05)
+- BGE reranker requests now fail with an explicit capability error when
+  `cascade-rag` is compiled without the `reranker` feature. The disabled path
+  no longer returns linearly decreasing fake relevance scores; a targeted
+  no-feature regression test invokes the real `BgeReranker` path. The explicit
+  `NoopReranker` remains available for callers that intentionally select it.
+  (T-P7-E14-04)
+- Dense embedding requests now fail with an explicit `EmbeddingFailed` error
+  when `cascade-rag` is compiled without the `fastembed` feature. The low-level
+  embedder no longer returns all-zero vectors that could silently pollute
+  similarity results, and feature-disabled tests cover both the `EmbedModel`
+  and public `EmbeddingProvider` paths. (T-P7-E14-03)
 - Conductor's spill loop-guard (T-P7-E13-02) used fragile `starts_with`
   prefix matching to detect whether an account had already been tried
   (`tried.iter().any(|t| t.starts_with(&next.account_id))`), which had a
@@ -1342,8 +1377,8 @@ every AI tool you use can read.
 
 ### Known notes
 
-- BGE-M3 dense/sparse use nearest fastembed equivalents until upstream
-  ships native BGE-M3; swap is config-only.
+- The `bge-m3` compatibility mode uses nearest fastembed equivalents until
+  upstream ships native BGE-M3; swap is config-only.
 - Apple notarization and SignPath signing activate once the maintainer
   completes the one-time enrollments (documented in
   .github/docs/code-signing.md); unsigned builds work everywhere today.

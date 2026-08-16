@@ -1055,4 +1055,4 @@ JetBrains open-sourced **Mellum2** (12B MoE / 2.5B active / 64 experts, Apache 2
 4. Keep `qwen2.5-coder:7b` as the default local model; `llama3.2:3b` for the 8GB floor.
 5. Revisit in 4-6 weeks once official quantizations + independent benchmarks exist.
 
-Legitimate Cascade slots once deployable: query-routing decisions, context-compression passes, code-edit sub-agent work, summarization. Not a fit: multimodal, frontier reasoning, knowledge-heavy queries. (RAG *reranking* stays on BGE-M3 + cross-encoder — that is not generative-LLM work.)
+Legitimate Cascade slots once deployable: query-routing decisions, context-compression passes, code-edit sub-agent work, summarization. Not a fit: multimodal, frontier reasoning, knowledge-heavy queries. (RAG retrieval stays on Multilingual E5 Large plus an optional cross-encoder — that is not generative-LLM work.)

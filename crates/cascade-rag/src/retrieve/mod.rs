@@ -33,8 +33,8 @@ pub mod vector;
 /// Multi-vector (ColBERT-style) MaxSim retriever.
 ///
 /// Gated behind the `rag-multivec` feature (OFF by default). When enabled,
-/// adds a fourth retrieval channel to the RRF pipeline using BGE-M3
-/// per-token late-interaction scoring.
+/// adds a fourth retrieval channel to the RRF pipeline using per-word E5 proxy
+/// vectors and MaxSim late-interaction scoring. This is not native ColBERT.
 #[cfg(feature = "rag-multivec")]
 pub mod multivec;
 

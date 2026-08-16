@@ -26,7 +26,7 @@
 //!
 //! | Flag | What it enables |
 //! |------|-----------------|
-//! | `fastembed`    | BGE-M3, Nomic, Jina local ONNX inference via fastembed-rs |
+//! | `fastembed`    | Multilingual E5 Large local ONNX inference via fastembed-rs (`bge-m3` compatibility key) |
 //! | `vec`          | sqlite-vec vec0 virtual table for dense vector search |
 //! | `code-chunker` | tree-sitter code-aware chunking for Rust/TS/Python/JS |
 //!
@@ -90,7 +90,7 @@ pub enum TierLevel {
     #[default]
     Minimal,
 
-    /// Hybrid FTS5 + BGE-M3 dense vectors via RRF. Default for most users.
+    /// Hybrid FTS5 + Multilingual E5 Large dense vectors via RRF. Default for most users.
     /// Index size: ~text + 4KB/chunk. RAM: ~500 MB during indexing.
     Semantic,
 

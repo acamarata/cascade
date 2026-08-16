@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ProviderKind {
-    /// BGE-M3 (BAAI) — multilingual, supports dense + sparse + ColBERT.
+    /// Legacy `bge-m3` compatibility mode — currently Multilingual E5 Large
+    /// dense vectors plus TF-IDF sparse vectors; native BGE-M3/ColBERT is
+    /// deferred to E-P7-20.
     BgeM3,
 
     /// Nomic Embed Text — open-source, 768-dim.

@@ -34,7 +34,7 @@ use rusqlite::{params, Connection};
 
 use super::EmbedError;
 
-/// Expected dense vector dimension.  Matches BGE-M3 / BGELargeENV15 output.
+/// Expected dense vector dimension. Matches Multilingual E5 Large output.
 pub const DENSE_DIM: usize = 1024;
 
 // ── Serialisation helpers ──────────────────────────────────────────────────────

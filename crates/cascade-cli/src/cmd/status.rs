@@ -21,13 +21,16 @@
 //!   "indexed_docs": 8234,
 //!   "last_index_duration_ms": 412,
 //!   "incremental_enabled": true,
-//!   "worker_queue_depth": 0
+//!   "worker_queue_depth": 0,
+//!   "embedding_status": "ready",
+//!   "embedding_degraded": false
 //! }
 //! ```
 //! Fields are sourced from: project config.toml (shard_count, incremental_enabled),
 //! cascade_state.db (indexed_docs), a stats file written by the daemon
 //! (`last_index_stats.json` in the index root), and the daemon's live
-//! `rag.queue_depth` IPC endpoint (0 when the daemon is not reachable).
+//! `rag.queue_depth` and `rag.embedding_status` IPC endpoints (local defaults
+//! are used when the daemon is not reachable).
 
 use std::path::PathBuf;
 
@@ -68,6 +71,10 @@ pub struct RagStatus {
     pub incremental_enabled: bool,
     /// Pending embed-worker queue depth. 0 when daemon is not reachable.
     pub worker_queue_depth: usize,
+    /// Runtime embedding backend state: loading, ready, degraded, or unknown.
+    pub embedding_status: String,
+    /// True when failed/skipped real-model initialisation left MockEmbedModel active.
+    pub embedding_degraded: bool,
 }
 
 impl RagStatus {
@@ -110,7 +117,30 @@ impl RagStatus {
             last_index_duration_ms,
             incremental_enabled,
             worker_queue_depth: 0,
+            embedding_status: "unknown".into(),
+            embedding_degraded: false,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EmbeddingRuntimeStatus {
+    status: String,
+    degraded: bool,
+}
+
+fn parse_embedding_status(value: &serde_json::Value) -> Option<EmbeddingRuntimeStatus> {
+    Some(EmbeddingRuntimeStatus {
+        status: value.get("status")?.as_str()?.to_string(),
+        degraded: value.get("degraded")?.as_bool()?,
+    })
+}
+
+fn embedding_status_label(rag: &RagStatus) -> String {
+    if rag.embedding_degraded {
+        "DEGRADED (MockEmbedModel fallback active)".into()
+    } else {
+        rag.embedding_status.to_ascii_uppercase()
     }
 }
 
@@ -132,6 +162,17 @@ async fn fetch_worker_queue_depth() -> Option<usize> {
         .map(|v| v as usize)
 }
 
+/// Fetch the live embedding backend state. A failed/skipped real-model load is
+/// returned as `degraded=true`; temporary startup mock availability is `loading`.
+async fn fetch_embedding_status() -> Option<EmbeddingRuntimeStatus> {
+    let client = crate::ipc_client::IpcClient::new().ok()?;
+    let resp: serde_json::Value = client
+        .send("rag.embedding_status", serde_json::Value::Null)
+        .await
+        .ok()?;
+    parse_embedding_status(&resp)
+}
+
 #[async_trait]
 impl Command for StatusArgs {
     async fn run(&self) -> Result<()> {
@@ -140,9 +181,21 @@ impl Command for StatusArgs {
         let daemon_ok = check_daemon();
         let tiers = cascade_core::discovery::TierDiscovery::new().discover(&cwd)?;
 
+        let mut rag = RagStatus::load(&cwd);
+        if daemon_ok {
+            if let Some(depth) = fetch_worker_queue_depth().await {
+                rag.worker_queue_depth = depth;
+            }
+            if let Some(embedding) = fetch_embedding_status().await {
+                rag.embedding_status = embedding.status;
+                rag.embedding_degraded = embedding.degraded;
+            }
+        }
+
         // A tier is "healthy" when CASCADE.md is readable and both sibling symlinks
         // (CLAUDE.md, AGENTS.md) are valid.
         let any_fail = !daemon_ok
+            || rag.embedding_degraded
             || tiers.iter().any(|t| {
                 t.is_readable()
                     && !cascade_core::symlinks::verify_siblings(&t.cascade_dir).is_empty()
@@ -162,14 +215,6 @@ impl Command for StatusArgs {
                 })
                 .collect();
 
-            let mut rag = RagStatus::load(&cwd);
-            // Enrich with the live queue depth when the daemon is reachable;
-            // otherwise keep the local default of 0.
-            if daemon_ok {
-                if let Some(depth) = fetch_worker_queue_depth().await {
-                    rag.worker_queue_depth = depth;
-                }
-            }
             let out = serde_json::json!({
                 "daemon": daemon_ok,
                 "tiers": tier_json,
@@ -179,6 +224,8 @@ impl Command for StatusArgs {
                     "last_index_duration_ms": rag.last_index_duration_ms,
                     "incremental_enabled": rag.incremental_enabled,
                     "worker_queue_depth": rag.worker_queue_depth,
+                    "embedding_status": rag.embedding_status,
+                    "embedding_degraded": rag.embedding_degraded,
                 },
             });
             println!("{}", serde_json::to_string_pretty(&out).unwrap());
@@ -188,6 +235,7 @@ impl Command for StatusArgs {
                 "DAEMON",
                 if daemon_ok { "OK" } else { "NOT RUNNING" }
             );
+            println!("{:<12} {}", "EMBEDDING", embedding_status_label(&rag));
             println!();
             println!("{:<8} {:<10} {:<8} PATH", "TIER", "STATUS", "SYMLINKS");
             println!("{}", "-".repeat(72));
@@ -302,6 +350,8 @@ mod tests {
         assert_eq!(rag.indexed_docs, 0);
         assert_eq!(rag.last_index_duration_ms, 0);
         assert_eq!(rag.worker_queue_depth, 0);
+        assert_eq!(rag.embedding_status, "unknown");
+        assert!(!rag.embedding_degraded);
     }
 
     // ── status::rag_status_reads_config ──────────────────────────────────────
@@ -345,7 +395,7 @@ mod tests {
 
     // ── status::rag_json_has_all_fields ──────────────────────────────────────
 
-    /// The JSON output must include all 5 required rag fields.
+    /// The JSON output must include all required RAG fields.
     #[test]
     fn rag_status_json_has_all_required_fields() {
         let tmp = tempfile::tempdir().expect("tmpdir");
@@ -358,11 +408,38 @@ mod tests {
             "last_index_duration_ms",
             "incremental_enabled",
             "worker_queue_depth",
+            "embedding_status",
+            "embedding_degraded",
         ] {
             assert!(
                 json.get(field).is_some(),
                 "RagStatus JSON must include field '{field}'"
             );
         }
+    }
+
+    #[test]
+    fn degraded_embedding_status_is_visible_in_json_and_human_label() {
+        let value = serde_json::json!({
+            "status": "degraded",
+            "degraded": true,
+            "model": "mock-embed-model",
+        });
+        let parsed = parse_embedding_status(&value).expect("valid status payload");
+        assert_eq!(parsed.status, "degraded");
+        assert!(parsed.degraded);
+
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let mut rag = RagStatus::load(tmp.path());
+        rag.embedding_status = parsed.status;
+        rag.embedding_degraded = parsed.degraded;
+
+        let json = serde_json::to_value(&rag).unwrap();
+        assert_eq!(json["embedding_status"], "degraded");
+        assert_eq!(json["embedding_degraded"], true);
+        assert_eq!(
+            embedding_status_label(&rag),
+            "DEGRADED (MockEmbedModel fallback active)"
+        );
     }
 }

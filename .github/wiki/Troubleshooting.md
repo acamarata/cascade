@@ -107,7 +107,7 @@ This should not happen with a properly signed release. If you see this:
 
 **Symptom:** The daemon uses more than 1 GB of RAM.
 
-The BGE-M3 ONNX model is ~800 MB resident when loaded. This is expected.
+The Multilingual E5 Large ONNX model has a substantial resident-memory cost when loaded. This is expected.
 
 To reduce memory usage, disable dense embeddings:
 

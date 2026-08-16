@@ -41,7 +41,8 @@
 //! - `search()` calls `tokio::task::spawn_blocking` internally (rusqlite is sync);
 //!   all four handlers are safe to call from any async context.
 //! - Embedder injection: the `EmbedModel` passed at construction is reused for
-//!   every search call.  Production: real BGE-M3; tests: `MockEmbedModel`.
+//!   every search call. Production: Multilingual E5 Large via the legacy
+//!   `bge-m3` compatibility key; tests: `MockEmbedModel`.
 //!
 //! ## Ticket
 //!
@@ -290,7 +291,7 @@ impl RagSearchHandler {
     /// Create a new handler without a reranker.
     ///
     /// `embed` is injected so callers can pass `MockEmbedModel` in tests and a
-    /// real BGE-M3 model in production.  Reranking is disabled; call
+    /// real Multilingual E5 Large model in production. Reranking is disabled; call
     /// [`spawn_load_reranker`](Self::spawn_load_reranker) to load it in the
     /// background, or use [`new_with_reranker`](Self::new_with_reranker) to
     /// supply a pre-built one.

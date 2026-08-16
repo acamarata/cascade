@@ -14,7 +14,7 @@ Tier 3 in the six-tier hierarchy. Instructions that apply to all projects under 
 ## B
 
 **BGE-M3**
-The embedding model used for dense search in the RAG pipeline. A bilingual general embedding model from BAAI, run locally via ONNX. Produces 1024-dimensional vectors. See [RAG Pipeline](RAG-Pipeline.md).
+The backward-compatible Cascade configuration/provider label for the current E5-based mode. Today it runs Multilingual E5 Large for 1024-dimensional dense vectors and TF-IDF for sparse vectors; it does not run BAAI's native BGE-M3 model. True BGE-M3/SPLADE/ColBERT support is deferred to E-P7-20. See [RAG Pipeline](RAG-Pipeline.md).
 
 ---
 
@@ -85,7 +85,7 @@ A `.cascade/memory/` Markdown file for persistent notes. Typical files: `decisio
 ## O
 
 **ONNX**
-Open Neural Network Exchange format. Used to run the BGE-M3 embedding model locally without a Python runtime. Executed via the `ort` crate (ONNX Runtime bindings for Rust).
+Open Neural Network Exchange format. Used to run the Multilingual E5 Large embedding model locally without a Python runtime. Executed via fastembed's ONNX Runtime integration.
 
 ---
 

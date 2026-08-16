@@ -1,4 +1,4 @@
-// Purpose: BGE-M3 multi-vector (ColBERT-style) token-level embedding support.
+// Purpose: E5 per-word proxy vectors for optional MaxSim retrieval.
 //
 // This module is compiled only when the `rag-multivec` feature is enabled.
 // It provides:

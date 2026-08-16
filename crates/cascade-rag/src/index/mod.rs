@@ -54,7 +54,7 @@ use tracing::{debug, info, instrument};
 /// Current schema version.  Increment on every breaking DDL change.
 const SCHEMA_VERSION: u32 = 3;
 
-/// Stored dimensions for BGE-M3.  Must match the embedding model dimension.
+/// Stored dimensions for the default Multilingual E5 Large model.
 const DEFAULT_EMBED_DIM: usize = 1024;
 
 // ── Index health ──────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ impl RagIndex {
         Ok(idx)
     }
 
-    /// Open with a custom embedding dimension (for non-BGE-M3 models).
+    /// Open with a custom embedding dimension (for non-default models).
     pub async fn open_with_dim(db_path: impl AsRef<Path>, embed_dim: usize) -> Result<Self> {
         let mut idx = Self::open(db_path).await?;
         idx.embed_dim = embed_dim;

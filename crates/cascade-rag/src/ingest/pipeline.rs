@@ -43,7 +43,8 @@ type ProgressCb = Box<dyn Fn(&Path, usize, usize) + Send + Sync>;
 /// # Inputs
 /// - `path`: absolute or relative path to the file to ingest.
 /// - DB connection wraps `rag_sources`, `rag_chunks`, and embedding tables.
-/// - `embed`: any [`EmbedModel`] implementation (real BGE-M3 or mock for tests).
+/// - `embed`: any [`EmbedModel`] implementation (Multilingual E5 Large in the
+///   default compatibility mode, or a mock for tests).
 ///
 /// # Outputs
 /// Returns [`IngestResult`] describing what happened (skip, new, updated).

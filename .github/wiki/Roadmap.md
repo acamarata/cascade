@@ -8,7 +8,7 @@ This page describes planned work for Cascade. Items are organized by phase. No d
 
 P4 is in active development. Work items include:
 
-- RAG pipeline with FTS5 + BGE-M3 + RRF
+- RAG pipeline with FTS5 + Multilingual E5 Large + RRF
 - Context fingerprinting and cross-session dedup
 - Cache management CLI (`cascade cache stats/clear`)
 - Rollback and update commands
@@ -65,7 +65,7 @@ P5 scope is preliminary and may change. Planned areas:
 - The WASM plugin sandbox does not yet support network access capabilities.
 - The MCP server does not yet support the MCP sampling primitive.
 - Windows widget requires Windows 11; not available on Windows 10.
-- The BGE-M3 model requires ~800 MB RAM. A lighter model option is being evaluated.
+- The Multilingual E5 Large model requires substantial resident memory. A lighter model option is being evaluated.
 
 ---
 

@@ -62,7 +62,7 @@ top_k = 10
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `rag.enabled` | boolean | `true` | Whether to build and query the RAG index |
-| `rag.embedding_model` | string | `"bge-m3"` | ONNX embedding model for dense search. `"bge-m3"` is bundled. |
+| `rag.embedding_model` | string | `"bge-m3"` | Backward-compatible key selecting the Multilingual E5 Large ONNX dense model. Native BGE-M3 is not bundled. |
 | `rag.fts_weight` | float | `0.4` | Weight for FTS5 keyword results in RRF fusion |
 | `rag.dense_weight` | float | `0.6` | Weight for dense embedding results in RRF fusion |
 | `rag.top_k` | integer | 10 | Number of results to return from `cascade search` |

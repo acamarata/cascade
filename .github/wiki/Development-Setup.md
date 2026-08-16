@@ -175,7 +175,7 @@ cascade/
 ├── crates/
 │   ├── cascade-types/     # shared traits and types (Chunker, Retriever, etc.)
 │   ├── cascade-core/      # cascade resolver, cascade resolution engine
-│   ├── cascade-rag/       # RAG indexer (FTS5 + BGE-M3 + RRF)
+│   ├── cascade-rag/       # RAG indexer (FTS5 + E5 Large + RRF)
 │   ├── cascade-mcp/       # MCP server (5 transports)
 │   ├── cascade-cli/       # cascade binary (Clap CLI)
 │   ├── cascade-daemon/    # cascaded daemon (Tokio)

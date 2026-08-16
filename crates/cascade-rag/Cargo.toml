@@ -93,7 +93,8 @@ fastembed    = ["dep:fastembed"]
 # Gate: TierLevel::Reranker or higher in cascade.toml.
 reranker     = ["dep:fastembed"]
 vec          = ["dep:sqlite-vec"]
-# rag-multivec: enables BGE-M3 multi-vector (ColBERT-style) late-interaction indexing.
+# rag-multivec: enables per-word E5 proxy vectors + MaxSim late-interaction indexing.
+# This is not native BGE-M3 ColBERT output; that remains deferred to E-P7-20.
 # OFF by default. Adds ~3-4x disk usage (rag_token_embeddings table).
 # Opt in via cascade.toml: [rag] multi_vec = true
 # Requires the rag-multivec feature to be compiled in.
@@ -126,6 +127,7 @@ code-chunker = [
 tempfile    = "3"
 serial_test = "3"
 criterion   = { version = "0.5", features = ["html_reports"] }
+tracing-subscriber = { workspace = true }
 
 [[bench]]
 name    = "perf"

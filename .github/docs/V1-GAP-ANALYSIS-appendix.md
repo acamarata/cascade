@@ -279,7 +279,7 @@
 **Exists:**
 - crates/cascade-rag/src/lib.rs (5KB) — full RAG pipeline with 48 RS files, 3834 LOC
 - crates/cascade-rag/src/retrieve/rrf.rs — RRF (Reciprocal Rank Fusion) hybrid merger with FTS5+dense vectors, k=60 configurable
-- crates/cascade-rag/src/embed/ (bge_m3, jina, fastembeds) — BGE-M3 ONNX via fastembed-rs, 1024-dim, sparse fallback with TF-IDF
+- crates/cascade-rag/src/embed/ (bge_m3, jina, fastembeds) — Multilingual E5 Large ONNX via fastembed-rs, 1024-dim, with TF-IDF sparse vectors; the `bge-m3` name is a compatibility key
 - crates/cascade-rag/src/search.rs — end-to-end search pipeline with SearchConfig tier support
 - crates/cascade-rag/src/index_manager.rs — per-project index routing with CASCADE tier awareness, SQLite WAL mode
 - crates/cascade-rag/src/ingest.rs (43.8KB) — file→parse→chunk→embed→store pipeline, idempotent via SHA-256, batch embedding (32 chunks)

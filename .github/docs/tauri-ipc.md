@@ -161,7 +161,7 @@ console.log(result.path)    // absolute path to the file
 Writes (overwrites) a file in a project's `.claude/memory/` directory. Creates the file if it does not exist.
 
 ```typescript
-const updated = `# Decisions\n\n## 2026-06-06\nChose BGE-M3 for embeddings.\n`
+const updated = `# Decisions\n\n## 2026-06-06\nChose Multilingual E5 Large for embeddings.\n`
 const result = await ipc.memory.write('/home/user/projects/myapp', 'decisions.md', updated)
 console.log(`wrote ${result.bytes} bytes to ${result.path}`)
 ```

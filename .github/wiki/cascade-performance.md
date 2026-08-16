@@ -137,7 +137,7 @@ Controls how many threads the `WorkerPool` uses for parallel embedding.
 
 Number of documents sent to the embedding model in a single call.
 
-- For ONNX-backed models (BGE-M3), use 32-128. Values above 128 rarely improve throughput and can increase peak memory.
+- For the default ONNX-backed Multilingual E5 Large model, use 32-128. Values above 128 rarely improve throughput and can increase peak memory.
 - For the `StubEmbedder` (tests/benchmarks), any value is fine.
 - Reducing this value lowers peak memory at the cost of more model calls.
 

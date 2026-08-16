@@ -32,7 +32,9 @@ The six tiers:
 
 - Six-tier instruction hierarchy (GCI → PCI → APC → PPC → PRC → PAC) resolved for any working directory
 - Harness-native file generation: writes `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, and more from a single source
-- Local RAG index over your instruction corpus: FTS5 + BGE-M3 dense embeddings + RRF reranking, no cloud required
+- Local RAG index over your instruction corpus: FTS5 + Multilingual E5 Large
+  dense embeddings + RRF fusion, no cloud required (`bge-m3` remains the
+  backward-compatible configuration key)
 - MCP server with multiple transports, exposing your cascade as live context to any MCP-compatible tool
 - WASM plugin system (wasmtime, capability-gated) with a PDK and `cargo-generate` template
 - Background daemon (`cascaded`) with file watcher that re-indexes and re-generates derived files on change

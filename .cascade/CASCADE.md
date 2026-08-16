@@ -13,7 +13,7 @@ Path: `/home/user/projects/acamarata/cascade/`
 Purpose: FOSS multi-agent context-cascade tool for AI coding agents (Claude Code,
 OpenCode, Codex, Cursor, Aider, Windsurf). Resolves a tiered instruction cascade
 (GCI→PCI→APC→PPC→PRC→PAC), manages AI harnesses/accounts/subscriptions, and
-provides RAG (BGE-M3 + FTS5 + RRF), sub-agent routing, and context compression.
+provides RAG (Multilingual E5 Large + FTS5 + RRF), sub-agent routing, and context compression.
 Primary language: Rust (+ TypeScript/React for Tauri GUI)
 Visibility: Private (push only at end-of-phase with user authorization)
 
@@ -23,7 +23,7 @@ Visibility: Private (push only at end-of-phase with user authorization)
 |---|---|---|
 | Daemon/CLI | Rust (Tokio async) | 1.85+ (rust-toolchain.toml) |
 | Desktop GUI | Tauri 2 + React + Vite + TypeScript + Tailwind + shadcn | Tauri ^2 |
-| RAG engine | BGE-M3 via fastembed ONNX + FTS5 + sqlite-vec + RRF | workspace |
+| RAG engine | Multilingual E5 Large via fastembed ONNX + FTS5 + sqlite-vec + RRF | workspace |
 | Plugin system | wasmtime (WASM, capability-gated) | 22 |
 | Key storage | OS keychain via `KeyStorage` trait | macOS Keychain / Linux Secret Service |
 | IPC | Unix socket JSON-RPC 2.0 | — |
@@ -42,7 +42,7 @@ cascade/
     cascade-core/      # resolution, templates, memory, RAG core logic
     cascade-cli/       # `cascade` binary (Clap v4 derive)
     cascade-daemon/    # `cascaded` daemon (Tokio, Unix socket IPC)
-    cascade-rag/       # RAG pipeline (BGE-M3 + FTS5 + sqlite-vec + RRF)
+    cascade-rag/       # RAG pipeline (E5 Large + FTS5 + sqlite-vec + RRF)
     cascade-mcp/       # MCP server + client (Unix socket transport)
     cascade-harness/   # harness detection + policy enforcement
     cascade-keychain/  # OS keychain abstraction (KeyStorage trait)
@@ -71,7 +71,7 @@ cascade/
 - **WASM plugins (capability-gated):** plugins run in wasmtime sandbox with
   explicit capability grants (file read, network, keychain). No native code in
   plugins.
-- **RRF RAG:** Reciprocal Rank Fusion merges BM25 (FTS5) and vector (BGE-M3 +
+- **RRF RAG:** Reciprocal Rank Fusion merges BM25 (FTS5) and vector (E5 Large +
   sqlite-vec) results. Chosen over single-signal retrieval for recall+precision
   balance without a heavy reranker at query time.
 - **MCP via Unix socket:** `cascaded` exposes an MCP-compatible endpoint over
@@ -93,7 +93,7 @@ P4 has 6 epics / 140 tickets. Current branch: `wip/rust-rewrite`.
 
 | Epic | Title | Status |
 |---|---|---|
-| E-01 | RAG pipeline (BGE-M3 + FTS5 + RRF) | Complete |
+| E-01 | RAG pipeline (E5 Large + FTS5 + RRF) | Complete |
 | E-02 | MCP server + client | Complete |
 | E-03 | WASM plugin system | Complete |
 | E-04 | Cache, rollback, context dedup | In progress |

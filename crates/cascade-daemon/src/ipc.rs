@@ -116,8 +116,11 @@ pub struct IpcServer {
     usage_summary_cache: SummaryCache,
     /// RAG IPC method handlers (rag.search / rag.ingest_file / rag.list_sources /
     /// rag.index_stats). Wired per T-P4-E01-29.  Uses MockEmbedModel until a
-    /// real BGE-M3 embedder is injected in a later ticket.
+    /// real Multilingual E5 Large embedder is injected in a later ticket.
     rag_handler: Arc<RagSearchHandler>,
+    /// Shared lazy embedder retained separately from the trait-object search
+    /// handler so authenticated status endpoints can expose loading/degraded state.
+    lazy_embed: Arc<cascade_rag::embed::LazyEmbedModel>,
     /// In-memory mtime-validated chunk cache (T-P4-E04-10).
     /// Surfaced via `cache.stats` and cleared via `cache.clear --chunk`.
     file_chunk_cache: Arc<ChunkCache>,
@@ -207,10 +210,14 @@ impl IpcServer {
         // WorkerPool (supervisor.rs). spawn_load() is idempotent, so the real
         // ONNX model is downloaded/warmed exactly once per process.
         let lazy_embed = cascade_rag::embed::LazyEmbedModel::shared();
-        if !offline_models {
+        if offline_models {
+            lazy_embed.engage_mock_fallback(
+                "CASCADE_OFFLINE_MODELS is set; real embedding-model loading was skipped",
+            );
+        } else {
             lazy_embed.spawn_load();
         }
-        let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed;
+        let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed.clone();
         let rag_handler = RagSearchHandler::new(IndexRegistry::new(), embed);
         if !offline_models {
             rag_handler.spawn_load_reranker();
@@ -220,7 +227,7 @@ impl IpcServer {
         // pass them into the RAG pipeline without cloning.
         let file_chunk_cache = Arc::new(ChunkCache::new(256));
         let query_cache = Arc::new(cascade_rag::cache::QueryCache::default());
-        // EmbedCache: enabled now that a real BGE-M3 model is wired in.
+        // EmbedCache: enabled now that the real Multilingual E5 Large backend is wired in.
         // Falls back to disabled() if the SQLite open fails.
         let embed_cache_dir = config_dir.join("embed-cache");
         let _ = std::fs::create_dir_all(&embed_cache_dir);
@@ -292,6 +299,7 @@ impl IpcServer {
             daemon_shutdown: None,
             usage_summary_cache: new_summary_cache(),
             rag_handler,
+            lazy_embed,
             file_chunk_cache,
             query_cache,
             embed_cache,
@@ -560,7 +568,12 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
         }
         Request::Status => {
             let snap = server.health.snapshot();
-            Response::ok(snap)
+            let embedding = embedding_status_payload(&server.lazy_embed);
+            Response::ok(serde_json::json!({
+                "status": snap.status,
+                "embedding_status": embedding["status"],
+                "embedding_degraded": embedding["degraded"],
+            }))
         }
         Request::Ping { echo } => {
             Response::ok(serde_json::json!({ "pong": echo.unwrap_or_default() }))
@@ -596,6 +609,19 @@ async fn dispatch(server: &IpcServer, req: Request) -> Response {
             Response::ok(serde_json::json!({ "status": "stopping" }))
         }
     }
+}
+
+fn embedding_status_payload(lazy_embed: &cascade_rag::embed::LazyEmbedModel) -> serde_json::Value {
+    let status = lazy_embed.status();
+    serde_json::json!({
+        "status": status.as_str(),
+        "degraded": lazy_embed.is_degraded(),
+        "model": match status {
+            cascade_rag::embed::LazyEmbedStatus::Ready => "multilingual-e5-large",
+            cascade_rag::embed::LazyEmbedStatus::Loading
+            | cascade_rag::embed::LazyEmbedStatus::Degraded => "mock-embed-model",
+        },
+    })
 }
 
 /// Typed JSON-RPC dispatch scaffold (ADR-P3-001).
@@ -811,12 +837,15 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                 return dispatch_cache(server, &typed_req.method, typed_req.params).await;
             }
 
-            // ── RAG status method (T-P7-E07-02) ─────────────────────────
+            // ── RAG status methods (T-P7-E07-02 / T-P7-E14-05) ─────────
             // Live embed-worker queue depth from DaemonState.  Must precede the
             // rag.* family dispatch below, which does not own the worker pool.
             if typed_req.method == "rag.queue_depth" {
                 let depth = server.daemon_state.lock().await.worker_queue_depth();
                 return Response::ok(serde_json::json!({ "worker_queue_depth": depth }));
+            }
+            if typed_req.method == "rag.embedding_status" {
+                return Response::ok(embedding_status_payload(&server.lazy_embed));
             }
 
             // ── RAG methods (T-P4-E01-29) ─────────────────────────────────
@@ -1726,6 +1755,20 @@ mod tests {
                 .await
                 .unwrap(),
         )
+    }
+
+    #[test]
+    fn embedding_status_payload_surfaces_degraded_mock_fallback() {
+        let lazy = cascade_rag::embed::LazyEmbedModel::new_mock();
+        let loading = embedding_status_payload(&lazy);
+        assert_eq!(loading["status"], "loading");
+        assert_eq!(loading["degraded"], false);
+
+        lazy.engage_mock_fallback("simulated daemon model-init failure");
+        let degraded = embedding_status_payload(&lazy);
+        assert_eq!(degraded["status"], "degraded");
+        assert_eq!(degraded["degraded"], true);
+        assert_eq!(degraded["model"], "mock-embed-model");
     }
 
     async fn write_json_frame<W: AsyncWriteExt + Unpin>(writer: &mut W, value: serde_json::Value) {

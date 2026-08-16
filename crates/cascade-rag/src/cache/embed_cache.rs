@@ -2,7 +2,7 @@
 //!
 //! Stores `(content_hash: blake3_hex) → Vec<f32>` in a dedicated
 //! `cascade_embed_cache.db` SQLite database adjacent to the project's
-//! RAG index directory.  Before calling BGE-M3 ONNX inference, callers
+//! RAG index directory. Before calling Multilingual E5 Large ONNX inference, callers
 //! check this cache; a hit skips inference entirely (10-50 ms → ~0.1 ms).
 //!
 //! ## Schema
@@ -24,7 +24,7 @@
 //!
 //! ## Size characteristics
 //!
-//! Each BGE-M3 embedding is 1024 × f32 = 4 096 bytes.  10 000 chunks ≈ 40 MB.
+//! Each default E5 Large embedding is 1024 × f32 = 4 096 bytes. 10 000 chunks ≈ 40 MB.
 //! The cache grows unboundedly (append-only, no eviction) because embeddings
 //! are deterministic for a fixed model.  Use `cascade cache clear embed` to
 //! reset (T-P4-E04-11 scope).
@@ -87,7 +87,8 @@ pub enum EmbedCacheError {
 ///
 /// - `index_root` — directory that owns `cascade_embed_cache.db`.
 /// - `model_id` — stable string identifier for the embedding model (e.g.
-///   `"bge-m3"`, `"nomic-embed-text-v1"`, `"mock-embed-model"`).
+///   `"bge-m3"` (legacy compatibility key), `"nomic-embed-text-v1"`,
+///   `"mock-embed-model"`).
 /// - `model_version` — version string for the model (e.g. `"1"`, `"0.3.0"`).
 ///   Changing this value invalidates all cached entries atomically.
 ///

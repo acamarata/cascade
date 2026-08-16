@@ -9,23 +9,22 @@
 //!   higher-level, async, batch-oriented trait consumed by the daemon and CLI.
 //!   `BgeM3Provider` bridges the two via an `async fn embed()` wrapper.
 //!
-//! ## Primary local provider: BGE-M3 (proxied via BGELargeENV15)
+//! ## Primary local provider: Multilingual E5 Large (`bge-m3` compatibility key)
 //!
 //! [`bge_m3::BgeM3Embedder`] wraps fastembed-rs ONNX inference.  Dense
-//! vectors are 1024-dimensional (`EmbeddingModel::BGELargeENV15`).
+//! vectors are 1024-dimensional (`EmbeddingModel::MultilingualE5Large`).
 //!
-//! NOTE: fastembed 3.14.1 does not expose `EmbeddingModel::BGEM3`.  The
-//! closest available 1024-dim variant is `BGELargeENV15`.  True BGE-M3
-//! sparse output (SPLADE-like) is not available; this ticket uses a TF-IDF
-//! fallback with FNV-1a stable token hashing.  Tracked as a known gap in
-//! T-P4-E01-04; upgrade path: bump fastembed to a version that ships BGEM3,
-//! replace the model enum variant + remove the fallback comment.
+//! NOTE: fastembed 4.9.1 does not expose `EmbeddingModel::BGEM3`.  The current
+//! compatibility mode runs Multilingual E5 Large for dense vectors, TF-IDF
+//! with FNV-1a token hashing for sparse vectors, and (when enabled) a per-word
+//! E5 dense-call proxy for multi-vector search.  None of those paths is native
+//! BGE-M3/SPLADE/ColBERT; that upgrade remains tracked in E-P7-20.
 //!
 //! ## Provider selection (cascade.toml)
 //!
 //! ```toml
 //! [rag]
-//! embedding_model = "bge-m3"   # default
+//! embedding_model = "bge-m3"   # compatibility key: runs Multilingual E5 Large
 //! # embedding_model = "nomic"
 //! # embedding_model = "jina"
 //! # embedding_model = "openai"  # requires OPENAI_API_KEY in vault
@@ -332,7 +331,8 @@ pub fn validate_provider_kind(kind: ProviderKind) -> cascade_types::error::Resul
     match kind {
         ProviderKind::Nomic | ProviderKind::Jina => Err(CascadeError::Other(format!(
             "embedding provider '{}' is not available in this build — full implementation is \
-             tracked in E-P7-20 (Deferred-Backlog Group B). Use 'bge-m3' (the default) instead.",
+             tracked in E-P7-20 (Deferred-Backlog Group B). Use 'bge-m3' (the default \
+             Multilingual E5 Large compatibility mode) instead.",
             kind.config_key()
         ))),
         // BgeM3 is the only local provider constructed by cascade-rag; other
@@ -376,27 +376,36 @@ pub fn validate_provider_kind(kind: ProviderKind) -> cascade_types::error::Resul
 /// assert!(model.dim() == 1024);
 /// # }
 /// ```
-pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
+async fn try_default_embed_model() -> std::result::Result<std::sync::Arc<dyn EmbedModel>, String> {
     #[cfg(feature = "fastembed")]
     {
         use bge_m3::{BgeM3Embedder, BgeM3Options};
-        match BgeM3Embedder::new(BgeM3Options::default()).await {
-            Ok(embedder) => {
+        BgeM3Embedder::new(BgeM3Options::default())
+            .await
+            .map(|embedder| {
                 tracing::info!("RAG: real BgeM3Embedder initialised (MultilingualE5Large, 1024-d)");
-                return std::sync::Arc::new(embedder);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    error = %e,
-                    "RAG: BgeM3Embedder init failed — falling back to MockEmbedModel \
-                     (search results will be semantically meaningless until the model is cached)"
-                );
-            }
-        }
+                std::sync::Arc::new(embedder) as std::sync::Arc<dyn EmbedModel>
+            })
+            .map_err(|e| e.to_string())
     }
 
-    tracing::warn!("RAG: using MockEmbedModel (fastembed feature off or init failed)");
-    std::sync::Arc::new(MockEmbedModel::new(1024))
+    #[cfg(not(feature = "fastembed"))]
+    Err("cascade-rag was built without the 'fastembed' feature".into())
+}
+
+pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
+    match try_default_embed_model().await {
+        Ok(model) => model,
+        Err(reason) => {
+            tracing::warn!(
+                embedding_degraded = true,
+                fallback_model = "mock-embed-model",
+                %reason,
+                "RAG: real embedder unavailable; engaging MockEmbedModel fallback"
+            );
+            std::sync::Arc::new(MockEmbedModel::new(1024))
+        }
+    }
 }
 
 // ── LazyEmbedModel: swappable holder for background model load ─────────────────
@@ -406,8 +415,8 @@ pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
 ///
 /// # Purpose
 ///
-/// Loading the real BGE-M3 embedder (`BgeM3Embedder::new`) downloads and
-/// initialises a multi-hundred-MB ONNX model — too slow to await on the daemon
+/// Loading the real Multilingual E5 Large backend (`BgeM3Embedder::new`)
+/// downloads and initialises a multi-hundred-MB ONNX model — too slow to await on the daemon
 /// startup path (it blocks the IPC socket from appearing).  `LazyEmbedModel`
 /// lets the daemon construct *instantly* with a working mock backend, then
 /// upgrade itself to the real embedder in a background task.
@@ -418,23 +427,46 @@ pub async fn default_embed_model() -> std::sync::Arc<dyn EmbedModel> {
 /// - All [`EmbedModel`] calls delegate to whatever inner model is currently
 ///   installed (mock at first, real after the swap).  Reads take a cheap
 ///   `RwLock` read lock.
-/// - [`LazyEmbedModel::spawn_load`] spawns a background tokio task that runs
-///   [`default_embed_model`] (which is offline-graceful: `Err` → mock, never
-///   panics/hangs) and swaps the result in.  Until the swap completes, the mock
-///   is used.  If load yields another mock (offline + uncached), the swap is a
-///   harmless no-op.
+/// - [`LazyEmbedModel::spawn_load`] spawns a background tokio task that attempts
+///   real-model initialisation and swaps a successful result in. Until the swap
+///   completes, the temporary mock is used. A failed attempt leaves the mock in
+///   place, sets [`LazyEmbedStatus::Degraded`], and emits a warning.
 ///
 /// # Dimension
 ///
 /// `dim()` always returns 1024 — both the mock and the real model are 1024-d,
 /// so the dimension is stable across the swap and stored vectors never become
 /// incompatible mid-flight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum LazyEmbedStatus {
+    /// The holder contains the temporary startup mock while the real model loads.
+    Loading = 0,
+    /// The real ONNX embedding model is installed.
+    Ready = 1,
+    /// Real-model initialisation failed and the mock fallback is actively serving.
+    Degraded = 2,
+}
+
+impl LazyEmbedStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Loading => "loading",
+            Self::Ready => "ready",
+            Self::Degraded => "degraded",
+        }
+    }
+}
+
 pub struct LazyEmbedModel {
     inner: std::sync::RwLock<std::sync::Arc<dyn EmbedModel>>,
     /// Set once the real-model background load has been kicked off, so repeated
     /// `spawn_load()` calls (e.g. from two daemon construction sites sharing the
     /// same instance) do not each download/initialise the multi-GB ONNX model.
     load_started: std::sync::atomic::AtomicBool,
+    /// Observable runtime state. `new_mock()` starts in Loading; only a failed
+    /// real-model load (or an explicit offline-mode decision) sets Degraded.
+    status: std::sync::atomic::AtomicU8,
 }
 
 /// Process-global shared holder, so every subsystem in the daemon (RAG search
@@ -452,6 +484,7 @@ impl std::fmt::Debug for LazyEmbedModel {
             .unwrap_or_else(|_| "<poisoned>".into());
         f.debug_struct("LazyEmbedModel")
             .field("current_model", &id)
+            .field("status", &self.status())
             .finish()
     }
 }
@@ -465,6 +498,7 @@ impl LazyEmbedModel {
         std::sync::Arc::new(Self {
             inner: std::sync::RwLock::new(std::sync::Arc::new(MockEmbedModel::new(1024))),
             load_started: std::sync::atomic::AtomicBool::new(false),
+            status: std::sync::atomic::AtomicU8::new(LazyEmbedStatus::Loading as u8),
         })
     }
 
@@ -477,17 +511,61 @@ impl LazyEmbedModel {
         std::sync::Arc::clone(SHARED_EMBED.get_or_init(Self::new_mock))
     }
 
+    /// Return the current load/fallback state for daemon health surfaces.
+    pub fn status(&self) -> LazyEmbedStatus {
+        match self.status.load(std::sync::atomic::Ordering::SeqCst) {
+            1 => LazyEmbedStatus::Ready,
+            2 => LazyEmbedStatus::Degraded,
+            _ => LazyEmbedStatus::Loading,
+        }
+    }
+
+    /// Whether a failed/skipped real-model load left the mock fallback active.
+    pub fn is_degraded(&self) -> bool {
+        self.status() == LazyEmbedStatus::Degraded
+    }
+
+    /// Mark the mock fallback as actively engaged and emit the user-visible
+    /// warning once for this holder. `new_mock()` alone does not call this: the
+    /// startup mock is temporary availability, not yet a failed fallback.
+    pub fn engage_mock_fallback(&self, reason: &str) {
+        let previous = self.status.swap(
+            LazyEmbedStatus::Degraded as u8,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        if previous != LazyEmbedStatus::Degraded as u8 {
+            tracing::warn!(
+                embedding_degraded = true,
+                fallback_model = "mock-embed-model",
+                %reason,
+                "RAG: embedding degraded; MockEmbedModel fallback is active and similarity results are not semantically reliable"
+            );
+        }
+    }
+
     /// Spawn a background tokio task that loads the real embedder and swaps it in.
     ///
     /// Returns immediately; the swap happens later on the tokio runtime.  The
-    /// load is offline-graceful (see [`default_embed_model`]): if the real model
-    /// cannot be initialised, the holder keeps using the mock.
+    /// load is offline-graceful: if the real model cannot be initialised, the
+    /// holder keeps using the mock, becomes degraded, and emits a warning.
     ///
     /// # Requires
     ///
     /// A tokio runtime must be active when this is called (it uses
     /// `tokio::spawn`).
     pub fn spawn_load(self: &std::sync::Arc<Self>) {
+        self.spawn_load_with(try_default_embed_model());
+    }
+
+    fn spawn_load_with<F>(self: &std::sync::Arc<Self>, load: F)
+    where
+        F: std::future::Future<
+                Output = std::result::Result<std::sync::Arc<dyn EmbedModel>, String>,
+            > + Send
+            + 'static,
+    {
+        use tracing::instrument::WithSubscriber;
+
         // Idempotent: only the first caller kicks off the real-model load. When
         // the shared instance is used by multiple subsystems, each may call
         // spawn_load(); without this guard they would each trigger a full
@@ -499,25 +577,37 @@ impl LazyEmbedModel {
             return;
         }
         let this = std::sync::Arc::clone(self);
-        tokio::spawn(async move {
-            let real = default_embed_model().await;
-            // Only swap if we actually got a real model (not another mock).
-            if real.model_id() != "mock-embed-model" {
-                match this.inner.write() {
+        let task = async move {
+            match load.await {
+                Ok(real) if real.model_id() != "mock-embed-model" => match this.inner.write() {
                     Ok(mut guard) => {
                         *guard = real;
+                        this.status.store(
+                            LazyEmbedStatus::Ready as u8,
+                            std::sync::atomic::Ordering::SeqCst,
+                        );
                         tracing::info!("RAG: LazyEmbedModel swapped in real embedder");
                     }
                     Err(_) => {
-                        tracing::warn!("RAG: LazyEmbedModel lock poisoned; keeping mock");
+                        this.engage_mock_fallback(
+                            "LazyEmbedModel lock poisoned during real-model swap",
+                        );
                     }
+                },
+                Ok(_) => {
+                    this.engage_mock_fallback(
+                        "real-model loader unexpectedly returned MockEmbedModel",
+                    );
                 }
-            } else {
-                tracing::warn!(
-                    "RAG: real embedder unavailable; LazyEmbedModel continues with mock"
-                );
+                Err(reason) => {
+                    this.engage_mock_fallback(&reason);
+                }
             }
-        });
+        };
+        // `set_default` tracing subscribers are thread-local. Preserve the
+        // caller's dispatcher when Tokio moves this loader to another thread,
+        // so the degraded warning reaches the daemon logger (and test capture).
+        tokio::spawn(task.with_current_subscriber());
     }
 
     /// Snapshot the currently-installed inner model (cheap read-lock clone).
@@ -553,7 +643,6 @@ impl EmbedModel for LazyEmbedModel {
 
 // ── Sub-module declarations ───────────────────────────────────────────────────
 
-#[cfg(feature = "fastembed")]
 pub mod bge_m3;
 
 pub mod jina;
@@ -564,8 +653,8 @@ pub mod store;
 /// Multi-vector (ColBERT-style) token-level embedding support.
 ///
 /// Gated behind the `rag-multivec` feature (OFF by default). Enables the
-/// BGE-M3 multi-vector tier: per-token vector storage + MaxSim late-interaction
-/// scoring. See `multivector` module docs for the proxy caveat on fastembed.
+/// compatibility multi-vector tier: per-token E5 proxy vectors + MaxSim
+/// late-interaction scoring. See `multivector` module docs for the caveat.
 #[cfg(feature = "rag-multivec")]
 pub mod multivector;
 
@@ -861,6 +950,8 @@ mod tests {
     #[test]
     fn lazy_embed_model_mock_is_usable_before_load() {
         let lazy = super::LazyEmbedModel::new_mock();
+        assert_eq!(lazy.status(), super::LazyEmbedStatus::Loading);
+        assert!(!lazy.is_degraded());
         assert_eq!(lazy.dim(), 1024);
         assert_eq!(lazy.model_id(), "lazy-embed-model");
         let dense = lazy.embed_dense(&["hello cascade"]).unwrap();
@@ -880,5 +971,64 @@ mod tests {
         tokio::task::yield_now().await;
         let dense = lazy.embed_dense(&["after spawn_load"]).unwrap();
         assert_eq!(dense[0].len(), 1024, "must remain usable after spawn_load");
+    }
+
+    #[derive(Clone)]
+    struct SharedLogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    struct SharedLogGuard(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for SharedLogGuard {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for SharedLogWriter {
+        type Writer = SharedLogGuard;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            SharedLogGuard(std::sync::Arc::clone(&self.0))
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn lazy_embed_model_failed_init_sets_degraded_and_warns() {
+        use std::sync::{Arc, Mutex};
+
+        let logs = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(SharedLogWriter(Arc::clone(&logs)))
+            .finish();
+        let _subscriber_guard = tracing::subscriber::set_default(subscriber);
+
+        let lazy = super::LazyEmbedModel::new_mock();
+        lazy.spawn_load_with(async { Err("simulated real-model-init failure".into()) });
+
+        for _ in 0..100 {
+            if lazy.status() == super::LazyEmbedStatus::Degraded {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        assert_eq!(lazy.status(), super::LazyEmbedStatus::Degraded);
+        assert!(lazy.is_degraded());
+        let captured = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+        assert!(
+            captured.contains("embedding degraded"),
+            "warning missing: {captured}"
+        );
+        assert!(
+            captured.contains("simulated real-model-init failure"),
+            "failure reason missing from warning: {captured}"
+        );
     }
 }

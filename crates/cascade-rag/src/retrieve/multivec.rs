@@ -1,4 +1,4 @@
-// Purpose: Multi-vector (ColBERT-style) retriever for the BGE-M3 tier-4 RAG mode.
+// Purpose: MaxSim retriever for the E5 per-word proxy tier-4 RAG mode.
 //
 // Gated behind feature `rag-multivec` (OFF by default). Loaded only when
 // `cascade.toml [rag] multi_vec = true` and the feature is compiled in.

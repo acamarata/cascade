@@ -12,7 +12,7 @@ This page is an overview. For the complete step-by-step guide including the PDK 
 |---|---|
 | `DataSource` | Ingest data from external services (GitHub Issues, Jira, Notion) into the RAG index |
 | `ChatTool` | Add callable tools to the MCP server |
-| `EmbeddingProvider` | Replace the default BGE-M3 embedder with a custom model |
+| `EmbeddingProvider` | Replace the default Multilingual E5 Large embedder with a custom model |
 | `Agent` | Autonomous sub-agent triggered by daemon events or schedules |
 
 ---
