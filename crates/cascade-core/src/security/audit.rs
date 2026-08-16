@@ -270,19 +270,11 @@ impl SqliteAuditLog {
 
 // ── sha256_hex ────────────────────────────────────────────────────────────────
 
-/// Compute the hex-encoded SHA-256 of `input` without pulling in a full crypto
-/// crate. Uses a minimal portable implementation.
-///
-/// For production, replace with `ring` or `sha2` if already in the dependency
-/// tree for other modules.
+/// Compute the hex-encoded SHA-256 of `input`.
 fn sha256_hex(input: &str) -> String {
-    // Stub: delegates to a minimal SHA-256 implementation.
-    // Replace with `sha2::Sha256::digest(input.as_bytes())` when sha2 is added
-    // to the workspace dependencies.
-    //
-    // For now, return a deterministic hex string derived from the input length
-    // so the hash-chain structure is exercised by tests without a crypto dep.
-    format!("{:064x}", input.len() as u64)
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(input.as_bytes());
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // ── Chain verification ────────────────────────────────────────────────────────
@@ -371,7 +363,53 @@ mod tests {
             .await;
 
         let result = verify_chain(tmp.path()).await.unwrap();
-        // With the stub sha256, chain should be internally consistent.
         assert!(result.is_ok(), "chain verification failed: {result:?}");
+    }
+
+    #[tokio::test]
+    async fn forged_same_length_entry_is_rejected() {
+        // Regression: the old sha256_hex stub hashed only the input's byte
+        // length, so two entries of equal length produced identical hashes
+        // and a forged same-length entry passed chain verification. A real
+        // SHA-256 must reject this.
+        let tmp = NamedTempFile::new().unwrap();
+        let logger = AuditLogger::open(tmp.path()).await.unwrap();
+        logger
+            .log(AuditEvent::Custom {
+                tag: "test".to_owned(),
+                detail: "event-1".to_owned(),
+            })
+            .await;
+
+        let conn = rusqlite::Connection::open(tmp.path()).unwrap();
+        // Tamper: same length as the original event_json, different content.
+        let (seq, original): (i64, String) = conn
+            .query_row(
+                "SELECT seq, event_json FROM audit_log ORDER BY seq ASC LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        // Pad/trim a different payload to exactly the original's byte length
+        // so the two only differ in content, not length.
+        let mut forged = "{\"Custom\":{\"tag\":\"evil\",\"detail\":\"forged\"}}".to_owned();
+        forged.truncate(original.len().min(forged.len()));
+        while forged.len() < original.len() {
+            forged.push('x');
+        }
+        assert_eq!(forged.len(), original.len());
+        assert_ne!(forged, original);
+        conn.execute(
+            "UPDATE audit_log SET event_json = ?1 WHERE seq = ?2",
+            rusqlite::params![forged, seq],
+        )
+        .unwrap();
+        drop(conn);
+
+        let result = verify_chain(tmp.path()).await.unwrap();
+        assert!(
+            result.is_err(),
+            "forged same-length entry passed chain verification"
+        );
     }
 }

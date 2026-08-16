@@ -200,6 +200,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   can't silently reintroduce.
 
 ### Security
+- Fixed `cascade_core::security::audit`'s hash-chain tamper-evidence: its
+  `sha256_hex` was a stub that hashed only the input's byte length
+  (`format!("{:064x}", input.len())`), so any two audit entries of equal
+  serialized length produced identical "hashes" and a forged same-length
+  entry passed `verify_chain`. Now uses real `sha2::Sha256` (already a
+  workspace dependency). Added a regression test proving a forged
+  same-length entry is now rejected. This module is actively used by 5
+  cascade-core security modules (env_allowlist, sanitizer, mcp_envelope,
+  rag_poisoning, validator) — it was not dead code, contrary to
+  T-P7-E11-05's original premise; ticket closed as premise-invalid rather
+  than deleted, with this narrower fix applied instead. Migrating those 5
+  call sites onto the separate `cascade-audit` crate (a different API
+  shape) remains a distinct, unscoped follow-up. (T-P7-E11-05)
 - Removed the unused `cascade_core::security::oauth` module, whose HMAC and
   SHA-256 functions were explicitly fake placeholders. Production OAuth/PKCE
   remains in `cascade-providers::oauth` and is unchanged. (T-P7-E11-04)
