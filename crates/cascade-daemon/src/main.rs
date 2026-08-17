@@ -96,6 +96,12 @@ mod nsentry_sync;
 // usage-cap window clears (E2-S1)
 mod continuity;
 mod failover;
+// T-P7-E13-09: request-level Anthropic failover proxy (:3763), unconditional
+// (loopback-only; the gemini-proxy feature gates only the external-network
+// surface). Declared via #[path] so the file stays at its ticket-specified
+// location inside proxy/ without pulling in the feature-gated proxy/mod.rs.
+#[path = "proxy/anthropic_failover.rs"]
+mod anthropic_failover;
 // E2-S3: POST-processing middleware — background response digest →
 // ~/.cascade/context-sync JSONL (the rag_watcher index-refresh nudge)
 mod context_sync;

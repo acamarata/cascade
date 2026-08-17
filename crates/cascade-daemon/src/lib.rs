@@ -41,6 +41,13 @@ pub mod project_poller;
 pub mod provider_health;
 #[cfg(feature = "gemini-proxy")]
 pub mod proxy;
+
+// T-P7-E13-09: request-level Anthropic failover proxy (:3763). Deliberately
+// NOT gated on `gemini-proxy` (that feature gates the external-network Gemini
+// surface): this proxy is loopback-only, dispatches local `claude` subprocesses
+// under user-configured accounts, and supervisor.rs starts it unconditionally.
+#[path = "proxy/anthropic_failover.rs"]
+pub mod anthropic_failover;
 #[cfg(feature = "gfp")]
 pub mod quota_poller;
 // ram-guardian: OOM-prevention subsystem — memory sampling + conservative

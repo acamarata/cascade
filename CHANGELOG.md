@@ -6,6 +6,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Real Anthropic request-level failover proxy, auto-started on
+  `127.0.0.1:3763`** (T-P7-E13-09, 2026-08-17) — a behavior-affecting
+  change for anyone who activates it. The daemon now starts an
+  unconditional loopback proxy (alongside `:3761`/`:3762`) that serves the
+  Anthropic Messages API and dispatches each request as a local `claude`
+  subprocess under the account chosen by
+  `cascade_core::selection::select_account` (the same spill order as the
+  conductor). On the empirically captured failure signatures (2026-08-17
+  captures under /tmp/cascade-failover-capture; see the module doc in
+  `crates/cascade-daemon/src/proxy/anthropic_failover.rs`) — first
+  `system/api_retry` 429 line, synthetic `assistant` error markers
+  (`authentication_failed`, `rate_limit`), terminal `result` with
+  `is_error:true` — the attempt is abandoned pre-commit and the next
+  account is tried, so the caller sees one continuous, correctly-framed
+  Anthropic SSE stream. Stream output is re-framed from Claude Code's
+  `--output-format stream-json` NDJSON into literal Anthropic SSE events
+  (new `stream_json` classifier; not the Gemini-oriented
+  `anthropic_compat/sse.rs`). Post-commit failures surface as an Anthropic
+  `error` SSE event, never a silent truncation. Full spill exhaustion
+  returns HTTP 529 `overloaded_error` naming every tried account. Child
+  environments are sanitized (`ANTHROPIC_*`/`CLAUDE*` stripped) so the
+  proxy never recursively proxies itself or leaks the caller's
+  credentials into another account's config dir.
+  **BEHAVIOR CHANGE / BILLING:** activation is an explicit user step —
+  `export ANTHROPIC_BASE_URL=http://127.0.0.1:3763` before `claude`
+  (README § "Interactive-session failover proxy"; `cascade doctor` shows
+  reachability + the activation one-liner; no shell config is ever
+  mutated). Once active, interactive-session usage is billed against
+  whichever fleet account the proxy selects (zai/GLM lane first, then
+  Claude accounts), not necessarily the account originally logged in.
+  Fidelity limits for text-chat traffic: tool calls render as text
+  markers; image/document blocks are not forwarded; sensitive prompts
+  still never land on untrusted lanes. The old fail-closed skeleton test
+  is replaced by 27 real bind+serve+spill+SSE re-framing tests.
+
 ### Changed
 - Conductor spill loop (`execute_with_fallback`) now re-reads
   `~/.cascade/accounts/quota.json` before each spill-target selection (CFC-05)

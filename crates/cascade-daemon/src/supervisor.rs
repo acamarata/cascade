@@ -325,6 +325,28 @@ pub async fn run(
         });
     }
 
+    // ── Anthropic failover proxy (T-P7-E13-09) ─────────────────────────────
+    // UNCONDITIONAL (unlike the gemini-proxy block above): loopback-only
+    // request-level failover on 127.0.0.1:3763. Every incoming /v1/messages
+    // request is dispatched as a local `claude` subprocess under the account
+    // chosen by cascade_core::selection::select_account_for_prompt, spilling
+    // to the next account on the captured 429/auth-failure signatures. A user
+    // opts in per-session by pointing their interactive `claude` CLI at it via
+    // ANTHROPIC_BASE_URL=http://127.0.0.1:3763 (see README + `cascade doctor`).
+    {
+        use crate::anthropic_failover::AnthropicFailoverServer;
+        use std::net::SocketAddr;
+
+        let fo_bind: SocketAddr = "127.0.0.1:3763".parse().expect("valid addr");
+        let fo_shutdown = shutdown.clone();
+        let fo_server = AnthropicFailoverServer::new(fo_bind, fo_shutdown);
+        tokio::spawn(async move {
+            if let Err(e) = fo_server.run().await {
+                warn!(error = %e, "anthropic_failover exited with error");
+            }
+        });
+    }
+
     // ── Scheduler ────────────────────────────────────────────────────────────────
     if config.scheduler.enabled {
         use crate::scheduler::Scheduler;

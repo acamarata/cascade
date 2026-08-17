@@ -117,6 +117,46 @@ impl Command for DoctorArgs {
             });
         }
 
+        // ── Anthropic failover proxy (:3763) ────────────────────────────────
+        // T-P7-E13-09: the daemon auto-starts this loopback proxy; interactive
+        // `claude` sessions opt in per-session via ANTHROPIC_BASE_URL. The
+        // detail line doubles as the activation hint (explicit user step —
+        // doctor never mutates shell config).
+        {
+            let probe = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_millis(500))
+                .build();
+            let reachable = match probe {
+                Ok(client) => client
+                    .get("http://127.0.0.1:3763/v1/health")
+                    .send()
+                    .await
+                    .map(|r| r.status().is_success())
+                    .unwrap_or(false),
+                Err(_) => false,
+            };
+            let (status, detail) = if reachable {
+                (
+                    CheckStatus::Pass,
+                    "reachable — activate per-session: export \
+                     ANTHROPIC_BASE_URL=http://127.0.0.1:3763"
+                        .into(),
+                )
+            } else {
+                (
+                    CheckStatus::Warn,
+                    "not reachable at 127.0.0.1:3763 — start the daemon \
+                     (`cascade daemon start`) to enable request-level failover"
+                        .into(),
+                )
+            };
+            checks.push(Check {
+                name: "Anthropic failover proxy (:3763)",
+                status,
+                detail,
+            });
+        }
+
         // ── Config integrity ───────────────────────────────────────────────
         for (label, config_path) in config_paths(&cwd) {
             if !config_path.exists() {

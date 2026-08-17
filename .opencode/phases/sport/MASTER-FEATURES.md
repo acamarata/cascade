@@ -77,6 +77,7 @@
 | F-FLEET-QUOTA-HISTORY | Historical cost/usage analytics | Weekly/historical bar charts, per-account ledger drilldown, date-range picker | 🔲 Planned | P3-E02 |
 | F-FLEET-LEDGER | Per-account usage ledger | Token counts + cost estimates per provider call; stored by daemon | 🔲 Planned | P2-E02 + P3-E02 |
 | F-FLEET-GEMINI-POOL | Central Gemini Pool proxy | Daemon-held proxy at localhost:3761; 28 free-tier Gemini keys; round-robin + 429-retry | 🔲 Planned | P2-E02 |
+| F-FLEET-ANTHROPIC-FAILOVER | Anthropic request-level failover proxy | Loopback :3763 Anthropic Messages endpoint; selects account per request (select_account spill order), shells `claude -p --output-format stream-json`, re-frames as Anthropic SSE, spills to next account on captured 429/auth signatures; opt-in activation via ANTHROPIC_BASE_URL | ✅ Done (P7-E13-09) | P7-E13 |
 | F-FLEET-OC-ROUTING | OC multi-model routing | OC routes GPT/Gemini/DeepSeek through the Gemini Pool OpenAI-compatible proxy | 🔲 Planned | P4-E02 |
 | F-FLEET-GCP-PROVISION | Assisted GCP provisioning | Wizard-guided: per-account Google OAuth → GCP project → Gemini API key creation → add to Pool | 🔲 Planned | P3-E04 |
 | F-FLEET-PROVIDER-PROVISION | Assisted provider provisioning | Same assist for Anthropic/OpenAI/Codex; permission-gated; keys encrypted at rest via OS keychain | 🔲 Planned | P3-E04 |
@@ -373,11 +374,11 @@ Items explicitly deferred beyond P4 or assigned to the ClawDE fork. Do not build
 | 1. Identity & Principles | 5 | 0 | 2 | 0 | 1 | 8 |
 | 2. Instruction Cascade | 0 | 0 | 9 | 0 | 1 | 10 |
 | 3. Knowledge & Memory | 0 | 0 | 14 | 0 | 0 | 14 |
-| 4. Fleet, Quota & Gemini Pool | 0 | 0 | 9 | 0 | 0 | 9 |
+| 4. Fleet, Quota & Gemini Pool | 1 | 0 | 9 | 0 | 0 | 10 |
 | 5. Daemon, CLI & Harness Bridge | 0 | 0 | 37 | 0 | 0 | 37 |
 | 6. Tauri App + Wizard + Widgets | 2 | 1 | 34 | 0 | 0 | 37 |
 | 7. RAG, MCP, Plugins, Dist & Ops | 0 | 0 | 62 | 0 | 18 | 80 |
 | 8. Deferred / Future | 0 | 0 | 0 | 0 | 19 | 19 |
-| **Total** | **5** | **0** | **169** | **0** | **39** | **213** |
+| **Total** | **6** | **0** | **169** | **0** | **39** | **214** |
 
 *Note: ✅ Done features are architectural constants established by design decisions, not shipped code. Cascade P2 build has not started; no features are code-complete yet.*

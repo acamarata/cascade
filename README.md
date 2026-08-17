@@ -122,6 +122,25 @@ Full walkthrough: [Quickstart](../../wiki/Quickstart)
 
 ---
 
+## Interactive-session failover proxy (opt-in)
+
+The daemon automatically runs a request-level Anthropic failover proxy on `127.0.0.1:3763`. Point an interactive `claude` session at it and every request is routed through Cascade's fleet account-priority logic (the same `select_account` spill order the conductor uses): if the chosen account is rate-limited or unauthenticated, the request transparently spills to the next account and the caller sees one continuous, correctly-framed SSE stream.
+
+Activate it for one terminal session (explicit, never automatic — nothing mutates your shell config):
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:3763
+claude
+```
+
+Deactivate by starting `claude` without that variable (or `unset ANTHROPIC_BASE_URL`).
+
+**Billing note:** once activated, your interactive session's usage is billed against whichever fleet account the proxy selects (zai/GLM lane first, then Claude accounts) — not necessarily the account you originally logged in with. Sensitive prompts still respect the sensitivity firewall and never land on untrusted lanes.
+
+Current fidelity limits (text-chat traffic): tool calls are rendered as text markers, and image/document blocks are not forwarded. `cascade doctor` reports whether the proxy is reachable and repeats the activation one-liner.
+
+---
+
 ## Architecture
 
 ```
@@ -138,6 +157,7 @@ Full walkthrough: [Quickstart](../../wiki/Quickstart)
 │  MCP server · WASM plugin host           │
 │  Context optimizer · Policy guardrails   │
 │  Gemini key-pool proxy                   │
+│  Anthropic failover proxy (:3763)        │
 │       127.0.0.1:9761 dashboard           │
 └──────┬──────────┬───────────┬────────────┘
        │          │           │
