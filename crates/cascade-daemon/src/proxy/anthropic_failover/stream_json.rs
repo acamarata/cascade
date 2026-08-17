@@ -134,7 +134,10 @@ fn classify_result(v: &Value) -> LineOutcome {
 /// a `stream_event` line IS a literal Anthropic SSE event, so the frame is
 /// `event: <event.type>\ndata: <event verbatim>\n\n` — no translation.
 pub fn frame_for_event(event: &Value) -> Vec<u8> {
-    let name = event.get("type").and_then(Value::as_str).unwrap_or("unknown");
+    let name = event
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
     format!("event: {name}\ndata: {event}\n\n").into_bytes()
 }
 
@@ -169,7 +172,12 @@ pub fn error_frame(error_type: &str, message: &str) -> Vec<u8> {
 /// event sequence from a terminal `result` value, for the (never observed
 /// with `--include-partial-messages`, but possible) case where an attempt
 /// succeeds without emitting any `stream_event` deltas.
-pub fn synthesize_success_frames(text: &str, model: &str, input_tokens: u64, output_tokens: u64) -> Vec<Vec<u8>> {
+pub fn synthesize_success_frames(
+    text: &str,
+    model: &str,
+    input_tokens: u64,
+    output_tokens: u64,
+) -> Vec<Vec<u8>> {
     let id = format!("msg_failover_{}", uuid::Uuid::new_v4().simple());
     let events = [
         serde_json::json!({
@@ -224,7 +232,9 @@ mod tests {
             LineOutcome::Frames(frames) => {
                 // The data payload after "data: " re-parses as the event itself.
                 let raw = String::from_utf8(frames[0].clone()).unwrap();
-                let data = raw.strip_prefix("event: content_block_delta\ndata: ").unwrap();
+                let data = raw
+                    .strip_prefix("event: content_block_delta\ndata: ")
+                    .unwrap();
                 let event: Value = serde_json::from_str(data.trim_end()).unwrap();
                 assert!(is_content_delta(&event));
             }
@@ -303,7 +313,9 @@ mod tests {
     #[test]
     fn prelude_and_noise_lines_are_ignored() {
         assert!(matches!(
-            classify_line(r#"{"type":"system","subtype":"init","tools":["Bash"],"model":"claude-haiku-4-5-20251001"}"#),
+            classify_line(
+                r#"{"type":"system","subtype":"init","tools":["Bash"],"model":"claude-haiku-4-5-20251001"}"#
+            ),
             LineOutcome::Ignored
         ));
         assert!(matches!(
@@ -312,12 +324,20 @@ mod tests {
         ));
         // assistant snapshots without an error marker appear in SUCCESS streams too.
         assert!(matches!(
-            classify_line(r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}"#),
+            classify_line(
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}"#
+            ),
             LineOutcome::Ignored
         ));
         assert!(matches!(classify_line(""), LineOutcome::Ignored));
-        assert!(matches!(classify_line("not json at all"), LineOutcome::Ignored));
-        assert!(matches!(classify_line(r#"{"type":"unknown_thing"}"#), LineOutcome::Ignored));
+        assert!(matches!(
+            classify_line("not json at all"),
+            LineOutcome::Ignored
+        ));
+        assert!(matches!(
+            classify_line(r#"{"type":"unknown_thing"}"#),
+            LineOutcome::Ignored
+        ));
         assert!(matches!(
             classify_line(r#"{"type":"stream_event"}"#), // missing event
             LineOutcome::Ignored

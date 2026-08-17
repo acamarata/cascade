@@ -469,10 +469,11 @@ fn parse_cascade_env(content: &str) -> Vec<(String, String)> {
         };
         let key = key.trim();
         if key.is_empty()
+            || !key.chars().all(|c| c == '_' || c.is_ascii_alphanumeric())
             || !key
                 .chars()
-                .all(|c| c == '_' || c.is_ascii_alphanumeric())
-            || !key.chars().next().is_some_and(|c| c == '_' || c.is_ascii_alphabetic())
+                .next()
+                .is_some_and(|c| c == '_' || c.is_ascii_alphabetic())
         {
             continue;
         }
@@ -572,9 +573,7 @@ impl Stream for ChildLineStream {
         match Pin::new(&mut self.lines).poll_next_line(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Ok(opt)) => Poll::Ready(opt.map(Ok)),
-            Poll::Ready(Err(e)) => {
-                Poll::Ready(Some(Err(format!("read claude stdout: {e}"))))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(format!("read claude stdout: {e}")))),
         }
     }
 }
@@ -638,7 +637,10 @@ impl FailoverDispatcher {
 
     /// Test constructor: scripted runner + fixture snapshot.
     #[cfg(test)]
-    fn with_runner_and_snapshot(runner: std::sync::Arc<dyn AttemptRunner>, snapshot: QuotaSnapshot) -> Self {
+    fn with_runner_and_snapshot(
+        runner: std::sync::Arc<dyn AttemptRunner>,
+        snapshot: QuotaSnapshot,
+    ) -> Self {
         Self {
             runner,
             snapshot_override: Some(snapshot),
@@ -675,12 +677,20 @@ impl FailoverDispatcher {
     /// Streaming retry loop. Drives attempts and pushes SSE frames into
     /// `tx`; terminates on success, post-commit error, client disconnect, or
     /// spill-list exhaustion (final `overloaded_error` error frame).
-    pub async fn run_stream_loop(&self, prompt: &str, class: ModelClass, tx: mpsc::Sender<Vec<u8>>) {
+    pub async fn run_stream_loop(
+        &self,
+        prompt: &str,
+        class: ModelClass,
+        tx: mpsc::Sender<Vec<u8>>,
+    ) {
         let mut snapshot = match self.load_snapshot() {
             Ok(s) => s,
             Err(e) => {
                 let _ = tx
-                    .send(error_frame("api_error", &format!("failover proxy misconfigured: {e}")))
+                    .send(error_frame(
+                        "api_error",
+                        &format!("failover proxy misconfigured: {e}"),
+                    ))
                     .await;
                 return;
             }
@@ -745,9 +755,7 @@ impl FailoverDispatcher {
                                 }
                             }
                             if committed {
-                                tx.send(frame)
-                                    .await
-                                    .map_err(|_| DriveSignal::ClientGone)?;
+                                tx.send(frame).await.map_err(|_| DriveSignal::ClientGone)?;
                             } else {
                                 buffer.push(frame);
                             }
@@ -782,9 +790,7 @@ impl FailoverDispatcher {
                     let text = result.get("result").and_then(Value::as_str).unwrap_or("");
                     let input = result["usage"]["input_tokens"].as_u64().unwrap_or(0);
                     let output = result["usage"]["output_tokens"].as_u64().unwrap_or(0);
-                    for frame in
-                        synthesize_success_frames(text, &target.model, input, output)
-                    {
+                    for frame in synthesize_success_frames(text, &target.model, input, output) {
                         if tx.send(frame).await.is_err() {
                             return AttemptOutcome::ClientGone;
                         }
@@ -861,7 +867,11 @@ impl FailoverDispatcher {
 
     /// One non-streaming attempt: accumulate text deltas, build the response
     /// from the terminal result on success.
-    async fn run_attempt_json(&self, target: &SelectionTarget, prompt: &str) -> Result<Value, String> {
+    async fn run_attempt_json(
+        &self,
+        target: &SelectionTarget,
+        prompt: &str,
+    ) -> Result<Value, String> {
         let mut lines = self.runner.spawn(target, prompt);
         let mut text = String::new();
         let mut terminal: Option<Value> = None;
@@ -1002,11 +1012,7 @@ async fn messages(State(state): State<FailoverState>, Json(body): Json<Value>) -
             .body(Body::from_stream(frame_stream))
             .unwrap_or_else(|e| {
                 warn!(error = %e, "anthropic_failover: failed to build SSE response");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "stream build failed",
-                )
-                    .into_response()
+                (StatusCode::INTERNAL_SERVER_ERROR, "stream build failed").into_response()
             })
     } else {
         match state.dispatcher.dispatch_json(&prompt, class).await {
@@ -1130,10 +1136,7 @@ mod tests {
 
     impl AttemptRunner for FakeRunner {
         fn spawn(&self, target: &SelectionTarget, _prompt: &str) -> LineStream {
-            self.spawns
-                .lock()
-                .unwrap()
-                .push(target.account_id.clone());
+            self.spawns.lock().unwrap().push(target.account_id.clone());
             let lines = self
                 .scripts
                 .get(target.account_id.as_str())
@@ -1194,7 +1197,10 @@ mod tests {
             ]
         });
         let prompt = flatten_request(&body).unwrap();
-        assert!(prompt.starts_with("[system]\nbe terse\n\n[user]\nhello\n\n"), "{prompt}");
+        assert!(
+            prompt.starts_with("[system]\nbe terse\n\n[user]\nhello\n\n"),
+            "{prompt}"
+        );
         assert!(prompt.contains("[assistant]\nhi\n\n"), "{prompt}");
         assert!(prompt.ends_with("[user]\nbye\n\n[assistant]\n"), "{prompt}");
     }
@@ -1214,9 +1220,15 @@ mod tests {
         });
         let prompt = flatten_request(&body).unwrap();
         assert!(prompt.contains("look"), "{prompt}");
-        assert!(prompt.contains("[image omitted by failover proxy]"), "{prompt}");
+        assert!(
+            prompt.contains("[image omitted by failover proxy]"),
+            "{prompt}"
+        );
         assert!(prompt.contains("[tool result: tool said no]"), "{prompt}");
-        assert!(prompt.contains("[tool use: Bash {\"cmd\":\"ls\"}]"), "{prompt}");
+        assert!(
+            prompt.contains("[tool use: Bash {\"cmd\":\"ls\"}]"),
+            "{prompt}"
+        );
     }
 
     #[test]
@@ -1325,11 +1337,13 @@ mod tests {
     #[tokio::test]
     async fn streaming_exhaustion_returns_overloaded_error_frame() {
         // Every dispatchable account fails with the captured auth signature.
-        let auth_fail = || vec![
+        let auth_fail = || {
+            vec![
             r#"{"type":"system","subtype":"init"}"#.into(),
             r#"{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"Not logged in"}]},"error":"authentication_failed"}"#.into(),
             r#"{"type":"result","subtype":"success","is_error":true,"api_error_status":null,"result":"auth"}"#.into(),
-        ];
+        ]
+        };
         let runner = FakeRunner::new(vec![
             ("glm-acc1", auth_fail()),
             ("claude2", auth_fail()),
@@ -1429,8 +1443,7 @@ mod tests {
     #[tokio::test]
     async fn non_streaming_success_builds_anthropic_message_body() {
         let runner = FakeRunner::new(vec![("glm-acc1", success_script("final answer text"))]);
-        let dispatcher =
-            FailoverDispatcher::with_runner_and_snapshot(runner, test_snapshot());
+        let dispatcher = FailoverDispatcher::with_runner_and_snapshot(runner, test_snapshot());
 
         let body = dispatcher
             .dispatch_json("hello there friend", ModelClass::Sonnet)
@@ -1486,9 +1499,7 @@ mod tests {
     // ── Server: real bind + serve (replaces the fail-closed skeleton test) ──
 
     /// Wait for `run` to publish the OS-assigned ephemeral port (bind `:0`).
-    async fn wait_for_bound(
-        cell: &std::sync::Arc<std::sync::OnceLock<SocketAddr>>,
-    ) -> SocketAddr {
+    async fn wait_for_bound(cell: &std::sync::Arc<std::sync::OnceLock<SocketAddr>>) -> SocketAddr {
         for _ in 0..500 {
             if let Some(a) = cell.get() {
                 return *a;
