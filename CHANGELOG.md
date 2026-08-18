@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Test coverage for the in-app chat prompt path** (T-P7-E21-03, 2026-08-18).
+  22 new tests covering `buildSystemPrompt` (all three namespace branches) and
+  the `ChatInput` component (disabled/streaming states, submit behaviour), both
+  of which were exported and exercised on every chat request but had no direct
+  tests. No behaviour change.
+
 ### Changed
 - **Production JS bundles code-split to clear Vite's 500 kB chunk warning**
   (T-P7-E17-01 / T-P7-E17-02, 2026-08-18). Both Vite apps previously shipped

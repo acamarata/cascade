@@ -733,3 +733,156 @@ describe('ChatPage', () => {
     expect(input).toBeInTheDocument()
   })
 })
+
+// ── 8. buildSystemPrompt ─────────────────────────────────────────────────────
+
+import { buildSystemPrompt } from './useChat'
+
+describe('buildSystemPrompt', () => {
+  it('meta namespace returns Cascade self-help prompt', () => {
+    const prompt = buildSystemPrompt('meta')
+    expect(prompt).toContain('Cascade self-help assistant')
+    expect(prompt).toContain('Cascade app itself')
+  })
+
+  it('projects: namespace returns projects assistant prompt', () => {
+    const prompt = buildSystemPrompt('projects:cascade')
+    expect(prompt).toContain('Projects assistant')
+    expect(prompt).toContain('read-only')
+  })
+
+  it('personal namespace returns personal assistant prompt', () => {
+    const prompt = buildSystemPrompt('personal')
+    expect(prompt).toContain('Personal assistant')
+    expect(prompt).toContain('personal-life topics')
+  })
+
+  it('personal:private falls through to personal prompt', () => {
+    const prompt = buildSystemPrompt('personal:private')
+    expect(prompt).toContain('Personal assistant')
+  })
+
+  it('undefined namespace returns personal prompt (default)', () => {
+    const prompt = buildSystemPrompt(undefined)
+    expect(prompt).toContain('Personal assistant')
+  })
+
+  it('empty string namespace returns personal prompt (default)', () => {
+    const prompt = buildSystemPrompt('')
+    expect(prompt).toContain('Personal assistant')
+  })
+
+  it('every prompt forbids writing code (common refusal rule)', () => {
+    const refusal = "This isn't a coding harness"
+    for (const ns of ['meta', 'projects:cascade', 'personal', undefined]) {
+      expect(buildSystemPrompt(ns)).toContain(refusal)
+    }
+  })
+
+  it('every prompt says model is read-only Q&A (common rules)', () => {
+    for (const ns of ['meta', 'projects:cascade', 'personal', 'personal:private']) {
+      const prompt = buildSystemPrompt(ns)
+      expect(prompt).toContain('read-only question-answering')
+    }
+  })
+
+  it('meta scope never mentions personal-life', () => {
+    expect(buildSystemPrompt('meta')).not.toContain('personal-life')
+  })
+
+  it('projects scope never mentions personal-life', () => {
+    expect(buildSystemPrompt('projects:myapp')).not.toContain('personal-life')
+  })
+})
+
+// ── 9. ChatInput ─────────────────────────────────────────────────────────────
+
+import { ChatInput } from './ChatInput'
+
+describe('ChatInput', () => {
+  it('renders a textarea and send button', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={false} />)
+    expect(screen.getByRole('textbox', { name: /chat message input/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument()
+  })
+
+  it('send button is disabled when textarea is empty', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={false} />)
+    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled()
+  })
+
+  it('send button is enabled when textarea has non-empty text', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={false} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
+    expect(screen.getByRole('button', { name: /send message/i })).not.toBeDisabled()
+  })
+
+  it('send button is disabled while isStreaming=true', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={true} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
+    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled()
+  })
+
+  it('textarea is disabled while isStreaming=true', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={true} />)
+    expect(screen.getByRole('textbox')).toBeDisabled()
+  })
+
+  it('textarea is disabled when disabled prop is true', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={false} disabled={true} />)
+    expect(screen.getByRole('textbox')).toBeDisabled()
+    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled()
+  })
+
+  it('calls onSend with trimmed content when send button is clicked', () => {
+    const onSend = vi.fn()
+    render(<ChatInput onSend={onSend} isStreaming={false} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '  hello world  ' } })
+    fireEvent.click(screen.getByRole('button', { name: /send message/i }))
+    expect(onSend).toHaveBeenCalledOnce()
+    expect(onSend).toHaveBeenCalledWith('hello world')
+  })
+
+  it('calls onSend on Enter keydown (no shift)', () => {
+    const onSend = vi.fn()
+    render(<ChatInput onSend={onSend} isStreaming={false} />)
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: 'ping' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onSend).toHaveBeenCalledWith('ping')
+  })
+
+  it('does NOT call onSend on Shift+Enter', () => {
+    const onSend = vi.fn()
+    render(<ChatInput onSend={onSend} isStreaming={false} />)
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: 'ping' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('does NOT call onSend for whitespace-only input on Enter', () => {
+    const onSend = vi.fn()
+    render(<ChatInput onSend={onSend} isStreaming={false} />)
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: '   ' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('resets textarea to empty after sending', () => {
+    render(<ChatInput onSend={() => {}} isStreaming={false} />)
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: /send message/i }))
+    expect(textarea.value).toBe('')
+  })
+
+  it('does not call onSend when isStreaming=true and Enter is pressed', () => {
+    const onSend = vi.fn()
+    render(<ChatInput onSend={onSend} isStreaming={true} />)
+    const textarea = screen.getByRole('textbox')
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onSend).not.toHaveBeenCalled()
+  })
+})
