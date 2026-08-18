@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **Model weights are no longer downloaded into ephemeral storage**
+  (T-P7-E25-18, 2026-08-18). Cascade resolves its model cache to
+  `CASCADE_MODEL_DIR`, falling back to `$HOME/.cascade/models`. Any process that
+  pointed `HOME` at a temporary directory therefore redirected multi-GB
+  embedding/reranker downloads into throwaway storage: each run started from an
+  empty cache and re-fetched roughly 2 GB, and whatever still held the files
+  open when the directory was removed was left behind. A single day of test runs
+  accumulated 32 such orphaned directories totalling 8.83 GB and filled the
+  disk. Cascade now refuses to hand fastembed a cache directory that lives
+  inside the OS temp directory, failing fast with a clear error before any
+  download starts. Downloading gigabytes into the temp directory is never
+  correct, so the guard is unconditional rather than test-only; set
+  `CASCADE_ALLOW_TEMP_MODEL_DIR=1` to opt back in. Successful-download
+  behaviour, model validation, and the `~/.cascade/models` default path are
+  unchanged.
+
 ### Added
 - **Real Anthropic request-level failover proxy, auto-started on
   `127.0.0.1:3763`** (T-P7-E13-09, 2026-08-17) — a behavior-affecting

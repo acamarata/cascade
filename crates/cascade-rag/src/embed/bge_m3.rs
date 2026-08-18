@@ -265,6 +265,16 @@ impl BgeM3Embedder {
         // dir points at an unmounted external volume) errors clearly here rather
         // than looking empty and triggering a redundant multi-GB re-download
         // into an abandoned temp `.part` dir.
+        // T-P7-E25-18: refuse to pull ~2 GB of weights into ephemeral storage.
+        // Checked BEFORE ensure_cache_dir_ready so a temp-resident cache dir is
+        // rejected without first creating it.
+        super::model_cache::ensure_persistent_cache_dir(&model_dir).map_err(|e| {
+            CascadeError::EmbeddingFailed {
+                provider: MODEL_ID.into(),
+                detail: format!("{e}"),
+            }
+        })?;
+
         super::model_cache::ensure_cache_dir_ready(&model_dir).map_err(|e| {
             CascadeError::EmbeddingFailed {
                 provider: MODEL_ID.into(),

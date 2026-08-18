@@ -75,6 +75,26 @@ pub enum ModelCacheError {
         /// The (unreadable) symlink target.
         target: PathBuf,
     },
+
+    /// The resolved model cache directory lives inside the OS temp directory,
+    /// which is never a valid home for multi-GB model weights.
+    ///
+    /// This is the guard for the T-P7-E25-18 disk leak: tests routinely set
+    /// `HOME` to a `tempfile::TempDir` for filesystem isolation, and because
+    /// [`model_cache_dir`] falls back to `$HOME/.cascade/models`, that silently
+    /// redirects every model download into a throwaway directory. Each such run
+    /// re-fetched ~2 GB (a fresh temp `HOME` is always an empty cache) and left
+    /// it behind whenever the directory was still open at drop time.
+    #[error(
+        "model cache dir {cache_dir} is inside the OS temp directory — refusing to \
+         download model weights into ephemeral storage; set CASCADE_MODEL_DIR to a \
+         persistent path, or CASCADE_ALLOW_TEMP_MODEL_DIR=1 to override",
+        cache_dir = cache_dir.display()
+    )]
+    EphemeralCacheDir {
+        /// The offending (temp-resident) cache directory.
+        cache_dir: PathBuf,
+    },
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -172,12 +192,168 @@ pub fn ensure_cache_dir_ready(dir: &std::path::Path) -> Result<(), ModelCacheErr
     }
 }
 
+/// Environment variable that opts back in to downloading models into a cache
+/// directory that lives under the OS temp dir. Off by default.
+pub const CASCADE_ALLOW_TEMP_MODEL_DIR_ENV: &str = "CASCADE_ALLOW_TEMP_MODEL_DIR";
+
+/// Refuse to download model weights into ephemeral (OS-temp-resident) storage.
+///
+/// Call this immediately before handing a path to fastembed's `with_cache_dir`.
+///
+/// # Why
+///
+/// fastembed owns the download and its `.part` staging; Cascade only chooses
+/// the destination. So the leak fixed here is not a missing cleanup guard on a
+/// staging path we control — it is Cascade handing fastembed a *throwaway*
+/// destination in the first place. 176 call sites across the workspace set
+/// `HOME` to a `tempfile::TempDir` for test isolation, and [`model_cache_dir`]
+/// falls back to `$HOME/.cascade/models`, so those runs pointed multi-GB
+/// downloads at a directory nobody intended to keep. Refusing up front removes
+/// both the wasted re-download and the orphan it leaves behind.
+///
+/// Downloading gigabytes into the temp dir is never correct in production
+/// either, so this guard is unconditional rather than test-only, with
+/// [`CASCADE_ALLOW_TEMP_MODEL_DIR_ENV`] as the deliberate escape hatch.
+///
+/// # Errors
+///
+/// [`ModelCacheError::EphemeralCacheDir`] when `dir` is inside
+/// [`std::env::temp_dir`] and the override env var is unset.
+pub fn ensure_persistent_cache_dir(dir: &std::path::Path) -> Result<(), ModelCacheError> {
+    if let Ok(val) = env::var(CASCADE_ALLOW_TEMP_MODEL_DIR_ENV) {
+        if !val.is_empty() && val != "0" {
+            return Ok(());
+        }
+    }
+
+    if is_under_temp_dir(dir) {
+        return Err(ModelCacheError::EphemeralCacheDir {
+            cache_dir: dir.to_path_buf(),
+        });
+    }
+    Ok(())
+}
+
+/// Return `true` when `dir` is the OS temp dir or nested inside it.
+///
+/// Both sides are canonicalised where possible so that macOS's `/var` ->
+/// `/private/var` symlink does not defeat the comparison — `env::temp_dir()`
+/// reports `/var/folders/...` while the real path is `/private/var/folders/...`.
+fn is_under_temp_dir(dir: &std::path::Path) -> bool {
+    let tmp = env::temp_dir();
+    let canon_tmp = std::fs::canonicalize(&tmp).unwrap_or(tmp);
+
+    // The dir may not exist yet, so canonicalize the nearest existing ancestor
+    // and re-attach the remainder.
+    let canon_dir = canonicalize_lossy(dir);
+    canon_dir.starts_with(&canon_tmp)
+}
+
+/// Canonicalise as much of `path` as exists, leaving the rest untouched.
+fn canonicalize_lossy(path: &std::path::Path) -> PathBuf {
+    if let Ok(p) = std::fs::canonicalize(path) {
+        return p;
+    }
+    let mut existing = path;
+    let mut trailing: Vec<&std::ffi::OsStr> = Vec::new();
+    while let Some(parent) = existing.parent() {
+        if let Some(name) = existing.file_name() {
+            trailing.push(name);
+        }
+        if let Ok(p) = std::fs::canonicalize(parent) {
+            let mut out = p;
+            for part in trailing.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        existing = parent;
+    }
+    path.to_path_buf()
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::env;
+
+    // ── T-P7-E25-18: ephemeral cache-dir guard ───────────────────────────────
+
+    /// The negative the ticket asks for: a temp-resident cache dir is REFUSED,
+    /// so no download is ever started and no orphan can be left behind.
+    #[test]
+    fn download_refused_when_cache_dir_is_under_temp() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // Mirror the real failure shape: $TMPDIR/.tmpXXXX/.cascade/models
+        let cache_dir = tmp.path().join(".cascade").join("models");
+
+        let err = ensure_persistent_cache_dir(&cache_dir)
+            .expect_err("temp-resident cache dir must be refused");
+
+        match err {
+            ModelCacheError::EphemeralCacheDir { cache_dir: got } => {
+                assert_eq!(got, cache_dir);
+            }
+            other => panic!("expected EphemeralCacheDir, got {other:?}"),
+        }
+    }
+
+    /// The guard must fire for a path that does not exist yet — the download
+    /// destination is normally created only after this check passes.
+    #[test]
+    fn guard_fires_for_not_yet_created_temp_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let missing = tmp
+            .path()
+            .join("does")
+            .join("not")
+            .join("exist")
+            .join("models");
+        assert!(!missing.exists());
+        assert!(ensure_persistent_cache_dir(&missing).is_err());
+    }
+
+    /// A persistent (non-temp) cache dir is allowed — no behaviour change for
+    /// the real `~/.cascade/models` path.
+    #[test]
+    fn persistent_cache_dir_is_allowed() {
+        let home_like = PathBuf::from("/opt/cascade-models-test-path");
+        assert!(ensure_persistent_cache_dir(&home_like).is_ok());
+    }
+
+    /// The documented escape hatch re-enables temp-resident downloads.
+    #[test]
+    #[serial_test::serial(env_model_dir)]
+    fn override_env_allows_temp_cache_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache_dir = tmp.path().join(".cascade").join("models");
+
+        // SAFETY: guarded by #[serial] so no other test reads this var concurrently.
+        env::set_var(CASCADE_ALLOW_TEMP_MODEL_DIR_ENV, "1");
+        let allowed = ensure_persistent_cache_dir(&cache_dir);
+        env::remove_var(CASCADE_ALLOW_TEMP_MODEL_DIR_ENV);
+
+        assert!(allowed.is_ok(), "override must permit temp cache dir");
+        // And with the override cleared it is refused again.
+        assert!(ensure_persistent_cache_dir(&cache_dir).is_err());
+    }
+
+    /// `0` and empty are not treated as opting in.
+    #[test]
+    #[serial_test::serial(env_model_dir)]
+    fn override_env_zero_or_empty_does_not_opt_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache_dir = tmp.path().join(".cascade").join("models");
+
+        for val in ["0", ""] {
+            env::set_var(CASCADE_ALLOW_TEMP_MODEL_DIR_ENV, val);
+            let got = ensure_persistent_cache_dir(&cache_dir);
+            env::remove_var(CASCADE_ALLOW_TEMP_MODEL_DIR_ENV);
+            assert!(got.is_err(), "value {val:?} must not opt in");
+        }
+    }
 
     // ── env override ─────────────────────────────────────────────────────────
 

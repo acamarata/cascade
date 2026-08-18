@@ -148,6 +148,12 @@ impl BgeReranker {
         // symlink to an unmounted volume errors clearly instead of triggering a
         // redundant multi-GB re-download, and a symlink-to-existing-dir no longer
         // aborts init with `File exists (os error 17)`.
+        // T-P7-E25-18: refuse to pull ~580 MB of weights into ephemeral storage.
+        // Checked BEFORE ensure_cache_dir_ready so a temp-resident cache dir is
+        // rejected without first creating it.
+        crate::embed::model_cache::ensure_persistent_cache_dir(&model_dir)
+            .map_err(|e| CascadeError::Other(format!("reranker[{MODEL_ID}] {e}")))?;
+
         crate::embed::model_cache::ensure_cache_dir_ready(&model_dir).map_err(|e| {
             CascadeError::Other(format!(
                 "reranker[{MODEL_ID}] model cache dir not ready: {e}"

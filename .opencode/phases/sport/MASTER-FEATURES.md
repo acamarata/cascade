@@ -224,6 +224,7 @@
 | F-RAG-FTS5 | FTS5 keyword index | SQLite FTS5 with porter tokenizer, stemming, prefix matching | 🔲 Planned | P4-E01 |
 | F-RAG-BGE-M3 | E5 Large dense embeddings (`bge-m3` compatibility key) | fastembed-rs (ONNX); local-only; multilingual; native BGE-M3 remains deferred to E-P7-20 | ✅ Done | T-P7-E14-02 |
 | F-RAG-FASTEMBED-FAIL-LOUD | Reject dense embedding without fastembed | Feature-disabled builds return an explicit capability error instead of zero vectors | ✅ Done | T-P7-E14-03 |
+| F-RAG-NO-EPHEMERAL-MODELS | Refuse model downloads into ephemeral storage | Model weights are never fetched into an OS-temp-resident cache dir (the `$HOME`-override path that leaked multi-GB orphans); `CASCADE_ALLOW_TEMP_MODEL_DIR=1` overrides | ✅ Done | T-P7-E25-18 |
 | F-RAG-RERANKER-FAIL-LOUD | Reject BGE reranking without reranker support | Feature-disabled builds return an explicit capability error instead of mock scores | ✅ Done | T-P7-E14-04 |
 | F-RAG-MOCK-FALLBACK-STATUS | Surface lazy embedding degradation | Failed real-model init logs a warning and appears in daemon/CLI status | ✅ Done | T-P7-E14-05 |
 | F-RAG-DEFERRED-TODO-AUDIT | Verify HyDE/feedback deferral tracking | HyDE is tracked by T-P7-E20-01; feedback projection/LoRA training is absent from the current backlog and E-P7-20 scope | ⚠️ Gap recorded | T-P7-E14-06 / T-P7-E20-01 |
