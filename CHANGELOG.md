@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Plugin enable/disable persistence helpers on `PluginsSettings`**
+  (T-P7-E20-26, 2026-08-18). The `plugins.enabled` vector in `settings.json`
+  has existed since T-P3-E07-14 and round-tripped correctly, but nothing
+  consumed it — it was vestigial schema. Added `is_enabled`, `enable`, and
+  `disable` methods on `PluginsSettings` (in the new
+  `cascade_core::settings::plugins` module) so callers can query and toggle
+  plugin enable/disable state through the existing `store::load`/`store::save`
+  path. This complements (does not replace) the `.disabled` marker-file
+  mechanism in `cascade-plugins`. 9 new tests cover the restart round-trip,
+  idempotency, multi-plugin independence, and unknown/removed-plugin robustness.
+  No behaviour change to existing functionality.
+
 ### Security
 - **Removed maintainer-private identifiers from shipped files** (2026-08-18).
   A private maintainer email address was committed in

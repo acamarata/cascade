@@ -24,6 +24,7 @@
 //!
 //! MASTER-RUST-CRATES.md — cascade-core: settings module (T-P3-E07-14)
 
+pub mod plugins;
 pub mod store;
 pub mod types;
 
