@@ -65,7 +65,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 /// Canonicalizes `path` for tier comparison, resolving symlinks (e.g. a
-/// `~/Sites -> /Volumes/X9/Sites` symlink) so that a path passed in as the
+/// `~/Sites -> /mnt/data/Sites` symlink) so that a path passed in as the
 /// symlink and a CWD already resolved to the target compare equal.
 ///
 /// Falls back to the input path unchanged when canonicalization fails — the
@@ -216,7 +216,7 @@ impl TierDiscovery {
     /// [`cascade_core::sensitivity::ContentSensitivity::Sensitive`].
     ///
     /// Path comparisons are made on canonicalized paths so that a symlinked
-    /// `~/Sites` (e.g. `~/Sites -> /Volumes/X9/Sites`) still matches a CWD that
+    /// `~/Sites` (e.g. `~/Sites -> /mnt/data/Sites`) still matches a CWD that
     /// the OS has already resolved to the symlink target.
     ///
     /// Environment-variable overrides (`CASCADE_APC_PATH`, `with_sites()`) always
@@ -230,7 +230,7 @@ impl TierDiscovery {
         };
 
         // Canonicalize for comparison so symlinked roots resolve. `~/Sites` is
-        // commonly a symlink to external storage (e.g. /Volumes/X9/Sites); the
+        // commonly a symlink to external storage (e.g. /mnt/data/Sites); the
         // OS resolves the CWD to the target, so a literal `==` against the
         // symlink path would never match and every project would fall through to
         // the Ppc catch-all. `canon()` falls back to the input path when the

@@ -3,7 +3,13 @@
 # or maintainer-owned hostnames appear in any SHIPPED (git-tracked) file.
 # Checking git-tracked files only is deliberate — it ignores gitignored build
 # artifacts (Xcode DerivedData, target/, node_modules/) and local-only trees
-# (.claude/, .opencode/) that never ship.
+# that never ship.
+#
+# NOTE (2026-08-18): .claude/ is untracked and therefore genuinely never ships,
+# but .opencode/ IS git-tracked (the SPORT master lists) and DOES ship. An
+# earlier version of this comment claimed both were local-only, which would have
+# left public files unscanned. Because this script scans git-tracked files,
+# .opencode/ is in fact covered — the comment was the only thing that was wrong.
 #
 # Scanned directories include .forgejo/ so workflow files are also guarded.
 #

@@ -711,7 +711,7 @@ mod tests {
     fn should_reap_false_outside_scratch_root() {
         let root = PathBuf::from("/private/tmp/claude-501");
         let d = DirInfo {
-            path: PathBuf::from("/Volumes/X9/Sites/acamarata/cascade/target"),
+            path: PathBuf::from("/mnt/data/projects/cascade/target"),
             age: Duration::from_secs(MIN_STRAY_AGE.as_secs() + 100),
         };
         assert!(!should_reap(&d, DiskStatus::Critical, &root));
@@ -731,7 +731,7 @@ mod tests {
     fn should_reap_never_matches_home_dotfiles() {
         let root = PathBuf::from("/private/tmp/claude-501");
         let d = DirInfo {
-            path: PathBuf::from("/Users/admin/.claude/target"),
+            path: PathBuf::from("/home/user/.claude/target"),
             age: Duration::from_secs(MIN_STRAY_AGE.as_secs() + 100),
         };
         assert!(!should_reap(&d, DiskStatus::Critical, &root));

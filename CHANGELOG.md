@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- **Removed maintainer-private identifiers from shipped files** (2026-08-18).
+  A private maintainer email address was committed in
+  `.github/docs/MODEL-MATRIX.md`, and maintainer-specific local filesystem paths
+  appeared in `cascade-core`'s discovery doc comments and two `cascade-daemon`
+  disk-guardian test fixtures. All are replaced with generic examples. The
+  repository's own `scripts/check-no-maintainer-ids.sh` guard already covered
+  these cases and was failing; it had simply never been run in CI.
+
 ### Fixed
 - **OpenTelemetry tracing is no longer inert** (T-P7-E25-13, 2026-08-18). The
   OTel layer was constructed but never attached to the subscriber that actually

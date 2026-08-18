@@ -17,7 +17,7 @@ Related: [MODEL-ROUTING.md](MODEL-ROUTING.md) (how Conductor picks between these
 | `claude-haiku-4-5` | Anthropic | Max (A1/A2) — T3 | `claude`, `claude2` | 200k | Paid | folds into same 5h/weekly pool |
 | `claude-fable-5` | Anthropic | Max (A1/A2) — Mythos-class | `claude`, `claude2` | 1M | Paid (incl. Pro/Max) | GA 2026-07-01; own weekly allowance |
 | `gpt-5.5` | OpenAI | ChatGPT Plus/Pro (Codex CLI) | `codex-acc1` | 1M API / capped in CLI | Paid (ChatGPT sub) | no separate `-codex` id; CLI caps window |
-| `gemini-3.1-pro` | Google | **Google AI Pro** ($20/mo Google One), alisalaah@gmail.com | `gemini-acc1` (via agy/cloudcode-pa) | 1M | Paid | newest Pro model (NOT "3.5 Pro" — 3.5 is Flash) |
+| `gemini-3.1-pro` | Google | **Google AI Pro** ($20/mo Google One) | `gemini-acc1` (via agy/cloudcode-pa) | 1M | Paid | newest Pro model (NOT "3.5 Pro" — 3.5 is Flash) |
 | `gemini-3.5-flash` | Google | AI Pro bundle | (Pro bundle) | 1M | Paid | newest Flash, agentic/coding-tuned |
 | `gemini-2.5-flash` | Google | Free API tier (GFP pool) | `gfp-pool` | 1M | Free | ~10 RPM · ~250k TPM · ~1,500 RPD **per project** |
 | `gemini-2.0-flash` | Google | Free API tier (GFP pool) | `gfp-pool` | 1M | Free | ~15 RPM · 1M TPM · ~1,500 RPD **per project** |
