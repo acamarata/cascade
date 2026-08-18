@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **OpenTelemetry tracing is no longer inert** (T-P7-E25-13, 2026-08-18). The
+  OTel layer was constructed but never attached to the subscriber that actually
+  gets installed, so every OTel span went nowhere. The provider is now created
+  before logging init and composed into the live daemon subscriber. Telemetry
+  remains strictly opt-in — the provider is `None` unless the existing
+  `telemetry.enabled` gate is set, and the env filter, JSON file layer and
+  stderr formatting are unchanged.
+
 ### Added
 - **Test coverage for the personal vault UI and instructions browser**
   (T-P7-E21-01, T-P7-E21-02, 2026-08-18). 44 new tests across the encrypted

@@ -185,14 +185,26 @@ async fn run_daemon() {
     };
 
     // Load config now (sync, falls back to Default when config.toml is absent)
-    // so log::init_with_config can honour daemon.log_level + daemon.log_format.
+    // so the active logger can honour daemon.log_level + daemon.log_format.
     let early_cfg = config::Config::load(&config_dir).unwrap_or_default();
 
-    // Initialize structured JSON logging — honours [daemon] log_level / log_format.
-    // CASCADE_LOG_LEVEL env still wins over the config value (see log.rs).
-    if let Err(e) = log::init_with_config(
+    // Gate OTLP telemetry export on the config flag. init_tracing(None) is a
+    // no-op; only call with an endpoint when both enabled=true and an endpoint
+    // is configured. The provider must live until the end of main to flush
+    // any pending spans on clean shutdown.
+    let _otel_provider = if early_cfg.telemetry.enabled {
+        telemetry::init_tracing(early_cfg.telemetry.endpoint.as_deref())
+    } else {
+        None
+    };
+
+    // Initialize structured JSON logging — honours [daemon] log_level / log_format
+    // and attaches OTel to this active subscriber only when the opt-in gate above
+    // produced a provider. CASCADE_LOG_LEVEL env still wins over the config value.
+    if let Err(e) = log::init_with_config_and_otel(
         Some(&early_cfg.daemon.log_level),
         Some(&early_cfg.daemon.log_format),
+        _otel_provider.as_ref(),
     ) {
         eprintln!("failed to initialize logging: {e}");
         process::exit(1);
@@ -207,19 +219,6 @@ async fn run_daemon() {
         write_crash_sentinel(&e.to_string());
         process::exit(1);
     }
-
-    // Gate OTLP telemetry export on the config flag. init_tracing(None) is a
-    // no-op; only call with an endpoint when both enabled=true and an endpoint
-    // is configured. The provider must live until the end of main to flush
-    // any pending spans on clean shutdown.
-    let _otel_provider = {
-        let cfg = config::Config::load(&config_dir).unwrap_or_default();
-        if cfg.telemetry.enabled {
-            telemetry::init_tracing(cfg.telemetry.endpoint.as_deref())
-        } else {
-            None
-        }
-    };
 
     // Write crash sentinel BEFORE the async event loop so it is present on disk
     // even if the process is killed with SIGKILL (which prevents all cleanup).

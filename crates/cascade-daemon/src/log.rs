@@ -11,6 +11,8 @@
 //!   - Rotation is best-effort: failures are logged to stderr and do not
 //!     crash the daemon.
 
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::trace::TracerProvider;
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{
     fmt::{self, time::UtcTime},
@@ -43,6 +45,19 @@ pub fn init_with_config(
     config_log_level: Option<&str>,
     config_log_format: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    init_with_config_and_otel(config_log_level, config_log_format, None)
+}
+
+/// Initialize the active logging subscriber with an optional OTel bridge.
+///
+/// `otel_provider` must remain `None` unless the caller's telemetry opt-in gate
+/// is enabled. Passing a provider attaches its tracer to the same subscriber as
+/// the existing env-filter, file, and stderr layers.
+pub fn init_with_config_and_otel(
+    config_log_level: Option<&str>,
+    config_log_format: Option<&str>,
+    otel_provider: Option<&TracerProvider>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_dir = log_dir()?;
     std::fs::create_dir_all(&log_dir)?;
 
@@ -72,48 +87,60 @@ pub fn init_with_config(
         EnvFilter::new(level_str)
     };
 
+    let use_pretty = config_log_format.map(|f| f == "pretty").unwrap_or(false)
+        && std::env::var("CASCADE_LOG_LEVEL").is_err(); // env override disables pretty too
+
+    build_subscriber(file, env_filter, use_pretty, otel_provider).init();
+
+    Ok(())
+}
+
+fn build_subscriber(
+    file: std::fs::File,
+    env_filter: EnvFilter,
+    use_pretty: bool,
+    otel_provider: Option<&TracerProvider>,
+) -> impl tracing::Subscriber + Send + Sync {
     let file_layer = fmt::layer()
         .json()
         .with_timer(UtcTime::rfc_3339())
         .with_target(true)
         .with_writer(std::sync::Mutex::new(file));
 
-    let stderr_layer = fmt::layer()
-        .with_target(false)
-        .with_writer(std::io::stderr)
-        .with_filter(EnvFilter::new("warn"));
+    let stderr_layer = (!use_pretty).then(|| {
+        fmt::layer()
+            .with_target(false)
+            .with_writer(std::io::stderr)
+            .with_filter(EnvFilter::new("warn"))
+    });
 
-    let use_pretty = config_log_format.map(|f| f == "pretty").unwrap_or(false)
-        && std::env::var("CASCADE_LOG_LEVEL").is_err(); // env override disables pretty too
-
-    if use_pretty {
-        // Pretty console layer for development/debug mode.
-        let pretty_stderr = fmt::layer()
+    // Pretty console layer for development/debug mode.
+    let pretty_stderr = use_pretty.then(|| {
+        fmt::layer()
             .pretty()
             .with_target(true)
             .with_writer(std::io::stderr)
-            .with_filter(EnvFilter::new("debug"));
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(file_layer)
-            .with(pretty_stderr)
-            .init();
-    } else {
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(file_layer)
-            .with(stderr_layer)
-            .init();
-    }
+            .with_filter(EnvFilter::new("debug"))
+    });
 
-    Ok(())
+    let otel_layer = otel_provider.map(|provider| {
+        let tracer = provider.tracer("cascaded");
+        tracing_opentelemetry::layer().with_tracer(tracer)
+    });
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(file_layer)
+        .with(stderr_layer)
+        .with(pretty_stderr)
+        .with(otel_layer)
 }
 
 /// Initialize the global tracing subscriber with defaults.
 ///
 /// Equivalent to `init_with_config(None, None)`.  Available for callers that don't
-/// have a config yet (e.g. unit tests).  The main daemon entry-point uses
-/// `init_with_config` directly so it can honour `[daemon] log_level / log_format`.
+/// have a config yet (e.g. unit tests). The main daemon entry-point uses
+/// `init_with_config_and_otel` so it can also supply the gated OTel provider.
 #[allow(dead_code)]
 pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_with_config(None, None)
@@ -185,8 +212,58 @@ fn log_dir() -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::future::BoxFuture;
+    use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
     use std::io::Write;
+    use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
+
+    #[derive(Clone, Debug, Default)]
+    struct RecordingExporter(Arc<Mutex<Vec<SpanData>>>);
+
+    impl SpanExporter for RecordingExporter {
+        fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+            let spans = Arc::clone(&self.0);
+            Box::pin(async move {
+                spans.lock().unwrap().append(&mut batch);
+                Ok(())
+            })
+        }
+    }
+
+    #[test]
+    fn active_subscriber_attaches_otel_layer_only_when_provider_is_present() {
+        let dir = tempdir().unwrap();
+        let exporter = RecordingExporter::default();
+        let provider = TracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+
+        let disabled_file = std::fs::File::create(dir.path().join("disabled.log")).unwrap();
+        let disabled_subscriber =
+            build_subscriber(disabled_file, EnvFilter::new("info"), false, None);
+        tracing::subscriber::with_default(disabled_subscriber, || {
+            tracing::info_span!("otel_disabled").in_scope(|| {});
+        });
+        for result in provider.force_flush() {
+            result.unwrap();
+        }
+        assert!(exporter.0.lock().unwrap().is_empty());
+
+        let enabled_file = std::fs::File::create(dir.path().join("enabled.log")).unwrap();
+        let enabled_subscriber =
+            build_subscriber(enabled_file, EnvFilter::new("info"), false, Some(&provider));
+        tracing::subscriber::with_default(enabled_subscriber, || {
+            tracing::info_span!("otel_enabled").in_scope(|| {});
+        });
+        for result in provider.force_flush() {
+            result.unwrap();
+        }
+
+        let spans = exporter.0.lock().unwrap();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].name, "otel_enabled");
+    }
 
     #[test]
     fn rotation_triggers_on_size() {
