@@ -26,8 +26,8 @@ mod engine_tests;
 mod test_support;
 
 pub use dispatch::{
-    classify_ticket, cli_binary_for_task_class, run_fleet_cli, FleetOutcome, FleetRunner,
-    RealFleetRunner,
+    classify_ticket, cli_binary_for_task_class, dispatch_actor, dispatch_actor_parts,
+    run_fleet_cli, FleetOutcome, FleetRunner, RealFleetRunner,
 };
 pub use dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
 pub use engine::{BuildConfig, BuildEngine};

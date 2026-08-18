@@ -28,7 +28,7 @@ use crate::pbd::{
 
 pub use super::dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
 use super::{
-    dispatch::{classify_ticket, FleetOutcome, FleetRunner, RealFleetRunner},
+    dispatch::{classify_ticket, dispatch_actor, FleetOutcome, FleetRunner, RealFleetRunner},
     topo::topological_sort,
 };
 
@@ -322,6 +322,14 @@ impl BuildEngine {
         let ticket = self
             .store
             .load_ticket(phase_id, epic_id, wave_id, sprint_id, ticket_id)?;
+
+        // Observability (T-P7-E10-06): resolve the executor this dispatch will
+        // use so step-transition events record what actually runs the ticket —
+        // `fleet/<cli-binary>/<TaskClass>`. Purely a label: classification,
+        // routing, retries, and the marker protocol are unchanged.
+        let task_class = classify_ticket(ticket.weight.as_deref());
+        let actor = dispatch_actor(task_class);
+
         let active_steps: Vec<_> = ticket
             .steps
             .iter()
@@ -344,7 +352,7 @@ impl BuildEngine {
                 step.status,
                 crate::pbd::schema::StepStatus::Pending | crate::pbd::schema::StepStatus::Failed
             ) {
-                self.store.transition_step(
+                self.store.transition_step_as(
                     phase_id,
                     epic_id,
                     wave_id,
@@ -352,6 +360,7 @@ impl BuildEngine {
                     ticket_id,
                     &step.id,
                     crate::pbd::schema::StepStatus::Running,
+                    &actor,
                 )?;
             }
         }
@@ -436,8 +445,8 @@ impl BuildEngine {
                         missing.push(step.id.clone());
                         crate::pbd::schema::StepStatus::Failed
                     };
-                    self.store.transition_step(
-                        phase_id, epic_id, wave_id, sprint_id, ticket_id, &step.id, status,
+                    self.store.transition_step_as(
+                        phase_id, epic_id, wave_id, sprint_id, ticket_id, &step.id, status, &actor,
                     )?;
                 }
 
@@ -630,6 +639,17 @@ mod tests {
             .collect()
     }
 
+    /// Actors of every step-level event in events.jsonl, in order.
+    fn step_event_actors(phases_root: &Path) -> Vec<String> {
+        fs::read_to_string(phases_root.join("events.jsonl"))
+            .expect("read event log")
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("valid event JSON"))
+            .filter(|event| event["level"] == "step")
+            .map(|event| event["actor"].as_str().expect("actor string").to_string())
+            .collect()
+    }
+
     fn first_step_status(phases_root: PathBuf) -> StepStatus {
         PbdStore::new(phases_root)
             .load_ticket("p1", "e01", "w01", "s01", "t01")
@@ -690,6 +710,47 @@ mod tests {
 
     #[tokio::test]
     #[serial(env_path)]
+    async fn real_dispatch_records_resolved_fleet_cli_as_step_event_actor() {
+        let cli_dir = TempDir::new().expect("fake CLI directory");
+        let _path = install_fake_fleet_cli(
+            cli_dir.path(),
+            "printf '%s\\n' 'CASCADE_STEP_COMPLETE:step-01'",
+        );
+        let tmp = TempDir::new().expect("phase directory");
+        let store = mk_store(&tmp);
+        seed_phase(&store);
+        let phases_root = store.root().to_path_buf();
+
+        BuildEngine::new(
+            store,
+            FleetDispatcher,
+            NoExternalChecks,
+            BuildConfig::default(),
+        )
+        .run_phase("p1")
+        .await
+        .expect("real phase run");
+
+        let actors = step_event_actors(&phases_root);
+        assert!(
+            actors.iter().all(|actor| actor != "cascade-cli"),
+            "no step event should carry the hardcoded default actor: {actors:?}"
+        );
+        // seed_phase tickets: t01/t02 weight M → BulkExec → claude;
+        // t03 weight S → Cheap → opencode. The dispatch-path transitions
+        // (pending→running and running→passed) must name the resolved CLI.
+        assert!(
+            actors.iter().any(|actor| actor == "fleet/claude/BulkExec"),
+            "M-weight dispatch should be attributed to claude/BulkExec: {actors:?}"
+        );
+        assert!(
+            actors.iter().any(|actor| actor == "fleet/opencode/Cheap"),
+            "S-weight dispatch should be attributed to opencode/Cheap: {actors:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[serial(env_path)]
     async fn real_dispatch_marks_step_failed_when_success_output_has_no_marker() {
         let cli_dir = TempDir::new().expect("fake CLI directory");
         let _path = install_fake_fleet_cli(cli_dir.path(), "printf '%s\\n' 'work complete'");
@@ -710,6 +771,34 @@ mod tests {
 
         assert!(error.to_string().contains("omitted completion markers"));
         assert_eq!(first_step_status(phases_root), StepStatus::Failed);
+    }
+
+    #[tokio::test]
+    #[serial(env_path)]
+    async fn real_dispatch_records_fleet_cli_actor_on_missing_marker_failure() {
+        let cli_dir = TempDir::new().expect("fake CLI directory");
+        let _path = install_fake_fleet_cli(cli_dir.path(), "printf '%s\\n' 'work complete'");
+        let tmp = TempDir::new().expect("phase directory");
+        let store = mk_store(&tmp);
+        seed_phase(&store);
+        let phases_root = store.root().to_path_buf();
+
+        let error = BuildEngine::new(
+            store,
+            FleetDispatcher,
+            NoExternalChecks,
+            BuildConfig::default(),
+        )
+        .run_phase("p1")
+        .await
+        .expect_err("missing marker must fail the phase run");
+
+        assert!(error.to_string().contains("omitted completion markers"));
+        let actors = step_event_actors(&phases_root);
+        assert!(
+            actors.iter().any(|actor| actor == "fleet/claude/BulkExec"),
+            "missing-marker failure transitions must still name the resolved CLI: {actors:?}"
+        );
     }
 
     #[tokio::test]

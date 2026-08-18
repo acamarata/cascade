@@ -93,6 +93,36 @@ pub fn cli_binary_for_task_class(task_class: TaskClass) -> &'static str {
     }
 }
 
+// ── Dispatch actor (T-P7-E10-06, observability only) ──────────────────────────
+
+/// Format the actor recorded in `PbdEvent::actor` when the fleet dispatch path
+/// executes a ticket step: `fleet/<resolved-cli-binary>/<TaskClass>`, e.g.
+/// `fleet/claude/BulkExec`.
+///
+/// Pure string formatting — this changes NOTHING about how work is dispatched,
+/// classified, or routed; it only names what ran so event-log consumers (UI,
+/// daemon status) can display the real executor. The format is the single
+/// source of truth shared with [`dispatch_actor_parts`].
+pub fn dispatch_actor(task_class: TaskClass) -> String {
+    format!(
+        "fleet/{}/{}",
+        cli_binary_for_task_class(task_class),
+        task_class
+    )
+}
+
+/// Parse a dispatch actor produced by [`dispatch_actor`] back into
+/// `(cli_binary, task_class)`.
+///
+/// Returns `None` for any non-fleet actor (e.g. the `"cascade-cli"` default
+/// recorded by manual/CLI-driven transitions), so consumers can distinguish
+/// "a fleet CLI executed this" from "a human/CLI tool did".
+pub fn dispatch_actor_parts(actor: &str) -> Option<(&str, &str)> {
+    let rest = actor.strip_prefix("fleet/")?;
+    let (binary, task_class) = rest.split_once('/')?;
+    Some((binary, task_class))
+}
+
 /// Build the CLI args for `binary` given a non-interactive `prompt`, mirroring
 /// conductor.rs's `execute_claude` / `execute_codex` / `execute_opencode`.
 fn args_for_binary<'p>(binary: &str, prompt: &'p str) -> Vec<&'p str> {
@@ -232,6 +262,48 @@ mod tests {
         assert_eq!(args_for_binary("codex", "hi"), vec!["exec", "hi"]);
         assert_eq!(args_for_binary("opencode", "hi"), vec!["run", "hi"]);
         assert_eq!(args_for_binary("unknown-cli", "hi"), vec!["run", "hi"]);
+    }
+
+    #[test]
+    fn dispatch_actor_names_resolved_cli_and_task_class() {
+        assert_eq!(dispatch_actor(TaskClass::BulkExec), "fleet/claude/BulkExec");
+        assert_eq!(dispatch_actor(TaskClass::Cheap), "fleet/opencode/Cheap");
+        assert_eq!(
+            dispatch_actor(TaskClass::AdversarialReview),
+            "fleet/codex/AdversarialReview"
+        );
+        assert_eq!(
+            dispatch_actor(TaskClass::FinalGate),
+            "fleet/claude/FinalGate"
+        );
+    }
+
+    #[test]
+    fn dispatch_actor_parts_round_trips_fleet_actors() {
+        for class in [
+            TaskClass::BulkExec,
+            TaskClass::Cheap,
+            TaskClass::AdversarialReview,
+            TaskClass::FinalGate,
+            TaskClass::InteractiveChat,
+            TaskClass::Sensitive,
+        ] {
+            let actor = dispatch_actor(class);
+            let (binary, parsed_class) = dispatch_actor_parts(&actor)
+                .unwrap_or_else(|| panic!("fleet actor must parse: {actor}"));
+            assert_eq!(binary, cli_binary_for_task_class(class));
+            assert_eq!(parsed_class, class.to_string());
+        }
+    }
+
+    #[test]
+    fn dispatch_actor_parts_rejects_non_fleet_actors() {
+        // The default actor for manual/CLI-driven transitions is not a fleet
+        // dispatch and must not parse as one.
+        assert!(dispatch_actor_parts("cascade-cli").is_none());
+        assert!(dispatch_actor_parts("").is_none());
+        assert!(dispatch_actor_parts("fleet/claude").is_none());
+        assert!(dispatch_actor_parts("claude/BulkExec").is_none());
     }
 
     #[test]

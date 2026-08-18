@@ -13,8 +13,8 @@ mod tests {
         external_checks::{BuildCheck, RealExternalChecks},
         protocol::{run_eoe, run_eop, run_eos, run_eot, run_eow, ExternalChecks, NoExternalChecks},
         schema::{
-            Epic, EpicStatus, Phase, PhaseStatus, Sprint, SprintStatus, Step, StepStatus, Ticket,
-            TicketStatus, Wave, WaveStatus,
+            Epic, EpicStatus, EventLevel, Phase, PhaseStatus, Sprint, SprintStatus, Step,
+            StepStatus, Ticket, TicketStatus, Wave, WaveStatus,
         },
         store::PbdStore,
     };
@@ -469,6 +469,64 @@ mod tests {
             StepStatus::Running,
         );
         assert!(bad.is_err(), "passed → running should be rejected");
+    }
+
+    #[test]
+    #[serial(global_env)]
+    fn test_step_transition_records_caller_supplied_actor() {
+        let tmp = TempDir::new().unwrap();
+        let store = mk_store(&tmp);
+        build_hierarchy(&store);
+
+        // Two pending steps on one ticket: one via the default path, one via
+        // the actor-aware path.
+        let mut ticket = store.load_ticket("p1", "e01", "w01", "s01", "t01").unwrap();
+        ticket.steps.push(mk_step("step1"));
+        ticket.steps.push(mk_step("step2"));
+        store.save_ticket("p1", "e01", "w01", &ticket).unwrap();
+
+        // Non-fleet caller (manual/CLI): default actor must be unchanged.
+        store
+            .transition_step(
+                "p1",
+                "e01",
+                "w01",
+                "s01",
+                "t01",
+                "step1",
+                StepStatus::Running,
+            )
+            .expect("default transition_step");
+
+        // Fleet caller: the supplied actor is recorded verbatim.
+        store
+            .transition_step_as(
+                "p1",
+                "e01",
+                "w01",
+                "s01",
+                "t01",
+                "step2",
+                StepStatus::Running,
+                "fleet/claude/BulkExec",
+            )
+            .expect("actor-aware transition_step_as");
+
+        let step_actors: Vec<(String, String)> = store
+            .read_events()
+            .unwrap()
+            .into_iter()
+            .filter(|ev| ev.level == EventLevel::Step)
+            .map(|ev| (ev.id, ev.actor))
+            .collect();
+        assert_eq!(
+            step_actors,
+            vec![
+                ("step1".to_string(), "cascade-cli".to_string()),
+                ("step2".to_string(), "fleet/claude/BulkExec".to_string()),
+            ],
+            "each step event must carry the actor of the path that ran it"
+        );
     }
 
     #[test]

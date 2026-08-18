@@ -45,6 +45,15 @@ use super::schema::{
 
 // ── PbdStore ──────────────────────────────────────────────────────────────────
 
+/// Actor recorded on events emitted via the non-actor-aware paths
+/// (`transition_step`, `emit_event`, and every CRUD/transition helper).
+///
+/// This is the default for manual/CLI-driven transitions — callers that know
+/// the real executor (e.g. the build engine's fleet dispatch path, which
+/// resolves a fleet CLI via `classify_ticket` + `cli_binary_for_task_class`)
+/// pass their own actor string through [`PbdStore::transition_step_as`].
+pub const DEFAULT_EVENT_ACTOR: &str = "cascade-cli";
+
 pub struct PbdStore {
     /// Root of the phases/ directory.
     root: PathBuf,
@@ -833,6 +842,36 @@ impl PbdStore {
         step_id: &str,
         new_status: StepStatus,
     ) -> Result<()> {
+        self.transition_step_as(
+            phase_id,
+            epic_id,
+            wave_id,
+            sprint_id,
+            ticket_id,
+            step_id,
+            new_status,
+            DEFAULT_EVENT_ACTOR,
+        )
+    }
+
+    /// Transition one step, recording `actor` on the emitted event.
+    ///
+    /// Same validation, persistence, and event emission as
+    /// [`PbdStore::transition_step`] — the ONLY difference is the actor string
+    /// written to `events.jsonl`, so fleet-dispatch callers can record what
+    /// actually executed the step (T-P7-E10-06, observability only).
+    #[allow(clippy::too_many_arguments)]
+    pub fn transition_step_as(
+        &self,
+        phase_id: &str,
+        epic_id: &str,
+        wave_id: &str,
+        sprint_id: &str,
+        ticket_id: &str,
+        step_id: &str,
+        new_status: StepStatus,
+        actor: &str,
+    ) -> Result<()> {
         let mut ticket = self.load_ticket(phase_id, epic_id, wave_id, sprint_id, ticket_id)?;
         let step = ticket
             .steps
@@ -850,7 +889,7 @@ impl PbdStore {
         let to = new_status.as_str().to_string();
         step.status = new_status;
         self.save_ticket(phase_id, epic_id, wave_id, &ticket)?;
-        self.emit_event(EventLevel::Step, step_id, &from, &to, None)?;
+        self.emit_event_as(EventLevel::Step, step_id, &from, &to, None, actor)?;
         Ok(())
     }
 
@@ -864,9 +903,21 @@ impl PbdStore {
         to: &str,
         note: Option<&str>,
     ) -> Result<()> {
+        self.emit_event_as(level, id, from, to, note, DEFAULT_EVENT_ACTOR)
+    }
+
+    fn emit_event_as(
+        &self,
+        level: EventLevel,
+        id: &str,
+        from: &str,
+        to: &str,
+        note: Option<&str>,
+        actor: &str,
+    ) -> Result<()> {
         let event = PbdEvent {
             ts: Utc::now(),
-            actor: "cascade-cli".into(),
+            actor: actor.to_string(),
             level,
             id: id.to_string(),
             from: from.to_string(),

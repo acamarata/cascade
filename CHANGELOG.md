@@ -7,6 +7,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- **Real fleet dispatch actor is now recorded and exposed** (T-P7-E10-06,
+  2026-08-18). The build engine's fleet dispatch path previously logged every
+  step transition under a hardcoded `"cascade-cli"` actor, so nothing on disk
+  said which fleet CLI actually executed a ticket. The engine now resolves
+  the executor it is about to use (`classify_ticket` +
+  `cli_binary_for_task_class`, unchanged) and records it on the step events
+  it emits via the new additive `PbdStore::transition_step_as` — actor format
+  `fleet/<cli-binary>/<TaskClass>`, e.g. `fleet/claude/BulkExec`. Manual/CLI
+  callers keep the `"cascade-cli"` default through the unchanged
+  `transition_step`. The daemon's `GET /api/projects/:id/phase` response
+  gains two additive fields, `last_dispatch_actor` and
+  `last_dispatch_task_class`, read from the project's `events.jsonl` (most
+  recent step-level event; non-fleet actors report no task class).
+  Observability only: dispatch, classification, routing, retry, and the
+  `CASCADE_STEP_COMPLETE` marker protocol are untouched.
 - **Injectable `FleetRunner` seam enables deterministic end-to-end tests of
   the real dispatch path** (T-P7-E03-06, 2026-08-18). The build engine's
   fleet dispatch now shells the CLI through a `FleetRunner` trait

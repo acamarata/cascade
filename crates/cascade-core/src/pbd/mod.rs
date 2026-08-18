@@ -49,5 +49,5 @@ pub use schema::{
     PhaseStatus, Sprint, SprintStatus, Step, StepStatus, Ticket, TicketStatus, Wave, WaveStatus,
 };
 pub use security_checks::{SecurityChecks, WithSecurity};
-pub use store::{locate_phases_root, resolve_phases_root, PbdStore};
+pub use store::{locate_phases_root, resolve_phases_root, PbdStore, DEFAULT_EVENT_ACTOR};
 pub use validate::{validate, Issue, IssueLevel, ValidationResult};

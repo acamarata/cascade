@@ -109,6 +109,15 @@ pub struct PhaseStatus {
     pub plan_md_exists: bool,
     /// Absolute path of the phase directory that was read.
     pub phase_dir: Option<String>,
+    /// Actor of the most recent step-level event in the project's PBD event
+    /// log — what actually executed the last dispatched ticket step, e.g.
+    /// `"fleet/claude/BulkExec"`, or `"cascade-cli"` for manual/CLI-driven
+    /// transitions. None when no event log exists. (T-P7-E10-06)
+    pub last_dispatch_actor: Option<String>,
+    /// TaskClass portion of `last_dispatch_actor` when it names a fleet
+    /// dispatch (`"BulkExec"` for `"fleet/claude/BulkExec"`); None for
+    /// non-fleet actors or a missing event log. (T-P7-E10-06)
+    pub last_dispatch_task_class: Option<String>,
 }
 
 /// Leaf ticket summary inside a scaffold tree.
@@ -275,7 +284,59 @@ fn read_phase_status(project_path: &std::path::Path) -> PhaseStatus {
         tickets_blocked: get_u32("blocked"),
         plan_md_exists,
         phase_dir,
+        // Dispatch attribution is filled in by the /phase handler only, so
+        // the per-project enumeration in handler_projects (which needs just
+        // phase_id) never pays the event-log scan.
+        last_dispatch_actor: None,
+        last_dispatch_task_class: None,
     }
+}
+
+/// Most recent dispatch info from a project's PBD event log (T-P7-E10-06).
+///
+/// Scans the project's `events.jsonl` (written by cascade-core's `PbdStore`)
+/// from the end for the latest step-level event — the last thing a fleet
+/// dispatch actually executed — and returns
+/// `(Some(actor), Some(task_class))`, e.g.
+/// `("fleet/claude/BulkExec", "BulkExec")`. The task class is None for
+/// non-fleet actors (manual/CLI transitions record `"cascade-cli"`).
+/// `(None, None)` when no event log exists or none has step events.
+/// Read-only best effort: missing/unparseable files and lines are skipped,
+/// never a 500.
+fn last_dispatch_info(project_path: &std::path::Path) -> (Option<String>, Option<String>) {
+    use cascade_core::pbd::schema::{EventLevel, PbdEvent};
+
+    let candidates = [
+        project_path
+            .join(".claude")
+            .join("phases")
+            .join("events.jsonl"),
+        project_path
+            .join(".cascade")
+            .join("phases")
+            .join("events.jsonl"),
+        project_path.join("phases").join("events.jsonl"),
+    ];
+
+    for candidate in candidates {
+        let content = match std::fs::read_to_string(&candidate) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        // Reverse scan: the last step-level line in file order is the most
+        // recent dispatch. Malformed lines are skipped, not fatal.
+        for line in content.lines().rev() {
+            let Ok(event) = serde_json::from_str::<PbdEvent>(line) else {
+                continue;
+            };
+            if event.level == EventLevel::Step {
+                let task_class = cascade_core::build::dispatch_actor_parts(&event.actor)
+                    .map(|(_, class)| class.to_string());
+                return (Some(event.actor), task_class);
+            }
+        }
+    }
+    (None, None)
 }
 
 /// Read a single YAML ticket file and extract summary fields.
@@ -576,7 +637,12 @@ pub async fn handler_project_phase(Path(id): Path<String>) -> impl IntoResponse 
     };
 
     let project_dir = home.join("Sites").join(&id);
-    let status = read_phase_status(&project_dir);
+    let mut status = read_phase_status(&project_dir);
+    // Dispatch attribution (T-P7-E10-06): most recent step-level event actor
+    // from the project's PBD event log — additive, read-only.
+    let (actor, task_class) = last_dispatch_info(&project_dir);
+    status.last_dispatch_actor = actor;
+    status.last_dispatch_task_class = task_class;
     Json(json!(status)).into_response()
 }
 
@@ -826,6 +892,106 @@ mod tests {
                     assert_eq!(val["phase_id"], "P3");
                     assert_eq!(val["phase_status"], "building");
                     assert_eq!(val["pct_done"], 42.0);
+                })
+            });
+        });
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
+    async fn test_phase_exposes_last_dispatch_actor_from_events() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        with_fake_home(|tmp| {
+            let phases_dir = tmp
+                .path()
+                .join("Sites")
+                .join("myproj")
+                .join(".claude")
+                .join("phases");
+            std::fs::create_dir_all(&phases_dir).unwrap();
+            std::fs::write(
+                phases_dir.join("status.yaml"),
+                "phase_id: P1\nphase_status: building\n",
+            )
+            .unwrap();
+            // Event log: a fleet dispatch is the most recent step event; a
+            // later ticket-level event must NOT override it.
+            std::fs::write(
+                phases_dir.join("events.jsonl"),
+                concat!(
+                    r#"{"ts":"2026-08-18T10:00:00Z","actor":"cascade-cli","level":"step","id":"step-01","from":"pending","to":"running"}"#,
+                    "\n",
+                    r#"{"ts":"2026-08-18T10:01:00Z","actor":"fleet/claude/BulkExec","level":"step","id":"step-01","from":"running","to":"passed"}"#,
+                    "\n",
+                    r#"{"ts":"2026-08-18T10:02:00Z","actor":"cascade-cli","level":"ticket","id":"t01","from":"active","to":"done"}"#,
+                    "\n",
+                ),
+            )
+            .unwrap();
+
+            let app = test_router();
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    let req = Request::builder()
+                        .uri("/myproj/phase")
+                        .body(Body::empty())
+                        .unwrap();
+                    let resp = app.oneshot(req).await.unwrap();
+                    assert_eq!(resp.status(), StatusCode::OK);
+                    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                        .await
+                        .unwrap();
+                    let val: Value = serde_json::from_slice(&body).unwrap();
+                    // Existing fields unchanged.
+                    assert_eq!(val["phase_id"], "P1");
+                    assert_eq!(val["phase_status"], "building");
+                    // New dispatch-attribution fields.
+                    assert_eq!(val["last_dispatch_actor"], "fleet/claude/BulkExec");
+                    assert_eq!(val["last_dispatch_task_class"], "BulkExec");
+                })
+            });
+        });
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial(global_env)]
+    async fn test_phase_dispatch_fields_null_without_event_log() {
+        let _env_guard = crate::test_support::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        with_fake_home(|tmp| {
+            // status.yaml exists but no events.jsonl anywhere.
+            let phases_dir = tmp
+                .path()
+                .join("Sites")
+                .join("myproj")
+                .join(".claude")
+                .join("phases");
+            std::fs::create_dir_all(&phases_dir).unwrap();
+            std::fs::write(
+                phases_dir.join("status.yaml"),
+                "phase_id: P1\nphase_status: building\n",
+            )
+            .unwrap();
+
+            let app = test_router();
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    let req = Request::builder()
+                        .uri("/myproj/phase")
+                        .body(Body::empty())
+                        .unwrap();
+                    let resp = app.oneshot(req).await.unwrap();
+                    assert_eq!(resp.status(), StatusCode::OK);
+                    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                        .await
+                        .unwrap();
+                    let val: Value = serde_json::from_slice(&body).unwrap();
+                    assert_eq!(val["phase_id"], "P1");
+                    assert!(val["last_dispatch_actor"].is_null());
+                    assert!(val["last_dispatch_task_class"].is_null());
                 })
             });
         });
