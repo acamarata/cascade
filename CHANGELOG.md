@@ -7,11 +7,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- **Test coverage for the personal vault UI and instructions browser**
+  (T-P7-E21-01, T-P7-E21-02, 2026-08-18). 44 new tests across the encrypted
+  personal-vault panel (collections, records, add-record, exposure log) and the
+  instructions browser page (list, search, tier-diff views). Both surfaces
+  already shipped; neither had direct component tests. No behaviour change.
+
+### Added
+- **Test coverage for the encrypted personal vault UI** (T-P7-E21-01, 2026-08-18).
+  25 new tests for `PersonalEncryptedVaultPanel` and its backing hook, covering
+  loading/error/empty states, collection selection, sensitivity badges, mode toggle,
+  records table, exposure log, and add-record form validation (invalid JSON, array
+  input, save error, successful submit clears textarea). Feature itself was already
+  complete (`usePersonalEncryptedVault` + `PersonalEncryptedVaultPanel` wired into
+  `/personal?tab=vault`); tests were the only gap.
+- **Test coverage for the InstructionsPage component** (T-P7-E21-02, 2026-08-18).
+  19 new tests for `InstructionsPage`, covering loading/error/header states, list
+  view (tier cards, absent label, line count, expand/collapse), view-mode switching
+  (List ↔ Search ↔ Diff), search results (match count, no-matches prompt), diff
+  view (tier nav), and refresh trigger. Service layer (`instructionTiers.ts`) was
+  already tested; the page component had no tests. Editing of tier files is not
+  implemented — no Tauri write command for CASCADE.md/AGENTS.md exists in the
+  backend; that gap is left open for a future ticket once the daemon handler is built.
 - **Test coverage for the in-app chat prompt path** (T-P7-E21-03, 2026-08-18).
   22 new tests covering `buildSystemPrompt` (all three namespace branches) and
   the `ChatInput` component (disabled/streaming states, submit behaviour), both
   of which were exported and exercised on every chat request but had no direct
   tests. No behaviour change.
+- **Cross-session dedup wired in `cascade.context_slice`** (T-P7-E15-01,
+  2026-08-18). The `handle_context_slice` handler had an explicit TODO: every
+  MCP session received fully independent results with zero deduplication across
+  sessions because the live SQLite pool was never injected. `ToolRegistry` now
+  carries an optional `DbPool` slot (mirroring the existing `RetrieverSlot`
+  pattern) filled via `ToolRegistry::with_db_pool` / `db_pool_slot`. When a pool
+  AND a `session_id` are present, `cascade.context_slice` runs
+  `ContextOptimizer::cross_session_dedup` (filtering chunks already delivered to
+  that session within the last 30 min via the `context_fingerprints` table)
+  before assembly, and `ContextOptimizer::record_delivered` after the response is
+  built — both in `spawn_blocking` (matching `handlers_memory`). The pool reuses
+  the existing `cascade-db` `DbPool` / `build_pool` mechanism (no new
+  persistence). Without a pool or `session_id`, behaviour is unchanged. Response
+  metadata gains `dedup_applied` and `dedup_suppressed`. 3 new tests prove dedup
+  ACROSS two simulated sessions (same `session_id`), session-scoping (different
+  `session_id` not suppressed), and the no-pool passthrough. Also a one-line
+  clippy `io_other_error` fix in `cascade-db::pool::build_pool` (`Error::other`,
+  MSRV-safe since 1.74) surfaced by the new dependency.
 
 ### Changed
 - **Production JS bundles code-split to clear Vite's 500 kB chunk warning**
