@@ -4,12 +4,13 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use cascade_core::cascade_resolution::resolve_cascade_full;
 use cascade_core::pbd::active_work::build_active_work;
 use cascade_rag::context::ContextOptimizer;
 use cascade_types::retriever::Retriever;
+use cascade_types::RetrievalHit;
 
 use crate::paths as mcp_paths;
 use crate::server::JsonRpcError;
@@ -449,15 +450,24 @@ pub(super) async fn handle_memory_write(args: &Value) -> std::result::Result<Val
 /// `cascade.context_slice` — token-budgeted, deduplicated context window.
 ///
 /// Invokes the `ContextOptimizer` pipeline from `cascade-rag` directly (no IPC
-/// double-serialization — T-P4-E04-22 architectural requirement). In this
-/// implementation, the RAG retrieve path is stubbed until the full daemon-backed
-/// retrieve pipeline is wired in (future ticket). The optimizer pipeline (dedup,
+/// double-serialization — T-P4-E04-22 architectural requirement). When a live
+/// retriever is injected, real RAG hits are retrieved; otherwise a single
+/// informational fallback chunk is returned. The optimizer pipeline (dedup,
 /// window, shell compression) is fully operational.
+///
+/// ## Cross-session dedup (T-P7-E15-01)
+///
+/// When a live SQLite pool (`DbPool`) is injected via
+/// [`ToolRegistry::with_db_pool`] AND the caller supplies a `session_id`,
+/// chunks already delivered to that session within the last 30 minutes are
+/// suppressed (via the `context_fingerprints` table) and the chunks actually
+/// returned are recorded for future suppression. Without a pool or
+/// `session_id`, every call returns independent results (the prior behaviour).
 ///
 /// ## Arguments
 /// - `query`         — natural-language query (required)
 /// - `budget_tokens` — max tokens to include (256–32768, default 4096)
-/// - `session_id`    — optional; enables cross-session dedup when provided
+/// - `session_id`    — optional; enables cross-session dedup when a pool is present
 /// - `include_shell` — if true, compress embedded shell snippets
 /// - `project`       — optional project name filter (forwarded to future retriever)
 ///
@@ -466,9 +476,12 @@ pub(super) async fn handle_memory_write(args: &Value) -> std::result::Result<Val
 /// - `content[0].text` — markdown context (fenced blocks with citation headers)
 /// - `metadata.tokens_used` — estimated token count of included chunks
 /// - `metadata.chunks_returned` — number of chunks in the slice
+/// - `metadata.dedup_applied` — `true` when cross-session dedup ran
+/// - `metadata.dedup_suppressed` — chunks filtered by cross-session dedup
 pub(super) async fn handle_context_slice(
     args: &Value,
     retriever: Option<Arc<dyn Retriever>>,
+    db_pool: Option<cascade_db::pool::DbPool>,
 ) -> std::result::Result<Value, JsonRpcError> {
     // ── Validate and extract arguments ──────────────────────────────────────
     let query = args
@@ -524,31 +537,71 @@ pub(super) async fn handle_context_slice(
     // pipeline still runs and the caller gets a non-empty, valid response.
     //
     // Architecture note (T-P4-E04-22): direct crate-level call, no daemon IPC.
-    // Cross-session dedup (T-P4-E04-21) requires a live SQLite pool — skipped
-    // here; wire via cross_session_dedup + record_delivered when pool is injected.
     let retriever_ready = retriever.is_some();
-    let raw_chunks: Vec<String> = match retriever {
+    let raw_hits: Vec<RetrievalHit> = match retriever {
         Some(ret) => {
             // Build retrieve opts: limit to profile k_chunks (default 10).
             let opts = build_retrieve_opts(10, None);
-            let hits = ret
-                .retrieve(query, &opts)
+            ret.retrieve(query, &opts)
                 .await
-                .map_err(|e| JsonRpcError::internal(format!("retrieval failed: {e}")))?;
-            hits.into_iter().map(|h| h.text).collect()
+                .map_err(|e| JsonRpcError::internal(format!("retrieval failed: {e}")))?
         }
         None => {
             // TODO(E-05-follow): inject retriever via ToolRegistry::with_retriever
             // so this branch is never taken in production.  Currently the
             // ToolRegistry does not forward the retriever slot to context_slice;
             // that wiring is the remaining step to fully close E-05.
-            vec![format!(
-                "cascade.context_slice: index not ready (query={query:?}). \
-                 Run `cascade index rebuild` then restart the MCP server."
-            )]
+            Vec::new()
         }
     };
-    let _ = session_id; // forward-ref: used when DB pool is wired for cross-session dedup
+
+    // Fallback informational chunk when the retriever is not wired in.  This is
+    // NOT real retrieved context, so it is excluded from cross-session dedup
+    // and fingerprint recording.
+    let fallback_msg: Option<String> = if !retriever_ready {
+        Some(format!(
+            "cascade.context_slice: index not ready (query={query:?}). \
+             Run `cascade index rebuild` then restart the MCP server."
+        ))
+    } else {
+        None
+    };
+
+    // ── Cross-session dedup (T-P7-E15-01) ─────────────────────────────────────
+    // When a live SQLite pool AND a session_id are supplied, filter out chunks
+    // already delivered to this session within the last 30 minutes via the
+    // `context_fingerprints` table.  This runs BEFORE assembly so the token
+    // window operates on the deduped set.  rusqlite is sync, so the DB work
+    // runs in `spawn_blocking` (same pattern as handlers_memory).
+    //
+    // Dedup is only applied to real retrieved chunks (not the fallback message)
+    // and requires both a pool and a session_id; otherwise we pass through.
+    let raw_count = raw_hits.len();
+    let can_dedup = db_pool.is_some() && session_id.is_some() && retriever_ready;
+    let deduped_hits: Vec<RetrievalHit> = match (db_pool.clone(), session_id) {
+        (Some(pool), Some(sid)) if retriever_ready => {
+            let sid = sid.to_string();
+            let opt = ContextOptimizer::new(budget_tokens);
+            tokio::task::spawn_blocking(
+                move || -> std::result::Result<Vec<RetrievalHit>, String> {
+                    let conn = pool.get().map_err(|e| format!("db pool checkout: {e}"))?;
+                    Ok(opt.cross_session_dedup(raw_hits, &sid, &conn))
+                },
+            )
+            .await
+            .map_err(|e| JsonRpcError::internal(format!("dedup task join: {e}")))?
+            .map_err(JsonRpcError::internal)?
+        }
+        _ => raw_hits,
+    };
+    let dedup_suppressed = raw_count.saturating_sub(deduped_hits.len());
+
+    // Convert to text strings for the ContextAssembler.
+    let raw_chunks: Vec<String> = if let Some(msg) = fallback_msg {
+        vec![msg]
+    } else {
+        deduped_hits.iter().map(|h| h.text.clone()).collect()
+    };
 
     // ── ContextAssembler (ctx-01) ─────────────────────────────────────────────
     // Load profiles from disk if available; fall back to built-in defaults.
@@ -594,6 +647,56 @@ pub(super) async fn handle_context_slice(
         }
     }
 
+    // ── Record delivered fingerprints (T-P7-E15-01) ───────────────────────────
+    // Persist fingerprints of the chunks actually returned so a subsequent
+    // context_slice for the same session_id within 30 min suppresses them.
+    // Called AFTER the response markdown is built (per `record_delivered`'s
+    // contract) so a transport error dropping the reply does not mark
+    // undelivered chunks as delivered.
+    //
+    // Only real retrieved chunks are recorded (not the fallback message), and
+    // only when both a pool and session_id are present.  Recording failures are
+    // non-fatal: the response is already valid, so we log and continue rather
+    // than surfacing a protocol error.
+    if retriever_ready && !assembled.chunks.is_empty() {
+        if let (Some(pool), Some(sid)) = (db_pool.as_ref(), session_id) {
+            let pool = pool.clone();
+            let sid = sid.to_string();
+            // `assembled.chunks` are the raw (pre-shell-compression) texts of the
+            // hits that survived the token window.  Their fingerprints match the
+            // fingerprints computed by `cross_session_dedup` on raw retrieved
+            // text, so future suppression is consistent.
+            let delivered: Vec<RetrievalHit> = assembled
+                .chunks
+                .iter()
+                .enumerate()
+                .map(|(i, text)| RetrievalHit {
+                    chunk_id: format!("delivered-{i}"),
+                    text: text.clone(),
+                    file_path: None,
+                    start_line: None,
+                    end_line: None,
+                    score: 1.0,
+                    rank: i,
+                    tier: None,
+                })
+                .collect();
+            let opt = ContextOptimizer::new(budget_tokens);
+            let join_res =
+                tokio::task::spawn_blocking(move || -> std::result::Result<(), String> {
+                    let conn = pool.get().map_err(|e| format!("db pool checkout: {e}"))?;
+                    opt.record_delivered(&sid, &delivered, &conn)
+                        .map_err(|e| format!("record_delivered: {e}"))
+                })
+                .await;
+            match join_res {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => warn!("context_slice record_delivered failed: {e}"),
+                Err(e) => warn!("context_slice record_delivered task join failed: {e}"),
+            }
+        }
+    }
+
     Ok(serde_json::json!({
         "content": [{ "type": "text", "text": md }],
         "metadata": {
@@ -604,6 +707,8 @@ pub(super) async fn handle_context_slice(
             "role": role,
             "tier": assembled.tier,
             "retriever_ready": retriever_ready,
+            "dedup_applied": can_dedup,
+            "dedup_suppressed": dedup_suppressed,
         }
     }))
 }

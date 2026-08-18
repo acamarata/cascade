@@ -1710,3 +1710,262 @@ async fn security_audit_returns_well_formed_result() {
         "high_or_critical_count must be a number: {result}"
     );
 }
+
+// ── cascade.context_slice cross-session dedup (T-P7-E15-01) ──────────────────
+//
+// These tests prove that when a live SQLite pool is injected into the
+// ToolRegistry, `cascade.context_slice` suppresses chunks already delivered to
+// the same `session_id` within a prior session (call), and records the chunks
+// it actually delivers so future calls suppress them.  Dedup state persists
+// ACROSS sessions via the shared pool (a temp-file SQLite DB).
+
+use async_trait::async_trait;
+use cascade_types::error::Result as TypesResult;
+use cascade_types::retriever::{RetrievalHit, RetrieveOpts};
+
+/// A stub retriever that returns a fixed list of hits regardless of query.
+///
+/// Used to exercise cross-session dedup with deterministic, distinct chunk
+/// content (so fingerprints are stable and predictable).
+struct StubRetriever {
+    hits: Vec<RetrievalHit>,
+}
+
+#[async_trait]
+impl Retriever for StubRetriever {
+    async fn retrieve(&self, _query: &str, _opts: &RetrieveOpts) -> TypesResult<Vec<RetrievalHit>> {
+        Ok(self.hits.clone())
+    }
+
+    fn name(&self) -> &str {
+        "stub-dedup"
+    }
+}
+
+/// Build a SQLite pool over a temp file and create the `context_fingerprints`
+/// table (schema from migration 0008) so cross-session dedup has a live store.
+///
+/// This is test-fixture setup using the documented table schema — it does NOT
+/// invent a new persistence mechanism; the production path runs the same schema
+/// via `cascade-rag` migration 0008.
+fn build_dedup_pool(dir: &tempfile::TempDir) -> cascade_db::pool::DbPool {
+    let db_path = dir.path().join("dedup.db");
+    let pool = cascade_db::pool::build_pool(&db_path, 4).expect("build_pool");
+    let conn = pool.get().expect("pool checkout for schema setup");
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS context_fingerprints (
+            session_id   TEXT    NOT NULL,
+            chunk_hash   TEXT    NOT NULL,
+            delivered_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            PRIMARY KEY (session_id, chunk_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cfp_delivered ON context_fingerprints (delivered_at);",
+    )
+    .expect("create context_fingerprints table");
+    pool
+}
+
+/// Three distinct chunks used across the dedup tests.  Each is small enough to
+/// fit well within a 4096-token budget so the token window never trims them
+/// (keeping the dedup assertions unambiguous).
+fn dedup_fixture_hits() -> Vec<RetrievalHit> {
+    vec![
+        RetrievalHit {
+            chunk_id: "dedup-a".into(),
+            text: "Alpha chunk: the quick brown fox jumps over the lazy dog.".into(),
+            file_path: None,
+            start_line: None,
+            end_line: None,
+            score: 1.0,
+            rank: 0,
+            tier: None,
+        },
+        RetrievalHit {
+            chunk_id: "dedup-b".into(),
+            text: "Beta chunk: rust ownership and borrowing rules explained.".into(),
+            file_path: None,
+            start_line: None,
+            end_line: None,
+            score: 0.9,
+            rank: 1,
+            tier: None,
+        },
+        RetrievalHit {
+            chunk_id: "dedup-c".into(),
+            text: "Gamma chunk: sqlite write-ahead logging and concurrency.".into(),
+            file_path: None,
+            start_line: None,
+            end_line: None,
+            score: 0.8,
+            rank: 2,
+            tier: None,
+        },
+    ]
+}
+
+/// Cross-session dedup suppresses chunks delivered in a prior session.
+///
+/// Two simulated sessions share the same `session_id` and the same pool. The
+/// first call returns all three fixture chunks and records their fingerprints.
+/// The second call (same session_id) must suppress all three and return zero
+/// chunks — proving dedup state persists ACROSS sessions (calls), not just
+/// within a single call.
+#[tokio::test]
+async fn context_slice_dedup_suppresses_across_two_sessions() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pool = build_dedup_pool(&dir);
+    let retriever: Arc<dyn Retriever> = Arc::new(StubRetriever {
+        hits: dedup_fixture_hits(),
+    });
+    let reg = ToolRegistry::new()
+        .with_retriever(Arc::clone(&retriever))
+        .with_db_pool(pool);
+
+    let params = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-shared"
+        }
+    });
+
+    // Session 1: all three chunks returned; dedup applied but nothing suppressed yet.
+    let r1 = reg.call(&params).await.expect("session 1 call");
+    assert!(
+        r1.get("isError").is_none() || r1["isError"] != Value::Bool(true),
+        "session 1 must not be an error: {r1}"
+    );
+    assert_eq!(
+        r1["metadata"]["dedup_applied"],
+        Value::Bool(true),
+        "dedup_applied must be true when pool + session_id present"
+    );
+    assert_eq!(
+        r1["metadata"]["dedup_suppressed"].as_u64(),
+        Some(0),
+        "first session should suppress nothing yet"
+    );
+    let chunks_1 = r1["metadata"]["chunks_returned"].as_u64().unwrap_or(0);
+    assert_eq!(
+        chunks_1, 3,
+        "session 1 should return all 3 fixture chunks, got {chunks_1}"
+    );
+
+    // Session 2: same session_id, same pool → all three suppressed.
+    let r2 = reg.call(&params).await.expect("session 2 call");
+    assert!(
+        r2.get("isError").is_none() || r2["isError"] != Value::Bool(true),
+        "session 2 must not be an error: {r2}"
+    );
+    assert_eq!(
+        r2["metadata"]["dedup_applied"],
+        Value::Bool(true),
+        "dedup_applied must still be true for session 2"
+    );
+    assert_eq!(
+        r2["metadata"]["dedup_suppressed"].as_u64(),
+        Some(3),
+        "session 2 should suppress all 3 chunks delivered in session 1"
+    );
+    let chunks_2 = r2["metadata"]["chunks_returned"].as_u64().unwrap_or(0);
+    assert_eq!(
+        chunks_2, 0,
+        "session 2 should return 0 chunks (all suppressed); got {chunks_2}"
+    );
+}
+
+/// Cross-session dedup is scoped to `session_id`: a different session is NOT
+/// suppressed by another session's deliveries.
+#[tokio::test]
+async fn context_slice_dedup_scoped_to_session_id() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pool = build_dedup_pool(&dir);
+    let retriever: Arc<dyn Retriever> = Arc::new(StubRetriever {
+        hits: dedup_fixture_hits(),
+    });
+    let reg = ToolRegistry::new()
+        .with_retriever(Arc::clone(&retriever))
+        .with_db_pool(pool);
+
+    // Session A delivers all three chunks.
+    let params_a = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-A"
+        }
+    });
+    let r_a = reg.call(&params_a).await.expect("session A call");
+    assert_eq!(
+        r_a["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
+        3,
+        "session A should return all 3 chunks"
+    );
+
+    // Session B (different session_id) must NOT be suppressed by A.
+    let params_b = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-B"
+        }
+    });
+    let r_b = reg.call(&params_b).await.expect("session B call");
+    assert_eq!(
+        r_b["metadata"]["dedup_suppressed"].as_u64(),
+        Some(0),
+        "session B should not be suppressed by session A's deliveries"
+    );
+    let chunks_b = r_b["metadata"]["chunks_returned"].as_u64().unwrap_or(0);
+    assert_eq!(
+        chunks_b, 3,
+        "session B (different id) should still get all 3 chunks; got {chunks_b}"
+    );
+}
+
+/// Without a DB pool, dedup is disabled and repeated calls return identical
+/// results (the pre-T-P7-E15-01 behaviour).  This guards against a regression
+/// where dedup might accidentally run without a live store.
+#[tokio::test]
+async fn context_slice_dedup_disabled_without_pool() {
+    let retriever: Arc<dyn Retriever> = Arc::new(StubRetriever {
+        hits: dedup_fixture_hits(),
+    });
+    let reg = ToolRegistry::new().with_retriever(Arc::clone(&retriever));
+
+    let params = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-no-pool"
+        }
+    });
+
+    let r1 = reg.call(&params).await.expect("call 1");
+    assert_eq!(
+        r1["metadata"]["dedup_applied"],
+        Value::Bool(false),
+        "dedup_applied must be false without a pool"
+    );
+    assert_eq!(
+        r1["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
+        3,
+        "call 1 without pool should return all 3 chunks"
+    );
+
+    let r2 = reg.call(&params).await.expect("call 2");
+    assert_eq!(
+        r2["metadata"]["dedup_applied"],
+        Value::Bool(false),
+        "dedup_applied must still be false without a pool"
+    );
+    assert_eq!(
+        r2["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
+        3,
+        "without a pool, second call must still return all chunks (no dedup)"
+    );
+}

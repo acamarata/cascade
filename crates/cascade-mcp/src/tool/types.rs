@@ -16,6 +16,20 @@ use cascade_types::retriever::Retriever;
 /// await point.
 pub type RetrieverSlot = Arc<RwLock<Option<Arc<dyn Retriever>>>>;
 
+/// Shared interior-mutable slot holding an optional live SQLite connection
+/// pool ([`cascade_db::pool::DbPool`]).
+///
+/// `None` until a pool is injected via [`ToolRegistry::with_db_pool`] or a
+/// background task writes into the slot returned by
+/// [`ToolRegistry::db_pool_slot`].  `cascade.context_slice` snapshots the
+/// slot (read-lock → clone the `Option` out → drop the guard) and, when a
+/// pool is present together with a `session_id`, runs cross-session chunk
+/// dedup against the `context_fingerprints` table (T-P7-E15-01).
+///
+/// `DbPool` is cheaply cloneable (an `Arc` internally), so cloning the
+/// `Option` out of the slot is a shallow clone.
+pub type DbPoolSlot = Arc<RwLock<Option<cascade_db::pool::DbPool>>>;
+
 /// A single tool definition returned by `tools/list`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

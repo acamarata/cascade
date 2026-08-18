@@ -36,7 +36,7 @@ use super::schemas::{
     cascade_security_audit_tool, cascade_security_secret_scan_tool,
     cascade_update_ticket_status_tool,
 };
-use super::types::{ConnectionContext, RetrieverSlot};
+use super::types::{ConnectionContext, DbPoolSlot, RetrieverSlot};
 
 /// Handles `tools/list` and `tools/call` for the MCP server.
 ///
@@ -57,17 +57,24 @@ pub struct ToolRegistry {
     auth: Option<Arc<McpAuth>>,
     /// Shared slot for the live RAG retriever.  `None` = index not yet ready.
     retriever: RetrieverSlot,
+    /// Shared slot for the live SQLite connection pool used by
+    /// `cascade.context_slice` cross-session dedup (T-P7-E15-01).
+    /// `None` = dedup disabled (every session gets independent results).
+    db_pool: DbPoolSlot,
 }
 
 impl ToolRegistry {
-    /// Create a registry without an auth backend or retriever.
+    /// Create a registry without an auth backend, retriever, or DB pool.
     ///
     /// `cascade.memory.write` calls are always rejected; `cascade.search`
-    /// returns an "index not ready" message until a retriever is injected.
+    /// returns an "index not ready" message until a retriever is injected;
+    /// `cascade.context_slice` skips cross-session dedup until a pool is
+    /// injected via [`ToolRegistry::with_db_pool`].
     pub fn new() -> Self {
         Self {
             auth: None,
             retriever: Arc::new(tokio::sync::RwLock::new(None)),
+            db_pool: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 
@@ -76,6 +83,7 @@ impl ToolRegistry {
         Self {
             auth: Some(auth),
             retriever: Arc::new(tokio::sync::RwLock::new(None)),
+            db_pool: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 
@@ -111,6 +119,40 @@ impl ToolRegistry {
     /// Subsequent `cascade.search` calls will then return real hits.
     pub fn retriever_slot(&self) -> RetrieverSlot {
         Arc::clone(&self.retriever)
+    }
+
+    /// Synchronously fill the SQLite pool slot so that `cascade.context_slice`
+    /// performs cross-session chunk dedup against the `context_fingerprints`
+    /// table (T-P7-E15-01).
+    ///
+    /// Intended for construction-time injection (tests, daemon).  For
+    /// post-construction background injection use [`ToolRegistry::db_pool_slot`].
+    ///
+    /// The pool must point at a database that has run the Cascade migrations
+    /// (migration 0008 creates `context_fingerprints`).  When the slot is
+    /// `None`, `cascade.context_slice` skips dedup and every session receives
+    /// independent results — the pre-T-P7-E15-01 behaviour.
+    pub fn with_db_pool(self, pool: cascade_db::pool::DbPool) -> Self {
+        // `try_write` on a freshly created, uncontested lock always succeeds.
+        if let Ok(mut slot) = self.db_pool.try_write() {
+            *slot = Some(pool);
+        }
+        self
+    }
+
+    /// Return a clone of the shared [`DbPoolSlot`] so that a background task
+    /// can inject a pool after the server is already running.
+    ///
+    /// The background task should:
+    /// 1. Build the pool (`cascade_db::pool::build_pool`) and run migrations.
+    /// 2. Acquire a write-lock on the slot.
+    /// 3. Store `Some(pool)`.
+    /// 4. Drop the write-lock.
+    ///
+    /// Subsequent `cascade.context_slice` calls (with a `session_id`) will
+    /// then dedup across sessions.
+    pub fn db_pool_slot(&self) -> DbPoolSlot {
+        Arc::clone(&self.db_pool)
     }
 
     /// Handle `tools/list` — enumerate all available tools with their schemas.
@@ -192,6 +234,13 @@ impl ToolRegistry {
             guard.clone()
         };
 
+        // Snapshot the DB pool slot the same way (T-P7-E15-01).  DbPool is
+        // cheaply cloneable (Arc internally), so this is a shallow clone.
+        let db_pool_snapshot: Option<cascade_db::pool::DbPool> = {
+            let guard = self.db_pool.read().await;
+            guard.clone()
+        };
+
         match name {
             "cascade.read" => tool_result(handle_read(&args).await),
             "cascade.search" => tool_result(handle_search(&args, retriever_snapshot).await),
@@ -210,7 +259,7 @@ impl ToolRegistry {
                 tool_result(handle_memory_write(&args).await)
             }
             "cascade.context_slice" => {
-                tool_result(handle_context_slice(&args, retriever_snapshot).await)
+                tool_result(handle_context_slice(&args, retriever_snapshot, db_pool_snapshot).await)
             }
             "cascade.provide_harness_context" => {
                 tool_result(handle_provide_harness_context(&args).await)

@@ -39,6 +39,6 @@ pub fn build_pool(path: impl AsRef<Path>, max_size: u32) -> Result<DbPool> {
         .build(manager)
         .map_err(|e| DbError::Io {
             path: path.to_path_buf(),
-            source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+            source: std::io::Error::other(e.to_string()),
         })
 }

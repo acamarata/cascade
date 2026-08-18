@@ -28,4 +28,4 @@ mod types;
 mod tests;
 
 pub use registry::ToolRegistry;
-pub use types::{ConnectionContext, McpTool, RetrieverSlot};
+pub use types::{ConnectionContext, DbPoolSlot, McpTool, RetrieverSlot};
