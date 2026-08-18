@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Removed
+- **Dead `HttpTransport` / `SseTransport` stubs removed from cascade-mcp**
+  (T-P7-E15-03, 2026-08-18). Two legacy P2 transport stubs with no callers
+  anywhere in the workspace, plus the imports they alone pulled in. The
+  production axum-based `HttpServer` and `SseServer` are untouched — these were
+  separate, unused types that only made the transport module harder to read.
+
 ### Added
 - **Build progress panel shows the real fleet dispatch actor instead of a
   placeholder** (T-P7-E10-05, 2026-08-18). When a project is actively

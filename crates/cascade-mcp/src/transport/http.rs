@@ -2,12 +2,9 @@
 //!
 //! ## Overview
 //!
-//! Two roles:
-//! - **`HttpTransport`** (legacy P2 stub): channel-backed low-level `Transport`.
-//!   Kept for backward compatibility with code that constructs `HttpTransport` directly.
-//! - **`HttpServer`** (P4 server-side): axum-based HTTP server implementing `McpTransport`.
-//!   Binds `127.0.0.1:7722` (loopback only), handles POST /mcp (stateless JSON-RPC)
-//!   and GET /mcp/health.
+//! [`HttpServer`] is an axum-based HTTP server implementing [`McpTransport`].
+//! Binds `127.0.0.1:7722` (loopback only), handles POST /mcp (stateless JSON-RPC)
+//! and GET /mcp/health.
 //!
 //! ## Routes
 //!
@@ -42,15 +39,13 @@ use axum::{Json, Router};
 use tokio::sync::mpsc;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use cascade_types::error::{CascadeError, Result};
 
 use crate::auth::McpAuth;
 use crate::server::{McpServer, McpServerConfig};
 use crate::transport::McpTransport;
-
-use super::Transport;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -62,84 +57,6 @@ pub const BODY_LIMIT: usize = 4 * 1024 * 1024;
 
 /// Request timeout: 30 seconds.
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-
-// ── HttpTransport (legacy P2 channel-backed stub) ─────────────────────────────
-
-/// Configuration for the HTTP streaming transport.
-#[derive(Debug, Clone)]
-pub struct HttpTransportConfig {
-    /// TCP port to bind (default: 7722).
-    pub port: u16,
-    /// Host to bind (default: 127.0.0.1).
-    pub host: String,
-    /// Max response chunk size in bytes.
-    pub chunk_size: usize,
-}
-
-impl Default for HttpTransportConfig {
-    fn default() -> Self {
-        Self {
-            port: DEFAULT_HTTP_PORT,
-            host: "127.0.0.1".into(),
-            chunk_size: 65_536,
-        }
-    }
-}
-
-/// MCP transport over HTTP — legacy channel-backed stub (P2).
-///
-/// For the full axum-based HTTP server, use [`HttpServer`].
-pub struct HttpTransport {
-    _config: HttpTransportConfig,
-    send_tx: mpsc::Sender<String>,
-    recv_rx: mpsc::Receiver<String>,
-}
-
-impl HttpTransport {
-    /// Create an HTTP transport backed by mpsc channels.
-    pub fn new(
-        config: HttpTransportConfig,
-    ) -> (Self, mpsc::Receiver<String>, mpsc::Sender<String>) {
-        let (send_tx, send_rx) = mpsc::channel(128);
-        let (recv_tx, recv_rx) = mpsc::channel(128);
-        let transport = Self {
-            _config: config,
-            send_tx,
-            recv_rx,
-        };
-        (transport, send_rx, recv_tx)
-    }
-}
-
-#[async_trait]
-impl Transport for HttpTransport {
-    async fn send(&mut self, message: &str) -> Result<()> {
-        debug!(bytes = message.len(), "http-stream send");
-        self.send_tx
-            .send(message.to_owned())
-            .await
-            .map_err(|_| CascadeError::Io {
-                path: "<http-channel>".into(),
-                operation: "send",
-                source: std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "HTTP send channel closed",
-                ),
-            })
-    }
-
-    async fn recv(&mut self) -> Result<Option<String>> {
-        Ok(self.recv_rx.recv().await)
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn name(&self) -> &str {
-        "http-stream"
-    }
-}
 
 // ── HttpServer (P4 axum-based server) ────────────────────────────────────────
 

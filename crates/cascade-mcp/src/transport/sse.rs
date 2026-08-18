@@ -2,12 +2,9 @@
 //!
 //! ## Overview
 //!
-//! Two roles:
-//! - **`SseTransport`** (legacy P2 stub): channel-backed low-level `Transport`.
-//!   Kept for backward compatibility.
-//! - **`SseServer`** (P4 server-side): adds `GET /mcp/events` SSE route to the
-//!   existing HTTP axum router. Clients use POST /mcp for requests (stateless)
-//!   and GET /mcp/events for server-initiated notifications (streaming).
+//! [`SseServer`] adds `GET /mcp/events` to the existing HTTP axum router.
+//! Clients use POST /mcp for requests (stateless) and GET /mcp/events for
+//! server-initiated notifications (streaming).
 //!
 //! ## Routes
 //!
@@ -45,10 +42,9 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Router;
-use tokio::sync::mpsc;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt as _;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use cascade_types::error::{CascadeError, Result};
 
@@ -58,88 +54,10 @@ use crate::server::McpServerConfig;
 use crate::transport::http::BODY_LIMIT;
 use crate::transport::McpTransport;
 
-use super::Transport;
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Heartbeat interval for SSE (prevents proxy timeout).
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
-
-// ── SseTransport (legacy P2 channel-backed stub) ──────────────────────────────
-
-/// Configuration for the SSE transport.
-#[derive(Debug, Clone)]
-pub struct SseConfig {
-    /// TCP port to bind (default: 7722).
-    pub port: u16,
-    /// Host to bind (default: 127.0.0.1).
-    pub host: String,
-    /// Maximum event queue depth before back-pressure.
-    pub queue_depth: usize,
-}
-
-impl Default for SseConfig {
-    fn default() -> Self {
-        Self {
-            port: crate::transport::http::DEFAULT_HTTP_PORT,
-            host: "127.0.0.1".into(),
-            queue_depth: 256,
-        }
-    }
-}
-
-/// MCP transport over HTTP SSE — legacy channel-backed stub (P2).
-///
-/// For the full P4 SSE server, use [`SseServer`].
-pub struct SseTransport {
-    _config: SseConfig,
-    send_tx: mpsc::Sender<String>,
-    recv_rx: mpsc::Receiver<String>,
-}
-
-impl SseTransport {
-    /// Create an SSE transport backed by mpsc channels.
-    pub fn new(config: SseConfig) -> (Self, mpsc::Receiver<String>, mpsc::Sender<String>) {
-        let (send_tx, send_rx) = mpsc::channel(config.queue_depth);
-        let (recv_tx, recv_rx) = mpsc::channel(config.queue_depth);
-        let transport = Self {
-            _config: config,
-            send_tx,
-            recv_rx,
-        };
-        (transport, send_rx, recv_tx)
-    }
-}
-
-#[async_trait]
-impl Transport for SseTransport {
-    async fn send(&mut self, message: &str) -> Result<()> {
-        debug!(bytes = message.len(), "sse send");
-        self.send_tx
-            .send(message.to_owned())
-            .await
-            .map_err(|_| CascadeError::Io {
-                path: "<sse-channel>".into(),
-                operation: "send",
-                source: std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "SSE send channel closed",
-                ),
-            })
-    }
-
-    async fn recv(&mut self) -> Result<Option<String>> {
-        Ok(self.recv_rx.recv().await)
-    }
-
-    async fn close(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn name(&self) -> &str {
-        "sse"
-    }
-}
 
 // ── SseServer (P4 axum-based) ─────────────────────────────────────────────────
 
