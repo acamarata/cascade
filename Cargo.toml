@@ -37,7 +37,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 version = "1.16.0"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "MIT"
 authors = ["Aric Camarata"]
 repository = "https://github.com/acamarata/cascade"

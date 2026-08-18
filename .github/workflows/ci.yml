@@ -298,6 +298,28 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check --all
 
+  # ── msrv ──────────────────────────────────────────────────────────────────
+  # Proves the workspace actually compiles on its declared minimum supported
+  # Rust version. Every other job installs `@stable`, which floats far above
+  # the MSRV and therefore never exercises it — a `rust-version = "1.85"` that
+  # nothing verifies is just a claim. `cargo check` (not build/test) keeps this
+  # cheap: it type-checks the whole workspace, which is what catches use of a
+  # post-1.85 language or std feature.
+  #
+  # Keep the pinned version below in sync with `rust-version` in the workspace
+  # Cargo.toml and the comment in rust-toolchain.toml.
+  msrv:
+    name: msrv (1.88)
+    runs-on: [self-hosted, cam-sentry]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned MSRV toolchain
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Check workspace against MSRV
+        run: cargo check --workspace --all-targets --locked
+
   # ── deny ──────────────────────────────────────────────────────────────────
   # License compliance and banned-crate check via cargo-deny.
   # Runs on Linux x86_64 only — deny.toml applies to the workspace graph
@@ -614,6 +636,7 @@ jobs:
       - clippy
       - fmt
       - deny
+      - msrv
       - coverage
       - bench-check
       - test-hosted
@@ -644,6 +667,10 @@ jobs:
           fi
           if [[ "${{ needs.fmt.result }}" != "success" ]]; then
             echo "fmt failed: ${{ needs.fmt.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.msrv.result }}" != "success" ]]; then
+            echo "msrv failed: ${{ needs.msrv.result }}"
             exit 1
           fi
           if [[ "${{ needs.deny.result }}" != "success" ]]; then

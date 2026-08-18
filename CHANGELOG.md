@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- **Declared MSRV corrected to 1.88 and now actually enforced in CI**
+  (T-P7-E16-04, 2026-08-18). `rust-toolchain.toml` documented an MSRV of 1.75
+  while the workspace `Cargo.toml` declared 1.85. Both were wrong: locked
+  dependencies (`darling`, `image`, `plist`, `time`, `serde_with` and others)
+  declare `rust-version = 1.88`, so the workspace has not been buildable on
+  1.85 for some time — nothing ever verified the number, because every CI job
+  installs `@stable`, which floats far above the MSRV and never exercises it.
+  The workspace now declares 1.88, the toolchain comment matches, and a new
+  `msrv` CI job pins `dtolnay/rust-toolchain@1.88` and runs
+  `cargo check --workspace --all-targets --locked` so the claim is verified
+  rather than asserted. Consumers on 1.85 were already unable to build this
+  workspace; the declaration now says so honestly.
+
 ### Security
 - **Audit closure: `cascade-agy` OAuth credential findings reviewed and accepted**
   (T-P7-E16-05, 2026-08-18). `src/bin/cascade-agy` and `src/bin/cascade-agy-auth`

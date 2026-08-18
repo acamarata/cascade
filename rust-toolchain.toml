@@ -1,4 +1,10 @@
 [toolchain]
 channel = "stable"
-# MSRV 1.75 — async fn in traits stable, required for cascade-types traits
+# MSRV 1.88 — matches `rust-version` in the workspace Cargo.toml.
+# History: this said 1.75 ("async fn in traits"), while Cargo.toml said 1.85.
+# BOTH were wrong. Locked dependencies (darling, image, plist, time,
+# serde_with and others) declare rust-version 1.88, so the workspace has not
+# been buildable on 1.85 for some time — the number was simply never verified.
+# `channel = "stable"` floats above the MSRV; the msrv CI job is what actually
+# pins and proves it. Keep all three in sync.
 components = ["rustfmt", "clippy"]
