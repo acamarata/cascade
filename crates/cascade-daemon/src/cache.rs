@@ -22,6 +22,7 @@
 //!
 //! SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-daemon, cache polling loop
 
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -29,6 +30,7 @@ use cascade_tray::TrayState;
 use tokio::time;
 use tracing::{error, info, warn};
 
+use crate::supervisor::DAEMON_PAUSED;
 use crate::tray::TrayStateUpdate;
 
 /// Spawn the StatusCache polling task. Sends TrayStateUpdate every 10s.
@@ -48,6 +50,9 @@ use crate::tray::TrayStateUpdate;
 ///   - The task runs forever unless cancelled via the JoinHandle.
 ///   - If tray_tx.send() fails, the task does NOT panic — it logs the
 ///     error and continues polling.
+///   - While `DAEMON_PAUSED` is set (tray PauseDaemon, T-P7-E05-04), each
+///     tick skips the fetch + send but keeps ticking — pausing suspends
+///     the work, never the loop.
 ///
 /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-daemon, spawn_status_cache_poller
 pub fn spawn_status_cache_poller(
@@ -73,6 +78,14 @@ pub fn spawn_status_cache_poller(
             // Wait for the next tick. The first iteration completes immediately
             // (the initial update); every later iteration waits 10 seconds.
             interval.tick().await;
+
+            // T-P7-E05-04: while the daemon is paused (tray PauseDaemon),
+            // skip the fetch + tray send but keep ticking — the loop must
+            // not exit or block, and the first unpaused tick resumes tray
+            // updates with no state rebuild.
+            if DAEMON_PAUSED.load(Ordering::SeqCst) {
+                continue;
+            }
 
             // Fetch the current tray state from live quota.json.
             let state = fetch_tray_state();
@@ -193,6 +206,10 @@ mod tests {
     ///   advancing time and aborting the poller.
     #[tokio::test]
     async fn cache_poller_sends_updates_every_10s_with_paused_time() {
+        // T-P7-E05-04: this poller now observes DAEMON_PAUSED; serialize
+        // against tests that flip the process-global flag.
+        let _pause_guard = crate::supervisor::TEST_PAUSE_LOCK.lock().await;
+
         // Enable deterministic time so we can fast-forward without sleeping.
         time::pause();
 
@@ -276,6 +293,9 @@ mod tests {
     ///   3. Drain non-blockingly and verify we got at least 1 update.
     #[tokio::test]
     async fn cache_poller_sends_initial_update_immediately() {
+        // T-P7-E05-04: same flag serialization as the interval test above.
+        let _pause_guard = crate::supervisor::TEST_PAUSE_LOCK.lock().await;
+
         time::pause();
 
         let (tx, rx) = mpsc::channel::<TrayStateUpdate>();
@@ -309,5 +329,106 @@ mod tests {
             !recorded.is_empty(),
             "expected at least 1 update (the initial one); got 0"
         );
+    }
+
+    /// T-P7-E05-04 behavior test: while DAEMON_PAUSED is set the polling loop
+    /// emits NO tray updates (fetch + send are skipped), and after unpause the
+    /// next 10 s tick emits again. Replaces the old tautological flag-toggle
+    /// test in main.rs, which proved nothing about any consumer of the flag.
+    ///
+    /// Test strategy (follows `cache_poller_sends_updates_every_10s_with_paused_time`):
+    ///   1. Deterministic time; spawn the poller; drain the initial update.
+    ///   2. Set DAEMON_PAUSED; advance past TWO tick deadlines; pump yields;
+    ///      assert the recorded count is unchanged.
+    ///   3. Clear DAEMON_PAUSED; advance past ONE tick; pump until the next
+    ///      update arrives; abort + drain stragglers; assert EXACTLY one more
+    ///      update arrived in total (a leaked paused-window send would show up
+    ///      as a third).
+    #[tokio::test]
+    async fn cache_poller_skips_updates_while_daemon_paused_and_resumes() {
+        let _pause_guard = crate::supervisor::TEST_PAUSE_LOCK.lock().await;
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+
+        time::pause();
+
+        let (tx, rx) = mpsc::channel::<TrayStateUpdate>();
+        let poller_task = spawn_status_cache_poller(tx.clone());
+        drop(tx);
+
+        let mut recorded = Vec::new();
+
+        // Same bounded pump as the interval test: yield rounds + non-blocking
+        // drain until `want` updates are observed (cannot hang).
+        async fn pump_until(
+            rx: &mpsc::Receiver<TrayStateUpdate>,
+            recorded: &mut Vec<TrayStateUpdate>,
+            want: usize,
+        ) {
+            for _ in 0..100 {
+                tokio::task::yield_now().await;
+                while let Ok(msg) = rx.try_recv() {
+                    recorded.push(msg);
+                }
+                if recorded.len() >= want {
+                    break;
+                }
+            }
+        }
+
+        // Initial update (the interval's immediate first tick). Under paused
+        // time a tick only fires once time advances past its deadline — a
+        // bare poll never marks it elapsed (same caveat the immediacy test
+        // documents) — so interleave yields with 1 ms advances until it
+        // lands. Total advance stays far under the 10 s period, so ONLY the
+        // initial tick can fire here.
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            time::advance(Duration::from_millis(1)).await;
+            while let Ok(msg) = rx.try_recv() {
+                recorded.push(msg);
+            }
+            if !recorded.is_empty() {
+                break;
+            }
+        }
+        assert_eq!(recorded.len(), 1, "expected exactly the initial update");
+
+        // ── Paused: two full 10 s ticks must emit NOTHING. ─────────────────
+        DAEMON_PAUSED.store(true, Ordering::SeqCst);
+        time::advance(Duration::from_secs(20)).await;
+        // Give any (wrong) send ample scheduling room to surface, then drain.
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+        }
+        while let Ok(msg) = rx.try_recv() {
+            recorded.push(msg);
+        }
+        assert_eq!(
+            recorded.len(),
+            1,
+            "no tray updates expected while DAEMON_PAUSED is set; got {}",
+            recorded.len()
+        );
+
+        // ── Unpaused: the next 10 s tick emits again. ──────────────────────
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+        time::advance(Duration::from_secs(10) + Duration::from_millis(100)).await;
+        pump_until(&rx, &mut recorded, 2).await;
+
+        poller_task.abort();
+        // Drain any straggler: total must be exactly 2 (a leaked send from the
+        // paused window would make it 3).
+        while let Ok(msg) = rx.try_recv() {
+            recorded.push(msg);
+        }
+        assert_eq!(
+            recorded.len(),
+            2,
+            "expected exactly one resumed update (initial + 1); got {}",
+            recorded.len()
+        );
+
+        // Reset the process-global flag for other tests.
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
     }
 }

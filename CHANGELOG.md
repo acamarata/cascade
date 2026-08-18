@@ -52,6 +52,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   unchanged.
 
 ### Added
+- **Tray "Pause daemon" now actually pauses background work**
+  (T-P7-E05-04, 2026-08-18). Clicking *Pause* in the menu-bar tray used to
+  flip an internal flag that nothing read — polling, indexing, and
+  auto-updates continued unchanged. The flag is now honoured for real: the
+  10-second status/tray refresh loop skips its fetch while paused, the
+  24-hour periodic self-update check skips its work tick, and RAG indexing is
+  paused through the same APIs the external-volume watcher already uses —
+  the index manager stops registering sources and the file watcher stops
+  forwarding change events to the indexing pipeline until you unpause.
+  Everything else keeps running normally while paused: the local IPC socket,
+  the dashboard, and the memory/disk safety guardians stay fully responsive,
+  and unpausing resumes each loop on its next scheduled tick with no restart
+  and no state rebuild. The old unit test that merely asserted the flag
+  could be toggled is replaced by behavior tests: one proving the tray loop
+  emits no updates during a paused window and resumes afterwards, and two
+  proving indexing pause/resume is genuinely invoked (state and end-to-end
+  signal suppression).
 - **Real Anthropic request-level failover proxy, auto-started on
   `127.0.0.1:3763`** (T-P7-E13-09, 2026-08-17) — a behavior-affecting
   change for anyone who activates it. The daemon now starts an

@@ -119,19 +119,20 @@ use secrecy::SecretString;
 #[cfg(feature = "gemini-proxy")]
 use std::collections::HashMap;
 use std::process;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-/// Process-global pause flag: when `true`, polling and indexing subsystems
-/// should yield work until the flag is cleared.
-///
-/// Set/cleared by the `PauseDaemon` tray action.  Supervisor and fleet-poller
-/// loops in a later phase will read this to skip their work intervals.
-pub(crate) static DAEMON_PAUSED: AtomicBool = AtomicBool::new(false);
+// T-P7-E05-04: DAEMON_PAUSED now lives in supervisor.rs — that module is
+// compiled into BOTH the lib and bin targets, and the loops that honour the
+// flag (cache poller, auto-update loop, RAG indexing propagator) read it from
+// there. Re-exported so the bin crate root keeps a `crate::DAEMON_PAUSED`
+// path; see `supervisor::DAEMON_PAUSED` for the full contract (who honours
+// it, who deliberately does not).
+pub(crate) use supervisor::DAEMON_PAUSED;
 
 /// Cascade background daemon.
 ///
@@ -561,9 +562,12 @@ async fn run_daemon() {
                 }
                 cascade_tray::TrayAction::PauseDaemon => {
                     // Toggle the daemon-paused state via the process-global flag.
-                    // Polling and indexing loops read DAEMON_PAUSED and skip their
-                    // work intervals while it is true (supervisor wiring tracked
-                    // separately; the flag itself is live here).
+                    // T-P7-E05-04: the flag is now honoured for real — the 10 s
+                    // status-cache/tray poller (cache.rs) and the 24 h
+                    // auto-update loop skip their work while paused, and
+                    // supervisor.rs's propagator mirrors transitions into
+                    // IndexManager + AutoRagWatcher pause/resume so indexing
+                    // stops. The IPC server keeps serving while paused.
                     let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
                     DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
                     if !was_paused {
@@ -954,34 +958,13 @@ fn write_crash_sentinel(reason: &str) {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn daemon_paused_flag_toggles() {
-        // Start from known state (previous test run may have left it set).
-        DAEMON_PAUSED.store(false, Ordering::SeqCst);
-        assert!(!DAEMON_PAUSED.load(Ordering::SeqCst));
-
-        // Toggle on.
-        let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
-        DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
-        assert!(
-            DAEMON_PAUSED.load(Ordering::SeqCst),
-            "flag should be true after first toggle"
-        );
-
-        // Toggle off.
-        let was_paused = DAEMON_PAUSED.load(Ordering::SeqCst);
-        DAEMON_PAUSED.store(!was_paused, Ordering::SeqCst);
-        assert!(
-            !DAEMON_PAUSED.load(Ordering::SeqCst),
-            "flag should be false after second toggle"
-        );
-
-        // Reset for other tests.
-        DAEMON_PAUSED.store(false, Ordering::SeqCst);
-    }
-}
+//
+// T-P7-E05-04: the former `daemon_paused_flag_toggles` test here was removed
+// — it only proved an AtomicBool can be stored and loaded (tautological; the
+// flag was read by nothing). Real behavior tests now live next to the loops
+// that honour the flag:
+//   - cache.rs: cache_poller_skips_updates_while_daemon_paused_and_resumes
+//     (paused window emits no tray updates; updates resume after unpause)
+//   - supervisor.rs: pause_propagator_pauses_and_resumes_indexing_layers +
+//     pause_propagator_suppresses_watcher_signals_while_paused
+//     (indexing pause/resume is actually invoked end-to-end)

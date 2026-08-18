@@ -17,6 +17,7 @@
 #[cfg(feature = "gemini-proxy")]
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,6 +33,50 @@ use crate::config::Config;
 use crate::{
     event_bus::EventBus, healthcheck::HealthState, hook_runner::HookRunner, ipc::IpcServer,
 };
+
+/// Process-global pause flag: when `true`, background polling and indexing
+/// subsystems skip their work (while still ticking) until the flag is cleared.
+///
+/// Set/cleared by the `PauseDaemon` tray action (main.rs action dispatcher).
+/// Honoured by:
+///   - the 10 s status-cache/tray poller (cache.rs) — skips fetch + tray send,
+///   - the 24 h periodic auto-update loop (below) — skips `auto_update_tick`,
+///   - the RAG indexing pause propagator (below) — mirrors transitions into
+///     `IndexManager::pause/resume` and `AutoRagWatcher::pause/resume`, so
+///     ingest stops for real while paused.
+///
+/// Deliberately NOT honoured by: the IPC server (stays fully responsive while
+/// paused), the dashboard/proxies, and the ram/disk guardians (safety
+/// subsystems must keep protecting the machine while paused).
+///
+/// WHY this lives here and not in main.rs: `supervisor` is compiled into BOTH
+/// the lib and bin targets (lib.rs `pub mod supervisor` + main.rs
+/// `mod supervisor`), and only a shared-module static is visible to the loops
+/// that read it from either crate root. main.rs re-exports it so existing
+/// `crate::DAEMON_PAUSED` paths keep resolving.
+// T-P7-E05-04: wiring is live — previously the flag was toggled but read by
+// nothing (a fake feature); see the CHANGELOG entry.
+pub(crate) static DAEMON_PAUSED: AtomicBool = AtomicBool::new(false);
+
+/// Serializes tests that flip [`DAEMON_PAUSED`] so they cannot race the
+/// cache-poller tests (which observe the same process-global flag) under the
+/// parallel test runner. Mirrors the `ENV_TEST_LOCK` pattern in test_support.
+///
+/// WHY tokio::sync::Mutex (unlike the std ENV_TEST_LOCK): the guarded tests
+/// are `async` and must hold the guard across `.await`s for their whole
+/// body — a std MutexGuard held across an await trips clippy's
+/// `await_holding_lock`, and correctly so in the general case.
+#[cfg(test)]
+pub(crate) static TEST_PAUSE_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+/// Interval at which the daemon-pause propagator re-reads [`DAEMON_PAUSED`].
+///
+/// WHY polling instead of channel signalling: the tray action dispatcher
+/// (main.rs) toggles a process-global AtomicBool from a `spawn_blocking`
+/// thread; a short poll keeps the async side free of cross-thread channel
+/// plumbing and bounds propagation latency well under any indexing cadence.
+const PAUSE_PROPAGATOR_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Drives the daemon's main loop. Starts the IPC server, health poller,
 /// event bus, hook engine, quota poller, file watcher, and providers scan,
@@ -502,11 +547,17 @@ pub async fn run(
                     }
                     let watcher_cfg = WatcherConfig::new(config_dir.clone());
                     let rag_shutdown = shutdown.clone();
+                    // T-P7-E05-04: retained for the daemon-pause propagator
+                    // below — moving the handle into that task also keeps the
+                    // notify watcher alive for the daemon's lifetime (matching
+                    // the pipeline task's lifetime) instead of dropping it at
+                    // the end of this match arm.
+                    let mut rag_watcher_handle: Option<Arc<AutoRagWatcher>> = None;
                     match AutoRagWatcher::start(watcher_cfg, rag_shutdown.clone()) {
                         Err(e) => {
                             warn!(%e, "rag: AutoRagWatcher failed to start — file watching disabled");
                         }
-                        Ok((_watcher, signal_rx)) => {
+                        Ok((watcher, signal_rx)) => {
                             let pipeline = IndexingPipeline::new(
                                 signal_rx,
                                 pool,
@@ -516,8 +567,21 @@ pub async fn run(
                             );
                             tokio::spawn(pipeline.run());
                             info!("rag: AutoRagWatcher + IndexingPipeline spawned");
+                            rag_watcher_handle = Some(Arc::new(watcher));
                         }
                     }
+
+                    // T-P7-E05-04: tray PauseDaemon → REAL indexing pause.
+                    // The propagator mirrors DAEMON_PAUSED transitions into
+                    // IndexManager::pause/resume + AutoRagWatcher::pause/resume
+                    // (the existing pause APIs — no new ones), so a paused
+                    // daemon stops ingesting instead of just flipping a flag.
+                    let _pause_propagator_handle = spawn_pause_propagator(
+                        Arc::clone(&index_mgr),
+                        rag_watcher_handle,
+                        shutdown.clone(),
+                    );
+                    info!("rag: daemon-pause propagator spawned");
                 }
             }
         }
@@ -621,7 +685,15 @@ pub async fn run(
                 _ = au_shutdown.cancelled() => { return; }
             }
             loop {
-                auto_update_tick().await;
+                // T-P7-E05-04: while the daemon is paused (tray PauseDaemon),
+                // skip the work tick but keep the 24 h cadence alive — the
+                // loop must not exit, block, or drift; the next unpaused tick
+                // runs the check/apply cycle normally.
+                if DAEMON_PAUSED.load(Ordering::SeqCst) {
+                    info!("auto_update: daemon paused — skipping tick");
+                } else {
+                    auto_update_tick().await;
+                }
                 tokio::select! {
                     _ = tokio::time::sleep(CADENCE) => {}
                     _ = au_shutdown.cancelled() => { break; }
@@ -642,6 +714,71 @@ pub async fn run(
     bus.flush().await?;
     info!("supervisor stopped");
     Ok(())
+}
+
+/// Spawn the daemon-pause → indexing-pause propagator (T-P7-E05-04).
+///
+/// Purpose: mirror [`DAEMON_PAUSED`] transitions into the RAG indexing layer
+/// using the EXISTING pause APIs — `IndexManager::pause()/resume()` (async;
+/// makes `register_source` skip writes) and `AutoRagWatcher::pause()/resume()`
+/// (sync; debounce tasks suppress outbound ingest signals). Together these
+/// stop indexing work while the daemon is paused from the tray.
+///
+/// Inputs:
+///   - `index_mgr` — the shared RAG index manager (owned for the task lifetime),
+///   - `watcher` — the live `AutoRagWatcher` handle, when it started
+///     successfully (`None` ⇒ only the IndexManager side is paused),
+///   - `shutdown` — daemon shutdown token; the task stops when cancelled.
+///
+/// Outputs: `JoinHandle<()>` so callers can retain/join the task during
+/// shutdown (fire-and-forget spawn is also fine — it never exits on its own).
+///
+/// Constraints:
+///   - Transition-driven: applies only when the flag CHANGES. This is
+///     deliberate — `VolumeIndexGuard` pauses/resumes the same IndexManager
+///     for external-drive mount events, and a state-enforcing loop would fight
+///     it (e.g. force-resume an index paused because a volume unmounted).
+///     Consequence of the shared single-bool API: a guard `resume()` on volume
+///     remount clears an index pause while the daemon stays paused; it is
+///     re-applied on the next daemon-pause transition.
+///   - Owns the `AutoRagWatcher` for the daemon's lifetime, keeping the notify
+///     watcher alive alongside the indexing-pipeline task.
+///   - Never pauses the IPC server or the guardians — only indexing.
+pub(crate) fn spawn_pause_propagator(
+    index_mgr: Arc<cascade_rag::IndexManager>,
+    watcher: Option<Arc<crate::rag_watcher::AutoRagWatcher>>,
+    shutdown: CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        // Start from the compile-time default (false). If the flag was already
+        // set before this task came up (pause raced RAG boot), the first tick
+        // reconciles by applying the transition.
+        let mut last = false;
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(PAUSE_PROPAGATOR_INTERVAL) => {}
+                _ = shutdown.cancelled() => { break; }
+            }
+            let now = DAEMON_PAUSED.load(Ordering::SeqCst);
+            if now == last {
+                continue;
+            }
+            if now {
+                index_mgr.pause().await;
+                if let Some(w) = watcher.as_ref() {
+                    w.pause();
+                }
+                info!("daemon pause: RAG indexing paused (IndexManager + watcher)");
+            } else {
+                index_mgr.resume().await;
+                if let Some(w) = watcher.as_ref() {
+                    w.resume();
+                }
+                info!("daemon pause: RAG indexing resumed (IndexManager + watcher)");
+            }
+            last = now;
+        }
+    })
 }
 
 // ── OS-specific install helpers ───────────────────────────────────────────
@@ -970,6 +1107,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
+    use super::{spawn_pause_propagator, DAEMON_PAUSED, TEST_PAUSE_LOCK};
+    use crate::rag_watcher::{AutoRagWatcher, WatchSignal, WatcherConfig};
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
     /// Fix 2 regression guard: the scheduler store must be a persistent
     /// SQLite file under the daemon's config_dir (not `:memory:`), so tasks
     /// survive a daemon restart. This test opens the store, inserts a task,
@@ -1028,5 +1171,149 @@ mod tests {
             .expect("task must still exist after reopen");
         assert_eq!(reloaded.name, "test.persisted-task");
         assert_eq!(reloaded.command, "echo");
+    }
+
+    // ── T-P7-E05-04: daemon-pause → real indexing pause ────────────────────
+    //
+    // These replace the old tautological main.rs flag-toggle test (which only
+    // proved an AtomicBool can be stored/loaded). They prove the tray's
+    // PauseDaemon flag actually reaches the indexing layer through the
+    // propagator, both directions, using the existing pause APIs.
+    //
+    // WHY TEST_PAUSE_LOCK: DAEMON_PAUSED is process-global; these tests flip
+    // it, and the cache.rs poller tests observe it, so they must not overlap
+    // under the parallel test runner.
+
+    /// Flipping DAEMON_PAUSED must pause BOTH indexing layers (IndexManager +
+    /// AutoRagWatcher) via the propagator, and unpausing must resume both.
+    #[tokio::test]
+    async fn pause_propagator_pauses_and_resumes_indexing_layers() {
+        let _guard = TEST_PAUSE_LOCK.lock().await;
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+
+        let index_mgr = crate::volume_watcher::new_index_manager_for_test().await;
+        assert!(!index_mgr.is_paused().await, "index starts unpaused");
+
+        // Real watcher over a temp dir (same pattern as the rag_watcher tests).
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".claude/memory")).unwrap();
+        let token = CancellationToken::new();
+        let (watcher, _rx) = AutoRagWatcher::start(WatcherConfig::new(tmp.path()), token.clone())
+            .expect("watcher starts");
+        let watcher = Arc::new(watcher);
+        assert!(!watcher.is_paused(), "watcher starts unpaused");
+
+        // Deterministic time: the propagator's 500 ms poll fires on advance().
+        tokio::time::pause();
+        let _propagator = spawn_pause_propagator(
+            Arc::clone(&index_mgr),
+            Some(Arc::clone(&watcher)),
+            token.clone(),
+        );
+
+        // Pause → within one poll interval both layers report paused.
+        DAEMON_PAUSED.store(true, Ordering::SeqCst);
+        // Yield first so the propagator takes its first poll and registers its
+        // 500 ms timer (a bare advance before first poll would push the
+        // deadline past it — same caveat the cache poller tests document).
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::advance(Duration::from_millis(600)).await;
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            index_mgr.is_paused().await,
+            "IndexManager must be paused after DAEMON_PAUSED=true"
+        );
+        assert!(
+            watcher.is_paused(),
+            "AutoRagWatcher must be paused after DAEMON_PAUSED=true"
+        );
+
+        // Resume → both layers report resumed.
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+        tokio::time::advance(Duration::from_millis(600)).await;
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            !index_mgr.is_paused().await,
+            "IndexManager must resume after unpause"
+        );
+        assert!(
+            !watcher.is_paused(),
+            "AutoRagWatcher must resume after unpause"
+        );
+
+        token.cancel();
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+    }
+
+    /// End-to-end: while DAEMON_PAUSED is set, the watcher suppresses ingest
+    /// signals — pause stops indexing INPUT, not just a flag — and signals
+    /// flow again after unpause.
+    #[tokio::test]
+    async fn pause_propagator_suppresses_watcher_signals_while_paused() {
+        let _guard = TEST_PAUSE_LOCK.lock().await;
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+
+        let tmp = TempDir::new().unwrap();
+        let watch_dir = tmp.path().join(".claude/memory");
+        std::fs::create_dir_all(&watch_dir).unwrap();
+
+        // Real time throughout: real FS events + the real 500 ms poll interval.
+        let mut cfg = WatcherConfig::new(tmp.path());
+        cfg.debounce = Duration::from_millis(50);
+        let token = CancellationToken::new();
+        let (watcher, mut rx) = AutoRagWatcher::start(cfg, token.clone()).expect("watcher starts");
+        let watcher = Arc::new(watcher);
+
+        let index_mgr = crate::volume_watcher::new_index_manager_for_test().await;
+        let _propagator = spawn_pause_propagator(
+            Arc::clone(&index_mgr),
+            Some(Arc::clone(&watcher)),
+            token.clone(),
+        );
+
+        // Let the OS-level watcher register its stream (same settle window as
+        // the rag_watcher integration tests).
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Pause and wait > one propagator interval so it has propagated.
+        DAEMON_PAUSED.store(true, Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        assert!(
+            index_mgr.is_paused().await,
+            "propagator must have paused the IndexManager"
+        );
+
+        // A file change while paused must NOT reach the pipeline. The gate is
+        // checked at debounce completion, so late OS event delivery is still
+        // suppressed — an 800 ms no-signal window proves suppression.
+        std::fs::write(watch_dir.join("paused.md"), "no signal expected").unwrap();
+        let leaked = tokio::time::timeout(Duration::from_millis(800), rx.recv()).await;
+        assert!(
+            leaked.is_err(),
+            "no ingest signal expected while paused, got {leaked:?}"
+        );
+
+        // Unpause; a new change flows through again.
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        assert!(
+            !index_mgr.is_paused().await,
+            "propagator must have resumed the IndexManager"
+        );
+        std::fs::write(watch_dir.join("resumed.md"), "signal expected").unwrap();
+        let sig = tokio::time::timeout(Duration::from_millis(2000), rx.recv()).await;
+        assert!(
+            matches!(sig, Ok(Some(WatchSignal::Ingest(_)))),
+            "expected Ingest after resume, got {sig:?}"
+        );
+
+        token.cancel();
+        DAEMON_PAUSED.store(false, Ordering::SeqCst);
     }
 }
