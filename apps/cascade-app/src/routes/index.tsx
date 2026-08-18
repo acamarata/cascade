@@ -10,19 +10,43 @@
  * SPORT: MASTER-ROUTES.md — all frontend routes
  */
 
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
-import { InboxPage } from '../pages/InboxPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
-import { WizardLayout } from '../features/onboarding/WizardLayout'
-import { TasksPage } from '../pages/TasksPage'
-import { ChatPage } from '../features/chat/ChatPage'
-import VaultHub from '../pages/hubs/VaultHub'
-import ProjectsHub from '../pages/hubs/ProjectsHub'
-import AccountsHub from '../pages/hubs/AccountsHub'
-import { SettingsHub } from '../pages/hubs/SettingsHub'
-import { PersonalPage } from '../pages/PersonalPage'
-import { CascadeMetaPage } from '../pages/CascadeMetaPage'
+
+/**
+ * Route-level lazy loading (T-P7-E17-01): each hub/page is code-split so the
+ * initial bundle only ships the shell + the active route. Named-export modules
+ * are wrapped via `.then(m => ({ default: m.X }))` because React.lazy expects a
+ * default export. AppLayout and NotFoundPage stay eager — the layout is the
+ * persistent chrome (must not suspend on every navigation) and the 404 page is
+ * a tiny catch-all that should render instantly on a bad URL.
+ */
+const WizardLayout = lazy(() =>
+  import('../features/onboarding/WizardLayout').then(m => ({ default: m.WizardLayout }))
+)
+const TasksPage = lazy(() =>
+  import('../pages/TasksPage').then(m => ({ default: m.TasksPage }))
+)
+const ChatPage = lazy(() =>
+  import('../features/chat/ChatPage').then(m => ({ default: m.ChatPage }))
+)
+const InboxPage = lazy(() =>
+  import('../pages/InboxPage').then(m => ({ default: m.InboxPage }))
+)
+const VaultHub = lazy(() => import('../pages/hubs/VaultHub'))
+const ProjectsHub = lazy(() => import('../pages/hubs/ProjectsHub'))
+const AccountsHub = lazy(() => import('../pages/hubs/AccountsHub'))
+const SettingsHub = lazy(() =>
+  import('../pages/hubs/SettingsHub').then(m => ({ default: m.SettingsHub }))
+)
+const PersonalPage = lazy(() =>
+  import('../pages/PersonalPage').then(m => ({ default: m.PersonalPage }))
+)
+const CascadeMetaPage = lazy(() =>
+  import('../pages/CascadeMetaPage').then(m => ({ default: m.CascadeMetaPage }))
+)
 
 interface RouterAppProps {
   /** True while the wizard status check is in-flight. */
@@ -54,6 +78,13 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
   }
 
   return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-screen bg-background">
+          <div className="text-lg text-muted-foreground">Loading...</div>
+        </div>
+      }
+    >
     <Routes>
       {/*
        * Wizard guard: if wizard is NeverRun or InProgress, redirect all traffic
@@ -104,5 +135,6 @@ export function RouterApp({ isLoading, launchWizard }: RouterAppProps) {
       {/* Catch-all */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </Suspense>
   )
 }

@@ -39,3 +39,9 @@ src/widget/macos/build/
 *.zip
 *.plasmoid
 /~/
+
+# Compiled Vite config artifacts — vite.config.ts is the single source of truth.
+# A committed vite.config.js SHADOWS the .ts (Vite resolves .js first), which
+# silently made edits to the .ts source ineffective (T-P7-E17-02).
+apps/*/vite.config.js
+apps/*/vite.config.d.ts

@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- **Production JS bundles code-split to clear Vite's 500 kB chunk warning**
+  (T-P7-E17-01 / T-P7-E17-02, 2026-08-18). Both Vite apps previously shipped
+  every route and every vendor dependency in a single oversized chunk. Route
+  components are now loaded on demand via `React.lazy` + `Suspense`, and heavy
+  vendor libraries are split into dedicated chunks via
+  `build.rollupOptions.output.manualChunks`. No routes, UI, or behaviour
+  changed — this is a bundling-only change. Measured results (minified / gzip):
+
+  - **cascade-app**: the single entry chunk went from **2,679 kB (756 kB gzip)**
+    to **58 kB (19 kB gzip)**. The largest vendor chunk is `vendor-charts` at
+    370 kB (110 kB gzip); all other vendor chunks (CodeMirror core/view/lang/ext,
+    markdown, highlight, react, radix, flow, icons, router, tauri) are under
+    270 kB. No chunk exceeds 500 kB — the Vite warning is gone without raising
+    `chunkSizeWarningLimit`. CodeMirror language modes were investigated as a
+    suspected contributor but verified **not** the cause: `@codemirror/language-data`
+    and `highlight.js` already lazy-load their language parsers via dynamic
+    imports (visible as the many small per-language chunks in the build output).
+    The baseline monolith was dominated by eagerly-bundled vendor libraries and
+    all route code in one file.
+  - **cascade-dashboard**: the single entry chunk went from **1,004 kB
+    (304 kB gzip)** to **42 kB (14 kB gzip)**. The largest vendor chunk is
+    `vendor-charts` at 318 kB (94 kB gzip); all other vendor chunks (react,
+    highlight, markdown, radix, router, date, icons) are under 176 kB. No chunk
+    exceeds 500 kB.
+
 ### Removed
 - **Dead `HttpTransport` / `SseTransport` stubs removed from cascade-mcp**
   (T-P7-E15-03, 2026-08-18). Two legacy P2 transport stubs with no callers
