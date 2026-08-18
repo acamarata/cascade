@@ -38,6 +38,7 @@ use serde_json::{json, Value};
 
 use crate::model_ids::MODEL_CLAUDE_HAIKU;
 use crate::routing::delegate::{find_binary_opt, LaneResult};
+use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
 /// The local Anthropic-compat GP proxy endpoint.
 pub const GFP_MESSAGES_URL: &str = "http://127.0.0.1:3762/v1/messages";
@@ -307,17 +308,20 @@ mod tests {
 
     #[test]
     fn parse_valid_message_extracts_text() {
+        // The model id is interpolated from the canonical constant rather than
+        // hardcoded, so this fixture cannot drift from model_ids.rs.
         let body = r#"{
             "id": "msg_gp_abc",
             "type": "message",
             "role": "assistant",
             "content": [{"type": "text", "text": "decision, security"}],
-            "model": "gemini-flash-latest",
+            "model": "__MODEL__",
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 10, "output_tokens": 5}
-        }"#;
+        }"#
+        .replace("__MODEL__", MODEL_GEMINI_FLASH_LATEST);
         assert_eq!(
-            parse_messages_response(body),
+            parse_messages_response(&body),
             LaneResult::Output("decision, security".into())
         );
     }

@@ -13,6 +13,7 @@
 //!              boundaries (network reads rarely align on `\n\n`).
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — proxy/anthropic_compat/sse
 
+use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -289,7 +290,7 @@ mod tests {
     #[test]
     fn translates_single_chunk_stream_to_full_anthropic_sequence() {
         let raw = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2}}\n\n";
-        let events = run_translation("gemini-flash-latest", &[raw]);
+        let events = run_translation(MODEL_GEMINI_FLASH_LATEST, &[raw]);
 
         assert_eq!(
             event_names(&events),
@@ -312,7 +313,7 @@ mod tests {
                 .trim_start_matches("data: "),
         )
         .unwrap();
-        assert_eq!(start_json["message"]["model"], "gemini-flash-latest");
+        assert_eq!(start_json["message"]["model"], MODEL_GEMINI_FLASH_LATEST);
         assert_eq!(start_json["message"]["usage"]["input_tokens"], 0);
 
         // content_block_delta carries the text.
@@ -347,7 +348,7 @@ mod tests {
             "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"lo \"}]}}]}\n\n",
             "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"world\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":3}}\n\n",
         ];
-        let events = run_translation("gemini-flash-latest", &chunks);
+        let events = run_translation(MODEL_GEMINI_FLASH_LATEST, &chunks);
 
         assert_eq!(
             event_names(&events),
@@ -391,7 +392,7 @@ mod tests {
 
     #[test]
     fn empty_text_chunk_produces_no_delta_events() {
-        let mut translator = StreamTranslator::new("gemini-flash-latest");
+        let mut translator = StreamTranslator::new(MODEL_GEMINI_FLASH_LATEST);
         let chunk: Value =
             serde_json::from_str("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}]}}]}")
                 .unwrap();
@@ -401,7 +402,7 @@ mod tests {
 
     #[test]
     fn max_tokens_finish_reason_maps_to_anthropic_max_tokens() {
-        let mut translator = StreamTranslator::new("gemini-flash-latest");
+        let mut translator = StreamTranslator::new(MODEL_GEMINI_FLASH_LATEST);
         let chunk: Value = serde_json::from_str(
             "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"MAX_TOKENS\"}]}",
         )
@@ -435,7 +436,7 @@ mod tests {
     #[test]
     fn no_content_block_when_stream_has_only_finish_reason() {
         // Some terminal chunks carry only finishReason + usageMetadata, no text.
-        let mut translator = StreamTranslator::new("gemini-flash-latest");
+        let mut translator = StreamTranslator::new(MODEL_GEMINI_FLASH_LATEST);
         let chunk: Value = serde_json::from_str(
             "{\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0}}",
         )

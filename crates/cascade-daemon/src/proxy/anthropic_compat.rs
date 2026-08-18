@@ -52,6 +52,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 mod sse;
+use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 use sse::{GeminiSseParser, StreamTranslator};
 
 // ── GFP circuit breaker (Phase B, v1.13.0) ────────────────────────────────────
@@ -261,7 +262,7 @@ fn map_model(anthropic_model: &str) -> &'static str {
         "gemini-flash-lite-latest"
     } else {
         // Covers claude-sonnet-* and everything else — see doc comment above.
-        "gemini-flash-latest"
+        MODEL_GEMINI_FLASH_LATEST
     }
 }
 

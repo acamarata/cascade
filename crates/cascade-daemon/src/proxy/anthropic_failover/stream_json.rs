@@ -21,6 +21,7 @@
 //!
 //! SPORT: `.opencode/phases/sport/MASTER-FEATURES.md` — F-FLEET-ANTHROPIC-FAILOVER
 
+use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
 use serde_json::Value;
 
 /// Classification of one parsed stream-json line.
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn synthesized_frames_are_complete_sequence() {
-        let frames = synthesize_success_frames("hi", "claude-sonnet-5", 10, 2);
+        let frames = synthesize_success_frames("hi", MODEL_CLAUDE_SONNET, 10, 2);
         let joined: String = frames
             .iter()
             .map(|f| String::from_utf8_lossy(f))

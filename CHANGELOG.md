@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **model-id-gate CI check restored to green** (2026-08-18). Twenty-one
+  hardcoded canonical model-ID literals had accumulated across the daemon proxy,
+  chat handlers and the GFP HTTP lane while CI was unable to run. All now import
+  their constant from `cascade-types::model_ids`, so the canonical ids have a
+  single source of truth again.
+
+### Added
+- **`cascade update --full` — one-command full-stack redeploy** (T-P7-E19-04,
+  2026-08-18). A new `--full` flag on `cascade update` that composes the
+  existing per-component update logic into a single orchestrated pass: daemon +
+  CLI binary update (reuses `update apply` IPC), codesign the swapped binaries
+  (macOS-only, ad-hoc, fails loudly if `codesign` tool missing), `launchctl
+  kickstart -k` the daemon service (macOS-only, falls back to `cascade daemon
+  restart`), models roster refresh (reuses `update models`), widget LaunchAgent
+  re-install (reuses `cascade widget install`), and app signature verification
+  (macOS-only health check via `codesign --verify --deep --strict`). The
+  pipeline is idempotent, safe to re-run, and designed so a mid-sequence
+  codesign failure still proceeds to kickstart (daemon not left down) while
+  surfacing the error. Cannot be combined with a subcommand. 8 new tests;
+  no existing tests or functionality changed.
+
 ### Added
 - **Plugin enable/disable persistence helpers on `PluginsSettings`**
   (T-P7-E20-26, 2026-08-18). The `plugins.enabled` vector in `settings.json`

@@ -126,6 +126,11 @@ use cascade_core::selection::{
     select_account_for_prompt, GpHealthSnapshot, ModelClass, QuotaAccount, QuotaSnapshot,
     SelectionRequest, SelectionTarget, Tier,
 };
+use cascade_types::model_ids::MODEL_CLAUDE_FABLE;
+use cascade_types::model_ids::MODEL_CLAUDE_HAIKU;
+use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
+use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
+use cascade_types::model_ids::MODEL_GLM;
 use stream_json::{classify_line, error_frame, synthesize_success_frames, LineOutcome};
 
 /// Default bind address (loopback only — this proxy must never bind off-host).
@@ -1239,12 +1244,12 @@ mod tests {
 
     #[test]
     fn model_class_mapping_covers_known_families() {
-        assert_eq!(model_class_for("claude-haiku-4-5"), ModelClass::Haiku);
-        assert_eq!(model_class_for("claude-opus-4-8"), ModelClass::Opus);
-        assert_eq!(model_class_for("claude-sonnet-5"), ModelClass::Sonnet);
-        assert_eq!(model_class_for("claude-fable-5"), ModelClass::Fable);
+        assert_eq!(model_class_for(MODEL_CLAUDE_HAIKU), ModelClass::Haiku);
+        assert_eq!(model_class_for(MODEL_CLAUDE_OPUS), ModelClass::Opus);
+        assert_eq!(model_class_for(MODEL_CLAUDE_SONNET), ModelClass::Sonnet);
+        assert_eq!(model_class_for(MODEL_CLAUDE_FABLE), ModelClass::Fable);
         // Unrecognized (incl. provider-specific ids) → interactive default.
-        assert_eq!(model_class_for("glm-5.2"), ModelClass::Sonnet);
+        assert_eq!(model_class_for(MODEL_GLM), ModelClass::Sonnet);
         assert_eq!(model_class_for(""), ModelClass::Sonnet);
     }
 
@@ -1489,7 +1494,7 @@ mod tests {
             test_snapshot(),
         ));
         let body = json!({
-            "model": "claude-sonnet-5",
+            "model": MODEL_CLAUDE_SONNET,
             "messages": [{ "role": "user", "content": "ping" }],
         });
         let out = dispatcher.dispatch(&body).await.unwrap();
@@ -1546,7 +1551,7 @@ mod tests {
         let resp = client
             .post(format!("http://{addr}/v1/messages"))
             .json(&json!({
-                "model": "claude-sonnet-5",
+                "model": MODEL_CLAUDE_SONNET,
                 "stream": true,
                 "messages": [{ "role": "user", "content": "hi" }],
             }))
@@ -1567,7 +1572,7 @@ mod tests {
         let resp = client
             .post(format!("http://{addr}/v1/messages"))
             .json(&json!({
-                "model": "claude-sonnet-5",
+                "model": MODEL_CLAUDE_SONNET,
                 "messages": [{ "role": "user", "content": "hi" }],
             }))
             .send()
@@ -1580,7 +1585,7 @@ mod tests {
         // Malformed body → Anthropic-shaped 400.
         let resp = client
             .post(format!("http://{addr}/v1/messages"))
-            .json(&json!({ "model": "claude-sonnet-5" }))
+            .json(&json!({ "model": MODEL_CLAUDE_SONNET }))
             .send()
             .await
             .unwrap();
@@ -1629,7 +1634,7 @@ mod tests {
         let resp = client
             .post(format!("http://{addr}/v1/messages"))
             .json(&json!({
-                "model": "claude-sonnet-5",
+                "model": MODEL_CLAUDE_SONNET,
                 "messages": [{ "role": "user", "content": "hi" }],
             }))
             .send()

@@ -45,6 +45,7 @@ use tokio::io::AsyncReadExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::dashboard::DashboardState;
+use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
 // ── Request types ─────────────────────────────────────────────────────────────
 
@@ -1178,7 +1179,7 @@ fn default_model_for(provider_id: &str) -> String {
     match provider_id {
         // "gp-pool" is the reserved pool-backed adapter id (GP_CHAT_PROVIDER_ID);
         // the :3761 pool serves free Flash only.
-        "gemini" | "gp-pool" => "gemini-flash-latest".into(),
+        "gemini" | "gp-pool" => MODEL_GEMINI_FLASH_LATEST.into(),
         "anthropic" => MODEL_CLAUDE_HAIKU.into(),
         "openai" => MODEL_GPT.into(),
         _ if provider_id.starts_with("local") => "default".into(),
@@ -1851,7 +1852,7 @@ mod tests {
     /// The default model for the reserved pool adapter id must be Flash.
     #[test]
     fn default_model_for_gp_pool_is_flash() {
-        assert_eq!(default_model_for("gp-pool"), "gemini-flash-latest");
+        assert_eq!(default_model_for("gp-pool"), MODEL_GEMINI_FLASH_LATEST);
     }
 
     // ── E2-S2 pre-middleware ──────────────────────────────────────────────────
