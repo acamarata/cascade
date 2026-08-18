@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- **Audit closure: `cascade-agy` OAuth credential findings reviewed and accepted**
+  (T-P7-E16-05, 2026-08-18). `src/bin/cascade-agy` and `src/bin/cascade-agy-auth`
+  embed a Google OAuth client id and secret. These are credentials for an
+  *installed/desktop* OAuth client, not confidential server credentials: the
+  client authenticates via a loopback redirect
+  (`http://localhost:51121/oauth-callback`), which Google permits only for the
+  Desktop application client type, and RFC 8252 classifies such native clients as
+  public clients whose "secret" cannot be kept confidential and is not treated as
+  one. They are allowlisted in `.gitleaks.toml` with that rationale. No user
+  credential, API key, or server secret is exposed. Separately, the reported
+  `security.yml` artifact-upload error is not reproducible: the workflow exists
+  and contains no upload-artifact step.
+
 ### Fixed
 - **Model weights are no longer downloaded into ephemeral storage**
   (T-P7-E25-18, 2026-08-18). Cascade resolves its model cache to
