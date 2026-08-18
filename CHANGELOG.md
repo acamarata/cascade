@@ -412,6 +412,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   `NoExternalChecks` stub, so `--real` runs actually gate ticket completion on
   a passing build. `--mock` and `--skip-externals` keep the no-op provider.
 
+- **BudgetGuard fail-closed mode for autonomous runs** (CFC-10,
+  T-P7-E13-08, 2026-08-17): the daemon's budget guard previously failed OPEN
+  on undeterminable state — unknown account, missing rate windows, and
+  unknown providers all returned `Allow`, so a dispatch could proceed with no
+  budget information at all. `BudgetGuard` now has two constructors with
+  identical limit arithmetic: `new` (fail-open — the historical behavior,
+  unchanged, backing the interactive `budget_check` IPC method) and the new
+  `new_fail_closed`, exposed on the IPC surface as a new
+  `budget_check_autonomous` method for AUTONOMOUS dispatch paths (daemon
+  scheduler, conductor fan-out). In fail-closed mode those unknown-state
+  conditions return a new `BudgetResult::DenyUnknown` variant — deliberately
+  distinct from `DenyLimit`/`DenyCost` so callers can tell "over budget" from
+  "couldn't determine budget" — rendered on the wire as `allow: false` with
+  the reason. A `quota-store.json` read failure in the autonomous method
+  yields an empty store, which fail-closed reports as an unknown account and
+  denies; the interactive method keeps its fail-open `Allow`. Explicitly
+  disabled limits (`0`/`0.0`) still mean "check off" and allow in both modes,
+  and interactive/manual budget checks are unchanged.
+
 ## [1.16.0] - 2026-07-12
 
 ### Removed

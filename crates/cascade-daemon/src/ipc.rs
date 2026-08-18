@@ -140,9 +140,10 @@ pub struct IpcServer {
     /// Shared via Arc so connection tasks can call provider commands concurrently.
     provider_handler: Arc<ProviderIpcHandler>,
     /// Per-provider hard-stop budget limits loaded from config.toml at startup.
-    /// Used by `budget_check` to enforce token/USD caps without reading the
-    /// config file on every IPC call.  Defaults to all-disabled when config.toml
-    /// is absent or unparseable.
+    /// Used by `budget_check` (interactive, fail-open) and
+    /// `budget_check_autonomous` (fail-closed, CFC-10) to enforce token/USD
+    /// caps without reading the config file on every IPC call.  Defaults to
+    /// all-disabled when config.toml is absent or unparseable.
     budget_config: crate::config::BudgetConfig,
     /// Daemon runtime state: typed quota snapshot buffer and worker pool.
     /// Shared with the fleet poller and supervisor via Arc<Mutex>.
@@ -1030,7 +1031,13 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                         }
                     }
                 }
-                "budget_check" => {
+                // `budget_check` (interactive/manual) stays fail-open; `budget_check_autonomous`
+                // runs the identical check fail-closed for AUTONOMOUS dispatch paths (daemon
+                // scheduler, conductor fan-out) per CFC-10 / T-P7-E13-08. Note the empty-store
+                // fallback below on a quota-store read failure: fail-closed treats it as an
+                // unknown account and denies — the intended CFC-10 outcome — while the
+                // interactive method keeps its historical fail-open Allow.
+                "budget_check" | "budget_check_autonomous" => {
                     let params_val = typed_req.params.unwrap_or(serde_json::Value::Null);
                     let params: crate::ipc_handlers::BudgetCheckParams =
                         match serde_json::from_value(params_val) {
@@ -1057,11 +1064,19 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                             }
                         });
                     // Use the BudgetConfig loaded from config.toml at daemon startup.
-                    let result = crate::ipc_handlers::handle_budget_check(
-                        params,
-                        &server.budget_config,
-                        &store,
-                    );
+                    let result = if typed_req.method == "budget_check_autonomous" {
+                        crate::ipc_handlers::handle_budget_check_autonomous(
+                            params,
+                            &server.budget_config,
+                            &store,
+                        )
+                    } else {
+                        crate::ipc_handlers::handle_budget_check(
+                            params,
+                            &server.budget_config,
+                            &store,
+                        )
+                    };
                     return Response::ok(result);
                 }
                 _ => {}

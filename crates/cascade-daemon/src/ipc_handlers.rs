@@ -303,28 +303,9 @@ pub struct BudgetCheckParams {
     pub estimated_cost_usd: f64,
 }
 
-/// Check whether a pending request fits within the budget for a provider/account.
-///
-/// Inputs:
-///   - `params`  — `BudgetCheckParams` from the IPC caller.
-///   - `config`  — current `BudgetConfig` loaded at daemon start.
-///   - `store`   — current `QuotaStore` read from disk.
-///
-/// Outputs: JSON `{ "allow": bool, "reason": string | null }`.
-pub fn handle_budget_check(
-    params: BudgetCheckParams,
-    config: &crate::config::BudgetConfig,
-    store: &QuotaStore,
-) -> serde_json::Value {
-    let guard = crate::budget_guard::BudgetGuard::new(config.clone());
-    let result = guard.check(
-        &params.provider,
-        &params.account_id,
-        params.estimated_tokens,
-        params.estimated_cost_usd,
-        store,
-    );
-
+/// Render a [`crate::budget_guard::BudgetResult`] as the wire JSON shared by
+/// both budget-check handlers: `{ "allow": bool, "reason": string | null }`.
+fn budget_result_to_json(result: crate::budget_guard::BudgetResult) -> serde_json::Value {
     match result {
         crate::budget_guard::BudgetResult::Allow => {
             serde_json::json!({ "allow": true, "reason": null })
@@ -354,7 +335,68 @@ pub fn handle_budget_check(
                 )
             })
         }
+        // Fail-closed mode only (CFC-10): the budget could not be determined.
+        crate::budget_guard::BudgetResult::DenyUnknown { reason } => {
+            serde_json::json!({
+                "allow": false,
+                "reason": format!("budget undeterminable — denied (fail-closed): {reason}")
+            })
+        }
     }
+}
+
+/// Check whether a pending request fits within the budget for a provider/account.
+///
+/// INTERACTIVE / manual path — the guard runs fail-open (CFC-10 leaves this
+/// behavior unchanged): unknown account, missing windows, and unknown
+/// providers allow.
+///
+/// Inputs:
+///   - `params`  — `BudgetCheckParams` from the IPC caller.
+///   - `config`  — current `BudgetConfig` loaded at daemon start.
+///   - `store`   — current `QuotaStore` read from disk.
+///
+/// Outputs: JSON `{ "allow": bool, "reason": string | null }`.
+pub fn handle_budget_check(
+    params: BudgetCheckParams,
+    config: &crate::config::BudgetConfig,
+    store: &QuotaStore,
+) -> serde_json::Value {
+    let guard = crate::budget_guard::BudgetGuard::new(config.clone());
+    let result = guard.check(
+        &params.provider,
+        &params.account_id,
+        params.estimated_tokens,
+        params.estimated_cost_usd,
+        store,
+    );
+    budget_result_to_json(result)
+}
+
+/// Autonomous twin of [`handle_budget_check`] (CFC-10, T-P7-E13-08).
+///
+/// Same inputs, same limit arithmetic — but the guard runs FAIL-CLOSED:
+/// unknown account, missing windows, and unknown providers return
+/// `DenyUnknown` (rendered as `allow: false`) instead of `Allow`, so an
+/// autonomous dispatch never proceeds on a budget it could not determine.
+///
+/// Backs the `budget_check_autonomous` IPC method used by AUTONOMOUS dispatch
+/// paths (daemon scheduler, conductor fan-out); interactive callers keep
+/// `budget_check` / [`handle_budget_check`].
+pub fn handle_budget_check_autonomous(
+    params: BudgetCheckParams,
+    config: &crate::config::BudgetConfig,
+    store: &QuotaStore,
+) -> serde_json::Value {
+    let guard = crate::budget_guard::BudgetGuard::new_fail_closed(config.clone());
+    let result = guard.check(
+        &params.provider,
+        &params.account_id,
+        params.estimated_tokens,
+        params.estimated_cost_usd,
+        store,
+    );
+    budget_result_to_json(result)
 }
 
 /// Append a typed [`QuotaState`] snapshot to the daemon's buffer and
