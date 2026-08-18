@@ -1191,7 +1191,7 @@ dependencies = [
 
 [[package]]
 name = "cascade-app"
-version = "1.5.1"
+version = "1.16.0"
 dependencies = [
  "cascade-audit",
  "cascade-cli",

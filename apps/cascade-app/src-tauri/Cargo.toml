@@ -1,10 +1,12 @@
 [package]
 name = "cascade-app"
-version = "1.5.1"
+version.workspace = true
 license = "MIT"
 edition = "2021"
-rust-version = "1.85"
-# Tauri requires this specific crate structure — do not add to workspace members.
+rust-version.workspace = true
+# Tauri requires this specific crate structure. NOTE: this crate IS a workspace
+# member (listed in the root Cargo.toml members as apps/cascade-app/src-tauri),
+# which is what makes the `.workspace = true` inheritance above valid.
 # cascade-core is consumed here as a path dep, not published to crates.io.
 
 [lib]
@@ -28,16 +30,16 @@ tauri-plugin-shell   = "2"
 
 # cascade-types provides the frozen JSON-RPC 2.0 wire types (T-P2-E03).
 # cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
-cascade-types     = { path = "../../../crates/cascade-types", version = "1.5.1" }
-cascade-cli       = { path = "../../../crates/cascade-cli", version = "1.5.1" }
-cascade-audit     = { path = "../../../crates/cascade-audit", version = "1.5.1" }
+cascade-types     = { path = "../../../crates/cascade-types", version = "1.16.0" }
+cascade-cli       = { path = "../../../crates/cascade-cli", version = "1.16.0" }
+cascade-audit     = { path = "../../../crates/cascade-audit", version = "1.16.0" }
 # T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
-cascade-providers = { path = "../../../crates/cascade-providers", version = "1.5.1" }
+cascade-providers = { path = "../../../crates/cascade-providers", version = "1.16.0" }
 # E-P5-08: OS keychain access for provider_connect (platform_keychain)
-cascade-keychain  = { path = "../../../crates/cascade-keychain", version = "1.5.1" }
-cascade-core  = { path = "../../../crates/cascade-core", version = "1.5.1" }    # T-P3-E04-15: read_providers_store
+cascade-keychain  = { path = "../../../crates/cascade-keychain", version = "1.16.0" }
+cascade-core  = { path = "../../../crates/cascade-core", version = "1.16.0" }    # T-P3-E04-15: read_providers_store
 # rag-16-ui: encrypted personal vault commands
-cascade-personal  = { path = "../../../crates/cascade-personal", version = "1.5.1" }
+cascade-personal  = { path = "../../../crates/cascade-personal", version = "1.16.0" }
 
 # Async runtime (Tauri commands are async; used by daemon_client.rs)
 tokio = { version = "1", features = ["net", "io-util", "rt", "time", "sync"] }

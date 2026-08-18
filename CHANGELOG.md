@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **Version numbers across the app manifests now track the real product
+  version** (T-P7-E16-01, T-P7-E16-02, 2026-08-18). `apps/cascade-app` and
+  `apps/cascade-dashboard` reported `0.9.3` in their `package.json`, and the
+  Tauri crate hardcoded `1.5.1`, while the product was on `1.16.0`. The Tauri
+  crate now inherits both `version` and `rust-version` from the workspace, its
+  seven stale intra-repo path-dependency pins were refreshed, and both
+  `package.json` files report the real version. `tauri.conf.json` was already
+  correct and is unchanged.
+
 ### Changed
 - **Declared MSRV corrected to 1.88 and now actually enforced in CI**
   (T-P7-E16-04, 2026-08-18). `rust-toolchain.toml` documented an MSRV of 1.75
