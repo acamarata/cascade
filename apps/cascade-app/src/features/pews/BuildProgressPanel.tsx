@@ -1,17 +1,21 @@
 /**
  * BuildProgressPanel.tsx — Live build progress panel for active Build phases.
  *
- * Purpose: Show the current build unit, fleet account/model (from project state),
- *   elapsed time, and ticket pass/fail state — rendered only when a project is in
- *   "building" status. Polls phase status every 10 s (live stream TODO noted below).
+ * Purpose: Show the current build unit, the observed fleet dispatch actor
+ *   (from the daemon's phase status), elapsed time, and ticket pass/fail
+ *   state — rendered only when a project is in "building" status. Polls
+ *   phase status every 10 s (live stream TODO noted below).
  *
  * Inputs:  projectPath — absolute path to the project root.
  * Outputs: Progress panel (current ticket, timing, findings summary).
  * Constraints:
  *   - Rendered only when project phaseStatus === "building".
  *   - Calls GET /api/projects/:id/phase for live data (10 s poll interval).
- *   - TODO: replace poll with SSE / Tauri event when daemon exposes a build stream.
- *   - Fleet account/model info not yet in the API — shown as a stub with TODO.
+ *   - TODO: replace poll with SSE / Tauri event when daemon exposes a build
+ *     stream. The daemon endpoint this depends on does not yet exist.
+ *   - Fleet dispatch actor is read from `last_dispatch_actor` (added by
+ *     T-P7-E10-06). Null is shown honestly as "no dispatch yet" — never
+ *     invented or derived from ticket weight.
  *   - Elapsed time measured from component mount (approximation until API provides start_at).
  * SPORT: MASTER-COMPONENTS.md — BuildProgressPanel (pews-03)
  */
@@ -33,6 +37,31 @@ function formatElapsed(seconds: number): string {
   return `${m}m ${s}s`
 }
 
+/**
+ * Purpose: Render the observed fleet dispatch actor readably for the panel.
+ * Inputs:  actor — `last_dispatch_actor` from the daemon phase status, or null.
+ * Outputs: A short display string. Fleet actors (`fleet/<cli>/<TaskClass>`)
+ *   are parsed to `<cli> · <TaskClass>` (e.g. `claude · BulkExec`); non-fleet
+ *   actors (e.g. `cascade-cli`) are shown verbatim; null is shown as
+ *   "no dispatch yet". Never invents or predicts a value.
+ * Constraints: Honest about null — does not derive a CLI from ticket weight.
+ */
+function formatDispatchActor(actor: string | null): string {
+  if (!actor) return 'no dispatch yet'
+  // Fleet actor format: fleet/<cli-binary>/<TaskClass>
+  if (actor.startsWith('fleet/')) {
+    const parts = actor.split('/')
+    // parts[0] === 'fleet'; parts[1] === cli-binary; parts[2..] === task class
+    if (parts.length >= 3 && parts[1] && parts[2]) {
+      return `${parts[1]} · ${parts.slice(2).join('/')}`
+    }
+    // Malformed fleet actor — fall back to the raw observed string.
+    return actor
+  }
+  // Non-fleet actor (e.g. "cascade-cli" from manual/CLI callers) — show as-is.
+  return actor
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export interface BuildProgressPanelProps {
@@ -47,9 +76,8 @@ export interface BuildProgressPanelProps {
  *   current phase progress and ticket stats. Polls every 10 s.
  *
  * TODO(pews-04): Replace 10 s poll with daemon SSE build-progress stream when
- *   the endpoint is added to projects_handlers.rs.
- * TODO(pews-04): Add fleet account/model column once the daemon exposes it in
- *   the phase-status or a new /api/projects/:id/build endpoint.
+ *   the endpoint is added to projects_handlers.rs. The endpoint this depends
+ *   on does not yet exist; do not attempt it here.
  */
 export function BuildProgressPanel({
   projectPath: _projectPath,
@@ -111,6 +139,11 @@ export function BuildProgressPanel({
   const total = status?.tickets_total ?? 0
   const blocked = status?.tickets_blocked ?? 0
   const phaseName = status?.phase_name ?? status?.phase_id ?? 'Active Phase'
+  // Observed fleet dispatch actor from the daemon (T-P7-E10-06). Null when no
+  // dispatch has been recorded; never invented or derived from ticket weight.
+  const dispatchActor = status?.last_dispatch_actor ?? null
+  const dispatchLabel = formatDispatchActor(dispatchActor)
+  const hasDispatch = dispatchActor !== null
 
   return (
     <div
@@ -147,13 +180,20 @@ export function BuildProgressPanel({
                 <Clock className="h-3 w-3" aria-hidden="true" />
                 {formatElapsed(elapsed)}
               </span>
-              {/* Fleet stub — TODO(pews-04): replace with real account/model from daemon */}
+              {/* Observed fleet dispatch actor (T-P7-E10-05). Real value from
+                  the daemon's last_dispatch_actor; null shown honestly. */}
               <span
-                className="flex items-center gap-1 text-[10px] text-muted-foreground/60"
-                title="Fleet account/model — available in a future daemon update (pews-04)"
+                className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                title={
+                  hasDispatch
+                    ? `Last dispatch actor: ${dispatchActor}`
+                    : 'No fleet dispatch recorded yet'
+                }
               >
                 <Cpu className="h-3 w-3" aria-hidden="true" />
-                <span className="opacity-50">fleet: —</span>
+                <span className={hasDispatch ? '' : 'italic opacity-70'}>
+                  {dispatchLabel}
+                </span>
               </span>
             </div>
 

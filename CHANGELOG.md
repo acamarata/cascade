@@ -6,6 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Build progress panel shows the real fleet dispatch actor instead of a
+  placeholder** (T-P7-E10-05, 2026-08-18). When a project is actively
+  building, the Cascade.app build progress panel previously displayed a
+  hardcoded `fleet: —` stub next to the elapsed timer, with a TODO noting
+  the fleet account/model was not yet in the API. The panel now reads the
+  `last_dispatch_actor` field that T-P7-E10-06 added to
+  `GET /api/projects/:id/phase` and renders it readably: a fleet actor
+  string like `fleet/claude/BulkExec` is parsed and shown as
+  `claude · BulkExec` (CLI binary · task class), and the full raw actor is
+  kept in the element tooltip. When no fleet dispatch has been recorded
+  yet — the field is null — the panel says so honestly (`no dispatch yet`)
+  rather than inventing or predicting a CLI from the ticket's weight. The
+  `DaemonPhaseStatus` TypeScript interface gains the two additive fields
+  (`last_dispatch_actor`, `last_dispatch_task_class`); existing fields are
+  unchanged. The separate TODO to replace the 10 s poll with an SSE/Tauri
+  build stream is deliberately left in place, since the daemon endpoint it
+  depends on does not yet exist.
+### Removed
+
+- **Dead `HttpTransport` / `SseTransport` channel-backed stubs removed from
+  `cascade-mcp`** (T-P7-E15-03, 2026-08-18). Both were self-documented P2
+  legacy stubs with zero callers outside their own definition files. Confirmed
+  by workspace-wide grep before deletion. The production axum-based
+  `HttpServer` and `SseServer` (P4) in the same files are untouched. The
+  now-unused `use super::Transport;` imports and `debug` / `mpsc` imports
+  that were only pulled in by the dead types are also removed. Test counts
+  are unchanged (5 in `http.rs`, 4 in `sse.rs`) because no tests referenced
+  the dead types.
+
 ### Fixed
 - **Release workflow no longer pins pnpm to a major version behind the
   lockfile** (T-P7-E25-09, 2026-08-18). `release.yml` pinned

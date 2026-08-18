@@ -45,6 +45,20 @@ export interface DaemonPhaseStatus {
   tickets_blocked: number | null
   plan_md_exists: boolean
   phase_dir: string | null
+  /**
+   * Actor that performed the most recent fleet dispatch, format
+   * `fleet/<cli-binary>/<TaskClass>` (e.g. `fleet/claude/BulkExec`), or a
+   * non-fleet actor string (e.g. `cascade-cli`) for manual/CLI callers.
+   * Null when no step-level dispatch event has been recorded yet.
+   * Added by T-P7-E10-06; consumed by T-P7-E10-05.
+   */
+  last_dispatch_actor: string | null
+  /**
+   * Task class of the most recent fleet dispatch (e.g. `BulkExec`), or null
+   * when the last event was a non-fleet actor or no dispatch has happened.
+   * Added by T-P7-E10-06; consumed by T-P7-E10-05.
+   */
+  last_dispatch_task_class: string | null
 }
 
 /** Combined entry exposed to UI components. */
