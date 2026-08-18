@@ -6,7 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **Release workflow no longer pins pnpm to a major version behind the
+  lockfile** (T-P7-E25-09, 2026-08-18). `release.yml` pinned
+  `pnpm/action-setup` to `version: 9` while the repo's `packageManager` field
+  declares `pnpm@10.30.1`, so release builds ran a pnpm major version older
+  than the one that generated the lockfile. The pin is removed; the action now
+  resolves from `packageManager`, matching every other workflow in the repo.
+
 ### Added
+
 - **Real fleet dispatch actor is now recorded and exposed** (T-P7-E10-06,
   2026-08-18). The build engine's fleet dispatch path previously logged every
   step transition under a hardcoded `"cascade-cli"` actor, so nothing on disk

@@ -279,10 +279,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # No `version:` pin — pnpm/action-setup reads `packageManager` from the root
+      # package.json (currently pnpm@10.30.1), matching every other workflow here.
+      # Pinning it caused 6 simultaneous CI failures previously, and the pin that
+      # was here (9) was a MAJOR version behind the lockfile's own pnpm.
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Install Node.js
         uses: actions/setup-node@v4
