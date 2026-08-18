@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Injectable `FleetRunner` seam enables deterministic end-to-end tests of
+  the real dispatch path** (T-P7-E03-06, 2026-08-18). The build engine's
+  fleet dispatch now shells the CLI through a `FleetRunner` trait
+  (`fn run(&self, task_class, prompt) -> FleetOutcome`, `Send + Sync`) with a
+  `RealFleetRunner` that delegates to the existing `run_fleet_cli`. Default
+  construction is unchanged — `cascade build run --real` behaviour, including
+  the `CASCADE_STEP_COMPLETE:<step-id>` marker protocol, retry/backoff, step
+  transitions, and gate checks, is byte-for-byte identical. Tests may opt in
+  via `BuildEngine::with_fleet_runner` to drive the full real path on a toy
+  phase with a scripted runner (no network, no live CLI); a separate
+  `#[ignore]`d live test can be enabled with `CASCADE_E2E_LIVE=1`.
+
 ### Fixed
 - **Version numbers across the app manifests now track the real product
   version** (T-P7-E16-01, T-P7-E16-02, 2026-08-18). `apps/cascade-app` and

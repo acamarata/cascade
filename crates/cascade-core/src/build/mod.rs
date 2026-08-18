@@ -25,6 +25,9 @@ mod engine_tests;
 #[cfg(test)]
 mod test_support;
 
-pub use dispatch::{classify_ticket, cli_binary_for_task_class, run_fleet_cli, FleetOutcome};
+pub use dispatch::{
+    classify_ticket, cli_binary_for_task_class, run_fleet_cli, FleetOutcome, FleetRunner,
+    RealFleetRunner,
+};
 pub use dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
 pub use engine::{BuildConfig, BuildEngine};

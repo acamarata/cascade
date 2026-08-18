@@ -11,7 +11,7 @@
 // EOP intentionally performs no outbound traffic. Deploy verification remains
 // the responsibility of the ExternalChecks implementation injected by the caller.
 
-use std::{any::TypeId, collections::HashSet, time::Duration};
+use std::{any::TypeId, collections::HashSet, sync::Arc, time::Duration};
 
 use tracing::{debug, info, warn};
 
@@ -28,7 +28,7 @@ use crate::pbd::{
 
 pub use super::dispatchers::{FleetDispatcher, MockDispatcher, TicketDispatcher};
 use super::{
-    dispatch::{classify_ticket, run_fleet_cli, FleetOutcome},
+    dispatch::{classify_ticket, FleetOutcome, FleetRunner, RealFleetRunner},
     topo::topological_sort,
 };
 
@@ -54,6 +54,7 @@ pub struct BuildEngine {
     uses_fleet_dispatcher: bool,
     checks: Box<dyn ExternalChecks>,
     config: BuildConfig,
+    fleet_runner: Arc<dyn FleetRunner>,
 }
 
 impl BuildEngine {
@@ -61,6 +62,10 @@ impl BuildEngine {
     ///
     /// `dispatcher` — ticket execution seam.
     /// `checks` — external gate seam (pass [`NoExternalChecks`] for dry runs).
+    ///
+    /// The fleet CLI runner seam defaults to [`RealFleetRunner`] (the real
+    /// `run_fleet_cli` shell-out) so production behaviour is unchanged; use
+    /// [`BuildEngine::with_fleet_runner`] to substitute a scripted runner.
     pub fn new<D, C>(store: PbdStore, dispatcher: D, checks: C, config: BuildConfig) -> Self
     where
         D: TicketDispatcher + 'static,
@@ -72,7 +77,21 @@ impl BuildEngine {
             uses_fleet_dispatcher: TypeId::of::<D>() == TypeId::of::<FleetDispatcher>(),
             checks: Box::new(checks),
             config,
+            fleet_runner: Arc::new(RealFleetRunner),
         }
+    }
+
+    /// Override the fleet CLI runner seam (T-P7-E03-06).
+    ///
+    /// Opt-in: every default construction keeps [`RealFleetRunner`], so
+    /// production dispatch shells the real fleet CLI exactly as before.
+    /// Integration tests inject a scripted [`FleetRunner`] to drive the REAL
+    /// dispatch path — prompt construction, retry/backoff, marker parsing,
+    /// step transitions, gate checks — deterministically, with no network and
+    /// no live CLI.
+    pub fn with_fleet_runner(mut self, runner: Arc<dyn FleetRunner>) -> Self {
+        self.fleet_runner = runner;
+        self
     }
 
     /// Create an engine with [`MockDispatcher`] and [`NoExternalChecks`] for tests.
@@ -354,12 +373,17 @@ impl BuildEngine {
             attempt += 1;
             let task_class = classify_ticket(ticket.weight.as_deref());
             let attempt_prompt = prompt.clone();
-            let attempt_outcome =
-                tokio::task::spawn_blocking(move || run_fleet_cli(task_class, &attempt_prompt))
-                    .await
-                    .map_err(|error| {
-                        CascadeError::Other(format!("fleet dispatch join error: {error}"))
-                    })?;
+            // Runner seam (T-P7-E03-06): RealFleetRunner delegates to
+            // run_fleet_cli, so the default is the same blocking shell-out;
+            // tests inject a scripted runner here. The clone moves the Arc
+            // into the 'static closure — the blocking call stays off the
+            // async executor either way.
+            let attempt_runner = Arc::clone(&self.fleet_runner);
+            let attempt_outcome = tokio::task::spawn_blocking(move || {
+                attempt_runner.run(task_class, &attempt_prompt)
+            })
+            .await
+            .map_err(|error| CascadeError::Other(format!("fleet dispatch join error: {error}")))?;
 
             if matches!(attempt_outcome, FleetOutcome::Failed { .. })
                 && attempt < MAX_FLEET_ATTEMPTS

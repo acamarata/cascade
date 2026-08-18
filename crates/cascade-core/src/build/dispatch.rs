@@ -140,6 +140,38 @@ pub fn run_fleet_cli(task_class: TaskClass, prompt: &str) -> FleetOutcome {
     }
 }
 
+// ── FleetRunner seam (T-P7-E03-06) ────────────────────────────────────────────
+
+/// Seam for one fleet CLI invocation, as performed by the build engine's real
+/// dispatch path.
+///
+/// Production uses [`RealFleetRunner`], which delegates to [`run_fleet_cli`].
+/// Integration tests inject a scripted implementation so the engine's REAL
+/// dispatch path — prompt construction, retry/backoff, `CASCADE_STEP_COMPLETE`
+/// marker parsing, step transitions, and gate checks — can be driven
+/// end-to-end deterministically, with no network and no live CLI.
+///
+/// Implementations must be `Send + Sync` because the engine invokes the runner
+/// inside `tokio::task::spawn_blocking`.
+pub trait FleetRunner: Send + Sync {
+    /// Run one fleet CLI invocation for `task_class` with `prompt`.
+    ///
+    /// Blocking — callers keep this off the async executor (per D-external).
+    fn run(&self, task_class: TaskClass, prompt: &str) -> FleetOutcome;
+}
+
+/// Default [`FleetRunner`] — the real CLI shell-out via [`run_fleet_cli`].
+///
+/// This is what every production construction site gets; injecting any other
+/// runner requires an explicit opt-in (`BuildEngine::with_fleet_runner`).
+pub struct RealFleetRunner;
+
+impl FleetRunner for RealFleetRunner {
+    fn run(&self, task_class: TaskClass, prompt: &str) -> FleetOutcome {
+        run_fleet_cli(task_class, prompt)
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
