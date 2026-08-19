@@ -258,12 +258,12 @@ pub fn store_embeddings(
 /// SELECT rowid, distance
 /// FROM rag_embeddings
 /// WHERE embedding MATCH ?
+///   AND k = ?
 /// ORDER BY distance
-/// LIMIT ?
 /// ```
 ///
 /// The `?` placeholder receives the query vector as a little-endian f32 BLOB.
-/// sqlite-vec decodes it as a float[1024] and computes L2 distance.
+/// sqlite-vec decodes it as a float[1024] and searches the cosine DiskANN index.
 ///
 /// Without `vec`, performs a full table scan and computes squared Euclidean
 /// distance in Rust.  Correct but O(n) — acceptable for test/dev environments.
@@ -291,9 +291,8 @@ pub fn query_dense_knn(
             .prepare_cached(
                 "SELECT rowid, distance \
                  FROM rag_embeddings \
-                 WHERE embedding MATCH ? \
-                 ORDER BY distance \
-                 LIMIT ?",
+                 WHERE embedding MATCH ?1 AND k = ?2 \
+                 ORDER BY distance",
             )
             .map_err(|e| EmbedError::InferenceFailed {
                 model_id: "query_dense_knn/prepare".into(),
@@ -325,13 +324,9 @@ pub fn query_dense_knn(
     #[cfg(not(feature = "vec"))]
     {
         // Full-scan fallback: load all blobs, compute squared-L2, sort, return top-k.
-        // Distance-metric note (task 4): both the `vec` path above and the non-`vec`
-        // path here use ascending-distance ranking.  The `vec` path returns sqlite-vec
-        // L2 distance; the non-`vec` path uses squared-L2.  Both are monotone for
-        // ranking — the ordering is identical, only the scale differs.  These two
-        // paths are never mixed in a single ranking list (they feed separate retrieval
-        // tables: `rag_embeddings` vs `shard_embeddings`), so the difference does NOT
-        // affect result correctness.
+        // The production `vec` path uses cosine distance. This opt-out fallback
+        // retains its historical squared-L2 behavior and is never mixed with
+        // DiskANN results in one ranking list.
         let mut stmt = conn
             .prepare_cached("SELECT rowid, embedding FROM rag_embeddings")
             .map_err(|e| EmbedError::InferenceFailed {
@@ -426,12 +421,7 @@ mod tests {
     /// Register the sqlite-vec extension (no-op without the `vec` feature).
     #[cfg(feature = "vec")]
     fn load_vec_extension() {
-        use rusqlite::ffi::sqlite3_auto_extension;
-        unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite_vec::sqlite3_vec_init as *const (),
-            )));
-        }
+        crate::db::register_sqlite_vec();
     }
 
     /// Create a fully-migrated in-memory database for tests.
@@ -701,6 +691,93 @@ mod tests {
                 knn[0].1
             );
         }
+    }
+
+    /// Compare DiskANN against an exact cosine baseline on a deterministic
+    /// corpus. This quantifies the ranking trade-off instead of assuming that
+    /// approximate results are interchangeable with the former exact scan.
+    #[cfg(feature = "vec")]
+    #[test]
+    fn diskann_recall_against_exact_cosine_baseline() {
+        fn unit_vector(mut state: u64) -> Vec<f32> {
+            let mut values = Vec::with_capacity(DENSE_DIM);
+            for _ in 0..DENSE_DIM {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let scaled = (state as f64 / u64::MAX as f64) * 2.0 - 1.0;
+                values.push(scaled as f32);
+            }
+            let norm = values
+                .iter()
+                .map(|value| value * value)
+                .sum::<f32>()
+                .sqrt()
+                .max(f32::EPSILON);
+            for value in &mut values {
+                *value /= norm;
+            }
+            values
+        }
+
+        let conn = test_db();
+        let corpus: Vec<Vec<f32>> = (0..128)
+            .map(|index| unit_vector(0x9e37_79b9_u64.wrapping_mul(index + 1)))
+            .collect();
+        for (index, vector) in corpus.iter().enumerate() {
+            store_dense(&conn, index as i64 + 1, vector).expect("DiskANN insert");
+        }
+
+        let k = 10;
+        let queries: Vec<Vec<f32>> = (0..12)
+            .map(|index| unit_vector(0xd1b5_4a32_d192_ed03_u64.wrapping_add(index * 97)))
+            .collect();
+        let mut overlap = 0usize;
+        let mut exact_rank_matches = 0usize;
+        for query in &queries {
+            let mut exact: Vec<(i64, f32)> = corpus
+                .iter()
+                .enumerate()
+                .map(|(index, vector)| {
+                    let cosine = query
+                        .iter()
+                        .zip(vector)
+                        .map(|(left, right)| left * right)
+                        .sum::<f32>();
+                    (index as i64 + 1, cosine)
+                })
+                .collect();
+            exact.sort_by(|left, right| {
+                right
+                    .1
+                    .partial_cmp(&left.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| left.0.cmp(&right.0))
+            });
+            exact.truncate(k);
+
+            let ann = query_dense_knn(&conn, query, k).expect("DiskANN query");
+            overlap += ann
+                .iter()
+                .filter(|(id, _)| exact.iter().any(|(exact_id, _)| exact_id == id))
+                .count();
+            exact_rank_matches += ann
+                .iter()
+                .zip(&exact)
+                .filter(|((ann_id, _), (exact_id, _))| ann_id == exact_id)
+                .count();
+        }
+
+        let comparisons = queries.len() * k;
+        let recall = overlap as f64 / comparisons as f64;
+        let rank_agreement = exact_rank_matches as f64 / comparisons as f64;
+        println!(
+            "DiskANN deterministic recall@{k}={recall:.3}, exact-rank agreement={rank_agreement:.3}"
+        );
+        assert!(
+            recall >= 0.95,
+            "DiskANN recall@{k} must remain >= 0.95, measured {recall:.3}"
+        );
     }
 
     // ── Transaction atomicity ─────────────────────────────────────────────────

@@ -250,6 +250,7 @@ impl ShardedIndex {
     #[instrument(skip_all, fields(root = %index_root.as_ref().display(), shards = shard_count))]
     pub fn new(index_root: impl AsRef<Path>, shard_count: usize, embed_dim: usize) -> Result<Self> {
         let root = index_root.as_ref();
+        crate::db::register_sqlite_vec();
         std::fs::create_dir_all(root)?;
 
         // Migration path: copy legacy single-file index to shard 0.
@@ -658,6 +659,7 @@ fn shard_knn_query(
 ) -> Result<Vec<SearchHit>> {
     #[cfg(feature = "vec")]
     {
+        let _ = dim;
         // sqlite-vec MATCH syntax — native ANN.
         let mut stmt = conn
             .prepare_cached(
@@ -777,12 +779,7 @@ mod tests {
     /// Register sqlite-vec as an auto-extension (no-op without the `vec` feature).
     #[cfg(feature = "vec")]
     fn load_vec_extension() {
-        use rusqlite::ffi::sqlite3_auto_extension;
-        unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite_vec::sqlite3_vec_init as *const (),
-            )));
-        }
+        crate::db::register_sqlite_vec();
     }
 
     /// Build a small deterministic unit vector seeded by `seed`.

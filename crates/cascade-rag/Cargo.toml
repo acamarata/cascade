@@ -83,7 +83,7 @@ docx-rs = { version = "0.4", optional = true }
 calamine = { version = "0.36", optional = true }
 
 [features]
-default = []
+default = ["vec"]
 # bench-scale-heavy: unlocks 1M and 10M corpus benchmarks in sharded_search_scale.
 # Heavy corpora take significant time and disk — only enable on dedicated nightly runners.
 bench-scale-heavy = []

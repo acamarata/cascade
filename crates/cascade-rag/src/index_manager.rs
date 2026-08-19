@@ -113,6 +113,7 @@ impl IndexManager {
 
         info!(db = %db_path.display(), "IndexManager: opening project index");
 
+        crate::db::register_sqlite_vec();
         let conn =
             cascade_db::open_configured(&db_path).map_err(|e| CascadeError::RetrievalFailed {
                 detail: format!("open index db: {e}"),

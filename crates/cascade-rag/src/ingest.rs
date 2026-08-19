@@ -69,12 +69,7 @@ mod tests {
     /// migrations (no-op without the `vec` feature).
     #[cfg(feature = "vec")]
     fn load_vec_extension() {
-        use rusqlite::ffi::sqlite3_auto_extension;
-        unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite_vec::sqlite3_vec_init as *const (),
-            )));
-        }
+        crate::db::register_sqlite_vec();
     }
 
     fn migrated_conn() -> Connection {

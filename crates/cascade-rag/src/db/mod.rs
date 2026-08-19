@@ -9,4 +9,4 @@
 
 pub mod migrations;
 
-pub use migrations::run_migrations;
+pub use migrations::{register_sqlite_vec, run_migrations};

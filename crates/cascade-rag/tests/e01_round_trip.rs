@@ -146,12 +146,7 @@ fn seed_fixture_files(base: &Path) -> Vec<PathBuf> {
 /// migrations (no-op without the `vec` feature).
 #[cfg(feature = "vec")]
 fn load_vec_extension() {
-    use rusqlite::ffi::sqlite3_auto_extension;
-    unsafe {
-        sqlite3_auto_extension(Some(std::mem::transmute(
-            sqlite_vec::sqlite3_vec_init as *const (),
-        )));
-    }
+    cascade_rag::db::register_sqlite_vec();
 }
 
 /// Build a file-backed DB at `path` and run migrations.
@@ -365,7 +360,7 @@ async fn changed_file_re_ingest_reflected_in_results() {
         run_migrations(&conn).expect("migrations");
         let pipeline = IngestPipeline::new(conn, Arc::clone(&embed) as _, IngestConfig::default());
         let (results, errors) = pipeline.ingest_files(std::iter::once(config_path.as_path()));
-        assert!(errors.is_empty());
+        assert!(errors.is_empty(), "re-ingest should not error: {errors:?}");
         assert_eq!(results.len(), 1);
         assert!(!results[0].skipped, "modified file must not be skipped");
     }

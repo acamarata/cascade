@@ -120,7 +120,16 @@ impl RagIndex {
     /// schema cannot be applied.
     #[instrument(skip_all, fields(db_path = %db_path.as_ref().display()))]
     pub async fn open(db_path: impl AsRef<Path>) -> Result<Self> {
-        let db_path = db_path.as_ref().to_path_buf();
+        Self::open_inner(db_path.as_ref().to_path_buf(), DEFAULT_EMBED_DIM).await
+    }
+
+    /// Open with a custom embedding dimension (for non-default models).
+    pub async fn open_with_dim(db_path: impl AsRef<Path>, embed_dim: usize) -> Result<Self> {
+        Self::open_inner(db_path.as_ref().to_path_buf(), embed_dim).await
+    }
+
+    async fn open_inner(db_path: PathBuf, embed_dim: usize) -> Result<Self> {
+        crate::db::register_sqlite_vec();
         let conn =
             cascade_db::open_configured(&db_path).map_err(|e| CascadeError::RetrievalFailed {
                 detail: format!("open db: {e}"),
@@ -128,16 +137,9 @@ impl RagIndex {
         let idx = Self {
             db_path,
             conn: tokio::sync::Mutex::new(conn),
-            embed_dim: DEFAULT_EMBED_DIM,
+            embed_dim,
         };
         idx.apply_schema().await?;
-        Ok(idx)
-    }
-
-    /// Open with a custom embedding dimension (for non-default models).
-    pub async fn open_with_dim(db_path: impl AsRef<Path>, embed_dim: usize) -> Result<Self> {
-        let mut idx = Self::open(db_path).await?;
-        idx.embed_dim = embed_dim;
         Ok(idx)
     }
 
@@ -363,7 +365,7 @@ impl RagIndex {
                 })?
                 .filter_map(|r| r.ok())
                 .collect();
-            return Ok(results);
+            Ok(results)
         }
 
         #[cfg(not(feature = "vec"))]

@@ -256,7 +256,7 @@ impl Default for SearchConfig {
 /// 2. If `config.fts5_enabled`: keyword search via FTS5, fetching `k*2` candidates
 ///    (or `k * rerank_candidate_multiplier` when `rerank_enabled = true`).
 /// 3. If `config.vec_enabled`: embed query (or HyDE hypothetical doc when
-///    `config.hyde_enabled`), brute-force cosine scan via BLOB table.
+///    `config.hyde_enabled`) and query the sqlite-vec DiskANN index.
 /// 4. If `config.sparse_enabled`: TF-IDF sparse score for the query.  When the
 ///    `bge_m3_native_sparse` feature is compiled AND the model capability is
 ///    detected, native sparse is used; otherwise TF-IDF is the silent fallback.
@@ -366,8 +366,8 @@ pub async fn search(
     //
     // Uses `dense_query` (raw query or HyDE hypothetical document).
     // When the `vec` feature is absent the rag_embeddings table holds plain
-    // BLOB rows and we perform a brute-force cosine scan in Rust.
-    // The `vec` feature adds vec0 KNN SQL (wired in T-P4-E01-05).
+    // BLOB rows and we perform a brute-force cosine scan in Rust. With `vec`,
+    // query_dense_knn dispatches MATCH to the existing sqlite-vec DiskANN index.
 
     let dense_hits: Vec<(i64, f64)> = if config.vec_enabled {
         let query_for_embed = dense_query.clone();
@@ -382,58 +382,71 @@ pub async fn search(
             };
             let query_vec = &vecs[0];
 
-            // Fetch all embeddings from the BLOB table (brute-force KNN fallback).
             let locked = conn_arc.blocking_lock();
-            let mut stmt = match locked
-                .prepare("SELECT rowid, embedding FROM rag_embeddings ORDER BY rowid")
+
+            #[cfg(feature = "vec")]
             {
-                Ok(s) => s,
-                Err(_) => return vec![],
-            };
+                crate::embed::store::query_dense_knn(&locked, query_vec, candidate_n)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(rowid, distance)| {
+                        let similarity = (1.0 - f64::from(distance)).clamp(0.0, 1.0);
+                        (rowid, similarity)
+                    })
+                    .collect()
+            }
 
-            let dim = query_vec.len();
-            let rows: Vec<(i64, Vec<u8>)> = match stmt.query_map([], |row| {
-                let rowid: i64 = row.get(0)?;
-                let blob: Vec<u8> = row.get(1)?;
-                Ok((rowid, blob))
-            }) {
-                Ok(mapped) => mapped.flatten().collect(),
-                Err(_) => return vec![],
-            };
+            #[cfg(not(feature = "vec"))]
+            {
+                let mut stmt = match locked
+                    .prepare("SELECT rowid, embedding FROM rag_embeddings ORDER BY rowid")
+                {
+                    Ok(s) => s,
+                    Err(_) => return vec![],
+                };
 
-            // Compute cosine similarity for each stored vector.
-            let mut scored: Vec<(i64, f64)> = rows
-                .into_iter()
-                .filter_map(|(rowid, blob)| {
-                    // Deserialise little-endian f32 blob.
-                    if blob.len() != dim * 4 {
-                        return None;
-                    }
-                    let stored: Vec<f32> = blob
-                        .chunks_exact(4)
-                        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                        .collect();
+                let dim = query_vec.len();
+                let rows: Vec<(i64, Vec<u8>)> = match stmt.query_map([], |row| {
+                    let rowid: i64 = row.get(0)?;
+                    let blob: Vec<u8> = row.get(1)?;
+                    Ok((rowid, blob))
+                }) {
+                    Ok(mapped) => mapped.flatten().collect(),
+                    Err(_) => return vec![],
+                };
 
-                    let dot: f32 = query_vec
-                        .iter()
-                        .zip(stored.iter())
-                        .map(|(a, b)| a * b)
-                        .sum();
-                    let norm_q: f32 = query_vec.iter().map(|v| v * v).sum::<f32>().sqrt();
-                    let norm_s: f32 = stored.iter().map(|v| v * v).sum::<f32>().sqrt();
-                    if norm_q < 1e-9 || norm_s < 1e-9 {
-                        return None;
-                    }
-                    let cosine = (dot / (norm_q * norm_s)) as f64;
-                    // Clamp to [0.0, 1.0] — cosine can be slightly outside due to fp.
-                    Some((rowid, cosine.clamp(0.0, 1.0)))
-                })
-                .collect();
+                let mut scored: Vec<(i64, f64)> = rows
+                    .into_iter()
+                    .filter_map(|(rowid, blob)| {
+                        // Deserialise little-endian f32 blob.
+                        if blob.len() != dim * 4 {
+                            return None;
+                        }
+                        let stored: Vec<f32> = blob
+                            .chunks_exact(4)
+                            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                            .collect();
 
-            // Sort descending and take top candidate_n.
-            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            scored.truncate(candidate_n);
-            scored
+                        let dot: f32 = query_vec
+                            .iter()
+                            .zip(stored.iter())
+                            .map(|(a, b)| a * b)
+                            .sum();
+                        let norm_q: f32 = query_vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+                        let norm_s: f32 = stored.iter().map(|v| v * v).sum::<f32>().sqrt();
+                        if norm_q < 1e-9 || norm_s < 1e-9 {
+                            return None;
+                        }
+                        let cosine = (dot / (norm_q * norm_s)) as f64;
+                        // Clamp to [0.0, 1.0] — cosine can be slightly outside due to fp.
+                        Some((rowid, cosine.clamp(0.0, 1.0)))
+                    })
+                    .collect();
+
+                scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                scored.truncate(candidate_n);
+                scored
+            }
         })
         .await
         .unwrap_or_default()
@@ -1080,6 +1093,51 @@ mod tests {
         assert_eq!(
             results[0].dense_score, None,
             "dense_score must be None when vec_enabled=false"
+        );
+    }
+
+    #[cfg(feature = "vec")]
+    #[tokio::test]
+    async fn test_search_dense_only_returns_diskann_hit() {
+        let conn = setup_db_with_chunk("semantic-only retrieval target");
+        let chunk_id: i64 = conn
+            .query_row("SELECT id FROM rag_chunks", [], |row| row.get(0))
+            .unwrap();
+        let embed_model = MockEmbedModel::default();
+        let query_vector = embed_model
+            .embed_dense(&["dense needle"])
+            .unwrap()
+            .remove(0);
+        crate::embed::store::store_dense(&conn, chunk_id, &query_vector)
+            .expect("store DiskANN vector");
+
+        let cfg = SearchConfig {
+            k: 1,
+            fts5_enabled: false,
+            vec_enabled: true,
+            sparse_enabled: false,
+            ..Default::default()
+        };
+        let results = search(
+            "dense needle",
+            &cfg,
+            Arc::new(Mutex::new(conn)),
+            Arc::new(embed_model),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            results.len(),
+            1,
+            "dense-only search must return its ANN hit"
+        );
+        assert_eq!(results[0].chunk_id, chunk_id);
+        assert!(
+            results[0].dense_score.is_some_and(|score| score > 0.999),
+            "an exact query vector must retain a near-perfect cosine score"
         );
     }
 

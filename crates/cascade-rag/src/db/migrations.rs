@@ -24,6 +24,7 @@
 //! | 10          | 0010_memory_episodes.sql      | always        |
 //! | 11          | 0011_memory_facts.sql         | always        |
 //! | 12          | 0012_chat_history.sql         | always        |
+//! | 13          | DiskANN reconciliation        | `vec`         |
 //!
 //! Both paths (vec and blob) advance to `user_version=5`.
 //! Migration 6 advances to `user_version=6` only when `rag-multivec` is enabled.
@@ -31,11 +32,17 @@
 //! Migration 8 advances to `user_version=8` (context_fingerprints — T-P4-E04-21).
 //! Migration 9 advances to `user_version=9` (curated-description metadata table).
 //! Migrations 10–12 (RAG-08): memory_episodes, memory_facts, chat_history.
+//! Migration 13 upgrades either a plain-BLOB or flat vec0 `rag_embeddings`
+//! table in place to the sqlite-vec DiskANN schema. The reconciliation also
+//! runs on already-versioned databases so switching from a non-`vec` build is
+//! safe.
 //!
 //! SPORT: MASTER-TABLES.md → rag_sources, rag_chunks, rag_citations, rag_fts5,
 //!        rag_embeddings, rag_sparse_embeddings, index_state, context_fingerprints,
 //!        memory_episodes, memory_facts, chat_history
 
+#[cfg(feature = "vec")]
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, Result};
 
 // Embedded SQL — paths are relative to the crate root (where Cargo.toml lives).
@@ -63,6 +70,60 @@ const SQL_0010: &str = include_str!("../../migrations/0010_memory_episodes.sql")
 const SQL_0011: &str = include_str!("../../migrations/0011_memory_facts.sql");
 const SQL_0012: &str = include_str!("../../migrations/0012_chat_history.sql");
 
+const LATEST_SCHEMA_VERSION: u32 = 13;
+
+#[cfg(feature = "vec")]
+const DISKANN_EMBEDDINGS_DDL: &str = "CREATE VIRTUAL TABLE {table} USING vec0 (
+    rowid INTEGER PRIMARY KEY,
+    embedding float[1024] distance_metric=cosine indexed by diskann(
+        neighbor_quantizer=int8,
+        n_neighbors=64,
+        search_list_size_insert=128,
+        search_list_size_search=256
+    )
+)";
+
+/// Register sqlite-vec for every SQLite connection opened after this call.
+///
+/// Registration is process-global and idempotent. Keeping it here makes the
+/// production migration/open path use the same statically-linked extension as
+/// tests and embedding storage.
+#[cfg(feature = "vec")]
+pub fn register_sqlite_vec() {
+    cascade_db::vector::register_sqlite_vec();
+}
+
+/// No-op for builds that deliberately disable dense sqlite-vec storage.
+#[cfg(not(feature = "vec"))]
+pub fn register_sqlite_vec() {}
+
+#[cfg(feature = "vec")]
+fn load_sqlite_vec(conn: &Connection) -> Result<()> {
+    let mut error = std::ptr::null();
+    // SAFETY: the connection handle is valid for the lifetime of `conn`; the
+    // extension was compiled with SQLITE_CORE and therefore does not dereference
+    // the null extension API pointer.
+    let code = unsafe { sqlite_vec::sqlite3_vec_init(conn.handle(), &mut error, std::ptr::null()) };
+    if code == rusqlite::ffi::SQLITE_OK {
+        return Ok(());
+    }
+
+    let detail = if error.is_null() {
+        None
+    } else {
+        // SAFETY: sqlite-vec returns an SQLite-allocated, NUL-terminated error.
+        let message = unsafe { std::ffi::CStr::from_ptr(error) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { rusqlite::ffi::sqlite3_free(error.cast_mut().cast()) };
+        Some(message)
+    };
+    Err(rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(code),
+        detail,
+    ))
+}
+
 /// Apply all pending migrations to `conn`.
 ///
 /// # Idempotency
@@ -77,6 +138,9 @@ const SQL_0012: &str = include_str!("../../migrations/0012_chat_history.sql");
 /// `Ok(())` when all applicable migrations have been applied. Returns
 /// `Err(rusqlite::Error)` on the first SQL failure.
 pub fn run_migrations(conn: &Connection) -> Result<()> {
+    register_sqlite_vec();
+    #[cfg(feature = "vec")]
+    load_sqlite_vec(conn)?;
     let version = user_version(conn)?;
 
     if version < 1 {
@@ -151,7 +215,94 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         set_user_version(conn, 12)?;
     }
 
+    #[cfg(feature = "vec")]
+    ensure_diskann_embeddings(conn)?;
+
+    if version < LATEST_SCHEMA_VERSION {
+        set_user_version(conn, LATEST_SCHEMA_VERSION)?;
+    }
+
     Ok(())
+}
+
+#[cfg(feature = "vec")]
+fn ensure_diskann_embeddings(conn: &Connection) -> Result<()> {
+    let schema: Option<String> = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'rag_embeddings'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if schema
+        .as_deref()
+        .is_some_and(|sql| sql.to_ascii_lowercase().contains("indexed by diskann"))
+    {
+        return Ok(());
+    }
+
+    if schema.is_none() {
+        conn.execute_batch(&DISKANN_EMBEDDINGS_DDL.replace("{table}", "rag_embeddings"))?;
+        return Ok(());
+    }
+
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let migration = (|| {
+        let old_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))?;
+        conn.execute_batch(
+            "DROP TABLE IF EXISTS temp.rag_embeddings_ann_migration;
+             CREATE TEMP TABLE rag_embeddings_ann_migration (
+                 rowid INTEGER PRIMARY KEY,
+                 embedding BLOB NOT NULL
+             );
+             INSERT INTO rag_embeddings_ann_migration(rowid, embedding)
+             SELECT rowid, embedding FROM rag_embeddings ORDER BY rowid;",
+        )?;
+        let staged_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM rag_embeddings_ann_migration",
+            [],
+            |row| row.get(0),
+        )?;
+        if old_count != staged_count {
+            return Err(row_count_mismatch(old_count, staged_count));
+        }
+
+        conn.execute_batch("DROP TABLE rag_embeddings")?;
+        conn.execute_batch(&DISKANN_EMBEDDINGS_DDL.replace("{table}", "rag_embeddings"))?;
+        conn.execute(
+            "INSERT INTO rag_embeddings(rowid, embedding) \
+             SELECT rowid, embedding FROM rag_embeddings_ann_migration ORDER BY rowid",
+            [],
+        )?;
+        let new_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))?;
+        if old_count != new_count {
+            return Err(row_count_mismatch(old_count, new_count));
+        }
+
+        conn.execute_batch("DROP TABLE temp.rag_embeddings_ann_migration")?;
+        Ok(())
+    })();
+
+    match migration {
+        Ok(()) => conn.execute_batch("COMMIT"),
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+#[cfg(feature = "vec")]
+fn row_count_mismatch(source: i64, destination: i64) -> rusqlite::Error {
+    rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+        Some(format!(
+            "DiskANN migration row-count mismatch: source={source}, destination={destination}"
+        )),
+    )
 }
 
 /// Returns the current `PRAGMA user_version` of `conn`.
@@ -181,12 +332,7 @@ mod tests {
     /// can create vec0 virtual tables. Idempotent (SQLite deduplicates).
     #[cfg(feature = "vec")]
     fn load_vec_extension() {
-        use rusqlite::ffi::sqlite3_auto_extension;
-        unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite_vec::sqlite3_vec_init as *const (),
-            )));
-        }
+        register_sqlite_vec();
     }
 
     /// Open a fresh in-memory database and run all migrations.
@@ -208,10 +354,11 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
 
-        // Migrations 10 (memory_episodes), 11 (memory_facts), 12 (chat_history)
-        // run unconditionally, so every configuration lands on user_version=12.
+        // Migrations 10 (memory_episodes), 11 (memory_facts), 12 (chat_history),
+        // and the DiskANN schema marker run unconditionally, so every
+        // configuration lands on user_version=13.
         // (Migration 6 is rag-multivec-only; versions may skip it.)
-        assert_eq!(version, 12, "expected final user_version=12");
+        assert_eq!(version, 13, "expected final user_version=13");
     }
 
     // --- db::migrations::idempotent ------------------------------------------
@@ -224,7 +371,7 @@ mod tests {
         let version: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 12, "idempotent: final user_version=12");
+        assert_eq!(version, 13, "idempotent: final user_version=13");
     }
 
     // --- db::migrations::tables_exist ----------------------------------------
@@ -347,6 +494,50 @@ mod tests {
     mod vec {
         use super::*;
 
+        fn embedding(seed: f32) -> Vec<u8> {
+            let values: Vec<f32> = (0..1024)
+                .map(|index| (seed + index as f32 * 0.013).sin())
+                .collect();
+            values
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect()
+        }
+
+        fn assert_diskann_schema(conn: &Connection) {
+            let schema: String = conn
+                .query_row(
+                    "SELECT sql FROM sqlite_master WHERE name = 'rag_embeddings'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(
+                schema.to_ascii_lowercase().contains("indexed by diskann"),
+                "rag_embeddings must declare a DiskANN index: {schema}"
+            );
+
+            let diskann_nodes: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master \
+                     WHERE type = 'table' AND name = 'rag_embeddings_diskann_nodes00'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(diskann_nodes, 1, "DiskANN node index must exist");
+
+            let flat_chunks: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master \
+                     WHERE type = 'table' AND name = 'rag_embeddings_vector_chunks00'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(flat_chunks, 0, "flat vec0 storage must not be used");
+        }
+
         #[test]
         fn rag_embeddings_virtual_table_exists() {
             let conn = migrated_db();
@@ -358,6 +549,115 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(n, 1, "rag_embeddings virtual table must exist");
+        }
+
+        #[test]
+        fn rag_embeddings_uses_diskann_index() {
+            let conn = migrated_db();
+            assert_diskann_schema(&conn);
+        }
+
+        #[test]
+        fn dense_knn_query_uses_vec0_knn_plan() {
+            let conn = migrated_db();
+            let vector = embedding(0.25);
+            conn.execute(
+                "INSERT INTO rag_embeddings(rowid, embedding) VALUES (?1, ?2)",
+                rusqlite::params![7_i64, vector],
+            )
+            .unwrap();
+
+            let mut plan = conn
+                .prepare(
+                    "EXPLAIN QUERY PLAN \
+                     SELECT rowid, distance FROM rag_embeddings \
+                     WHERE embedding MATCH ?1 AND k = ?2 ORDER BY distance",
+                )
+                .unwrap();
+            let details: Vec<String> = plan
+                .query_map(rusqlite::params![embedding(0.25), 1_i64], |row| row.get(3))
+                .unwrap()
+                .collect::<std::result::Result<_, _>>()
+                .unwrap();
+
+            assert!(
+                details
+                    .iter()
+                    .any(|detail| { detail.contains("rag_embeddings VIRTUAL TABLE INDEX 0:3") }),
+                "MATCH query must select sqlite-vec's KNN plan (3), got {details:?}"
+            );
+            assert!(
+                details
+                    .iter()
+                    .all(|detail| { !detail.contains("rag_embeddings VIRTUAL TABLE INDEX 0:1") }),
+                "query must not select sqlite-vec's full-scan plan (1): {details:?}"
+            );
+        }
+
+        #[test]
+        fn existing_blob_embeddings_migrate_without_data_loss() {
+            let conn = Connection::open_in_memory().unwrap();
+            conn.execute_batch(
+                "CREATE TABLE rag_embeddings (
+                    rowid INTEGER PRIMARY KEY,
+                    embedding BLOB NOT NULL
+                 );
+                 PRAGMA user_version = 13;",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO rag_embeddings(rowid, embedding) VALUES (?1, ?2)",
+                rusqlite::params![41_i64, embedding(0.5)],
+            )
+            .unwrap();
+
+            run_migrations(&conn).expect("legacy BLOB migration must succeed");
+            assert_diskann_schema(&conn);
+            let ids: Vec<i64> = conn
+                .prepare(
+                    "SELECT rowid FROM rag_embeddings \
+                     WHERE embedding MATCH ?1 AND k = 1 ORDER BY distance",
+                )
+                .unwrap()
+                .query_map([embedding(0.5)], |row| row.get(0))
+                .unwrap()
+                .collect::<std::result::Result<_, _>>()
+                .unwrap();
+            assert_eq!(ids, vec![41], "the legacy vector must remain queryable");
+        }
+
+        #[test]
+        fn existing_flat_vec0_embeddings_migrate_without_data_loss() {
+            register_sqlite_vec();
+            let conn = Connection::open_in_memory().unwrap();
+            conn.execute_batch(
+                "CREATE VIRTUAL TABLE rag_embeddings USING vec0 (
+                    rowid INTEGER PRIMARY KEY,
+                    embedding float[1024]
+                 );
+                 PRAGMA user_version = 12;",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO rag_embeddings(rowid, embedding) VALUES (?1, ?2)",
+                rusqlite::params![73_i64, embedding(0.75)],
+            )
+            .unwrap();
+
+            run_migrations(&conn).expect("legacy flat-vec0 migration must succeed");
+            assert_diskann_schema(&conn);
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM rag_embeddings", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 1, "the legacy vec0 row must be preserved");
+            let indexed: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM rag_embeddings_diskann_nodes00",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(indexed, 1, "the migrated vector must be in DiskANN");
         }
 
         #[test]
