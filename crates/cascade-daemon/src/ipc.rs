@@ -50,7 +50,7 @@ use crate::ipc_usage_analytics::{
     handle_usage_history, handle_usage_ledger, handle_usage_summary, new_summary_cache,
     SummaryCache,
 };
-use crate::search_handler::{dispatch_rag, RagSearchHandler};
+use crate::search_handler::{dispatch_rag, load_multi_vec_default, RagSearchHandler};
 use crate::supervisor::DaemonError;
 
 const SOCKET_NAME: &str = "daemon.sock";
@@ -223,7 +223,16 @@ impl IpcServer {
             lazy_embed.spawn_load();
         }
         let embed: Arc<dyn cascade_rag::embed::EmbedModel> = lazy_embed.clone();
-        let rag_handler = RagSearchHandler::new(IndexRegistry::new(), embed);
+        // T-P7-E20-30: resolve the daemon-global [rag] multi_vec default from
+        // the same config.toml (via the CascadeConfig schema) so the persisted
+        // setting actually gates the ColBERT channel.  Absent/unparseable →
+        // false (no retrieval change on upgrade).  Read once here; changes
+        // require a daemon restart.
+        let rag_handler = RagSearchHandler::new(
+            IndexRegistry::new(),
+            embed,
+            load_multi_vec_default(&config_dir),
+        );
         if !offline_models {
             rag_handler.spawn_load_reranker();
         }

@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **The `rag.multi_vec` setting now actually affects search** (T-P7-E20-30). The
+  global setting and the per-request `colbert_enabled` flag both existed but were
+  never connected, so toggling multi-vec retrieval changed nothing. The daemon now
+  resolves `[rag] multi_vec` from config and uses it as the default for requests
+  that do not specify one; `colbert_enabled` became `Option<bool>` so an explicit
+  `false` can still override a `true` global. Wire format is unchanged.
+- **`RagSearchConfigOverride::default()` no longer disables keyword search.**
+  `fts5_enabled` carried `#[serde(default = "bool_true")]`, which applies only
+  when deserializing, so the derived `Default` produced `false` — Rust-side
+  callers silently searched with FTS5 off while every deserialized request had it
+  on, contradicting the field's own documentation and returning empty results
+  that resembled an indexing failure.
+
 ### Changed
 - **Model and subscription registry re-verified against first-party provider
   documentation** (2026-08-19). The registry had drifted 44 days and carried two
