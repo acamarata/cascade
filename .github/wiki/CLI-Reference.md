@@ -382,7 +382,7 @@ cascade snapshot restore <SNAPSHOT_ID> --apply
 
 ## cascade update
 
-Check for and apply daemon updates.
+Check for and apply daemon updates, or run a one-command full-stack redeploy.
 
 ```sh
 cascade update check
@@ -391,9 +391,21 @@ cascade update apply --yes
 cascade update auto --enable
 cascade update auto --disable
 cascade update models
+cascade update --full
 ```
 
 `cascade update` with no subcommand defaults to `check`. Check/apply use the running daemon; `apply` prompts unless `--yes` (`-y`) is supplied. `models` downloads and validates the repository roster, compares it with the existing cache (or compiled roster when no readable cache exists), and writes `~/.cascade/models.yaml`; a download failure exits non-zero.
+
+`cascade update --full` is a one-command full-stack redeploy that composes the existing per-component update logic into a single orchestrated pass:
+
+1. **Daemon + CLI binary update** — reuses the `update apply` IPC (download, verify, snapshot, swap).
+2. **Codesign** — ad-hoc signs the swapped `cascaded` and `cascade` binaries (macOS-only; degrades cleanly on other platforms). Fails loudly if the `codesign` tool is missing.
+3. **launchd kickstart** — `launchctl kickstart -k` the daemon service (macOS-only; falls back to `cascade daemon restart` when not launchd-managed or on non-macOS). Preferred over `unload`/`load` because it atomically kills and relaunches the job.
+4. **Models refresh** — reuses the `update models` logic.
+5. **Widget re-install** — reuses `cascade widget install` (re-loads the fleet-widget LaunchAgent).
+6. **App signature check** — verifies `~/Applications/Cascade.app` with `codesign --verify --deep --strict` if present (macOS-only; health check, not a redeploy).
+
+`--full` cannot be combined with a subcommand. The pipeline is idempotent and safe to re-run. If `apply` fails, the daemon rolls back internally and the pipeline aborts. If `codesign` fails, the pipeline still proceeds to `kickstart` so the daemon is not left down; the codesign failure is surfaced as an error at the end. `models` and `widget` failures are non-fatal warnings.
 
 ---
 

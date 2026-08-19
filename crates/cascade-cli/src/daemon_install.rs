@@ -34,6 +34,15 @@ const UNIT_NAME: &str = "cascade-daemon.service";
 #[cfg(windows)]
 const WIN_TASK_NAME: &str = "CascadeDaemon";
 
+/// The macOS launchd service label for the cascade daemon.
+///
+/// Exposed so other modules (e.g. `cascade update --full` kickstart) can
+/// reference the canonical label without duplicating the string constant.
+#[cfg(target_os = "macos")]
+pub fn macos_service_label() -> &'static str {
+    LABEL
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Outcome of a successful [`install`] call.
