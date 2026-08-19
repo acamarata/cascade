@@ -51,6 +51,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   these cases and was failing; it had simply never been run in CI.
 
 ### Fixed
+- **RAG dense KNN now uses sqlite-vec DiskANN instead of a full table scan**
+  (T-P7-E25-01, 2026-08-18). The production dense retrieval path now issues a
+  vec0 `MATCH` query against the existing `rag_embeddings` store, backed by the
+  vendored sqlite-vec 0.1.10-alpha.3 DiskANN implementation. Schema version 13
+  transactionally rebuilds existing BLOB or flat-vec0 tables without losing
+  rows, including databases previously opened by a non-`vec` build. sqlite-vec
+  registration is centralised through `cascade-db`'s existing loader for
+  production and test connections, and
+  DiskANN's exact-rescore, missing-row, statement-cleanup, and connection-lock
+  defects are corrected locally. Six targeted tests cover query-plan selection,
+  schema/data migration, dense-only retrieval, and deterministic ANN quality;
+  the measured fixture remains at 1.000 recall@10 and 1.000 exact-rank
+  agreement.
 - **OpenTelemetry tracing is no longer inert** (T-P7-E25-13, 2026-08-18). The
   OTel layer was constructed but never attached to the subscriber that actually
   gets installed, so every OTel span went nowhere. The provider is now created

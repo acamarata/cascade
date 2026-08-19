@@ -423,6 +423,15 @@ pub struct RagConfig {
     /// Changing this value on an existing index requires a full re-index.
     /// Default: 4.
     pub shard_count: usize,
+
+    /// Enable the ColBERT multi-vector late-interaction retrieval channel.
+    ///
+    /// Only effective when the binary is compiled with the `rag-multivec`
+    /// feature AND token embeddings are present in the index.
+    /// The 3-channel RRF (fts5/dense/sparse) is unchanged when `false`.
+    ///
+    /// **Default: `false`** — preserves existing retrieval behaviour on upgrade.
+    pub multi_vec: bool,
 }
 
 impl Default for RagConfig {
@@ -439,6 +448,7 @@ impl Default for RagConfig {
             chunk_overlap: 64,
             index_dir: None,
             shard_count: 4,
+            multi_vec: false,
         }
     }
 }
@@ -648,6 +658,7 @@ pub mod keys {
     pub const RAG_STRATEGY: &str = "rag.strategy";
     pub const RAG_TOP_K: &str = "rag.top_k";
     pub const RAG_CHUNK_SIZE: &str = "rag.chunk_size";
+    pub const RAG_MULTI_VEC: &str = "rag.multi_vec";
     pub const MCP_ENABLED: &str = "mcp.enabled";
     pub const DAEMON_LOG_LEVEL: &str = "daemon.log_level";
     pub const DAEMON_DEBOUNCE_MS: &str = "daemon.debounce_ms";
@@ -756,5 +767,40 @@ kind = "bge-m3"
         ];
         cfg.projects_dirs = paths.clone();
         assert_eq!(cfg.effective_projects_dirs(), paths);
+    }
+
+    // ── rag.multi_vec key constant and RagConfig default (T-P7-E20-29) ─────────
+
+    /// `keys::RAG_MULTI_VEC` has the correct dot-path value.
+    #[test]
+    fn rag_multi_vec_key_constant_has_correct_value() {
+        assert_eq!(super::keys::RAG_MULTI_VEC, "rag.multi_vec");
+    }
+
+    /// `RagConfig::default()` sets `multi_vec = false`, preserving existing
+    /// retrieval behaviour on upgrade.
+    #[test]
+    fn rag_config_default_multi_vec_is_false() {
+        let cfg = RagConfig::default();
+        assert!(!cfg.multi_vec, "multi_vec must default to false");
+    }
+
+    /// `RagConfig` round-trips through TOML with `multi_vec` absent (defaults to
+    /// `false`) and with `multi_vec = true` (persists correctly).
+    #[test]
+    fn rag_config_multi_vec_round_trips_through_toml() {
+        // Absent → default false.
+        let cfg: CascadeConfig = toml::from_str("[rag]\nenabled = true\n").expect("parse");
+        assert!(
+            !cfg.rag.multi_vec,
+            "absent multi_vec must deserialise to false"
+        );
+
+        // Explicit true → preserved.
+        let cfg: CascadeConfig = toml::from_str("[rag]\nmulti_vec = true\n").expect("parse");
+        assert!(
+            cfg.rag.multi_vec,
+            "explicit multi_vec = true must be preserved"
+        );
     }
 }

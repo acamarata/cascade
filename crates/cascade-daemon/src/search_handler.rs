@@ -178,6 +178,13 @@ pub struct RagSearchConfigOverride {
     /// Enable cross-encoder reranking. Defaults to `false`.
     #[serde(default)]
     pub rerank_enabled: bool,
+    /// Enable the ColBERT/multi-vec late-interaction retrieval channel.
+    ///
+    /// Only effective when compiled with the `rag-multivec` feature AND token
+    /// embeddings exist in the index.  The 3-channel RRF (fts5/dense/sparse)
+    /// is unchanged when `false`.  Defaults to `false`.
+    #[serde(default)]
+    pub colbert_enabled: bool,
 }
 
 fn bool_true() -> bool {
@@ -429,6 +436,7 @@ impl RagSearchHandler {
             vec_enabled: params.config.vec_enabled,
             rerank_enabled: params.config.rerank_enabled,
             reranker_model: RerankerModelConfig::Bge,
+            colbert_enabled: params.config.colbert_enabled,
             ..Default::default()
         };
 
@@ -812,5 +820,40 @@ mod tests {
         assert!(result.is_err());
         let (code, _) = result.unwrap_err();
         assert_eq!(code, -32602);
+    }
+
+    // ── RagSearchConfigOverride::colbert_enabled defaults (T-P7-E20-29) ──────
+
+    /// `colbert_enabled` defaults to `false` so the flag is opt-in only.
+    #[test]
+    fn config_override_colbert_enabled_defaults_false() {
+        let ov = RagSearchConfigOverride::default();
+        assert!(
+            !ov.colbert_enabled,
+            "colbert_enabled must default to false to preserve existing retrieval behaviour"
+        );
+    }
+
+    /// Deserialising a params JSON that lacks `colbert_enabled` still succeeds
+    /// and the field is `false`.
+    #[test]
+    fn config_override_colbert_absent_deserialises_as_false() {
+        let json = serde_json::json!({"fts5_enabled": true});
+        let ov: RagSearchConfigOverride = serde_json::from_value(json).unwrap();
+        assert!(
+            !ov.colbert_enabled,
+            "absent colbert_enabled must deserialise to false"
+        );
+    }
+
+    /// Deserialising with `colbert_enabled: true` round-trips correctly.
+    #[test]
+    fn config_override_colbert_enabled_true_preserved() {
+        let json = serde_json::json!({"colbert_enabled": true});
+        let ov: RagSearchConfigOverride = serde_json::from_value(json).unwrap();
+        assert!(
+            ov.colbert_enabled,
+            "colbert_enabled: true must be preserved"
+        );
     }
 }

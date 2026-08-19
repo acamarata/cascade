@@ -298,7 +298,29 @@ fn test_status_roundtrip() {
         rag_index_fresh: true,
         version: "0.1.0".to_string(),
         tcp_port: None,
+        index_paused: false,
     });
+}
+
+/// Old daemon JSON (no `index_paused` key) must still deserialise into
+/// `StatusResult` with `index_paused = false`.  Validates the `#[serde(default)]`
+/// guard added in schema v1.2 (T-P7-E20-29).
+#[test]
+fn test_status_result_old_json_missing_index_paused_deserialises() {
+    let old_json = r#"{
+        "pid": 9999,
+        "uptime_secs": 120,
+        "queue_depth": 0,
+        "rag_index_fresh": true,
+        "version": "0.8.0",
+        "tcp_port": null
+    }"#;
+    let result: StatusResult =
+        serde_json::from_str(old_json).expect("old daemon JSON must deserialise");
+    assert!(
+        !result.index_paused,
+        "missing index_paused must default to false"
+    );
 }
 
 // ── JSON-RPC 2.0 spec compliance checks ─────────────────────────────────

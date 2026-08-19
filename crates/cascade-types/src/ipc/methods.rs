@@ -328,6 +328,11 @@ pub struct StatusResult {
     /// TCP IPC port if enabled (feature: tcp-ipc). Added schema v1.1 — safe additive.
     #[serde(default)]
     pub tcp_port: Option<u16>,
+    /// Whether the RAG indexer is currently paused (e.g. because its source
+    /// volume was unmounted). `false` means indexing is active.
+    /// Added schema v1.2 — safe additive; old daemons omit the field → `false`.
+    #[serde(default)]
+    pub index_paused: bool,
 }
 
 // --- update_check (T-P4-E04-14/16) ---

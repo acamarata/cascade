@@ -23,6 +23,9 @@ export interface StatusResult {
   version: string
   /** TCP IPC port if enabled (schema v1.1 additive). */
   tcp_port?: number | null
+  /** Whether the RAG indexer is paused (e.g. source volume unmounted).
+   *  False when active or when the daemon predates schema v1.2. */
+  index_paused?: boolean
 }
 
 // ── cascade_resolve ───────────────────────────────────────────────────────────
