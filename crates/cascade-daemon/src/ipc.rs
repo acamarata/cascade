@@ -148,6 +148,10 @@ pub struct IpcServer {
     /// Daemon runtime state: typed quota snapshot buffer and worker pool.
     /// Shared with the fleet poller and supervisor via Arc<Mutex>.
     daemon_state: Arc<tokio::sync::Mutex<crate::state::DaemonState>>,
+    /// Primary IndexManager — used by the `status` handler to query whether
+    /// the RAG indexer is currently paused (e.g. source volume unmounted).
+    /// `None` until `set_index_manager` is called from supervisor.rs.
+    index_manager: Option<Arc<cascade_rag::IndexManager>>,
 }
 
 impl IpcServer {
@@ -309,6 +313,7 @@ impl IpcServer {
             provider_handler,
             budget_config,
             daemon_state,
+            index_manager: None,
         })
     }
 
@@ -327,6 +332,15 @@ impl IpcServer {
     /// endpoint always reports 0 (no pool active).
     pub async fn set_worker_pool(&self, pool: Arc<cascade_rag::workers::WorkerPool>) {
         self.daemon_state.lock().await.worker_pool = Some(pool);
+    }
+
+    /// Register the primary [`IndexManager`] so the `status` IPC endpoint can
+    /// truthfully report whether the RAG indexer is paused (T-P7-E20-29).
+    ///
+    /// Call from supervisor.rs after the `VolumeIndexGuard` is wired.
+    /// Without this, `status.index_paused` always returns `false`.
+    pub fn set_index_manager(&mut self, mgr: Arc<cascade_rag::IndexManager>) {
+        self.index_manager = Some(mgr);
     }
 
     /// Bind the Unix socket and serve connections until `shutdown` fires.
@@ -704,7 +718,16 @@ pub(crate) async fn try_typed_dispatch(server: &IpcServer, body: &[u8]) -> Respo
                     return Response::ok(serde_json::json!({ "pong": echo }));
                 }
                 "status" | "health" => {
-                    return Response::ok(server.health.snapshot());
+                    let index_paused = match &server.index_manager {
+                        Some(mgr) => mgr.is_paused().await,
+                        None => false,
+                    };
+                    let mut snap =
+                        serde_json::to_value(server.health.snapshot()).unwrap_or_default();
+                    if let Some(obj) = snap.as_object_mut() {
+                        obj.insert("index_paused".into(), serde_json::Value::Bool(index_paused));
+                    }
+                    return Response::ok(snap);
                 }
                 _ => {}
             }
@@ -2130,5 +2153,59 @@ mod tests {
         }
 
         handle.join().expect("background embed must finish");
+    }
+
+    // ── status / health — index_paused field (T-P7-E20-29) ──────────────────
+
+    /// `"status"` returns `index_paused: false` when no IndexManager is wired.
+    #[tokio::test]
+    async fn status_includes_index_paused_false_without_manager() {
+        let frame = br#"{"jsonrpc":"2.0","id":1,"method":"status","protocol_version":1}"#;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+
+        let resp = try_typed_dispatch(&server, frame).await;
+        match resp {
+            Response::Ok(v) => {
+                assert!(
+                    v.get("index_paused").is_some(),
+                    "status response must include index_paused field; got {v}"
+                );
+                assert_eq!(
+                    v["index_paused"].as_bool(),
+                    Some(false),
+                    "index_paused must be false when no IndexManager is wired; got {v}"
+                );
+            }
+            Response::Error { code, message } => {
+                panic!("expected ok response, got error {code}: {message}")
+            }
+        }
+    }
+
+    /// `"health"` (alias) also returns `index_paused: false` when no IndexManager is wired.
+    #[tokio::test]
+    async fn health_alias_includes_index_paused_false_without_manager() {
+        let frame = br#"{"jsonrpc":"2.0","id":1,"method":"health","protocol_version":1}"#;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let server = test_server(&tmp).await;
+
+        let resp = try_typed_dispatch(&server, frame).await;
+        match resp {
+            Response::Ok(v) => {
+                assert!(
+                    v.get("index_paused").is_some(),
+                    "health response must include index_paused field; got {v}"
+                );
+                assert_eq!(
+                    v["index_paused"].as_bool(),
+                    Some(false),
+                    "health alias: index_paused must be false without IndexManager; got {v}"
+                );
+            }
+            Response::Error { code, message } => {
+                panic!("expected ok response, got error {code}: {message}")
+            }
+        }
     }
 }

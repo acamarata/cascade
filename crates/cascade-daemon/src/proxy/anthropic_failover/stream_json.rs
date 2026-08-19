@@ -21,7 +21,6 @@
 //!
 //! SPORT: `.opencode/phases/sport/MASTER-FEATURES.md` — F-FLEET-ANTHROPIC-FAILOVER
 
-use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
 use serde_json::Value;
 
 /// Classification of one parsed stream-json line.
@@ -205,6 +204,7 @@ pub fn synthesize_success_frames(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
 
     // ── Fixtures below are VERBATIM lines from the 2026-08-17 empirical
     // captures under /tmp/cascade-failover-capture (see parent module docs),

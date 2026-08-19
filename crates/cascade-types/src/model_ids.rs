@@ -30,7 +30,16 @@
 // ── Anthropic / Claude CC models ─────────────────────────────────────────────
 
 /// T1 planning model — high-stakes synthesis and final gates.
-pub const MODEL_CLAUDE_OPUS: &str = "claude-opus-4-8";
+///
+/// Verified 2026-08-19: Claude Opus 5 is GA and is Anthropic's recommended
+/// default for complex agentic coding. Claude Opus 4.8 is now listed under
+/// "Legacy models" and was the previous value here.
+/// Source: https://platform.claude.com/docs/en/about-claude/models/overview
+pub const MODEL_CLAUDE_OPUS: &str = "claude-opus-5";
+
+/// Previous Opus generation, retained for pinned/legacy callers only.
+/// Legacy per Anthropic docs as of 2026-08-19 — do not use for new routing.
+pub const MODEL_CLAUDE_OPUS_4_8: &str = "claude-opus-4-8";
 
 /// T2 bulk-execution model — default for agent harness generation.
 pub const MODEL_CLAUDE_SONNET: &str = "claude-sonnet-5";
@@ -38,7 +47,10 @@ pub const MODEL_CLAUDE_SONNET: &str = "claude-sonnet-5";
 /// T3 cheap triage model — grunt work, taxonomy, post-prompt hooks.
 pub const MODEL_CLAUDE_HAIKU: &str = "claude-haiku-4-5";
 
-/// Fable — extra CC account, hardest-reasoning tasks.
+/// Fable — Anthropic's most capable widely released model (GA 2026-06-09).
+/// Verified 2026-08-19: NOT retired. Use for the highest-capability workloads;
+/// $10/$50 per MTok vs Opus 5's $5/$25, so reserve it for genuine T1 work.
+/// Source: https://platform.claude.com/docs/en/about-claude/models/overview
 pub const MODEL_CLAUDE_FABLE: &str = "claude-fable-5";
 
 // ── OpenAI / Codex ───────────────────────────────────────────────────────────
@@ -58,10 +70,25 @@ pub const MODEL_GPT: &str = MODEL_GPT_SOL;
 // ── Google / Gemini ───────────────────────────────────────────────────────────
 
 /// Gemini T2 pro model via AGY CLI.
+///
+/// UNVERIFIED as of 2026-08-19: Google's model list documents only
+/// `gemini-3.1-pro-preview` (Preview); the bare `gemini-3.1-pro` id appears on
+/// neither the models page nor the pricing page. Left unchanged pending
+/// confirmation — do not route production traffic on the assumption it is GA.
+/// Source: https://ai.google.dev/gemini-api/docs/models
 pub const MODEL_GEMINI_PRO: &str = "gemini-3.1-pro";
 
 /// Gemini T3 key-pool model for cheap grunt work (GFP pool).
+///
+/// Verified 2026-08-19: `gemini-3.7-flash` is Stable and cheaper than 3.5
+/// ($0.75/$3.75 per MTok through 2026-12-31, vs 3.5-flash at $1.50/$9.00).
+/// Prefer MODEL_GEMINI_FLASH_37 for new GF-pool routing.
+/// Source: https://ai.google.dev/gemini-api/docs/pricing
 pub const MODEL_GEMINI_FLASH: &str = "gemini-3.5-flash";
+
+/// Gemini 3.7 Flash — Stable as of 2026-08-19, newer and cheaper than 3.5.
+/// Source: https://ai.google.dev/gemini-api/docs/models
+pub const MODEL_GEMINI_FLASH_37: &str = "gemini-3.7-flash";
 
 /// Gemini Flash auto-tracking alias used by the GFP proxy (localhost:3761)
 /// and the Anthropic-compat translation layer. Google's `-latest` aliases

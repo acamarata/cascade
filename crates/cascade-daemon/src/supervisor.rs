@@ -521,6 +521,9 @@ pub async fn run(
                     // Register the pool so `rag.queue_depth` IPC reports live
                     // back-pressure to `cascade status` (T-P7-E07-02).
                     ipc.set_worker_pool(Arc::clone(&pool)).await;
+                    // Register the IndexManager so `status.index_paused` reports
+                    // the volume-pause state truthfully (T-P7-E20-29).
+                    ipc.set_index_manager(Arc::clone(&index_mgr));
 
                     // ── VolumeWatcher + VolumeIndexGuard ─────────────────────
                     let (vol_watcher, vol_rx) = VolumeWatcher::new(

@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- **Model and subscription registry re-verified against first-party provider
+  documentation** (2026-08-19). The registry had drifted 44 days and carried two
+  factual errors, not just stale dates: Claude Fable 5 was recorded as "retired
+  / blocked by Anthropic" when it has been generally available since 2026-06-09
+  and is Anthropic's most capable widely released model; and Claude Opus 4.8 was
+  recorded as the current best model when it is now listed as legacy, superseded
+  by Claude Opus 5 — which was absent from the registry entirely.
+  `MODEL_CLAUDE_OPUS` now resolves to `claude-opus-5`; `claude-opus-5` and
+  `gemini-3.7-flash` were added to `models/models.yaml`; `verified_date` and
+  `data/model-matrix.json` `_updated` are now 2026-08-19.
+  Three referenced model IDs could not be confirmed from first-party sources and
+  are explicitly annotated rather than assumed: `gemini-3.5-pro` and `gpt-5.5`
+  appear in no current provider documentation, and `gemini-3.1-pro` is
+  documented only as `gemini-3.1-pro-preview`. Sonnet 5's $2/$10 pricing is
+  confirmed permanent — the scheduled 2026-09-01 increase will not occur.
+
+### Fixed
+- **`status` now reports `index_paused` truthfully** (T-P7-E20-29 completion).
+  The IPC server holds the IndexManager and populates the field from real
+  volume-pause state; previously the field was declared but never filled.
+- Moved test-only model-id constant imports into their `#[cfg(test)]` modules,
+  restoring `clippy -D warnings` after the model-id-gate refactor.
+
 ### Fixed
 - **model-id-gate CI check restored to green** (2026-08-18). Twenty-one
   hardcoded canonical model-ID literals had accumulated across the daemon proxy,

@@ -5,11 +5,11 @@
 #   companion: models/README.md. Per-provider deep detail: models/{anthropic,
 #   openai,google,opencode}.md.
 #
-# Verified: 2026-07-11, via live fetches of provider docs (see per-provider .md
+# Verified: 2026-08-19, via live fetches of provider docs (see per-provider .md
 #   files for source URLs). Anything `preview: true` is announced but not
 #   broadly GA — do not route production traffic to it.
 #
-# Cross-reference: crates/cascade-core/src/model_ids.rs holds the Rust
+# Cross-reference: crates/cascade-types/src/model_ids.rs holds the Rust
 #   constants Cascade code actually imports. As of this write, those constants
 #   ARE current (claude-opus-4-8, claude-sonnet-5, claude-haiku-4-5,
 #   claude-fable-5, gpt-5.6-sol, gemini-3.1-pro, gemini-3.5-flash, glm-5.2) — no
@@ -26,7 +26,7 @@
 #   (auto-maximized Gemini Flash key pool, provision-gfp-keys.sh).
 
 schema_version: 1
-verified_date: "2026-07-06"
+verified_date: "2026-08-19"
 
 providers:
   - name: anthropic
@@ -34,6 +34,21 @@ providers:
     cascade_accounts: ["A1", "A2"]
     dispatch: "Claude Code (native), smithers-claude-p PTY wrapper for A2"
     models:
+      - id: claude-opus-5
+        tier: T1
+        best_for: ["complex agentic coding", "enterprise work", "architectural decisions", "final gates", "CR-C"]
+        quota_cost_weight: "same list price as Opus 4.8 ($5/$25 per MTok); replaces it as the routine T1 target"
+        context_tokens: 1000000
+        max_output_tokens: 128000
+        availability: ga
+        notes: >
+          Verified 2026-08-19. Anthropic's recommended starting model for complex
+          agentic coding and enterprise work; supersedes Opus 4.8, which is now
+          listed under "Legacy models". `effort` defaults to high on the Claude
+          API and Claude Code. Batch API supports up to 300k output via the
+          output-300k-2026-03-24 beta header. Fast mode (research preview,
+          first-party API only) costs $10/$50 per MTok.
+          Source: https://platform.claude.com/docs/en/about-claude/models/overview
       - id: claude-opus-4-8
         tier: T1
         best_for: ["architectural decisions", "final gates", "CR-C", "hardest synthesis", "long-horizon autonomous agentic execution"]
@@ -92,6 +107,7 @@ providers:
     dispatch: "Codex CLI"
     models:
       - id: gpt-5.5
+        verification_2026_08_19: "NOT FOUND in OpenAI's current model documentation as of 2026-08-19 — treat as retired. The GPT-5.6 family (sol/terra/luna) is GA and is the correct target."
         tier: T2-legacy
         best_for: ["large refactors", "holding context across big systems", "ambiguous-failure debugging", "agentic tool-checking"]
         quota_cost_weight: "$5/MTok in, $0.50 cached-in, $30/MTok out; 2x in / 1.5x out beyond 272K input tokens in one session"
@@ -211,6 +227,7 @@ providers:
         availability: ga
         notes: "Open-weight 120B in the Antigravity roster (2026-07-09)."
       - id: gemini-3.1-pro
+        verification_2026_08_19: "Google documents only `gemini-3.1-pro-preview` (Preview); the bare id is UNVERIFIED as of 2026-08-19. Do NOT route production traffic on a GA assumption."
         tier: T2
         best_for: ["complex problem-solving", "agentic and vibe coding", "advanced intelligence tasks needing a Pro-tier model today"]
         quota_cost_weight: "$2-4/MTok in, $12-18/MTok out; paid-only, NOT in free tier"
@@ -224,6 +241,7 @@ providers:
           against the live Gemini API and Google AI Studio routing, not the docs
           page.
       - id: gemini-3.5-pro
+        verification_2026_08_19: "NOT FOUND in Google's model list or pricing page as of 2026-08-19 — treat as non-existent; do NOT route production traffic."
         tier: T1-pending
         best_for: ["frontier reasoning + full-codebase/large-corpus ingestion (2M ctx)", "agentic coding above 3.1 Pro"]
         quota_cost_weight: "unpublished"
@@ -237,6 +255,20 @@ providers:
           reasoning mode expected (prior Gemini 3 Deep Think scored 84.6% on
           ARC-AGI-2). DO NOT treat as selectable in Cascade routing yet —
           reverify GA status before wiring in.
+      - id: gemini-3.7-flash
+        tier: T3
+        best_for: ["cheap high-volume grunt work", "triage", "classification", "extraction", "summarisation"]
+        context_tokens: UNVERIFIED
+        max_output_tokens: UNVERIFIED
+        availability: ga
+        notes: >
+          Verified 2026-08-19: listed as Stable. CHEAPER than gemini-3.5-flash —
+          $0.75 input / $3.75 output per MTok through 2026-12-31, rising to
+          $1.50/$7.50 on 2027-01-01; free tier available. Preferred target for
+          the GF (gfp-pool) lane over 3.5-flash on both cost and recency.
+          Context/output limits are not published on the models or pricing
+          pages — marked UNVERIFIED rather than guessed.
+          Source: https://ai.google.dev/gemini-api/docs/pricing
       - id: gemini-3.5-flash
         tier: T3
         best_for: ["GFP backbone: always-on grunt work", "post-prompting", "classify/triage/summarize", "cheap high-volume bulk"]

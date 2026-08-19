@@ -1,6 +1,6 @@
 {
   "_schema": "cascade-model-matrix/1",
-  "_updated": "2026-06-23",
+  "_updated": "2026-08-19",
   "_note": "Machine-readable best-for matrix for the Cascade accounts subsystem. No personal keys or IPs included.",
   "models": [
     {
@@ -201,43 +201,75 @@
     {
       "id": "interactive-chat",
       "label": "T0 interactive chat / final synthesis",
-      "preferred": ["claude-sonnet-4.6"],
+      "preferred": [
+        "claude-sonnet-4.6"
+      ],
       "fallback": []
     },
     {
       "id": "hard-reasoning-gate",
       "label": "Hard reasoning / final correctness gate",
-      "preferred": ["claude-fable-5", "claude-opus-4.8"],
-      "fallback": ["claude-sonnet-4.6"]
+      "preferred": [
+        "claude-fable-5",
+        "claude-opus-4.8"
+      ],
+      "fallback": [
+        "claude-sonnet-4.6"
+      ]
     },
     {
       "id": "bulk-execution",
       "label": "Bulk execution / code drafting / agents",
-      "preferred": ["claude-sonnet-4.6", "claude-haiku-4.5"],
-      "fallback": ["gpt-5.6-sol", "glm-5.2"]
+      "preferred": [
+        "claude-sonnet-4.6",
+        "claude-haiku-4.5"
+      ],
+      "fallback": [
+        "gpt-5.6-sol",
+        "glm-5.2"
+      ]
     },
     {
       "id": "adversarial-review",
       "label": "Adversarial CR / QA / research (cross-family)",
-      "preferred": ["gpt-5.6-sol", "gemini-3.1-pro", "glm-5.2"],
-      "fallback": ["claude-haiku-4.5"]
+      "preferred": [
+        "gpt-5.6-sol",
+        "gemini-3.1-pro",
+        "glm-5.2"
+      ],
+      "fallback": [
+        "claude-haiku-4.5"
+      ]
     },
     {
       "id": "large-context-docs",
       "label": "Large-context research / docs",
-      "preferred": ["gemini-3.1-pro", "gpt-5.6-sol"],
-      "fallback": ["glm-5.2", "claude-sonnet-4.6"]
+      "preferred": [
+        "gemini-3.1-pro",
+        "gpt-5.6-sol"
+      ],
+      "fallback": [
+        "glm-5.2",
+        "claude-sonnet-4.6"
+      ]
     },
     {
       "id": "cheap-classify",
       "label": "Cheap / classify / taxonomy / post-prompt",
-      "preferred": ["gemini-3.5-flash-gfp"],
+      "preferred": [
+        "gemini-3.5-flash-gfp"
+      ],
       "fallback": []
     },
     {
       "id": "sensitive",
       "label": "Sensitive: PII / VA / health / custody / personal",
-      "preferred": ["claude-fable-5", "claude-opus-4.8", "claude-sonnet-4.6", "claude-haiku-4.5"],
+      "preferred": [
+        "claude-fable-5",
+        "claude-opus-4.8",
+        "claude-sonnet-4.6",
+        "claude-haiku-4.5"
+      ],
       "fallback": [],
       "firewall": true,
       "note": "External models are hard-blocked for this class. Task waits if all Claude quotas exhausted."

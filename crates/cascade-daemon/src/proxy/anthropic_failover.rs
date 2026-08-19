@@ -126,11 +126,6 @@ use cascade_core::selection::{
     select_account_for_prompt, GpHealthSnapshot, ModelClass, QuotaAccount, QuotaSnapshot,
     SelectionRequest, SelectionTarget, Tier,
 };
-use cascade_types::model_ids::MODEL_CLAUDE_FABLE;
-use cascade_types::model_ids::MODEL_CLAUDE_HAIKU;
-use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
-use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
-use cascade_types::model_ids::MODEL_GLM;
 use stream_json::{classify_line, error_frame, synthesize_success_frames, LineOutcome};
 
 /// Default bind address (loopback only — this proxy must never bind off-host).
@@ -1113,6 +1108,11 @@ impl AnthropicFailoverServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::model_ids::MODEL_CLAUDE_FABLE;
+    use cascade_types::model_ids::MODEL_CLAUDE_HAIKU;
+    use cascade_types::model_ids::MODEL_CLAUDE_OPUS;
+    use cascade_types::model_ids::MODEL_CLAUDE_SONNET;
+    use cascade_types::model_ids::MODEL_GLM;
     use std::collections::HashMap;
     use std::sync::Mutex;
 

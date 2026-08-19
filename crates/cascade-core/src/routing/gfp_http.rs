@@ -38,7 +38,6 @@ use serde_json::{json, Value};
 
 use crate::model_ids::MODEL_CLAUDE_HAIKU;
 use crate::routing::delegate::{find_binary_opt, LaneResult};
-use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
 /// The local Anthropic-compat GP proxy endpoint.
 pub const GFP_MESSAGES_URL: &str = "http://127.0.0.1:3762/v1/messages";
@@ -303,6 +302,7 @@ pub fn parse_gp_health(body: &str) -> crate::selection::GpHealthSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
     // ── parse_messages_response (pure) ────────────────────────────────────────
 
