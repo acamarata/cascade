@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+- **Fable 5 recorded as a standard Max-plan inclusion** (2026-08-20). Anthropic
+  now includes `claude-fable-5` in the Max plan, capped at 50% of the weekly
+  usage limit, with usage credits available beyond that cap rather than a hard
+  stop. The registry previously recorded the 50% allowance as a temporary window
+  that expired 2026-07-07; it is now the standing arrangement. Fable 5 is
+  therefore a first-class T1-plus option on Max seats rather than an exceptional
+  escalation — though it still costs 2x Opus 5 per token, so it remains reserved
+  for genuinely hardest-reasoning work.
+
 ### Fixed
 - **Packaging manifests synced to the real version, with hash automation for
   every channel** (T-P7-E16-03). All six manifests (nix, AUR, Chocolatey,

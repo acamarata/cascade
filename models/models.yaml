@@ -86,20 +86,29 @@ providers:
       - id: claude-fable-5
         tier: T1-plus
         best_for: ["hardest reasoning", "overnight/long-horizon autonomous coding runs", "deep multi-step research", "enterprise-scale deliverables"]
-        quota_cost_weight: "~2x Opus 4.8 burn rate [Likely, not Anthropic-confirmed exact multiplier — corroborated by in-app UI copy + 3rd-party trackers]; 2x Opus API price exactly ($10/$50 vs $5/$25)"
+        quota_cost_weight: "2x Opus 5 API price exactly ($10/$50 vs $5/$25). On Max plans it draws from the same weekly pool, capped at 50% of it."
         context_tokens: 1000000
         max_output_tokens: 128000
         availability: ga
+        max_plan_included: true
+        max_plan_weekly_cap_pct: 50
+        max_plan_overflow: "usage credits"
         notes: >
-          Redeployed 2026-07-01 after brief pull, with improved safety
-          classifier (blocks reported jailbreak >99% per Anthropic). Included
-          up to 50% of weekly Max limits only through 2026-07-07 — that window
-          has now passed relative to today (2026-07-06); reverify current
-          billing treatment on support.claude.com before assuming flat-pool
-          inclusion still applies. Adaptive thinking always-on, cannot disable.
-          Requires 30-day data retention (no ZDR). Org-gated twin
-          claude-mythos-5 (Project Glasswing only) is functionally identical
-          minus safety classifiers.
+          STANDARD on Max as of 2026-08-20 (owner-reported from the in-app plan
+          notice; not stated on public pricing docs, so treat this line as
+          account-entitlement fact rather than API documentation). Up to 50% of
+          the weekly usage limit may be spent on Fable 5; on hitting that cap a
+          session can continue on Fable 5 using usage credits rather than being
+          cut off. This SUPERSEDES the previous entry here, which recorded the
+          50% allowance as a temporary window expiring 2026-07-07 and told the
+          reader to reverify — it is now the standing arrangement.
+          ROUTING CONSEQUENCE: Fable 5 is no longer an exceptional escalation on
+          Max seats (A1/A2); it is a first-class T1-plus option. It still costs
+          2x Opus 5 per token, and the 50% cap is a real ceiling, so reserve it
+          for genuinely hardest-reasoning work rather than defaulting to it.
+          Verified GA and most-capable per
+          https://platform.claude.com/docs/en/about-claude/models/overview
+
 
   - name: openai
     subscription: "ChatGPT Codex (tier TBD — verify plan; Plus/Pro assumed)"
