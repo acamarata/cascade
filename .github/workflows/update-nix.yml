@@ -18,7 +18,7 @@ on:
 
 jobs:
   update-derivation:
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
     if: ${{ vars.PUBLIC_RELEASES == 'true' }}
     permissions:

@@ -17,7 +17,7 @@ on:
 jobs:
   test:
     name: Typecheck & Build (Node ${{ matrix.node-version }})
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -52,7 +52,7 @@ jobs:
 
   unit-test:
     name: Unit Tests (Node 24)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 

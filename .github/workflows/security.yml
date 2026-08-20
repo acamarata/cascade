@@ -25,7 +25,7 @@ jobs:
   # Any advisory with severity >= high causes the job to fail, blocking merge.
   cargo-audit:
     name: cargo-audit
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,7 +83,7 @@ jobs:
   # directly on the ubuntu runner sidesteps the container entirely.
   cargo-deny:
     name: cargo-deny
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -103,7 +103,7 @@ jobs:
   # Runs on push and PR to catch leaks before they are merged.
   gitleaks:
     name: gitleaks
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,7 +130,7 @@ jobs:
   # Skipped if that package.json is absent.
   npm-audit:
     name: npm-audit
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -186,7 +186,7 @@ jobs:
   security-gate:
     name: security-gate
     needs: [cargo-audit, cargo-deny, gitleaks, npm-audit]
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     if: always()
     steps:
       - name: Check all security jobs passed

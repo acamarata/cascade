@@ -16,7 +16,7 @@ on:
 
 jobs:
   model-id-gate:
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 

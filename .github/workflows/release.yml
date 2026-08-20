@@ -34,7 +34,7 @@ env:
 jobs:
   # ── Build CLI + daemon artifacts ───────────────────────────────────────────
   # Builds cascade (CLI) and cascaded (daemon) binaries with --release --locked.
-  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # Native Linux x86_64 runs on vars.CI_RUNNER (defaults to ubuntu-latest).
   # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
   # split into build-cli-hosted (guarded by HOSTED_CI=true) — skipped on the
   # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
@@ -45,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 (native, self-hosted cam-sentry)
-          - runner: [self-hosted, cam-sentry]
+          # Linux x86_64 (native)
+          - runner: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
             target: x86_64-unknown-linux-gnu
             os: linux
 
@@ -410,7 +410,7 @@ jobs:
   sign-windows:
     name: Sign Windows MSI (Authenticode)
     needs: build-tauri
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # Only run when SIGNPATH_API_TOKEN is set.
     # Note: secrets cannot be used in `if:` directly; use env var bridge below.
     if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
@@ -483,7 +483,7 @@ jobs:
       needs.universal-macos.result != 'failure' &&
       needs.build-tauri.result != 'failure' &&
       needs.sign-windows.result != 'failure'
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
     outputs:
@@ -550,7 +550,7 @@ jobs:
     name: Update Homebrew Cask
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Trigger update-homebrew workflow
         uses: actions/github-script@v7
@@ -570,7 +570,7 @@ jobs:
     name: Update Winget Manifest
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Trigger update-winget workflow
         uses: actions/github-script@v7
@@ -597,7 +597,7 @@ jobs:
     name: Publish to crates.io
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -679,7 +679,7 @@ jobs:
     name: Sync GitHub Wiki
     needs: publish
     if: github.repository == 'acamarata/cascade'
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 

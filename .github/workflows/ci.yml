@@ -50,7 +50,7 @@ env:
 
 jobs:
   # ── test ─────────────────────────────────────────────────────────────────
-  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # Native Linux x86_64 runs on vars.CI_RUNNER (defaults to ubuntu-latest).
   # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
   # split into test-hosted (guarded by HOSTED_CI=true) — skipped on the
   # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
@@ -58,7 +58,7 @@ jobs:
     name: test (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     # A full `cargo nextest run --workspace` build needs ~8-10GB of target dir,
-    # which does not fit on cam-sentry's 38GB disk alongside the ~14GB in-use
+    # which does not fit on the former self-hosted runner's 38GB disk alongside the ~14GB in-use
     # Docker (nSentry stack + Forgejo + other repos' runners; 0% reclaimable).
     # Verified locally pre-push instead. Flip repo var HEAVY_CI=true after the
     # volume is resized to restore CI-side test/clippy/integration builds.
@@ -67,8 +67,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 (native, self-hosted cam-sentry)
-          - runner: [self-hosted, cam-sentry]
+          # Linux x86_64 (native)
+          - runner: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
             target: x86_64-unknown-linux-gnu
             use-cross: false
 
@@ -173,8 +173,8 @@ jobs:
   # platform-independent.
   integration-tests:
     name: integration-tests
-    runs-on: [self-hosted, cam-sentry]
-    # Full-build job — guarded behind HEAVY_CI (does not fit cam-sentry disk; verified locally pre-push).
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Full-build job — guarded behind HEAVY_CI (did not fit the former self-hosted disk; verified locally pre-push).
     if: ${{ vars.HEAVY_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
@@ -192,21 +192,21 @@ jobs:
         run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
 
   # ── clippy ────────────────────────────────────────────────────────────────
-  # Native Linux x86_64 always runs on the self-hosted cam-sentry runner.
+  # Native Linux x86_64 runs on vars.CI_RUNNER (defaults to ubuntu-latest).
   # macOS / Windows / aarch64 Linux require GitHub-hosted runners and are
   # split into clippy-hosted (guarded by HOSTED_CI=true) — skipped on the
   # private repo (no paid minutes). Flip repo var HOSTED_CI=true when public.
   clippy:
     name: clippy (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
-    # Full-build job — guarded behind HEAVY_CI (does not fit cam-sentry disk; verified locally pre-push).
+    # Full-build job — guarded behind HEAVY_CI (did not fit the former self-hosted disk; verified locally pre-push).
     if: ${{ vars.HEAVY_CI == 'true' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 (native, self-hosted cam-sentry)
-          - runner: [self-hosted, cam-sentry]
+          # Linux x86_64 (native)
+          - runner: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
             target: x86_64-unknown-linux-gnu
             use-cross: false
 
@@ -286,7 +286,7 @@ jobs:
   # platform-independent so running it on every matrix entry is redundant.
   fmt:
     name: fmt
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -310,7 +310,7 @@ jobs:
   # Cargo.toml and the comment in rust-toolchain.toml.
   msrv:
     name: msrv (1.88)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -326,7 +326,7 @@ jobs:
   # regardless of target platform.
   deny:
     name: deny
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -368,9 +368,9 @@ jobs:
   #   coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
   coverage:
     name: coverage
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # The llvm-cov instrumented build of the full workspace needs ~10GB+, which
-    # does not reliably fit on cam-sentry's 38GB disk alongside the ~19GB nSentry
+    # does not reliably fit on the former self-hosted runner's 38GB disk alongside the ~19GB nSentry
     # stack. Disabled until the volume is resized; flip repo var COVERAGE_ENABLED=true
     # once there is headroom. (job-started/completed hooks prune target dirs, but
     # the instrumented build peak still exceeds free space here.)
@@ -541,7 +541,7 @@ jobs:
   # include that commit in the PR.
   bench-check:
     name: bench-check
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -659,12 +659,12 @@ jobs:
       - widget-macos
       - widget-windows
       - tray-windows
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     if: always()
     steps:
       - name: Check all CI jobs passed
         run: |
-          # Self-hosted jobs that always run on cam-sentry — must succeed.
+          # Core jobs that always run on vars.CI_RUNNER — must succeed.
           # test guarded behind HEAVY_CI (disk); skip acceptable, failure not.
           if [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "test failed: ${{ needs.test.result }}"

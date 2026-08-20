@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gnome-extension:
     name: GNOME Extension (lint + pack + test)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
 
   kde-plasmoid:
     name: KDE Plasmoid (qmllint + pack + validate)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v4

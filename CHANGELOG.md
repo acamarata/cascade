@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **CI and releases unblocked after the self-hosted runner was decommissioned**
+  (2026-08-20). 43 jobs across 19 workflows were pinned to
+  `runs-on: [self-hosted, cam-sentry]`, naming a specific machine that no longer
+  exists. Because the label named a machine rather than a capability, GitHub
+  queued those jobs indefinitely instead of failing them — including
+  `release.yml` and `publish-flatpak.yml`, so releases were blocked, not just
+  tests. Every job now uses `${{ vars.CI_RUNNER || 'ubuntu-latest' }}`: it runs
+  on GitHub-hosted runners by default and can be pointed back at a self-hosted
+  label by setting one repository variable, without editing 43 jobs again.
+
 ### Changed
 - **Fable 5 recorded as a standard Max-plan inclusion** (2026-08-20). Anthropic
   now includes `claude-fable-5` in the Max plan, capped at 50% of the weekly

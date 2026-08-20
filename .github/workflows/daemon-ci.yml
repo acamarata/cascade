@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 # Build-size controls for the self-hosted runner. Cascade's target/ reaches
-# 45-65 GB locally; cam-sentry has ~42 GB of headroom, so an unconstrained
+# 45-65 GB locally; the former self-hosted runner had ~42 GB of headroom, so an unconstrained
 # build exhausts the disk and fails with "No space left on device" (observed
 # 2026-08-19 on Daemon CI, CI and App CI simultaneously).
 #   CARGO_INCREMENTAL=0 — incremental artifacts were the single largest
@@ -37,7 +37,7 @@ jobs:
   # macOS variant is guarded by HOSTED_CI=true — skipped on the private repo.
   test:
     name: test (ubuntu)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +108,7 @@ jobs:
   # builds are guarded by HOSTED_CI=true — skipped on the private repo.
   build:
     name: build (ubuntu)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -198,7 +198,7 @@ jobs:
   # Linting and code quality checks on ubuntu only.
   clippy:
     name: clippy
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -221,7 +221,7 @@ jobs:
   # Code formatting checks on ubuntu only.
   fmt:
     name: fmt
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 

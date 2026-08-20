@@ -30,7 +30,7 @@ jobs:
   # TypeScript strict-mode check on ubuntu only (not OS-sensitive).
   typecheck:
     name: typecheck
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +54,7 @@ jobs:
   # files in apps/cascade-app went unrun by CI until 2026-07-10.
   test:
     name: test
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +77,7 @@ jobs:
   # ESLint check on ubuntu only (not OS-sensitive).
   lint:
     name: lint
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +101,7 @@ jobs:
   # spend paid GitHub-hosted minutes on a build self-hosted CI can cover).
   build-linux:
     name: build (ubuntu-latest)
-    runs-on: [self-hosted, cam-sentry]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
