@@ -11,7 +11,7 @@
 //! | [`handlers_pbd`] | 8 PBD tool handlers (get_current, update_ticket_status, …) |
 //! | [`handlers_memory`] | 4 RAG-08 memory handlers (remember, recall, forget, search) |
 //! | [`handlers_security`] | 2 security handlers (secret_scan, audit) |
-//! | [`registry`] | `ToolRegistry` — dispatch hub |
+//! | [`registry`] | `ToolRegistry` — dispatch hub + production dedup-pool helpers (`production_db_pool`) |
 //! | [`context_assembler`] | Role-aware context assembly layer (ctx-01) |
 
 pub mod context_assembler;
@@ -27,5 +27,5 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use registry::ToolRegistry;
+pub use registry::{production_db_path, production_db_pool, try_db_pool, ToolRegistry};
 pub use types::{ConnectionContext, DbPoolSlot, McpTool, RetrieverSlot};

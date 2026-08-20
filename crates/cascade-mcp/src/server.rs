@@ -323,7 +323,10 @@ impl McpServer {
             config,
             transport,
             resources: Arc::new(ResourceRegistry::new()),
-            tools: Arc::new(ToolRegistry::new()),
+            // T-P7-E15-04: arm cross-session dedup by injecting the shared
+            // production pool. Degrades to no pool (dedup off) if the DB
+            // cannot be opened — never fatal.
+            tools: Arc::new(ToolRegistry::new().with_production_db_pool()),
             _progress: Arc::new(ProgressEmitter::new()),
             cancellation: Arc::new(CancellationRegistry::new()),
             sampling: Arc::new(SamplingClient::new()),
@@ -349,7 +352,10 @@ impl McpServer {
             config,
             transport,
             resources: Arc::new(ResourceRegistry::new()),
-            tools: Arc::new(ToolRegistry::new()),
+            // T-P7-E15-04: arm cross-session dedup by injecting the shared
+            // production pool. Degrades to no pool (dedup off) if the DB
+            // cannot be opened — never fatal.
+            tools: Arc::new(ToolRegistry::new().with_production_db_pool()),
             _progress: Arc::new(ProgressEmitter::new()),
             cancellation: Arc::new(CancellationRegistry::new()),
             sampling: Arc::new(SamplingClient::new()),
@@ -1005,5 +1011,53 @@ mod tests {
         };
         let result = server.handle_request(&req).await.unwrap();
         assert_eq!(result["hello"], "world");
+    }
+
+    // ── Production dedup pool wiring (T-P7-E15-04) ──────────────────────────
+
+    /// An unopenable dedup pool leaves the SERVER running with dedup off:
+    /// construction does not panic, the initialize handshake succeeds, and
+    /// tools keep listing on the degraded registry.
+    #[tokio::test]
+    async fn server_runs_with_dedup_off_when_pool_unopenable() {
+        use crate::tool::try_db_pool;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        // A regular FILE where a parent directory would need to exist makes
+        // build_pool fail -> pool unopenable.
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"not a directory").expect("write blocker file");
+        assert!(
+            try_db_pool(dir.path().join("blocker").join("cascade.db")).is_none(),
+            "try_db_pool must degrade to None"
+        );
+
+        // The degrade branch used at every production construction site.
+        let tools = crate::tool::ToolRegistry::new();
+        let server =
+            McpServer::new(McpServerConfig::default(), Box::new(NullTransport)).with_tools(tools);
+
+        // Handshake still works.
+        let req = init_req(MCP_PROTOCOL_VERSION);
+        let result = server.handle_initialize(&req).await;
+        assert!(result.is_ok(), "initialize must succeed with dedup off");
+        assert_eq!(server.current_state().await, ServerState::Initializing);
+
+        // And the tool surface is alive.
+        let notif = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "initialized".into(),
+            id: None,
+            params: serde_json::json!({}),
+        };
+        server.handle_notification(&notif).await;
+        let list_req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "tools/list".into(),
+            id: Some(RequestId::Number(3)),
+            params: serde_json::json!({}),
+        };
+        let listed = server.handle_request(&list_req).await;
+        assert!(listed.is_ok(), "tools/list must succeed with dedup off");
     }
 }

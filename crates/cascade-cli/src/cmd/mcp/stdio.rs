@@ -52,7 +52,11 @@ impl Command for McpStdioArgs {
                 // Build a registry with an EMPTY retriever slot so the server
                 // can serve `initialize` immediately — no index I/O on the
                 // critical path (E11.1 / P11 regression fix).
-                let tools = ToolRegistry::new();
+                // T-P7-E15-04: inject the shared production dedup pool
+                // (existing Cascade RAG DB — same file IndexManager migrates
+                // below, so `context_fingerprints` is guaranteed there).
+                // Degrades to dedup-off if the DB cannot be opened.
+                let tools = ToolRegistry::new().with_production_db_pool();
 
                 // Clone the retriever slot handle so the background task can
                 // inject the real retriever once the index is open.

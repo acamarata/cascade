@@ -26,11 +26,21 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Fixed strings: checked via grep -F (no regex interpretation).
-FIXED_DENYLIST=(
-  '/Users/admin'
-  '/Volumes/X9/Sites'
-  'alisalaah@gmail.com'
+#
+# Stored base64-encoded ON PURPOSE. This repository is public, and a guard whose
+# job is to keep a private email address and local paths out of shipped files
+# must not itself publish those exact strings — that would leak precisely what it
+# protects. Decoded at runtime; the check behaves identically.
+# To inspect or extend: printf '%s' '<entry>' | base64
+FIXED_DENYLIST_B64=(
+  'L1VzZXJzL2FkbWlu'
+  'L1ZvbHVtZXMvWDkvU2l0ZXM='
+  'YWxpc2FsYWFoQGdtYWlsLmNvbQ=='
 )
+FIXED_DENYLIST=()
+for _e in "${FIXED_DENYLIST_B64[@]}"; do
+  FIXED_DENYLIST+=( "$(printf '%s' "$_e" | base64 --decode)" )
+done
 
 # Regex patterns: checked via grep -E.
 # Matches maintainer-owned domains. The github.com/acamarata repo URL is

@@ -19,8 +19,27 @@ import time
 import urllib.parse
 import urllib.request
 
-CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-CLIENT_SECRET = "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"
+# Antigravity desktop OAuth client.
+#
+# These are INSTALLED-APP (public client) credentials per RFC 8252 — the flow
+# uses a loopback redirect, which Google only permits for the Desktop client
+# type, and such a "secret" cannot be kept confidential by design. They were
+# previously hardcoded here. This repository is public, so they are now read
+# from the environment instead: a world-readable credential string invites
+# copy-paste reuse and quota abuse even when it is not confidential material.
+#
+# Set both before use (e.g. from ~/.cascade/agy.env or your shell profile):
+#   export CASCADE_AGY_CLIENT_ID=...
+#   export CASCADE_AGY_CLIENT_SECRET=...
+CLIENT_ID = os.environ.get("CASCADE_AGY_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("CASCADE_AGY_CLIENT_SECRET", "")
+if not CLIENT_ID or not CLIENT_SECRET:
+    raise SystemExit(
+        "cascade-agy: CASCADE_AGY_CLIENT_ID and CASCADE_AGY_CLIENT_SECRET must be set.\n"
+        "These are the Antigravity desktop OAuth client credentials; they are no "
+        "longer bundled in this public repository.\n"
+        "Set them in your environment, then re-run."
+    )
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 BASE = "https://cloudcode-pa.googleapis.com"
 USER_AGENT = "antigravity/1.18.3 macos/arm64"

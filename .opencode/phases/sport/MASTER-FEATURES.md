@@ -237,7 +237,7 @@
 | F-RAG-CITATIONS | Citation tracking | File path, line\_start, line\_end, chunk\_id, rrf\_score, source\_hash per result | 🔲 Planned | P4-E01 |
 | F-RAG-AUTO-INDEX | Auto-RAG indexer | File watcher auto-indexes `.claude/memory/`, `.claude/planning/`, `.github/wiki/`, `docs/` | 🔲 Planned | P4-E01 |
 | F-RAG-DND | Drag-and-drop ingest | Add any file to the index via Cascade.app drag-and-drop | 🔲 Planned | P4-E01 |
-| F-RAG-EXTERNAL-DRIVE | External drive index | Point index root at any path (e.g. `/Volumes/X9/`); daemon handles mount/unmount | 🔲 Planned | P4-E01 |
+| F-RAG-EXTERNAL-DRIVE | External drive index | Point index root at any path (e.g. an external volume); daemon handles mount/unmount | 🔲 Planned | P4-E01 |
 | F-RAG-MULTIVEC | Multi-vec MaxSim | Per-word E5 proxy is feature-gated; native BGE-M3/ColBERT remains deferred to E-P7-20 | 🟡 Partial | P4-E01 / E-P7-20 |
 | F-RAG-EVAL | Offline eval harness | precision@k, recall@k, MRR, NDCG against golden query set | 🔲 Planned | P4-E01 |
 | F-RAG-INCR-INDEX | Incremental indexing | Index only changed files; file-hash diffing | 🔲 Planned | P4-E04 |

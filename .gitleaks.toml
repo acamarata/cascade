@@ -27,11 +27,12 @@ paths = [
   # redact_secrets() test fixtures (sk-/ghp_-shaped synthetic strings) for
   # the RAG privacy-redaction unit tests, not real credentials.
   '''crates/cascade-rag/src/privacy/redaction\.rs''',
-  # cascade-agy / cascade-agy-auth embed Google's public Antigravity desktop
-  # OAuth client id+secret (see the "Credentials are the public Antigravity
-  # desktop-OAuth client (not secret material)" comment in
-  # src/bin/cascade-agy-auth) — the same client Google's own Antigravity IDE
-  # ships publicly. Not a leaked production credential.
+  # cascade-agy / cascade-agy-auth previously embedded the Antigravity desktop
+  # OAuth client id+secret. As of 2026-08-20 they read both from the environment
+  # (CASCADE_AGY_CLIENT_ID / CASCADE_AGY_CLIENT_SECRET) and the repository ships
+  # no credential material, so these allowlist entries are retained only to
+  # tolerate the strings remaining in git HISTORY. New occurrences in working-tree
+  # files should be treated as real findings, not waived.
   '''src/bin/cascade-agy''',
   '''src/bin/cascade-agy-auth''',
 ]

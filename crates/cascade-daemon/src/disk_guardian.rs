@@ -155,7 +155,7 @@ pub fn sample_free_space(path: &Path) -> Option<(u64, f32)> {
 /// Expected format (macOS/BSD):
 /// ```text
 /// Filesystem   1024-blocks      Used Available Capacity  Mounted on
-/// /dev/disk7s1     976490568 599932108 376704668    62%   /Volumes/X9
+/// /dev/disk7s1     976490568 599932108 376704668    62%   /Volumes/ExtDrive
 /// ```
 /// `Capacity` is the USED percentage, so free_pct = 100 - capacity.
 /// Pure/testable. Returns `None` if the second (data) line is missing or
@@ -742,7 +742,7 @@ mod tests {
     #[test]
     fn parse_df_typical_macos_output() {
         let text = "Filesystem   1024-blocks      Used Available Capacity  Mounted on\n\
-                     /dev/disk7s1     976490568 599932108 376704668    62%    /Volumes/X9\n";
+                     /dev/disk7s1     976490568 599932108 376704668    62%    /Volumes/ExtDrive\n";
         let (free_bytes, free_pct) = parse_df_output(text).expect("should parse");
         assert_eq!(free_bytes, 376_704_668 * 1024);
         assert!((free_pct - 38.0).abs() < 0.01);

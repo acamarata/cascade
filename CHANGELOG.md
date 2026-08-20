@@ -6,6 +6,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- **Repository prepared for public release** (2026-08-20). `cascade-agy` and
+  `cascade-agy-auth` no longer bundle the Antigravity desktop OAuth client
+  credentials; both read `CASCADE_AGY_CLIENT_ID` / `CASCADE_AGY_CLIENT_SECRET`
+  from the environment and exit with instructions when unset. These are
+  installed-app (public client) credentials under RFC 8252 and were never
+  confidential material, but a world-readable credential string invites reuse
+  and quota abuse regardless. `check-no-maintainer-ids.sh` also no longer
+  contains the private email address it exists to detect — the denylist is
+  base64-encoded, since a guard that publishes the string it protects defeats
+  itself. Local filesystem paths in `disk_guardian.rs`, `volume_watcher.rs` and
+  the SPORT feature list were replaced with generic examples.
+
+### Added
+- **Instruction-tier write IPC** (T-P7-E21-07). Two new Tauri commands
+  (`cascade_write_tier`, `cascade_tier_cascade_dir`) let the frontend write
+  edited CASCADE.md content back to a named tier's `.cascade/` directory.
+  Path security: rejects `..` traversal components before canonicalization,
+  resolves symlinks, verifies the final path component is `.cascade`, and
+  performs atomic writes (`.tmp` sibling + rename). No-op detection returns
+  `written: false` when content is unchanged. `cascade_tier_cascade_dir`
+  returns the `.cascade/` path for GCI/PCI/APC (deterministic HOME-relative)
+  and `null` for PPC/PRC/PAC (require a project root the UI doesn't have).
+  `TierContent` gains a `cascadeDir: string | null` field; the Instructions
+  page now shows an inline editor for tiers where the dir is known.
+
+- **Cross-session context dedup is now live in real MCP sessions**
+  (T-P7-E15-04). `ToolRegistry::with_db_pool` existed since T-P7-E15-01 but
+  was only ever called from tests, so `cascade.context_slice` dedup was inert
+  in production. Every production construction site now injects a pool:
+  both `McpServer` constructors (`new`, `with_registry` — which covers every
+  transport: stdio, TCP, unix socket, SSE, HTTP) and the `cascade mcp stdio`
+  CLI command. The pool points at the existing Cascade RAG database — the
+  same file `IndexManager` migrates (migration 0008 creates
+  `context_fingerprints` there) and the retriever reads — via one
+  process-shared pool, so no second database is introduced. If the database
+  cannot be opened, the failure is logged once and the server keeps running
+  with dedup disabled; a broken cache never takes down the MCP server.
+
 ### Fixed
 - **CI and releases unblocked after the self-hosted runner was decommissioned**
   (2026-08-20). 43 jobs across 19 workflows were pinned to

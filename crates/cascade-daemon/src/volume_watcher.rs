@@ -1,6 +1,6 @@
 //! Volume mount/unmount watcher — pause and resume RAG indexing on drive events.
 //!
-//! Purpose: Detect when an external volume (e.g. /Volumes/X9) that contains a
+//! Purpose: Detect when an external volume (e.g. /Volumes/ExtDrive) that contains a
 //! configured RAG index root is mounted or unmounted, then emit `VolumeEvent`
 //! on a Tokio broadcast channel so downstream consumers (IndexManager,
 //! AutoRagWatcher) can pause/resume indexing without crashing or flooding logs
@@ -450,8 +450,8 @@ mod tests {
     /// Unmounting a watched volume emits `VolumeEvent::Unmounted`.
     #[tokio::test]
     async fn test_unmount_emits_event() {
-        let initial = vec![p("/Volumes/X9")];
-        let watched = vec![p("/Volumes/X9/cascade-indexes/")];
+        let initial = vec![p("/Volumes/ExtDrive")];
+        let watched = vec![p("/Volumes/ExtDrive/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(initial);
 
         let (watcher, mut rx) =
@@ -468,14 +468,14 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(25)).await;
 
         // Simulate unmount by removing the volume from the fake table.
-        mounts_ref.lock().unwrap().remove(&p("/Volumes/X9"));
+        mounts_ref.lock().unwrap().remove(&p("/Volumes/ExtDrive"));
 
         let event = timeout(Duration::from_millis(500), rx.recv())
             .await
             .expect("timed out waiting for event")
             .expect("channel closed");
 
-        assert_eq!(event, VolumeEvent::Unmounted(p("/Volumes/X9")));
+        assert_eq!(event, VolumeEvent::Unmounted(p("/Volumes/ExtDrive")));
         shutdown.cancel();
     }
 
@@ -483,7 +483,7 @@ mod tests {
     #[tokio::test]
     async fn test_mount_emits_event() {
         // Start with no volumes so the watcher sees X9 as absent.
-        let watched = vec![p("/Volumes/X9/cascade-indexes/")];
+        let watched = vec![p("/Volumes/ExtDrive/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(vec![]);
 
         let (watcher, mut rx) =
@@ -494,14 +494,14 @@ mod tests {
 
         // Simulate mount after watcher has snapshotted the empty table.
         tokio::time::sleep(Duration::from_millis(25)).await;
-        mounts_ref.lock().unwrap().insert(p("/Volumes/X9"));
+        mounts_ref.lock().unwrap().insert(p("/Volumes/ExtDrive"));
 
         let event = timeout(Duration::from_millis(500), rx.recv())
             .await
             .expect("timed out waiting for event")
             .expect("channel closed");
 
-        assert_eq!(event, VolumeEvent::Mounted(p("/Volumes/X9")));
+        assert_eq!(event, VolumeEvent::Mounted(p("/Volumes/ExtDrive")));
         shutdown.cancel();
     }
 
@@ -509,7 +509,7 @@ mod tests {
     #[tokio::test]
     async fn test_unrelated_volume_ignored() {
         let initial = vec![p("/Volumes/Other")];
-        let watched = vec![p("/Volumes/X9/cascade-indexes/")];
+        let watched = vec![p("/Volumes/ExtDrive/cascade-indexes/")];
         let (provider, mounts_ref) = FakeMountProvider::new(initial);
 
         let (watcher, mut rx) =
@@ -533,14 +533,15 @@ mod tests {
     #[tokio::test]
     async fn test_guard_pauses_on_unmount() {
         let index_mgr = new_index_manager_for_test().await;
-        let watched = vec![p("/Volumes/X9/idx")];
+        let watched = vec![p("/Volumes/ExtDrive/idx")];
         let guard = VolumeIndexGuard::new(watched, index_mgr.clone());
 
         let (tx, rx) = broadcast::channel::<VolumeEvent>(16);
         let shutdown = CancellationToken::new();
         let _handle = guard.spawn(rx, shutdown.clone());
 
-        tx.send(VolumeEvent::Unmounted(p("/Volumes/X9"))).unwrap();
+        tx.send(VolumeEvent::Unmounted(p("/Volumes/ExtDrive")))
+            .unwrap();
 
         // Give the task one tick to process.
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -554,7 +555,7 @@ mod tests {
     #[tokio::test]
     async fn test_guard_resumes_on_mount() {
         let index_mgr = new_index_manager_for_test().await;
-        let watched = vec![p("/Volumes/X9/idx")];
+        let watched = vec![p("/Volumes/ExtDrive/idx")];
         let guard = VolumeIndexGuard::new(watched, index_mgr.clone());
 
         let (tx, rx) = broadcast::channel::<VolumeEvent>(16);
@@ -562,11 +563,13 @@ mod tests {
         let _handle = guard.spawn(rx, shutdown.clone());
 
         // First pause, then resume.
-        tx.send(VolumeEvent::Unmounted(p("/Volumes/X9"))).unwrap();
+        tx.send(VolumeEvent::Unmounted(p("/Volumes/ExtDrive")))
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert!(index_mgr.is_paused().await);
 
-        tx.send(VolumeEvent::Mounted(p("/Volumes/X9"))).unwrap();
+        tx.send(VolumeEvent::Mounted(p("/Volumes/ExtDrive")))
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         assert!(
@@ -581,7 +584,7 @@ mod tests {
     #[tokio::test]
     async fn test_guard_ignores_unrelated_volumes() {
         let index_mgr = new_index_manager_for_test().await;
-        let watched = vec![p("/Volumes/X9/idx")];
+        let watched = vec![p("/Volumes/ExtDrive/idx")];
         let guard = VolumeIndexGuard::new(watched, index_mgr.clone());
 
         let (tx, rx) = broadcast::channel::<VolumeEvent>(16);
@@ -649,14 +652,14 @@ mod tests {
     #[tokio::test]
     async fn test_affects_watched_prefix() {
         let (watcher, _rx) = VolumeWatcher::with_provider(
-            vec![p("/Volumes/X9/idx/cascade")],
+            vec![p("/Volumes/ExtDrive/idx/cascade")],
             Duration::from_millis(100),
             Arc::new(NativeMountProvider),
         );
 
-        assert!(watcher.affects_watched(&p("/Volumes/X9")));
-        assert!(watcher.affects_watched(&p("/Volumes/X9/idx")));
+        assert!(watcher.affects_watched(&p("/Volumes/ExtDrive")));
+        assert!(watcher.affects_watched(&p("/Volumes/ExtDrive/idx")));
         assert!(!watcher.affects_watched(&p("/Volumes/X8")));
-        assert!(!watcher.affects_watched(&p("/Volumes/X99")));
+        assert!(!watcher.affects_watched(&p("/Volumes/ExtDrive9")));
     }
 }

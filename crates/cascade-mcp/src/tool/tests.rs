@@ -7,7 +7,7 @@ use serde_json::Value;
 use cascade_types::retriever::Retriever;
 
 use super::helpers::chrono_local_date;
-use super::registry::ToolRegistry;
+use super::registry::{production_db_path, try_db_pool, ToolRegistry};
 use super::types::ConnectionContext;
 
 // ── tools/list ────────────────────────────────────────────────────────────────
@@ -1967,5 +1967,129 @@ async fn context_slice_dedup_disabled_without_pool() {
         r2["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
         3,
         "without a pool, second call must still return all chunks (no dedup)"
+    );
+}
+
+// ── Production pool wiring (T-P7-E15-04) ─────────────────────────────────────
+
+/// The production path resolves to the EXISTING Cascade RAG DB — the same
+/// file `IndexManager` migrates (0008 creates `context_fingerprints` there).
+/// No second database may be introduced.
+#[test]
+fn production_pool_path_reuses_existing_rag_index_db() {
+    let p = production_db_path();
+    let s = p.to_string_lossy();
+    assert!(
+        s.ends_with("cascade.db"),
+        "production dedup path must be the RAG index DB (cascade.db), got: {s}"
+    );
+    assert!(
+        s.contains(".cascade"),
+        "production dedup path must live under the .cascade layout, got: {s}"
+    );
+}
+
+/// A registry built by the production construction path (pool via
+/// `try_db_pool` + `with_db_pool`) reports dedup ENABLED and actually
+/// deduplicates across two `cascade.context_slice` calls.
+#[tokio::test]
+async fn registry_built_via_production_pool_reports_dedup_enabled() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pool = try_db_pool(dir.path().join("cascade.db"))
+        .expect("try_db_pool should open a fresh temp DB");
+    let conn = pool.get().expect("pool checkout for schema setup");
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS context_fingerprints (
+            session_id   TEXT    NOT NULL,
+            chunk_hash   TEXT    NOT NULL,
+            delivered_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            PRIMARY KEY (session_id, chunk_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cfp_delivered ON context_fingerprints (delivered_at);",
+    )
+    .expect("create context_fingerprints table");
+
+    let retriever: Arc<dyn Retriever> = Arc::new(StubRetriever {
+        hits: dedup_fixture_hits(),
+    });
+    let reg = ToolRegistry::new()
+        .with_retriever(retriever)
+        .with_db_pool(pool);
+
+    assert!(
+        reg.db_pool_configured().await,
+        "registry built by the production path must report dedup enabled"
+    );
+
+    let params = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-prod-path"
+        }
+    });
+
+    let r1 = reg.call(&params).await.expect("session 1 call");
+    assert_eq!(
+        r1["metadata"]["dedup_applied"],
+        Value::Bool(true),
+        "production-built registry must apply dedup: {r1}"
+    );
+    assert_eq!(
+        r1["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
+        3,
+        "first call returns all fixture chunks"
+    );
+
+    let r2 = reg.call(&params).await.expect("session 2 call");
+    assert_eq!(
+        r2["metadata"]["dedup_suppressed"].as_u64(),
+        Some(3),
+        "second call must suppress already-delivered chunks (dedup is live)"
+    );
+}
+
+/// An unopenable pool degrades to `None`: the registry keeps serving with
+/// dedup disabled — a broken cache must never break the tool surface.
+#[tokio::test]
+async fn unopenable_pool_disables_dedup_without_failing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    // A regular FILE where a parent directory would need to exist makes
+    // build_pool's create_dir_all fail -> pool unopenable.
+    let blocker = dir.path().join("blocker");
+    std::fs::write(&blocker, b"not a directory").expect("write blocker file");
+
+    let pool = try_db_pool(dir.path().join("blocker").join("cascade.db"));
+    assert!(pool.is_none(), "try_db_pool must degrade to None, got Some");
+
+    // The degrade branch: plain registry, no pool.
+    let retriever: Arc<dyn Retriever> = Arc::new(StubRetriever {
+        hits: dedup_fixture_hits(),
+    });
+    let reg = ToolRegistry::new().with_retriever(retriever);
+    assert!(
+        !reg.db_pool_configured().await,
+        "degraded registry must report dedup disabled"
+    );
+
+    let params = serde_json::json!({
+        "name": "cascade.context_slice",
+        "arguments": {
+            "query": "fox rust sqlite",
+            "budget_tokens": 4096,
+            "session_id": "sess-degraded"
+        }
+    });
+    let r = reg.call(&params).await.expect("call must still succeed");
+    assert_eq!(
+        r["metadata"]["dedup_applied"],
+        Value::Bool(false),
+        "dedup must be off after pool-open failure: {r}"
+    );
+    assert_eq!(
+        r["metadata"]["chunks_returned"].as_u64().unwrap_or(0),
+        3,
+        "tool still returns full results with dedup off"
     );
 }

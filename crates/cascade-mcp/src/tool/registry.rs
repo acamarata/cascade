@@ -1,11 +1,13 @@
 //! ToolRegistry — handles `tools/list` and `tools/call` for the MCP server.
 
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 use serde_json::Value;
-use tracing::debug;
+use tracing::{debug, info, warn};
 
 use cascade_types::error::Result;
+use cascade_types::paths::home_dir;
 use cascade_types::retriever::Retriever;
 
 use crate::auth::McpAuth;
@@ -37,6 +39,69 @@ use super::schemas::{
     cascade_update_ticket_status_tool,
 };
 use super::types::{ConnectionContext, DbPoolSlot, RetrieverSlot};
+
+// ── Production DB pool (T-P7-E15-04) ──────────────────────────────────────────
+
+/// Process-wide dedup pool, built once against the existing Cascade RAG DB.
+///
+/// `OnceLock` so every `McpServer` in the process (one per transport
+/// connection) shares ONE pool instead of each eagerly opening its own set of
+/// SQLite connections.  A failed open is cached as `None` — the process runs
+/// with dedup disabled rather than retrying the filesystem on every
+/// construction.
+static PRODUCTION_DB_POOL: OnceLock<Option<cascade_db::pool::DbPool>> = OnceLock::new();
+
+/// Size of the shared production pool.  The dedup path checks out one
+/// connection per in-flight `cascade.context_slice` call; 4 covers concurrent
+/// MCP connections with headroom while keeping eager open cost tiny.
+const PRODUCTION_DB_POOL_MAX_SIZE: u32 = 4;
+
+/// Resolve the path of the EXISTING Cascade RAG database (T-P7-E15-04).
+///
+/// Deliberately the same derivation the stdio server already uses for its
+/// index: `IndexManager::open(&home_dir().join(".cascade"))` →
+/// `cascade_rag::index_manager::resolve_db_path`.  Migration 0008 creates the
+/// `context_fingerprints` table in exactly this file, so the pool lands on a
+/// database that is already migrated and shared with the retriever — no
+/// second database is introduced.  Honors `CASCADE_INDEX_ROOT` the same way
+/// the index does.
+pub fn production_db_path() -> PathBuf {
+    cascade_rag::index_manager::resolve_db_path(&home_dir().join(".cascade"))
+}
+
+/// Build a pool for `path`, degrading gracefully on failure (T-P7-E15-04).
+///
+/// Returns `Some(pool)` on success, or `None` after logging a warning — a
+/// broken cache must never take down the MCP server, so callers treat `None`
+/// as "dedup disabled" and keep serving.
+pub fn try_db_pool(path: impl AsRef<std::path::Path>) -> Option<cascade_db::pool::DbPool> {
+    let path = path.as_ref();
+    match cascade_db::pool::build_pool(path, PRODUCTION_DB_POOL_MAX_SIZE) {
+        Ok(pool) => {
+            info!(db = %path.display(), "dedup pool ready — cascade.context_slice cross-session dedup enabled");
+            Some(pool)
+        }
+        Err(e) => {
+            warn!(
+                db = %path.display(),
+                err = %e,
+                "could not open dedup DB — cascade.context_slice cross-session dedup DISABLED (server continues)"
+            );
+            None
+        }
+    }
+}
+
+/// Return the process-wide production dedup pool, building it on first use.
+///
+/// Points at the existing Cascade RAG database ([`production_db_path`]) and
+/// caches the outcome (including failure) for the process lifetime.  `None`
+/// means dedup is disabled for this process — never fatal.
+pub fn production_db_pool() -> Option<cascade_db::pool::DbPool> {
+    PRODUCTION_DB_POOL
+        .get_or_init(|| try_db_pool(production_db_path()))
+        .clone()
+}
 
 /// Handles `tools/list` and `tools/call` for the MCP server.
 ///
@@ -138,6 +203,28 @@ impl ToolRegistry {
             *slot = Some(pool);
         }
         self
+    }
+
+    /// Attach the process-wide production dedup pool, if it can be opened
+    /// (T-P7-E15-04).
+    ///
+    /// Shares one pool across every registry in the process
+    /// ([`production_db_pool`]).  When the underlying database cannot be
+    /// opened this is a no-op — the failure is logged inside and the registry
+    /// keeps serving with dedup disabled.
+    pub fn with_production_db_pool(self) -> Self {
+        match production_db_pool() {
+            Some(pool) => self.with_db_pool(pool),
+            None => self,
+        }
+    }
+
+    /// Report whether a DB pool is wired in (i.e. cross-session dedup is
+    /// armed for `cascade.context_slice` calls that carry a `session_id`).
+    ///
+    /// Observability/test accessor for the T-P7-E15-04 construction wiring.
+    pub async fn db_pool_configured(&self) -> bool {
+        self.db_pool.read().await.is_some()
     }
 
     /// Return a clone of the shared [`DbPoolSlot`] so that a background task
