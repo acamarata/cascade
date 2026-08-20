@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **Cross-session dedup is now active in real MCP sessions** (T-P7-E15-04).
+  `ToolRegistry::with_db_pool` existed but was called only from tests, so
+  `cascade.context_slice` deduplication was inert in production. All three
+  construction sites (the two `McpServer` paths and the stdio CLI) now call
+  `with_production_db_pool()`, sharing one process-wide pool. If the database
+  cannot be opened the call is a no-op — the failure is logged and the registry
+  keeps serving with dedup disabled, so a broken cache never takes down the MCP
+  server. (Landed in commit 8f72dbe, which was mis-staged: that commit's message
+  describes only the pre-publication security work.)
+
 ### Added
 - **Instruction files can now be edited from the app** (T-P7-E21-07). The
   instructions browser could list, search and diff CLAUDE.md/AGENTS.md across
