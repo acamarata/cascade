@@ -274,6 +274,9 @@ pub fn run() {
             commands::vault_env::read_vault_keys,
             // T-P7-E10-02: Harness config-file auto-detection
             commands::harness::detect_harness_path,
+            // T-P7-E21-07: Instruction-tier write IPC
+            commands::instructions::cascade_write_tier,
+            commands::instructions::cascade_tier_cascade_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

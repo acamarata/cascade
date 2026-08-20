@@ -13,14 +13,15 @@
  *        MASTER-COMPONENTS.md — InstructionsPage (E-P9-02)
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, ChevronDown, ChevronRight, GitMerge, RefreshCw, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, ChevronDown, ChevronRight, GitMerge, Pencil, RefreshCw, Save, Search, X } from 'lucide-react'
 import type { TierContent, TierDiff, TierLabel } from '../types/instructions'
 import { TIER_DESCRIPTIONS, TIER_LABELS } from '../types/instructions'
 import {
   computeTierDiff,
   fetchAllTiers,
   searchInstructions,
+  writeTier,
 } from '../services/instructions/instructionTiers'
 import { Button } from '../components/ui/button'
 
@@ -55,9 +56,52 @@ function TierBadge({ tier, size = 'sm' }: { tier: TierLabel; size?: 'sm' | 'xs' 
 
 // ── Tier card (list view) ─────────────────────────────────────────────────────
 
-function TierCard({ tier }: { tier: TierContent }) {
+interface TierCardProps {
+  tier: TierContent
+  /** Called after a successful save so the parent can refresh. */
+  onSaved?: (tier: TierLabel, newContent: string) => void
+}
+
+function TierCard({ tier, onSaved }: TierCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   const lineCount = tier.content ? tier.content.split('\n').length : 0
+  const canEdit = tier.cascadeDir != null
+
+  function handleEditClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    setDraft(tier.content)
+    setSaveError(null)
+    setEditing(true)
+    setExpanded(true)
+    // Focus the textarea after render.
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
+  function handleCancel() {
+    setEditing(false)
+    setSaveError(null)
+  }
+
+  async function handleSave() {
+    if (!tier.cascadeDir) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await writeTier(tier.tier, tier.cascadeDir, draft)
+      setEditing(false)
+      onSaved?.(tier.tier, draft)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <article
@@ -67,7 +111,7 @@ function TierCard({ tier }: { tier: TierContent }) {
       {/* Header */}
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => { if (!editing) setExpanded((v) => !v) }}
         className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/30 transition-colors"
         aria-expanded={expanded}
         aria-controls={`tier-content-${tier.tier}`}
@@ -81,20 +125,70 @@ function TierCard({ tier }: { tier: TierContent }) {
         ) : (
           <span className="text-xs text-muted-foreground">{lineCount} lines</span>
         )}
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {/* Edit button — only for tiers with a resolvable cascade dir */}
+        {canEdit && !editing && (
+          <button
+            type="button"
+            onClick={handleEditClick}
+            aria-label={`Edit ${tier.tier} instructions`}
+            className="ml-1 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+        {!editing && (
+          expanded ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          )
         )}
       </button>
 
       {/* Content */}
       {expanded && (
         <div id={`tier-content-${tier.tier}`} className="border-t border-border bg-muted/20">
-          {tier.error ? (
+          {tier.error && !editing ? (
             <p className="px-4 py-3 text-sm text-destructive" role="alert">
               {tier.error}
             </p>
+          ) : editing ? (
+            <div className="flex flex-col gap-2 px-4 py-3">
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                aria-label={`Edit ${tier.tier} CASCADE.md content`}
+                className="w-full min-h-[200px] resize-y rounded border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                spellCheck={false}
+              />
+              {saveError && (
+                <p className="text-xs text-destructive" role="alert">{saveError}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void handleSave()}
+                  disabled={saving}
+                  className="h-7 gap-1.5 px-3 text-xs"
+                  aria-label="Save changes"
+                >
+                  <Save className="h-3 w-3" aria-hidden="true" />
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="h-7 px-3 text-xs"
+                  aria-label="Cancel edit"
+                >
+                  <X className="h-3 w-3" aria-hidden="true" />
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : !tier.present ? (
             <p className="px-4 py-3 text-sm text-muted-foreground italic">
               No CASCADE.md found for this tier.
@@ -290,6 +384,18 @@ export function InstructionsPage() {
     }
   }, [])
 
+  // Update a single tier's content in state after a successful save (avoids
+  // a full reload while keeping the displayed content consistent).
+  const handleTierSaved = useCallback((tier: TierLabel, newContent: string) => {
+    setTiers((prev) =>
+      prev.map((t) =>
+        t.tier === tier
+          ? { ...t, content: newContent, present: newContent.trim().length > 0 }
+          : t
+      )
+    )
+  }, [])
+
   useEffect(() => {
     void load()
   }, [load])
@@ -373,7 +479,7 @@ export function InstructionsPage() {
               {TIER_LABELS.map((label) => {
                 const tier = tiers.find((t) => t.tier === label)
                 if (!tier) return null
-                return <TierCard key={label} tier={tier} />
+                return <TierCard key={label} tier={tier} onSaved={handleTierSaved} />
               })}
             </div>
           </div>

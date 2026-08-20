@@ -35,6 +35,23 @@ export interface TierContent {
   present: boolean
   /** Error message if resolution failed, null otherwise. */
   error: string | null
+  /**
+   * Absolute path to the `.cascade/` directory for this tier, or null when
+   * the tier is project-relative (PPC/PRC/PAC) or the directory does not exist.
+   * Present only when the tier can be edited via cascade_write_tier.
+   */
+  cascadeDir: string | null
+}
+
+/**
+ * Result of a cascade_write_tier IPC call.
+ * Mirrors the Rust WriteTierResult struct (T-P7-E21-07).
+ */
+export interface WriteTierResult {
+  /** True when content was written; false when unchanged (no-op). */
+  written: boolean
+  /** Absolute path to the CASCADE.md file that was written. */
+  path: string
 }
 
 /**

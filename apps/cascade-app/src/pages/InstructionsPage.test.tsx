@@ -22,6 +22,7 @@ vi.mock('../services/instructions/instructionTiers', () => ({
     newLineCount: 0,
     inheritedLineCount: 0,
   })),
+  writeTier: vi.fn(),
 }))
 
 import { within } from '@testing-library/react'
@@ -30,6 +31,7 @@ import {
   fetchAllTiers,
   searchInstructions,
   computeTierDiff,
+  writeTier,
 } from '../services/instructions/instructionTiers'
 import type { TierContent } from '../types/instructions'
 import { TIER_LABELS } from '../types/instructions'
@@ -37,6 +39,7 @@ import { TIER_LABELS } from '../types/instructions'
 const mockFetchAllTiers = fetchAllTiers as MockedFunction<typeof fetchAllTiers>
 const mockSearchInstructions = searchInstructions as MockedFunction<typeof searchInstructions>
 const mockComputeTierDiff = computeTierDiff as MockedFunction<typeof computeTierDiff>
+const mockWriteTier = writeTier as MockedFunction<typeof writeTier>
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,7 @@ function makeTiers(overrides: Partial<Record<string, Partial<TierContent>>> = {}
     content: '',
     present: false,
     error: null,
+    cascadeDir: null,
     ...overrides[label],
   }))
 }
@@ -72,6 +76,7 @@ beforeEach(() => {
     newLineCount: 0,
     inheritedLineCount: 0,
   })
+  mockWriteTier.mockReset()
 })
 
 describe('InstructionsPage — loading state', () => {
@@ -285,6 +290,85 @@ describe('InstructionsPage — tier error', () => {
     fireEvent.click(within(gciArticle).getByRole('button'))
     await waitFor(() =>
       expect(screen.getByText('permission denied')).toBeInTheDocument()
+    )
+  })
+})
+
+describe('InstructionsPage — edit affordance (T-P7-E21-07)', () => {
+  const EDITABLE_CASCADE_DIR = '/home/user/.cascade'
+
+  const TIERS_EDITABLE = makeTiers({
+    GCI: {
+      content: '# Global Instructions\nApplies everywhere.',
+      present: true,
+      cascadeDir: EDITABLE_CASCADE_DIR,
+    },
+  })
+
+  it('hides edit button when cascadeDir is null', async () => {
+    mockFetchAllTiers.mockResolvedValue(TIERS_WITH_GCI) // cascadeDir: null everywhere
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Edit GCI instructions/i })).toBeNull()
+  })
+
+  it('shows edit button when cascadeDir is set', async () => {
+    mockFetchAllTiers.mockResolvedValue(TIERS_EDITABLE)
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    expect(
+      screen.getByRole('button', { name: /Edit GCI instructions/i })
+    ).toBeInTheDocument()
+  })
+
+  it('clicking edit opens the textarea with current content', async () => {
+    mockFetchAllTiers.mockResolvedValue(TIERS_EDITABLE)
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Edit GCI instructions/i }))
+    const textarea = await screen.findByRole('textbox', { name: /Edit GCI CASCADE.md content/i })
+    expect(textarea).toBeInTheDocument()
+    expect((textarea as HTMLTextAreaElement).value).toBe(
+      '# Global Instructions\nApplies everywhere.'
+    )
+  })
+
+  it('Cancel button closes the textarea without saving', async () => {
+    mockFetchAllTiers.mockResolvedValue(TIERS_EDITABLE)
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Edit GCI instructions/i }))
+    await screen.findByRole('textbox', { name: /Edit GCI CASCADE.md content/i })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel edit' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: /Edit GCI CASCADE.md content/i })).toBeNull()
+    )
+    expect(mockWriteTier).not.toHaveBeenCalled()
+  })
+
+  it('Save button calls writeTier with correct args', async () => {
+    mockWriteTier.mockResolvedValue({ written: true, path: `${EDITABLE_CASCADE_DIR}/CASCADE.md` })
+    mockFetchAllTiers.mockResolvedValue(TIERS_EDITABLE)
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Edit GCI instructions/i }))
+    const textarea = await screen.findByRole('textbox', { name: /Edit GCI CASCADE.md content/i })
+    fireEvent.change(textarea, { target: { value: '# Updated content' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(mockWriteTier).toHaveBeenCalledTimes(1))
+    expect(mockWriteTier).toHaveBeenCalledWith('GCI', EDITABLE_CASCADE_DIR, '# Updated content')
+  })
+
+  it('shows save error when writeTier rejects', async () => {
+    mockWriteTier.mockRejectedValue(new Error('path traversal rejected'))
+    mockFetchAllTiers.mockResolvedValue(TIERS_EDITABLE)
+    render(<InstructionsPage />)
+    await waitFor(() => expect(screen.getByText('Instructions')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Edit GCI instructions/i }))
+    await screen.findByRole('textbox', { name: /Edit GCI CASCADE.md content/i })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() =>
+      expect(screen.getByText('path traversal rejected')).toBeInTheDocument()
     )
   })
 })

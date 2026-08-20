@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Instruction files can now be edited from the app** (T-P7-E21-07). The
+  instructions browser could list, search and diff CLAUDE.md/AGENTS.md across
+  tiers but had no write path — `cascade_resolve` is read-only, so the "editing"
+  half of the feature was unreachable. Adds `cascade_write_tier` with an editor
+  affordance in the instructions page. Because these files govern agent
+  behaviour, a mis-targeted write has high blast radius: the command writes only
+  the single tier named by the caller, rejects `..` traversal, canonicalises the
+  tier root before writing, and treats an unchanged save as a no-op.
+
 ### Security
 - **Repository prepared for public release** (2026-08-20). `cascade-agy` and
   `cascade-agy-auth` no longer bundle the Antigravity desktop OAuth client

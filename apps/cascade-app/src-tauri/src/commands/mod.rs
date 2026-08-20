@@ -75,6 +75,8 @@ pub mod wizard_state;
 pub mod vault_env;
 // T-P7-E10-02: Harness config-file auto-detection (detect_harness_path)
 pub mod harness;
+// T-P7-E21-07: Instruction-tier write IPC (cascade_write_tier, cascade_tier_cascade_dir)
+pub mod instructions;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — keep every previously-public item at its original path
@@ -152,4 +154,13 @@ pub use setup::{
     GeminiPoolDetectResult,
     LocalModelDownloadResult,
     ProviderConnectResult,
+};
+
+// instructions (T-P7-E21-07)
+pub use instructions::{
+    cascade_tier_cascade_dir,
+    cascade_write_tier,
+    // types
+    TierCascadeDirResult,
+    WriteTierResult,
 };

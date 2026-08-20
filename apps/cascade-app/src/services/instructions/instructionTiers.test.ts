@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { fetchAllTiers, searchInstructions, computeTierDiff } from './instructionTiers'
+import { fetchAllTiers, searchInstructions, computeTierDiff, writeTier } from './instructionTiers'
 import type { TierContent } from '../../types/instructions'
 import { TIER_LABELS } from '../../types/instructions'
 
@@ -22,6 +22,7 @@ function makeTiers(contents: Partial<Record<string, string>> = {}): TierContent[
       content,
       present: content.length > 0,
       error: null,
+      cascadeDir: null,
     }
   })
 }
@@ -31,7 +32,7 @@ function makeTiers(contents: Partial<Record<string, string>> = {}): TierContent[
 describe('fetchAllTiers', () => {
   it('returns one TierContent per tier in TIER_LABELS order', async () => {
     const resolver = async (tier: string) => `# Content for ${tier}`
-    const result = await fetchAllTiers(resolver)
+    const result = await fetchAllTiers(resolver, async () => null)
 
     expect(result).toHaveLength(TIER_LABELS.length)
     for (let i = 0; i < TIER_LABELS.length; i++) {
@@ -41,7 +42,7 @@ describe('fetchAllTiers', () => {
 
   it('marks tiers with non-empty content as present', async () => {
     const resolver = async (tier: string) => (tier === 'GCI' ? '# Global' : '')
-    const result = await fetchAllTiers(resolver)
+    const result = await fetchAllTiers(resolver, async () => null)
 
     const gci = result.find((t) => t.tier === 'GCI')
     expect(gci?.present).toBe(true)
@@ -55,7 +56,7 @@ describe('fetchAllTiers', () => {
       if (tier === 'APC') throw new Error('resolve failed')
       return `content for ${tier}`
     }
-    const result = await fetchAllTiers(resolver)
+    const result = await fetchAllTiers(resolver, async () => null)
 
     const apc = result.find((t) => t.tier === 'APC')
     expect(apc?.present).toBe(false)
@@ -68,7 +69,7 @@ describe('fetchAllTiers', () => {
 
   it('marks empty-string resolve as not present', async () => {
     const resolver = async (_tier: string) => '   '
-    const result = await fetchAllTiers(resolver)
+    const result = await fetchAllTiers(resolver, async () => null)
     for (const t of result) {
       expect(t.present).toBe(false)
     }
@@ -182,6 +183,42 @@ describe('computeTierDiff', () => {
     const tiers = makeTiers({ GCI: 'x' })
     const diff = computeTierDiff(tiers, 99)
     expect(diff.lines).toHaveLength(0)
+  })
+})
+
+// ── writeTier ─────────────────────────────────────────────────────────────────
+
+describe('writeTier', () => {
+  it('calls the injectable writeFn with correct args and returns its result', async () => {
+    const expected = { written: true, path: '/home/user/.cascade/CASCADE.md' }
+    const writeFn = async (_tier: string, _root: string, _content: string) => expected
+    const result = await writeTier('GCI', '/home/user/.cascade', '# New content', writeFn)
+    expect(result).toEqual(expected)
+  })
+
+  it('passes tier, tierRoot, and content through to writeFn', async () => {
+    let capturedTier = ''
+    let capturedRoot = ''
+    let capturedContent = ''
+    const writeFn = async (tier: string, root: string, content: string) => {
+      capturedTier = tier
+      capturedRoot = root
+      capturedContent = content
+      return { written: true, path: `${root}/CASCADE.md` }
+    }
+    await writeTier('PCI', '/home/user/Downloads/.cascade', 'edited content', writeFn)
+    expect(capturedTier).toBe('PCI')
+    expect(capturedRoot).toBe('/home/user/Downloads/.cascade')
+    expect(capturedContent).toBe('edited content')
+  })
+
+  it('propagates errors thrown by writeFn', async () => {
+    const writeFn = async () => {
+      throw new Error('path traversal rejected')
+    }
+    await expect(writeTier('GCI', '/bad/../path/.cascade', 'x', writeFn)).rejects.toThrow(
+      'path traversal rejected'
+    )
   })
 })
 
