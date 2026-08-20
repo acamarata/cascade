@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- **Autonomous dispatch now enforces the budget fail-closed** (CFC-10,
+  T-P7-E13-10). `BudgetGuard` gained a fail-closed mode in T-P7-E13-08 but
+  nothing consumed it — the daemon's automation runner dispatched to providers
+  without consulting any budget. `RegistryRouter` now checks the guard before
+  every provider step, after selection and before any request is issued, so a
+  denied step costs nothing. A missing or unreadable `quota-store.json` yields
+  an empty store, which fail-closed reports as an unknown account and denies —
+  deliberately, since "could not determine the budget" is exactly the case this
+  is meant to stop. Denials surface as a typed error naming the provider and the
+  guard's reason, never a silent skip. The interactive `budget_check` IPC path
+  remains fail-open and unchanged.
+
 ### Fixed
 - **CI no longer exhausts the build runner's disk** (2026-08-19). Daemon CI, CI
   and App CI failed simultaneously with `No space left on device`. Cascade's

@@ -72,12 +72,82 @@ use cascade_types::policy::PolicyAction;
 /// status rather than a silently wrong "nop" success.
 pub struct RegistryRouter {
     registry: Arc<ProviderRegistry>,
+    /// Budget enforcement for AUTONOMOUS dispatch (CFC-10, T-P7-E13-10).
+    ///
+    /// `None` disables enforcement entirely and preserves the pre-ticket
+    /// behaviour — used by unit tests that are not exercising budgets.
+    /// `Some((config_dir, budget))` enables a FAIL-CLOSED check before every
+    /// provider step: an autonomous run must not proceed on a budget it could
+    /// not determine. The interactive `budget_check` IPC path stays fail-open
+    /// and is untouched.
+    budget: Option<(PathBuf, crate::config::BudgetConfig)>,
 }
 
 impl RegistryRouter {
-    /// Construct a `RegistryRouter` around the shared provider registry.
+    /// Construct a `RegistryRouter` with NO budget enforcement.
+    ///
+    /// Retained so existing call sites and tests compile unchanged. Prefer
+    /// [`RegistryRouter::with_budget`] on any autonomous path.
     pub fn new(registry: Arc<ProviderRegistry>) -> Self {
-        Self { registry }
+        Self {
+            registry,
+            budget: None,
+        }
+    }
+
+    /// Construct a `RegistryRouter` that enforces the budget FAIL-CLOSED.
+    ///
+    /// `config_dir` is where `quota-store.json` lives; it is re-read on each
+    /// step so a run reacts to quota consumed while it is in flight rather
+    /// than to a snapshot taken at construction.
+    pub fn with_budget(
+        registry: Arc<ProviderRegistry>,
+        config_dir: PathBuf,
+        budget_config: crate::config::BudgetConfig,
+    ) -> Self {
+        Self {
+            registry,
+            budget: Some((config_dir, budget_config)),
+        }
+    }
+
+    /// Fail-closed budget gate applied before each autonomous provider step.
+    ///
+    /// Returns `Err(ExecutorError::ProviderFailed)` carrying the guard's own
+    /// reason when the step must not run. A missing or unreadable
+    /// `quota-store.json` yields an empty store, which fail-closed reports as
+    /// an unknown account and DENIES — deliberately, since "we could not tell"
+    /// is exactly the case CFC-10 exists to stop.
+    fn check_budget(&self, provider_id: &str) -> Result<(), ExecutorError> {
+        let Some((config_dir, budget_config)) = &self.budget else {
+            return Ok(());
+        };
+        let path = config_dir.join("quota-store.json");
+        let store = cascade_core::quota_store::read_quota_store(&path).unwrap_or_else(|_| {
+            cascade_core::quota_store::QuotaStore {
+                schema_version: cascade_core::quota_store::QUOTA_STORE_SCHEMA_VERSION,
+                updated_at: String::new(),
+                accounts: vec![],
+                week_totals: std::collections::HashMap::new(),
+                month_totals: std::collections::HashMap::new(),
+                rolling_history: vec![],
+            }
+        });
+        let guard = crate::budget_guard::BudgetGuard::new_fail_closed(budget_config.clone());
+        match guard.check(provider_id, provider_id, 0, 0.0, &store) {
+            crate::budget_guard::BudgetResult::Allow => Ok(()),
+            denied => {
+                let reason = format!("{denied:?}");
+                warn!(
+                    provider = %provider_id,
+                    %reason,
+                    "autonomous dispatch BLOCKED by fail-closed budget guard"
+                );
+                Err(ExecutorError::ProviderFailed(format!(
+                    "budget denied for provider {provider_id}: {reason}"
+                )))
+            }
+        }
     }
 }
 
@@ -119,6 +189,11 @@ impl ProviderRouter for RegistryRouter {
                             .to_string(),
                     )
                 })?;
+
+        // CFC-10 / T-P7-E13-10: fail-closed budget gate on the AUTONOMOUS path.
+        // Runs AFTER provider selection (we need the provider id) and BEFORE any
+        // request is issued, so a denied step costs nothing.
+        self.check_budget(&provider_id)?;
 
         // ── Build CompletionRequest ───────────────────────────────────────────
         // Map ContextMessage → cascade_providers::Message.
@@ -763,6 +838,62 @@ impl<I: ToolInvoker> ToolInvoker for SafetyGate<I> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
+    // ── T-P7-E13-10: fail-closed budget gate on the autonomous path ──────────
+
+    /// A router built with `new()` performs NO budget check — preserves the
+    /// pre-ticket behaviour for tests and non-autonomous callers.
+    #[test]
+    fn router_without_budget_allows_any_provider() {
+        let registry = Arc::new(ProviderRegistry::new());
+        let router = RegistryRouter::new(registry);
+        assert!(
+            router.check_budget("anthropic").is_ok(),
+            "no budget configured => no enforcement"
+        );
+    }
+
+    /// With a budget configured and NO quota-store.json on disk, the store reads
+    /// as empty, which fail-closed treats as an unknown account and DENIES.
+    /// This is the whole point of CFC-10: "could not determine" must not proceed.
+    #[test]
+    fn router_with_budget_denies_when_quota_store_is_missing() {
+        let tmp = TempDir::new().expect("tmpdir");
+        let registry = Arc::new(ProviderRegistry::new());
+        let router = RegistryRouter::with_budget(
+            registry,
+            tmp.path().to_path_buf(),
+            crate::config::BudgetConfig::default(),
+        );
+        let err = router
+            .check_budget("anthropic")
+            .expect_err("unknown account under fail-closed must deny");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("budget denied"),
+            "denial must be a typed, self-describing error; got {msg}"
+        );
+    }
+
+    /// The denial is reported, never silent: the error carries the provider id
+    /// and the guard's own reason so the runner can surface why a step stopped.
+    #[test]
+    fn router_budget_denial_names_provider_and_reason() {
+        let tmp = TempDir::new().expect("tmpdir");
+        let registry = Arc::new(ProviderRegistry::new());
+        let router = RegistryRouter::with_budget(
+            registry,
+            tmp.path().to_path_buf(),
+            crate::config::BudgetConfig::default(),
+        );
+        let msg = format!("{}", router.check_budget("openai").unwrap_err());
+        assert!(msg.contains("openai"), "must name the provider; got {msg}");
+        assert!(
+            msg.contains("DenyUnknown") || msg.contains("unknown account"),
+            "must carry the guard's reason; got {msg}"
+        );
+    }
     use super::*;
 
     use std::pin::Pin;

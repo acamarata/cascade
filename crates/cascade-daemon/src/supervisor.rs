@@ -618,7 +618,14 @@ pub async fn run(
         use cascade_agents::chain::ChainExecutor;
         use cascade_agents::executor::AgentExecutor;
 
-        let real_router = Arc::new(RegistryRouter::new(Arc::clone(&provider_registry)));
+        // T-P7-E13-10: the daemon-wide AutomationRunner is an AUTONOMOUS path, so
+        // it gets the fail-closed budget gate. Interactive callers keep the
+        // fail-open `budget_check` IPC method and are unaffected.
+        let real_router = Arc::new(RegistryRouter::with_budget(
+            Arc::clone(&provider_registry),
+            config_dir.clone(),
+            config.budget.clone(),
+        ));
         // Wrap SafeToolInvoker in SafetyGate so all three safety layers
         // (deny-list, path sandbox, real audit log) are already enforced on
         // this daemon-wide AutomationRunner. SafeToolInvoker is today an
