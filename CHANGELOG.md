@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- **Packaging manifests synced to the real version, with hash automation for
+  every channel** (T-P7-E16-03). All six manifests (nix, AUR, Chocolatey,
+  Homebrew, Scoop, Winget) sat at 0.1.0/1.0.0 while the product was 1.16.0, and
+  the Winget manifest directory was still named `0.1.0` — Winget requires it to
+  match `PackageVersion`. Homebrew, Scoop, Chocolatey and Winget already had
+  real release-triggered workflows that compute hashes; nix and AUR had none, so
+  `nix/cascade.nix` kept `PLACEHOLDER_SHA256` and the PKGBUILD kept
+  `sha256sums=('SKIP')` — which disables integrity checking for AUR users
+  entirely. Both now have `update-nix.yml` / `update-aur.yml`, computing a
+  separate SHA256 per architecture from the actual release artifacts and failing
+  the job loudly if any placeholder survives.
+
 ### Security
 - **Autonomous dispatch now enforces the budget fail-closed** (CFC-10,
   T-P7-E13-10). `BudgetGuard` gained a fail-closed mode in T-P7-E13-08 but

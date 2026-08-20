@@ -1,5 +1,5 @@
 cask "cascade" do
-  version "1.0.0"
+  version "1.16.0"
   sha256 :no_check # placeholder; updated by .github/workflows/update-homebrew.yml on each release
 
   url "https://github.com/acamarata/cascade/releases/download/v#{version}/Cascade_#{version}_macos_universal.dmg"

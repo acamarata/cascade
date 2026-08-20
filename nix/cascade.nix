@@ -1,7 +1,7 @@
 { pkgs, system ? "x86_64-linux" }:
 
 let
-  version = "1.0.0";
+  version = "1.16.0";
 
   srcs = {
     "x86_64-linux" = {

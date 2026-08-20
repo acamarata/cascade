@@ -1,0 +1,103 @@
+name: Update Nix Derivation
+
+# Fills nix/cascade.nix's version and source hash from a published release.
+#
+# WHY THIS EXISTS: nix/cascade.nix shipped with `version = "1.0.0"` and a literal
+# PLACEHOLDER_SHA256, and — unlike homebrew/scoop/chocolatey/winget — had no
+# workflow to replace either. The placeholder is only correct while no release
+# exists; once one does, an unautomated manifest silently rots (T-P7-E16-03).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v1.16.0)"
+        required: true
+
+jobs:
+  update-derivation:
+    runs-on: [self-hosted, cam-sentry]
+    # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
+    if: ${{ vars.PUBLIC_RELEASES == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout cascade repo
+        uses: actions/checkout@v4
+
+      - name: Resolve tag, version and source URL
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          VERSION="${TAG#v}"
+          SRC_URL="https://github.com/acamarata/cascade/archive/refs/tags/${TAG}.tar.gz"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "src_url=${SRC_URL}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute per-architecture SHA256 from release artifacts
+        id: hash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          VERSION="${{ steps.release.outputs.version }}"
+          BASE="https://github.com/acamarata/cascade/releases/download/${TAG}"
+          for ARCH in x86_64 aarch64; do
+            URL="${BASE}/cascade_${VERSION}_linux_${ARCH}.tar.gz"
+            curl -fsSL -o "/tmp/cascade_${ARCH}.tar.gz" "$URL"
+            SHA="$(sha256sum "/tmp/cascade_${ARCH}.tar.gz" | cut -d' ' -f1)"
+            # Fail loudly rather than writing an empty or partial hash.
+            test -n "$SHA"
+            echo "sha_${ARCH}=${SHA}" >> "$GITHUB_OUTPUT"
+            echo "${ARCH}: ${SHA}"
+          done
+
+      - name: Rewrite nix/cascade.nix
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          X86="${{ steps.hash.outputs.sha_x86_64 }}"
+          ARM="${{ steps.hash.outputs.sha_aarch64 }}"
+          sed -i -E "s|version = \"[0-9][0-9.]*\"|version = \"${VERSION}\"|" nix/cascade.nix
+          # Two DISTINCT artifacts: x86_64-linux and aarch64-linux each need
+          # their own hash. Target them by the srcs block they sit in rather
+          # than blanket-replacing, or both get the same (wrong) value.
+          python3 - "$X86" "$ARM" <<'PY_INNER'
+          import re, sys
+          x86, arm = sys.argv[1], sys.argv[2]
+          p = "nix/cascade.nix"
+          s = open(p).read()
+          def sub_for(block, sha, s):
+              m = re.search(rf'("{block}"\s*=\s*\{{.*?sha256\s*=\s*")(PLACEHOLDER_SHA256|[a-f0-9]{{64}})(")', s, re.S)
+              if not m:
+                  raise SystemExit(f"could not locate sha256 for {block}")
+              return s[:m.start(2)] + sha + s[m.end(2):]
+          s = sub_for("x86_64-linux", x86, s)
+          s = sub_for("aarch64-linux", arm, s)
+          open(p, "w").write(s)
+          print("nix: wrote per-arch hashes")
+          PY_INNER
+          if grep -q "PLACEHOLDER_SHA256" nix/cascade.nix; then
+            echo "::error::nix/cascade.nix still contains PLACEHOLDER_SHA256"
+            exit 1
+          fi
+          grep -q "${VERSION}" nix/cascade.nix
+
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(nix): sync derivation to ${{ steps.release.outputs.tag }}"
+          branch: "auto/nix-${{ steps.release.outputs.tag }}"
+          title: "chore(nix): sync derivation to ${{ steps.release.outputs.tag }}"
+          body: |
+            Automated by `update-nix.yml` on release publish.
+
+            - version -> `${{ steps.release.outputs.version }}`
+            - x86_64 sha256 -> `${{ steps.hash.outputs.sha_x86_64 }}`
+            - aarch64 sha256 -> `${{ steps.hash.outputs.sha_aarch64 }}`
+          add-paths: nix/cascade.nix

@@ -1,6 +1,6 @@
 # Maintainer: Aric Camarata <aric.camarata@gmail.com>
 pkgname=cascade-bin
-pkgver=1.0.0
+pkgver=1.16.0
 pkgrel=1
 pkgdesc="Unified AI instruction cascade manager — daemon, CLI, and context resolver"
 arch=('x86_64' 'aarch64')

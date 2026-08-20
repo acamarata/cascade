@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>cascade</id>
-    <version>0.1.0</version>
+    <version>1.16.0</version>
     <title>Cascade</title>
     <authors>Aric Camarata</authors>
     <projectUrl>https://github.com/acamarata/cascade</projectUrl>

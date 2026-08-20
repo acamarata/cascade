@@ -1,0 +1,92 @@
+name: Update AUR PKGBUILD
+
+# Fills packaging/aur/PKGBUILD's pkgver and sha256sums from a published release.
+#
+# WHY THIS EXISTS: the PKGBUILD shipped with `pkgver=1.0.0` and
+# `sha256sums=('SKIP')`. SKIP disables integrity checking entirely, so an AUR
+# user would install an unverified tarball. Unlike homebrew/scoop/chocolatey/
+# winget, nothing replaced it at release time (T-P7-E16-03).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v1.16.0)"
+        required: true
+
+jobs:
+  update-pkgbuild:
+    runs-on: [self-hosted, cam-sentry]
+    # Skips while the repo/releases are private. Flip repo var PUBLIC_RELEASES=true to enable.
+    if: ${{ vars.PUBLIC_RELEASES == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout cascade repo
+        uses: actions/checkout@v4
+
+      - name: Resolve tag, version and source URL
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          VERSION="${TAG#v}"
+          SRC_URL="https://github.com/acamarata/cascade/archive/refs/tags/${TAG}.tar.gz"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "src_url=${SRC_URL}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute per-architecture SHA256 from release artifacts
+        id: hash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          VERSION="${{ steps.release.outputs.version }}"
+          BASE="https://github.com/acamarata/cascade/releases/download/${TAG}"
+          for ARCH in x86_64 aarch64; do
+            URL="${BASE}/cascade_${VERSION}_linux_${ARCH}.tar.gz"
+            curl -fsSL -o "/tmp/cascade_${ARCH}.tar.gz" "$URL"
+            SHA="$(sha256sum "/tmp/cascade_${ARCH}.tar.gz" | cut -d' ' -f1)"
+            # Fail loudly rather than writing an empty or partial hash.
+            test -n "$SHA"
+            echo "sha_${ARCH}=${SHA}" >> "$GITHUB_OUTPUT"
+            echo "${ARCH}: ${SHA}"
+          done
+
+      - name: Rewrite PKGBUILD
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          X86="${{ steps.hash.outputs.sha_x86_64 }}"
+          ARM="${{ steps.hash.outputs.sha_aarch64 }}"
+          sed -i -E "s|^pkgver=.*|pkgver=${VERSION}|" packaging/aur/PKGBUILD
+          # Reset pkgrel on a version bump, per AUR convention.
+          sed -i -E "s|^pkgrel=.*|pkgrel=1|" packaging/aur/PKGBUILD
+          # This PKGBUILD uses ARCH-SPECIFIC sums (sha256sums_x86_64 /
+          # sha256sums_aarch64), not a single sha256sums array.
+          sed -i -E "s|^sha256sums_x86_64=\(.*\)|sha256sums_x86_64=('${X86}')|" packaging/aur/PKGBUILD
+          sed -i -E "s|^sha256sums_aarch64=\(.*\)|sha256sums_aarch64=('${ARM}')|" packaging/aur/PKGBUILD
+          grep -q "pkgver=${VERSION}" packaging/aur/PKGBUILD
+          if grep -qE "^sha256sums_(x86_64|aarch64)=\('SKIP'\)" packaging/aur/PKGBUILD; then
+            echo "::error::PKGBUILD still contains SKIP — integrity checking would be disabled for AUR users"
+            exit 1
+          fi
+
+      - name: Open PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(aur): sync PKGBUILD to ${{ steps.release.outputs.tag }}"
+          branch: "auto/aur-${{ steps.release.outputs.tag }}"
+          title: "chore(aur): sync PKGBUILD to ${{ steps.release.outputs.tag }}"
+          body: |
+            Automated by `update-aur.yml` on release publish.
+
+            - pkgver -> `${{ steps.release.outputs.version }}`, pkgrel reset to 1
+            - sha256sums_x86_64 -> `${{ steps.hash.outputs.sha_x86_64 }}`
+            - sha256sums_aarch64 -> `${{ steps.hash.outputs.sha_aarch64 }}`
+              (both replace `SKIP`, which disabled integrity checking)
+          add-paths: packaging/aur/PKGBUILD
