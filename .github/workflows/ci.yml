@@ -330,6 +330,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Reclaim disk before build
+        run: |
+          echo "free before:"; df -h / | tail -1
+          # target/ from previous runs is the dominant consumer on a persistent
+          # self-hosted runner. Drop incremental caches unconditionally; they are
+          # never reused across CI checkouts.
+          rm -rf target/debug/incremental target/release/incremental 2>/dev/null || true
+          AVAIL=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          if [ "${AVAIL:-99}" -lt 25 ]; then
+            echo "under 25G free — pruning cargo registry cache and docker build cache"
+            cargo clean -q 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
+          fi
+          echo "free after:"; df -h / | tail -1
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

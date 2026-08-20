@@ -17,6 +17,20 @@ on:
 permissions:
   contents: read
 
+# Build-size controls for the self-hosted runner. Cascade's target/ reaches
+# 45-65 GB locally; cam-sentry has ~42 GB of headroom, so an unconstrained
+# build exhausts the disk and fails with "No space left on device" (observed
+# 2026-08-19 on Daemon CI, CI and App CI simultaneously).
+#   CARGO_INCREMENTAL=0 — incremental artifacts were the single largest
+#     component locally (32 GB) and are worthless on a fresh CI checkout.
+#   debug=line-tables-only — keeps backtraces useful while dropping the bulk
+#     of debuginfo, which is the next largest contributor.
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+
 jobs:
   # ── test ────────────────────────────────────────────────────────────────
   # Unit tests for cascade-daemon and cascade-core on Linux (self-hosted).
@@ -26,6 +40,21 @@ jobs:
     runs-on: [self-hosted, cam-sentry]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Reclaim disk before build
+        run: |
+          echo "free before:"; df -h / | tail -1
+          # target/ from previous runs is the dominant consumer on a persistent
+          # self-hosted runner. Drop incremental caches unconditionally; they are
+          # never reused across CI checkouts.
+          rm -rf target/debug/incremental target/release/incremental 2>/dev/null || true
+          AVAIL=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          if [ "${AVAIL:-99}" -lt 25 ]; then
+            echo "under 25G free — pruning cargo registry cache and docker build cache"
+            cargo clean -q 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
+          fi
+          echo "free after:"; df -h / | tail -1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

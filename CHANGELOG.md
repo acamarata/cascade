@@ -7,6 +7,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Fixed
+- **CI no longer exhausts the build runner's disk** (2026-08-19). Daemon CI, CI
+  and App CI failed simultaneously with `No space left on device`. Cascade's
+  `target/` reaches 45-65 GB while the self-hosted runner has ~42 GB of headroom.
+  `daemon-ci.yml` now sets `CARGO_INCREMENTAL=0` (incremental artifacts were the
+  largest single component and are never reused across CI checkouts) and
+  `debug=line-tables-only` for dev/test profiles, and both Rust workflows drop
+  stale incremental caches before building, pruning harder when free space falls
+  below 25 GB.
+
+### Fixed
 - **The `rag.multi_vec` setting now actually affects search** (T-P7-E20-30). The
   global setting and the per-request `colbert_enabled` flag both existed but were
   never connected, so toggling multi-vec retrieval changed nothing. The daemon now
