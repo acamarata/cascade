@@ -57,11 +57,11 @@ jobs:
   test:
     name: test (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
-    # A full `cargo nextest run --workspace` build needs ~8-10GB of target dir,
-    # which does not fit on the former self-hosted runner's 38GB disk alongside the ~14GB in-use
-    # Docker (nSentry stack + Forgejo + other repos' runners; 0% reclaimable).
-    # Verified locally pre-push instead. Flip repo var HEAVY_CI=true after the
-    # volume is resized to restore CI-side test/clippy/integration builds.
+    # A full `cargo nextest run --workspace` build needs ~8-10GB of target dir.
+    # This was gated off because the former self-hosted runner's 38GB disk was
+    # already ~14GB into Docker (0% reclaimable), leaving no room. That runner is
+    # gone; GitHub-hosted runners start clean with ~14GB free, which fits, so
+    # HEAVY_CI is enabled.
     if: ${{ vars.HEAVY_CI == 'true' }}
     strategy:
       fail-fast: false
