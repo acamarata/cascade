@@ -16,9 +16,13 @@
 //! ## Usage
 //!
 //! ```sh
-//! cascade mcp serve          # default: stdio
-//! cascade mcp serve --stdio  # explicit
+//! cascade mcp stdio          # the real invocation (a subcommand, not a flag)
 //! ```
+//!
+//! Neither `cascade mcp serve` nor `cascade mcp serve --stdio` exists; both
+//! were rejected by clap. `cascade mcp setup` wrote the `--stdio` form into
+//! every client config, which is why no integrated tool could start the
+//! server (T-P7-E25-17).
 //!
 //! ## SPORT
 //! MASTER-TRANSPORTS.md: stdio transport row

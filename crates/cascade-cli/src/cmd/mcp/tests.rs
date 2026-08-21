@@ -86,8 +86,8 @@ fn setup_claude_code_creates_settings_with_cascade_entry() {
     );
     assert_eq!(
         parsed["mcpServers"]["cascade"]["args"],
-        json!(["mcp", "--stdio"]),
-        "args must be ['mcp', '--stdio']"
+        json!(["mcp", "stdio"]),
+        "args must be ['mcp', 'stdio']"
     );
 }
 
@@ -129,7 +129,7 @@ fn setup_claude_code_remove_clears_entry_preserves_others() {
     let initial = json!({
         "mcpServers": {
             "other-tool": { "command": "other", "args": [] },
-            "cascade": { "command": "cascade", "args": ["mcp", "--stdio"], "env": {} }
+            "cascade": { "command": "cascade", "args": ["mcp", "stdio"], "env": {} }
         }
     });
     std::fs::write(
@@ -373,7 +373,7 @@ fn setup_vscode_remove_preserves_other_servers() {
     let initial = json!({
         "servers": {
             "other": { "type": "stdio", "command": "other" },
-            "cascade": { "type": "stdio", "command": "cascade", "args": ["mcp", "--stdio"] }
+            "cascade": { "type": "stdio", "command": "cascade", "args": ["mcp", "stdio"] }
         }
     });
     std::fs::write(&mcp_path, serde_json::to_string_pretty(&initial).unwrap()).unwrap();
@@ -551,4 +551,90 @@ fn setup_all_no_clients_returns_error() {
     // No clients present
     let result = setup_all(false, false);
     assert!(result.is_err(), "should error when no clients detected");
+}
+
+// ── The written config must be a command the CLI actually accepts ────────────
+//
+// T-P7-E25-17: every client config wrote `["mcp", "--stdio"]`, but the CLI
+// defines `stdio` as a SUBCOMMAND, not a flag. clap rejected it with exit 2, so
+// the MCP server never started for any tool wired up by `cascade mcp setup` —
+// Claude Code, Claude Desktop, VS Code, Codex and OpenCode alike. The old tests
+// asserted the broken string, so the suite confirmed the bug instead of
+// catching it.
+//
+// These tests pin the written args against the CLI's OWN parser, so the two
+// cannot drift apart again.
+
+/// Parse an argv through the real `cascade mcp` argument types.
+///
+/// Wrapping `McpArgs` in a throwaway `Parser` exercises the SAME derive the
+/// binary uses, so a config the binary would reject is rejected here too.
+fn cli_accepts(args: &[&str]) -> bool {
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Harness {
+        #[command(subcommand)]
+        _cmd: HarnessCmd,
+    }
+
+    #[derive(clap::Subcommand)]
+    enum HarnessCmd {
+        Mcp(super::args::McpArgs),
+    }
+
+    let mut argv = vec!["cascade"];
+    argv.extend_from_slice(args);
+    Harness::try_parse_from(argv).is_ok()
+}
+
+#[test]
+fn the_stdio_invocation_we_write_is_accepted_by_the_cli() {
+    assert!(
+        cli_accepts(&["mcp", "stdio"]),
+        "`cascade mcp stdio` must parse — it is what every client config invokes"
+    );
+}
+
+#[test]
+fn the_old_flag_form_is_genuinely_rejected() {
+    // Guards against "fixing" this by adding a --stdio alias and quietly
+    // leaving the configs on a form that only sometimes works.
+    assert!(
+        !cli_accepts(&["mcp", "--stdio"]),
+        "`mcp --stdio` is not a real invocation; if it becomes one, revisit T-P7-E25-17"
+    );
+}
+
+#[test]
+#[serial(global_env)]
+fn what_the_real_writer_emits_is_accepted_by_the_cli() {
+    // The strongest form of this check: run the ACTUAL config writer, read the
+    // args it wrote, and feed them to the ACTUAL parser. A hardcoded expected
+    // string is what let the original bug live in the test suite.
+    let _env_guard = crate::test_support::ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let tmp = temp_home();
+    std::env::set_var("HOME", tmp.path());
+
+    let settings_path = tmp.path().join(".claude").join("settings.json");
+    std::fs::create_dir_all(settings_path.parent().unwrap()).unwrap();
+    setup_claude_code(false, false).expect("setup should succeed");
+
+    let parsed: Value =
+        serde_json::from_str(&std::fs::read_to_string(&settings_path).expect("settings written"))
+            .expect("valid JSON");
+    let args: Vec<String> = parsed["mcpServers"]["cascade"]["args"]
+        .as_array()
+        .expect("args array")
+        .iter()
+        .map(|v| v.as_str().expect("string arg").to_owned())
+        .collect();
+    let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+
+    assert!(
+        cli_accepts(&argv),
+        "the writer emitted {argv:?}, which the CLI parser rejects"
+    );
 }

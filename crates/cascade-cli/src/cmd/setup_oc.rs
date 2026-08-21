@@ -173,7 +173,7 @@ pub fn write_text_atomic(path: &Path, content: &str, dry_run: bool) -> Result<()
 /// Upsert the cascade MCP server entry in the global `~/.config/opencode/opencode.json`.
 ///
 /// The cascade entry uses `type: "stdio"` and `command: "cascade"` with
-/// `args: ["mcp", "--stdio"]`. Any existing entry named "cascade" is replaced;
+/// `args: ["mcp", "stdio"]`. Any existing entry named "cascade" is replaced;
 /// all other entries are preserved.
 ///
 /// Returns `true` if the config was modified (or would be in dry-run mode).
@@ -185,7 +185,7 @@ pub fn upsert_global_mcp_entry(dry_run: bool) -> Result<bool> {
     let cascade_entry = json!({
         "type": "stdio",
         "command": "cascade",
-        "args": ["mcp", "--stdio"]
+        "args": ["mcp", "stdio"]
     });
 
     // opencode.json mcpServers is an object keyed by name (same as CC format).
@@ -314,7 +314,7 @@ mod tests {
         );
         assert_eq!(
             parsed["mcpServers"]["cascade"]["args"],
-            json!(["mcp", "--stdio"]),
+            json!(["mcp", "stdio"]),
             "args must match"
         );
     }

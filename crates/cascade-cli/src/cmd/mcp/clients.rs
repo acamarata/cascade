@@ -40,7 +40,7 @@ pub fn setup_claude_code(remove: bool, dry_run: bool) -> Result<()> {
 
     let cascade_entry = json!({
         "command": "cascade",
-        "args": ["mcp", "--stdio"],
+        "args": ["mcp", "stdio"],
         "env": {}
     });
     upsert_key(&mut config, "mcpServers", "cascade", cascade_entry);
@@ -171,7 +171,7 @@ pub fn setup_vscode(remove: bool, global: bool, dry_run: bool) -> Result<()> {
     let cascade_entry = json!({
         "type": "stdio",
         "command": "cascade",
-        "args": ["mcp", "--stdio"]
+        "args": ["mcp", "stdio"]
     });
     upsert_key(&mut config, "servers", "cascade", cascade_entry);
     write_json_atomic(&path, &config, dry_run)?;
@@ -264,7 +264,7 @@ pub fn setup_opencode(remove: bool, local: bool, http: bool, dry_run: bool) -> R
         json!({
             "type": "stdio",
             "command": "cascade",
-            "args": ["mcp", "--stdio"]
+            "args": ["mcp", "stdio"]
         })
     };
 
