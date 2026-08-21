@@ -467,6 +467,8 @@ mod tests {
 
     #[test]
     fn canonical_model_id_resolves_to_the_same_family_as_the_window_suffix() {
+        use cascade_types::model_ids::MODEL_CLAUDE_FABLE;
+
         let store = make_store(account_with_weekly_slots(
             "acc1",
             PROVIDER_CLAUDE_MAX,
@@ -476,7 +478,7 @@ mod tests {
         // Callers holding a canonical id must hit the same cap as callers
         // holding the provider's window suffix.
         assert!(matches!(
-            guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "claude-fable-5", &store),
+            guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", MODEL_CLAUDE_FABLE, &store),
             BudgetResult::DenyLimit { .. }
         ));
     }
