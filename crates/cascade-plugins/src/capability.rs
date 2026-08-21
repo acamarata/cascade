@@ -205,6 +205,18 @@ impl DeclaredCapabilities {
         Ok(set)
     }
 
+    /// Expand and canonicalise one declared scope root.
+    ///
+    /// Public so callers can pre-check a declaration without failing the whole
+    /// resolve: a plugin listing one path that does not exist should skip that
+    /// scope, not lose every other scope it declared (T-P7-E25-15).
+    ///
+    /// Canonicalisation is what makes the scope symlink-safe — the returned
+    /// path has every link in the chain resolved.
+    pub fn canonical_scope_root(raw: &str) -> Result<PathBuf, CapabilityError> {
+        Self::resolve_path(raw)
+    }
+
     fn resolve_path(raw: &str) -> Result<PathBuf, CapabilityError> {
         // Expand leading `~` to home directory.
         let expanded = if let Some(rest) = raw.strip_prefix("~/") {
@@ -217,8 +229,10 @@ impl DeclaredCapabilities {
             PathBuf::from(raw)
         };
 
-        // For paths that don't exist yet (e.g. a write target not yet created),
-        // canonicalize the nearest existing ancestor and append the remainder.
+        // A path that does not exist cannot be canonicalised, and an
+        // un-canonicalised root is not a safe scope boundary — so this is an
+        // error, and callers that want to tolerate it skip that scope via
+        // `canonical_scope_root`.
         std::fs::canonicalize(&expanded).map_err(|source| CapabilityError::CanonicalizeFailed {
             path: expanded,
             source,
