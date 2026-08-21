@@ -761,6 +761,7 @@ mod tests {
     #[cfg(feature = "local-llm")]
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn all_checks_pass_on_fully_setup_tempdir() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK
             .lock()

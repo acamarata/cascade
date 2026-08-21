@@ -26,7 +26,7 @@ cascade-types   = { workspace = true }
 cascade-harness = { workspace = true }
 cascade-ccapi   = { path = "../cascade-ccapi", version = "1.5.0" }
 cascade-rag     = { path = "../cascade-rag", version = "1.5.0" }
-cascade-plugins = { path = "../cascade-plugins", version = "1.5.0" }
+cascade-plugins = { path = "../cascade-plugins", version = "1.5.0", optional = true }
 cascade-mcp     = { path = "../cascade-mcp", version = "1.5.0" }
 cascade-keychain = { path = "../cascade-keychain", version = "1.5.0" }
 cascade-audit = { path = "../cascade-audit", version = "1.5.0" }
@@ -46,11 +46,11 @@ toml          = "0.8"
 toml_edit     = "0.22"
 tracing       = { workspace = true }
 tracing-subscriber = { workspace = true }
-tracing-opentelemetry = "0.33"
-opentelemetry         = { version = "0.32", features = ["trace"] }
-opentelemetry-otlp    = { version = "0.32", features = ["grpc-tonic"] }
-opentelemetry_sdk     = { version = "0.32", features = ["trace", "rt-tokio"] }
-opentelemetry-semantic-conventions = "0.32"
+tracing-opentelemetry = { version = "0.33", optional = true }
+opentelemetry         = { version = "0.32", features = ["trace"], optional = true }
+opentelemetry-otlp    = { version = "0.32", features = ["grpc-tonic"], optional = true }
+opentelemetry_sdk     = { version = "0.32", features = ["trace", "rt-tokio"], optional = true }
+opentelemetry-semantic-conventions = { version = "0.32", optional = true }
 notify        = { workspace = true }
 chrono        = { workspace = true }
 dirs          = "5"
@@ -58,6 +58,28 @@ flate2        = "1"
 tar           = "0.4"
 
 [features]
+# Default is deliberately LEAN. `plugins` drags in the full wasmtime JIT and
+# `otel` drags in the OTLP/gRPC/tonic/prost stack — neither belongs in a build
+# that never loads a plugin or exports a span. Both stay fully supported, they
+# are just opt-in (T-P7-E25-11).
+default = []
+
+## `cascade plugin` subcommand + the WASM plugin runtime (wasmtime).
+plugins = ["dep:cascade-plugins"]
+
+## OTLP span export over gRPC. Without it the CLI still logs to stderr and the
+## `cascade telemetry` subcommand still works; only the exporter is absent.
+otel = [
+    "dep:tracing-opentelemetry",
+    "dep:opentelemetry",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-semantic-conventions",
+]
+
+## Everything. This is what the release binaries are built with.
+full = ["plugins", "otel", "local-llm"]
+
 local-llm = ["dep:cascade-local-llm"]
 
 [target.'cfg(unix)'.dependencies]

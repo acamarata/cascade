@@ -31,7 +31,7 @@ tauri-plugin-shell   = "2"
 # cascade-types provides the frozen JSON-RPC 2.0 wire types (T-P2-E03).
 # cascade-core is pulled in at P3-E02 when the CascadeCore API lands.
 cascade-types     = { path = "../../../crates/cascade-types", version = "1.16.0" }
-cascade-cli       = { path = "../../../crates/cascade-cli", version = "1.16.0" }
+cascade-cli       = { path = "../../../crates/cascade-cli", version = "1.16.0", features = ["full"] }
 cascade-audit     = { path = "../../../crates/cascade-audit", version = "1.16.0" }
 # T-P3-E03-39b: GCP provisioning engine (GoogleProvisionClient)
 cascade-providers = { path = "../../../crates/cascade-providers", version = "1.16.0" }

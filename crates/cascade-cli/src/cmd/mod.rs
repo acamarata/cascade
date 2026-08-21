@@ -57,6 +57,7 @@ pub mod migrate;
 pub mod migrate_keys;
 pub mod monitor_oc;
 pub mod ping;
+#[cfg(feature = "plugins")]
 pub mod plugin;
 pub mod resolve;
 pub mod restore;
@@ -170,6 +171,7 @@ pub enum Commands {
     #[command(hide = true)]
     Ping(ping::PingArgs),
     /// Manage installed WASM plugins.
+    #[cfg(feature = "plugins")]
     Plugin(plugin::PluginArgs),
     /// Inspect and clear daemon caches.
     Cache(cache::CacheArgs),
@@ -262,6 +264,7 @@ impl Commands {
             Commands::MonitorOc(args) => args.run().await,
             Commands::Harness(args) => args.run().await,
             Commands::Ping(args) => args.run().await,
+            #[cfg(feature = "plugins")]
             Commands::Plugin(args) => args.run().await,
             Commands::Cache(args) => args.run().await,
             Commands::Rollback(args) => args.run().await,

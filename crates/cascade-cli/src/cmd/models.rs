@@ -290,6 +290,10 @@ impl Command for RemoveArgs {
 // ── internal helpers ──────────────────────────────────────────────────────────
 
 /// Return a `CascadeError` explaining that local LLM support was not compiled in.
+///
+/// Only reachable in builds WITHOUT the `local-llm` feature; with the feature
+/// on, every caller takes the real path instead.
+#[cfg(not(feature = "local-llm"))]
 fn local_llm_not_built() -> cascade_types::error::CascadeError {
     CascadeError::Other(
         "local LLM support is not built in — reinstall or build with `--features local-llm`"
@@ -354,6 +358,7 @@ mod tests {
 
     #[tokio::test]
     #[serial(global_env)]
+    #[allow(clippy::await_holding_lock)] // Deliberate: env-mutation test lock spans await to keep process-env writes serialized.
     async fn list_runs_without_panic() {
         let _env_guard = crate::test_support::ENV_TEST_LOCK
             .lock()

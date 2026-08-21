@@ -67,7 +67,7 @@ jobs:
 
       - name: Build cascade + cascaded (native, all targets)
         run: |
-          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli --features full
           cargo build --release --locked --target ${{ matrix.target }} -p cascade-daemon
 
       - name: Package CLI + daemon (Linux/macOS tar.gz)
@@ -180,7 +180,7 @@ jobs:
 
       - name: Build cascade + cascaded (native, all targets)
         run: |
-          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli
+          cargo build --release --locked --target ${{ matrix.target }} -p cascade-cli --features full
           cargo build --release --locked --target ${{ matrix.target }} -p cascade-daemon
 
       - name: Package CLI + daemon (Linux/macOS tar.gz)
