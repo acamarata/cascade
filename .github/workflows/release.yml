@@ -680,11 +680,42 @@ jobs:
     needs: publish
     if: github.repository == 'acamarata/cascade'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync .github/wiki to GitHub Wiki
-        uses: nickg/github-wikis@v1
-        with:
-          path: .github/wiki
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # Plain git, no third-party action. The previous step used
+      # nickg/github-wikis@v1, and that repository does not exist (404) — so
+      # every release would have failed here. A wiki is just another git repo,
+      # and GITHUB_TOKEN can push to it, so there is no reason to depend on
+      # someone else's action for a copy and a commit.
+      - name: Sync .github/wiki to the GitHub Wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          WIKI_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          # A wiki that has never been initialised cannot be cloned. Report that
+          # clearly instead of failing the release with a bare git error.
+          if ! git clone --depth 1 "$WIKI_URL" wiki-repo 2>/dev/null; then
+            echo "::warning::wiki repo not clonable — create the first wiki page once in the GitHub UI to initialise it, then re-run"
+            exit 0
+          fi
+
+          # Mirror the tracked pages; delete pages that no longer exist in the
+          # source so the wiki cannot accumulate orphans.
+          find wiki-repo -maxdepth 1 -name '*.md' -delete
+          cp .github/wiki/*.md wiki-repo/
+
+          cd wiki-repo
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "wiki already up to date"
+            exit 0
+          fi
+          git commit -m "docs: sync wiki from ${GITHUB_SHA:0:7}"
+          git push

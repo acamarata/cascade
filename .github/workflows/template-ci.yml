@@ -94,7 +94,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       # ── Step 4: Cargo integration test ──────────────────────────────────────
       # Loads all .md files from data/templates/ via TemplateRegistry and asserts
