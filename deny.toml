@@ -81,21 +81,6 @@ ignore = [
     #    unmaintained, no safe upgrade available. Same threat model as the lopdf
     #    entry above — only parses PDFs the user explicitly adds to the RAG index.
     "RUSTSEC-2026-0192",
-    # ── wasmtime 36.0.12 (cascade-plugins WASM sandbox): "Stores can mix up type
-    #    indices between engines". Fixed upstream only in a much later major; a
-    #    36 -> 48 bump breaks the wasmtime-wasi API this crate uses (preview1
-    #    module moved, DirPerms/FilePerms relocated) and is a real migration, not
-    #    a drop-in — attempted and reverted 2026-08-21, tracked as T-P7-E25-19.
-    #    Exposure is bounded: Cascade creates ONE engine, and the advisory
-    #    requires mixing Stores across DIFFERENT engines. Not ignored lightly —
-    #    this is the plugin sandbox.
-    "RUSTSEC-2026-0222",
-    # ── h2 0.3.27 (transitive via hyper 0.14 / tonic 0.11): unbounded empty DATA
-    #    frames. h2 0.4.18 (the current major) is already patched and is what our
-    #    own HTTP paths use; 0.3.27 arrives only through tonic 0.11's old hyper,
-    #    which serves no untrusted external listener in Cascade. Removed when
-    #    tonic is upgraded — tracked as T-P7-E25-19.
-    "RUSTSEC-2026-0258",
     # ── quick-xml 0.31/0.36/0.39 (transitive via tauri/plist and pdf-extract):
     #    quadratic-time dup-attr check + unbounded namespace-decl allocation. Plist
     #    inputs are bundled at build time (Tauri codegen) — not untrusted runtime data.
