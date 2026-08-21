@@ -125,9 +125,19 @@ jobs:
             use-cross: false
 
           # Linux aarch64 — native arm64 runner (no Docker, no cross-rs)
+          #
+          # +fp16 is REQUIRED here: the `gemm-f16` crate (pulled in via candle
+          # for cascade-local-llm) emits half-precision instructions and fails
+          # to assemble with "instruction requires: fullfp16" on the baseline
+          # aarch64 target. Every ARMv8.2+ core — including this runner's
+          # Neoverse — has the feature; the default target-cpu just does not
+          # assume it. Set per-entry rather than in the workflow-level
+          # RUSTFLAGS, which applies to all targets, or in .cargo/config.toml,
+          # whose target rustflags the RUSTFLAGS env var overrides entirely.
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             use-cross: false
+            extra-rustflags: "-C target-feature=+fp16"
 
           # Windows x86_64 (native MSVC)
           - runner: windows-latest
@@ -161,9 +171,15 @@ jobs:
       # execution can't race ahead of cascade-daemon's own build.
       - name: Build cascade-daemon (integration test dependency)
         run: cargo build -p cascade-daemon --target ${{ matrix.target }}
+        env:
+          # Workflow-level RUSTFLAGS plus any per-target additions.
+          RUSTFLAGS: "-D warnings ${{ matrix.extra-rustflags }}"
 
       - name: Run tests via nextest (native, all targets)
         run: cargo nextest run --workspace --profile ci --target ${{ matrix.target }}
+        env:
+          # Workflow-level RUSTFLAGS plus any per-target additions.
+          RUSTFLAGS: "-D warnings ${{ matrix.extra-rustflags }}"
 
   # ── integration-tests ────────────────────────────────────────────────────
   # Run the cascade-providers integration test suite (all adapters via
@@ -453,12 +469,18 @@ jobs:
 
   # ── widget-macos ──────────────────────────────────────────────────────────
   # Build the CascadeApp + CascadeWidgetExtension Xcode project and run
-  # CascadeWidgetTests on a macos-14 runner (Apple Silicon, WidgetKit support).
-  # Needs GitHub-hosted macOS runners; skipped on the private repo (no paid minutes).
-  # Flip repo var HOSTED_CI=true when public.
+  # CascadeWidgetTests. Needs GitHub-hosted macOS runners; gated on HOSTED_CI.
+  #
+  # RUNNER VERSION IS LOad-BEARING: this job was pinned to macos-14, whose
+  # Xcode 15 cannot read a project with `objectVersion = 77` — the Xcode 16+
+  # format that xcodegen 2.45.4 emits and that the committed project already
+  # uses. The job failed with a bare "xcodebuild: error: Unable to read
+  # project 'CascadeWidget.xcodeproj'", which names neither the format nor the
+  # Xcode version. Reproduced locally: same xcodegen, Xcode 26 reads it fine.
+  # Do not pin this back below macos-15 without also lowering objectVersion.
   widget-macos:
     name: widget-macos
-    runs-on: macos-14
+    runs-on: macos-latest
     if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4

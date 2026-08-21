@@ -18,8 +18,6 @@
 //!
 //! SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-tray (Windows impl)
 
-use std::sync::{Arc, Mutex};
-
 use tray_icon::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     Icon, TrayIcon, TrayIconBuilder,
@@ -68,9 +66,6 @@ pub struct WindowsTrayImpl {
     /// WHY Vec not HashMap: the menu has at most 4-5 items; linear scan is
     /// faster than hashing for such small sets and avoids a HashMap import.
     menu_actions: Vec<(String, TrayAction)>,
-    /// Shared slot for the last action received from `MenuEvent::receiver()`.
-    /// Written by `last_action()` after polling `MenuEvent::receiver()`.
-    last_action_slot: Arc<Mutex<Option<TrayAction>>>,
 }
 
 impl WindowsTrayImpl {
@@ -101,7 +96,6 @@ impl WindowsTrayImpl {
         Ok(Self {
             tray,
             menu_actions: Vec::new(),
-            last_action_slot: Arc::new(Mutex::new(None)),
         })
     }
 }
@@ -221,6 +215,14 @@ impl TrayHandle for WindowsTrayImpl {
     ///     silently discarded.
     ///
     /// SPORT: `.claude/docs/MASTER-CRATES.md` — cascade-tray
+    /// Poll the tray menu for the most recent action.
+    ///
+    /// There is deliberately no shared "last action" slot on Windows. One
+    /// existed, documented as "written by `last_action()`" — but nothing ever
+    /// wrote it, so the field was dead and the comment was wrong. The Linux
+    /// backend needs a slot because its menu callback fires on another thread;
+    /// here the receiver is polled directly by the caller, so a slot would add
+    /// state without a reader.
     fn last_action(&self) -> Option<TrayAction> {
         use tray_icon::menu::MenuEvent;
         if let Ok(event) = MenuEvent::receiver().try_recv() {

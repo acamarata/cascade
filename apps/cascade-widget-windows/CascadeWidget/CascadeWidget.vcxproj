@@ -26,7 +26,15 @@
     <AssemblyName>CascadeWidget</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <!-- Windows App SDK 1.5 requires Windows 10 1809 (10.0.17763) as minimum -->
-    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
+    <!--
+      Pinning an exact SDK build (was 10.0.22621.0) fails on any machine that
+      does not have that precise version installed — including the GitHub
+      windows-latest runner, which errored MSB8036 "The Windows SDK version
+      10.0.22621.0 was not found". "10.0" means "the latest installed 10.x
+      SDK", which is what a CI runner and a fresh dev box both actually have.
+      The MIN version below is what enforces the real compatibility floor.
+    -->
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
     <ApplicationType>Windows Store</ApplicationType>
     <ApplicationTypeRevision>10.0</ApplicationTypeRevision>

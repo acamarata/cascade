@@ -254,9 +254,16 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
         if src_path.is_dir() {
             copy_tree(&src_path, &dst_path)?;
         } else if src_path.is_symlink() {
-            let target = std::fs::read_link(&src_path)?;
+            // The link target is only needed to RECREATE the link, which is a
+            // unix-only path here; reading it unconditionally left `target`
+            // unused on Windows and failed that build under -D warnings.
             #[cfg(unix)]
-            std::os::unix::fs::symlink(&target, &dst_path)?;
+            {
+                let target = std::fs::read_link(&src_path)?;
+                std::os::unix::fs::symlink(&target, &dst_path)?;
+            }
+            // Windows needs elevated privileges or Developer Mode to create a
+            // symlink, so the link is followed and its CONTENT copied instead.
             #[cfg(not(unix))]
             std::fs::copy(&src_path, &dst_path).map(|_| ())?;
         } else {
