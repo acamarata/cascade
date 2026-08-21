@@ -25,7 +25,7 @@ cascade-db      = { workspace = true }
 cascade-types   = { workspace = true }
 cascade-harness = { workspace = true }
 cascade-ccapi   = { path = "../cascade-ccapi", version = "1.5.0" }
-cascade-rag     = { path = "../cascade-rag", version = "1.5.0" }
+cascade-rag     = { path = "../cascade-rag", version = "1.5.0", features = ["code-chunker"] }
 cascade-plugins = { path = "../cascade-plugins", version = "1.5.0", optional = true }
 cascade-mcp     = { path = "../cascade-mcp", version = "1.5.0" }
 cascade-keychain = { path = "../cascade-keychain", version = "1.5.0" }

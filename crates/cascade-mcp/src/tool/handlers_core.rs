@@ -159,19 +159,22 @@ pub(super) async fn handle_search(
 
 /// `cascade.search_codebase` — code-aware search.
 ///
-/// # Current status
+/// # Retriever selection
 ///
-/// The tree-sitter code index path (`code-chunker` feature) is not yet wired
-/// into a separate code [`Retriever`] at construction time.  Until a dedicated
-/// code index is available this handler falls back to the general-purpose
-/// retriever (same as `cascade.search`) when one is injected, and returns an
-/// "index not ready" message otherwise.
+/// Prefers `code_retriever` — a retriever backed by a TREE-SITTER-CHUNKED
+/// index, whose chunks are whole functions, impl blocks and classes rather
+/// than fixed-size windows — and falls back to the general-purpose retriever
+/// when no code index has been injected (T-P7-E15-02). The response reports
+/// which one answered in `metadata.index`, so a caller can tell a genuine
+/// code-index hit from a generic fallback instead of guessing.
 ///
-/// TODO(E11.1-followup): wire a `code_retriever: Option<Arc<dyn Retriever>>`
-/// field into `ToolRegistry` backed by a tree-sitter chunked index, and add a
-/// `lang` filter to `RetrieveOpts` so callers can constrain by language.
+/// A `lang` filter is still passed through only as a result annotation:
+/// `RetrieveOpts` has no language field, so constraining the retrieval itself
+/// remains future work rather than something this handler silently pretends
+/// to do.
 pub(super) async fn handle_search_codebase(
     args: &Value,
+    code_retriever: Option<Arc<dyn Retriever>>,
     retriever: Option<Arc<dyn Retriever>>,
 ) -> std::result::Result<Value, JsonRpcError> {
     let query = args
@@ -187,10 +190,9 @@ pub(super) async fn handle_search_codebase(
 
     debug!(query, limit, lang = ?lang, "cascade.search_codebase");
 
-    // Use the general-purpose retriever as a best-effort fallback until a
-    // dedicated code index (tree-sitter chunker + code-aware embed path) is
-    // wired in.  When `lang` is set we include it as a note in the result.
-    let ret = match retriever {
+    // Dedicated code index first; the general retriever is the fallback.
+    let used_code_index = code_retriever.is_some();
+    let ret = match code_retriever.or(retriever) {
         None => {
             return Ok(serde_json::json!({
                 "content": [{
@@ -233,12 +235,21 @@ pub(super) async fn handle_search_codebase(
         }));
     }
 
+    // Name the index that answered. A caller cannot otherwise distinguish a
+    // real tree-sitter code hit from a generic-index fallback.
+    let index = if used_code_index { "code" } else { "general" };
     let text = if hits.is_empty() {
-        format!("cascade.search_codebase: no results for {query:?} (lang={lang:?})")
+        format!("cascade.search_codebase: no results for {query:?} (lang={lang:?}, index={index})")
+    } else if used_code_index {
+        format!(
+            "cascade.search_codebase: {} result(s) for {query:?} (lang={lang:?}, \
+             index=code, tree-sitter chunked)",
+            hits.len()
+        )
     } else {
         format!(
             "cascade.search_codebase: {} result(s) for {query:?} (lang={lang:?}, \
-             note: using general-purpose index; dedicated code index pending E11.1-followup)",
+             index=general — no dedicated code index injected)",
             hits.len()
         )
     };
@@ -246,7 +257,7 @@ pub(super) async fn handle_search_codebase(
     Ok(serde_json::json!({
         "content": [{ "type": "text", "text": text }],
         "results": results,
-        "metadata": { "ready": true, "lang": lang }
+        "metadata": { "ready": true, "lang": lang, "index": index }
     }))
 }
 

@@ -17,7 +17,10 @@ path = "src/main.rs"
 [dependencies]
 cascade-core      = { workspace = true }
 cascade-db        = { workspace = true }
-cascade-rag       = { path = "../cascade-rag", version = "1.5.0", features = ["fastembed", "reranker"] }
+# code-chunker: symbol-aware (tree-sitter) chunking for .rs/.ts/.js/.py.
+# Not a default of cascade-rag, and nothing enabled it, so every shipped build
+# chunked source files with the generic sliding window (T-P7-E15-02).
+cascade-rag       = { path = "../cascade-rag", version = "1.5.0", features = ["fastembed", "reranker", "code-chunker"] }
 cascade-types     = { workspace = true }
 cascade-agents    = { workspace = true }
 async-trait       = { workspace = true }

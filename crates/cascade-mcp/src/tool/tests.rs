@@ -2093,3 +2093,83 @@ async fn unopenable_pool_disables_dedup_without_failing() {
         "tool still returns full results with dedup off"
     );
 }
+
+// ── search_codebase retriever selection (T-P7-E15-02) ─────────────────────────
+
+/// A retriever that reports which index it is, so a test can tell which one
+/// actually answered.
+struct LabelledRetriever(&'static str);
+
+#[async_trait::async_trait]
+impl Retriever for LabelledRetriever {
+    async fn retrieve(
+        &self,
+        _query: &str,
+        _opts: &cascade_types::retriever::RetrieveOpts,
+    ) -> cascade_types::error::Result<Vec<cascade_types::retriever::RetrievalHit>> {
+        Ok(vec![cascade_types::retriever::RetrievalHit {
+            chunk_id: self.0.to_owned(),
+            text: format!("hit from {}", self.0),
+            file_path: Some(std::path::PathBuf::from("src/lib.rs")),
+            start_line: Some(1),
+            end_line: Some(2),
+            score: 1.0,
+            rank: 0,
+            tier: None,
+        }])
+    }
+
+    fn name(&self) -> &str {
+        self.0
+    }
+}
+
+async fn call_search_codebase(reg: &ToolRegistry) -> Value {
+    reg.call(&serde_json::json!({
+        "name": "cascade.search_codebase",
+        "arguments": { "query": "fn main" }
+    }))
+    .await
+    .expect("search_codebase should not fail")
+}
+
+/// With a code index injected, the code retriever answers — not the generic one.
+#[tokio::test]
+async fn search_codebase_prefers_the_dedicated_code_index() {
+    let reg = ToolRegistry::new()
+        .with_retriever(Arc::new(LabelledRetriever("general")))
+        .with_code_retriever(Arc::new(LabelledRetriever("code")));
+
+    let out = call_search_codebase(&reg).await;
+    let results = out["results"].as_array().cloned().unwrap_or_default();
+    assert!(!results.is_empty(), "expected a hit, got: {out}");
+    assert_eq!(
+        results[0]["chunk_id"], "code",
+        "the dedicated code index must answer when present"
+    );
+    assert_eq!(out["metadata"]["index"], "code");
+}
+
+/// Without a code index the handler still works, using the general retriever,
+/// and SAYS so — a caller must be able to tell a fallback from a real code hit.
+#[tokio::test]
+async fn search_codebase_falls_back_to_the_general_index() {
+    let reg = ToolRegistry::new().with_retriever(Arc::new(LabelledRetriever("general")));
+
+    let out = call_search_codebase(&reg).await;
+    let results = out["results"].as_array().cloned().unwrap_or_default();
+    assert!(!results.is_empty(), "expected a fallback hit, got: {out}");
+    assert_eq!(results[0]["chunk_id"], "general");
+    assert_eq!(
+        out["metadata"]["index"], "general",
+        "a fallback must not be reported as a code-index hit"
+    );
+}
+
+/// With neither retriever the handler reports "not ready" rather than erroring.
+#[tokio::test]
+async fn search_codebase_with_no_index_reports_not_ready() {
+    let reg = ToolRegistry::new();
+    let out = call_search_codebase(&reg).await;
+    assert_eq!(out["metadata"]["ready"], false);
+}

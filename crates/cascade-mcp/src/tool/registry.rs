@@ -122,6 +122,10 @@ pub struct ToolRegistry {
     auth: Option<Arc<McpAuth>>,
     /// Shared slot for the live RAG retriever.  `None` = index not yet ready.
     retriever: RetrieverSlot,
+    /// Shared slot for a retriever backed by a TREE-SITTER-CHUNKED code index
+    /// (T-P7-E15-02).  `None` = no dedicated code index; `search_codebase`
+    /// then falls back to the general retriever, as it always did.
+    code_retriever: RetrieverSlot,
     /// Shared slot for the live SQLite connection pool used by
     /// `cascade.context_slice` cross-session dedup (T-P7-E15-01).
     /// `None` = dedup disabled (every session gets independent results).
@@ -139,6 +143,7 @@ impl ToolRegistry {
         Self {
             auth: None,
             retriever: Arc::new(tokio::sync::RwLock::new(None)),
+            code_retriever: Arc::new(tokio::sync::RwLock::new(None)),
             db_pool: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
@@ -148,6 +153,7 @@ impl ToolRegistry {
         Self {
             auth: Some(auth),
             retriever: Arc::new(tokio::sync::RwLock::new(None)),
+            code_retriever: Arc::new(tokio::sync::RwLock::new(None)),
             db_pool: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
@@ -170,6 +176,25 @@ impl ToolRegistry {
             *slot = Some(retriever);
         }
         self
+    }
+
+    /// Inject a retriever backed by a tree-sitter-chunked code index.
+    ///
+    /// `cascade.search_codebase` prefers this over the general retriever.
+    /// When it is absent the handler falls back to the general retriever
+    /// exactly as before, so wiring it is optional and non-breaking.
+    pub fn with_code_retriever(self, retriever: Arc<dyn Retriever>) -> Self {
+        // `try_write` on a freshly created, uncontested lock always succeeds.
+        if let Ok(mut slot) = self.code_retriever.try_write() {
+            *slot = Some(retriever);
+        }
+        self
+    }
+
+    /// Shared slot for the code retriever, for post-construction injection by
+    /// a background indexing task. Same protocol as [`Self::retriever_slot`].
+    pub fn code_retriever_slot(&self) -> RetrieverSlot {
+        Arc::clone(&self.code_retriever)
     }
 
     /// Return a clone of the shared [`RetrieverSlot`] so that a background
@@ -321,6 +346,12 @@ impl ToolRegistry {
             guard.clone()
         };
 
+        // Same snapshot discipline for the dedicated code retriever.
+        let code_retriever_snapshot: Option<Arc<dyn Retriever>> = {
+            let guard = self.code_retriever.read().await;
+            guard.clone()
+        };
+
         // Snapshot the DB pool slot the same way (T-P7-E15-01).  DbPool is
         // cheaply cloneable (Arc internally), so this is a shallow clone.
         let db_pool_snapshot: Option<cascade_db::pool::DbPool> = {
@@ -331,9 +362,9 @@ impl ToolRegistry {
         match name {
             "cascade.read" => tool_result(handle_read(&args).await),
             "cascade.search" => tool_result(handle_search(&args, retriever_snapshot).await),
-            "cascade.search_codebase" => {
-                tool_result(handle_search_codebase(&args, retriever_snapshot).await)
-            }
+            "cascade.search_codebase" => tool_result(
+                handle_search_codebase(&args, code_retriever_snapshot, retriever_snapshot).await,
+            ),
             "cascade.inbox.list" => tool_result(handle_inbox_list(&args).await),
             "cascade.inbox.send" => tool_result(handle_inbox_send(&args).await),
             "cascade.master_lists" => tool_result(handle_master_lists(&args).await),
