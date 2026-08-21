@@ -30,7 +30,7 @@ sha2 = "0.10"
 blake3 = "1"
 
 # LRU query cache with TTL (T-P4-E04-07; MIT)
-lru = "0.12"
+lru = "0.18"
 
 # Regex engine for redaction pipeline PII/secret stripping (T-RAG-07; MIT/Apache-2.0)
 regex = "1"

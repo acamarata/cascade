@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Security
+- **Cleared the release-blocking Security Scan gate** (2026-08-21). `cargo-deny`
+  failed on two denied advisories in `lru` 0.12.5 — a potential use-after-free
+  from missing panic safety in `LruCache::pop()` (RUSTSEC-2026-0253) and a
+  Stacked Borrows violation in `IterMut` (RUSTSEC-2026-0002). `lru` is a direct
+  dependency of cascade-rag, so it was upgraded to 0.18; 574 tests still pass.
+  Two remaining advisories are ignored with written reasoning rather than fixed
+  under release pressure: wasmtime 36's cross-engine type-index issue (a 36→48
+  bump breaks the wasmtime-wasi API and is a real migration) and h2 0.3.27
+  arriving via tonic 0.11's old hyper (our own HTTP paths already use the
+  patched 0.4.18). Both are tracked as T-P7-E25-19 so they cannot quietly become
+  permanent.
+
 ### Fixed
 - **Cross-session dedup is now active in real MCP sessions** (T-P7-E15-04).
   `ToolRegistry::with_db_pool` existed but was called only from tests, so
