@@ -5,9 +5,9 @@
 //! be kept alive for the process lifetime.
 //!
 //! Inputs:  `log_dir` — directory where rolling log files are written.
-//!          `otel_provider` — optional TracerProvider returned by `init_tracing`.
+//!          `otel_provider` — optional SdkTracerProvider from `init_tracing`.
 //! Outputs: `WorkerGuard` — must be bound in `main()`.
-//!          `Option<TracerProvider>` — returned by `init_tracing`; must be kept
+//!          `Option<SdkTracerProvider>` — from `init_tracing`; must be kept
 //!          alive and `shutdown()` called on daemon exit to flush pending spans.
 //! Constraints: must be called exactly once per process; panics if the global
 //! subscriber is already set (tracing-subscriber invariant).
@@ -24,7 +24,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 // OTel imports — used only when an endpoint is provided.
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 
 /// Initialise an OpenTelemetry OTLP/gRPC tracer provider.
 ///
@@ -38,42 +38,48 @@ use opentelemetry_sdk::trace::TracerProvider;
 ///
 /// # Returns
 ///
-/// `Some(TracerProvider)` when OTel is configured; `None` otherwise. The
+/// `Some(SdkTracerProvider)` when OTel is configured; `None` otherwise. The
 /// returned provider must be stored and `provider.shutdown()` called on exit.
 ///
-/// The batch exporter runs on the Tokio runtime (`opentelemetry_sdk::runtime::Tokio`);
-/// call this only after `#[tokio::main]` has started the runtime.
+/// The batch exporter drives its own background runtime as of
+/// opentelemetry_sdk 0.32 — the explicit `runtime::Tokio` argument no longer
+/// exists — but the exporter still needs a Tokio reactor, so call this only
+/// after `#[tokio::main]` has started the runtime.
 ///
 /// # Errors
 ///
 /// Errors during exporter or provider construction are swallowed and `None` is
 /// returned. This matches the fire-and-forget contract: an unavailable collector
 /// must not crash the daemon.
-pub fn init_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
+pub fn init_tracing(endpoint: Option<&str>) -> Option<SdkTracerProvider> {
     let endpoint = endpoint?;
 
-    let exporter = opentelemetry_otlp::new_exporter()
-        .tonic()
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
         .with_endpoint(endpoint)
-        .build_span_exporter()
+        .build()
         .ok()?;
 
-    let resource = opentelemetry_sdk::Resource::new(vec![
-        opentelemetry::KeyValue::new(
-            opentelemetry_semantic_conventions::resource::SERVICE_NAME,
-            "cascaded",
-        ),
-        opentelemetry::KeyValue::new(
-            opentelemetry_semantic_conventions::resource::SERVICE_VERSION,
-            env!("CARGO_PKG_VERSION"),
-        ),
-    ]);
+    // `Resource::new` became private in 0.32; resources are built through the
+    // builder, which also supplies the SDK's own default attributes.
+    let resource = opentelemetry_sdk::Resource::builder()
+        .with_attributes(vec![
+            opentelemetry::KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                "cascaded",
+            ),
+            opentelemetry::KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_VERSION,
+                env!("CARGO_PKG_VERSION"),
+            ),
+        ])
+        .build();
 
-    let config = opentelemetry_sdk::trace::Config::default().with_resource(resource);
-
-    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_config(config)
+    // `trace::Config` is gone in 0.32 — the resource is set directly on the
+    // provider builder instead.
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(resource)
         .build();
 
     opentelemetry::global::set_tracer_provider(provider.clone());
@@ -99,7 +105,7 @@ pub fn init_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
 /// already been installed.
 // Called by main() when OTEL telemetry is enabled via config.telemetry.enabled.
 #[allow(dead_code)]
-pub fn init_logging(log_dir: &Path, otel_provider: Option<&TracerProvider>) -> WorkerGuard {
+pub fn init_logging(log_dir: &Path, otel_provider: Option<&SdkTracerProvider>) -> WorkerGuard {
     std::fs::create_dir_all(log_dir).expect("cannot create log dir");
 
     // Bug 4 fix: set a restrictive umask (0o177 → new files get 0o600) for the

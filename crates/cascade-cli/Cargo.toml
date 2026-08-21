@@ -46,11 +46,11 @@ toml          = "0.8"
 toml_edit     = "0.22"
 tracing       = { workspace = true }
 tracing-subscriber = { workspace = true }
-tracing-opentelemetry = "0.24"
-opentelemetry         = { version = "0.23", features = ["trace"] }
-opentelemetry-otlp    = { version = "0.16", features = ["tonic", "grpc-tonic"] }
-opentelemetry_sdk     = { version = "0.23", features = ["trace", "rt-tokio"] }
-opentelemetry-semantic-conventions = "0.15"
+tracing-opentelemetry = "0.33"
+opentelemetry         = { version = "0.32", features = ["trace"] }
+opentelemetry-otlp    = { version = "0.32", features = ["grpc-tonic"] }
+opentelemetry_sdk     = { version = "0.32", features = ["trace", "rt-tokio"] }
+opentelemetry-semantic-conventions = "0.32"
 notify        = { workspace = true }
 chrono        = { workspace = true }
 dirs          = "5"

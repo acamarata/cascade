@@ -76,8 +76,8 @@ tree-sitter-rust       = "0.24"
 tree-sitter-typescript = "0.23"
 tree-sitter-python     = "0.25"
 tree-sitter-javascript = "0.25"
-wasmtime      = "=36.0.12"
-wasmtime-wasi = "=36.0.12"
+wasmtime      = "=36.0.13"
+wasmtime-wasi = "=36.0.13"
 notify      = "6"
 chrono      = { version = "0.4", features = ["serde"] }
 uuid        = { version = "1", features = ["v4", "serde"] }

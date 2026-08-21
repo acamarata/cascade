@@ -12,7 +12,7 @@
 //!     crash the daemon.
 
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::path::{Path, PathBuf};
 use tracing_subscriber::{
     fmt::{self, time::UtcTime},
@@ -56,7 +56,7 @@ pub fn init_with_config(
 pub fn init_with_config_and_otel(
     config_log_level: Option<&str>,
     config_log_format: Option<&str>,
-    otel_provider: Option<&TracerProvider>,
+    otel_provider: Option<&SdkTracerProvider>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log_dir = log_dir()?;
     std::fs::create_dir_all(&log_dir)?;
@@ -99,7 +99,7 @@ fn build_subscriber(
     file: std::fs::File,
     env_filter: EnvFilter,
     use_pretty: bool,
-    otel_provider: Option<&TracerProvider>,
+    otel_provider: Option<&SdkTracerProvider>,
 ) -> impl tracing::Subscriber + Send + Sync {
     let file_layer = fmt::layer()
         .json()
@@ -212,8 +212,8 @@ fn log_dir() -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_util::future::BoxFuture;
-    use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
+    use opentelemetry_sdk::error::OTelSdkResult;
+    use opentelemetry_sdk::trace::{SpanData, SpanExporter};
     use std::io::Write;
     use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
@@ -222,12 +222,11 @@ mod tests {
     struct RecordingExporter(Arc<Mutex<Vec<SpanData>>>);
 
     impl SpanExporter for RecordingExporter {
-        fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
-            let spans = Arc::clone(&self.0);
-            Box::pin(async move {
-                spans.lock().unwrap().append(&mut batch);
-                Ok(())
-            })
+        // opentelemetry_sdk 0.32: `export` takes `&self` and returns an
+        // `impl Future`, replacing the old `&mut self` + `BoxFuture` shape.
+        async fn export(&self, mut batch: Vec<SpanData>) -> OTelSdkResult {
+            self.0.lock().unwrap().append(&mut batch);
+            Ok(())
         }
     }
 
@@ -235,7 +234,7 @@ mod tests {
     fn active_subscriber_attaches_otel_layer_only_when_provider_is_present() {
         let dir = tempdir().unwrap();
         let exporter = RecordingExporter::default();
-        let provider = TracerProvider::builder()
+        let provider = SdkTracerProvider::builder()
             .with_simple_exporter(exporter.clone())
             .build();
 
@@ -245,9 +244,7 @@ mod tests {
         tracing::subscriber::with_default(disabled_subscriber, || {
             tracing::info_span!("otel_disabled").in_scope(|| {});
         });
-        for result in provider.force_flush() {
-            result.unwrap();
-        }
+        provider.force_flush().unwrap();
         assert!(exporter.0.lock().unwrap().is_empty());
 
         let enabled_file = std::fs::File::create(dir.path().join("enabled.log")).unwrap();
@@ -256,9 +253,7 @@ mod tests {
         tracing::subscriber::with_default(enabled_subscriber, || {
             tracing::info_span!("otel_enabled").in_scope(|| {});
         });
-        for result in provider.force_flush() {
-            result.unwrap();
-        }
+        provider.force_flush().unwrap();
 
         let spans = exporter.0.lock().unwrap();
         assert_eq!(spans.len(), 1);

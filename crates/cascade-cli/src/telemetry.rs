@@ -4,7 +4,7 @@
 //! optional OpenTelemetry OTLP export) for interactive CLI commands.
 //!
 //! Inputs:  `otel_provider` — optional TracerProvider returned by `init_cli_tracing`.
-//! Outputs: `Option<TracerProvider>` — returned by `init_cli_tracing`; must be kept
+//! Outputs: `Option<SdkTracerProvider>` — returned by `init_cli_tracing`; must be kept
 //!          alive and `shutdown()` called on CLI exit to flush pending spans.
 //! Constraints: must be called exactly once per process; panics if the global
 //! subscriber is already set (tracing-subscriber invariant).
@@ -13,7 +13,7 @@
 
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 /// Initialise an OpenTelemetry OTLP/gRPC tracer provider for the CLI.
@@ -28,7 +28,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 ///
 /// # Returns
 ///
-/// `Some(TracerProvider)` when OTel is configured; `None` otherwise. The
+/// `Some(SdkTracerProvider)` when OTel is configured; `None` otherwise. The
 /// returned provider must be stored and `provider.shutdown()` called on exit.
 ///
 /// The batch exporter runs on the Tokio runtime (`opentelemetry_sdk::runtime::Tokio`);
@@ -39,31 +39,35 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 /// Errors during exporter or provider construction are swallowed and `None` is
 /// returned. This matches the fire-and-forget contract: an unavailable collector
 /// must not crash the CLI.
-pub fn init_cli_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
+pub fn init_cli_tracing(endpoint: Option<&str>) -> Option<SdkTracerProvider> {
     let endpoint = endpoint?;
 
-    let exporter = opentelemetry_otlp::new_exporter()
-        .tonic()
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
         .with_endpoint(endpoint)
-        .build_span_exporter()
+        .build()
         .ok()?;
 
-    let resource = opentelemetry_sdk::Resource::new(vec![
-        opentelemetry::KeyValue::new(
-            opentelemetry_semantic_conventions::resource::SERVICE_NAME,
-            "cascade-cli",
-        ),
-        opentelemetry::KeyValue::new(
-            opentelemetry_semantic_conventions::resource::SERVICE_VERSION,
-            env!("CARGO_PKG_VERSION"),
-        ),
-    ]);
+    // `Resource::new` became private in 0.32; resources are built through the
+    // builder, which also supplies the SDK's own default attributes.
+    let resource = opentelemetry_sdk::Resource::builder()
+        .with_attributes(vec![
+            opentelemetry::KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                "cascade-cli",
+            ),
+            opentelemetry::KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_VERSION,
+                env!("CARGO_PKG_VERSION"),
+            ),
+        ])
+        .build();
 
-    let config = opentelemetry_sdk::trace::Config::default().with_resource(resource);
-
-    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_config(config)
+    // `trace::Config` is gone in 0.32 — the resource is set directly on the
+    // provider builder, and the batch exporter no longer takes a runtime arg.
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(resource)
         .build();
 
     opentelemetry::global::set_tracer_provider(provider.clone());
@@ -82,7 +86,7 @@ pub fn init_cli_tracing(endpoint: Option<&str>) -> Option<TracerProvider> {
 ///
 /// Panics (via `tracing-subscriber`) if a global subscriber has already been
 /// installed.
-pub fn init_cli_logging(otel_provider: Option<&TracerProvider>) {
+pub fn init_cli_logging(otel_provider: Option<&SdkTracerProvider>) {
     let stderr_layer = fmt::layer()
         .compact()
         .with_writer(std::io::stderr)
