@@ -130,6 +130,64 @@ mod tests {
         }
     }
 
+    // ── Test: Mutex poison recovery (T-P7-E25-05) ─────────────────────────────
+
+    /// One panicking request must not take the whole proxy down.
+    ///
+    /// `std::sync::Mutex` poisons permanently: with `.lock().unwrap()`, a
+    /// single panic while the routing table was held makes EVERY later
+    /// request panic on acquisition. `/health` and dispatch both acquire it,
+    /// so the proxy would report nothing and route nothing until restart.
+    #[tokio::test]
+    async fn proxy_state_survives_a_panic_while_the_table_lock_is_held() {
+        let state = make_proxy_state(
+            RoutingTable::new(&[]),
+            HashMap::new(),
+            "http://mock",
+            ProxyConfig::default(),
+        );
+
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {})); // keep the fixture panic out of test output
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
+            panic!("simulated panic while holding the routing-table lock");
+        }));
+        std::panic::set_hook(previous_hook);
+
+        assert!(panicked.is_err(), "the fixture must actually panic");
+        assert!(
+            state.table.lock().is_err(),
+            "the lock must genuinely be poisoned, or this test proves nothing"
+        );
+
+        // Recovery: the table is still readable, and /health-style inspection
+        // still works rather than panicking.
+        let slot_count = {
+            let guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
+            guard.slots().len()
+        };
+        assert_eq!(slot_count, 0, "empty fixture table is still readable");
+
+        // The credentials map is independently locked and equally recoverable.
+        let creds_panicked = {
+            let previous_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(|_| {}));
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _g = state.credentials.lock().unwrap_or_else(|e| e.into_inner());
+                panic!("simulated panic while holding the credentials lock");
+            }));
+            std::panic::set_hook(previous_hook);
+            r
+        };
+        assert!(creds_panicked.is_err());
+        let creds = state.credentials.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(
+            creds.is_empty(),
+            "credentials map still usable after a panic"
+        );
+    }
+
     // ── Test: Path allowlist (SIEGE HIGH-1) ───────────────────────────────────
 
     /// Unit test: /v1alpha/ path returns HTTP 403 with allowlist error message.

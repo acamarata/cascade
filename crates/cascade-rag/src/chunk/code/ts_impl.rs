@@ -20,11 +20,15 @@ use super::language::SourceLanguage;
 
 #[cfg(feature = "code-chunker")]
 pub(super) fn get_ts_language(lang: SourceLanguage) -> Language {
+    // tree-sitter 0.23 replaced the `language()` functions with `LANGUAGE`
+    // constants of type `LanguageFn`, converted with `.into()`. This module is
+    // behind the `code-chunker` feature and nothing in CI built it, so it kept
+    // calling the removed API and had simply stopped compiling.
     match lang {
-        SourceLanguage::Rust => tree_sitter_rust::language(),
-        SourceLanguage::TypeScript => tree_sitter_typescript::language_typescript(),
-        SourceLanguage::JavaScript => tree_sitter_javascript::language(),
-        SourceLanguage::Python => tree_sitter_python::language(),
+        SourceLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
+        SourceLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+        SourceLanguage::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+        SourceLanguage::Python => tree_sitter_python::LANGUAGE.into(),
     }
 }
 
@@ -127,14 +131,13 @@ pub(super) fn preceding_doc_comment(
         if comment_kinds.contains(&kind) {
             let text = sib.utf8_text(src).ok()?;
             // For Python, only count expression_statement containing a string literal.
-            if lang == SourceLanguage::Python {
-                if !text.trim_start().starts_with('"')
-                    && !text.trim_start().starts_with('\'')
-                    && !text.trim_start().starts_with("r\"")
-                    && !text.trim_start().starts_with("r'")
-                {
-                    break;
-                }
+            if lang == SourceLanguage::Python
+                && !text.trim_start().starts_with('"')
+                && !text.trim_start().starts_with('\'')
+                && !text.trim_start().starts_with("r\"")
+                && !text.trim_start().starts_with("r'")
+            {
+                break;
             }
             lines.push(text.to_owned());
             match sib.prev_named_sibling() {
@@ -250,7 +253,6 @@ pub(super) fn ts_chunk(
                     node,
                     src_bytes,
                     source_path,
-                    text,
                     lang,
                     config,
                     &heading,
@@ -337,12 +339,15 @@ pub(super) fn ts_chunk(
 }
 
 /// Recursively split an oversized node by its inner function/method children.
+///
+/// `full_text` used to be threaded through here but was never read — only
+/// passed down to the next recursion — so it is gone rather than silenced with
+/// an underscore.
 #[cfg(feature = "code-chunker")]
 pub(super) fn split_oversized(
     node: &tree_sitter::Node<'_>,
     src: &[u8],
     source_path: &Path,
-    full_text: &str,
     lang: SourceLanguage,
     config: &ChunkerConfig,
     parent_heading: &str,
@@ -368,16 +373,7 @@ pub(super) fn split_oversized(
             let node_text = child.utf8_text(src).unwrap_or("").to_owned();
             if node_text.len() > config.max_chunk_chars {
                 // Recurse deeper.
-                let sub = split_oversized(
-                    child,
-                    src,
-                    source_path,
-                    full_text,
-                    lang,
-                    config,
-                    &heading,
-                    idx,
-                );
+                let sub = split_oversized(child, src, source_path, lang, config, &heading, idx);
                 idx += sub.len();
                 result.extend(sub);
             } else {

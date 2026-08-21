@@ -211,8 +211,24 @@ impl PolicyEvaluator for WasmPolicyEvaluator {
 
 /// Load the bundled default-deny-dangerous WASM policy.
 ///
-/// Returns `None` if the `bundled-policy-wasm` feature is not enabled or the
-/// pre-built WASM artifact is absent.  Callers fall back to `SimplePolicyEvaluator`.
+/// Returns `None` when the `bundled-policy-wasm` feature is not enabled, and
+/// callers fall back to `SimplePolicyEvaluator`.
+///
+/// # The artifact is REQUIRED when the feature is on
+///
+/// The doc here used to claim this returns `None` when the pre-built artifact
+/// is absent. It cannot: `include_bytes!` resolves at COMPILE time, so a
+/// missing `assets/policies/default-deny-dangerous.wasm` is a build failure,
+/// not a runtime `None`. The artifact is not checked in, so enabling this
+/// feature without producing it first will not compile — which is also why
+/// `--all-features` cannot build this workspace. Produce it with:
+///
+/// ```text
+/// opa build -t wasm -e data/allow assets/policies/default-deny-dangerous.rego
+/// ```
+///
+/// then extract `policy.wasm` from the bundle as
+/// `assets/policies/default-deny-dangerous.wasm`.
 pub fn load_bundled_default() -> Option<WasmPolicyEvaluator> {
     #[cfg(feature = "bundled-policy-wasm")]
     {

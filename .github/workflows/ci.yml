@@ -232,6 +232,21 @@ jobs:
       - name: Run clippy natively (all targets)
         run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
 
+      # Feature-gated code is invisible to the default clippy run, and it rots
+      # silently: this pass found `code-chunker` calling a tree-sitter API
+      # removed two majors earlier (the module had not compiled in months) and
+      # `gemini-proxy` carrying a dead import. `--all-features` cannot be used
+      # here — `bundled-policy-wasm` include_bytes! an artifact that is not
+      # checked in — so the buildable optional features are listed explicitly.
+      - name: Run clippy on optional features
+        run: |
+          set -euo pipefail
+          for feat in gemini-proxy code-chunker rag-multivec; do
+            echo "::group::clippy --features $feat"
+            cargo clippy --workspace --all-targets --target ${{ matrix.target }} --features "$feat" -- -D warnings
+            echo "::endgroup::"
+          done
+
   # ── clippy-hosted ─────────────────────────────────────────────────────────
   # Needs GitHub-hosted macOS/Windows runners; skipped on the private repo (no paid
   # minutes). Flip repo var HOSTED_CI=true when public.

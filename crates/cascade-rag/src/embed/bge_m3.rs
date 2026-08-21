@@ -133,6 +133,8 @@ const DOCUMENT_INSTRUCTION: &str = "passage: ";
 /// # async fn example() -> cascade_rag::embed::EmbedError {
 /// use std::sync::Arc;
 /// use cascade_rag::embed::bge_m3::{BgeM3Embedder, BgeM3Options};
+/// // embed_dense comes from the EmbedModel trait, which must be in scope.
+/// use cascade_rag::embed::EmbedModel;
 ///
 /// let embedder = BgeM3Embedder::new(BgeM3Options::default()).await
 ///     .expect("model init should succeed when model is cached");

@@ -1,7 +1,10 @@
 //! Tests for CodeChunker across all supported languages.
 
+// The file IS the test module (`chunk::code::tests`), so an inner `mod tests`
+// would make the path `chunk::code::tests::tests`. Attributes go on the file's
+// own module declaration in code.rs instead.
 #[cfg(all(test, feature = "code-chunker"))]
-mod tests {
+mod cases {
     use std::path::PathBuf;
 
     use super::super::super::{Chunker, ChunkerConfig};

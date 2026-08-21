@@ -619,7 +619,7 @@ pub async fn search(
     // and this block is a no-op — the 3-channel RRF is unchanged.
 
     let fused: Vec<FusedHit> = if config.colbert_enabled {
-        compute_colbert_channel(fused, &*embed, &conn, rrf_k, candidate_n).await
+        compute_colbert_channel(fused, query, &*embed, &conn, rrf_k, candidate_n).await
     } else {
         fused
     };
@@ -798,6 +798,7 @@ fn check_bge_m3_sparse_available() -> bool {
 /// that returns the input `fused` list unchanged and logs a warning.
 async fn compute_colbert_channel(
     fused: Vec<FusedHit>,
+    query: &str,
     embed: &dyn EmbedModel,
     conn: &Arc<Mutex<Connection>>,
     rrf_k: f64,
@@ -811,32 +812,82 @@ async fn compute_colbert_channel(
             return fused;
         }
 
-        let candidate_ids: Vec<i64> = fused.iter().map(|h| h.chunk_id).collect();
-
-        // Embed query tokens via embed.embed_multi_vec (blanket impl on EmbedModel).
-        let q_vecs = match embed.embed_multi_vec("") {
-            // embed_multi_vec on empty string returns empty — we need the actual query.
-            // The query is not passed into this helper; use the embed_dense path as a
-            // proxy for the query vector (single-token MaxSim approximation).
-            _ => {
-                // Since we don't have the raw query string in this helper, skip
-                // ColBERT scoring and return fused unchanged.  A future refactor
-                // should pass the query string here.
-                warn!("colbert_channel: query not available in helper; returning fused unchanged");
+        // Embed the query into per-token vectors. Previously the helper never
+        // received the query at all and always returned `fused` unchanged, so
+        // enabling colbert changed nothing while appearing to work.
+        let q_vecs = match embed.embed_multi_vec(query) {
+            Ok(v) if !v.is_empty() => v,
+            Ok(_) => {
+                warn!("colbert: query produced no token vectors; keeping 3-channel fusion");
+                return fused;
+            }
+            Err(e) => {
+                warn!(error = %e, "colbert: query embedding failed; keeping 3-channel fusion");
                 return fused;
             }
         };
-        let _ = q_vecs;
-        let _ = candidate_ids;
-        let _ = (load_token_embeddings, maxsim);
-        let _ = (rrf_k, candidate_n, conn);
-        fused
+
+        // MaxSim each candidate against its stored token embeddings. Chunks
+        // indexed before multi-vector storage was enabled have none; they keep
+        // their 3-channel score instead of being scored as 0.
+        let mut colbert_hits: Vec<(i64, f64)> = {
+            // tokio Mutex: acquired with .await, then used synchronously —
+            // the guard is never held across another await point.
+            let guard = conn.lock().await;
+            fused
+                .iter()
+                .filter_map(|h| match load_token_embeddings(&guard, h.chunk_id) {
+                    Ok(d_vecs) if !d_vecs.is_empty() => {
+                        Some((h.chunk_id, f64::from(maxsim(&q_vecs, &d_vecs))))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        if colbert_hits.is_empty() {
+            warn!("colbert: no candidate has stored token embeddings; keeping 3-channel fusion");
+            return fused;
+        }
+        colbert_hits.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+        // Re-fuse the existing ranking with the colbert ranking.
+        let base: Vec<(i64, f64)> = fused.iter().map(|h| (h.chunk_id, h.rrf_score)).collect();
+        let lists = [
+            RankedList {
+                source: "rrf3",
+                weight: 1.0,
+                hits: &base,
+            },
+            RankedList {
+                source: "colbert",
+                weight: 1.0,
+                hits: &colbert_hits,
+            },
+        ];
+        let mut refused = rrf_merge(&lists, rrf_k, candidate_n);
+
+        // Restore per-source provenance. Without this every citation would read
+        // "rrf3" and the original fts5/dense/sparse attribution — which the UI
+        // shows — would be lost behind the re-fusion.
+        for hit in &mut refused {
+            let carried_colbert = hit.sources_hit.iter().any(|s| s == "colbert");
+            let mut sources = fused
+                .iter()
+                .find(|h| h.chunk_id == hit.chunk_id)
+                .map(|h| h.sources_hit.clone())
+                .unwrap_or_default();
+            if carried_colbert {
+                sources.push("colbert".to_owned());
+            }
+            hit.sources_hit = sources;
+        }
+        refused
     }
 
     #[cfg(not(feature = "rag-multivec"))]
     {
         warn!("colbert_enabled=true but rag-multivec feature is not compiled; 4th channel skipped");
-        let _ = (embed, conn, rrf_k, candidate_n);
+        let _ = (query, embed, conn, rrf_k, candidate_n);
         fused
     }
 }

@@ -71,7 +71,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"
 clap        = { version = "4", features = ["derive"] }
 rusqlite    = { version = "0.31", features = ["bundled"] }
 sqlite-vec  = { path = "vendor/sqlite-vec", version = "=0.1.10-alpha.3" }
-tree-sitter = "0.24"
+# Runtime must be new enough for the grammar ABI the grammar crates ship.
+# The python/javascript grammars are ABI 15; runtime 0.24 caps at 14, which
+# made every parse fail at load with "Incompatible language version 15".
+tree-sitter = "0.26"
 tree-sitter-rust       = "0.24"
 tree-sitter-typescript = "0.23"
 tree-sitter-python     = "0.25"

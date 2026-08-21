@@ -16,6 +16,10 @@
 //!     across an `await` point (clone then release).
 //!   - Tests inject a `MockPlanner` — no live LLM, no disk I/O.
 //!
+//! Lock discipline: the orchestrator Mutex recovers from poisoning rather
+//! than unwrapping (T-P7-E25-05) — one panicking directive must not
+//! poison the lock and take every subsequent CEO directive down with it.
+//!
 //! SPORT: cascade-daemon / ipc_ceo — E-P6-04
 
 use std::path::PathBuf;
@@ -264,14 +268,20 @@ pub async fn handle_ceo_directive(
     let report = ceo.submit(directive).await.map_err(|e| e.to_string())?;
 
     // Store for subsequent status/approval queries
-    *runtime.orchestrator.lock().unwrap() = Some(ceo);
+    *runtime
+        .orchestrator
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(ceo);
 
     serde_json::to_value(&report).map_err(|e| e.to_string())
 }
 
 /// Handle `ceo_status` — return the current session report.
 pub fn handle_ceo_status(runtime: &CeoRuntime) -> Result<Value, String> {
-    let guard = runtime.orchestrator.lock().unwrap();
+    let guard = runtime
+        .orchestrator
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     match &*guard {
         None => Err("no active CEO session".into()),
         Some(ceo) => serde_json::to_value(ceo.report()).map_err(|e| e.to_string()),
@@ -280,7 +290,10 @@ pub fn handle_ceo_status(runtime: &CeoRuntime) -> Result<Value, String> {
 
 /// Handle `ceo_approvals` — list pending approvals.
 pub fn handle_ceo_approvals(runtime: &CeoRuntime) -> Result<Value, String> {
-    let guard = runtime.orchestrator.lock().unwrap();
+    let guard = runtime
+        .orchestrator
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     match &*guard {
         None => Err("no active CEO session".into()),
         Some(ceo) => serde_json::to_value(ceo.pending_approvals()).map_err(|e| e.to_string()),
@@ -289,7 +302,10 @@ pub fn handle_ceo_approvals(runtime: &CeoRuntime) -> Result<Value, String> {
 
 /// Handle `ceo_approve` — approve a pending action.
 pub fn handle_ceo_approve(runtime: &CeoRuntime, params: CeoApproveParams) -> Result<Value, String> {
-    let guard = runtime.orchestrator.lock().unwrap();
+    let guard = runtime
+        .orchestrator
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     match &*guard {
         None => Err("no active CEO session".into()),
         Some(ceo) => {
@@ -302,7 +318,10 @@ pub fn handle_ceo_approve(runtime: &CeoRuntime, params: CeoApproveParams) -> Res
 
 /// Handle `ceo_deny` — deny a pending action.
 pub fn handle_ceo_deny(runtime: &CeoRuntime, params: CeoApproveParams) -> Result<Value, String> {
-    let guard = runtime.orchestrator.lock().unwrap();
+    let guard = runtime
+        .orchestrator
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     match &*guard {
         None => Err("no active CEO session".into()),
         Some(ceo) => {
@@ -328,6 +347,55 @@ mod tests {
             parallel: false,
         }]));
         CeoRuntime::new(None).with_planner(planner)
+    }
+
+    // ── Poison recovery (T-P7-E25-05) ───────────────────────────────────────
+
+    /// A panic while the orchestrator lock is held must not take out every
+    /// later directive.
+    ///
+    /// With a plain `.lock().unwrap()` this test fails on the FIRST assertion
+    /// after the panic: `std::sync::Mutex` stays poisoned for the rest of the
+    /// process, so every subsequent CEO call panics — one bad directive turns
+    /// into a permanent outage.
+    #[test]
+    fn orchestrator_lock_survives_a_panic_while_held() {
+        let runtime = make_runtime();
+
+        // Poison the lock exactly the way a panicking request would.
+        // AssertUnwindSafe: the closure only borrows the runtime, and the
+        // point of the test is precisely that the state stays usable after
+        // the unwind.
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {})); // keep the fixture panic off the test output
+        let poisoner = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = runtime
+                .orchestrator
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            panic!("simulated panic while holding the orchestrator lock");
+        }));
+        std::panic::set_hook(previous_hook);
+        assert!(poisoner.is_err(), "the fixture must actually panic");
+        assert!(
+            runtime.orchestrator.lock().is_err(),
+            "the lock must actually be poisoned, or this test proves nothing"
+        );
+
+        // The recovery pattern still yields a usable guard.
+        let guard = runtime
+            .orchestrator
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        drop(guard);
+
+        // And it keeps working on repeat acquisition.
+        for _ in 0..3 {
+            let _g = runtime
+                .orchestrator
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+        }
     }
 
     // ── T1: ceo_directive dispatches and returns a FounderReport ────────────

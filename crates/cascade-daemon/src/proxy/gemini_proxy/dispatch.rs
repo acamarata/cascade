@@ -2,6 +2,14 @@
 //!
 //! Purpose: handle_connection reads one HTTP/1.1 request from a TCP stream,
 //! dispatch_request routes it through the RoutingTable with 429 retry logic.
+//!
+//! Lock discipline: every `Mutex` acquisition here recovers from poisoning
+//! with `.unwrap_or_else(|e| e.into_inner())` (T-P7-E25-05). A plain
+//! `.unwrap()` turns ONE panic while the lock was held into a permanent
+//! outage: the Mutex stays poisoned, so every later request panics too and
+//! the whole proxy is down rather than one request failing. The state behind
+//! these locks is a routing table and a credential map — a panicking request
+//! leaves them structurally intact, so continuing is the right call.
 //! SPORT: proxy module (T-P2-E02-36)
 
 use std::sync::Arc;
@@ -56,7 +64,7 @@ pub async fn dispatch_request(
     // Never forwarded upstream; answered locally before the /v1beta allowlist.
     if path == "/health" && (method == "GET" || method == "HEAD") {
         let gp = {
-            let guard = state.table.lock().unwrap();
+            let guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
             cascade_core::selection::gp_health_from_slots(guard.slots())
         };
         // Circuit-breaker observability (Phase B, v1.13.0): "exhausted" and
@@ -93,7 +101,7 @@ pub async fn dispatch_request(
     loop {
         // Pick next slot — release Mutex BEFORE the await.
         let slot_opt = {
-            let mut guard = state.table.lock().unwrap();
+            let mut guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
             guard.pick_next()
         };
 
@@ -120,7 +128,7 @@ pub async fn dispatch_request(
         // Look up API key: prefer OS keychain, fall back to providers.json.
         // Both guards are released before the .await below.
         let api_key = {
-            let creds_guard = state.credentials.lock().unwrap();
+            let creds_guard = state.credentials.lock().unwrap_or_else(|e| e.into_inner());
             let kc_guard = state.keychain_keys.read().unwrap();
             resolve_api_key(&creds_guard, &kc_guard, &slot.slot_id)
         };
@@ -156,7 +164,7 @@ pub async fn dispatch_request(
                 // Mark slot rate-limited BEFORE incrementing attempts so the slot
                 // is skipped immediately on the next pick_next() call.
                 {
-                    let mut guard = state.table.lock().unwrap();
+                    let mut guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
                     guard.mark_rate_limited(&slot.slot_id, cooldown_secs);
                     // Record rate-limit response latency and increment rate_limit_count.
                     if let Some(slot_data) =
@@ -183,7 +191,7 @@ pub async fn dispatch_request(
             Ok((status, resp_body)) => {
                 // Record latency and success path.
                 {
-                    let mut guard = state.table.lock().unwrap();
+                    let mut guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(slot_data) =
                         guard.slots_mut().iter_mut().find(|s| s.id == slot.slot_id)
                     {
@@ -196,7 +204,7 @@ pub async fn dispatch_request(
             Err(e) => {
                 // Record latency and error path (non-429 errors).
                 {
-                    let mut guard = state.table.lock().unwrap();
+                    let mut guard = state.table.lock().unwrap_or_else(|e| e.into_inner());
                     if let Some(slot_data) =
                         guard.slots_mut().iter_mut().find(|s| s.id == slot.slot_id)
                     {

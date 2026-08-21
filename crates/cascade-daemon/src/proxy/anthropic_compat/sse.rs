@@ -13,7 +13,6 @@
 //!              boundaries (network reads rarely align on `\n\n`).
 //! SPORT: `.claude/docs/MASTER-DAEMON.md` — proxy/anthropic_compat/sse
 
-use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -248,6 +247,10 @@ impl StreamTranslator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-only: the canonical id is referenced by fixtures, not by the
+    // translator itself, so it must be imported HERE — a module-level import
+    // is dead in the non-test build and fails clippy -D warnings.
+    use cascade_types::model_ids::MODEL_GEMINI_FLASH_LATEST;
 
     fn event_names(events: &[Vec<u8>]) -> Vec<String> {
         events

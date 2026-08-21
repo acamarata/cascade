@@ -17,18 +17,14 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use axum::routing::{get, post};
 use axum::Router;
 use tower::ServiceExt as _;
-use tower_http::limit::RequestBodyLimitLayer;
 
 use cascade_mcp::auth::McpAuth;
-use cascade_mcp::notification::NotificationBus;
 use cascade_mcp::security::{validate_local_origin, CapabilitySet};
 use cascade_mcp::server::McpServerConfig;
 
 // Re-export transport internals needed for app construction.
-use cascade_mcp::transport::http::BODY_LIMIT;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
