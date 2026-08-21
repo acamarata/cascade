@@ -73,13 +73,31 @@ fn cascade_bin() -> PathBuf {
         .expect("expected workspace root two dirs above CARGO_MANIFEST_DIR");
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let bin = workspace_root.join("target").join(profile).join("cascade");
+    let target_dir = workspace_root.join("target");
 
-    assert!(
-        bin.exists(),
-        "cascade binary not found at {bin:?}. Run `cargo build -p cascade-cli` first."
+    // A native build puts the binary at target/<profile>/cascade, but
+    // `cargo build --target <triple>` — even when <triple> is the host —
+    // always nests it under target/<triple>/<profile>/. CI builds with an
+    // explicit --target, so the native-only lookup failed there while passing
+    // on every developer machine. Same locator shape as
+    // cascade-cli/tests/integration.rs::cascaded_bin.
+    let native = target_dir.join(&profile).join("cascade");
+    if native.exists() {
+        return native;
+    }
+    if let Ok(entries) = std::fs::read_dir(&target_dir) {
+        for entry in entries.flatten() {
+            let candidate = entry.path().join(&profile).join("cascade");
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    panic!(
+        "cascade binary not found at {native:?} or under any {target_dir:?}/<triple>/{profile}/. \
+         Run `cargo build -p cascade-cli` (add --target <triple> to match how the test binary itself was built) first."
     );
-    bin
 }
 
 // ── MCP test helpers ──────────────────────────────────────────────────────────
