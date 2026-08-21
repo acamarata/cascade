@@ -59,7 +59,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use cascade_types::accounts::{Account, AccountFamily, AccountRole, AccountsRegistry};
-use cascade_types::quota_store::QuotaStore;
+use cascade_types::quota_store::{self as quota_store, QuotaStore};
 
 use crate::{
     accounts_store::read_accounts_registry,
@@ -555,10 +555,17 @@ fn account_is_exhausted(quota: &Option<QuotaStore>, account_id: &str) -> bool {
     };
     for entry in &qs.accounts {
         if entry.account_id == account_id || entry.provider == account_id {
+            // Per-model weekly breakdown slots (`w7:<account>:<model>`)
+            // describe ONE model family, not the account. Counting them here
+            // would let an exhausted Opus week mark the whole account
+            // exhausted while Sonnet still has headroom. The account-wide
+            // weekly slot (`…:all`) is NOT excluded — that one really does
+            // mean the account is out for the week.
             let pcts = entry
                 .models
-                .values()
-                .filter_map(|m| m.pct_used.map(f64::from));
+                .iter()
+                .filter(|(k, _)| !quota_store::is_weekly_model_breakdown(k))
+                .filter_map(|(_, m)| m.pct_used.map(f64::from));
             if selection::pcts_saturated(pcts) {
                 return true;
             }
@@ -576,7 +583,7 @@ mod tests {
         AccessMethod, Account, AccountFamily, AccountRole, AccountsRegistry,
         ACCOUNTS_SCHEMA_VERSION,
     };
-    use cascade_types::quota_store::{AccountEntry, ModelUsage, QuotaStore};
+    use cascade_types::quota_store::{weekly_slot_key, AccountEntry, ModelUsage, QuotaStore};
     use std::collections::HashMap;
 
     // ── Test registry builders ─────────────────────────────────────────────
@@ -889,6 +896,69 @@ mod tests {
             matches!(d, RoutingDecision::Lane { ref provider_id, .. } if provider_id == "claude-pooled-2"),
             "Exhausted pooled-1 must be skipped; should select pooled-2, got: {d:?}"
         );
+    }
+
+    /// Build a quota store whose account carries only the given `models` slots.
+    fn store_with_slots(account_id: &str, slots: &[(&str, f32)]) -> Option<QuotaStore> {
+        let mut models = HashMap::new();
+        for (key, pct) in slots {
+            models.insert(
+                (*key).to_string(),
+                ModelUsage {
+                    used: 0,
+                    limit: None,
+                    reset_at: None,
+                    pct_used: Some(*pct),
+                    cost_usd: None,
+                },
+            );
+        }
+        Some(QuotaStore {
+            schema_version: cascade_types::quota_store::QUOTA_STORE_SCHEMA_VERSION,
+            updated_at: "2026-08-21T00:00:00Z".into(),
+            accounts: vec![AccountEntry {
+                account_id: account_id.into(),
+                harness: "cc".into(),
+                provider: "claude-max".into(),
+                models,
+                week_total_used: 0,
+                month_total_used: 0,
+                last_polled: "2026-08-21T00:00:00Z".into(),
+                rate_windows: vec![],
+            }],
+            week_totals: HashMap::new(),
+            month_totals: HashMap::new(),
+            rolling_history: vec![],
+        })
+    }
+
+    /// One exhausted MODEL FAMILY must not retire the whole account — the
+    /// other families still have weekly headroom.
+    #[test]
+    fn per_model_weekly_slot_does_not_exhaust_the_account() {
+        let quota = store_with_slots(
+            "acc1",
+            &[
+                ("acc1", 20.0),
+                (&weekly_slot_key("acc1", "all"), 40.0),
+                (&weekly_slot_key("acc1", "opus"), 100.0),
+            ],
+        );
+        assert!(
+            !account_is_exhausted(&quota, "acc1"),
+            "an exhausted opus week must not block sonnet on the same account"
+        );
+    }
+
+    /// The ACCOUNT-WIDE weekly slot must still exhaust the account: at 100% of
+    /// the weekly allowance the account really is out until it resets.
+    #[test]
+    fn account_wide_weekly_slot_still_exhausts_the_account() {
+        let quota = store_with_slots(
+            "acc1",
+            &[("acc1", 20.0), (&weekly_slot_key("acc1", "all"), 100.0)],
+        );
+        assert!(account_is_exhausted(&quota, "acc1"));
     }
 
     #[test]

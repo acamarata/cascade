@@ -405,6 +405,21 @@ pub struct BudgetConfig {
     pub oc_go_hourly_usd_limit: f64,
     /// Hard USD spend limit per calendar month for OC-Go. `0.0` = disabled.
     pub oc_go_monthly_usd_limit: f64,
+
+    /// Per-model share of a weekly usage window, as a percentage (`0`–`100`).
+    ///
+    /// Keyed by the provider's window suffix — `"opus"`, `"sonnet"`,
+    /// `"fable"` — which is what the usage endpoint publishes
+    /// (`seven_day_opus`, …). A canonical model id such as `"claude-fable-5"`
+    /// is normalised to its family before lookup, so either form works.
+    ///
+    /// Expressed as a PERCENTAGE rather than an absolute token count on
+    /// purpose: plan limits change without notice, and a percentage keeps
+    /// tracking the plan instead of going stale the day the allowance moves.
+    ///
+    /// A model with no entry here is uncapped. `0` disables the cap for that
+    /// model (explicit config, not unknown state).
+    pub model_window_cap_pct: std::collections::HashMap<String, u8>,
 }
 
 impl Default for BudgetConfig {
@@ -413,8 +428,22 @@ impl Default for BudgetConfig {
             claude_max_hourly_token_limit: 0,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            model_window_cap_pct: default_model_window_cap_pct(),
         }
     }
+}
+
+/// Default per-model window caps.
+///
+/// Seeds Anthropic's published Fable 5 allowance: Fable is included in the Max
+/// plan and may consume up to 50% of the weekly usage limit, after which it
+/// continues on usage credits. Capping at the published share keeps an
+/// autonomous run from spending the plan's weekly allowance on one model and
+/// silently rolling onto paid credits.
+fn default_model_window_cap_pct() -> std::collections::HashMap<String, u8> {
+    let mut caps = std::collections::HashMap::new();
+    caps.insert("fable".to_string(), 50);
+    caps
 }
 
 /// `[fleet]` section of config.toml.

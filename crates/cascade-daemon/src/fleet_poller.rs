@@ -50,8 +50,8 @@ use cascade_core::quota_store::{write_quota_store, QUOTA_STORE_SCHEMA_VERSION};
 use cascade_core::read_claude_access_token;
 use cascade_types::accounts::{AccessMethod, AccountFamily, AccountsRegistry};
 use cascade_types::quota_store::{
-    ModelUsage, QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP, PROVIDER_GOOGLE_AGY,
-    PROVIDER_OPENAI_CODEX,
+    weekly_slot_key, ModelUsage, QuotaState, QuotaStore, PROVIDER_CLAUDE_MAX, PROVIDER_GFP,
+    PROVIDER_GOOGLE_AGY, PROVIDER_OPENAI_CODEX, WEEKLY_SLOT_ALL,
 };
 
 use crate::claude_usage::fetch_claude_usage;
@@ -171,6 +171,47 @@ impl FleetSource for ClaudeMaxSource {
                     cost_usd: None,
                 },
             );
+
+            // The endpoint also publishes WEEKLY windows — `seven_day`
+            // (account-wide) plus per-model breakdowns such as
+            // `seven_day_opus` / `seven_day_sonnet`. Only the 5-hour window
+            // was read before, so weekly exhaustion — the limit that actually
+            // stops a Max account — was invisible to routing and to the
+            // budget guard. Map every `seven_day*` key generically so a family
+            // the provider adds later (e.g. `seven_day_fable`) is picked up
+            // without another code change.
+            for (key, window) in usage.as_object().into_iter().flatten() {
+                let Some(suffix) = key.strip_prefix("seven_day") else {
+                    continue;
+                };
+                let model = match suffix.trim_start_matches('_') {
+                    "" => WEEKLY_SLOT_ALL,
+                    other => other,
+                };
+                // A window whose `utilization` is null is still recorded, with
+                // `pct_used: None`. "Reported but empty" and "not reported at
+                // all" are different states and consumers must be able to tell
+                // them apart.
+                let pct = window
+                    .get("utilization")
+                    .and_then(|v| v.as_f64())
+                    .map(|f| f as f32);
+                let reset_at = window.get("resets_at").and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.as_f64().map(|n| n.to_string()))
+                });
+                models.insert(
+                    weekly_slot_key(account_id, model),
+                    ModelUsage {
+                        used: 0,
+                        limit: None,
+                        reset_at,
+                        pct_used: pct,
+                        cost_usd: None,
+                    },
+                );
+            }
         }
 
         if models.is_empty() {
@@ -1060,6 +1101,75 @@ mod tests {
                 "AgySource provider_id mismatch"
             );
         }
+    }
+
+    /// The usage endpoint publishes weekly windows alongside the 5-hour one:
+    /// `seven_day` (account-wide) plus per-model breakdowns. All of them were
+    /// dropped before T-P7-E13-12, so weekly exhaustion — the limit that
+    /// actually stops a Max account — was invisible to routing.
+    #[test]
+    fn claude_max_source_captures_weekly_and_per_model_windows() {
+        use cascade_types::quota_store::weekly_slot_key;
+
+        let tmp = TempDir::new().unwrap();
+        let cache_path = tmp.path().join("usage-cache.json");
+        // Shape copied from a real ~/.claude/usage-cache.json payload.
+        let cache_content = serde_json::json!({
+            "accounts": [{
+                "account": "claude",
+                "provider": "claude",
+                "usage": {
+                    "fable_available": true,
+                    "five_hour": { "utilization": 15.0, "resets_at": 1_787_330_400_f64 },
+                    "seven_day": { "utilization": 3.0, "resets_at": 1_787_889_600_f64 },
+                    "seven_day_opus": { "utilization": 71.5, "resets_at": null },
+                    "seven_day_sonnet": { "utilization": null, "resets_at": null }
+                },
+                "last_error": null
+            }]
+        });
+        std::fs::write(&cache_path, cache_content.to_string()).unwrap();
+
+        let snap = ClaudeMaxSource::new(cache_path)
+            .poll()
+            .expect("cache with one healthy account must poll");
+
+        // The account slot still carries the 5-hour utilisation, unchanged.
+        assert_eq!(
+            snap.models.get("claude").and_then(|m| m.pct_used),
+            Some(15.0)
+        );
+
+        // Account-wide weekly window.
+        assert_eq!(
+            snap.models
+                .get(&weekly_slot_key("claude", "all"))
+                .and_then(|m| m.pct_used),
+            Some(3.0),
+            "seven_day must land in the account-wide weekly slot"
+        );
+
+        // Per-model weekly breakdown.
+        assert_eq!(
+            snap.models
+                .get(&weekly_slot_key("claude", "opus"))
+                .and_then(|m| m.pct_used),
+            Some(71.5)
+        );
+
+        // A window reported with a null utilisation is still RECORDED, with no
+        // pct — "reported but empty" must stay distinguishable from "absent",
+        // because the budget guard treats the two differently.
+        let sonnet = snap
+            .models
+            .get(&weekly_slot_key("claude", "sonnet"))
+            .expect("a reported window must be recorded even with a null utilisation");
+        assert_eq!(sonnet.pct_used, None);
+
+        // No window was invented for a family the provider did not report.
+        assert!(!snap
+            .models
+            .contains_key(&weekly_slot_key("claude", "fable")));
     }
 
     /// ClaudeMaxSource with a valid usage-cache.json returns a correctly shaped QuotaState.

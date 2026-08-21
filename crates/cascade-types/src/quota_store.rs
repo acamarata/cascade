@@ -204,3 +204,61 @@ pub struct QuotaStore {
     /// Rolling snapshots trimmed to the configured `retention_days`.
     pub rolling_history: Vec<HistoryEntry>,
 }
+
+// ── Weekly per-model breakdown slots ──────────────────────────────────────────
+//
+// Some providers publish a weekly window BROKEN DOWN BY MODEL alongside the
+// account-wide one. Anthropic's Claude Code usage endpoint, for example,
+// returns `seven_day` (account-wide) next to `seven_day_opus` and
+// `seven_day_sonnet`.
+//
+// `QuotaState` (what a `FleetSource` returns) carries only a `models` map, so
+// those windows have to travel inside it. They are namespaced with the
+// [`WEEKLY_SLOT_PREFIX`] so downstream consumers can tell a breakdown slot
+// from an ordinary account slot instead of silently averaging the two.
+
+/// Prefix marking a `models` key as a weekly usage-window slot rather than an
+/// ordinary account/model usage slot.
+pub const WEEKLY_SLOT_PREFIX: &str = "w7:";
+
+/// Model name used for the ACCOUNT-WIDE weekly window (provider `seven_day`).
+pub const WEEKLY_SLOT_ALL: &str = "all";
+
+/// Build the `models` key for a weekly window.
+///
+/// `model` is the provider's window suffix — `"all"` for the account-wide
+/// weekly window, or a model family such as `"opus"`, `"sonnet"`, `"fable"`.
+pub fn weekly_slot_key(account_id: &str, model: &str) -> String {
+    format!("{WEEKLY_SLOT_PREFIX}{account_id}:{model}")
+}
+
+/// True when `key` is any weekly window slot (account-wide or per-model).
+pub fn is_weekly_slot(key: &str) -> bool {
+    key.starts_with(WEEKLY_SLOT_PREFIX)
+}
+
+/// True when `key` is a PER-MODEL weekly breakdown slot.
+///
+/// The account-wide weekly slot (`…:all`) returns `false`: it describes the
+/// whole account, so account-level saturation checks must keep counting it.
+/// A per-model slot returns `true` — one exhausted model family must not mark
+/// the entire account exhausted while its other families still have headroom.
+pub fn is_weekly_model_breakdown(key: &str) -> bool {
+    is_weekly_slot(key) && !key.ends_with(&format!(":{WEEKLY_SLOT_ALL}"))
+}
+
+/// Normalise a model identifier to the window suffix a provider publishes.
+///
+/// Callers may hold a canonical id (`"claude-fable-5"`) while the provider
+/// names its window `seven_day_fable`. Known Anthropic families are mapped;
+/// anything else is lower-cased and returned unchanged, so an unrecognised id
+/// still matches a window of the same name rather than being silently dropped.
+pub fn model_window_suffix(model_id: &str) -> String {
+    let lower = model_id.trim().to_ascii_lowercase();
+    for family in ["opus", "sonnet", "haiku", "fable"] {
+        if lower.contains(family) {
+            return family.to_string();
+        }
+    }
+    lower
+}

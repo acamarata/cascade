@@ -179,6 +179,7 @@ fn budget_check_allow_when_limits_disabled() {
         claude_max_hourly_token_limit: 0, // disabled
         oc_go_hourly_usd_limit: 0.0,
         oc_go_monthly_usd_limit: 0.0,
+        ..Default::default()
     };
     let store = store_with_accounts(vec![make_account_token(
         "cc-1",
@@ -208,6 +209,7 @@ fn budget_check_deny_limit_when_over() {
         claude_max_hourly_token_limit: 100_000,
         oc_go_hourly_usd_limit: 0.0,
         oc_go_monthly_usd_limit: 0.0,
+        ..Default::default()
     };
     let store = store_with_accounts(vec![make_account_token(
         "cc-1",
@@ -241,6 +243,7 @@ fn budget_check_deny_cost_when_oc_go_over() {
         claude_max_hourly_token_limit: 0,
         oc_go_hourly_usd_limit: 5.0,
         oc_go_monthly_usd_limit: 0.0,
+        ..Default::default()
     };
     let store = store_with_accounts(vec![make_account_cost("oc-1", PROVIDER_OC_GO, 4.90, 10.0)]);
 

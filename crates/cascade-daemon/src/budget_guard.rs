@@ -258,6 +258,89 @@ impl BudgetGuard {
             )),
         }
     }
+
+    /// Check the configured PER-MODEL share of the weekly window for
+    /// `(provider, account_id, model)`.
+    ///
+    /// Providers may publish a weekly window broken down by model family
+    /// (Anthropic's `seven_day_opus`, `seven_day_fable`, …). The poller stores
+    /// each one as a `w7:<account>:<model>` slot. This check compares the
+    /// reported utilisation of that slot against
+    /// [`BudgetConfig::model_window_cap_pct`].
+    ///
+    /// Inputs:
+    ///   - `provider`   — `PROVIDER_*` string.
+    ///   - `account_id` — account to check.
+    ///   - `model`      — window suffix (`"fable"`) or canonical id
+    ///     (`"claude-fable-5"`); both normalise to the same family.
+    ///   - `store`      — read-only current quota store.
+    ///
+    /// Outputs: [`BudgetResult`] — `Allow`, `DenyLimit` naming the model and
+    /// its cap, or `DenyUnknown`.
+    ///
+    /// Constraints:
+    ///   - No cap configured for the model, or a cap of `0` → `Allow` in both
+    ///     modes. That is explicit config, not unknown state.
+    ///   - **A missing weekly slot → `Allow` in both modes.** Most providers
+    ///     publish no per-model breakdown at all; failing closed on that would
+    ///     block the model outright on every provider that does not, which is
+    ///     nearly all of them. Absence means "this provider exposes no such
+    ///     window", not "the budget is unknown".
+    ///   - A slot that IS present but whose utilisation is `None` → unknown
+    ///     state: the provider exposes the window and it could not be read, so
+    ///     fail-closed denies.
+    pub fn check_model_window(
+        &self,
+        provider: &str,
+        account_id: &str,
+        model: &str,
+        store: &QuotaStore,
+    ) -> BudgetResult {
+        use cascade_types::quota_store::{model_window_suffix, weekly_slot_key};
+
+        let family = model_window_suffix(model);
+        let cap_pct = match self.config.model_window_cap_pct.get(&family) {
+            // Uncapped, or explicitly disabled with 0.
+            None | Some(0) => return BudgetResult::Allow,
+            Some(pct) => *pct,
+        };
+
+        let Some(account) = store
+            .accounts
+            .iter()
+            .find(|a| a.provider == provider && a.account_id == account_id)
+        else {
+            return self.unknown_state(format!(
+                "unknown account {provider}/{account_id}: cannot check {family} window cap"
+            ));
+        };
+
+        let key = weekly_slot_key(account_id, &family);
+        let Some(slot) = account.models.get(&key) else {
+            // Provider publishes no weekly window for this family — nothing to
+            // enforce against. See Constraints above for why this is not
+            // treated as unknown state.
+            return BudgetResult::Allow;
+        };
+
+        let Some(pct_used) = slot.pct_used else {
+            return self.unknown_state(format!(
+                "weekly window {key} reports no utilisation: {family} cap of {cap_pct}% undeterminable"
+            ));
+        };
+
+        if pct_used >= f32::from(cap_pct) {
+            // Percentages are carried in basis points here so the token-shaped
+            // DenyLimit fields stay integral (12.5% → 1250).
+            BudgetResult::DenyLimit {
+                window: format!("weekly:{family}"),
+                used: (f64::from(pct_used) * 100.0).round() as u64,
+                limit: u64::from(cap_pct) * 100,
+            }
+        } else {
+            BudgetResult::Allow
+        }
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -280,6 +363,229 @@ mod tests {
             month_totals: HashMap::new(),
             rolling_history: vec![],
         }
+    }
+
+    // ── Per-model weekly window caps (T-P7-E13-12) ────────────────────────────
+
+    /// Build an account carrying weekly window slots: `(model, pct)` pairs,
+    /// where `None` means the provider reported the window with no utilisation.
+    fn account_with_weekly_slots(
+        account_id: &str,
+        provider: &str,
+        slots: &[(&str, Option<f32>)],
+    ) -> AccountEntry {
+        use cascade_types::quota_store::weekly_slot_key;
+        let mut models = HashMap::new();
+        for (model, pct) in slots {
+            models.insert(
+                weekly_slot_key(account_id, model),
+                ModelUsage {
+                    used: 0,
+                    limit: None,
+                    reset_at: None,
+                    pct_used: *pct,
+                    cost_usd: None,
+                },
+            );
+        }
+        AccountEntry {
+            account_id: account_id.to_string(),
+            harness: "cc".to_string(),
+            provider: provider.to_string(),
+            models,
+            week_total_used: 0,
+            month_total_used: 0,
+            last_polled: "2026-06-02T12:00:00Z".to_string(),
+            rate_windows: vec![],
+        }
+    }
+
+    fn guard_capping_fable_at_50(fail_closed: bool) -> BudgetGuard {
+        let config = BudgetConfig::default();
+        // The default config already seeds fable = 50; assert that rather than
+        // rebuilding it, so the shipped default is what the tests exercise.
+        assert_eq!(config.model_window_cap_pct.get("fable"), Some(&50));
+        if fail_closed {
+            BudgetGuard::new_fail_closed(config)
+        } else {
+            BudgetGuard::new(config)
+        }
+    }
+
+    #[test]
+    fn model_under_its_window_cap_is_allowed() {
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", Some(31.0))],
+        ));
+        let guard = guard_capping_fable_at_50(true);
+        assert_eq!(
+            guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "fable", &store),
+            BudgetResult::Allow
+        );
+    }
+
+    #[test]
+    fn model_over_its_window_cap_is_denied_naming_model_and_cap() {
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", Some(64.0))],
+        ));
+        let guard = guard_capping_fable_at_50(true);
+        match guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "fable", &store) {
+            BudgetResult::DenyLimit {
+                window,
+                used,
+                limit,
+            } => {
+                assert_eq!(window, "weekly:fable");
+                assert_eq!(used, 6_400, "64% in basis points");
+                assert_eq!(limit, 5_000, "50% cap in basis points");
+            }
+            other => panic!("expected DenyLimit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cap_is_reached_exactly_at_the_configured_percentage() {
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", Some(50.0))],
+        ));
+        let guard = guard_capping_fable_at_50(true);
+        assert!(
+            matches!(
+                guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "fable", &store),
+                BudgetResult::DenyLimit { .. }
+            ),
+            "at 50% the 50% allowance is spent, so the cap binds"
+        );
+    }
+
+    #[test]
+    fn canonical_model_id_resolves_to_the_same_family_as_the_window_suffix() {
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", Some(90.0))],
+        ));
+        let guard = guard_capping_fable_at_50(true);
+        // Callers holding a canonical id must hit the same cap as callers
+        // holding the provider's window suffix.
+        assert!(matches!(
+            guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "claude-fable-5", &store),
+            BudgetResult::DenyLimit { .. }
+        ));
+    }
+
+    #[test]
+    fn uncapped_model_is_unaffected_even_when_its_window_is_full() {
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("sonnet", Some(99.0))],
+        ));
+        let guard = guard_capping_fable_at_50(true);
+        assert_eq!(
+            guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "sonnet", &store),
+            BudgetResult::Allow,
+            "no cap configured for sonnet, so its window must not be gated here"
+        );
+    }
+
+    #[test]
+    fn missing_weekly_slot_allows_in_both_modes() {
+        // Provider publishes no per-model breakdown at all. Denying here would
+        // block the model outright on every such provider.
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("all", Some(12.0))],
+        ));
+        for fail_closed in [false, true] {
+            let guard = guard_capping_fable_at_50(fail_closed);
+            assert_eq!(
+                guard.check_model_window(PROVIDER_CLAUDE_MAX, "acc1", "fable", &store),
+                BudgetResult::Allow,
+                "fail_closed={fail_closed}"
+            );
+        }
+    }
+
+    #[test]
+    fn reported_window_with_no_utilisation_is_unknown_state() {
+        // The window EXISTS but carries no number — that is undeterminable
+        // budget state, and fail-closed must refuse it.
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", None)],
+        ));
+        assert!(matches!(
+            guard_capping_fable_at_50(true).check_model_window(
+                PROVIDER_CLAUDE_MAX,
+                "acc1",
+                "fable",
+                &store
+            ),
+            BudgetResult::DenyUnknown { .. }
+        ));
+        assert_eq!(
+            guard_capping_fable_at_50(false).check_model_window(
+                PROVIDER_CLAUDE_MAX,
+                "acc1",
+                "fable",
+                &store
+            ),
+            BudgetResult::Allow,
+            "interactive callers keep the fail-open path"
+        );
+    }
+
+    #[test]
+    fn zero_cap_disables_the_check_rather_than_denying_everything() {
+        let mut config = BudgetConfig::default();
+        config.model_window_cap_pct.insert("fable".to_string(), 0);
+        let store = make_store(account_with_weekly_slots(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            &[("fable", Some(100.0))],
+        ));
+        assert_eq!(
+            BudgetGuard::new_fail_closed(config).check_model_window(
+                PROVIDER_CLAUDE_MAX,
+                "acc1",
+                "fable",
+                &store
+            ),
+            BudgetResult::Allow
+        );
+    }
+
+    #[test]
+    fn provider_level_limits_are_untouched_by_the_model_cap() {
+        // check() must behave exactly as before: a default config disables the
+        // claude_max token limit, so a known account is allowed.
+        let store = make_store(make_account_with_windows(
+            "acc1",
+            PROVIDER_CLAUDE_MAX,
+            vec![RateWindow {
+                window_secs: 18_000,
+                label: "5hr".to_string(),
+                used: 999_999,
+                limit: None,
+                reset_at: None,
+                cost_usd: None,
+            }],
+        ));
+        let guard = BudgetGuard::new_fail_closed(BudgetConfig::default());
+        assert_eq!(
+            guard.check(PROVIDER_CLAUDE_MAX, "acc1", 1_000, 0.0, &store),
+            BudgetResult::Allow
+        );
     }
 
     fn make_account_with_windows(
@@ -341,6 +647,7 @@ mod tests {
             claude_max_hourly_token_limit: 0, // disabled
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -362,6 +669,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -391,6 +699,7 @@ mod tests {
             claude_max_hourly_token_limit: 0,
             oc_go_hourly_usd_limit: 5.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -437,6 +746,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -455,6 +765,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -472,6 +783,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -490,6 +802,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -507,6 +820,7 @@ mod tests {
             claude_max_hourly_token_limit: 0,
             oc_go_hourly_usd_limit: 5.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -531,6 +845,7 @@ mod tests {
             claude_max_hourly_token_limit: 0,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 100.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -550,6 +865,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 5.0,
             oc_go_monthly_usd_limit: 100.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new(config);
 
@@ -568,6 +884,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 5.0,
             oc_go_monthly_usd_limit: 100.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -586,6 +903,7 @@ mod tests {
             claude_max_hourly_token_limit: 0, // disabled
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 
@@ -604,6 +922,7 @@ mod tests {
             claude_max_hourly_token_limit: 100_000,
             oc_go_hourly_usd_limit: 0.0,
             oc_go_monthly_usd_limit: 0.0,
+            ..Default::default()
         };
         let guard = BudgetGuard::new_fail_closed(config);
 

@@ -118,7 +118,7 @@ impl RegistryRouter {
     /// `quota-store.json` yields an empty store, which fail-closed reports as
     /// an unknown account and DENIES — deliberately, since "we could not tell"
     /// is exactly the case CFC-10 exists to stop.
-    fn check_budget(&self, provider_id: &str) -> Result<(), ExecutorError> {
+    fn check_budget(&self, provider_id: &str, model: Option<&str>) -> Result<(), ExecutorError> {
         let Some((config_dir, budget_config)) = &self.budget else {
             return Ok(());
         };
@@ -134,20 +134,38 @@ impl RegistryRouter {
             }
         });
         let guard = crate::budget_guard::BudgetGuard::new_fail_closed(budget_config.clone());
+
+        let deny = |denied: crate::budget_guard::BudgetResult| {
+            let reason = format!("{denied:?}");
+            warn!(
+                provider = %provider_id,
+                %reason,
+                "autonomous dispatch BLOCKED by fail-closed budget guard"
+            );
+            ExecutorError::ProviderFailed(format!(
+                "budget denied for provider {provider_id}: {reason}"
+            ))
+        };
+
+        // Provider-level windows first — they gate the whole account.
         match guard.check(provider_id, provider_id, 0, 0.0, &store) {
-            crate::budget_guard::BudgetResult::Allow => Ok(()),
-            denied => {
-                let reason = format!("{denied:?}");
-                warn!(
-                    provider = %provider_id,
-                    %reason,
-                    "autonomous dispatch BLOCKED by fail-closed budget guard"
-                );
-                Err(ExecutorError::ProviderFailed(format!(
-                    "budget denied for provider {provider_id}: {reason}"
-                )))
+            crate::budget_guard::BudgetResult::Allow => {}
+            denied => return Err(deny(denied)),
+        }
+
+        // Then the per-model share of the weekly window, when a model is
+        // known. Anthropic includes Fable 5 in the Max plan but caps it at
+        // 50% of the weekly allowance, past which it bills usage credits —
+        // an autonomous run must stop at the cap rather than roll onto paid
+        // credits unattended.
+        if let Some(model) = model {
+            match guard.check_model_window(provider_id, provider_id, model, &store) {
+                crate::budget_guard::BudgetResult::Allow => {}
+                denied => return Err(deny(denied)),
             }
         }
+
+        Ok(())
     }
 }
 
@@ -193,7 +211,7 @@ impl ProviderRouter for RegistryRouter {
         // CFC-10 / T-P7-E13-10: fail-closed budget gate on the AUTONOMOUS path.
         // Runs AFTER provider selection (we need the provider id) and BEFORE any
         // request is issued, so a denied step costs nothing.
-        self.check_budget(&provider_id)?;
+        self.check_budget(&provider_id, spec.model_pref.as_deref())?;
 
         // ── Build CompletionRequest ───────────────────────────────────────────
         // Map ContextMessage → cascade_providers::Message.
@@ -849,7 +867,7 @@ mod tests {
         let registry = Arc::new(ProviderRegistry::new());
         let router = RegistryRouter::new(registry);
         assert!(
-            router.check_budget("anthropic").is_ok(),
+            router.check_budget("anthropic", None).is_ok(),
             "no budget configured => no enforcement"
         );
     }
@@ -867,7 +885,7 @@ mod tests {
             crate::config::BudgetConfig::default(),
         );
         let err = router
-            .check_budget("anthropic")
+            .check_budget("anthropic", None)
             .expect_err("unknown account under fail-closed must deny");
         let msg = format!("{err}");
         assert!(
@@ -887,7 +905,7 @@ mod tests {
             tmp.path().to_path_buf(),
             crate::config::BudgetConfig::default(),
         );
-        let msg = format!("{}", router.check_budget("openai").unwrap_err());
+        let msg = format!("{}", router.check_budget("openai", None).unwrap_err());
         assert!(msg.contains("openai"), "must name the provider; got {msg}");
         assert!(
             msg.contains("DenyUnknown") || msg.contains("unknown account"),
