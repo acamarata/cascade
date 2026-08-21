@@ -61,6 +61,7 @@ mod regen;
 mod shutdown;
 mod state;
 mod supervisor;
+mod task_supervision;
 mod telemetry;
 mod tray;
 // T-P4-E04-10: cascade instruction-file loader (goes through ChunkCache)
@@ -209,6 +210,12 @@ async fn run_daemon() {
         eprintln!("failed to initialize logging: {e}");
         process::exit(1);
     }
+
+    // Panic hook AFTER the subscriber exists, so panics land in the structured
+    // log rather than only on stderr. Before T-P7-E25-12 the daemon installed
+    // no hook at all, so a panic in any background task left no trace in the
+    // file an operator actually reads.
+    task_supervision::install_panic_hook();
 
     info!(version = env!("CARGO_PKG_VERSION"), "cascaded starting");
 

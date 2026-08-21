@@ -221,20 +221,39 @@ pub async fn run(
         let qp_bus = bus.clone();
         let qp_shutdown = shutdown.clone();
 
-        tokio::spawn(async move {
-            if let Err(e) = QuotaPoller::run(
-                qp_config,
-                qs_config,
-                qp_dir,
-                qp_bus,
-                daemon_state,
-                qp_shutdown,
-            )
-            .await
-            {
-                warn!(%e, "quota poller exited with error");
-            }
-        });
+        // Supervised: a panic here used to kill quota polling silently — the
+        // daemon stayed up and simply stopped refreshing quota forever
+        // (T-P7-E25-12). The factory re-clones its inputs on each restart.
+        let sup_shutdown = shutdown.clone();
+        crate::task_supervision::spawn_supervised(
+            "quota_poller",
+            crate::task_supervision::RestartPolicy::poller(),
+            sup_shutdown,
+            move || {
+                let (qp_config, qs_config, qp_dir, qp_bus, daemon_state, qp_shutdown) = (
+                    qp_config.clone(),
+                    qs_config.clone(),
+                    qp_dir.clone(),
+                    qp_bus.clone(),
+                    Arc::clone(&daemon_state),
+                    qp_shutdown.clone(),
+                );
+                async move {
+                    if let Err(e) = QuotaPoller::run(
+                        qp_config,
+                        qs_config,
+                        qp_dir,
+                        qp_bus,
+                        daemon_state,
+                        qp_shutdown,
+                    )
+                    .await
+                    {
+                        warn!(%e, "quota poller exited with error");
+                    }
+                }
+            },
+        );
     }
 
     // ── Fleet poller (E-P6-03 v1.1) ──────────────────────────────────────────
@@ -246,9 +265,20 @@ pub async fn run(
         let fp_config = config.fleet.clone();
         let fp_dir = config_dir.clone();
         let fp_shutdown = shutdown.clone();
-        tokio::spawn(async move {
-            FleetPoller::run(fp_config, fp_dir, fp_shutdown).await;
-        });
+        // Supervised for the same reason as the quota poller.
+        let sup_shutdown = shutdown.clone();
+        crate::task_supervision::spawn_supervised(
+            "fleet_poller",
+            crate::task_supervision::RestartPolicy::poller(),
+            sup_shutdown,
+            move || {
+                let (fp_config, fp_dir, fp_shutdown) =
+                    (fp_config.clone(), fp_dir.clone(), fp_shutdown.clone());
+                async move {
+                    FleetPoller::run(fp_config, fp_dir, fp_shutdown).await;
+                }
+            },
+        );
     }
 
     // ── nSentry multi-stream sync subsystem ──────────────────────────────────
@@ -276,26 +306,39 @@ pub async fn run(
         let debounce = Duration::from_millis(config.watcher.debounce_ms);
         let watch_shutdown = shutdown.clone();
 
-        tokio::spawn(async move {
-            let mut last_mtime: Option<std::time::SystemTime> = None;
+        // Supervised + restartable: the watcher owns no exclusive external
+        // handle, so a panic can safely restart from a fresh mtime read.
+        let sup_shutdown = shutdown.clone();
+        crate::task_supervision::spawn_supervised(
+            "cascade_md_watcher",
+            crate::task_supervision::RestartPolicy::poller(),
+            sup_shutdown,
+            move || {
+                let (watch_path, watch_bus, watch_shutdown) = (
+                    watch_path.clone(),
+                    watch_bus.clone(),
+                    watch_shutdown.clone(),
+                );
+                async move {
+                    let mut last_mtime: Option<std::time::SystemTime> = None;
 
-            // Read initial mtime if file exists.
-            if let Ok(meta) = tokio::fs::metadata(&watch_path).await {
-                last_mtime = meta.modified().ok();
-            }
+                    // Read initial mtime if file exists.
+                    if let Ok(meta) = tokio::fs::metadata(&watch_path).await {
+                        last_mtime = meta.modified().ok();
+                    }
 
-            loop {
-                tokio::select! {
-                    _ = tokio::time::sleep(debounce) => {}
-                    _ = watch_shutdown.cancelled() => { break; }
-                }
+                    loop {
+                        tokio::select! {
+                            _ = tokio::time::sleep(debounce) => {}
+                            _ = watch_shutdown.cancelled() => { break; }
+                        }
 
-                match tokio::fs::metadata(&watch_path).await {
-                    Ok(meta) => {
-                        let mtime = meta.modified().ok();
-                        if mtime != last_mtime && last_mtime.is_some() {
-                            // File changed — publish the event.
-                            if let Err(e) = watch_bus
+                        match tokio::fs::metadata(&watch_path).await {
+                            Ok(meta) => {
+                                let mtime = meta.modified().ok();
+                                if mtime != last_mtime && last_mtime.is_some() {
+                                    // File changed — publish the event.
+                                    if let Err(e) = watch_bus
                                 .publish(
                                     "cascade.changed",
                                     serde_json::json!({ "path": watch_path.to_string_lossy() }),
@@ -317,16 +360,18 @@ pub async fn run(
                                     }
                                 });
                             }
+                                }
+                                last_mtime = mtime;
+                            }
+                            Err(_) => {
+                                // File doesn't exist yet — reset mtime tracking.
+                                last_mtime = None;
+                            }
                         }
-                        last_mtime = mtime;
-                    }
-                    Err(_) => {
-                        // File doesn't exist yet — reset mtime tracking.
-                        last_mtime = None;
                     }
                 }
-            }
-        });
+            },
+        );
     }
 
     // ── Gemini GP proxy + Anthropic-compat adapter ───────────────────────────
@@ -440,7 +485,24 @@ pub async fn run(
         let sched_config = config.scheduler.clone();
         let sched_shutdown = shutdown.clone();
         let scheduler = Scheduler::new(sched_config, task_store, sched_shutdown);
-        tokio::spawn(scheduler.run());
+        // RestartPolicy::Never: `Scheduler::run` consumes `self`, so it cannot
+        // be rebuilt by a factory. Supervision still turns a silent panic into
+        // a logged, attributed one (T-P7-E25-12).
+        let sup_shutdown = shutdown.clone();
+        let mut scheduler_once = Some(scheduler);
+        crate::task_supervision::spawn_supervised(
+            "scheduler",
+            crate::task_supervision::RestartPolicy::Never,
+            sup_shutdown,
+            move || {
+                let taken = scheduler_once.take();
+                async move {
+                    if let Some(s) = taken {
+                        let _ = s.run().await;
+                    }
+                }
+            },
+        );
         info!(path = %sched_db_path.display(), "scheduler: spawned with persistent store");
     }
 
@@ -568,7 +630,25 @@ pub async fn run(
                                 embed,
                                 rag_shutdown,
                             );
-                            tokio::spawn(pipeline.run());
+                            // RestartPolicy::Never: the pipeline owns the
+                            // watcher's signal receiver, which cannot be
+                            // recreated without restarting the watcher too. A
+                            // panic is logged and attributed rather than lost.
+                            let sup_shutdown = shutdown.clone();
+                            let mut pipeline_once = Some(pipeline);
+                            crate::task_supervision::spawn_supervised(
+                                "rag_indexing_pipeline",
+                                crate::task_supervision::RestartPolicy::Never,
+                                sup_shutdown,
+                                move || {
+                                    let taken = pipeline_once.take();
+                                    async move {
+                                        if let Some(p) = taken {
+                                            p.run().await;
+                                        }
+                                    }
+                                },
+                            );
                             info!("rag: AutoRagWatcher + IndexingPipeline spawned");
                             rag_watcher_handle = Some(Arc::new(watcher));
                         }

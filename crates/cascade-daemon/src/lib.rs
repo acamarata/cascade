@@ -70,6 +70,7 @@ pub mod mcp_registration;
 pub mod shutdown;
 pub mod state;
 pub mod supervisor;
+pub mod task_supervision;
 pub mod telemetry;
 pub mod tray;
 pub mod volume_watcher;
