@@ -338,9 +338,7 @@ fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(),
                     _ => return, // no memory export — skip silently
                 };
                 let data = memory.data(&caller);
-                let ptr = ptr as usize;
-                let len = len as usize;
-                if let Some(slice) = data.get(ptr..ptr + len) {
+                if let Some(slice) = guest_slice(data, ptr, len) {
                     let msg = String::from_utf8_lossy(slice);
                     match level {
                         0 => tracing::trace!(target: "plugin:wasm", "{}", msg),
@@ -383,9 +381,7 @@ fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(),
                 // Read the key string from guest memory.
                 let key = {
                     let data = memory.data(&caller);
-                    let kp = key_ptr as usize;
-                    let kl = key_len as usize;
-                    match data.get(kp..kp + kl) {
+                    match guest_slice(data, key_ptr, key_len) {
                         Some(s) => String::from_utf8_lossy(s).into_owned(),
                         None => return 0,
                     }
@@ -396,11 +392,14 @@ fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(),
                     None => return 0,
                 };
                 let val_bytes = value.as_bytes();
-                let val_len = val_bytes.len() as i32;
+                // A value longer than i32::MAX cannot be reported back through
+                // this ABI at all, so refuse rather than truncate the length.
+                let Ok(val_len) = i32::try_from(val_bytes.len()) else {
+                    return 0;
+                };
                 // Write value into guest memory at out_ptr.
-                let out = out_ptr as usize;
                 let mem_data = memory.data_mut(&mut caller);
-                if let Some(dest) = mem_data.get_mut(out..out + val_bytes.len()) {
+                if let Some(dest) = guest_slice_mut(mem_data, out_ptr, val_bytes.len()) {
                     dest.copy_from_slice(val_bytes);
                     val_len
                 } else {
@@ -432,15 +431,11 @@ fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(),
                 };
                 let (key, value) = {
                     let data = memory.data(&caller);
-                    let kp = key_ptr as usize;
-                    let kl = key_len as usize;
-                    let vp = val_ptr as usize;
-                    let vl = val_len as usize;
-                    let k = match data.get(kp..kp + kl) {
+                    let k = match guest_slice(data, key_ptr, key_len) {
                         Some(s) => String::from_utf8_lossy(s).into_owned(),
                         None => return,
                     };
-                    let v = match data.get(vp..vp + vl) {
+                    let v = match guest_slice(data, val_ptr, val_len) {
                         Some(s) => String::from_utf8_lossy(s).into_owned(),
                         None => return,
                     };
@@ -452,6 +447,49 @@ fn register_cascade_host_functions(linker: &mut Linker<StoreData>) -> Result<(),
         .map_err(SandboxError::Engine)?;
 
     Ok(())
+}
+
+// ── Guest-memory boundary helpers (T-P7-E25-04) ───────────────────────────────
+//
+// Every value crossing the FFI boundary is chosen by the GUEST, which may be
+// malicious or simply buggy. Three separate hazards live in a bare
+// `data.get(ptr as usize..(ptr + len) as usize)`:
+//
+//   1. A negative i32 sign-extends into a huge usize instead of being rejected.
+//   2. `ptr + len` overflows — a debug-build panic in the HOST, i.e. a guest
+//      can crash the daemon; in release it silently wraps.
+//   3. A wrapped range can invert (start > end), which `get` happens to reject
+//      today, but that is luck rather than a checked boundary.
+//
+// These helpers reject all three explicitly and return `None`, which every
+// caller already handles as "out of bounds".
+
+/// Convert a guest-supplied `(ptr, len)` pair into a validated `Range<usize>`.
+///
+/// Returns `None` when either value is negative or when `ptr + len` overflows.
+/// Bounds against actual memory length are left to the caller's `get`.
+fn guest_range(ptr: i32, len: i32) -> Option<std::ops::Range<usize>> {
+    let start = usize::try_from(ptr).ok()?;
+    let count = usize::try_from(len).ok()?;
+    let end = start.checked_add(count)?;
+    Some(start..end)
+}
+
+/// Borrow `len` bytes of guest memory at `ptr`, or `None` if the region is not
+/// wholly inside `data`.
+fn guest_slice(data: &[u8], ptr: i32, len: i32) -> Option<&[u8]> {
+    data.get(guest_range(ptr, len)?)
+}
+
+/// Mutably borrow `len` bytes of guest memory at `ptr`.
+///
+/// `len` is a `usize` here because the length comes from HOST data (the value
+/// being written back), not from the guest; the pointer is still guest-chosen
+/// and still checked.
+fn guest_slice_mut(data: &mut [u8], ptr: i32, len: usize) -> Option<&mut [u8]> {
+    let start = usize::try_from(ptr).ok()?;
+    let end = start.checked_add(len)?;
+    data.get_mut(start..end)
 }
 
 // ── Fuel exhaustion detection ─────────────────────────────────────────────────
@@ -498,21 +536,36 @@ async fn invoke_wasm_json(
         .ok_or_else(|| SandboxError::MissingExport("alloc".to_owned()))?;
 
     // ── 2. Allocate input buffer in guest linear memory ───────────────────────
-    let input_len = input_bytes.len() as i32;
+    // The ABI passes lengths as i32; a payload above i32::MAX cannot be
+    // described by it, so refuse instead of wrapping to a negative length.
+    let input_len = i32::try_from(input_bytes.len()).map_err(|_| {
+        SandboxError::Trap(format!(
+            "input of {} bytes exceeds the i32 length the plugin ABI can express",
+            input_bytes.len()
+        ))
+    })?;
     let mut alloc_result = [Val::I32(0)];
     alloc
         .call_async(&mut *store, &[Val::I32(input_len)], &mut alloc_result)
         .await
         .map_err(|e| SandboxError::Trap(format!("alloc trap: {e}")))?;
 
-    let input_ptr = match &alloc_result[0] {
-        Val::I32(p) => *p as usize,
+    // `alloc` is guest code: a negative return is a broken or hostile
+    // allocator, not an address. Reject it rather than sign-extending it into
+    // a huge offset.
+    let input_ptr_i32 = match &alloc_result[0] {
+        Val::I32(p) => *p,
         _ => {
             return Err(SandboxError::Trap(
                 "alloc returned non-i32 value".to_owned(),
             ))
         }
     };
+    let input_ptr = usize::try_from(input_ptr_i32).map_err(|_| {
+        SandboxError::Trap(format!(
+            "alloc returned a negative pointer: {input_ptr_i32}"
+        ))
+    })?;
 
     // ── 3. Write serialized input into guest linear memory ────────────────────
     memory
@@ -527,7 +580,7 @@ async fn invoke_wasm_json(
     let mut out_vals = [Val::I64(0)];
     func.call_async(
         &mut *store,
-        &[Val::I32(input_ptr as i32), Val::I32(input_len)],
+        &[Val::I32(input_ptr_i32), Val::I32(input_len)],
         &mut out_vals,
     )
     .await
@@ -542,16 +595,23 @@ async fn invoke_wasm_json(
             ))
         }
     };
-    let out_ptr = (packed >> 32) as usize;
-    let out_len = (packed & 0xFFFF_FFFF) as usize;
+    // Both halves are guest-chosen. On a 32-bit host `as usize` would truncate
+    // and on any host `out_ptr + out_len` can overflow, so widen through u64
+    // and add with a check.
+    let out_ptr_u64 = packed >> 32;
+    let out_len_u64 = packed & 0xFFFF_FFFF;
 
     // ── 6. Read output bytes from guest linear memory ─────────────────────────
     let mem_data = memory.data(&*store);
-    let slice = mem_data
-        .get(out_ptr..out_ptr + out_len)
+    let range = usize::try_from(out_ptr_u64)
+        .ok()
+        .zip(usize::try_from(out_len_u64).ok())
+        .and_then(|(ptr, len)| ptr.checked_add(len).map(|end| ptr..end));
+    let slice = range
+        .and_then(|r| mem_data.get(r))
         .ok_or_else(|| {
             SandboxError::Trap(format!(
-                "output pointer out of bounds: ptr={out_ptr} len={out_len} mem_size={}",
+                "output pointer out of bounds: ptr={out_ptr_u64} len={out_len_u64} mem_size={}",
                 mem_data.len()
             ))
         })?
@@ -790,5 +850,100 @@ mod tests {
     fn fd_cap_default_is_32() {
         let limits = ResourceLimits::for_type(PluginType::Chunker);
         assert_eq!(limits.max_fds, DEFAULT_FD_CAP);
+    }
+
+    // ── FFI boundary hardening (T-P7-E25-04) ──────────────────────────────────
+    //
+    // Every ptr/len pair below is a value a hostile guest can actually pass.
+    // Before this ticket these went through `ptr as usize` + unchecked
+    // addition, so a negative pointer sign-extended and `ptr + len` could
+    // panic in the HOST — a guest-triggerable daemon crash.
+
+    #[test]
+    fn negative_pointer_or_length_is_refused() {
+        assert!(
+            guest_range(-1, 4).is_none(),
+            "negative ptr must not sign-extend"
+        );
+        assert!(guest_range(4, -1).is_none(), "negative len must be refused");
+        assert!(guest_range(i32::MIN, 0).is_none());
+        assert!(guest_range(0, i32::MIN).is_none());
+    }
+
+    #[test]
+    fn pointer_plus_length_overflow_is_refused_not_panicked() {
+        // On a 32-bit host this pair overflows usize; on 64-bit it does not,
+        // but it must still be rejected against real memory rather than
+        // producing an inverted or wrapped range.
+        let r = guest_range(i32::MAX, i32::MAX);
+        if let Some(range) = r {
+            assert!(range.start <= range.end, "range must never invert");
+        }
+        // A short buffer must reject it either way.
+        let data = [0u8; 16];
+        assert!(guest_slice(&data, i32::MAX, i32::MAX).is_none());
+    }
+
+    #[test]
+    fn in_bounds_reads_still_work() {
+        let data = [1u8, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(guest_slice(&data, 2, 3), Some(&data[2..5]));
+        assert_eq!(guest_slice(&data, 0, 8), Some(&data[..]));
+        // Zero-length at the very end is a valid empty read.
+        assert_eq!(guest_slice(&data, 8, 0), Some(&data[8..8]));
+    }
+
+    #[test]
+    fn reads_past_the_end_are_refused() {
+        let data = [0u8; 8];
+        assert!(guest_slice(&data, 8, 1).is_none());
+        assert!(guest_slice(&data, 0, 9).is_none());
+        assert!(guest_slice(&data, 7, 2).is_none());
+    }
+
+    #[test]
+    fn mutable_writes_are_bounds_checked_the_same_way() {
+        let mut data = [0u8; 8];
+        assert!(
+            guest_slice_mut(&mut data, -1, 1).is_none(),
+            "negative out_ptr"
+        );
+        assert!(guest_slice_mut(&mut data, 0, 9).is_none(), "write past end");
+        assert!(
+            guest_slice_mut(&mut data, 6, 4).is_none(),
+            "straddles the end"
+        );
+        assert!(
+            guest_slice_mut(&mut data, i32::MAX, usize::MAX).is_none(),
+            "overflowing write must be refused, not wrapped"
+        );
+        assert!(
+            guest_slice_mut(&mut data, 4, 4).is_some(),
+            "exact fit is fine"
+        );
+    }
+
+    #[test]
+    fn no_guest_supplied_pair_can_panic_the_host() {
+        // Sweep the interesting corners of the i32 space against a small
+        // buffer. The property under test is simply: this never panics.
+        let data = [0u8; 32];
+        let corners = [
+            i32::MIN,
+            i32::MIN + 1,
+            -1,
+            0,
+            1,
+            31,
+            32,
+            33,
+            i32::MAX - 1,
+            i32::MAX,
+        ];
+        for &ptr in &corners {
+            for &len in &corners {
+                let _ = guest_slice(&data, ptr, len);
+            }
+        }
     }
 }

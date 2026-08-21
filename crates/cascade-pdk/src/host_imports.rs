@@ -62,6 +62,40 @@ extern "C" {
     fn host_kv_set(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32);
 }
 
+// ── ABI conversion helpers (T-P7-E25-04) ──────────────────────────────────────
+//
+// The host ABI passes pointers and lengths as `i32`. On wasm32 both are really
+// `u32`, so any value above `i32::MAX` wraps to a NEGATIVE number. The host
+// now rejects negatives outright, but a guest that silently sends one turns a
+// too-long string into a confusing "out of bounds" instead of a clear refusal.
+//
+// These helpers are deliberately NOT `cfg(target_arch = "wasm32")`: keeping
+// them target-independent is what makes them testable on the host, where the
+// rest of this module compiles away.
+
+/// Convert a length to the `i32` the host ABI expects.
+///
+/// Returns `None` when the length cannot be represented — the caller then
+/// skips the host call rather than passing a wrapped negative value.
+// Callers are the wasm32-only wrappers below; on a host build only the
+// tests reach these, so the lib target sees them as unused.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn abi_len(len: usize) -> Option<i32> {
+    i32::try_from(len).ok()
+}
+
+/// Convert a guest pointer to the `i32` the host ABI expects.
+///
+/// Returns `None` for an address above `i32::MAX`. Cascade caps plugin linear
+/// memory well below 2 GiB, so this should be unreachable in practice; it is
+/// checked anyway because "should be unreachable" is not a bounds check.
+// Callers are the wasm32-only wrappers below; on a host build only the
+// tests reach these, so the lib target sees them as unused.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn abi_ptr(addr: usize) -> Option<i32> {
+    i32::try_from(addr).ok()
+}
+
 // ── Ergonomic wrappers ────────────────────────────────────────────────────────
 
 /// Emit a log line at INFO level to the Cascade host.
@@ -71,7 +105,11 @@ pub fn log_info(msg: &str) {
     #[cfg(target_arch = "wasm32")]
     // Safety: msg is a valid UTF-8 str; ptr/len are in-bounds for the call duration.
     unsafe {
-        host_log(2, msg.as_ptr() as i32, msg.len() as i32);
+        // A message whose pointer or length will not fit the i32 ABI is
+        // dropped rather than sent as a wrapped negative value.
+        if let (Some(ptr), Some(len)) = (abi_ptr(msg.as_ptr() as usize), abi_len(msg.len())) {
+            host_log(2, ptr, len);
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     let _ = msg;
@@ -82,7 +120,11 @@ pub fn log_debug(msg: &str) {
     #[cfg(target_arch = "wasm32")]
     // Safety: same as log_info.
     unsafe {
-        host_log(1, msg.as_ptr() as i32, msg.len() as i32);
+        // A message whose pointer or length will not fit the i32 ABI is
+        // dropped rather than sent as a wrapped negative value.
+        if let (Some(ptr), Some(len)) = (abi_ptr(msg.as_ptr() as usize), abi_len(msg.len())) {
+            host_log(1, ptr, len);
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     let _ = msg;
@@ -93,7 +135,11 @@ pub fn log_warn(msg: &str) {
     #[cfg(target_arch = "wasm32")]
     // Safety: same as log_info.
     unsafe {
-        host_log(3, msg.as_ptr() as i32, msg.len() as i32);
+        // A message whose pointer or length will not fit the i32 ABI is
+        // dropped rather than sent as a wrapped negative value.
+        if let (Some(ptr), Some(len)) = (abi_ptr(msg.as_ptr() as usize), abi_len(msg.len())) {
+            host_log(3, ptr, len);
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     let _ = msg;
@@ -123,13 +169,16 @@ pub fn kv_get(key: &str) -> Option<String> {
         //   - key.as_ptr() points to valid UTF-8 bytes for the duration of the call.
         //   - buf.as_mut_ptr() is a valid guest memory pointer in bounds.
         //   - host_kv_get writes at most `buf.len()` bytes (host bounds-checks).
-        let val_len = unsafe {
-            host_kv_get(
-                key.as_ptr() as i32,
-                key.len() as i32,
-                buf.as_mut_ptr() as i32,
-            )
+        let (Some(key_ptr), Some(key_len), Some(out_ptr)) = (
+            abi_ptr(key.as_ptr() as usize),
+            abi_len(key.len()),
+            abi_ptr(buf.as_mut_ptr() as usize),
+        ) else {
+            // Unrepresentable in the ABI — treat as "not found" rather than
+            // calling the host with a wrapped negative value.
+            return None;
         };
+        let val_len = unsafe { host_kv_get(key_ptr, key_len, out_ptr) };
         if val_len <= 0 {
             return None;
         }
@@ -155,15 +204,75 @@ pub fn kv_set(key: &str, value: &str) {
     #[cfg(target_arch = "wasm32")]
     // Safety: key and value are valid UTF-8 str slices; ptrs are valid for call duration.
     unsafe {
-        host_kv_set(
-            key.as_ptr() as i32,
-            key.len() as i32,
-            value.as_ptr() as i32,
-            value.len() as i32,
-        );
+        if let (Some(kp), Some(kl), Some(vp), Some(vl)) = (
+            abi_ptr(key.as_ptr() as usize),
+            abi_len(key.len()),
+            abi_ptr(value.as_ptr() as usize),
+            abi_len(value.len()),
+        ) {
+            host_kv_set(kp, kl, vp, vl);
+        }
+        // Otherwise the pair cannot be expressed in the ABI; skip the call
+        // rather than storing under a wrapped pointer.
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
         let _ = (key, value);
+    }
+}
+
+#[cfg(test)]
+mod abi_conversion_tests {
+    use super::{abi_len, abi_ptr};
+
+    // These cover the GUEST end of the FFI boundary (T-P7-E25-04). The wrappers
+    // themselves are wasm32-only, but the conversion logic they depend on is
+    // not, so the refusal behaviour is testable on the host.
+
+    #[test]
+    fn ordinary_lengths_and_pointers_convert() {
+        assert_eq!(abi_len(0), Some(0));
+        assert_eq!(abi_len(4096), Some(4096));
+        assert_eq!(abi_ptr(0), Some(0));
+        assert_eq!(abi_ptr(1 << 20), Some(1 << 20));
+    }
+
+    #[test]
+    fn the_largest_representable_value_still_converts() {
+        let max = i32::MAX as usize;
+        assert_eq!(abi_len(max), Some(i32::MAX));
+        assert_eq!(abi_ptr(max), Some(i32::MAX));
+    }
+
+    #[test]
+    fn values_above_i32_max_are_refused_not_wrapped() {
+        // The bug this replaces: `len as i32` turns 0x8000_0000 into
+        // -2147483648 and hands the host a negative length.
+        let over = (i32::MAX as usize) + 1;
+        assert_eq!(abi_len(over), None, "must refuse, not wrap to a negative");
+        assert_eq!(abi_ptr(over), None, "must refuse, not wrap to a negative");
+        assert_eq!(abi_len(usize::MAX), None);
+        assert_eq!(abi_ptr(usize::MAX), None);
+    }
+
+    #[test]
+    fn no_input_ever_produces_a_negative_abi_value() {
+        for candidate in [
+            0usize,
+            1,
+            4095,
+            i32::MAX as usize - 1,
+            i32::MAX as usize,
+            i32::MAX as usize + 1,
+            u32::MAX as usize,
+            usize::MAX,
+        ] {
+            if let Some(v) = abi_len(candidate) {
+                assert!(v >= 0, "abi_len({candidate}) produced a negative {v}");
+            }
+            if let Some(v) = abi_ptr(candidate) {
+                assert!(v >= 0, "abi_ptr({candidate}) produced a negative {v}");
+            }
+        }
     }
 }
