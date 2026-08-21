@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Plug-and-play provider presets** (2026-08-21). Cascade already accepted any
+  OpenAI-compatible endpoint through `ProviderKind::Custom`, but that required
+  knowing each vendor's base URL. `cascade_providers::presets` ships a curated
+  catalog so a slug is enough: Moonshot (Kimi), Z.ai (GLM), xAI, Fireworks,
+  Cerebras, Perplexity, Nebius and Hyperbolic for hosted keys, plus Ollama,
+  LM Studio, llama.cpp, vLLM and Jan for fully local runtimes that need no
+  account, no key and no network egress. Presets are convenience only —
+  `ProviderKind::Custom` remains the general escape hatch, so an unlisted
+  provider is never blocked. Tests enforce the invariants that matter: local
+  presets must require no credential and stay on loopback, and any preset that
+  sends a key must be HTTPS.
+
 ### Security
 - **Cleared the release-blocking Security Scan gate** (2026-08-21). `cargo-deny`
   failed on two denied advisories in `lru` 0.12.5 — a potential use-after-free

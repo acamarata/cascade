@@ -35,6 +35,7 @@ pub mod connect;
 pub mod cost;
 pub mod error;
 pub mod http_client;
+pub mod presets;
 pub mod provider_info;
 pub mod registry;
 pub mod types;
