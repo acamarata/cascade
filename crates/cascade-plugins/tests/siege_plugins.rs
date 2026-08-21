@@ -370,7 +370,7 @@ fn siege_v4_net_wildcard_host_rejected() {
 /// (no silent collision — the registry atomically replaces and drains).
 #[test]
 fn siege_v4_duplicate_plugin_id_replaces_not_collides() {
-    use cascade_plugins::loader::PluginLoader;
+    use cascade_plugins::loader::{PluginLoader, VerificationPolicy};
     use cascade_plugins::plugin_registry::PluginRegistry;
     use std::fs;
     use tempfile::TempDir;
@@ -393,13 +393,13 @@ fn siege_v4_duplicate_plugin_id_replaces_not_collides() {
     make_plugin(tmp.path(), "com.example.dup");
 
     let registry = PluginRegistry::new();
-    let (mut loaded, _) = PluginLoader::scan(tmp.path());
+    let (mut loaded, _) = PluginLoader::scan_with(tmp.path(), &VerificationPolicy::permissive());
     assert_eq!(loaded.len(), 1);
     registry.register(loaded.remove(0));
     assert_eq!(registry.len(), 1);
 
     // Register again with same ID — must replace, not grow the registry.
-    let (mut loaded2, _) = PluginLoader::scan(tmp.path());
+    let (mut loaded2, _) = PluginLoader::scan_with(tmp.path(), &VerificationPolicy::permissive());
     registry.register(loaded2.remove(0));
     assert_eq!(
         registry.len(),
@@ -513,7 +513,7 @@ fn siege_v6_hot_reload_drain_arc_timeout_safe() {
 /// must not panic or return a corrupted entry.
 #[test]
 fn siege_v6_registry_reload_atomic_no_panic() {
-    use cascade_plugins::loader::PluginLoader;
+    use cascade_plugins::loader::{PluginLoader, VerificationPolicy};
     use cascade_plugins::plugin_registry::PluginRegistry;
     use std::fs;
     use std::sync::Arc;
@@ -530,7 +530,7 @@ fn siege_v6_registry_reload_atomic_no_panic() {
     fs::write(plugin_dir.join("com.example.reload.wasm"), &wasm).unwrap();
 
     let registry = Arc::new(PluginRegistry::new());
-    let (mut loaded, _) = PluginLoader::scan(tmp.path());
+    let (mut loaded, _) = PluginLoader::scan_with(tmp.path(), &VerificationPolicy::permissive());
     registry.register(loaded.remove(0));
 
     // Concurrently call list() while performing a reload — must not panic.
@@ -543,7 +543,8 @@ fn siege_v6_registry_reload_atomic_no_panic() {
 
     // Reload the same plugin 5 times.
     for _ in 0..5 {
-        let (mut reloaded, _) = PluginLoader::scan(tmp.path());
+        let (mut reloaded, _) =
+            PluginLoader::scan_with(tmp.path(), &VerificationPolicy::permissive());
         if let Some(p) = reloaded.pop() {
             registry.reload_plugin(p);
         }

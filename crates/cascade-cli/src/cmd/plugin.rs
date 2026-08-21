@@ -27,7 +27,7 @@ use std::process::Command as StdCommand;
 use async_trait::async_trait;
 use cascade_plugins::capability::Capability;
 use cascade_plugins::grants::GrantStore;
-use cascade_plugins::loader::{PluginLoadError, PluginLoader};
+use cascade_plugins::loader::{PluginLoadError, PluginLoader, VerificationPolicy};
 use cascade_plugins::manifest::PluginKind;
 use cascade_plugins::signing::TrustedPublishers;
 use cascade_types::error::{CascadeError, Result};
@@ -80,6 +80,15 @@ pub struct ListArgs {
     /// Output as JSON instead of a human-readable table.
     #[arg(long)]
     pub json: bool,
+
+    /// List plugins that carry no signature, with a warning, instead of
+    /// rejecting them.
+    ///
+    /// Off by default: an unsigned plugin is rejected, and the rejection is
+    /// reported in the error list. Use this only for plugins you are
+    /// developing yourself.
+    #[arg(long)]
+    pub allow_unsigned: bool,
 }
 
 /// Arguments for `cascade plugin enable`.
@@ -250,7 +259,15 @@ fn run_trust(name: &str, public_key: &str) -> Result<()> {
 // ── list ──────────────────────────────────────────────────────────────────────
 
 fn run_list(plugins_dir: &Path, args: &ListArgs) -> Result<()> {
-    let (loaded, errors) = PluginLoader::scan(plugins_dir);
+    // Signatures are enforced unless the caller explicitly opts out
+    // (T-P7-E25-03). `enforcing()` reads the trust store; on a read failure it
+    // yields an EMPTY trusted set rather than a permissive one.
+    let policy = if args.allow_unsigned {
+        VerificationPolicy::permissive()
+    } else {
+        VerificationPolicy::enforcing()
+    };
+    let (loaded, errors) = PluginLoader::scan_with(plugins_dir, &policy);
 
     if args.json {
         // JSON output: include both loaded and error entries.
@@ -781,6 +798,10 @@ fn truncate(s: &str, max_len: usize) -> String {
 /// Extract a short display ID and reason from a `PluginLoadError`.
 fn error_display(e: &PluginLoadError) -> (String, String) {
     match e {
+        PluginLoadError::SignatureRejected { id, reason } => (
+            id.clone(),
+            format!("signature rejected: {reason} (use --allow-unsigned to list unsigned plugins)"),
+        ),
         PluginLoadError::ManifestNotFound { dir } => (
             dir.file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -857,9 +878,18 @@ mod tests {
 
     // Serial attribute ensures HOME env var manipulation does not interfere with
     // parallel tests in the same binary.
+    // Fixtures in this module are unsigned by design — these tests cover
+    // listing and output formatting, not the trust store. Signature
+    // enforcement is tested in cascade-plugins/src/loader.rs (T-P7-E25-03).
     #[cfg(test)]
     fn run_list_cmd(plugins_dir: &Path, json: bool) -> Result<()> {
-        run_list(plugins_dir, &ListArgs { json })
+        run_list(
+            plugins_dir,
+            &ListArgs {
+                json,
+                allow_unsigned: true,
+            },
+        )
     }
 
     #[test]

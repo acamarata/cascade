@@ -272,7 +272,7 @@ pub enum PluginDispatchError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::loader::PluginLoader;
+    use crate::loader::{PluginLoader, VerificationPolicy};
     use crate::manifest::PluginKind;
     use std::fs;
     use tempfile::TempDir;
@@ -315,7 +315,8 @@ mod tests {
         .unwrap();
         write_minimal_wasm(&plugin_dir.join(format!("{id}.wasm")));
 
-        let (mut loaded, errors) = PluginLoader::scan(plugins_dir);
+        let (mut loaded, errors) =
+            PluginLoader::scan_with(plugins_dir, &VerificationPolicy::permissive());
         assert!(
             errors
                 .iter()
