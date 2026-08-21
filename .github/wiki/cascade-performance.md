@@ -238,4 +238,4 @@ This swaps the staging and live directories back. The rollback is only available
 
 ---
 
-*See also: [Architecture](Architecture.md) | [RAG Setup](RAG-Setup.md) | [CLI Reference](CLI-Reference.md)*
+*See also: [Architecture](Architecture.md) | [RAG Setup](RAG-Pipeline.md) | [CLI Reference](CLI-Reference.md)*

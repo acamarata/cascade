@@ -98,7 +98,7 @@ Tier 6 in the six-tier hierarchy. Instructions scoped to a single app within a m
 Tier 2. Instructions that apply to a portfolio or personal workspace namespace. Lives at `~/Downloads/.cascade/` in the reference setup.
 
 **PDK (Plugin Development Kit)**
-The `cascade-pdk` crate. Guest-side types, macros, and host-import wrappers for authoring WASM plugins. See [Plugin Development Guide](plugin-development-guide.md).
+The `cascade-pdk` crate. Guest-side types, macros, and host-import wrappers for authoring WASM plugins. See [Plugin Development Guide](Plugin-Development.md).
 
 **PPC (Per-Product Cascade)**
 Tier 4. Instructions for a single product spanning multiple repos. Lives at the project root's `.cascade/`.
@@ -138,4 +138,4 @@ One level of the six-tier cascade hierarchy (GCI, PCI, APC, PPC, PRC, PAC). Each
 ## W
 
 **WASM plugin**
-A WebAssembly module that runs inside the Cascade host's wasmtime sandbox. Extends Cascade with new data sources, AI tools, embedding providers, or autonomous agents. See [Plugin Development Guide](plugin-development-guide.md).
+A WebAssembly module that runs inside the Cascade host's wasmtime sandbox. Extends Cascade with new data sources, AI tools, embedding providers, or autonomous agents. See [Plugin Development Guide](Plugin-Development.md).

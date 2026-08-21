@@ -40,7 +40,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 
 **Plugins**
 - [Plugin Development](Plugin-Development.md) — overview
-- [Plugin Development Guide](Plugin-Development-Guide.md) — full PDK reference
+- [Plugin Development Guide](Plugin-Development.md) — full PDK reference
 - [github-issues](plugins-github-issues.md) · [gitlab](plugins-gitlab.md) · [jira](plugins-jira.md) · [linear](plugins-linear.md)
 
 **Daemon & OS**
@@ -61,7 +61,7 @@ A six-tier hierarchy governs scope: global defaults flow down to project-level, 
 **Project info**
 - [Security](Security.md) · [Privacy](Privacy.md) · [Telemetry Consent](Telemetry-Consent.md)
 - [Code Signing](Code-Signing.md)
-- [Changelog](Changelog.md)
+- [Changelog](CHANGELOG.md)
 
 ## 30-second example
 

@@ -231,4 +231,4 @@ The release key fingerprint `3C463D90DF3061AA752FB8500F5729773E694CEA` is canoni
 
 ---
 
-See also: [Install](Install.md) · [Building From Source](Building-From-Source.md) · [Development Setup](Development-Setup.md) · [Code Signing](Code-Signing.md)
+See also: [Install](Installation.md) · [Building From Source](Building-From-Source.md) · [Development Setup](Development-Setup.md) · [Code Signing](Code-Signing.md)

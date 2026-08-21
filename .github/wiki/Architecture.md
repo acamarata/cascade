@@ -39,6 +39,42 @@ Cascade is built as a set of cooperating components. This page describes how the
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## All workspace crates
+
+Cascade is 21 crates under `crates/`, plus the Tauri desktop app under
+`apps/cascade-app/src-tauri` and the WASM plugins under `plugins/` and
+`examples/plugins/`. The sections after this table go into depth on the few a
+contributor meets first; this table is the complete map, so nothing is
+invisible to someone reading the repo for the first time.
+
+| Crate | Role |
+|---|---|
+| `cascade-agents` | Agent registry, tool grants, and agent-library schema for the Cascade orchestration runtime (E-P6-01/06/09). |
+| `cascade-audit` | Append-only, hash-chained audit log for Cascade privileged operations. |
+| `cascade-ccapi` | EXPERIMENTAL: HTTP+SSE bridge that drives the interactive Claude Code CLI (default-off, opt-in) |
+| `cascade-cli` | CLI for Cascade — unified AI instruction manager for coding agents |
+| `cascade-core` | Cascade runtime — orchestrates retrieval, chunking, and agent dispatch |
+| `cascade-daemon` | Background daemon that runs the Cascade context engine and exposes a local IPC socket |
+| `cascade-db` | Cascade embedded data layer: shared SQLite configuration, migration runner, embedded cache + job queue, and optional ANN vector store. Redis is never required. |
+| `cascade-fleet-widget` | macOS menu-bar fleet widget — shows live per-account usage from accounts.json and quota-store.json (Claw-Fleet replacement) |
+| `cascade-harness` | AI coding harness detection, configuration, and session monitoring for Cascade |
+| `cascade-keychain` | Cross-platform OS keychain access for Cascade (macOS Keychain / Linux Secret Service / Windows Credential Manager). |
+| `cascade-local-llm` | Local LLM runner for Cascade — candle-rs gemma-2-2b CPU/METAL inference |
+| `cascade-mcp` | Model Context Protocol (MCP) server implementation for Cascade |
+| `cascade-pdk` | Plugin Development Kit — guest-side bindings and macros for Cascade WASM plugins |
+| `cascade-pdk-macro` | Proc-macro support for cascade-pdk — generates WASM ABI entry points |
+| `cascade-personal` | Encrypted, isolated structured personal-data store for Cascade. AES-256-GCM at rest; key in OS keychain; mode-aware gate (medical/financial hidden in non-Personal mode). |
+| `cascade-plugins` | WASM plugin host for Cascade — load and execute sandboxed provider plugins |
+| `cascade-providers` | Provider provisioning, OAuth, and auto-auth import for the Cascade AI context framework |
+| `cascade-rag` | Retrieval-Augmented Generation pipeline for Cascade — chunking, embedding, vector search |
+| `cascade-security` | Security primitives shared by the daemon, CLI and MCP surfaces (secret redaction, sensitivity classification, policy hooks). |
+| `cascade-tray` | OS system-tray abstraction for the Cascade daemon — platform-agnostic trait + state types |
+| `cascade-types` | Core traits and types for the Cascade AI context framework |
+
+The remaining workspace members are not library crates: `apps/cascade-app/src-tauri`
+is the desktop shell, and `plugins/*` and `examples/plugins/*` are WASM plugins
+built against `cascade-pdk`.
+
 ## Components
 
 ### cascade-daemon

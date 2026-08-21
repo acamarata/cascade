@@ -101,6 +101,6 @@ No configuration is required. Cascade discovers the new tier from the file syste
 
 ## See also
 
-- [Cascade Concept](Cascade-Concept.md) — motivation and design
-- [Configuration Reference](Configuration-Reference.md) — controlling discovery behavior
+- [Cascade Concept](Cascade-Concepts.md) — motivation and design
+- [Configuration Reference](Configuration.md) — controlling discovery behavior
 - [Glossary](Glossary.md) — all tier names and related terms defined

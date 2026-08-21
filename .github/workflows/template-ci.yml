@@ -8,6 +8,10 @@ name: Template CI
 # Runs independently of the main CI workflow. Fast (<60s target).
 
 on:
+  # Manual trigger: this workflow only fires on template-path changes, so a
+  # fix to it (or to the runner it targets) could not otherwise be verified
+  # without an unrelated template edit.
+  workflow_dispatch:
   push:
     branches: [main, wip/rust-rewrite]
     paths:

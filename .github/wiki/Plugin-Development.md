@@ -2,7 +2,7 @@
 
 Cascade plugins extend the system with new data sources, AI tools, embedding providers, and autonomous agents. Plugins are compiled to WebAssembly (WASM) and run inside a sandboxed wasmtime host.
 
-This page is an overview. For the complete step-by-step guide including the PDK API reference and full examples, see [Plugin Development Guide](plugin-development-guide.md).
+This page is an overview. For the complete step-by-step guide including the PDK API reference and full examples, see [Plugin Development Guide](Plugin-Development.md).
 
 ---
 
@@ -108,4 +108,4 @@ Source and documentation for each: [github-issues](plugins-github-issues.md), [g
 
 ## Full guide
 
-For the complete PDK API, ABI contract, testing harness, CI setup, and publishing instructions, see [Plugin Development Guide](Plugin-Development-Guide.md).
+For the complete PDK API, ABI contract, testing harness, CI setup, and publishing instructions, see [Plugin Development Guide](Plugin-Development.md).

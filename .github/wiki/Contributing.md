@@ -45,7 +45,7 @@ cargo test
 - Performance improvements with benchmark data
 - Documentation fixes and improvements
 - New CLI subcommand ideas discussed in an issue first
-- New plugin templates (see [Plugin Development Guide](plugin-development-guide.md))
+- New plugin templates (see [Plugin Development Guide](Plugin-Development.md))
 - New bundled templates (see [Templates](templates.md))
 
 ---

@@ -53,7 +53,7 @@ cascade config set tools.aider false
 
 **Does Cascade work on Windows?**
 
-Yes. The CLI and daemon work on Windows 10+. The GUI app targets Windows 11. Distribution is available via Winget, Chocolatey, Scoop, and direct download. The Windows widget requires Windows 11 (Windows App SDK 1.5). See [Install](Install.md) for platform-specific notes.
+Yes. The CLI and daemon work on Windows 10+. The GUI app targets Windows 11. Distribution is available via Winget, Chocolatey, Scoop, and direct download. The Windows widget requires Windows 11 (Windows App SDK 1.5). See [Install](Installation.md) for platform-specific notes.
 
 ---
 
@@ -69,4 +69,4 @@ The CLI falls back to reading `.cascade/` files directly for most operations. Se
 
 ---
 
-See also: [Home](Home.md) · [Troubleshooting](Troubleshooting.md) · [Security](Security.md) · [Privacy](Privacy.md) · [Install](Install.md)
+See also: [Home](Home.md) · [Troubleshooting](Troubleshooting.md) · [Security](Security.md) · [Privacy](Privacy.md) · [Install](Installation.md)
