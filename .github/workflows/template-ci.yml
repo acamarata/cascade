@@ -49,11 +49,14 @@ jobs:
       # Validates data/templates/index.json against index.schema.json.
       # Must pass before the Rust step to catch schema regressions early.
 
+      # No `cache:` — this repo uses pnpm, so there is no package-lock.json at
+      # the root and setup-node's npm cache fails hard with "Dependencies lock
+      # file is not found". The only npm use here is a single global ajv-cli
+      # install, which is not worth a cache anyway.
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Install ajv-cli
         run: npm install -g ajv-cli@5
