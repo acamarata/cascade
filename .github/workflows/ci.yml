@@ -522,12 +522,9 @@ jobs:
   # Needs GitHub-hosted Windows runners; gated on HOSTED_CI.
   #
   # RUNNER VERSION IS LOAD-BEARING (same lesson as widget-macos): the project
-  # is ApplicationType "Windows Store" with PlatformToolset v143, i.e. the UWP
-  # C++ workload from Visual Studio 2022. `windows-latest` has moved on to
-  # VS 18, which does not carry that workload, and the build fails MSB8020:
-  # "The build tools for 'v143' application Type UWP ... cannot be found".
-  # Pinned to windows-2022, which is the toolset this project actually
-  # targets. Retarget the vcxproj before moving this forward.
+  # declares PlatformToolset v143, which is Visual Studio 2022's toolset.
+  # `windows-latest` has moved on to VS 18. Pinned to windows-2022 so the
+  # declared toolset is the one actually present; bump both together.
   widget-windows:
     name: widget-windows
     runs-on: windows-2022

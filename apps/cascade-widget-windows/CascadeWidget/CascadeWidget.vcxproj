@@ -36,8 +36,19 @@
     -->
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
-    <ApplicationType>Windows Store</ApplicationType>
-    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <!--
+      NOT a UWP project. This is a Windows App SDK 1.5 / WinUI 3 DESKTOP app
+      (unpackaged-capable, Win32 entry point), and the PackageReferences below
+      are the Windows App SDK, not UWP.
+
+      It previously declared ApplicationType "Windows Store" +
+      ApplicationTypeRevision 10.0, i.e. UWP. Two failures followed directly
+      from that mislabel: MSBuild demanded the VS2022 UWP C++ workload
+      (MSB8036/MSB8020), and NuGet demanded a "UAP,Version=v10.0" framework
+      reference a C++ vcxproj cannot express with PackageReference. Removing
+      the UWP declaration is the fix — the project builds as the desktop app
+      it actually is.
+    -->
     <!-- C++/WinRT projection — required for IWidgetProvider -->
     <CppWinRTOptimized>true</CppWinRTOptimized>
   </PropertyGroup>
