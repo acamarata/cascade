@@ -57,6 +57,13 @@ tower-http    = { version = "0.5", features = ["limit", "timeout", "cors"] }
 futures-util  = "0.3"
 bytes         = "1"
 
+# Windows-only: auth.rs marks the secret file hidden via SetFileAttributesW.
+# That call was already written behind #[cfg(windows)] but the crate never
+# declared the dependency, so cascade-mcp could not build for Windows at all
+# (T-P7-E25-10). Version matches what the tray dependency chain already locks.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+
 [dev-dependencies]
 tempfile     = "3"
 tokio        = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

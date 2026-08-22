@@ -45,6 +45,15 @@ pub mod http;
 pub mod sse;
 pub mod stdio;
 pub mod tcp;
+
+/// Unix-domain-socket transport.
+///
+/// `#[cfg(unix)]` because it is built on `tokio::net::{UnixListener,
+/// UnixStream}`, which do not exist on Windows. The module was declared
+/// unconditionally, so cascade-mcp simply did not compile for
+/// x86_64-pc-windows-msvc — invisible until hosted CI was switched on. The
+/// Windows equivalent is a named pipe (T-P7-E25-10).
+#[cfg(unix)]
 pub mod unix;
 
 use async_trait::async_trait;
