@@ -10,6 +10,11 @@
 //!
 //! SPORT: .claude/docs/MASTER-DAEMON.md — ipc_auth integration test row (T-P2-E03-03)
 
+//!
+//! Unix-only: exercises IPC auth over a Unix domain socket. Windows uses a
+//! named pipe.
+#![cfg(unix)]
+
 use std::{fs, path::PathBuf, time::Duration};
 
 use tempfile::TempDir;

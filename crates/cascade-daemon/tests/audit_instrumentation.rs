@@ -29,6 +29,11 @@
 //! SPORT: MASTER-ENDPOINTS.md — audit=hook annotation for gci_write,
 //!        symlink_create, symlink_delete, cascade_resolve, key_rotation.
 
+//!
+//! Unix-only: drives the daemon over a Unix domain socket to observe audit
+//! records. Windows uses a named pipe.
+#![cfg(unix)]
+
 use std::{fs, path::PathBuf, time::Duration};
 
 use cascade_audit::{AuditLog, AuditOp};

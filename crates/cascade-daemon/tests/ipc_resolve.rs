@@ -10,6 +10,11 @@
 //! These tests start a real IpcServer on a temp Unix socket to exercise the
 //! full dispatch path, identical to the pattern used in ipc_typed.rs.
 
+//!
+//! Unix-only: exercises `resolve` over a Unix domain socket. Windows uses a
+//! named pipe.
+#![cfg(unix)]
+
 use std::{fs, path::PathBuf, time::Duration};
 
 use tempfile::TempDir;

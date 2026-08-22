@@ -13,6 +13,11 @@
 //! SPORT: .opencode/phases/sport/MASTER-ENDPOINTS.md — IPC routing note
 //!        updated to "typed JSON-RPC (ADR-P3-001)"
 
+//!
+//! Unix-only: every test here speaks the daemon's IPC framing over a Unix
+//! domain socket. Windows uses a named pipe, so there is nothing here to run.
+#![cfg(unix)]
+
 use std::{fs, path::PathBuf, time::Duration};
 
 use tempfile::TempDir;
