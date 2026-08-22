@@ -6,6 +6,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+// Only the macOS (launchd) and Linux (systemd) install paths build a PathBuf;
+// the Windows path registers a service and never touches one.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::path::PathBuf;
 
 use super::wizard::get_home_dir;
@@ -394,7 +397,8 @@ async fn install_daemon_windows(home: &std::path::Path) -> Result<DaemonInstallR
         start_type: ServiceStartType::AutoStart,
         error_control: ServiceErrorControl::Normal,
         executable_path: daemon_bin.clone(),
-        launch_arguments: vec!["serve".to_string()],
+        // `ServiceInfo::launch_arguments` is Vec<OsString>, not Vec<String>.
+        launch_arguments: vec![OsString::from("serve")],
         dependencies: vec![],
         account_name: None, // run as LocalSystem
         account_password: None,
@@ -414,7 +418,9 @@ async fn install_daemon_windows(home: &std::path::Path) -> Result<DaemonInstallR
         .map_err(|e| format!("failed to set service description: {e}"))?;
 
     // Start the service.
-    let start_result = service.start(Vec::new());
+    // `Service::start` takes &[impl AsRef<OsStr>]; an untyped Vec::new()
+    // cannot infer that element type.
+    let start_result = service.start::<OsString>(&[]);
     let message = match start_result {
         Ok(_) => "cascaded daemon installed and started as Windows service".to_string(),
         Err(e) => {
