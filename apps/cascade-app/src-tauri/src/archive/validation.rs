@@ -278,6 +278,7 @@ fn active_processes_for(tool_root: &Path, tool_id: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[cfg(unix)] // unix-only: asserts POSIX mode bits on archive paths
 mod tests {
     use super::*;
     use serial_test::serial;

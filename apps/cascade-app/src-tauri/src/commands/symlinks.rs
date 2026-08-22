@@ -305,6 +305,7 @@ fn apply_single_entry(entry: &SymlinkEntry, home: &Path) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[cfg(unix)] // unix-only: builds real symlinks via std::os::unix::fs::symlink
 mod tests {
     use super::*;
     use std::os::unix::fs::symlink;

@@ -473,6 +473,7 @@ fn is_leap(y: u32) -> bool {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[cfg(unix)] // unix-only: drives read-only-directory rollback via mode bits
 mod tests {
     use super::*;
     use serial_test::serial;
