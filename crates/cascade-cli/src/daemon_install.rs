@@ -588,6 +588,11 @@ fn restart_platform() -> Result<()> {
 // ── Shared helper ─────────────────────────────────────────────────────────────
 
 /// Write `content` to `path` atomically (tmp → rename).
+// Only the macOS (launchd plist) and Linux (systemd unit) install paths write
+// files; the Windows path registers a scheduled task via `schtasks` and writes
+// none. So this is genuinely unused on Windows rather than a missing call, and
+// -D warnings fails the lib build without this allow.
+#[cfg_attr(windows, allow(dead_code))]
 fn atomic_write(path: &std::path::Path, content: &str) -> Result<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
