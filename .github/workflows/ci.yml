@@ -476,7 +476,14 @@ jobs:
       - name: Run coverage
         # Uses the cargo alias defined in .cargo/config.toml:
         # coverage = "llvm-cov nextest --workspace --lcov --output-path target/coverage/lcov.info"
-        run: cargo coverage
+        run: |
+          # llvm-cov does not create the output's parent directory. The job ran
+          # all 5079 tests green and then died on the very last step with
+          # "failed to create file target/coverage/lcov.info: No such file or
+          # directory". Nothing had surfaced it because the coverage job had
+          # never completed a run before this week.
+          mkdir -p target/coverage
+          cargo coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
