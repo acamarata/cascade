@@ -298,6 +298,7 @@ mod tests {
 
     /// Layout: `<root>/scope` is the declared scope, `<root>/secret` is off
     /// limits, and `<root>/scope/escape` is a symlink pointing into it.
+    #[cfg(unix)] // only the symlink tests below use it, and those are unix-only
     fn symlink_fixture() -> tempfile::TempDir {
         let tmp = tempfile::TempDir::new().unwrap();
         std::fs::create_dir(tmp.path().join("scope")).unwrap();

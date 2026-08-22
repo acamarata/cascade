@@ -183,6 +183,11 @@ pub(crate) fn home_dir() -> PathBuf {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+// Unix-only as a whole: the shared `make_fake_codex` fixture writes a
+// `#!/bin/sh` script and chmods it executable, and four of the five tests
+// go through it. Gating the module keeps its `fs`/`Write` imports with the
+// code that uses them.
+#[cfg(unix)]
 mod tests {
     use super::*;
     use serial_test::serial;
@@ -191,10 +196,6 @@ mod tests {
     use tempfile::TempDir;
 
     /// Create a fake `codex` binary in a tempdir that echoes a version string.
-    /// Unix-only: writes a `#!/bin/sh` script and chmods it executable.
-    /// Neither has a Windows equivalent, so the helper and every caller are
-    /// gated rather than faked.
-    #[cfg(unix)]
     fn make_fake_codex(dir: &TempDir, version_output: &str) -> PathBuf {
         let bin = dir.path().join("codex");
         let script = format!(
@@ -209,7 +210,6 @@ mod tests {
         bin
     }
 
-    #[cfg(unix)]
     #[test]
     #[serial(global_env)]
     fn detect_codex_returns_some_when_on_path() {
@@ -264,7 +264,6 @@ mod tests {
     }
 
     // Unix-only: asserts POSIX mode bits, which Windows does not have.
-    #[cfg(unix)]
     #[test]
     #[serial(global_env)]
     fn detect_codex_none_when_version_exits_nonzero() {
