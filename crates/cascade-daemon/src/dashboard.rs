@@ -882,6 +882,8 @@ mod tests {
 
     // ── Test 6: Token file permissions are 0600 ───────────────────────────────
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     /// generate_dashboard_token writes a file with 0600 permissions.
     ///
     /// Acceptance: "~/.cascade/dashboard.token has permissions 0600"

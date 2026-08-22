@@ -770,6 +770,8 @@ mod tests {
 
     // ── Timed-out resume must KILL the child (E1-S6 review regression) ────
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     /// A hung `claude --resume` (simulated by a script that sleeps far past
     /// the timeout) must be killed when the timeout fires — never left as an
     /// orphaned headless session burning quota. The script records its PID;
@@ -853,6 +855,8 @@ mod tests {
         }
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     /// The happy path still works through the tokio::process rewrite: a
     /// fast-exiting success script returns Ok.
     #[cfg(unix)]
@@ -880,6 +884,8 @@ mod tests {
         assert!(result.is_ok(), "got: {result:?}");
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     /// A failing exit code surfaces as Err with the status (not a timeout).
     #[cfg(unix)]
     #[tokio::test]

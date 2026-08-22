@@ -320,6 +320,8 @@ mod tests {
         }
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     /// A pre-existing loose-permission file is re-tightened on append.
     #[cfg(unix)]
     #[test]

@@ -381,6 +381,8 @@ mod tests {
         assert_eq!(read_store.providers[0].display_name, "Claude Code");
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[cfg(unix)]
     #[test]
     fn test_write_sets_owner_only_permissions() {

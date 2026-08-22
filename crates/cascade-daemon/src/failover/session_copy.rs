@@ -785,6 +785,8 @@ mod tests {
         std::fs::write(dir.join(format!("{session_id}.jsonl")), content).unwrap();
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[test]
     fn copies_fresh_when_destination_dir_missing() {
         let src = TempDir::new().unwrap();

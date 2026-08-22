@@ -184,6 +184,8 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[test]
     #[serial(global_env)]
     fn snapshot_finds_process_named_codex() {

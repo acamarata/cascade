@@ -1511,6 +1511,8 @@ mod tests {
     // (c) symlink escape — a symlink inside the sandbox pointing at an outside
     // file must be rejected because PathSandbox canonicalizes the symlink
     // target before checking containment.
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[cfg(unix)]
     #[tokio::test]
     async fn safety_gate_rejects_symlink_escape_via_canonicalize() {
@@ -1683,6 +1685,8 @@ mod tests {
             .expect("non-existent in-sandbox target should pass");
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[cfg(unix)]
     #[test]
     fn path_sandbox_rejects_symlink_escape() {

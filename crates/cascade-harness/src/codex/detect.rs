@@ -22,7 +22,6 @@
 //! ## SPORT
 //! MASTER-HARNESSES.md: Codex row — detect_codex (T-P4-E06-01)
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -101,10 +100,21 @@ fn fallback_paths() -> Vec<PathBuf> {
 }
 
 /// Return true if `path` exists and has executable permission bits set.
+#[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
     path.metadata()
         .map(|m| m.permissions().mode() & 0o111 != 0)
         .unwrap_or(false)
+}
+
+/// Windows has no executable permission bit — executability is decided by the
+/// file extension (PATHEXT), so an existing regular file is the closest true
+/// equivalent. Calling `PermissionsExt::mode()` unconditionally is why this
+/// crate could not compile for Windows.
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.metadata().map(|m| m.is_file()).unwrap_or(false)
 }
 
 // ── Version capture ───────────────────────────────────────────────────────────
@@ -248,6 +258,8 @@ mod tests {
         let _ = result; // don't panic either way; None is expected in CI
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[test]
     #[serial(global_env)]
     fn detect_codex_none_when_version_exits_nonzero() {

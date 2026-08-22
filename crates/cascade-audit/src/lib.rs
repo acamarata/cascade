@@ -34,7 +34,6 @@ use std::{
     fmt,
     fs::{self, File, OpenOptions},
     io::{self, BufRead, BufReader, Write},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     time::SystemTime,
 };
@@ -280,6 +279,30 @@ pub struct AuditLog {
     path: PathBuf,
 }
 
+/// Restrict `path` to owner-only access (0600 on unix).
+///
+/// The audit log is a security artifact, so its permissions are not
+/// best-effort on unix — a failure to tighten them is returned to the caller.
+///
+/// On Windows there is no mode bitmask; `PermissionsExt` and
+/// `Permissions::from_mode` do not exist there, and calling them
+/// unconditionally is why cascade-audit did not compile for Windows at all.
+/// The Windows equivalent is an ACL, which is tracked separately with the
+/// named-pipe DACL work (T-P7-E25-10); until then this is a no-op there
+/// rather than a silent claim of protection.
+#[cfg(unix)]
+fn restrict_to_owner(path: &Path) -> Result<(), AuditError> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+/// Windows has no mode bitmask; see the unix variant for why this is a no-op.
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path) -> Result<(), AuditError> {
+    Ok(())
+}
+
 impl AuditLog {
     /// Open (or create) the audit log at `path`.
     ///
@@ -290,7 +313,8 @@ impl AuditLog {
         // Create or open the file so we can set permissions.
         let file = OpenOptions::new().create(true).append(true).open(path)?;
         // Set 0600 on creation (no-op if the file already had these perms).
-        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        drop(file);
+        restrict_to_owner(path)?;
         let log = Self {
             path: path.to_path_buf(),
         };
@@ -377,7 +401,7 @@ impl AuditLog {
         let n = self.count_records()?;
         let cp = self.count_path();
         fs::write(&cp, n.to_string())?;
-        let _ = fs::set_permissions(&cp, fs::Permissions::from_mode(0o600));
+        let _ = restrict_to_owner(&cp);
         Ok(())
     }
 
@@ -735,8 +759,14 @@ mod tests {
         );
     }
 
+    /// Unix-only: Windows has no mode bitmask to assert against. The
+    /// equivalent ACL check belongs with the Windows DACL work
+    /// (T-P7-E25-10); asserting nothing there is honest, asserting 0600
+    /// would be meaningless.
+    #[cfg(unix)]
     #[test]
     fn file_permissions_are_0600() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("audit.log");
         let _log = AuditLog::open(&path).unwrap();

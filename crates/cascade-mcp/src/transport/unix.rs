@@ -379,6 +379,8 @@ mod tests {
         McpAuth::from_secret([42u8; 32])
     }
 
+    // Unix-only: asserts POSIX mode bits, which Windows does not have.
+    #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
     async fn unix_server_binds_with_0600_permissions() {
         let tmp = TempDir::new().unwrap();

@@ -14,8 +14,6 @@
 //! SPORT: MASTER-CRATES.md — cascade-daemon logging=✅ structured JSON rolling
 //!        rotation, otel_tracing=✅ optional OTLP/gRPC (CASCADE_OTEL_ENDPOINT)
 
-use std::fs::Permissions;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::{non_blocking, rolling};
@@ -144,11 +142,16 @@ pub fn init_logging(log_dir: &Path, otel_provider: Option<&SdkTracerProvider>) -
     // Belt-and-suspenders: chmod any log file in log_dir that was already
     // present from a prior run (the umask above only covers the file created
     // by this build() call).
+    // Unix-only: Windows has no mode bitmask. Log-file ACL tightening on
+    // Windows is tracked with the DACL work (T-P7-E25-10); doing nothing here
+    // is honest, whereas a no-op named like a permission fix is not.
+    #[cfg(unix)]
     if let Ok(entries) = std::fs::read_dir(log_dir) {
+        use std::os::unix::fs::PermissionsExt;
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
-                let _ = std::fs::set_permissions(&path, Permissions::from_mode(0o600));
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
             }
         }
     }
