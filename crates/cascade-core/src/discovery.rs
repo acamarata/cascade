@@ -404,9 +404,13 @@ mod tests {
         fs::create_dir_all(&home).unwrap();
         fs::create_dir_all(&external).unwrap();
         // Create the ~/Sites symlink pointing at the external target.
-        let sites_link = home.join("Sites");
+        // Bound inside the gate: on Windows there is no symlink call, so an
+        // unconditional binding is an unused variable.
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&external, &sites_link).unwrap();
+        {
+            let sites_link = home.join("Sites");
+            std::os::unix::fs::symlink(&external, &sites_link).unwrap();
+        }
 
         let discovery = TierDiscovery::new().with_home(home.clone());
         // Classify the RESOLVED target path (what the OS gives as CWD).

@@ -612,6 +612,10 @@ mod tests {
         }
     }
 
+    /// Unix-only: writes a `#!/bin/sh` stub and marks it executable. Windows
+    /// has neither a shebang nor a mode bit, so the helper and its callers are
+    /// gated rather than approximated.
+    #[cfg(unix)]
     fn install_fake_fleet_cli(directory: &Path, body: &str) -> PathGuard {
         for binary in ["claude", "opencode"] {
             let path = directory.join(binary);

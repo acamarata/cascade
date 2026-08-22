@@ -585,15 +585,15 @@ mod tests {
 
         // Backdate mtime to 6 hours ago using filetime crate via std workaround:
         // set atime+mtime to now - 6h.
-        let six_hours_ago = std::time::SystemTime::now()
-            .checked_sub(std::time::Duration::from_secs(6 * 3600 + 1))
-            .unwrap();
-        // Use std::fs::File and set_modified if available (Rust 1.75+), else skip.
+        // Backdating uses a unix mtime syscall, so the timestamp is computed
+        // inside the gate — the previous `let _ = six_hours_ago;` suppression
+        // could not help, because the BINDING sat outside it and was unused on
+        // Windows.
         #[cfg(unix)]
         {
-            let _ = six_hours_ago; // suppress warning if not used
-                                   // Use utime syscall via libc-free approach: open + futimens.
-                                   // Simplest: write a known-stale epoch directly via the raw mtime trick.
+            let six_hours_ago = std::time::SystemTime::now()
+                .checked_sub(std::time::Duration::from_secs(6 * 3600 + 1))
+                .unwrap();
             let secs = six_hours_ago
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
