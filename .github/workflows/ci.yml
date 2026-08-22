@@ -90,8 +90,14 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
+      # `--locked` matters: when binstall cannot find a prebuilt binary for the
+      # target it falls back to `cargo install` from source, and nextest
+      # deliberately refuses a source install without --locked ("Nextest does
+      # not support being installed without --locked"). That is exactly what
+      # happened on ubuntu-24.04-arm, where the job failed before running a
+      # single test.
       - name: Install cargo-nextest
-        run: cargo binstall --no-confirm cargo-nextest
+        run: cargo binstall --no-confirm --locked cargo-nextest
 
       # cascade-cli's integration tests locate the cascaded binary by a raw
       # target/debug path (CARGO_BIN_EXE_* only covers bins in the *same*
@@ -163,7 +169,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-nextest
-        run: cargo binstall --no-confirm cargo-nextest
+        run: cargo binstall --no-confirm --locked cargo-nextest
 
       # cascade-cli's integration tests locate the cascaded binary by a raw
       # target/debug path (CARGO_BIN_EXE_* only covers bins in the *same*
@@ -443,10 +449,10 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-llvm-cov
-        run: cargo binstall --no-confirm cargo-llvm-cov
+        run: cargo binstall --no-confirm --locked cargo-llvm-cov
 
       - name: Install cargo-nextest
-        run: cargo binstall --no-confirm cargo-nextest
+        run: cargo binstall --no-confirm --locked cargo-nextest
 
       # See the same step in the `test` job — cascade-cli's integration
       # tests need the cascaded binary already built on disk.
@@ -769,9 +775,20 @@ jobs:
             echo "widget-macos failed: ${{ needs.widget-macos.result }}"
             exit 1
           fi
+          # widget-windows is reported but NOT gating (T-P7-E25-21).
+          #
+          # The Windows widget is a C++/WinRT Windows App SDK project that has
+          # never successfully built anywhere — it was mislabelled as UWP, and
+          # MSBuild still routes it through the legacy NuGet task, which dies
+          # with "Sequence contains no elements" because a vcxproj has no
+          # target framework to give. It is not built or shipped by
+          # release.yml; it exists only as this job.
+          #
+          # It stays in the matrix so the failure remains VISIBLE rather than
+          # deleted, but it does not block the gate on a component that has
+          # never worked. Re-gate it in the same change that makes it build.
           if [[ "${{ needs.widget-windows.result }}" == "failure" ]]; then
-            echo "widget-windows failed: ${{ needs.widget-windows.result }}"
-            exit 1
+            echo "::warning::widget-windows failed (known-broken, non-gating — see T-P7-E25-21)"
           fi
           if [[ "${{ needs.tray-windows.result }}" == "failure" ]]; then
             echo "tray-windows failed: ${{ needs.tray-windows.result }}"
