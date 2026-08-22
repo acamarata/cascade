@@ -519,12 +519,18 @@ jobs:
 
   # ── widget-windows ────────────────────────────────────────────────────────
   # Builds the WinUI 3 / Windows App SDK 1.5 widget provider project.
-  # Uses MSBuild (Visual Studio 2022) on windows-latest.
-  # Needs GitHub-hosted Windows runners; skipped on the private repo (no paid minutes).
-  # Flip repo var HOSTED_CI=true when public.
+  # Needs GitHub-hosted Windows runners; gated on HOSTED_CI.
+  #
+  # RUNNER VERSION IS LOAD-BEARING (same lesson as widget-macos): the project
+  # is ApplicationType "Windows Store" with PlatformToolset v143, i.e. the UWP
+  # C++ workload from Visual Studio 2022. `windows-latest` has moved on to
+  # VS 18, which does not carry that workload, and the build fails MSB8020:
+  # "The build tools for 'v143' application Type UWP ... cannot be found".
+  # Pinned to windows-2022, which is the toolset this project actually
+  # targets. Retarget the vcxproj before moving this forward.
   widget-windows:
     name: widget-windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     if: ${{ vars.HOSTED_CI == 'true' }}
     steps:
       - uses: actions/checkout@v4
