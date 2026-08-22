@@ -555,7 +555,6 @@ fn fleet_prompt(
     )
 }
 
-#[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
 fn completion_markers(stdout: &str) -> HashSet<String> {
     stdout
         .match_indices(STEP_COMPLETION_MARKER)
