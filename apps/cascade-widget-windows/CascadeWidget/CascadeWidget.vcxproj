@@ -51,6 +51,16 @@
     -->
     <!-- C++/WinRT projection — required for IWidgetProvider -->
     <CppWinRTOptimized>true</CppWinRTOptimized>
+    <!--
+      Force the MODERN NuGet restore path. Without this, MSBuild runs the
+      legacy `ResolveNuGetPackageAssets` task (Microsoft.NuGet.targets), which
+      expects a project.json/UAP-style lock file and dies with
+      "Sequence contains no elements" in GiveErrorForMissingFramework —
+      i.e. it found no target framework because a vcxproj has none to give.
+      packages.config was removed in 386d1fd, but nothing told MSBuild to
+      switch pipelines, so it stayed on the legacy one.
+    -->
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
