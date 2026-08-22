@@ -308,13 +308,15 @@ fn send_sigterm(pid: u32) -> Result<()> {
 
 #[cfg(not(unix))]
 fn send_sigterm(pid: u32) -> Result<()> {
-    // Windows: open the process with PROCESS_TERMINATE, wrap the raw handle
-    // in std::process::Child (its `kill` calls TerminateProcess and Drop
-    // closes the handle), then kill it.
-    use std::os::windows::io::FromRawHandle;
-    use std::process::Child;
-
+    // Windows has no SIGTERM. Open the process with PROCESS_TERMINATE and call
+    // TerminateProcess directly, then close the handle.
+    //
+    // This previously did `Child::from_raw_handle(handle)` and called
+    // `child.kill()`. `FromRawHandle` is NOT implemented for
+    // `std::process::Child` — only for its stdio handles — so this function
+    // never compiled, and with it neither did cascade-cli for Windows.
     const PROCESS_TERMINATE: u32 = 0x0001;
+    const EXIT_CODE: u32 = 1;
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -323,9 +325,13 @@ fn send_sigterm(pid: u32) -> Result<()> {
             inherit_handle: i32,
             process_id: u32,
         ) -> *mut std::ffi::c_void;
+        fn TerminateProcess(handle: *mut std::ffi::c_void, exit_code: u32) -> i32;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
         fn GetLastError() -> u32;
     }
 
+    // SAFETY: `handle` is checked non-null before use and closed exactly once
+    // on every path below; no other code owns it.
     unsafe {
         let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
         if handle.is_null() {
@@ -335,10 +341,16 @@ fn send_sigterm(pid: u32) -> Result<()> {
                 GetLastError()
             )));
         }
-        let child = Child::from_raw_handle(handle);
-        child
-            .kill()
-            .map_err(|e| CascadeError::Other(format!("TerminateProcess({}) failed: {}", pid, e)))
+        let ok = TerminateProcess(handle, EXIT_CODE);
+        let err = if ok == 0 { Some(GetLastError()) } else { None };
+        CloseHandle(handle);
+
+        match err {
+            None => Ok(()),
+            Some(code) => Err(CascadeError::Other(format!(
+                "TerminateProcess({pid}) failed: Windows error {code}"
+            ))),
+        }
     }
 }
 

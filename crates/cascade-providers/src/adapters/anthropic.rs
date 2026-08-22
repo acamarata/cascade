@@ -845,12 +845,16 @@ mod tests {
     #[tokio::test]
     async fn complete_returns_rate_limited_with_retry_after() {
         let ctx = MockProviderServer::start("anthropic").await;
-        // Exhaust all retries with 429; retry-after: 0 so backoff is instant.
+        // Exhaust all retries with 429. `retry-after: 0` keeps the backoff
+        // instant — the header was 42, which contradicted this very comment
+        // and made the adapter sleep 42s per retry, timing the test out on CI
+        // (>60s) while passing locally only because nothing else competed for
+        // the runtime.
         Mock::given(method("POST"))
             .and(path(MESSAGES_PATH))
             .respond_with(
                 ResponseTemplate::new(429)
-                    .append_header("retry-after", "42")
+                    .append_header("retry-after", "0")
                     .append_header("content-length", "0"),
             )
             .mount(&ctx.server)
@@ -860,10 +864,20 @@ mod tests {
         let req = CompletionRequest::simple("claude-3-5-sonnet-20241022", "hello");
         let err = adapter.complete(req).await.unwrap_err();
 
-        assert!(
-            matches!(err, ProviderError::RateLimited { .. }),
-            "expected RateLimited, got {err:?}"
-        );
+        // The point of this test is that the header is PARSED and surfaced,
+        // so assert the value rather than only the variant — matching
+        // `RateLimited { .. }` alone would pass even if the header were
+        // dropped entirely.
+        match err {
+            ProviderError::RateLimited { retry_after_secs } => {
+                assert_eq!(
+                    retry_after_secs,
+                    Some(0),
+                    "retry-after header must be parsed and surfaced"
+                );
+            }
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
     }
 
     // ── SSE stream parse ──────────────────────────────────────────────────────
