@@ -570,6 +570,12 @@ fn completion_markers(stdout: &str) -> HashSet<String> {
 }
 
 #[cfg(test)]
+// Unix-only as a whole: every shared fixture here (the #!/bin/sh fleet-CLI
+// stub, PathGuard, RejectChecks, event_transitions) depends on shebangs and
+// mode bits, so the two tests that do not use them directly still cannot
+// stand alone on Windows. Gating the module keeps the fixtures and their
+// users consistent instead of leaving orphaned helpers.
+#[cfg(unix)]
 mod tests {
     use std::{
         fs,
@@ -681,7 +687,6 @@ mod tests {
         assert!(completion_markers("CASCADE_STEP_COMPLETE: !!!").is_empty());
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_integration_transitions_pending_running_passed_from_marker() {
@@ -716,7 +721,6 @@ mod tests {
         assert!(transitions.contains(&("running".into(), "passed".into())));
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_records_resolved_fleet_cli_as_step_event_actor() {
@@ -758,7 +762,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_marks_step_failed_when_success_output_has_no_marker() {
@@ -783,7 +786,6 @@ mod tests {
         assert_eq!(first_step_status(phases_root), StepStatus::Failed);
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_records_fleet_cli_actor_on_missing_marker_failure() {
@@ -812,7 +814,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_marks_step_failed_on_nonzero_exit() {
@@ -837,7 +838,6 @@ mod tests {
         assert_eq!(first_step_status(phases_root), StepStatus::Failed);
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn real_dispatch_gate_failure_blocks_step_progression() {
@@ -861,7 +861,6 @@ mod tests {
         assert!(!event_transitions(&phases_root).contains(&("running".into(), "passed".into())));
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn transient_cli_failure_retries_and_passes_on_third_attempt() {
@@ -901,7 +900,6 @@ printf '%s\n' 'CASCADE_STEP_COMPLETE:step-01'"#,
         assert_eq!(first_step_status(phases_root), StepStatus::Passed);
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn exhausted_cli_retries_mark_step_failed_after_bounded_count() {
@@ -942,7 +940,6 @@ exit 75"#,
         assert_eq!(first_step_status(phases_root), StepStatus::Failed);
     }
 
-    #[cfg(unix)] // depends on a #!/bin/sh stub + mode bits
     #[tokio::test]
     #[serial(env_path)]
     async fn interrupted_real_run_resumes_without_redispatching_passed_steps() {

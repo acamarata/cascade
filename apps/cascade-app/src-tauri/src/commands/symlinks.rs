@@ -869,6 +869,7 @@ fn copy_file_to_target(source: &Path, target: &Path) -> std::io::Result<()> {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[cfg(unix)] // unix-only: builds real symlinks via std::os::unix::fs::symlink
 mod unlink_tests {
     use super::*;
     use std::os::unix::fs::symlink;
