@@ -34,7 +34,11 @@ use cascade_types::ipc::{self as typed_ipc, RequestId, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
+// `error!` is only used by serve_unix, which is #[cfg(unix)], so on Windows an
+// unconditional import is dead and -D warnings rejects it.
+#[cfg(unix)]
+use tracing::error;
 
 use cascade_core::tasks::{open_tasks_db, KanbanTaskStore};
 
@@ -406,7 +410,8 @@ impl IpcServer {
 
         let server = Arc::new(self);
         loop {
-            let mut pipe = ServerOptions::new()
+            // `NamedPipeServer::connect` takes &self, so no `mut` is needed.
+            let pipe = ServerOptions::new()
                 .pipe_mode(PipeMode::Message)
                 .create(PIPE_NAME)
                 .map_err(DaemonError::Io)?;

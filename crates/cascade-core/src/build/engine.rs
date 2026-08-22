@@ -573,9 +573,12 @@ fn completion_markers(stdout: &str) -> HashSet<String> {
 mod tests {
     use std::{
         fs,
-        os::unix::fs::PermissionsExt,
         path::{Path, PathBuf},
     };
+    // Unix-only: consumed by the mode-bit assertions below, which are
+    // themselves cfg(unix). Windows has no mode bitmask.
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     use serial_test::serial;
     use tempfile::TempDir;

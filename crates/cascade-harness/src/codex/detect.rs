@@ -191,6 +191,10 @@ mod tests {
     use tempfile::TempDir;
 
     /// Create a fake `codex` binary in a tempdir that echoes a version string.
+    /// Unix-only: writes a `#!/bin/sh` script and chmods it executable.
+    /// Neither has a Windows equivalent, so the helper and every caller are
+    /// gated rather than faked.
+    #[cfg(unix)]
     fn make_fake_codex(dir: &TempDir, version_output: &str) -> PathBuf {
         let bin = dir.path().join("codex");
         let script = format!(
@@ -205,6 +209,7 @@ mod tests {
         bin
     }
 
+    #[cfg(unix)]
     #[test]
     #[serial(global_env)]
     fn detect_codex_returns_some_when_on_path() {
