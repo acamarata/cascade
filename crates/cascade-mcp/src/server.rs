@@ -120,6 +120,8 @@ pub const ERR_PERMISSION_DENIED: i32 = -32003;
 pub const ERR_METHOD_NOT_FOUND: i32 = -32601;
 pub const ERR_INVALID_PARAMS: i32 = -32602;
 pub const ERR_INTERNAL: i32 = -32603;
+/// A known resource kind with nothing backing it. Cascade extension range.
+pub const ERR_RESOURCE_NOT_FOUND: i32 = -32000;
 
 impl JsonRpcError {
     pub fn method_not_found(method: impl Into<String>) -> Self {
@@ -188,6 +190,14 @@ impl From<McpServerError> for JsonRpcError {
             },
             McpServerError::Internal { .. } | McpServerError::AuthFailed { .. } => Self {
                 code: ERR_INTERNAL,
+                message: e.to_string(),
+                data: None,
+            },
+            // -32000: the URI names a resource this server serves, but nothing
+            // backs it on this machine. Deliberately not InvalidParams, which
+            // means the URI is not a resource kind at all.
+            McpServerError::ResourceNotFound { .. } => Self {
+                code: ERR_RESOURCE_NOT_FOUND,
                 message: e.to_string(),
                 data: None,
             },

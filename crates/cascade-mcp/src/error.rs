@@ -49,6 +49,14 @@ pub enum McpServerError {
     /// Authentication failed.
     #[error("Authentication failed: {detail}")]
     AuthFailed { detail: String },
+
+    /// The URI is a known resource kind, but nothing backs it right now
+    /// (for example a tier file that does not exist on this machine).
+    ///
+    /// Distinct from `InvalidParams`, which means the URI itself is not a
+    /// resource this server serves at all.
+    #[error("Resource not found: {uri}")]
+    ResourceNotFound { uri: String },
 }
 
 impl From<McpServerError> for JsonRpcError {
@@ -74,6 +82,9 @@ impl From<McpServerError> for JsonRpcError {
             }
             McpServerError::AuthFailed { .. } => {
                 JsonRpcError::new(ErrorCode::Unauthorized, e.to_string())
+            }
+            McpServerError::ResourceNotFound { .. } => {
+                JsonRpcError::new(ErrorCode::ResourceNotFound, e.to_string())
             }
         }
     }

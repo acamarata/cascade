@@ -104,7 +104,19 @@ impl ResourceRegistry {
             "text/markdown"
         };
 
-        let text = self.backend.read_uri(uri).await?.unwrap_or_default();
+        // `read_uri` returns None for "this resource does not exist right now".
+        // Collapsing that into an empty string (the previous
+        // `.unwrap_or_default()`) reported a MISSING resource as an EMPTY one,
+        // so no client could tell an empty file from an absent one. -32000
+        // ResourceNotFound already existed in the error enum and had never
+        // been used.
+        let text =
+            self.backend
+                .read_uri(uri)
+                .await?
+                .ok_or_else(|| McpServerError::ResourceNotFound {
+                    uri: uri.to_string(),
+                })?;
         let contents = TextResourceContents {
             uri: uri.to_string(),
             mime_type: mime_type.to_string(),

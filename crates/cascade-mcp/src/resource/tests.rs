@@ -144,6 +144,36 @@ async fn read_gci_returns_text_contents() {
     assert_eq!(item["mimeType"], "text/markdown");
 }
 
+/// A resource kind we DO serve, but with nothing behind it, must be reported
+/// as not-found — never as an existing resource with empty text.
+///
+/// Before T-P7-E24 the handler did `.unwrap_or_default()` on the backend's
+/// `Option<String>`, so a missing tier file came back as
+/// `contents:[{text:""}]` and a client could not distinguish "this file is
+/// empty" from "this file does not exist". The `ResourceNotFound` error code
+/// already existed in the enum and had never been used by anything.
+#[tokio::test]
+async fn read_known_uri_with_no_backing_content_is_not_found() {
+    let reg = mock_registry();
+    // The mock serves tier/gci and tier/asi; tier/prc has no entry.
+    let params = serde_json::json!({ "uri": "cascade://tier/prc" });
+    let err = reg
+        .read(Some(&params))
+        .await
+        .expect_err("a resource with no backing content must be an error");
+
+    assert!(
+        matches!(err, McpServerError::ResourceNotFound { ref uri } if uri == "cascade://tier/prc"),
+        "expected ResourceNotFound naming the uri, got: {err:?}"
+    );
+
+    // And it must map to -32000, not to the generic internal-error code.
+    let rpc: cascade_types::mcp::JsonRpcError = err.into();
+    assert_eq!(rpc.code, -32000);
+}
+
+/// A URI that is not a resource kind at all stays InvalidParams — the two
+/// failures are different and clients key on the distinction.
 #[tokio::test]
 async fn read_unknown_uri_returns_invalid_params() {
     let reg = mock_registry();
