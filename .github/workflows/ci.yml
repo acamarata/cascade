@@ -85,7 +85,9 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -163,7 +165,9 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -208,7 +212,9 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Run cascade-providers integration tests
         run: cargo test -p cascade-providers --features integration_tests --test adapters_e2e
@@ -246,7 +252,9 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -310,7 +318,9 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -363,7 +373,9 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Check workspace against MSRV
         run: cargo check --workspace --all-targets --locked
@@ -443,7 +455,9 @@ jobs:
 
       - name: Install Linux tray system deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev libssl-dev pkg-config
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev libssl-dev pkg-config
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -610,7 +624,9 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install Linux tray system deps
-        run: sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
+          sudo apt-get update -y && sudo apt-get install -y libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev
 
       - name: Run benchmarks
         # Run without --save-baseline so no Criterion baseline files accumulate

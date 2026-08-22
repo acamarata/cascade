@@ -128,6 +128,7 @@ jobs:
 
       - name: Install Linux Tauri prerequisites
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \

@@ -25,6 +25,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
           sudo apt-get update -y
           sudo apt-get install -y gjs
 
@@ -67,6 +68,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list  # unused; its mirror desyncs and fails apt-get update
           sudo apt-get update -y
           sudo apt-get install -y qml-qt6 qt6-base-dev qt6-declarative-dev unzip
 
