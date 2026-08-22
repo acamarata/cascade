@@ -113,8 +113,6 @@ fn infer_workspace(proc: &sysinfo::Process) -> Option<PathBuf> {
 pub fn write_quota_sessions(sessions: &[CodexSession]) -> cascade_types::error::Result<()> {
     use cascade_types::error::CascadeError;
     use std::fs;
-    // Consumed only by unix-gated items below; unconditional here is an unused import on Windows.
-    #[cfg(unix)]
     use std::io::Write;
 
     let store_path = home_dir().join(".cascade").join("quota-store.json");
