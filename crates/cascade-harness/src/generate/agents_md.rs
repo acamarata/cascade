@@ -37,7 +37,11 @@ use std::path::Path;
 use cascade_core::cascade_resolution::ResolvedCascade;
 use cascade_core::model_ids::DEFAULT_HARNESS_MODEL;
 use cascade_types::error::{CascadeError, Result};
-use tracing::{debug, info};
+use tracing::debug;
+// `info!` is only reached from the unix symlink path below, so importing it
+// unconditionally is an unused import on Windows and fails -D warnings.
+#[cfg(unix)]
+use tracing::info;
 
 // ── Idempotency marker ────────────────────────────────────────────────────────
 

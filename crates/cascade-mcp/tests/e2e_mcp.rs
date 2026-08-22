@@ -42,6 +42,8 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::task::LocalSet;
+// Consumed only by unix-gated items below; unconditional here is an unused import on Windows.
+#[cfg(unix)]
 use uuid::Uuid;
 
 use cascade_mcp::auth::McpAuth;

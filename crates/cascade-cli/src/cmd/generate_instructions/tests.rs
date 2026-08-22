@@ -6,6 +6,8 @@ use cascade_core::cascade_resolution::TierResult;
 use cascade_types::cascade_tier::CascadeTier;
 use serde_json::Value;
 use serial_test::serial;
+// Consumed only by unix-gated items below; unconditional here is an unused import on Windows.
+#[cfg(unix)]
 use std::path::PathBuf;
 use tempfile::TempDir;
 

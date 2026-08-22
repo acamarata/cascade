@@ -12,6 +12,8 @@ use cascade_core::pbd::{
     TicketStatus, Wave, WaveStatus,
 };
 use serial_test::serial;
+// Consumed only by unix-gated items below; unconditional here is an unused import on Windows.
+#[cfg(unix)]
 use tempfile::TempDir;
 
 fn cascade_bin() -> PathBuf {
