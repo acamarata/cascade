@@ -8,6 +8,12 @@
 //! Follows the same pattern as the existing `integration.rs` binary tests.
 //!
 //! SPORT: .claude/docs/MASTER-DAEMON.md — quota_store_wire test (T-P2-E02-31)
+//!
+//! Unix-only: the whole test talks to the daemon over a Unix domain socket,
+//! which does not exist on Windows (the daemon uses a named pipe there). The
+//! FILE is gated rather than the single test, so its `os::unix::net` import
+//! and helpers stay consistent.
+#![cfg(unix)]
 
 use std::{
     fs,

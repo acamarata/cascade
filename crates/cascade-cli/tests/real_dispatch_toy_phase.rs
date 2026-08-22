@@ -1,10 +1,17 @@
+//! Real-agent dispatch end-to-end test.
+//!
+//! The single test here shells out to a `#!/bin/sh` harness and chmods it
+//! executable, so the whole file is unix-only. Gating the FILE keeps its
+//! helpers and imports consistent — gating item by item left `fs`,
+//! `process::Command`, `serial` and `cascade_bin` unused on Windows.
+#![cfg(unix)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
 };
 
-#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use cascade_core::pbd::{
@@ -12,8 +19,6 @@ use cascade_core::pbd::{
     TicketStatus, Wave, WaveStatus,
 };
 use serial_test::serial;
-// Consumed only by unix-gated items below; unconditional here is an unused import on Windows.
-#[cfg(unix)]
 use tempfile::TempDir;
 
 fn cascade_bin() -> PathBuf {
@@ -129,7 +134,6 @@ fn seed_real_toy_phase(store: &PbdStore, evidence_root: &Path) -> Vec<(String, P
 #[test]
 #[ignore = "explicit opt-in: dispatches three real cheap-tier agents"]
 #[serial(real_agent_e2e)]
-#[cfg(unix)]
 fn real_cli_dispatches_isolated_three_ticket_toy_phase() {
     assert_eq!(
         std::env::var("CASCADE_RUN_REAL_AGENT_E2E").as_deref(),
