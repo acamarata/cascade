@@ -1,0 +1,11 @@
+# AI workspace (never tracked)
+.claude/
+.opencode/
+
+# OS
+.DS_Store
+
+# build output (Go)
+/bin/
+/dist/
+*.log
