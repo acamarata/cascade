@@ -1,0 +1,3 @@
+This fixture contains no identifier-shaped content at all. It exists to
+prove the sweep gate is quiet on ordinary tracked-file content and does
+not fire on every file it scans.

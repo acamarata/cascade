@@ -1,0 +1,7 @@
+This fixture is synthetic test data (Art.1/Art.7.1) -- it deliberately
+contains SHAPES that a real identifier sweep pattern set would target, but
+none of the tokens below are real personal account or lane identifiers.
+
+fixture marker: SEEDED-IDENTIFIER-LEAK-0001
+local path shape: /Users/fixture-user/example/config.toml
+free-mail shape: fixture-user@gmail.com

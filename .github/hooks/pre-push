@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Cascade pre-push hygiene gate (P1-E01-W1-S01-T5).
+#
+# Install with:  git config core.hooksPath .github/hooks
+# (see docs/developer/hygiene.md for the full setup + configuration doc).
+#
+# Runs the conventional-commit checker and the personal-identifier sweep
+# (internal/build/commits.go, internal/build/sweep.go) over the outgoing
+# commit range before letting a push through. Both checks fail closed:
+# a missing/unreadable identifier-pattern source blocks the push, it is
+# never treated as "nothing configured, skip" (12-QUALITY-CONSTITUTION.md
+# Art.1; PRI hard rule 3).
+#
+# Git pre-push protocol: invoked as `pre-push <remote-name> <remote-url>`
+# with one "local-ref local-sha remote-ref remote-sha" line per pushed ref
+# on stdin. local-sha of all zeros means a ref deletion (nothing to check).
+# remote-sha of all zeros means a new remote ref, so the range is
+# "everything reachable from local-sha" rather than a bounded double-dot
+# range (nothing on the remote side bounds it yet).
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# R-14.114: go/git are wrapped by rtk in the interactive dev environment,
+# whose exit code does not track the real result. Bypass it when present;
+# a machine without rtk already has a real `go` on PATH.
+go_cmd() {
+  if command -v rtk >/dev/null 2>&1; then
+    rtk proxy go "$@"
+  else
+    command go "$@"
+  fi
+}
+
+zero_sha="0000000000000000000000000000000000000000"
+status=0
+checked_any=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ -z "${local_ref:-}" ]; then
+    continue
+  fi
+  if [ "$local_sha" = "$zero_sha" ]; then
+    continue # ref deletion: nothing to check
+  fi
+
+  if [ "$remote_sha" = "$zero_sha" ]; then
+    range="$local_sha"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+  checked_any=1
+
+  echo "pre-push hygiene: checking ${local_ref} (${range})" >&2
+
+  if ! CASCADE_HYGIENE_RUN=1 CASCADE_HYGIENE_COMMIT_RANGE="$range" \
+      go_cmd test -run '^TestConventionalCommitGate_Live$' ./internal/build/ -v </dev/null; then
+    echo "pre-push hygiene: conventional-commit gate FAILED for ${range}" >&2
+    status=1
+  fi
+
+  patterns_file="${CASCADE_IDENTIFIER_PATTERNS_FILE:-$repo_root/.claude/hygiene/identifier-patterns.txt}"
+  if ! CASCADE_HYGIENE_RUN=1 CASCADE_IDENTIFIER_PATTERNS_FILE="$patterns_file" \
+      CASCADE_HYGIENE_SWEEP_RANGE="$range" \
+      go_cmd test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v </dev/null; then
+    echo "pre-push hygiene: identifier sweep FAILED for ${range}" >&2
+    status=1
+  fi
+done
+
+if [ "$checked_any" = "0" ]; then
+  echo "pre-push hygiene: no refs to check (deletions only)" >&2
+fi
+
+exit "$status"

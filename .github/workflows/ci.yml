@@ -130,16 +130,70 @@ jobs:
       - name: go test ./internal/build/...
         run: go test ./internal/build/... -v
 
+  hygiene:
+    # P1-E01-W1-S01-T5: the conventional-commit checker and the
+    # personal-identifier sweep (internal/build/commits.go, sweep.go),
+    # invoked exactly as .github/hooks/pre-push invokes them locally —
+    # same -run targets, same CASCADE_HYGIENE_RUN opt-in so a bare
+    # `go test ./...` elsewhere never trips these (docs/developer/
+    # hygiene.md). fetch-depth: 0 because a bounded commit range needs
+    # real history, not the default single-commit shallow checkout.
+    name: hygiene (commit + identifier sweep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # PR: base..head. Push: before..after, or just "after" (everything
+      # reachable) when `before` is the all-zero sha — a brand-new branch,
+      # same "no remote bound yet" case the pre-push hook itself handles.
+      - name: compute commit range
+        id: range
+        run: |
+          set -eu
+          zero="0000000000000000000000000000000000000000"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
+          else
+            before="${{ github.event.before }}"
+            if [ -z "$before" ] || [ "$before" = "$zero" ]; then
+              range="${{ github.sha }}"
+            else
+              range="${before}..${{ github.sha }}"
+            fi
+          fi
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+
+      - name: go test (conventional-commit gate, live)
+        env:
+          CASCADE_HYGIENE_RUN: "1"
+          CASCADE_HYGIENE_COMMIT_RANGE: ${{ steps.range.outputs.range }}
+        run: go test -run '^TestConventionalCommitGate_Live$' ./internal/build/ -v
+
+      # CASCADE_IDENTIFIER_PATTERNS is a repo/org secret — masked in logs,
+      # never a tracked file (sweep.go's package doc; PRI hard rule 3).
+      - name: go test (identifier sweep gate, live)
+        env:
+          CASCADE_HYGIENE_RUN: "1"
+          CASCADE_HYGIENE_SWEEP_RANGE: ${{ steps.range.outputs.range }}
+          CASCADE_IDENTIFIER_PATTERNS: ${{ secrets.CASCADE_IDENTIFIER_PATTERNS }}
+        run: go test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, race, lint]
+    needs: [build-test, race, lint, hygiene]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

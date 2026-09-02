@@ -1,0 +1,6 @@
+feat(build): add the commit and identifier-sweep hygiene gates
+
+Adds internal/build/commits.go and sweep.go plus the pre-push hook and
+CI wiring that invoke them.
+
+Signed-off-by: Cascade Build <build@example.invalid>
