@@ -51,6 +51,13 @@ var LicenseAllowlist = map[string]bool{
 // github.com/mattn/go-isatty, github.com/ncruces/go-strftime,
 // github.com/remyoudompheng/bigfft. Every one verified against its
 // module-cache LICENSE file — all BSD-3-Clause or MIT, both allowlisted.
+//
+// P1-E02-W1-S02-T4 added github.com/zeebo/blake3 (providers/fs's BLAKE3-256
+// content-addressing hash — see providers/fs/blobstore.go's package doc)
+// and its one runtime dependency github.com/klauspost/cpuid/v2 (CPU
+// feature detection blake3 uses for its SIMD fast paths). Verified against
+// each module's module-cache LICENSE file: zeebo/blake3 is public domain /
+// CC0-1.0, klauspost/cpuid/v2 is MIT — both allowlisted.
 var KnownModuleLicenses = map[string]string{
 	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
@@ -58,9 +65,11 @@ var KnownModuleLicenses = map[string]string{
 	"github.com/spf13/pflag":               "BSD-3-Clause",
 	"github.com/dustin/go-humanize":        "MIT",
 	"github.com/google/uuid":               "BSD-3-Clause",
+	"github.com/klauspost/cpuid/v2":        "MIT",
 	"github.com/mattn/go-isatty":           "MIT",
 	"github.com/ncruces/go-strftime":       "MIT",
 	"github.com/remyoudompheng/bigfft":     "BSD-3-Clause",
+	"github.com/zeebo/blake3":              "CC0-1.0",
 	"golang.org/x/sys":                     "BSD-3-Clause",
 	"modernc.org/libc":                     "BSD-3-Clause",
 	"modernc.org/mathutil":                 "BSD-3-Clause",

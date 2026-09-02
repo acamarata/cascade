@@ -22,12 +22,14 @@ Module                                 License        Source
 github.com/dustin/go-humanize          MIT            https://github.com/dustin/go-humanize/blob/v1.0.1/LICENSE
 github.com/google/uuid                 BSD-3-Clause   https://github.com/google/uuid/blob/v1.6.0/LICENSE
 github.com/inconshreveable/mousetrap   Apache-2.0     https://github.com/inconshreveable/mousetrap/blob/v1.1.0/LICENSE
+github.com/klauspost/cpuid/v2          MIT            https://github.com/klauspost/cpuid/blob/v2.0.12/LICENSE
 github.com/mattn/go-isatty             MIT            https://github.com/mattn/go-isatty/blob/v0.0.24/LICENSE
 github.com/ncruces/go-strftime         MIT            https://github.com/ncruces/go-strftime/blob/v1.0.0/LICENSE
 github.com/pelletier/go-toml/v2        MIT            https://github.com/pelletier/go-toml/blob/v2.4.3/LICENSE
 github.com/remyoudompheng/bigfft       BSD-3-Clause   https://github.com/remyoudompheng/bigfft/blob/24d4a6f8daec/LICENSE
 github.com/spf13/cobra                 Apache-2.0     https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
 github.com/spf13/pflag                 BSD-3-Clause   https://github.com/spf13/pflag/blob/v1.0.9/LICENSE
+github.com/zeebo/blake3                CC0-1.0        https://github.com/zeebo/blake3/blob/v0.2.4/LICENSE
 golang.org/x/sys                       BSD-3-Clause   https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
 modernc.org/libc                       BSD-3-Clause   https://gitlab.com/cznic/libc/blob/v1.75.6/LICENSE
 modernc.org/mathutil                   BSD-3-Clause   https://gitlab.com/cznic/mathutil/blob/v1.7.1/LICENSE
@@ -78,3 +80,13 @@ Per .claude/rules/dependency-rules.md (acamarata dependency policy, applies
 project-wide): only MIT, BSD-2/3-Clause, Apache-2.0, ISC, and CC0 licenses are
 accepted for cascade's own dependencies. GPL/LGPL/AGPL/SSPL are blocked. All
 entries above satisfy that policy.
+
+P1-E02-W1-S02-T4 added github.com/zeebo/blake3 (the BLAKE3-256
+content-addressing hash providers/fs's BlobStore driver uses — see
+providers/fs/blobstore.go's package doc for the algorithm decision and
+its rationale) and its one runtime dependency,
+github.com/klauspost/cpuid/v2 (CPU feature detection blake3 uses to pick
+its SIMD fast path at runtime). Verified directly against each module's
+own top-level LICENSE file: zeebo/blake3 is public domain / CC0-1.0,
+klauspost/cpuid/v2 is MIT — both recorded above and in
+internal/build/licenses.go's KnownModuleLicenses registry.
