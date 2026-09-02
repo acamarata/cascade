@@ -30,6 +30,31 @@ func TestLoad_LoggingSection_RotationDisabledWhenUnset(t *testing.T) {
 	}
 }
 
+// TestLoad_LoggingSection_RotationDisabledWithOnlyOneKeySet covers
+// R-14.107's "either key alone" direction (NIT FIX 4, CR on
+// P1-E03-W1-S04-T2): loggingRotation.Enabled() requires BOTH MaxSizeMB
+// and MaxFiles to be non-nil, but only "neither set" and "both set" had
+// tests — "only max_size_mb" and "only max_files" were unproven.
+func TestLoad_LoggingSection_RotationDisabledWithOnlyOneKeySet(t *testing.T) {
+	cases := map[string]string{
+		"only max_size_mb": "[logging.rotation]\nmax_size_mb = 10\n",
+		"only max_files":   "[logging.rotation]\nmax_files = 3\n",
+	}
+	for name, toml := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeConfigFile(t, dir, toml)
+			cfg, err := Load(context.Background(), LoadOptions{Path: path, Getenv: func(string) string { return "" }, Environ: fakeEnviron(nil)})
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Logging.Rotation.Enabled() {
+				t.Errorf("Rotation.Enabled() = true with only one key set (%s), want false (R-14.107)", name)
+			}
+		})
+	}
+}
+
 func TestLoad_LoggingSection_RotationEnabledWhenBothKeysSet(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "[logging.rotation]\nmax_size_mb = 10\nmax_files = 3\n")

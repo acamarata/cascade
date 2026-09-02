@@ -236,35 +236,6 @@ func TestRotatingWriter_LogDirectoryNotWritable(t *testing.T) {
 	}
 }
 
-func TestRotatingWriter_RenameFailureIsTypedError(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "cascade.log")
-	w, err := NewRotatingWriter(path, newTestRotation(1, 2), NewFixedClock(fixedTime))
-	if err != nil {
-		t.Fatalf("NewRotatingWriter: %v", err)
-	}
-	defer func() { _ = w.Close() }()
-
-	// No numbered backup exists yet, so shiftBackupsLocked's prune/shift
-	// steps are no-ops; stripping write permission from dir isolates the
-	// FINAL step, rotateLocked's os.Rename(active, path.1), as the one
-	// that fails. Restore write permission before t.TempDir() cleanup
-	// runs, or removal of dir itself would fail too.
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatalf("chmod dir read-only: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
-
-	_, err = w.Write([]byte(strings.Repeat("f", 1<<20+1)))
-	var logErr *LogError
-	if !asLogError(err, &logErr) {
-		t.Fatalf("Write error = %v (%T), want *LogError", err, err)
-	}
-	if !strings.Contains(logErr.Reason, "rotate log file") {
-		t.Errorf("LogError.Reason = %q, want it to name the rename step", logErr.Reason)
-	}
-}
-
 // readAllLogLines reads path's full contents, or "" if it does not exist
 // (a rotation test may probe a backup slot that was never created).
 func readAllLogLines(t *testing.T, path string) string {

@@ -90,23 +90,48 @@ func DaemonLogsHandler(ctx context.Context, opts DaemonLogsOptions) error {
 
 // followLoop implements -f: poll via os.Stat, and whenever the file has
 // grown past offset, read and emit the new bytes. It exits cleanly (nil
-// error) on ctx cancellation or if the file disappears mid-poll — a
-// vanished log file is a diagnostic, not a failure.
+// error) on ctx cancellation, if the file disappears mid-poll, or if the
+// file at opts.Path is rotated out from under the open handle — none of
+// these are failures (docs/cli-reference/daemon.md documents all three
+// as diagnostic-then-exit).
+//
+// BLOCKING FIX 1 (CR on P1-E03-W1-S04-T2): the prior version compared
+// os.Stat(opts.Path).Size() against offset while continuing to read
+// from the ORIGINAL *os.File. After rotation.go's rotateLocked renames
+// the active file away and opens a fresh, smaller one at the same path,
+// that fresh file's size is permanently <= offset (the reader's already
+// consumed more bytes than the new file has ever contained), so the
+// `info.Size() <= offset` branch was permanently true and follow mode
+// silently stopped delivering new lines forever — no error, no
+// diagnostic, no data — after the first rotation. Detecting rotation by
+// size alone can never work: a rotated file legitimately starts small.
+// Detecting it by IDENTITY (os.SameFile between the still-open handle
+// and a fresh stat of the path) is the fix — same technique `tail -F`
+// relies on.
 func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset int64, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	openInfo, err := f.Stat()
+	if err != nil {
+		return &LogError{Field: "daemon.logs", Reason: fmt.Sprintf("stat open log file %s: %v", opts.Path, err)}
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			info, err := os.Stat(opts.Path)
+			pathInfo, err := os.Stat(opts.Path)
 			if err != nil {
 				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s disappeared\n", opts.Path)
 				return nil
 			}
-			if info.Size() <= offset {
+			if !os.SameFile(openInfo, pathInfo) {
+				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s was rotated out from under the reader\n", opts.Path)
+				return nil
+			}
+			if pathInfo.Size() <= offset {
 				continue
 			}
 			n, err := io.Copy(opts.Out, f)

@@ -162,6 +162,70 @@ func TestDaemonLogsHandler_FollowFileDisappearsExitsCleanly(t *testing.T) {
 	}
 }
 
+// TestDaemonLogsHandler_FollowRotationExitsCleanly proves BLOCKING FIX 1
+// (CR on P1-E03-W1-S04-T2): the prior followLoop compared
+// os.Stat(opts.Path).Size() against the reader's offset while still
+// reading from the pre-rotation *os.File. A real rotation (rotation.go's
+// rotateLocked) renames the active file away and opens a fresh, SMALLER
+// file at the same path, so that comparison was permanently
+// size-of-new-file <= offset-into-old-file and follow mode silently
+// stopped delivering forever, with no error and no diagnostic. This
+// simulates exactly that sequence (rename active-away, create a fresh
+// file at the same path) without depending on rotation.go, and asserts
+// the documented behaviour (docs/cli-reference/daemon.md: rotated out
+// from under the reader -> diagnostic to Diag, clean exit) instead.
+func TestDaemonLogsHandler_FollowRotationExitsCleanly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cascade.log")
+	if err := writeFile(t, path, "before-rotation\n"); err != nil {
+		t.Fatalf("seed log file: %v", err)
+	}
+
+	out := &syncBuffer{}
+	diag := &syncBuffer{}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- DaemonLogsHandler(ctx, DaemonLogsOptions{
+			Path:         path,
+			Follow:       true,
+			Out:          out,
+			Diag:         diag,
+			PollInterval: 5 * time.Millisecond,
+		})
+	}()
+
+	if !waitForContains(t, out, "before-rotation", 2*time.Second) {
+		t.Fatalf("initial content not delivered: %q", out.String())
+	}
+
+	// Simulate rotateLocked's two file-system effects: the active file
+	// moves away (to path.1, as a real rotation renames it) and a fresh,
+	// smaller file appears at the original path.
+	if err := os.Rename(path, path+".1"); err != nil {
+		t.Fatalf("simulate rotation rename: %v", err)
+	}
+	if err := writeFile(t, path, "after-rotation\n"); err != nil {
+		t.Fatalf("simulate post-rotation file: %v", err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("DaemonLogsHandler after rotation: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("DaemonLogsHandler did not exit after rotation (the FIX 1 regression: it would hang here forever, silently, pre-fix)")
+	}
+	if !strings.Contains(diag.String(), "rotated") {
+		t.Errorf("Diag = %q, want a rotation diagnostic", diag.String())
+	}
+	if strings.Contains(out.String(), "after-rotation") {
+		t.Errorf("Out = %q, must not deliver content from the new post-rotation file at the same path", out.String())
+	}
+}
+
 // waitForContains polls buf for want, up to timeout, to avoid a fixed
 // sleep racing the follow-mode goroutine's poll cadence.
 func waitForContains(t *testing.T, buf *syncBuffer, want string, timeout time.Duration) bool {
