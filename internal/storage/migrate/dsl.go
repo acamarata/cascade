@@ -55,8 +55,9 @@ type ColumnType int
 const (
 	// TypeText maps to SQLite TEXT / Postgres TEXT.
 	TypeText ColumnType = iota
-	// TypeInteger maps to SQLite INTEGER / Postgres BIGINT (or SERIAL when
-	// the column is an autoincrement primary key — see PostgresEmitter).
+	// TypeInteger maps to SQLite INTEGER / Postgres BIGINT (or BIGSERIAL
+	// when the column is an autoincrement primary key — see
+	// PostgresEmitter and ColumnDef.AutoIncrement's doc comment).
 	TypeInteger
 	// TypeReal maps to SQLite REAL / Postgres DOUBLE PRECISION.
 	TypeReal
@@ -78,11 +79,30 @@ type ColumnDef struct {
 	// key, EXCEPT when AutoIncrement is set (see AutoIncrement).
 	PrimaryKey bool
 	// AutoIncrement requests an auto-incrementing primary key (SQLite
-	// "INTEGER PRIMARY KEY AUTOINCREMENT", Postgres "SERIAL PRIMARY KEY").
-	// Only valid on a single TypeInteger column that is also the table's
-	// ONLY PrimaryKey column — a composite or non-integer autoincrement
-	// key is not portable and is REFUSED by both emitters rather than
-	// emitted incorrectly. See emit_common.go's primaryKeyPlan.
+	// "INTEGER PRIMARY KEY AUTOINCREMENT", Postgres "BIGSERIAL PRIMARY
+	// KEY"). Only valid on a single TypeInteger column that is also the
+	// table's ONLY PrimaryKey column — a composite or non-integer
+	// autoincrement key is not portable and is REFUSED by both emitters
+	// rather than emitted incorrectly. See emit_common.go's
+	// primaryKeyPlan.
+	//
+	// Range (R-14.142, binding — read this before assuming both dialects
+	// give you the same headroom): SQLite's AUTOINCREMENT is a rowid
+	// alias, a 64-bit signed integer (max 9223372036854775807), matching
+	// TypeInteger's own SQLite mapping. PostgresEmitter therefore emits
+	// BIGSERIAL (bigint-backed, also 64-bit) rather than the plain SERIAL
+	// (32-bit int, max 2147483647) a literal reading of this ticket's
+	// contract text would suggest — SERIAL would silently cap a
+	// high-volume table (an audit or event log is the obvious case) at
+	// ~2.1 billion rows, failing in PRODUCTION ONLY once the server
+	// profile's Postgres database outlives what a local SQLite profile
+	// ever exercises in testing. The two profiles therefore agree on
+	// range class: a caller relying on AutoIncrement gets the same
+	// practical 64-bit ceiling on both dialects, matching the plain
+	// TypeInteger->BIGINT mapping right beside this field. See
+	// autoincrement_range_test.go's TestAutoincrementRangeEquivalence for
+	// the enforced proof, and postgres_emitter.go's
+	// postgresAutoincrementColumn for the emitted form.
 	AutoIncrement bool
 	// NotNull adds a NOT NULL constraint.
 	NotNull bool
@@ -168,6 +188,18 @@ type MigrationStep struct {
 	Table       *TableDef
 	Index       *IndexDef
 	Description string
+
+	// ledgerBootstrap is unexported: only ensureLedgerTable (ledger_
+	// queries.go) may set it, by constructing its own MigrationStep
+	// literal in-package. It is the single carve-out from
+	// reservedLedgerName's refusal (R-14.143) — the package's own
+	// bootstrap of the applied_migrations table is legitimate and must
+	// not trip the same guard that refuses a CALLER's attempt to name a
+	// table or index "applied_migrations". Being unexported, no caller
+	// outside this package can ever set it to true, and json.Marshal
+	// (stepChecksum) silently skips unexported fields, so adding it does
+	// not change any existing step's checksum.
+	ledgerBootstrap bool
 }
 
 // MigrationSet is one forward migration: every step in Steps advances the

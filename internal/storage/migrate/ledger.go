@@ -66,7 +66,12 @@ import (
 //
 // SPORT: internal.storage.migrate.Ledger/ADDED (P1-E02-W1-S02-T3).
 
-// ledgerTableName is the applied-migrations ledger's fixed table name.
+// ledgerTableName is the applied-migrations ledger's fixed table name. It
+// is a RESERVED identifier (R-14.143): emitStep (emit_common.go) refuses
+// any caller-authored MigrationStep whose TableDef or IndexDef claims this
+// name, because ensureLedgerTable's own CREATE TABLE IF NOT EXISTS would
+// otherwise silently win or lose the race against a same-named caller
+// table with no error — see newReservedLedgerNameError.
 const ledgerTableName = "applied_migrations"
 
 // ledgerDef is the DSL definition of the ledger table itself — the

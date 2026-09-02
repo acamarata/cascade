@@ -15,6 +15,18 @@
 //	holds for shipped code while this test proves the real wiring
 //	end-to-end against a real modernc-sqlite database (Art.2).
 //
+// File placement (CR nit, R-14.117-style sibling): this file's own name is
+// outside T3's files_scope, which names only providers/sqlite/{driver.go,
+// README.md} as CHANGE targets — CR flagged it as worth a recorded reason
+// rather than a re-raise. It exists as a sibling of driver_test.go
+// deliberately, not driver_test.go itself: driver_test.go's own scope note
+// (above) already carves out one exception for internal/storage/storetest;
+// stacking this ticket's migrate wiring proof into the same file would mix
+// two unrelated test purposes and make driver_test.go's scope note read as
+// covering more than it does. A same-package sibling test file is the same
+// legitimate pattern R-14.117 blesses for cap-driven splits, applied here
+// for purpose-driven separation instead.
+//
 // SPORT: providers.sqlite.Driver/CHANGED (P1-E02-W1-S02-T3).
 package sqlite_test
 

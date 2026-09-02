@@ -45,7 +45,7 @@ type Dialect interface {
 // autoincrementColumn renders the full column clause (type + PRIMARY KEY +
 // autoincrement keyword) for the one AutoIncrement column a table may
 // have — SQLite and Postgres spell this completely differently
-// ("INTEGER PRIMARY KEY AUTOINCREMENT" vs "SERIAL PRIMARY KEY"), so it
+// ("INTEGER PRIMARY KEY AUTOINCREMENT" vs "BIGSERIAL PRIMARY KEY"), so it
 // cannot be built from columnType alone.
 type dialectHooks struct {
 	name                string
@@ -75,15 +75,42 @@ func emitStep(step MigrationStep, hooks dialectHooks) (string, error) {
 		if step.Table == nil {
 			return "", cascade.New(cascade.KindInvalidInput, "migrate: StepCreateTable requires Table")
 		}
+		if !step.ledgerBootstrap && step.Table.Name == ledgerTableName {
+			return "", newReservedLedgerNameError("table", step.Table.Name)
+		}
 		return emitCreateTable(*step.Table, hooks)
 	case StepCreateIndex:
 		if step.Index == nil {
 			return "", cascade.New(cascade.KindInvalidInput, "migrate: StepCreateIndex requires Index")
 		}
+		if step.Index.Name == ledgerTableName {
+			return "", newReservedLedgerNameError("index", step.Index.Name)
+		}
 		return emitCreateIndex(*step.Index)
 	default:
 		return "", cascade.Newf(cascade.KindInvalidInput, "migrate: unknown StepKind %d", step.Kind)
 	}
+}
+
+// newReservedLedgerNameError reports R-14.143: a caller migration cannot
+// name a table or index "applied_migrations" — that identifier is reserved
+// for the package's own ledger table (ledger.go's ledgerDef). Without this
+// refusal, a caller's CREATE TABLE applied_migrations would lose the race
+// against ensureLedgerTable's own CREATE TABLE IF NOT EXISTS: whichever ran
+// first would silently win, discarding the other's column shape with no
+// error — the exact silent-wrong-result failure class this whole DSL
+// exists to avoid (same principle as R-14.127's reserved
+// "plugin.__host__.*" namespace). Uses cascade.KindInvalidInput, the same
+// Kind validateIdentifier/validateFKAction already use for "this
+// caller-supplied name/value is not acceptable" — a reserved-name claim is
+// that same rejection class (the name is syntactically fine, but this
+// particular value is not permitted), not KindUnsupported's "this
+// construct shape is not portable across dialects" class, which is what
+// primaryKeyPlan's refusals (composite autoincrement etc.) use instead.
+func newReservedLedgerNameError(kind, name string) error {
+	return cascade.Newf(cascade.KindInvalidInput,
+		"migrate: %s name %q is reserved for the migration ledger and cannot be used by a caller-authored migration step",
+		kind, name)
 }
 
 // emitCreateIndex renders a CREATE [UNIQUE] INDEX IF NOT EXISTS statement.

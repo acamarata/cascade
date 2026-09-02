@@ -8,7 +8,7 @@ import "github.com/acamarata/cascade/pkg/cascade"
 //	Postgres real types, FOREIGN KEY clauses, and CREATE INDEX IF NOT
 //	EXISTS. Shares the structural walk in emit_common.go/emit_table.go
 //	with SQLiteEmitter; this file supplies only Postgres's own type
-//	keywords and its SERIAL autoincrement form.
+//	keywords and its BIGSERIAL autoincrement form.
 //
 // Inputs: a MigrationSet.
 // Outputs: []string DDL statements, one per step, or a *cascade.Error.
@@ -16,9 +16,10 @@ import "github.com/acamarata/cascade/pkg/cascade"
 //
 //	DOUBLE PRECISION, TypeBlob->BYTEA, matching this ticket's full_desc
 //	mapping table exactly. An autoincrement TypeInteger primary key emits
-//	SERIAL (32-bit, matching the ticket's literal "SERIAL for
-//	autoincrement PKs" — not BIGSERIAL) instead of BIGINT, since SERIAL
-//	already implies "integer primary key with an owned sequence."
+//	BIGSERIAL, not the contract's literal "SERIAL" — see R-14.142 and
+//	ColumnDef.AutoIncrement's doc comment (dsl.go) for why: the range
+//	equivalence this override protects lives there, where a caller
+//	actually reads it, not in this file's internal comment.
 //	Verified against golden fixtures captured from a real Postgres
 //	instance (docker) — see testdata/README.md for provenance and the
 //	honest split between golden-diff (this package's automated go test
@@ -61,10 +62,13 @@ func postgresColumnType(t ColumnType) (string, error) {
 	}
 }
 
-// postgresAutoincrementColumn renders Postgres's SERIAL autoincrement
-// primary key form.
+// postgresAutoincrementColumn renders Postgres's autoincrement primary key
+// form as BIGSERIAL (64-bit), not SERIAL (32-bit) — see R-14.142 and
+// ColumnDef.AutoIncrement's doc comment (dsl.go) for why this is a
+// deliberate override of the contract's literal "SERIAL for autoincrement
+// PKs" text.
 func postgresAutoincrementColumn(colName string) (string, error) {
-	return quoteIdent(colName) + " SERIAL PRIMARY KEY", nil
+	return quoteIdent(colName) + " BIGSERIAL PRIMARY KEY", nil
 }
 
 var _ Dialect = PostgresEmitter{}

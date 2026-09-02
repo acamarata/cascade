@@ -31,7 +31,7 @@ type ledgerRow struct {
 // tracked migration step: it is never recorded as a ledger row itself.
 func ensureLedgerTable(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	stmts, err := dialect.Emit(MigrationSet{
-		Steps: []MigrationStep{{Kind: StepCreateTable, Table: &ledgerDef}},
+		Steps: []MigrationStep{{Kind: StepCreateTable, Table: &ledgerDef, ledgerBootstrap: true}},
 	})
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "migrate: emit ledger bootstrap DDL")
