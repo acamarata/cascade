@@ -1,0 +1,33 @@
+# cascade.plugin/v2 manifest for the "example-agent-provider" first-party
+# example plugin (02-TARGET-STRUCTURE.md §First-party plugin catalog v1:
+# "examples: connector / agent-provider / domain | wasm | O | off").
+# Provenance: pkg/plugin/testdata/README.md.
+
+id            = "example-agent-provider"
+name          = "Example Agent Provider"
+schema        = "cascade.plugin/v2"
+version       = "0.1.0"
+host_version  = ">=2.0.0"
+runtime       = "wasm"
+requires      = ["network.egress", "model.invoke"]
+
+[[provides.intents]]
+name        = "invoke-agent-provider"
+description = "Route a model.execute request to the example wasm-hosted agent provider."
+
+[[provides.tools]]
+name        = "example-agent-provider.chat"
+description = "Send a chat completion request to the example agent provider driver."
+
+[[provides.commands]]
+name        = "agent-provider"
+description = "Inspect and test the example agent provider's health and reachability."
+rpc_method  = "plugin.example-agent-provider.status"
+
+[[permissions]]
+name        = "network.egress"
+description = "Make outbound network requests to the example agent provider's API."
+
+[[permissions]]
+name        = "model.invoke"
+description = "Accept routed model.execute requests from the Conductor."

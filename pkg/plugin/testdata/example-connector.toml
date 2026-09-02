@@ -1,0 +1,37 @@
+# cascade.plugin/v2 manifest for the "example-connector" first-party
+# example plugin (02-TARGET-STRUCTURE.md §First-party plugin catalog v1:
+# "examples: connector / agent-provider / domain | wasm | O | off").
+# Provenance: pkg/plugin/testdata/README.md.
+
+id            = "example-connector"
+name          = "Example Connector"
+schema        = "cascade.plugin/v2"
+version       = "0.1.0"
+host_version  = ">=2.0.0"
+runtime       = "wasm"
+requires      = ["storage.domain", "network.egress"]
+
+[[provides.intents]]
+name        = "connect-external-source"
+description = "Connect a third-party data source and register it as a storage domain."
+
+[[provides.tools]]
+name        = "example-connector.fetch"
+description = "Fetch a page of records from the connected external source."
+
+[[provides.domains]]
+name        = "example-connector"
+description = "Namespaced storage domain holding synced records from the external source."
+
+[[provides.commands]]
+name        = "connector"
+description = "Manage the example connector's external source connection."
+rpc_method  = "plugin.example-connector.status"
+
+[[permissions]]
+name        = "network.egress"
+description = "Make outbound network requests to the connected external source."
+
+[[permissions]]
+name        = "storage.domain"
+description = "Read and write the example-connector storage domain."
