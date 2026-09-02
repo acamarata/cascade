@@ -83,9 +83,24 @@ const defaultPruneBatchCap = 500
 type PruneTarget struct {
 	// Table is the exact table name (never user input; always a
 	// caller-registered literal), quoted via quoteIdent before use.
+	// Validated at Prune time (R-14.144, retention_validate.go) against
+	// the owning DomainID's TablePrefix — a table that does not belong
+	// to that domain is refused as a configuration error before any
+	// DELETE is issued, never a silently-wrong prune of a neighbouring
+	// domain's rows.
 	Table string
 	// TimestampColumn is the INTEGER (Unix-seconds) column compared
-	// against the retention cutoff.
+	// against the retention cutoff. Validated at Prune time
+	// (retention_validate.go) to have INTEGER affinity — a wrong-type
+	// column (e.g. TEXT holding ISO8601 text) is refused rather than
+	// silently comparing false forever. WARNING: zero and negative
+	// values in this column are NOT treated as "unset" — they compare as
+	// maximally old and WILL be pruned on the very first Prune call. A
+	// future domain that uses 0 as a sentinel for "no timestamp yet"
+	// will lose those rows; such a domain must use a genuinely absent
+	// (NULL) value instead, which this column's NOT NULL-agnostic
+	// comparison correctly treats as surviving (NULL < cutoff is never
+	// true).
 	TimestampColumn string
 }
 
@@ -197,11 +212,14 @@ func (DomainPruner) Prune(ctx context.Context, db *sql.DB, cfg RetentionConfig) 
 		return nil, cascade.New(cascade.KindInvalidInput, "storage: Prune requires a non-nil Clock")
 	}
 	cfg = cfg.Normalize()
+	if err := validateBatchCap(cfg.BatchCap); err != nil {
+		return nil, err
+	}
 
 	reports := make([]PruneReport, 0, len(AllDomains))
 	var errs []error
 	for _, meta := range AllDomains {
-		report := pruneDomain(ctx, db, cfg, meta.ID)
+		report := pruneDomain(ctx, db, cfg, meta)
 		reports = append(reports, report)
 		if report.Err != nil {
 			errs = append(errs, fmt.Errorf("domain %s: %w", meta.ID, report.Err))
@@ -211,89 +229,4 @@ func (DomainPruner) Prune(ctx context.Context, db *sql.DB, cfg RetentionConfig) 
 		return reports, cascade.Wrap(cascade.KindUnavailable, errors.Join(errs...), "storage: prune had per-domain failures")
 	}
 	return reports, nil
-}
-
-// dbExecer is the minimal *sql.DB method set pruneDomain/deleteOlderThan
-// need. *sql.DB satisfies it directly (Prune's public signature keeps the
-// contract's literal `db *sql.DB` parameter type), and this package's own
-// tests use it to wrap a real modernc-sqlite *sql.DB with round-trip
-// COUNTING instrumentation — Art.2 is preserved because the interface only
-// lets a test OBSERVE how many DELETE statements ran against the real
-// engine; it never substitutes a fake one.
-type dbExecer interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-// pruneDomain runs one domain's prune pass and always returns a
-// fully-populated PruneReport (Elapsed measured via cfg.Clock, never
-// time.Now).
-func pruneDomain(ctx context.Context, db dbExecer, cfg RetentionConfig, domain DomainID) PruneReport {
-	start := cfg.Clock.Now()
-	window := cfg.DomainRetention[domain]
-	if window == 0 {
-		return PruneReport{Domain: domain, RowsDeleted: 0, Elapsed: cfg.Clock.Now().Sub(start)}
-	}
-
-	targets := cfg.Targets[domain]
-	if len(targets) == 0 {
-		err := cascade.Newf(cascade.KindInvalidInput,
-			"storage: domain %s has a non-zero retention window but no registered PruneTarget", domain)
-		return PruneReport{Domain: domain, RowsDeleted: 0, Elapsed: cfg.Clock.Now().Sub(start), Err: err}
-	}
-
-	cutoff := cfg.Clock.Now().Add(-window).Unix()
-	total := 0
-	for _, target := range targets {
-		n, err := deleteOlderThan(ctx, db, target, cutoff, cfg.BatchCap)
-		total += n
-		if err != nil {
-			return PruneReport{
-				Domain: domain, RowsDeleted: total, Elapsed: cfg.Clock.Now().Sub(start),
-				Err: cascade.Wrapf(cascade.KindUnavailable, err, "storage: prune %s.%s", domain, target.Table),
-			}
-		}
-	}
-	return PruneReport{Domain: domain, RowsDeleted: total, Elapsed: cfg.Clock.Now().Sub(start)}
-}
-
-// deleteOlderThan COUNTs rows in target strictly older than cutoff, then
-// issues exactly ceil(count/batchCap) batched DELETEs (each removing at
-// most batchCap rows via a rowid subselect — plain SQLite tables have an
-// implicit rowid) — never an extra empty confirming round-trip, and a
-// zero count issues no DELETE at all. This split makes the round-trip
-// count exactly testable (TestPruneBatchCap: 1500 rows / cap 500 = 3
-// DELETEs): looping "until a round deletes fewer than batchCap" would add
-// a spurious 4th round whenever count is an exact multiple of batchCap.
-func deleteOlderThan(ctx context.Context, db dbExecer, target PruneTarget, cutoff int64, batchCap int) (int, error) {
-	table := quoteIdent(target.Table)
-	col := quoteIdent(target.TimestampColumn)
-
-	var count int
-	countStmt := fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE %s < ?`, table, col)
-	if err := db.QueryRowContext(ctx, countStmt, cutoff).Scan(&count); err != nil {
-		return 0, err
-	}
-	if count == 0 {
-		return 0, nil
-	}
-
-	deleteStmt := fmt.Sprintf(
-		`DELETE FROM %s WHERE rowid IN (SELECT rowid FROM %s WHERE %s < ? ORDER BY rowid LIMIT ?)`,
-		table, table, col,
-	)
-	rounds := (count + batchCap - 1) / batchCap
-	total := 0
-	for i := 0; i < rounds; i++ {
-		res, err := db.ExecContext(ctx, deleteStmt, cutoff, batchCap)
-		if err != nil {
-			return total, err
-		}
-		affected, err := res.RowsAffected()
-		if err != nil {
-			return total, err
-		}
-		total += int(affected)
-	}
-	return total, nil
 }

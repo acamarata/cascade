@@ -98,3 +98,45 @@ func findReport(t *testing.T, reports []PruneReport, domain DomainID) PruneRepor
 	t.Fatalf("no PruneReport for domain %s", domain)
 	return PruneReport{}
 }
+
+// createNullableTSTable creates a (id, ts INTEGER, filler TEXT) table with
+// ts NULLABLE, unlike createTSTable's `ts INTEGER NOT NULL` — lets a test
+// insert a genuinely absent timestamp to pin the NULL-survives case
+// (nit 3).
+func createNullableTSTable(t *testing.T, db *sql.DB, name string) {
+	t.Helper()
+	ddl := fmt.Sprintf(`CREATE TABLE %s (id INTEGER PRIMARY KEY, ts INTEGER, filler TEXT)`, quoteIdent(name))
+	if _, err := db.Exec(ddl); err != nil {
+		t.Fatalf("create table %s: %v", name, err)
+	}
+}
+
+// insertNullTSRow inserts one row with ts left NULL.
+func insertNullTSRow(t *testing.T, db *sql.DB, table string, filler string) {
+	t.Helper()
+	stmt := fmt.Sprintf(`INSERT INTO %s (ts, filler) VALUES (NULL, ?)`, quoteIdent(table))
+	if _, err := db.Exec(stmt, filler); err != nil {
+		t.Fatalf("insert into %s: %v", table, err)
+	}
+}
+
+// createWrongTypeTSTable creates a table whose timestamp column is
+// declared TEXT (standing in for an ISO8601-string column) rather than
+// INTEGER — pins nit 3's "comparison never true" observation and nit 4's
+// registration-time refusal of it.
+func createWrongTypeTSTable(t *testing.T, db *sql.DB, name string) {
+	t.Helper()
+	ddl := fmt.Sprintf(`CREATE TABLE %s (id INTEGER PRIMARY KEY, ts TEXT, filler TEXT)`, quoteIdent(name))
+	if _, err := db.Exec(ddl); err != nil {
+		t.Fatalf("create table %s: %v", name, err)
+	}
+}
+
+// insertTextTSRow inserts one row with a TEXT ts value (e.g. ISO8601).
+func insertTextTSRow(t *testing.T, db *sql.DB, table string, ts string, filler string) {
+	t.Helper()
+	stmt := fmt.Sprintf(`INSERT INTO %s (ts, filler) VALUES (?, ?)`, quoteIdent(table))
+	if _, err := db.Exec(stmt, ts, filler); err != nil {
+		t.Fatalf("insert into %s: %v", table, err)
+	}
+}

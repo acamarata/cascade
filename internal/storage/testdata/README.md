@@ -96,3 +96,30 @@ schema beyond the anchor.
   so explicitly), so there is nothing for a windows/linux-only fixture to
   cover beyond this ticket's own `GOOS=linux` / `GOOS=windows go build
   ./internal/storage/...` checks, both green.
+
+### CR fix-up (R-14.144, R-14.145, build-time addendum, 2026-09-02)
+
+`retention_validate.go` and `retention_validate_test.go` were added after
+the CR of this ticket FAILed with two live-probed blocking defects
+(R-14.144: an unvalidated cross-domain `PruneTarget.Table`; R-14.145: an
+unvalidated negative `BatchCap`) plus three nits (untested NULL/future/
+zero/negative timestamp values, and a wrong-type `TimestampColumn` left to
+loop forever). `pruneDomain`/`deleteOlderThan` moved to `retention_prune.go`
+in the same pass, purely to stay under Art.10.3's 300-line cap once the
+new validation call sites landed — no behavior change to either function
+beyond the new validation calls pruneDomain now makes before its delete
+loop.
+
+- Same real-modernc-sqlite method as above: every new test opens a real
+  `*sql.DB` in `t.TempDir()` and asserts against real row counts /
+  real `pragma_table_info` output — no mock, no schema double.
+- `TestPrune_WrongTypeColumnRefused`'s refusal is proven via
+  `SELECT type FROM pragma_table_info(?) WHERE name = ?` against a real
+  table declared `ts TEXT`, reading SQLite's own recorded column-type
+  string, not an assumption about what `CREATE TABLE` declared.
+- Nit 4 decision: **validate**, not document-only. A silent forever-no-op
+  is exactly the failure mode this ticket's "missing target is an error"
+  design already exists to prevent (see `retention_validate.go`'s package
+  doc comment); documenting the risk without refusing it would leave that
+  same failure mode reachable through a schema mismatch instead of a
+  missing registration.
