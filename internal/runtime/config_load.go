@@ -105,7 +105,12 @@ func resolveRuntimeSection(tree map[string]interface{}, flag string, getenv Gete
 	raw, _ := tree["runtime"].(map[string]interface{})
 	for k := range raw {
 		switch k {
-		case "profile", "home", "data_dir":
+		case "profile":
+		case "home", "data_dir":
+			// Derived from the path provider and CASCADE_HOME, never from the
+			// file, so a value here has no effect. Say so rather than
+			// discarding it in silence, which reads as if it had been applied.
+			warn("runtime: runtime.%s in config.toml is ignored; it is derived from the path layout (set CASCADE_HOME instead)", k)
 		default:
 			warn("runtime: unknown key runtime.%s in config.toml (preserved, not validated)", k)
 		}

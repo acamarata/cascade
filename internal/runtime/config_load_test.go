@@ -109,6 +109,43 @@ func TestLoad_UnknownRuntimeKeyWarnsNotErrors(t *testing.T) {
 	}
 }
 
+// TestLoad_DerivedRuntimeKeysWarn covers runtime.home and runtime.data_dir,
+// which are derived from the path layout and never read from the file. They
+// were previously matched as known keys and then discarded in total silence,
+// which reads to a user as if the value had been applied — worse than the
+// warning any unrecognised key already produced.
+func TestLoad_DerivedRuntimeKeysWarn(t *testing.T) {
+	for _, key := range []string{"home", "data_dir"} {
+		t.Run(key, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeConfigFile(t, dir,
+				"[runtime]\nprofile = \"local\"\n"+key+" = \"/somewhere/else\"\n")
+			var warnings []string
+			cfg, err := Load(context.Background(), LoadOptions{
+				Path:    path,
+				Getenv:  func(string) string { return "" },
+				Environ: fakeEnviron(nil),
+				Warn: func(format string, args ...interface{}) {
+					warnings = append(warnings, fmt.Sprintf(format, args...))
+				},
+			})
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if len(warnings) != 1 || !strings.Contains(warnings[0], key) {
+				t.Fatalf("warnings = %v, want exactly one mentioning %q", warnings, key)
+			}
+			if !strings.Contains(warnings[0], "ignored") {
+				t.Errorf("warning %q does not say the value is ignored", warnings[0])
+			}
+			// And it must genuinely not take effect.
+			if cfg.Runtime.Home == "/somewhere/else" || cfg.Runtime.DataDir == "/somewhere/else" {
+				t.Errorf("file value was applied to Runtime: %+v", cfg.Runtime)
+			}
+		})
+	}
+}
+
 func TestLoad_ElevationUnrecognisedKeyHardErrors(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "[elevation]\nallow_remote = false\nbogus_key = \"x\"\n")
