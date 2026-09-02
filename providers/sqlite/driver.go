@@ -59,6 +59,23 @@ const schemaDDL = `CREATE TABLE IF NOT EXISTS kv (
 // "socket-probe-first" per the ticket's §D-3 arbitration order.
 type SocketProbe func(path string) (daemonRunning bool, err error)
 
+// Migrator applies pending schema migrations against the write connection
+// before Open returns the Driver, so schema_version is current before any
+// caller can read from or write to the store. Injected via WithMigrator —
+// exactly the same injection-seam pattern SocketProbe uses one field
+// above, for the same reason: providers/sqlite may import pkg/** only,
+// never internal/** (Art.10.2, enforced by depguard's
+// plugins-providers-boundary rule), so this package never imports
+// internal/storage/migrate directly. The real migrator — a thin adapter
+// around internal/storage/migrate.Apply — is wired in by the composition
+// root (cmd/ or internal/daemon), which is free to import both this
+// package and internal/storage/migrate. A nil Migrator (the Open default)
+// skips migration entirely, which is correct for any caller that manages
+// its own schema (e.g. this package's own storetest-driven tests, which
+// exercise the seam directly with a real migrate.Apply adapter — see
+// providers/sqlite/README.md "Migration boot path").
+type Migrator func(ctx context.Context, db *sql.DB) error
+
 // Driver is the modernc-sqlite provider.Store implementation. One Driver
 // owns exactly one .db file, one read *sql.DB (multiple pooled
 // connections — WAL allows concurrent readers) and one write *sql.DB
@@ -76,7 +93,8 @@ type Driver struct {
 type Option func(*openConfig)
 
 type openConfig struct {
-	probe SocketProbe
+	probe    SocketProbe
+	migrator Migrator
 }
 
 // WithSocketProbe injects the §D-3 daemon-liveness check Open runs before
@@ -84,6 +102,15 @@ type openConfig struct {
 // injection point rather than a direct internal/ import.
 func WithSocketProbe(p SocketProbe) Option {
 	return func(c *openConfig) { c.probe = p }
+}
+
+// WithMigrator injects the schema-migration step Open runs, against the
+// write connection, immediately after the base kv schema is created and
+// before Open returns the Driver. See Migrator's doc comment for why this
+// is an injection point rather than a direct internal/storage/migrate
+// import.
+func WithMigrator(m Migrator) Option {
+	return func(c *openConfig) { c.migrator = m }
 }
 
 // Open opens (creating if absent) the SQLite database at path in WAL mode
@@ -117,7 +144,7 @@ func Open(ctx context.Context, path string, opts ...Option) (*Driver, error) {
 		return nil, err
 	}
 
-	d, err := openLocked(ctx, path, unlock)
+	d, err := openLocked(ctx, path, unlock, cfg.migrator)
 	if err != nil {
 		_ = unlock()
 		return nil, err
@@ -129,7 +156,7 @@ func Open(ctx context.Context, path string, opts ...Option) (*Driver, error) {
 // the §D-3 flock is held. Split from Open to keep Open's own body under
 // Art.10.3's 50-line function cap and to give tests (which materialize
 // their own lock) a seam that skips the OS-level flock entirely.
-func openLocked(ctx context.Context, path string, unlock func() error) (*Driver, error) {
+func openLocked(ctx context.Context, path string, unlock func() error, migrator Migrator) (*Driver, error) {
 	dsn := "file:" + path + "?" + url.Values{
 		"_busy_timeout": {"5000"},
 		"_journal_mode": {"WAL"},
@@ -151,6 +178,14 @@ func openLocked(ctx context.Context, path string, unlock func() error) (*Driver,
 		_ = readDB.Close()
 		_ = writeDB.Close()
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: schema init %s", path)
+	}
+
+	if migrator != nil {
+		if err := migrator(ctx, writeDB); err != nil {
+			_ = readDB.Close()
+			_ = writeDB.Close()
+			return nil, err
+		}
 	}
 
 	d := &Driver{

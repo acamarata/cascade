@@ -121,3 +121,61 @@ One table, `kv(namespace, key, value)`, primary key `(namespace, key)`,
 `WITHOUT ROWID`. Every `provider.Store` method is namespace-scoped by an
 explicit column rather than a separate table per namespace, matching
 `pkg/provider/store.go`'s own namespace-scoping design decision.
+
+## Migration boot path
+
+`Open` accepts an optional `WithMigrator` option (`driver.go`), mirroring
+`WithSocketProbe`'s injection-seam pattern exactly and for the same
+reason: `providers/sqlite` may import `pkg/**` only, never `internal/**`
+(Art.10.2, `depguard`'s `plugins-providers-boundary` rule), so this
+package never imports `internal/storage/migrate` directly. When a
+`Migrator` is supplied, `openLocked` calls it against the write
+connection immediately after the base `kv` schema is created and BEFORE
+`Open` returns the `Driver` — so `internal/storage/migrate.Apply`'s
+ledger bootstrap, downgrade check, §D-18 pre-migration snapshot, and any
+caller-defined `MigrationSet` all complete before any caller can read
+from or write to the store. A nil `Migrator` (the default) skips
+migration entirely.
+
+The real migrator is a thin adapter the composition root (`cmd/` or
+`internal/daemon`, both of which may import `internal/storage/migrate`)
+builds around `migrate.Apply`:
+
+```go
+sqlite.WithMigrator(func(ctx context.Context, db *sql.DB) error {
+    return migrate.Apply(ctx, migrate.ApplyConfig{
+        DB:        db,
+        Dialect:   migrate.SQLiteEmitter{},
+        Clock:     runtime.NewSystemClock(),
+        DBPath:    path,                              // enables the §D-18 snapshot
+        BackupDir: filepath.Join(profileDir, "backups"),
+    }, myMigrationSet)
+})
+```
+
+`migration_wiring_test.go` proves this wiring end-to-end against a real
+database: after `Open` returns, the `applied_migrations` ledger table and
+every table the supplied `MigrationSet` defines already exist, and a
+failing `Migrator` aborts `Open` with the migrator's error rather than
+returning a partially-migrated `Driver`.
+
+### Adding a new `MigrationStep`
+
+A schema change is a NEW `migrate.MigrationStep` (a new `TableDef` or
+`IndexDef`) appended to the caller's `MigrationSet`, with `SchemaVersion`
+incremented — `internal/storage/migrate`'s DSL is forward-only and
+CREATE-only (`CREATE TABLE`/`CREATE INDEX ... IF NOT EXISTS`, no `ALTER`;
+see `internal/storage/migrate/dsl.go`'s `StepKind` doc comment for why).
+Adding a column to an existing table means defining its NEW shape as a
+new table via a new step, the standard forward-only SQLite migration
+pattern, which is portable to Postgres by construction.
+
+### Pre-migration snapshot location
+
+Before any step that actually executes new DDL, `migrate.Apply` WAL-
+checkpoints the database and copies it to
+`<BackupDir>/pre-migrate-v<on-disk-schema-version>.db` (§D-18), so an
+operator always has a point-in-time rollback target from immediately
+before a migration ran. See `internal/storage/migrate/ledger.go`'s
+`Apply` doc comment for the exact idempotency and crash-safety guarantees
+this snapshot does and does not provide.
