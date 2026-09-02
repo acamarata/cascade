@@ -86,7 +86,11 @@ type ToolSpec struct {
 // declared domain requires an explicit capability grant.
 type DomainSpec struct {
 	// Name is the domain identifier, scoped under the plugin's own
-	// namespace by the host (required).
+	// namespace by the host (required). Must not claim the
+	// "plugin.__host__.*" namespace reserved by R-14.100 for host-owned
+	// storage slots — Validate rejects a claim here as cheap defence in
+	// depth at the manifest parse boundary (R-14.127b); authoritative
+	// enforcement remains the host's (O/S-32.T3/T4).
 	Name string `toml:"name"`
 	// Description is the human-readable summary of what the domain
 	// stores.
@@ -149,7 +153,14 @@ type PermissionDisplay struct {
 // error.
 type Manifest struct {
 	// ID uniquely identifies the plugin across the host registry. Must
-	// match [a-z][a-z0-9-]* (required).
+	// match [a-z][a-z0-9-]* (required; enforced by Validate — R-14.127).
+	// ID becomes both a storage namespace and a CLI/RPC mount point, so an
+	// unvalidated ID is a path-traversal and namespace-collision surface,
+	// not a style nit. It must also not claim the "plugin.__host__.*"
+	// namespace reserved by R-14.100 (R-14.127b); since that namespace
+	// contains characters ("." and "_") the id pattern itself already
+	// excludes, this second check is defence in depth, not redundant
+	// syntax.
 	ID string `toml:"id"`
 	// Name is the plugin's human display name (required).
 	Name string `toml:"name"`
@@ -159,7 +170,17 @@ type Manifest struct {
 	// Version is the plugin's own semver version string (required).
 	Version string `toml:"version"`
 	// HostVersion is the semver range of host versions this plugin
-	// expects to run under (required).
+	// expects to run under (required). Its semver CORE is validated with
+	// the same strictness as Version — no leading zeros in any numeric
+	// component (R-14.128) — while the RANGE OPERATORS differ: an
+	// optional comparator (^, ~, >=, <=, >, <, =) prefixes a possibly-
+	// partial core (major, major.minor, or major.minor.patch), and
+	// space-separated tokens AND together (e.g. ">=1.2.0 <2.0.0"); the
+	// bare wildcard "*" matches any host version. Two range forms are
+	// documented KNOWN GAPS, rejected rather than silently ignored:
+	// npm-style "||" alternation (e.g. "1.0.0 || 2.0.0") and "1.x"-style
+	// wildcard segments. Neither is supported; an author using one meets
+	// a documented limit, not a silent rejection.
 	HostVersion string `toml:"host_version"`
 	// Runtime selects how the host executes this plugin (required).
 	Runtime RuntimeMode `toml:"runtime"`
@@ -198,14 +219,22 @@ const (
 	// ErrCodeUnknownRuntimeMode reports rule R2: an unrecognized runtime
 	// string.
 	ErrCodeUnknownRuntimeMode ErrCode = "unknown-runtime-mode"
-	// ErrCodeRequiredField reports rule R3: an empty id or name.
+	// ErrCodeRequiredField reports rule R3: an empty id or name, or an id
+	// that does not match the required [a-z][a-z0-9-]* pattern
+	// (R-14.127) — reused rather than a new code because "id is not an
+	// acceptable id" is the same acceptance-criterion bucket as "id is
+	// missing", not a distinct rule.
 	ErrCodeRequiredField ErrCode = "required-field"
 	// ErrCodeMalformedVersion reports rule R4: version or host_version is
 	// not a well-formed semver value.
 	ErrCodeMalformedVersion ErrCode = "malformed-version"
 	// ErrCodeCommandNameCollision reports rule R5: a provides.commands
 	// entry whose name collides with a reserved core noun or utility
-	// verb.
+	// verb. Also reused (R-14.127b, not a new code — the closest existing
+	// fit) for an id or provides.domains[].Name that claims the
+	// "plugin.__host__.*" namespace reserved by R-14.100: both findings
+	// are, at bottom, a plugin-declared name colliding with a name the
+	// host itself owns.
 	ErrCodeCommandNameCollision ErrCode = "command-name-collision"
 	// ErrCodeInvalidCapabilityRef reports rule R6: an empty or duplicate
 	// requires entry.

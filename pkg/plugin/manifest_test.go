@@ -2,10 +2,13 @@
 // round-trip test for Manifest/ParseManifest/Validate. Split from a single
 // manifest_test.go per R-14.117 (Art.10.3's 300-line file cap): this file
 // keeps the shared substrate (goldenFixtures, readTestdata,
-// baseManifestTOML, errAs) plus TestParseManifest_Goldens; the rejection
-// rules move to validate_rules_test.go and the loader/errcode tests move to
-// loader_test.go. All three are behaviour-preserving relocations — no
-// assertion, name, or signature changed from the pre-split file.
+// baseManifestTOML, errAs, validManifest) plus TestParseManifest_Goldens;
+// the rejection rules move to validate_rules_test.go and the
+// loader/errcode tests move to loader_test.go. id_validation_test.go and
+// host_version_test.go (CR remediation, R-14.127/R-14.128) reuse
+// validManifest as their shared substrate. All relocations from the
+// pre-split file are behaviour-preserving — no assertion, name, or
+// signature changed.
 // Constraints: no network calls (Art.7.2); no writes outside t.TempDir()
 // (Art.7.1 — this file performs no writes at all, only reads of testdata/).
 package plugin_test
@@ -73,6 +76,22 @@ func TestParseManifest_Goldens(t *testing.T) {
 				t.Errorf("%s: round-trip mismatch:\n  original:  %+v\n  remarshal: %+v", name, m, m2)
 			}
 		})
+	}
+}
+
+// validManifest returns a Manifest that passes Validate with zero findings,
+// for tests that only want to vary one field via direct struct construction
+// (id_validation_test.go, host_version_test.go) rather than round-tripping
+// through TOML text. Each caller mutates a copy — this returns by value.
+func validManifest() plugin.Manifest {
+	return plugin.Manifest{
+		ID:          "valid-plugin-id",
+		Name:        "Valid Plugin",
+		Schema:      plugin.SchemaVersion,
+		Version:     "1.0.0",
+		HostVersion: ">=2.0.0",
+		Runtime:     plugin.RuntimeBuiltin,
+		Requires:    []string{"storage.domain"},
 	}
 }
 

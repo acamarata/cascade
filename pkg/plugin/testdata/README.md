@@ -16,7 +16,7 @@ plugin's full manifest body.
 | Fixture | Catalog row | Runtime | Epic | Default |
 |---|---|---|---|---|
 | `example-connector.toml` | `examples: connector / agent-provider / domain` | wasm | O | off |
-| `example-pbd.toml` | `cascade-pbd (+ telegram module — n/a)` | builtin | N | opt-in |
+| `example-pbd.toml` | `cascade-pbd` | builtin | N | opt-in |
 | `example-agent-provider.toml` | `examples: connector / agent-provider / domain` | wasm | O | off |
 
 Provenance for all three:
