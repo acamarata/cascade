@@ -1,0 +1,90 @@
+# Cascade v2 supply-chain lane (P1-E01-W1-S01-T3).
+#
+# Two independent checks, both required:
+#   - govulncheck ./...           — known-vulnerability scan of the module
+#     graph, installed fresh each run (`go install`, not a go.mod
+#     dependency — R-14.115 forbids adding one here).
+#   - license allowlist gate      — internal/build's own Go-native check
+#     (internal/build/licenses.go), run via `go test ./internal/build/...`
+#     so the exact same logic runs locally with zero extra tooling. On top
+#     of that, the real `go-licenses` tool runs too (installed the same
+#     way) as a second, independent classifier over the same dependency
+#     set — belt-and-braces, since go-licenses inspects each module's
+#     actual LICENSE file text rather than a maintained registry.
+#   - dependency-review (PRs only) — GitHub's own advisory-database diff
+#     check on any go.mod/go.sum change in a pull request.
+#
+# Public repo => free GitHub-hosted runners (ASI Policy 8). All `uses:`
+# pinned to full commit SHAs (tag recorded in the trailing comment).
+name: supply-chain
+
+on:
+  push:
+    branches:
+      - main
+      - p1-integration
+  pull_request:
+    branches:
+      - main
+      - p1-integration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: govulncheck ./...
+        run: govulncheck ./...
+
+  licenses:
+    name: license allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The gate that also runs locally, with zero extra install:
+      # internal/build/licenses.go's registry-vs-allowlist check.
+      - name: internal/build license gate
+        run: go test ./internal/build/... -run TestLicenses -v
+
+      # Independent second layer: the real go-licenses tool classifies each
+      # dependency directly from its LICENSE file text rather than a
+      # maintained registry, catching any drift in the registry itself.
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: go-licenses check (permissive allowlist)
+        run: |
+          go-licenses check ./... \
+            --allowed_licenses=MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,CC0-1.0
+
+  dependency-review:
+    name: dependency review (PR only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, CC0-1.0

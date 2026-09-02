@@ -1,0 +1,92 @@
+# Cascade v2 bench lane (P1-E01-W1-S01-T3).
+#
+# Two independent checks:
+#   - budget-assertion harness: internal/build's AssertBudgets
+#     (internal/build/bench.go) compared against whatever budgets are
+#     registered. This ticket registers ZERO numeric budgets (§D-38 —
+#     each consuming subsystem ticket registers its own; AB/S-58.T2 owns
+#     asserting the full set) so this step is green-empty by design, not a
+#     stub (Art.1 — infrastructure whose consumers arrive later, same
+#     pattern as the fuzz lane).
+#   - benchstat comparison vs the PR's base branch: runs `go test -bench`
+#     on both the PR head and its merge-base, diffs with benchstat. This
+#     is observational only at this ticket (no budget numbers exist to
+#     fail against yet) — it surfaces regressions for human review; once a
+#     later ticket registers budgets, AB/S-58.T2's harness invocation is
+#     what actually fails the build on an overrun.
+#
+# pull_request only: a benchmark comparison needs a base ref to diff
+# against, which a plain push does not have. `workflow_dispatch` allows an
+# on-demand run. Public repo => free GitHub-hosted runner (ASI Policy 8).
+# `uses:` pinned to a full commit SHA (tag in the trailing comment).
+name: bench
+
+on:
+  pull_request:
+    branches:
+      - main
+      - p1-integration
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  budget-harness:
+    name: budget-assertion harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: internal/build budget harness
+        run: go test ./internal/build/... -run TestAssertBudgets -v
+
+  benchstat:
+    name: benchstat vs base branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Bench PR head
+        run: |
+          set -eu
+          go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/new.txt 2>&1 || true
+          if ! grep -q '^Benchmark' /tmp/new.txt; then
+            echo "no Benchmark targets exist yet — green-empty by design (§D-38: budgets/benches arrive with consuming subsystem tickets)"
+            exit 0
+          fi
+          cat /tmp/new.txt
+
+      - name: Bench base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eu
+          if ! grep -q '^Benchmark' /tmp/new.txt 2>/dev/null; then
+            echo "skipping base-branch bench: no Benchmark targets on head"
+            exit 0
+          fi
+          git worktree add /tmp/base "origin/${{ github.event.pull_request.base.ref }}"
+          (cd /tmp/base && go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/old.txt 2>&1 || true)
+
+      - name: benchstat old vs new
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eu
+          if [ ! -s /tmp/old.txt ] || [ ! -s /tmp/new.txt ] || ! grep -q '^Benchmark' /tmp/new.txt; then
+            echo "nothing to compare yet"
+            exit 0
+          fi
+          benchstat /tmp/old.txt /tmp/new.txt

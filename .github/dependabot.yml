@@ -1,0 +1,24 @@
+# Dependabot config (P1-E01-W1-S01-T3): keeps go.mod/go.sum dependencies and
+# every SHA-pinned GitHub Action across .github/workflows/*.yml current.
+# Dependabot's "gitsubmodule"-style Actions updater bumps both the version
+# comment and the pinned SHA together — it understands SHA-pinned `uses:`
+# lines natively, so pinning does not block updates.
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "gomod"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "github-actions"

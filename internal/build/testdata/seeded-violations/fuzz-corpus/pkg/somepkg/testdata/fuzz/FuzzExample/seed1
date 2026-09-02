@@ -1,0 +1,2 @@
+go test fuzz v1
+string("wrong location seed — this corpus dir sits under pkg/somepkg/testdata/fuzz, not internal/testdata/fuzz. Seeded-violation fixture for P1-E01-W1-S01-T3's fuzz-corpus-location check (.github/workflows/fuzz-nightly.yml's location-check step, documented in docs/developer/ci.md). Data only, never executed.")

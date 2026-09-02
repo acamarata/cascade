@@ -1,0 +1,92 @@
+# Cascade v2 nightly fuzz lane (P1-E01-W1-S01-T3).
+#
+# Two independent checks:
+#   - fuzz-corpus-location: every "testdata/fuzz" directory in the tree
+#     must live under internal/testdata/fuzz/ (06-FORGE-SPEC.md §5.7 —
+#     "never repo root"; 12-QUALITY-CONSTITUTION.md Art.10.1 clean root).
+#     Proven RED against the seeded fixture at
+#     internal/build/testdata/seeded-violations/fuzz-corpus/ (a stray
+#     testdata/fuzz dir under pkg/somepkg/, deliberately outside
+#     internal/testdata/fuzz) and GREEN on the real tree, both checked
+#     below every run.
+#   - fuzz: discovers every FuzzXxx target that exists anywhere in the
+#     module and runs each for a bounded fuzztime against its corpus.
+#     Zero targets exist yet (parser/decoder tickets add them per §5 rule
+#     7) — this is infrastructure whose consumers arrive by design
+#     (§D-38's identical pattern), not a stub: with zero targets the step
+#     reports zero and exits 0.
+#
+# Nightly cron, not on every push — fuzzing is I/O- and CPU-heavy and adds
+# no signal on a push with no FuzzXxx targets yet. `workflow_dispatch` is
+# available for an on-demand run. Public repo => free GitHub-hosted runner
+# (ASI Policy 8). `uses:` pinned to a full commit SHA (tag in the trailing
+# comment).
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "17 7 * * *" # nightly, off-peak UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-corpus-location:
+    name: fuzz corpus location gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Real tree is clean (must find nothing)
+        run: |
+          set -eu
+          hits=$(find . -type d -path '*/testdata/fuzz' \
+            -not -path './internal/testdata/fuzz' \
+            -not -path '*/testdata/seeded-violations/*' \
+            -not -path './.git/*' 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "fuzz corpus found outside internal/testdata/fuzz/:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "real tree: clean"
+
+      - name: Seeded fixture trips the gate (must find something)
+        run: |
+          set -eu
+          hits=$(find ./internal/build/testdata/seeded-violations/fuzz-corpus -type d \
+            -path '*/testdata/fuzz' \
+            -not -path '*/internal/testdata/fuzz' 2>/dev/null || true)
+          if [ -z "$hits" ]; then
+            echo "expected the seeded fuzz-corpus fixture to trip the location gate, found nothing"
+            exit 1
+          fi
+          echo "seeded fixture: tripped as expected:"
+          echo "$hits"
+
+  fuzz:
+    name: run every FuzzXxx target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Discover and run FuzzXxx targets
+        run: |
+          set -eu
+          targets=$(go test -list '^Fuzz' ./... 2>/dev/null | grep '^Fuzz' || true)
+          if [ -z "$targets" ]; then
+            echo "no FuzzXxx targets exist yet (P1-E01-W1-S01-T3 ships the lane only; targets arrive with parser/decoder tickets) — green-empty by design"
+            exit 0
+          fi
+          echo "$targets" | while IFS= read -r name; do
+            pkgs=$(go list -f '{{.ImportPath}}' ./... | xargs -I{} sh -c "go test -list '^${name}\$' {} 2>/dev/null | grep -q '^${name}\$' && echo {}" || true)
+            for pkg in $pkgs; do
+              echo "fuzzing $name in $pkg"
+              go test "$pkg" -run '^$' -fuzz "^${name}\$" -fuzztime=60s
+            done
+          done

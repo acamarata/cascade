@@ -1,0 +1,122 @@
+# Cascade v2 CI (P1-E01-W1-S01-T3).
+#
+# Lanes: build+test matrix (native runner per supported platform, Art.5.1 —
+# every platform compiles AND runs its suite, never cross-compiled-and-
+# assumed-fine), -race, lint (golangci-lint wall + the internal/build gate
+# tests from A/S-01.T2), and ci-gate — the aggregate required-status job
+# every later ticket's "checks green in CI" (Art.3) hangs off.
+#
+# This repo is PUBLIC: GitHub-hosted runners are free (ASI Policy 8 — never
+# pay for Actions, never self-host what GitHub gives free). Every `uses:`
+# below is pinned to a full commit SHA (never a floating tag), per this
+# ticket's supply-chain requirement; the tag is recorded in a trailing
+# comment so pins stay legible. Dependabot (.github/dependabot.yml) keeps
+# them current.
+#
+# R-14.114: `go`/`git` are wrapped by `rtk` in the interactive dev
+# environment, which returns exit codes that do not track the real result.
+# CI runners have no such wrapper — every step here invokes the toolchain
+# directly, and its raw exit code is what gates the job (Art.7.4).
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - p1-integration
+  pull_request:
+    branches:
+      - main
+      - p1-integration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build+test (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64, runner: macos-14 }
+          - { goos: darwin, goarch: amd64, runner: macos-13 }
+          - { goos: linux, goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm }
+          - { goos: windows, goarch: amd64, runner: windows-latest }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go build ./...
+        run: go build ./...
+
+      - name: go vet ./...
+        run: go vet ./...
+
+      # Every matrix entry runs on ITS OWN native OS/arch runner (see the
+      # table above), so `go test` always executes real, non-cross-compiled
+      # binaries — this satisfies Art.5.1 without ever hitting the
+      # "cannot execute a cross-compiled binary" limitation the dev
+      # environment has on darwin.
+      - name: go test ./...
+        run: go test ./... -v
+
+  race:
+    name: race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test -race ./...
+        run: go test -race ./...
+
+  lint:
+    name: lint wall + build gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: golangci-lint run
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+
+      # A/S-01.T2's architecture/size/boundary gates plus this ticket's
+      # license and bench-harness gates — all live in internal/build and
+      # must be green alongside the lint wall (docs/developer/lint-wall.md).
+      - name: go test ./internal/build/...
+        run: go test ./internal/build/... -v
+
+  ci-gate:
+    name: ci-gate (required status)
+    needs: [build-test, race, lint]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: All lanes green
+        run: |
+          set -eu
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}"; do
+            if [ "$r" != "success" ]; then
+              echo "ci-gate: a required lane did not succeed ($r)"
+              exit 1
+            fi
+          done
+          echo "ci-gate: all lanes green"

@@ -1,0 +1,15 @@
+{
+  "_comment": "Seeded-violation fixture for P1-E01-W1-S01-T3's budget-assertion harness (internal/build/bench_test.go, TestAssertBudgets_SeededViolationRed_Overrun). A fake budget for a fake benchmark, paired with a fake measured result that exceeds every metric. Data only, never a real registered budget (KnownModuleLicenses-style production registries do not exist for bench yet — consuming tickets add their own per §D-38).",
+  "budget": {
+    "Name": "example.fixture.op",
+    "MaxNsPerOp": 100,
+    "MaxAllocsPerOp": 1,
+    "MaxBytesPerOp": 64
+  },
+  "result": {
+    "Name": "example.fixture.op",
+    "NsPerOp": 250,
+    "AllocsPerOp": 3,
+    "BytesPerOp": 128
+  }
+}
