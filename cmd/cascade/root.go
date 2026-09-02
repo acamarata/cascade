@@ -14,8 +14,12 @@
 package main
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/cmd/cascade/config"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -87,8 +91,14 @@ func newRootCmd() *cobra.Command {
 	flags.BoolVarP(&globalFlags.Quiet, "quiet", "q", false, "suppress progress output")
 	flags.BoolVarP(&globalFlags.Verbose, "verbose", "v", false, "increase log verbosity")
 
+	// Registered here, not in main(): the binary and newRootCmd() must build
+	// the SAME tree, or the golden-help fixture can only ever match one of
+	// them and every later command lands on a tree the tests do not see.
+	registerNoColorFlag(root)
+
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newCompletionCmd(root))
+	mountConfigCmd(root)
 
 	return root
 }
@@ -104,4 +114,105 @@ func usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs {
 		}
 		return nil
 	}
+}
+
+// mountConfigCmd attaches the `config` command tree. It lives here because
+// cmd/ is the sole composition root (Art.10.2): the config package takes its
+// dependencies by injection and must not reach for the real environment
+// itself.
+//
+// The command tree MUST NOT depend on the environment. Resolving the path
+// provider here and skipping the mount on failure would make `cascade --help`
+// print a different tree on a machine where the home directory cannot be
+// resolved -- an environment-dependent CLI surface, and a golden-help test
+// that flakes by machine (Art.11). So the subcommand is always mounted, and a
+// resolution failure surfaces when a config command is actually RUN, as a
+// taxonomy error with the right exit code.
+func mountConfigCmd(root *cobra.Command) {
+	cmd := config.NewConfigCmd(config.Deps{
+		Paths:   lazyPaths{},
+		Getenv:  os.Getenv,
+		Clock:   runtime.SystemClock{},
+		Environ: os.Environ,
+	})
+	guardUnknownSubcommands(cmd)
+	root.AddCommand(cmd)
+}
+
+// guardUnknownSubcommands applies the root's unknown-command rule to a whole
+// mounted subtree. Without it, `cascade config bogus` prints help and exits
+// 0: cobra's default for a group command with no Run is to show help, and the
+// invalid-input mapping applied to the root does not reach commands mounted
+// under it. Every command group added later would inherit that, so the guard
+// belongs at the mount point rather than in each group's own package.
+func guardUnknownSubcommands(cmd *cobra.Command) {
+	switch {
+	case cmd.Args != nil:
+		// Wrap the command's own validator. Cobra builds these errors
+		// itself, so they carry no taxonomy kind and would exit
+		// internal(1) rather than invalid-input(2) -- which is why
+		// `cascade config get` with no argument exited 1.
+		cmd.Args = usageArgs(cmd.Args)
+	case len(cmd.Commands()) > 0:
+		// A group command with no validator. Setting Args alone is NOT
+		// enough: cobra returns ErrHelp before validating args when a
+		// command is not Runnable, so the validator never runs and an
+		// unknown subcommand prints help and exits 0. Give the group a
+		// RunE that shows help -- exactly the fix the root command needed
+		// for the same reason -- so validation is reached.
+		cmd.Args = func(c *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return cascade.Newf(cascade.KindInvalidInput,
+					"unknown command %q for %q", args[0], c.CommandPath())
+			}
+			return nil
+		}
+		if cmd.Run == nil && cmd.RunE == nil {
+			cmd.RunE = func(c *cobra.Command, _ []string) error { return c.Help() }
+		}
+	}
+	for _, sub := range cmd.Commands() {
+		guardUnknownSubcommands(sub)
+	}
+}
+
+// lazyPaths defers NewDefaultPathProvider to first use, so constructing the
+// command tree never touches the environment. Each accessor resolves on
+// demand and returns the zero value if resolution fails; the config commands
+// validate the paths they receive and report the failure themselves.
+type lazyPaths struct{}
+
+func (lazyPaths) resolve() runtime.PathProvider {
+	p, err := runtime.NewDefaultPathProvider()
+	if err != nil {
+		return nil
+	}
+	return p
+}
+
+func (l lazyPaths) get(f func(runtime.PathProvider) string) string {
+	p := l.resolve()
+	if p == nil {
+		return ""
+	}
+	return f(p)
+}
+
+func (l lazyPaths) Root() string {
+	return l.get(func(p runtime.PathProvider) string { return p.Root() })
+}
+func (l lazyPaths) ConfigPath() string {
+	return l.get(func(p runtime.PathProvider) string { return p.ConfigPath() })
+}
+func (l lazyPaths) SocketPath() string {
+	return l.get(func(p runtime.PathProvider) string { return p.SocketPath() })
+}
+func (l lazyPaths) DataDir() string {
+	return l.get(func(p runtime.PathProvider) string { return p.DataDir() })
+}
+func (l lazyPaths) LogDir() string {
+	return l.get(func(p runtime.PathProvider) string { return p.LogDir() })
+}
+func (l lazyPaths) StorageRoot(profile runtime.Profile) string {
+	return l.get(func(p runtime.PathProvider) string { return p.StorageRoot(profile) })
 }

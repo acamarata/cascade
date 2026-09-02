@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // execRootWithNoColor mirrors execRoot (root_test.go) but additionally
@@ -29,14 +30,15 @@ import (
 // noColorFlag's doc comment in main.go for why the flag lives outside
 // root.go's GlobalFlags). Kept separate from execRoot, rather than folding
 // the registration into it, so the unrelated golden-help fixture
-// (testdata/golden_help.txt, captured before --no-color existed) is
-// untouched by these tests.
+// The golden help fixture now INCLUDES --no-color, because the flag is part
+// of the root tree rather than bolted on in main().
 func execRootWithNoColor(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	globalFlags = GlobalFlags{}
 	noColorFlag = false
+	// newRootCmd registers --no-color itself now, so the binary and the tests
+	// build the same tree; registering again here would duplicate the flag.
 	root := newRootCmd()
-	registerNoColorFlag(root)
 	buf := &bytes.Buffer{}
 	root.SetOut(buf)
 	root.SetErr(buf)
@@ -120,6 +122,40 @@ func TestNoColorFlagReachesOutputWriter(t *testing.T) {
 			w := output.New(buf, buf, globalFlags.JSON, globalFlags.Quiet, globalFlags.Verbose, noColorFlag)
 			if !w.Mode().NoColor {
 				t.Fatalf("Mode().NoColor = false, want true (non-TTY buffer; noColorFlag=%v)", noColorFlag)
+			}
+		})
+	}
+}
+
+// TestMountedSubtreeExitCodes pins the unknown-subcommand and bad-argument
+// rules for command groups mounted UNDER the root, not just the root itself.
+//
+// This exists because the root's fix did not reach mounted groups, and the
+// cause was subtle: cobra returns ErrHelp before validating arguments when a
+// command is not Runnable, so setting Args on a group whose only job is to
+// hold subcommands has no effect at all — `cascade config bogus` printed help
+// and exited 0. Every command group added later mounts the same way, so this
+// guards all of them.
+func TestMountedSubtreeExitCodes(t *testing.T) {
+	invalid := cascade.KindInvalidInput.ExitCode()
+
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"group with no args shows help", []string{"config"}, cascade.ExitOK},
+		{"group help flag", []string{"config", "--help"}, cascade.ExitOK},
+		{"unknown subcommand in a group", []string{"config", "bogus"}, invalid},
+		{"leaf missing its argument", []string{"config", "get"}, invalid},
+		{"leaf with too many arguments", []string{"config", "path", "extra"}, invalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := execRoot(t, tt.args...)
+			if got := cascade.ExitCode(err); got != tt.want {
+				t.Errorf("exit code = %d, want %d (err: %v)", got, tt.want, err)
 			}
 		})
 	}

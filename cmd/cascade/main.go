@@ -56,7 +56,6 @@ func registerNoColorFlag(root *cobra.Command) {
 
 func main() {
 	root := newRootCmd()
-	registerNoColorFlag(root)
 
 	err := root.Execute()
 
