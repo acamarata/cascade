@@ -1,0 +1,7 @@
+outcome=2
+effective_allow_remote=false
+effective_sync_domains=0
+events:
+  - config.policy.divergent
+audit_records:
+  - doctor_error

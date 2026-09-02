@@ -58,12 +58,21 @@ var LicenseAllowlist = map[string]bool{
 // feature detection blake3 uses for its SIMD fast paths). Verified against
 // each module's module-cache LICENSE file: zeebo/blake3 is public domain /
 // CC0-1.0, klauspost/cpuid/v2 is MIT — both allowlisted.
+//
+// P1-E03-W1-S05-T8 added github.com/fsnotify/fsnotify (internal/runtime's
+// hot-reload config.toml watcher, hotreload_watch.go) — this ticket was
+// the sole dependency-adding ticket in flight per R-14.115. Verified
+// against the module-cache LICENSE file: fsnotify is BSD-3-Clause
+// (Copyright (c) 2012 The Go Authors / fsnotify Authors), allowlisted; it
+// added no new transitive dependency (golang.org/x/sys was already
+// direct).
 var KnownModuleLicenses = map[string]string{
 	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
 	"github.com/inconshreveable/mousetrap": "Apache-2.0",
 	"github.com/spf13/pflag":               "BSD-3-Clause",
 	"github.com/dustin/go-humanize":        "MIT",
+	"github.com/fsnotify/fsnotify":         "BSD-3-Clause",
 	"github.com/google/uuid":               "BSD-3-Clause",
 	"github.com/klauspost/cpuid/v2":        "MIT",
 	"github.com/mattn/go-isatty":           "MIT",

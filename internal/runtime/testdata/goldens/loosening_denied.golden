@@ -1,0 +1,7 @@
+accepted=false rejected=true
+loosening_paths:
+  - family=conductor key=conductor.external_routing_enabled current=false proposed=true
+events:
+  - config.reload.rejected
+audit_records:
+  - reload_rejected

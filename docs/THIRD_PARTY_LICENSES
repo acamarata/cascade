@@ -20,6 +20,7 @@ locally with:
 Module                                 License        Source
 --------------------------------------- -------------- ------------------------------------------------------------------
 github.com/dustin/go-humanize          MIT            https://github.com/dustin/go-humanize/blob/v1.0.1/LICENSE
+github.com/fsnotify/fsnotify           BSD-3-Clause   https://github.com/fsnotify/fsnotify/blob/v1.10.1/LICENSE
 github.com/google/uuid                 BSD-3-Clause   https://github.com/google/uuid/blob/v1.6.0/LICENSE
 github.com/inconshreveable/mousetrap   Apache-2.0     https://github.com/inconshreveable/mousetrap/blob/v1.1.0/LICENSE
 github.com/klauspost/cpuid/v2          MIT            https://github.com/klauspost/cpuid/blob/v2.0.12/LICENSE
