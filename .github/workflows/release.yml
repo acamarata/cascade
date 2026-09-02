@@ -1,0 +1,159 @@
+# Cascade release lane (P1-E01-W1-S01-T6).
+#
+# Runs the goreleaser snapshot train on every push so the release pipeline is
+# proven green continuously, never only "at cut time" (12-QUALITY-CONSTITUTION
+# Art.11 progressive hardening). Two jobs:
+#   - `verify`   (always): config + build only, no secrets required. This is
+#     the gate that must stay green regardless of owner-prereq status.
+#   - `snapshot` (push to p1-integration/main + manual dispatch): the full
+#     snapshot release — archives, SBOMs, checksums, minisign signature —
+#     gated on the CASCADE_MINISIGN_KEY/CASCADE_MINISIGN_PUBKEY repo secrets
+#     existing (06-FORGE-SPEC §7 owner prereq: minisign keypair generated +
+#     escrowed). Skips cleanly, never red, when the secrets are absent.
+#
+# NEITHER job publishes anything. `goreleaser release --snapshot` never
+# creates a GitHub Release, pushes a Homebrew tap commit, or pushes an OCI
+# image (06 §7: any publish is GATED). Real, non-snapshot publishing on a
+# real version tag is AA/S-55.T4's owner-prereq-gated territory, not this
+# lane's.
+#
+# cosign KEYLESS signing (needs GitHub OIDC, `id-token: write` below) and the
+# OCI server-profile image are OUT of this workflow for now: the image needs
+# a Dockerfile, and this ticket's files_scope has no path for one (see this
+# ticket's journal / BLOCKERS — a T0 ruling is needed on where it lives).
+# Wiring cosign here without an image to sign would be exactly the kind of
+# simulated capability Art.1 forbids, so it is omitted rather than faked.
+#
+# This repo is PUBLIC: GitHub-hosted runners are free and used here per ASI
+# Policy 8 (never self-host what GitHub gives free; never pay for Actions).
+name: release
+
+on:
+  push:
+    branches:
+      - main
+      - p1-integration
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # reserved for the future cosign-keyless step (unused today)
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: goreleaser check + build (no secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+
+      - name: Install syft (SBOM generator)
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: goreleaser check
+        run: goreleaser check
+
+      - name: internal/buildinfo tests (-race)
+        run: go test ./internal/buildinfo/... -race -v
+
+      - name: goreleaser build --snapshot (all 5 platforms, no signing)
+        run: goreleaser build --snapshot --clean
+
+      - name: Verify the ldflags stamp resolves on a built binary
+        run: |
+          set -eu
+          # This runner is linux/amd64, so run that build's binary directly.
+          bin="dist/cascade_linux_amd64_v1/cascade"
+          "$bin" version
+          "$bin" version | grep -q '^cascade version 0\.0\.0-SNAPSHOT-' || (echo "version stamp did not resolve" && exit 1)
+          "$bin" version | grep -q '^channel: script$' || (echo "install-channel stamp did not resolve" && exit 1)
+
+  snapshot:
+    name: goreleaser release --snapshot (signed, SBOM'd)
+    needs: verify
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/p1-integration' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+
+      - name: Install syft (SBOM generator)
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Check minisign owner-prereq secrets are present
+        id: minisign-secret
+        env:
+          KEY_PRESENT: ${{ secrets.CASCADE_MINISIGN_KEY != '' }}
+          PUB_PRESENT: ${{ secrets.CASCADE_MINISIGN_PUBKEY != '' }}
+        run: |
+          if [ "$KEY_PRESENT" = "true" ] && [ "$PUB_PRESENT" = "true" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CASCADE_MINISIGN_KEY/CASCADE_MINISIGN_PUBKEY secrets are not set (06-FORGE-SPEC §7 owner prereq: minisign keypair generated + escrowed). Skipping the signed snapshot release; goreleaser build --snapshot already proved the cross-platform build in the verify job."
+          fi
+
+      - name: Write minisign key material to a runner-local temp file
+        if: steps.minisign-secret.outputs.present == 'true'
+        env:
+          MINISIGN_KEY_CONTENT: ${{ secrets.CASCADE_MINISIGN_KEY }}
+          MINISIGN_PUBKEY_CONTENT: ${{ secrets.CASCADE_MINISIGN_PUBKEY }}
+        run: |
+          umask 077
+          printf '%s' "$MINISIGN_KEY_CONTENT" > "${RUNNER_TEMP}/minisign.key"
+          printf '%s' "$MINISIGN_PUBKEY_CONTENT" > "${RUNNER_TEMP}/minisign.pub"
+
+      - name: goreleaser release --snapshot --clean (signed, SBOM'd, no publish)
+        if: steps.minisign-secret.outputs.present == 'true'
+        env:
+          CASCADE_MINISIGN_KEY: ${{ runner.temp }}/minisign.key
+          CASCADE_MINISIGN_PUBKEY: ${{ runner.temp }}/minisign.pub
+        run: goreleaser release --snapshot --clean
+
+      - name: Verify checksums and minisign signature
+        if: steps.minisign-secret.outputs.present == 'true'
+        run: |
+          set -eu
+          cd dist
+          shasum -a 256 -c ./*_checksums.txt
+          minisign -Vm ./*_checksums.txt -p "${RUNNER_TEMP}/minisign.pub"
+
+      - name: Remove minisign key material
+        if: always() && steps.minisign-secret.outputs.present == 'true'
+        run: rm -f "${RUNNER_TEMP}/minisign.key" "${RUNNER_TEMP}/minisign.pub"
+
+      - name: Upload snapshot artifacts (workflow artifact, NOT a GitHub Release)
+        if: steps.minisign-secret.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-snapshot-${{ github.sha }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sbom.json
+            dist/*_checksums.txt
+            dist/*_checksums.txt.minisig
+          retention-days: 14
