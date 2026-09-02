@@ -9,3 +9,11 @@
 /bin/
 /dist/
 *.log
+/cascade
+*.exe
+*.test
+
+# test and coverage artifacts (Go)
+*.out
+coverage.txt
+coverage.html
