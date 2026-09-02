@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"_type\":\"row\",\"key\":\"unicode-\\u00e9\\u4e2d\",\"value\":\"//79/A==\"}")
