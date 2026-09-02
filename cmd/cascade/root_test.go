@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/buildinfo"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -26,6 +27,10 @@ import (
 // commands are stateful (parsed flag values persist on the *Command).
 func execRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	// globalFlags is package-level state that cobra writes into, so it
+	// persists across commands within a test binary. Reset it per call to
+	// keep tests order-independent (Art.7.3).
+	globalFlags = GlobalFlags{}
 	root := newRootCmd()
 	buf := &bytes.Buffer{}
 	root.SetOut(buf)
@@ -127,7 +132,7 @@ func TestVersionCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute version: %v", err)
 	}
-	for _, want := range []string{version, commit, date, "channel: manual"} {
+	for _, want := range []string{buildinfo.Version, buildinfo.Commit, buildinfo.Date, "channel: manual"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("version output missing %q\noutput:\n%s", want, got)
 		}
@@ -139,31 +144,6 @@ func TestVersionCommandRejectsArgs(t *testing.T) {
 	_, err := execRoot(t, "version", "extra-arg")
 	if err == nil {
 		t.Fatal("expected error for unexpected positional arg")
-	}
-}
-
-func TestResolvedInstallChannel(t *testing.T) {
-	cases := []struct {
-		stamped string
-		want    string
-	}{
-		{stamped: "", want: "manual"},
-		{stamped: "script", want: "script"},
-		{stamped: "brew", want: "brew"},
-		{stamped: "oci", want: "oci"},
-		{stamped: "node-managed", want: "node-managed"},
-		{stamped: "manual", want: "manual"},
-		{stamped: "bogus-channel", want: "manual"},
-	}
-
-	original := installChannel
-	defer func() { installChannel = original }()
-
-	for _, tc := range cases {
-		installChannel = tc.stamped
-		if got := resolvedInstallChannel(); got != tc.want {
-			t.Errorf("resolvedInstallChannel() with stamp %q = %q, want %q", tc.stamped, got, tc.want)
-		}
 	}
 }
 
@@ -224,6 +204,8 @@ func TestProcessExitCodes(t *testing.T) {
 		{"unknown completion shell", []string{"completion", "badshell"}, invalid},
 		{"completion missing argument", []string{"completion"}, invalid},
 		{"version rejects extra args", []string{"version", "extra"}, invalid},
+		{"unknown subcommand", []string{"bogus-subcommand"}, invalid},
+		{"unknown subcommand with flag", []string{"bogus", "--json"}, invalid},
 	}
 
 	for _, tt := range tests {
@@ -244,6 +226,7 @@ func TestCobraErrorsCarryTaxonomyKind(t *testing.T) {
 		{"--nosuchflag"},
 		{"completion", "badshell"},
 		{"completion"},
+		{"bogus-subcommand"},
 	} {
 		_, err := execRoot(t, args...)
 		if err == nil {

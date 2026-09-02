@@ -50,10 +50,22 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		// Root needs a RunE: without one cobra prints help and never invokes
 		// PersistentPreRunE, so global-flag validation would silently not run.
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Cobra's default validator for a command with subcommands reports an
+		// unknown subcommand as a bare error, which reaches main kindless and
+		// exits internal(1) — wrong for what is the commonest CLI mistake there
+		// is, a typo'd subcommand. Reproduce cobra's own message and give it the
+		// invalid-input kind (R-14.113).
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return cascade.Newf(cascade.KindInvalidInput,
+					"unknown command %q for %q", args[0], cmd.CommandPath())
+			}
+			return nil
+		},
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			if globalFlags.Quiet && globalFlags.Verbose {
 				return cascade.New(cascade.KindInvalidInput, "--quiet and --verbose are mutually exclusive")
 			}
@@ -64,7 +76,7 @@ func newRootCmd() *cobra.Command {
 	// Cobra's flag parser returns bare errors; without this they would reach
 	// main as kindless errors and exit 1 (internal) instead of the taxonomy's
 	// invalid-input status. R-14.113.
-	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return cascade.Wrap(cascade.KindInvalidInput, err, "invalid flag")
 	})
 
