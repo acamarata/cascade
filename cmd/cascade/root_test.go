@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // execRoot runs a fresh root command tree with the given args and returns
@@ -195,5 +197,60 @@ func TestCompletionRequiresExactlyOneArg(t *testing.T) {
 	}
 	if _, err := execRoot(t, "completion", "bash", "zsh"); err == nil {
 		t.Fatal("expected error when more than one shell is given")
+	}
+}
+
+// TestProcessExitCodes pins the mapping main.go applies between a command's
+// returned error and the process exit status. It exists because the original
+// wiring exited 1 unconditionally and every unit test still passed: the tests
+// asserted that an error was returned, never which status it produced. Cobra
+// generates flag- and argument-validation errors itself, and those carry no
+// taxonomy kind unless the root explicitly wraps them (R-14.113), so each of
+// these cases guards a different path into cascade.ExitCode.
+func TestProcessExitCodes(t *testing.T) {
+	invalid := cascade.KindInvalidInput.ExitCode()
+
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"bare root prints help", nil, cascade.ExitOK},
+		{"help flag", []string{"--help"}, cascade.ExitOK},
+		{"version", []string{"version"}, cascade.ExitOK},
+		{"valid completion", []string{"completion", "zsh"}, cascade.ExitOK},
+		{"quiet and verbose conflict", []string{"--quiet", "--verbose"}, invalid},
+		{"unknown flag", []string{"--nosuchflag"}, invalid},
+		{"unknown completion shell", []string{"completion", "badshell"}, invalid},
+		{"completion missing argument", []string{"completion"}, invalid},
+		{"version rejects extra args", []string{"version", "extra"}, invalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := execRoot(t, tt.args...)
+			if got := cascade.ExitCode(err); got != tt.want {
+				t.Errorf("exit code = %d, want %d (err: %v)", got, tt.want, err)
+			}
+		})
+	}
+}
+
+// TestCobraErrorsCarryTaxonomyKind asserts the wrapping itself, so a
+// regression that drops SetFlagErrorFunc fails here with a precise message
+// rather than only as a wrong exit number above.
+func TestCobraErrorsCarryTaxonomyKind(t *testing.T) {
+	for _, args := range [][]string{
+		{"--nosuchflag"},
+		{"completion", "badshell"},
+		{"completion"},
+	} {
+		_, err := execRoot(t, args...)
+		if err == nil {
+			t.Fatalf("args %v: expected an error", args)
+		}
+		if !cascade.HasKind(err, cascade.KindInvalidInput) {
+			t.Errorf("args %v: error %v does not carry KindInvalidInput", args, err)
+		}
 	}
 }

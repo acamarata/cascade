@@ -19,6 +19,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // These are the ldflags injection points. A-T6's build tooling sets them via
@@ -54,11 +56,14 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the cascade version, commit, build date, and install channel",
-		Args:  cobra.NoArgs,
+		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintf(cmd.OutOrStdout(),
+			_, err := fmt.Fprintf(cmd.OutOrStdout(),
 				"cascade version %s\ncommit:  %s\nbuilt:   %s\nchannel: %s\n",
 				version, commit, date, resolvedInstallChannel())
+			if err != nil {
+				return cascade.Wrap(cascade.KindUnavailable, err, "write version output")
+			}
 			return nil
 		},
 	}

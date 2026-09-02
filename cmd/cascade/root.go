@@ -14,9 +14,9 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // GlobalFlags holds the persistent flag values shared by every subcommand.
@@ -48,13 +48,25 @@ func newRootCmd() *cobra.Command {
 		Long:          "Cascade is a local-first AI agent runtime: one binary that is both\nthe CLI surface and, via \"cascade daemon run\", the long-lived daemon.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Root needs a RunE: without one cobra prints help and never invokes
+		// PersistentPreRunE, so global-flag validation would silently not run.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if globalFlags.Quiet && globalFlags.Verbose {
-				return errors.New("--quiet and --verbose are mutually exclusive")
+				return cascade.New(cascade.KindInvalidInput, "--quiet and --verbose are mutually exclusive")
 			}
 			return nil
 		},
 	}
+
+	// Cobra's flag parser returns bare errors; without this they would reach
+	// main as kindless errors and exit 1 (internal) instead of the taxonomy's
+	// invalid-input status. R-14.113.
+	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return cascade.Wrap(cascade.KindInvalidInput, err, "invalid flag")
+	})
 
 	flags := root.PersistentFlags()
 	flags.BoolVar(&globalFlags.JSON, "json", false, "emit output as a versioned JSON envelope")
@@ -67,4 +79,17 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newCompletionCmd(root))
 
 	return root
+}
+
+// usageArgs adapts a cobra positional-argument validator so its errors carry
+// the invalid-input taxonomy kind. Cobra builds these errors internally and
+// they would otherwise reach main kindless and exit internal(1) instead of
+// invalid-input(2). Every command with an Args validator wraps it (R-14.113).
+func usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := v(cmd, args); err != nil {
+			return cascade.Wrap(cascade.KindInvalidInput, err, "invalid arguments")
+		}
+		return nil
+	}
 }

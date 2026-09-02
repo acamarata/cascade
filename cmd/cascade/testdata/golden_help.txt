@@ -2,6 +2,7 @@ Cascade is a local-first AI agent runtime: one binary that is both
 the CLI surface and, via "cascade daemon run", the long-lived daemon.
 
 Usage:
+  cascade [flags]
   cascade [command]
 
 Available Commands:
