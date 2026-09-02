@@ -192,3 +192,57 @@ func TestOpen_ExclusiveLockRefusesSecondOpener_SymlinkVsTarget(t *testing.T) {
 		t.Fatalf("second Open via symlink: want KindConflict, got %v", err)
 	}
 }
+
+// TestProbeExclusiveLock covers the health-check primitive, which measured
+// 0% despite being what StorageHealthCheck relies on to report whether a
+// database is already in use. An uncovered probe that always answered
+// "free" would make the health check quietly useless.
+func TestProbeExclusiveLock(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.db")
+
+	t.Run("free when nobody holds it", func(t *testing.T) {
+		res, err := sqlite.ProbeExclusiveLock(path)
+		if err != nil {
+			t.Fatalf("ProbeExclusiveLock on a free path: %v", err)
+		}
+		if res.Unsupported {
+			t.Skip("platform does not support flock; refusal is honest, nothing further to assert")
+		}
+		if res.Held {
+			t.Fatalf("Held = true on a path nobody has opened")
+		}
+	})
+
+	t.Run("held while a real driver has it open", func(t *testing.T) {
+		d, err := sqlite.Open(context.Background(), path)
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		defer func() { _ = d.Close() }()
+
+		res, err := sqlite.ProbeExclusiveLock(path)
+		if err != nil {
+			t.Fatalf("ProbeExclusiveLock while open: %v", err)
+		}
+		if res.Unsupported {
+			t.Skip("platform does not support flock")
+		}
+		if !res.Held {
+			t.Fatal("Held = false while a driver holds the database open")
+		}
+	})
+
+	t.Run("probe does not keep the lock", func(t *testing.T) {
+		free := filepath.Join(t.TempDir(), "free.db")
+		if _, err := sqlite.ProbeExclusiveLock(free); err != nil {
+			t.Fatalf("first probe: %v", err)
+		}
+		// A real Open must still succeed afterwards: the probe releases.
+		d, err := sqlite.Open(context.Background(), free)
+		if err != nil {
+			t.Fatalf("Open after probe (probe failed to release): %v", err)
+		}
+		_ = d.Close()
+	})
+}

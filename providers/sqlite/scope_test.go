@@ -216,3 +216,45 @@ func TestDomainScope_TxEnforcesPerCall(t *testing.T) {
 		t.Fatalf("Tx cross-domain, allowed = %v, want nil", err)
 	}
 }
+
+// TestDomainScope_TxDeniesEveryVerb covers the denial branch of EVERY
+// scopedTx method, not just Put. A review measured Get, Delete and
+// CompareAndSwap at 66.7% because only Put's cross-domain refusal was
+// exercised — so three of the four verbs inside a transaction were relying
+// on the same guard without anything proving it fired for them.
+func TestDomainScope_TxDeniesEveryVerb(t *testing.T) {
+	ctx := context.Background()
+	denyChecker := &fakeChecker{allowErr: errFakeCheckerDenied}
+
+	verbs := []struct {
+		name string
+		call func(tx provider.Tx) error
+	}{
+		{"Get", func(tx provider.Tx) error {
+			_, err := tx.Get(ctx, "memory", "k")
+			return err
+		}},
+		{"Put", func(tx provider.Tx) error {
+			return tx.Put(ctx, "memory", "k", []byte("v"))
+		}},
+		{"Delete", func(tx provider.Tx) error {
+			return tx.Delete(ctx, "memory", "k")
+		}},
+		{"CompareAndSwap", func(tx provider.Tx) error {
+			return tx.CompareAndSwap(ctx, "memory", "k", nil, []byte("v"))
+		}},
+	}
+
+	for _, v := range verbs {
+		t.Run(v.name, func(t *testing.T) {
+			d := newTestDriver(t)
+			store := d.Scoped("context", denyChecker)
+			err := store.Tx(ctx, func(_ context.Context, tx provider.Tx) error {
+				return v.call(tx)
+			})
+			if !errors.Is(err, errFakeCheckerDenied) {
+				t.Fatalf("Tx.%s cross-domain = %v, want errFakeCheckerDenied", v.name, err)
+			}
+		})
+	}
+}
