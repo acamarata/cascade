@@ -15,6 +15,7 @@ duplicate of the config.
 | `.goreleaser.yaml` | Build matrix, archives, checksums, SBOMs, minisign signing, Homebrew cask definition. |
 | `internal/buildinfo/buildinfo.go` | The single ldflags-stamp source of truth (version, commit, date, install channel). |
 | `.github/workflows/release.yml` | CI verification lane: `goreleaser check`, `goreleaser build --snapshot`, and (when the minisign owner-prereq secrets exist) a full signed `goreleaser release --snapshot`. |
+| `.github/docker/Dockerfile` | OCI server-profile image definition (R-14.119 — not at repo root; Art.10.1's clean-root allowlist has no root-Dockerfile entry, and `.github/` is where Art.10.1 already re-homes CI-adjacent infrastructure). |
 | `docs/THIRD_PARTY_LICENSES` | Third-party license report for every module actually compiled into a release binary, across all three release GOOSes. |
 
 ## Release matrix
@@ -64,11 +65,57 @@ platform:
   (`cascade_<version>_checksums.txt.minisig`)
 - a rendered (not published) Homebrew cask definition under
   `dist/homebrew/Casks/cascade.rb`
+- two OCI server-profile images (`ghcr.io/acamarata/cascade:<version>-amd64`
+  and `...-arm64`, `linux/amd64` + `linux/arm64` — the R-14.1 matrix's linux
+  legs), built locally in the Docker daemon and never pushed
 
 Nothing publishes. `goreleaser` skips GitHub Release creation, the Homebrew
 tap push (`skip_upload: auto`), and any registry push automatically under
 `--snapshot`; `release.draft: true` is a second safety net for the rare case
 a real (non-snapshot) run happens without a human present to click "Publish".
+
+## OCI server-profile image
+
+`.github/docker/Dockerfile` builds a minimal image that runs the **same
+statically linked `cascade` binary** the linux archives ship — "server
+profile" (02-TARGET-STRUCTURE.md "Profiles": Postgres/pgvector/S3/Redis vs
+local SQLite/fs) is a runtime config selection, not a separate build, so
+there is exactly one binary and one image definition.
+
+- **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no
+  package manager, nothing to pivot to. Runs as uid/gid `65532`
+  (`nonroot`); no `USER` directive is needed because the base already sets
+  it, so a future base-image swap that silently reverted to root would be
+  visible in the Dockerfile diff rather than hidden behind an easy-to-miss
+  line.
+- **Entrypoint:** `/usr/local/bin/cascade` — the image runs `cascade` and
+  nothing else. Server-profile config (DB/S3/Redis credentials, etc.) is
+  supplied entirely via runtime env/config-file mounts, never baked in.
+- **Platforms:** `linux/amd64` and `linux/arm64`, combined into one
+  multi-arch manifest (`docker_manifests:` in `.goreleaser.yaml`) tagged
+  both `<version>` and `latest`.
+- **Location ruling:** R-14.119 — the Dockerfile lives at
+  `.github/docker/Dockerfile`, not repo root.
+
+Locally verified (`goreleaser release --snapshot --clean`, per-arch images
+built by Docker Desktop's buildx, run directly):
+
+```sh
+$ docker run --rm ghcr.io/acamarata/cascade:<snapshot>-arm64 version
+cascade version 0.0.0-SNAPSHOT-<commit>
+commit:  <commit>
+built:   <date>
+channel: script
+
+$ docker run --rm ghcr.io/acamarata/cascade:<snapshot>-arm64 --help
+Cascade is a local-first AI agent runtime: ...
+```
+
+Registry push (`ghcr.io`) and cosign keyless attestation (§D-16, needs
+GitHub OIDC) are deferred to AA/S-55.T4 — neither is wired anywhere yet, CI
+included. A local snapshot never pushes anything; `skip_push: auto` on both
+the per-arch images and the manifest is a second safety net alongside
+`--snapshot`'s implicit `--skip=publish`.
 
 ## Verifying a snapshot release locally
 
@@ -138,14 +185,16 @@ green run before then is a **local or CI-side verification**, not a release.
 
 ## Known gaps (owner action / T0 ruling required)
 
-- **OCI server-profile image.** This ticket's `files_scope` has no path for
-  a `Dockerfile`, and 12-QUALITY-CONSTITUTION.md Art.10.1's clean-root
-  allowlist does not list `Dockerfile` among the permitted root files
-  either. `.goreleaser.yaml` therefore has no `dockers:` section and
-  `.github/workflows/release.yml` has no cosign/OCI step — building either
-  without a real image to build/sign would be a simulated capability
-  (Art.1). This is tracked as a cross-ticket seam pending a T0 ruling on
-  where the Dockerfile lives (see this ticket's journal).
+- **OCI registry push + cosign attestation.** R-14.119 resolved where the
+  Dockerfile lives (`.github/docker/Dockerfile`) and the image now builds
+  for real, both locally and in CI's `snapshot` job — see **OCI
+  server-profile image** above. What remains deferred to AA/S-55.T4 is the
+  actual `ghcr.io` push and the cosign KEYLESS attestation over the pushed
+  image: wiring a real push now, with no owning ticket ready to consume it
+  and no publish authorized yet (06-FORGE-SPEC §7: any publish is GATED),
+  would be exactly the kind of unfinished-but-live publish surface Art.1
+  forbids. `id-token: write` in `.github/workflows/release.yml` is reserved
+  for that step and unused today.
 - **Escrowed minisign keypair.** The real owner-prereq keypair (06-FORGE-SPEC
   §7) has not been generated/escrowed yet. Until it is, and the
   `CASCADE_MINISIGN_KEY`/`CASCADE_MINISIGN_PUBKEY` repo secrets are set, the

@@ -15,17 +15,22 @@
 # creates a GitHub Release, pushes a Homebrew tap commit, or pushes an OCI
 # image (06 §7: any publish is GATED). Real, non-snapshot publishing on a
 # real version tag is AA/S-55.T4's owner-prereq-gated territory, not this
-# lane's.
-#
-# cosign KEYLESS signing (needs GitHub OIDC, `id-token: write` below) and the
-# OCI server-profile image are OUT of this workflow for now: the image needs
-# a Dockerfile, and this ticket's files_scope has no path for one (see this
-# ticket's journal / BLOCKERS — a T0 ruling is needed on where it lives).
-# Wiring cosign here without an image to sign would be exactly the kind of
-# simulated capability Art.1 forbids, so it is omitted rather than faked.
+# lane's — including the actual `ghcr.io` push and cosign keyless
+# attestation, which stay unwired here (`id-token: write` below is reserved
+# for AA/S-55.T4, unused today). The OCI server-profile image itself DOES
+# build in the `snapshot` job as of R-14.119 (Dockerfile at
+# .github/docker/Dockerfile): `dockers:`/`docker_manifests:` in
+# .goreleaser.yaml carry `skip_push: auto`, and `--snapshot` additionally
+# implies `--skip=publish`, so the images are built into the local Docker
+# daemon and pushed nowhere.
 #
 # This repo is PUBLIC: GitHub-hosted runners are free and used here per ASI
 # Policy 8 (never self-host what GitHub gives free; never pay for Actions).
+#
+# Every `uses:` below is pinned to a full commit SHA (never a floating tag)
+# with the resolved version in a trailing comment, matching ci.yml's
+# convention — this is the workflow that signs and publishes release
+# artifacts, the worst place to trust a mutable tag.
 name: release
 
 on:
@@ -48,14 +53,14 @@ jobs:
     name: goreleaser check + build (no secrets)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
       - name: Install goreleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           install-only: true
 
@@ -86,14 +91,14 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/p1-integration' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
       - name: Install goreleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           install-only: true
 
@@ -102,6 +107,17 @@ jobs:
 
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
+
+      # QEMU + buildx: the goreleaser dockers: stanza builds BOTH linux/amd64
+      # (native on this runner) and linux/arm64 (R-14.1's linux legs) OCI
+      # images (R-14.119); cross-arch emulation needs QEMU registered and a
+      # buildx builder available, neither of which ubuntu-latest ships with
+      # by default.
+      - name: Set up QEMU (cross-arch docker builds)
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Check minisign owner-prereq secrets are present
         id: minisign-secret
@@ -141,13 +157,30 @@ jobs:
           shasum -a 256 -c ./*_checksums.txt
           minisign -Vm ./*_checksums.txt -p "${RUNNER_TEMP}/minisign.pub"
 
+      # Real-counterpart verification (Art.2) of the OCI server-profile image
+      # built by this run's `goreleaser release --snapshot` above: the image
+      # is never pushed (skip_push: auto + implicit --skip=publish), but it
+      # DOES land in this runner's local Docker daemon, so `cascade version`
+      # is exercised inside the actual built container, matching R-14.119's
+      # "OCI image builds" acceptance criterion.
+      - name: Verify the OCI server-profile image runs and is non-root
+        if: steps.minisign-secret.outputs.present == 'true'
+        run: |
+          set -eu
+          version="0.0.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          image="ghcr.io/acamarata/cascade:${version}-amd64"
+          docker run --rm "$image" version
+          docker run --rm "$image" version | grep -q '^cascade version 0\.0\.0-SNAPSHOT-' || (echo "OCI image version stamp did not resolve" && exit 1)
+          user="$(docker inspect "$image" --format '{{ .Config.User }}')"
+          [ "$user" = "65532" ] || (echo "OCI image does not run as the expected non-root uid (got: '$user')" && exit 1)
+
       - name: Remove minisign key material
         if: always() && steps.minisign-secret.outputs.present == 'true'
         run: rm -f "${RUNNER_TEMP}/minisign.key" "${RUNNER_TEMP}/minisign.pub"
 
       - name: Upload snapshot artifacts (workflow artifact, NOT a GitHub Release)
         if: steps.minisign-secret.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cascade-snapshot-${{ github.sha }}
           path: |

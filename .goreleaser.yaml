@@ -112,6 +112,68 @@ signs:
       - "${artifact}"
     artifacts: checksum
 
+# OCI server-profile image (R-14.119: Dockerfile lives at
+# .github/docker/Dockerfile, not repo root — Art.10.1's clean-root allowlist
+# admits no root Dockerfile, and .github/ is where Art.10.1 already re-homes
+# CI-adjacent infrastructure). The image ships the SAME statically linked
+# binary the linux archives ship (02-TARGET-STRUCTURE.md "Profiles": server
+# profile — Postgres/pgvector/S3/Redis — is a runtime config choice, not a
+# separate build), on a distroless non-root base with no shell. Built for
+# both linux/amd64 and linux/arm64 (R-14.1's linux legs) and combined into
+# one multi-arch manifest. `skip_push: auto` mirrors the homebrew_casks
+# pattern: never pushes on a prerelease build; `--snapshot` additionally
+# implies --skip=publish globally (goreleaser release --help), so a local
+# snapshot run builds the image(s) and pushes NOTHING regardless — ghcr push
+# + cosign keyless attestation are CI-side only on the release lane this
+# ticket adds (.github/workflows/release.yml), per §D-16.
+dockers:
+  - id: cascade-linux-amd64
+    ids:
+      - cascade
+    goos: linux
+    goarch: amd64
+    dockerfile: .github/docker/Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    skip_push: auto
+  - id: cascade-linux-arm64
+    ids:
+      - cascade
+    goos: linux
+    goarch: arm64
+    dockerfile: .github/docker/Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    skip_push: auto
+
+# Combines the two per-arch images into one multi-arch tag + a floating
+# `latest` tag. Manifest creation is a publish-time operation (needs a
+# registry) so, like the per-arch images above, it never runs under
+# --snapshot; it is exercised for real only on the CI release lane.
+docker_manifests:
+  - name_template: "ghcr.io/acamarata/cascade:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-amd64"
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-arm64"
+    skip_push: auto
+  - name_template: "ghcr.io/acamarata/cascade:latest"
+    image_templates:
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-amd64"
+      - "ghcr.io/acamarata/cascade:{{ .Version }}-arm64"
+    skip_push: auto
+
 # Homebrew formula definition (AA/S-55.T4 owns the tap-repo owner-prereq and
 # the actual `brew install` publish; `skip_upload: auto` means goreleaser
 # never pushes to the tap on a snapshot or prerelease build — this ticket
