@@ -1,0 +1,1 @@
+a stray write a test leaked into $HOME — Art.7.1 forbids this

@@ -1,0 +1,11 @@
+{
+  "cmd/cascade": { "tier": "cli", "floor": 70.0, "baseline": 80.0 },
+  "internal/build": { "tier": "core", "floor": 85.0, "baseline": 90.0 },
+  "internal/buildinfo": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
+  "internal/output": { "tier": "core", "floor": 85.0, "baseline": 91.3 },
+  "internal/plugins": { "tier": "core", "floor": 85.0, "baseline": 95.5 },
+  "internal/runtime": { "tier": "core", "floor": 85.0, "baseline": 90.3 },
+  "internal/storage/storetest": { "tier": "core", "floor": 85.0, "baseline": 89.3 },
+  "internal/testkit": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
+  "providers/sqlite": { "tier": "plugins", "floor": 80.0, "baseline": 86.1 }
+}

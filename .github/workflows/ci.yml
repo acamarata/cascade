@@ -3,8 +3,13 @@
 # Lanes: build+test matrix (native runner per supported platform, Art.5.1 —
 # every platform compiles AND runs its suite, never cross-compiled-and-
 # assumed-fine), -race, lint (golangci-lint wall + the internal/build gate
-# tests from A/S-01.T2), and ci-gate — the aggregate required-status job
-# every later ticket's "checks green in CI" (Art.3) hangs off.
+# tests from A/S-01.T2, extended by A-T8's stub/clean-root/dead-code/godoc/
+# flake-registry gates — all run as part of `go test ./internal/build/...`
+# with zero extra wiring), coverage-gate + redirected-home (A-T8's two
+# live, env-var-gated checks: the Art.4 coverage floor+ratchet against the
+# `coverage` job's artifact, and the Art.7.1 redirected-HOME + clean-tree
+# assertion), and ci-gate — the aggregate required-status job every later
+# ticket's "checks green in CI" (Art.3) hangs off.
 #
 # This repo is PUBLIC: GitHub-hosted runners are free (ASI Policy 8 — never
 # pay for Actions, never self-host what GitHub gives free). Every `uses:`
@@ -130,6 +135,74 @@ jobs:
       - name: go test ./internal/build/...
         run: go test ./internal/build/... -v
 
+  coverage-gate:
+    # P1-E01-W1-S01-T8: consumes the coverage-profile artifact the
+    # `coverage` job (A-T4) produces and enforces 12-QUALITY-CONSTITUTION.md
+    # Art.4's per-package-class floors plus the ratchet against
+    # internal/build/testdata/coverage-baseline.json — CI fails if ANY
+    # package's coverage drops below its floor OR below its committed
+    # baseline, even above the floor (internal/build/coveragegate.go).
+    name: coverage gate (floors + ratchet)
+    needs: [coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: coverage-profile
+
+      - name: go test (coverage gate, live)
+        env:
+          CASCADE_COVERAGE_PROFILE: coverage.out
+        run: go test -run '^TestCoverageGate_Live$' ./internal/build/ -v
+
+  redirected-home:
+    # P1-E01-W1-S01-T8: 12-QUALITY-CONSTITUTION.md Art.7.1 — runs the WHOLE
+    # suite with HOME redirected to an empty, CI-owned directory, then
+    # asserts (a) that directory is STILL EMPTY after the suite (no test
+    # leaked a write into $HOME — the exact v1 failure memory/
+    # lesson_local_disk_crisis_unresolved.md records) and (b) `git status
+    # --porcelain` is byte-identical before and after (no test dirtied the
+    # tracked tree). Deliberately its own job, not a step tacked onto
+    # build-test: HOME redirection must not leak into the OTHER lanes'
+    # environment, and the assertion needs the untouched
+    # before/after snapshots as separate files (hygiene.go's package doc
+    # explains why the assertion never nests a second `go test` inside
+    # this one).
+    name: redirected-HOME + clean-tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: snapshot git status (before)
+        run: git status --porcelain > /tmp/git-status-before.txt
+
+      - name: go test ./... (HOME redirected)
+        env:
+          HOME: /tmp/cascade-redirected-home
+        run: |
+          mkdir -p "$HOME"
+          go test ./...
+
+      - name: snapshot git status (after)
+        run: git status --porcelain > /tmp/git-status-after.txt
+
+      - name: go test (redirected-HOME + clean-tree assertion, live)
+        env:
+          CASCADE_HYGIENE_HOME_DIR: /tmp/cascade-redirected-home
+          CASCADE_HYGIENE_GIT_BEFORE_FILE: /tmp/git-status-before.txt
+          CASCADE_HYGIENE_GIT_AFTER_FILE: /tmp/git-status-after.txt
+        run: go test -run '^TestHygieneEnvironment_Live$' ./internal/build/ -v
+
   hygiene:
     # P1-E01-W1-S01-T5: the conventional-commit checker and the
     # personal-identifier sweep (internal/build/commits.go, sweep.go),
@@ -186,14 +259,14 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, race, lint, hygiene]
+    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

@@ -1,0 +1,1 @@
+a stray root file the RELEASE-STATE allowlist does not admit

@@ -1,0 +1,8 @@
+[
+  {
+    "test": "github.com/acamarata/cascade/internal/example.TestFlaky",
+    "ticket": "P1-E01-W1-S01-T8",
+    "reason": "seeded fixture: proves a well-formed, non-expired entry passes",
+    "expiry": "2099-01-01"
+  }
+]
