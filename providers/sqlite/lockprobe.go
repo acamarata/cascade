@@ -77,8 +77,17 @@ type LockProbeResult struct {
 func ProbeExclusiveLock(path string) (LockProbeResult, error) {
 	unlock, err := acquireExclusiveLock(path)
 	if err == nil {
-		// Nobody else holds it — release immediately; this is a probe,
+		// Nobody else held it — release immediately; this is a probe,
 		// never a real acquire.
+		//
+		// NOTE, and this is a real race, not a caveat: for the brief window
+		// between this acquire and the release below, the probe DOES hold
+		// the lock. A genuinely concurrent Open elsewhere uses LOCK_NB too,
+		// so it can fail spuriously during that window. The result is
+		// therefore ADVISORY — "nobody held it a moment ago" — and callers
+		// must not treat Held:false as a reservation. Health checks are the
+		// intended caller and tolerate that; anything needing exclusion must
+		// take the real lock and keep it.
 		return LockProbeResult{Held: false}, unlock()
 	}
 

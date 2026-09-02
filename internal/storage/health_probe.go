@@ -39,7 +39,19 @@ func checkProbeWrite(ctx context.Context, db *sql.DB) CheckResult {
 		return failResult("probe-write", cascade.Wrap(classifyProbeError(err), err, "storage: probe-write insert"))
 	}
 	if err := deleteProbeRow(ctx, db, id); err != nil {
-		return failResult("probe-write", cascade.Wrap(classifyProbeError(err), err, "storage: probe-write delete"))
+		// Sweep any sentinel rows left by THIS or an earlier degraded run
+		// before reporting. Without this a database that is writable but
+		// failing deletes accumulates rows in a reserved table on every
+		// health check — an unbounded leak caused by the diagnostic itself.
+		// Best effort: the delete already failed, so this may too, and the
+		// original error is what the caller needs either way.
+		sweepErr := sweepProbeRows(ctx, db)
+		wrapped := cascade.Wrap(classifyProbeError(err), err, "storage: probe-write delete")
+		if sweepErr != nil {
+			wrapped = cascade.Wrap(classifyProbeError(err), err,
+				"storage: probe-write delete (and sentinel sweep also failed)")
+		}
+		return failResult("probe-write", wrapped)
 	}
 	return CheckResult{OK: true, Detail: "insert+delete round-trip succeeded"}
 }
@@ -74,4 +86,13 @@ func deleteProbeRow(ctx context.Context, db *sql.DB, id int64) error {
 		return cascade.Newf(cascade.KindIntegrity, "storage: probe-write delete affected %d rows, want 1", n)
 	}
 	return nil
+}
+
+// sweepProbeRows removes every sentinel row from the health-probe table.
+// It runs only after a failed delete, to stop a database that accepts
+// inserts but not deletes from accumulating rows in a reserved table once
+// per health check.
+func sweepProbeRows(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `DELETE FROM `+quoteIdent(healthProbeTable))
+	return err
 }
