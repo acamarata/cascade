@@ -1,0 +1,12 @@
+== default_from_file ==
+runtime.profile = local (file)
+retrieval.fusion.k = 60 (file)
+== env_beats_file ==
+runtime.profile = server (env)
+retrieval.fusion.k = 60 (file)
+== flag_beats_env_and_file ==
+runtime.profile = worker (flag)
+retrieval.fusion.k = 60 (file)
+== generic_section_override ==
+runtime.profile = local (file)
+retrieval.fusion.k = 80 (env)

@@ -1,0 +1,6 @@
+from=0 to=1 mutated=true
+elevation.allow_remote = false
+elevation.helper_pubkey = 
+logging.level = info
+runtime.profile = server
+schema_version = 1

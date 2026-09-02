@@ -1,0 +1,8 @@
+elevation.allow_remote = false (file)
+elevation.helper_pubkey =  (default)
+logging.format = json (env)
+logging.level = debug (file)
+runtime.data_dir = ROOT/data (default)
+runtime.home = ROOT (default)
+runtime.profile = server (file)
+schema_version = 1 (default)
