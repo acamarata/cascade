@@ -24,10 +24,12 @@ import (
 // visible again for another consumer.
 type Queue interface {
 	// Enqueue appends payload to namespace and returns the new message's
-	// ID. Enqueue returns a cascade.KindUnavailable error if namespace has
-	// reached its capacity limit (enqueue-overflow) — the condition is
-	// framed as retryable because a consumer draining the queue will
-	// eventually free capacity.
+	// ID. Enqueue returns a cascade.KindQuotaExhausted error if namespace
+	// has reached its capacity limit (enqueue-overflow) — the backend
+	// itself is healthy, but the namespace has no free capacity, which
+	// calls for backpressure rather than a bare retry (R-14.125: this is
+	// distinct from KindUnavailable, which means the backend is
+	// unreachable).
 	Enqueue(ctx context.Context, namespace string, payload []byte) (id string, err error)
 
 	// Dequeue claims the next visible message in namespace, making it

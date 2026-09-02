@@ -232,7 +232,7 @@ func (f *fakeQueue) Enqueue(_ context.Context, ns string, payload []byte) (strin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.capacity > 0 && len(f.messages[ns]) >= f.capacity {
-		return "", cascade.Newf(cascade.KindUnavailable, "namespace %q is at capacity %d", ns, f.capacity)
+		return "", cascade.Newf(cascade.KindQuotaExhausted, "namespace %q is at capacity %d", ns, f.capacity)
 	}
 	f.seq++
 	id := fmt.Sprintf("msg-%d", f.seq)

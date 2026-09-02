@@ -20,7 +20,7 @@ import (
 // legitimately do not implement it).
 type BoundedQueue interface {
 	// Capacity returns the maximum number of un-Acked messages namespace
-	// may hold before Enqueue starts returning cascade.KindUnavailable.
+	// may hold before Enqueue starts returning cascade.KindQuotaExhausted.
 	Capacity(namespace string) int
 }
 
@@ -106,12 +106,19 @@ func testQueueAckTimeout(t *testing.T, q provider.Queue) {
 }
 
 // pollForRedelivery polls Dequeue on namespace until a message reappears
-// (its visibility having already elapsed) or the deadline passes.
+// (its visibility having already elapsed) or maxPollAttempts is exhausted.
+// It counts attempts rather than reading a wall-clock deadline so this
+// non-test-file helper (storetest.go's own doc comment: this package is a
+// library, not suffixed _test.go) stays clear of the bare-time.Now ban
+// (.golangci.yml forbidigo; 02-TARGET-STRUCTURE.md §v1.1) — a bounded
+// attempt count with a fixed per-attempt sleep is deterministic under
+// -shuffle and needs no injected Clock.
+const maxPollAttempts = 5000
+
 func pollForRedelivery(t *testing.T, q provider.Queue, namespace string) *provider.Message {
 	t.Helper()
 	ctx := testContext(t)
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	for i := 0; i < maxPollAttempts; i++ {
 		msg, err := q.Dequeue(ctx, namespace, time.Minute)
 		requireNoError(t, err, "polling Dequeue for redelivery")
 		if msg != nil {
@@ -142,5 +149,5 @@ func testQueueEnqueueOverflow(t *testing.T, q provider.Queue) {
 		requireNoError(t, err, "Enqueue filling capacity")
 	}
 	_, err := q.Enqueue(ctx, "ns", []byte("overflow"))
-	requireErrorKind(t, err, cascade.KindUnavailable, "Enqueue past capacity")
+	requireErrorKind(t, err, cascade.KindQuotaExhausted, "Enqueue past capacity")
 }
