@@ -6,6 +6,12 @@
 # + errcheck + -race lane + GOOS matrix from the first CI commit"):
 #   errcheck, staticcheck, govet, revive, exhaustive, depguard, funlen.
 #
+# forbidigo (P1-E01-W1-S01-T4) additionally carries 02-TARGET-STRUCTURE.md
+# §v1.1's "clock injection everywhere (no bare time.Now in domain logic —
+# lint)" and 12-QUALITY-CONSTITUTION.md Art.7.3's seeded-randomness rule:
+# both are enforced as forbidden call patterns, not prose. See the
+# "forbidigo" settings block and its exclusions.rules entries below.
+#
 # depguard also carries the import-boundary rules of
 # 12-QUALITY-CONSTITUTION.md Art.10.2 (plugins/providers -> pkg only, never
 # internal; pkg never imports internal). The same boundaries are additionally
@@ -23,6 +29,7 @@ linters:
     - depguard
     - errcheck
     - exhaustive
+    - forbidigo
     - funlen
     - govet
     - revive
@@ -52,6 +59,28 @@ linters:
             - pkg: "github.com/acamarata/cascade/internal"
               desc: "pkg/** may never import internal/** (12-QUALITY-CONSTITUTION.md Art.10.2) — pkg is the public SDK surface"
 
+    forbidigo:
+      # 02-TARGET-STRUCTURE.md §v1.1: no bare time.Now/time.Since in domain
+      # logic — inject a Clock (internal/runtime.Clock or a structurally
+      # identical testkit.Clock) instead, so tests can freeze it (Art.7.3).
+      # 12-QUALITY-CONSTITUTION.md Art.7.3: no unseeded global math/rand
+      # source usage in domain logic — inject an explicitly seeded
+      # *rand.Rand instead, so tests are reproducible. forbidigo matches
+      # each pattern against the bare SELECTOR text (e.g. "time.Now", not
+      # "time.Now()" — verified by probe, not assumed), so a properly
+      # seeded `r.Intn(...)` on a *rand.Rand VALUE never matches — its
+      # selector is the variable, never the "rand" package identifier —
+      # and rand.New/rand.NewSource (construction, not draws) are
+      # deliberately absent from the forbidden set.
+      forbid:
+        - pattern: '^time\.Now$'
+          msg: "bare time.Now() is forbidden in domain logic — inject a Clock and call its Now() instead (02-TARGET-STRUCTURE.md §v1.1; internal/testkit.FrozenClock for tests)"
+        - pattern: '^time\.Since$'
+          msg: "bare time.Since() is forbidden in domain logic — inject a Clock and compute elapsed from its Now() instead (02-TARGET-STRUCTURE.md §v1.1)"
+        - pattern: '^rand\.(Int|Int31|Int31n|Int63|Int63n|Intn|Float32|Float64|Perm|Shuffle|Read|NormFloat64|ExpFloat64|Seed)$'
+          msg: "unseeded global math/rand usage is forbidden in domain logic — inject an explicitly seeded *rand.Rand instead (12-QUALITY-CONSTITUTION.md Art.7.3)"
+      analyze-types: false
+
     exhaustive:
       # R-14.101: Go lacks compile-time switch exhaustiveness; N/S-30.T2
       # relies on this analyzer to enforce it for the task-class/sensitivity
@@ -76,3 +105,26 @@ linters:
       # merely CONTAINING the substring (internal/nottestdatagen, pkg/testdataset
       # ...), silently exempting real code from the whole wall.
       - "(^|/)testdata(/|$)"
+
+    rules:
+      # Art.7.3 exempts tests themselves from the clock/rand determinism
+      # rules those articles otherwise impose on domain logic — a test
+      # calling time.Now() to derive a unique tmp name, or math/rand for
+      # non-determinism it explicitly wants, is not the failure mode these
+      # rules exist to catch. ANCHORED at the filename suffix, same
+      # discipline as the testdata path exclusion above: "_test\.go$", not
+      # a bare "_test" substring.
+      - path: "_test\\.go$"
+        linters:
+          - forbidigo
+      # internal/runtime/clock.go (owned by C/S-04.T1, not this ticket) and
+      # internal/testkit/clock.go (this ticket) ARE the Clock abstractions —
+      # their SystemClock.Now()/RealClock.Now() are the one sanctioned
+      # place bare time.Now() belongs, because they are what everything
+      # else's injected Clock ultimately calls.
+      - path: "(^|/)internal/runtime/clock\\.go$"
+        linters:
+          - forbidigo
+      - path: "(^|/)internal/testkit/clock\\.go$"
+        linters:
+          - forbidigo
