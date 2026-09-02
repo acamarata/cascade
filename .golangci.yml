@@ -71,4 +71,8 @@ linters:
       # non-compliant data (Art.1/Art.7.1): they exist only for the
       # internal/build gate tests to scan directly and must never be
       # linted (or built) as if they were shipped code.
-      - "testdata"
+      # ANCHORED: this is a regex matched against the path, not a literal
+      # directory name. An unanchored "testdata" also excluded any real path
+      # merely CONTAINING the substring (internal/nottestdatagen, pkg/testdataset
+      # ...), silently exempting real code from the whole wall.
+      - "(^|/)testdata(/|$)"
