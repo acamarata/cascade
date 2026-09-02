@@ -5,12 +5,11 @@
 //   deterministic clock, retry-cap DLQ promotion, and a concurrent
 //   producer/consumer stress test under -race.
 // Constraints: no sleeps as synchronization in THIS file's own tests
-//   (Art.7.3/Art.11) — storetest's own AckTimeout case (queue_suite.go,
-//   already-landed shared code, not owned by this ticket) does poll with a
-//   real sleep against a real clock, which is why the conformance factory
-//   below intentionally uses runtime.NewSystemClock() rather than a frozen
-//   one: the suite's pollForRedelivery helper needs real time to actually
-//   elapse.
+//   (Art.7.3/Art.11). Per R-14.136, the conformance factory below passes
+//   storetest.WithQueueClock(clock) with the SAME testkit.FrozenClock the
+//   Queue is constructed with, so storetest's AckTimeout case drives
+//   ack-timeout by advancing that clock directly rather than sleeping and
+//   polling — no real time elapses in TestQueue_Conformance at all.
 // SPORT: internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4).
 
 package queue_test
@@ -30,10 +29,11 @@ import (
 )
 
 func TestQueue_Conformance(t *testing.T) {
+	clock := testkit.NewFrozenClock(time.Unix(1_700_000_000, 0))
 	storetest.RunQueueTests(t, func(t *testing.T) provider.Queue {
 		t.Helper()
-		return queue.New(storetest.NewMemStore(), runtime.NewSystemClock(), queue.Config{Capacity: 8})
-	})
+		return queue.New(storetest.NewMemStore(), clock, queue.Config{Capacity: 8})
+	}, storetest.WithQueueClock(clock))
 }
 
 func TestQueue_VisibilityTimeoutRequeue_DeterministicClock(t *testing.T) {

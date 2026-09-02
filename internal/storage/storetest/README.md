@@ -89,6 +89,45 @@ A driver only needs to implement `BoundedQueue` if it actually enforces a
 capacity; adding a fake `Capacity` that returns a positive number commits
 the driver to real overflow behavior under this suite.
 
+## Deterministic ack-timeout: WithQueueClock (R-14.136)
+
+`RunQueueTests` always exercises the ack-timeout error path, and by default
+it does so by Dequeuing with a near-zero visibility timeout and polling
+real elapsed time until redelivery happens. That is real-time-dependent —
+a flake every future `Queue` driver inherits, and the cost grows with each
+driver (R-14.136).
+
+A driver whose implementation takes an injected clock (per
+`internal/runtime.Clock` or the structurally-identical
+`internal/testkit.Clock`, R-14.126) can get a fully deterministic run by
+passing that SAME clock instance to `RunQueueTests`:
+
+```go
+clock := testkit.NewFrozenClock(time.Unix(1_700_000_000, 0))
+storetest.RunQueueTests(t, func(t *testing.T) provider.Queue {
+	t.Helper()
+	return mydriver.New(store, clock, mydriver.Config{})
+}, storetest.WithQueueClock(clock))
+```
+
+With a clock supplied, the AckTimeout case Dequeues with a normal
+visibility timeout, advances the clock directly past it
+(`clock.Advance(...)`), and asserts redelivery on the very next `Dequeue`
+call — no sleep, no poll, and the case runs as fast as any other.
+
+**Fallback for a driver with no clock seam:** `WithQueueClock` is optional.
+A driver whose implementation does not accept a clock (reads `time.Now()`
+internally, or wraps a backend that does) cannot have its expiry advanced
+by the suite, so `RunQueueTests` falls back to today's real-time poll —
+existing callers that pass no options are unaffected and keep compiling
+and passing unmodified. A driver author who wants the deterministic,
+poll-free path must expose a clock seam (accept a
+`runtime.Clock`/`testkit.Clock` at construction) and pass that same
+instance via `WithQueueClock`; passing an unrelated clock instance does
+NOT degrade gracefully to the fallback — the driver never observes the
+advance, so the case fails outright, since that mismatch is a test-setup
+bug worth surfacing rather than silently masking as a working case.
+
 ## What the suite does and does not guarantee
 
 Passing a family's `Run*Tests` proves the driver satisfies that interface's
