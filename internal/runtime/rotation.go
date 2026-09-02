@@ -180,11 +180,21 @@ var osRename = os.Rename
 // neither shiftBackupsLocked nor a failed osRename ever moves the
 // active file away — so the writer is left in a KNOWN-GOOD, still-
 // usable state, and only the rotation itself is reported as failed.
+// A failed Close is covered too: the handle is dropped unconditionally
+// before the error is inspected, so recovery reopens the path. If the
+// rename SUCCEEDED and only the reopen failed, the pre-rotation content
+// is at the backup, not at the path, and the next Write recreates the
+// active file — one in-flight write is reported failed, nothing else.
 func (w *RotatingWriter) rotateLocked() error {
-	if err := w.file.Close(); err != nil {
-		return &LogError{Field: "logging", Reason: fmt.Sprintf("close log file %s before rotation: %v", w.path, err)}
-	}
+	// Drop the handle BEFORE inspecting the Close error. A failed Close still
+	// invalidates the descriptor, so leaving w.file non-nil here would skip
+	// ensureFileLocked's nil check and strand the writer on a dead handle --
+	// the same permanent-brick this recovery path exists to prevent.
+	closeErr := w.file.Close()
 	w.file = nil
+	if closeErr != nil {
+		return w.recoverLocked(&LogError{Field: "logging", Reason: fmt.Sprintf("close log file %s before rotation: %v", w.path, closeErr)})
+	}
 
 	if w.maxFiles > 0 {
 		if err := w.shiftBackupsLocked(); err != nil {

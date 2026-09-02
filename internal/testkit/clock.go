@@ -5,7 +5,10 @@
 // deterministic (12-QUALITY-CONSTITUTION.md Art.7.3).
 package testkit
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 // Purpose: a duck-typed twin of internal/runtime's Clock interface, so any
 //   package (not only internal/runtime) can accept clock injection without
@@ -53,6 +56,7 @@ func NewRealClock() Clock { return RealClock{} }
 // is safe to pass anywhere a testkit.Clock or a structurally-identical
 // Clock (e.g. runtime.Clock) is expected.
 type FrozenClock struct {
+	mu  sync.Mutex
 	now time.Time
 }
 
@@ -62,16 +66,24 @@ func NewFrozenClock(t time.Time) *FrozenClock {
 }
 
 // Now returns the clock's current frozen instant.
-func (c *FrozenClock) Now() time.Time { return c.now }
+func (c *FrozenClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
 
 // Advance moves the frozen clock forward by d and returns the new instant.
 func (c *FrozenClock) Advance(d time.Duration) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.now = c.now.Add(d)
 	return c.now
 }
 
 // Set pins the frozen clock to t and returns t.
 func (c *FrozenClock) Set(t time.Time) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.now = t
 	return c.now
 }

@@ -60,3 +60,24 @@ func TestRealClock_TracksWallClock(t *testing.T) {
 		t.Fatalf("RealClock.Now() = %v, want between %v and %v", got, before, after)
 	}
 }
+
+// TestFrozenClockConcurrent exercises the mutex. A frozen clock shared across
+// parallel subtests, with one goroutine advancing it while others read, is the
+// obvious way to use this type; before the mutex it raced.
+func TestFrozenClockConcurrent(t *testing.T) {
+	c := NewFrozenClock(time.Unix(0, 0))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1000; i++ {
+			c.Advance(time.Millisecond)
+		}
+	}()
+	for i := 0; i < 1000; i++ {
+		_ = c.Now()
+	}
+	<-done
+	if got := c.Now(); got.IsZero() {
+		t.Fatal("clock did not advance")
+	}
+}
