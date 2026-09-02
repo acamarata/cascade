@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "ok": false,
+  "error": {
+    "kind": "not-found",
+    "code": -32001,
+    "message": "not-found: widget \"foo\" not found"
+  }
+}

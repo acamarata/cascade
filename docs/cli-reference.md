@@ -33,9 +33,16 @@ are available on every subcommand (see 07-CLI-COMMAND-TREE.md
 | `--config` | | string | Override the config file path. |
 | `--quiet` | `-q` | bool | Suppress progress output. |
 | `--verbose` | `-v` | bool | Increase log verbosity. |
+| `--no-color` | | bool | Disable colored output (also respects the `NO_COLOR` env var). Registered on the root command in `cmd/cascade/main.go`. |
 
 `--quiet` and `--verbose` are mutually exclusive; combining them is a
 usage error.
+
+See [`docs/cli-output-contract.md`](cli-output-contract.md) for the full
+output contract: the `--json` envelope's exact wire shape and version, the
+NDJSON stream format used by streaming commands, the `--no-color`/`NO_COLOR`
+precedence rules, and the TTY/non-TTY behavior matrix. The exit-code table
+itself is owned by [`docs/reference/error-taxonomy.md`](reference/error-taxonomy.md).
 
 ## `cascade version`
 
