@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // Purpose: assemble the runtime startup sequence — PathProvider, the TOML
@@ -30,6 +31,19 @@ type BootstrapOptions struct {
 	Environ     func() []string
 	Clock       Clock
 	Warn        func(format string, args ...interface{})
+	// MetricsBus, if non-nil, starts the periodic metrics emitter
+	// (P1-E03-W1-S05-T4) in its own goroutine, tied to ctx. The Registry
+	// (Runtime.Metrics) is always created regardless — subsystems may
+	// always register counters/gauges — but the emitter only runs, and
+	// therefore only ever publishes, when a bus is supplied. A nil
+	// MetricsBus is the honest default: no composition-root caller yet
+	// constructs a real EventBus (see metrics_emitter.go's EventBus doc
+	// for why cmd/cascade must supply an adapter over *events.Bus).
+	MetricsBus EventBus
+	// MetricsInterval overrides the emitter's tick period; zero uses
+	// DefaultMetricsInterval (60s, per T-4's contract). Ignored when
+	// MetricsBus is nil.
+	MetricsInterval time.Duration
 }
 
 // Runtime is the fully resolved bootstrap result. Later tickets extend the
@@ -45,6 +59,11 @@ type Runtime struct {
 	// subsystems receive it (or its .Logger()) via constructor
 	// injection — never a package-global slog.SetDefault.
 	Log *LogProvider
+	// Metrics is the internal operational metrics registry
+	// (P1-E03-W1-S05-T4). Always non-nil; subsystems register counters
+	// and gauges against it via RegisterCounter/RegisterGauge. It is NOT
+	// the telemetry egress system (H/S-16.T1) — see metrics.go.
+	Metrics *Registry
 }
 
 // Close releases resources Bootstrap opened — currently just the log
@@ -93,11 +112,40 @@ func Bootstrap(ctx context.Context, opts BootstrapOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("runtime: bootstrap log: %w", err)
 	}
 
+	metrics := startMetrics(ctx, opts, clock)
+
 	return &Runtime{
 		Profile: cfg.Runtime.Profile,
 		Paths:   paths,
 		Config:  cfg,
 		Clock:   clock,
 		Log:     log,
+		Metrics: metrics,
 	}, nil
+}
+
+// startMetrics creates the always-available metrics Registry and, only
+// when opts.MetricsBus is supplied, starts the periodic emitter goroutine
+// in the background, tied to ctx. Split out of Bootstrap to keep both
+// functions under Art.10.3's 50-line-per-function cap.
+func startMetrics(ctx context.Context, opts BootstrapOptions, clock Clock) *Registry {
+	metrics := NewRegistry()
+	if opts.MetricsBus == nil {
+		return metrics
+	}
+	interval := opts.MetricsInterval
+	if interval <= 0 {
+		interval = DefaultMetricsInterval
+	}
+	onError := func(error) {}
+	if opts.Warn != nil {
+		onError = func(err error) { opts.Warn("runtime: metrics emitter: %v", err) }
+	}
+	go RunPeriodicEmitter(ctx, PeriodicEmitterOptions{
+		Registry: metrics,
+		Clock:    clock,
+		Ticker:   NewSystemTicker(interval),
+		Bus:      opts.MetricsBus,
+	}, onError)
+	return metrics
 }
