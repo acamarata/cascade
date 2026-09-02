@@ -1,0 +1,74 @@
+# Cascade v2 lint wall (P1-E01-W1-S01-T2).
+#
+# This is a WALL, not advice: `golangci-lint run` must report zero findings
+# on the tree at all times. The linter set is the one ratified by
+# 06-FORGE-SPEC.md §5.25 / R-14.101 and PRI hard rule 2 ("golangci-lint wall
+# + errcheck + -race lane + GOOS matrix from the first CI commit"):
+#   errcheck, staticcheck, govet, revive, exhaustive, depguard, funlen.
+#
+# depguard also carries the import-boundary rules of
+# 12-QUALITY-CONSTITUTION.md Art.10.2 (plugins/providers -> pkg only, never
+# internal; pkg never imports internal). The same boundaries are additionally
+# proven by the internal/build arch tests (Go-level, seeded-violation gates)
+# as a second, independent enforcement layer.
+#
+# Schema: golangci-lint v2 (installed: v2.13.2). See
+# .golangci.reference.yml in the golangci-lint module for the full option
+# list this was checked against.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - exhaustive
+    - funlen
+    - govet
+    - revive
+    - staticcheck
+
+  settings:
+    depguard:
+      rules:
+        # Art.10.2: plugins/** and providers/** may import pkg/** (and
+        # stdlib/third-party) but never internal/** — internal is the
+        # module's private implementation, not a stable contract surface
+        # for first-party plugin/provider code.
+        plugins-providers-boundary:
+          files:
+            - "**/plugins/**/*.go"
+            - "**/providers/**/*.go"
+          deny:
+            - pkg: "github.com/acamarata/cascade/internal"
+              desc: "plugins/** and providers/** may import pkg/** only — never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"
+        # Art.10.2: pkg/ is the public SDK surface (godoc'd, API-stable per
+        # Art.10.4); it must never reach into the module's private
+        # internal/** implementation packages.
+        pkg-no-internal:
+          files:
+            - "**/pkg/**/*.go"
+          deny:
+            - pkg: "github.com/acamarata/cascade/internal"
+              desc: "pkg/** may never import internal/** (12-QUALITY-CONSTITUTION.md Art.10.2) — pkg is the public SDK surface"
+
+    exhaustive:
+      # R-14.101: Go lacks compile-time switch exhaustiveness; N/S-30.T2
+      # relies on this analyzer to enforce it for the task-class/sensitivity
+      # enums defined in 06-FORGE-SPEC.md §5.16.
+      default-signifies-exhaustive: false
+
+    funlen:
+      # Art.10.3: functions <=50 lines. Only the physical-line metric is
+      # enforced (the statement-count metric is disabled) so the limit
+      # matches the article's literal "50-line functions" wording.
+      lines: 50
+      statements: -1
+
+  exclusions:
+    paths:
+      # Seeded-violation fixtures under testdata/ are deliberately
+      # non-compliant data (Art.1/Art.7.1): they exist only for the
+      # internal/build gate tests to scan directly and must never be
+      # linted (or built) as if they were shipped code.
+      - "testdata"
