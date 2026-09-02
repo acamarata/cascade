@@ -17,13 +17,20 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// acquireExclusiveLock opens (creating if absent) path+".lock" and takes a
-// non-blocking exclusive flock on it. On success it returns an unlock func
-// that releases the lock and closes the file descriptor; the returned
-// error is non-nil (and unlock nil) if the lock is already held by another
-// process (unix.EWOULDBLOCK) or the sidecar file could not be opened.
+// acquireExclusiveLock opens (creating if absent) the canonicalized
+// path+".lock" (see lockpath.go's canonicalDBPath — this is what makes two
+// different spellings of the same database file contend on the same lock)
+// and takes a non-blocking exclusive flock on it. On success it returns an
+// unlock func that releases the lock and closes the file descriptor; the
+// returned error is non-nil (and unlock nil) if the lock is already held
+// by another process (unix.EWOULDBLOCK) or the sidecar file could not be
+// opened.
 func acquireExclusiveLock(path string) (unlock func() error, err error) {
-	f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o644)
+	resolved, err := canonicalDBPath(path)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(resolved+".lock", os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: open lock file for %s", path)
 	}

@@ -9,7 +9,7 @@
 //   platforms, but it always refuses rather than silently granting a lock
 //   it cannot actually enforce.
 // Constraints: build-tagged windows-only per files_scope. The refusal
-//   message is asserted by a build-tagged test (driver_test.go) so a
+//   message is asserted by a build-tagged test (lock_test.go) so a
 //   future edit cannot silently change or drop it.
 // SPORT: providers.sqlite.Driver/ADDED (P1-E02-W1-S02-T2).
 
@@ -17,7 +17,7 @@ package sqlite
 
 import "github.com/acamarata/cascade/pkg/cascade"
 
-// windowsLockRefusalMsg is asserted verbatim by driver_test.go's
+// windowsLockRefusalMsg is asserted verbatim by lock_test.go's
 // build-tagged windows case — keep the two in sync if this message ever
 // changes.
 const windowsLockRefusalMsg = "sqlite: §D-3 exclusive flock is not yet implemented on windows (tier-2 scope)"

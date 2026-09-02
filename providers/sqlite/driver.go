@@ -161,6 +161,14 @@ func openLocked(ctx context.Context, path string, unlock func() error, migrator 
 		"_busy_timeout": {"5000"},
 		"_journal_mode": {"WAL"},
 		"_foreign_keys": {"1"},
+		// Explicitly pinned rather than relied on as modernc-sqlite's
+		// compiled-in default (CR nit 1, fix 3): FULL is what makes a
+		// committed write durable across a power cut, not just an app
+		// crash (see README.md "Durability"). Pinning it means a future
+		// dependency upgrade or a well-meaning perf change to this DSN
+		// cannot silently drop to NORMAL with nothing noticing — a live
+		// PRAGMA assertion in durability_internal_test.go backs this up.
+		"_synchronous": {"FULL"},
 	}.Encode()
 
 	readDB, err := sql.Open("sqlite", dsn)
@@ -177,7 +185,7 @@ func openLocked(ctx context.Context, path string, unlock func() error, migrator 
 	if _, err := writeDB.ExecContext(ctx, schemaDDL); err != nil {
 		_ = readDB.Close()
 		_ = writeDB.Close()
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: schema init %s", path)
+		return nil, wrapDBError(err, "sqlite: schema init %s", path)
 	}
 
 	if migrator != nil {
@@ -230,7 +238,7 @@ func (d *Driver) Put(ctx context.Context, namespace, key string, value []byte) e
 		_, err := tx.ExecContext(ctx, `INSERT INTO kv (namespace, key, value) VALUES (?, ?, ?)
 			ON CONFLICT (namespace, key) DO UPDATE SET value = excluded.value`, namespace, key, value)
 		if err != nil {
-			return cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: put %s/%s", namespace, key)
+			return wrapDBError(err, "sqlite: put %s/%s", namespace, key)
 		}
 		return nil
 	})
@@ -241,7 +249,7 @@ func (d *Driver) Put(ctx context.Context, namespace, key string, value []byte) e
 func (d *Driver) Delete(ctx context.Context, namespace, key string) error {
 	return d.exec.submit(ctx, namespace, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM kv WHERE namespace = ? AND key = ?`, namespace, key); err != nil {
-			return cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: delete %s/%s", namespace, key)
+			return wrapDBError(err, "sqlite: delete %s/%s", namespace, key)
 		}
 		return nil
 	})

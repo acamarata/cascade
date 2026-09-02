@@ -9,6 +9,7 @@ package sqlite_test
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -103,5 +104,91 @@ func TestOpen_SocketProbeError(t *testing.T) {
 	}
 	if !errors.Is(err, probeErr) {
 		t.Fatalf("Open with failing probe: want errors.Is(err, probeErr), got %v", err)
+	}
+}
+
+// TestOpen_ExclusiveLockRefusesSecondOpener_RelativeVsAbsolute proves the
+// CR fix 1 canonicalization: opening the SAME database file first via its
+// absolute path and then via a relative spelling of the identical path
+// (after chdir into its directory) must derive the same sidecar lock
+// path and refuse the second Open — not silently succeed with two
+// unrelated ".lock" files. Without canonicalDBPath, "cascade.db" and its
+// absolute equivalent produce two different lock filenames and both
+// Opens would succeed, defeating the "never two writers" invariant.
+func TestOpen_ExclusiveLockRefusesSecondOpener_RelativeVsAbsolute(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("flock_windows.go refuses on the FIRST Open (tier-2 scope); canonicalization is unreachable")
+	}
+	dir := t.TempDir()
+	absPath := filepath.Join(dir, "cascade.db")
+	ctx := context.Background()
+
+	first, err := sqlite.Open(ctx, absPath)
+	if err != nil {
+		t.Fatalf("first Open (absolute path): %v", err)
+	}
+	defer func() {
+		if err := first.Close(); err != nil {
+			t.Errorf("first.Close: %v", err)
+		}
+	}()
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("os.Chdir(%s): %v", dir, err)
+	}
+	defer func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Errorf("os.Chdir(back to %s): %v", oldWD, err)
+		}
+	}()
+
+	_, err = sqlite.Open(ctx, "cascade.db")
+	if err == nil {
+		t.Fatal("second Open via relative spelling of the same database: want a §D-3 refusal, got nil error")
+	}
+	if !cascade.HasKind(err, cascade.KindConflict) {
+		t.Fatalf("second Open via relative spelling: want KindConflict, got %v", err)
+	}
+}
+
+// TestOpen_ExclusiveLockRefusesSecondOpener_SymlinkVsTarget proves the
+// same canonicalization for a symlink pointing at the database file's
+// real path: opening the target directly, then opening it again through a
+// symlink from a different directory, must derive the same sidecar lock
+// path and refuse the second Open.
+func TestOpen_ExclusiveLockRefusesSecondOpener_SymlinkVsTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("flock_windows.go refuses on the FIRST Open (tier-2 scope); canonicalization is unreachable")
+	}
+	targetDir := t.TempDir()
+	linkDir := t.TempDir()
+	targetPath := filepath.Join(targetDir, "cascade.db")
+	linkPath := filepath.Join(linkDir, "cascade.db")
+
+	if err := os.Symlink(targetPath, linkPath); err != nil {
+		t.Fatalf("os.Symlink(%s -> %s): %v", linkPath, targetPath, err)
+	}
+
+	ctx := context.Background()
+	first, err := sqlite.Open(ctx, targetPath)
+	if err != nil {
+		t.Fatalf("first Open (target path): %v", err)
+	}
+	defer func() {
+		if err := first.Close(); err != nil {
+			t.Errorf("first.Close: %v", err)
+		}
+	}()
+
+	_, err = sqlite.Open(ctx, linkPath)
+	if err == nil {
+		t.Fatal("second Open via symlink to the same database: want a §D-3 refusal, got nil error")
+	}
+	if !cascade.HasKind(err, cascade.KindConflict) {
+		t.Fatalf("second Open via symlink: want KindConflict, got %v", err)
 	}
 }

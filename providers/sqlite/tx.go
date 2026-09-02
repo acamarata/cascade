@@ -32,7 +32,7 @@ func getValue(ctx context.Context, q rowQuerier, namespace, key string) ([]byte,
 	case err == sql.ErrNoRows:
 		return nil, cascade.Newf(cascade.KindNotFound, "sqlite: %s/%s", namespace, key)
 	case err != nil:
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: get %s/%s", namespace, key)
+		return nil, wrapDBError(err, "sqlite: get %s/%s", namespace, key)
 	}
 	return value, nil
 }
@@ -61,7 +61,7 @@ func (t *driverTx) Put(_ context.Context, namespace, key string, value []byte) e
 	_, err := t.sqlTx.ExecContext(t.ctx, `INSERT INTO kv (namespace, key, value) VALUES (?, ?, ?)
 		ON CONFLICT (namespace, key) DO UPDATE SET value = excluded.value`, namespace, key, value)
 	if err != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: tx put %s/%s", namespace, key)
+		return wrapDBError(err, "sqlite: tx put %s/%s", namespace, key)
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func (t *driverTx) Put(_ context.Context, namespace, key string, value []byte) e
 // Delete removes key from namespace within the transaction.
 func (t *driverTx) Delete(_ context.Context, namespace, key string) error {
 	if _, err := t.sqlTx.ExecContext(t.ctx, `DELETE FROM kv WHERE namespace = ? AND key = ?`, namespace, key); err != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: tx delete %s/%s", namespace, key)
+		return wrapDBError(err, "sqlite: tx delete %s/%s", namespace, key)
 	}
 	return nil
 }
