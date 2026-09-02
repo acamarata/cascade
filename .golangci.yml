@@ -42,10 +42,18 @@ linters:
         # stdlib/third-party) but never internal/** — internal is the
         # module's private implementation, not a stable contract surface
         # for first-party plugin/provider code.
+        # _test.go is excluded here to AGREE with the Go-level arch gate in
+        # internal/build/arch_test.go, which has always exempted test files.
+        # A driver's tests must run the shared conformance suite, which lives
+        # at internal/storage/storetest, so denying it here while the arch gate
+        # permits it forced a per-driver //nolint — two enforcement layers
+        # disagreeing, papered over at each call site. Production code in
+        # plugins/ and providers/ is still denied internal/** by both layers.
         plugins-providers-boundary:
           files:
             - "**/plugins/**/*.go"
             - "**/providers/**/*.go"
+            - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
               desc: "plugins/** and providers/** may import pkg/** only — never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"
@@ -79,6 +87,24 @@ linters:
           msg: "bare time.Since() is forbidden in domain logic — inject a Clock and compute elapsed from its Now() instead (02-TARGET-STRUCTURE.md §v1.1)"
         - pattern: '^rand\.(Int|Int31|Int31n|Int63|Int63n|Intn|Float32|Float64|Perm|Shuffle|Read|NormFloat64|ExpFloat64|Seed)$'
           msg: "unseeded global math/rand usage is forbidden in domain logic — inject an explicitly seeded *rand.Rand instead (12-QUALITY-CONSTITUTION.md Art.7.3)"
+        # D/S-06.T5: cmd/** must never write to os.Stdout/os.Stderr (or the
+        # implicitly-stdout fmt.Print/Println/Printf) directly — the
+        # internal/output.Writer seam is the only sanctioned path. Scoped
+        # to cmd/** only (via the path-except exclusion below) rather than
+        # repo-wide: a repo-wide ban also caught plugins/examples'
+        # standalone example plugin (which legitimately prints to
+        # demonstrate its own I/O, independent of the cascade CLI), so
+        # this stays exactly as scoped as the contract asks for.
+        - pattern: '^os\.Stdout$'
+          msg: "direct os.Stdout access is forbidden outside internal/output — construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
+        - pattern: '^os\.Stderr$'
+          msg: "direct os.Stderr access is forbidden outside internal/output — construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
+        - pattern: '^fmt\.Print$'
+          msg: "bare fmt.Print targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
+        - pattern: '^fmt\.Println$'
+          msg: "bare fmt.Println targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
+        - pattern: '^fmt\.Printf$'
+          msg: "bare fmt.Printf targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
       analyze-types: false
 
     exhaustive:
@@ -128,3 +154,16 @@ linters:
       - path: "(^|/)internal/testkit/clock\\.go$"
         linters:
           - forbidigo
+      # D/S-06.T5: the os.Stdout/os.Stderr/bare-fmt.Print* forbidigo
+      # patterns added above are scoped to cmd/** only — golangci-lint has
+      # no per-pattern path scope within one linter's forbid list, so this
+      # is done via path-except + a text match on those five rules' own
+      # messages (each contains "D/S-06.T5", a substring no pre-existing
+      # forbidigo rule's message shares): the finding is suppressed for
+      # every file EXCEPT one under cmd/**, leaving the pre-existing
+      # time.Now/rand forbidigo rules (matched by their own, different
+      # messages) fully unaffected everywhere else in the tree.
+      - path-except: "(^|/)cmd/"
+        linters:
+          - forbidigo
+        text: "D/S-06\\.T5"

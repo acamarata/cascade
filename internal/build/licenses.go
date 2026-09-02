@@ -42,11 +42,30 @@ var LicenseAllowlist = map[string]bool{
 // verified SPDX identifier. Verified 2026-09-02 against each module's
 // GitHub license API / LICENSE file. Update this map in the same change
 // that adds or upgrades a require line in go.mod.
+//
+// P1-E02-W1-S02-T2 (R-14.130) added modernc.org/sqlite (the pure-Go, no-CGO
+// SQLite driver — §2/02-TARGET-STRUCTURE mandate) and its transitive
+// closure: modernc.org/libc, modernc.org/mathutil, modernc.org/memory,
+// golang.org/x/sys (promoted direct — the §D-3 linux flock path calls
+// unix.Flock), github.com/dustin/go-humanize, github.com/google/uuid,
+// github.com/mattn/go-isatty, github.com/ncruces/go-strftime,
+// github.com/remyoudompheng/bigfft. Every one verified against its
+// module-cache LICENSE file — all BSD-3-Clause or MIT, both allowlisted.
 var KnownModuleLicenses = map[string]string{
 	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
 	"github.com/inconshreveable/mousetrap": "Apache-2.0",
 	"github.com/spf13/pflag":               "BSD-3-Clause",
+	"github.com/dustin/go-humanize":        "MIT",
+	"github.com/google/uuid":               "BSD-3-Clause",
+	"github.com/mattn/go-isatty":           "MIT",
+	"github.com/ncruces/go-strftime":       "MIT",
+	"github.com/remyoudompheng/bigfft":     "BSD-3-Clause",
+	"golang.org/x/sys":                     "BSD-3-Clause",
+	"modernc.org/libc":                     "BSD-3-Clause",
+	"modernc.org/mathutil":                 "BSD-3-Clause",
+	"modernc.org/memory":                   "BSD-3-Clause",
+	"modernc.org/sqlite":                   "BSD-3-Clause",
 }
 
 // LicenseDependency is one require-directive entry parsed from a go.mod:

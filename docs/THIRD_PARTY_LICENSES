@@ -19,10 +19,20 @@ locally with:
 
 Module                                 License        Source
 --------------------------------------- -------------- ------------------------------------------------------------------
-github.com/pelletier/go-toml/v2        MIT            https://github.com/pelletier/go-toml/blob/v2.4.3/LICENSE
+github.com/dustin/go-humanize          MIT            https://github.com/dustin/go-humanize/blob/v1.0.1/LICENSE
+github.com/google/uuid                 BSD-3-Clause   https://github.com/google/uuid/blob/v1.6.0/LICENSE
 github.com/inconshreveable/mousetrap   Apache-2.0     https://github.com/inconshreveable/mousetrap/blob/v1.1.0/LICENSE
+github.com/mattn/go-isatty             MIT            https://github.com/mattn/go-isatty/blob/v0.0.24/LICENSE
+github.com/ncruces/go-strftime         MIT            https://github.com/ncruces/go-strftime/blob/v1.0.0/LICENSE
+github.com/pelletier/go-toml/v2        MIT            https://github.com/pelletier/go-toml/blob/v2.4.3/LICENSE
+github.com/remyoudompheng/bigfft       BSD-3-Clause   https://github.com/remyoudompheng/bigfft/blob/24d4a6f8daec/LICENSE
 github.com/spf13/cobra                 Apache-2.0     https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
 github.com/spf13/pflag                 BSD-3-Clause   https://github.com/spf13/pflag/blob/v1.0.9/LICENSE
+golang.org/x/sys                       BSD-3-Clause   https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
+modernc.org/libc                       BSD-3-Clause   https://gitlab.com/cznic/libc/blob/v1.75.6/LICENSE
+modernc.org/mathutil                   BSD-3-Clause   https://gitlab.com/cznic/mathutil/blob/v1.7.1/LICENSE
+modernc.org/memory                     BSD-3-Clause   https://gitlab.com/cznic/memory/blob/v1.12.1/LICENSE-GO
+modernc.org/sqlite                     BSD-3-Clause   https://gitlab.com/cznic/sqlite/blob/v1.58.0/LICENSE
 
 This list is scoped to modules actually IMPORTED by cascade's own packages
 across the release GOOS matrix (the go-licenses default: `go list -deps`
@@ -36,6 +46,33 @@ pelletier/go-toml and are never compiled into any cascade binary on any release
 platform. All four remain in go.sum (required to build/test the module
 graph); the latter two are intentionally absent from this report, which
 documents what actually ships, not the full go.sum.
+
+P1-E02-W1-S02-T2 (R-14.130) added modernc.org/sqlite, the pure-Go (no CGO)
+SQLite driver §2/02-TARGET-STRUCTURE mandates, plus its full transitive
+closure: modernc.org/libc, modernc.org/mathutil, modernc.org/memory,
+golang.org/x/sys (promoted to a direct dependency — providers/sqlite's
+flock_linux.go calls golang.org/x/sys/unix.Flock directly per the ticket
+text), github.com/dustin/go-humanize, github.com/google/uuid,
+github.com/mattn/go-isatty, github.com/ncruces/go-strftime, and
+github.com/remyoudompheng/bigfft. Regenerated per this file's own recipe
+(`for goos in darwin linux windows; do GOOS=$goos go-licenses csv ./...`)
+on 2026-09-02, which surfaced two known go-licenses tool quirks, both
+resolved by reading each module's own top-level LICENSE file directly
+rather than trusting the tool's file-selection heuristic:
+  - modernc.org/libc: go-licenses reports "MIT" against
+    LICENSE-3RD-PARTY.md, a bundled note about a *different* embedded
+    component, not libc's own license. libc's own top-level LICENSE file
+    (verified directly) is BSD-3-Clause, the value recorded above and in
+    internal/build/licenses.go's KnownModuleLicenses registry.
+  - modernc.org/mathutil: go-licenses reports "Unknown" (a path-matching
+    miss in the tool, not a missing license) despite the module carrying a
+    top-level LICENSE file. Verified directly: BSD-3-Clause, recorded
+    above and in the registry.
+internal/build/licenses.go's hand-rolled gate (this repo's actual CI
+enforcement point, per its own package doc) is keyed off directly-verified
+LICENSE file contents, not off go-licenses' file-selection heuristic, so
+these two quirks do not affect the gate's correctness — only this
+generated-report recipe's raw output, corrected here.
 
 Per .claude/rules/dependency-rules.md (acamarata dependency policy, applies
 project-wide): only MIT, BSD-2/3-Clause, Apache-2.0, ISC, and CC0 licenses are
