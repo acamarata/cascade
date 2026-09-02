@@ -16,8 +16,8 @@
 # image (06 §7: any publish is GATED). Real, non-snapshot publishing on a
 # real version tag is AA/S-55.T4's owner-prereq-gated territory, not this
 # lane's — including the actual `ghcr.io` push and cosign keyless
-# attestation, which stay unwired here (`id-token: write` below is reserved
-# for AA/S-55.T4, unused today). The OCI server-profile image itself DOES
+# attestation, which stay unwired here (and `id-token: write` is deliberately
+# NOT granted; AA/S-55.T4 grants it at the job that needs it). The OCI server-profile image itself DOES
 # build in the `snapshot` job as of R-14.119 (Dockerfile at
 # .github/docker/Dockerfile): `dockers:`/`docker_manifests:` in
 # .goreleaser.yaml carry `skip_push: auto`, and `--snapshot` additionally
@@ -40,9 +40,12 @@ on:
       - p1-integration
   workflow_dispatch: {}
 
+# Least privilege: id-token: write is NOT granted here. Cosign keyless needs
+# it, but that step is AA/S-55.T4's, and a write-scoped OIDC token granted to
+# every job in this workflow ahead of any consumer is a standing capability
+# nobody uses. AA/S-55.T4 grants it at the job that needs it.
 permissions:
   contents: read
-  id-token: write # reserved for the future cosign-keyless step (unused today)
 
 concurrency:
   group: release-${{ github.ref }}
