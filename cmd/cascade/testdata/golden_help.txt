@@ -1,0 +1,20 @@
+Cascade is a local-first AI agent runtime: one binary that is both
+the CLI surface and, via "cascade daemon run", the long-lived daemon.
+
+Usage:
+  cascade [command]
+
+Available Commands:
+  completion  Generate shell completion scripts
+  help        Help about any command
+  version     Print the cascade version, commit, build date, and install channel
+
+Flags:
+      --config string    override the config file path
+  -h, --help             help for cascade
+      --json             emit output as a versioned JSON envelope
+      --profile string   select a named config profile
+  -q, --quiet            suppress progress output
+  -v, --verbose          increase log verbosity
+
+Use "cascade [command] --help" for more information about a command.
