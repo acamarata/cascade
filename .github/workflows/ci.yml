@@ -257,6 +257,54 @@ jobs:
           CASCADE_IDENTIFIER_PATTERNS: ${{ secrets.CASCADE_IDENTIFIER_PATTERNS }}
         run: go test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v
 
+  storetest-under-docker:
+    # P1-E02-W1-S03-T5: allowed-fail W1 — Q/S-38.T4 carries the passing
+    # integration AC. providers/postgres/store.go is a build-tagged total
+    # stub in W1 (every provider.Store method returns
+    # cascade.ErrUnsupported without touching the wire), so every
+    # storetest.RunStoreTests sub-test this job runs is EXPECTED to fail —
+    # that is exactly what continue-on-error: true below is for. This lane
+    # proves plumbing only: the postgres:17 service container is
+    # provisioned and reachable, and the stub compiles and runs under
+    # -tags=postgres in that real environment (06-FORGE-SPEC.md §5.19,
+    # D-2 allowed-fail precedent). No Postgres wire behavior is verified
+    # here — see providers/postgres/testdata/README.md for the full,
+    # honest scope statement and the Q/S-38.T4 completion reference.
+    name: storetest-under-docker (postgres, allowed-fail W1)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cascade_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: verify postgres service container is reachable
+        run: pg_isready -h localhost -p 5432 -U postgres
+
+      # CASCADE_TEST_POSTGRES_DSN fixes the DSN convention Q/S-38.T4's
+      # real driver will consume; the W1 stub never reads it (Open never
+      # dials), so this env var is inert today and only documents the
+      # lane's future shape.
+      - name: go test -tags=postgres ./providers/postgres/...
+        env:
+          CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
+        run: go test -tags=postgres -count=1 ./providers/postgres/... -v
+
   ci-gate:
     name: ci-gate (required status)
     needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home]
