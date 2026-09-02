@@ -3,18 +3,17 @@ package runtime
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 // Purpose: the config.toml file-I/O and section-parsing helpers behind
-//   Load (config.go): reading and schema-upgrading the raw tree,
-//   shape-validating [elevation], resolving the active [runtime] profile,
-//   splitting off the sections this ticket does not own, and the
-//   atomic-write primitive the schema-upgrade rewrite uses. Split out of
-//   config.go per R-14.117 (Art.10.3 file-cap remedy) — behaviour-preserving,
-//   moved code only.
+//   Load (config.go): reading the raw tree, running the schema-upgrade
+//   frame IN MEMORY ONLY (never persisted from a read path — R-14 CR
+//   fix, P1-E03-W1-S05-T8), shape-validating [elevation], resolving the
+//   active [runtime] profile, and splitting off the sections this ticket
+//   does not own. Split out of config.go per R-14.117 (Art.10.3 file-cap
+//   remedy) — behaviour-preserving, moved code only.
 // Inputs: same as Load's — a config.toml path, the decoded generic tree,
 //   the --profile flag, and injected Getenv/Warn accessors.
 // Outputs: the parsed tree plus its per-key SourceFile annotations, typed
@@ -22,15 +21,43 @@ import (
 //   [runtime]/[elevation] section values Load assembles into *Config.
 // Constraints: Art.7.1 — no bare $HOME access; callers always pass a
 //   resolved path. Art.1 — extraSections preserves every section this
-//   ticket does not own, unvalidated, unwarned.
+//   ticket does not own, unvalidated, unwarned. A read path (Load, and
+//   therefore every `cascade config get`/`list`/`validate` and daemon
+//   boot) NEVER writes to path — see readAndUpgradeTree's doc comment.
 // SPORT: runtime/config (ADD, placeholder per T-1 sport_updates).
 
 // readAndUpgradeTree reads path (if it exists), decodes it as TOML into a
 // generic tree, records SourceFile for every leaf it contains, and runs
 // the schema_version upgrade-rewrite frame (08-INIT-CONFIG-SPEC §3 point
-// 4). A missing file is not an error — Load never creates config.toml as
-// a side effect; a file that needed upgrading is rewritten atomically in
-// place.
+// 4) IN MEMORY ONLY. A missing file is not an error — Load never creates
+// config.toml as a side effect.
+//
+// R-14 CR FINDING (P1-E03-W1-S05-T8, blocking fix 1): this function used
+// to call writeConfigAtomic(path, tree) whenever UpgradeSchema reported
+// Mutated, round-tripping the file through toml.Marshal. Every read verb
+// (get/list) and daemon boot funnel through Load → readAndUpgradeTree, so
+// a purely-read operation on any legacy config.toml (one predating
+// schema_version) silently rewrote the entire file on disk: comments
+// gone, quote style canonicalised, keys re-sorted — exactly what
+// docs/config-reference.md's "Round-trip fidelity" section promises never
+// happens, and precisely the toml.Marshal landmine that section's own
+// rationale calls out as "worse" than the alternative it chose. A
+// read-only verb must never mutate the user's file, full stop.
+//
+// The fix: UpgradeSchema still runs (tree is stamped with the current
+// schema_version so callers see the upgraded value for this call), but
+// the result is never persisted here. Persisting a schema upgrade is
+// deliberately NOT implemented anywhere in this ticket's scope: no
+// migrationStep has ever existed (schema.go's migrationSteps is empty —
+// schema 1 is the only generation P1 has shipped), so there is nothing a
+// persisted rewrite would actually preserve that isn't already
+// reconstructed identically, in memory, on every Load. The day a real
+// schema 2 migration lands, the ticket that adds it must persist the
+// upgrade — if it decides to — only from an explicit WRITE verb (`config
+// set`/`unset`), through the structure-preserving line editor
+// (toml_edit.go's SetKeyLine), never through toml.Marshal. This file
+// intentionally no longer contains a toml.Marshal-based write path for
+// that future ticket to accidentally reuse.
 func readAndUpgradeTree(path string) (map[string]interface{}, map[string]ConfigSource, error) {
 	tree := map[string]interface{}{}
 	sources := map[string]ConfigSource{}
@@ -53,14 +80,8 @@ func readAndUpgradeTree(path string) (map[string]interface{}, map[string]ConfigS
 		return nil, nil, fmt.Errorf("runtime: read config %s: %w", path, err)
 	}
 
-	upgrade, err := UpgradeSchema(tree)
-	if err != nil {
+	if _, err := UpgradeSchema(tree); err != nil {
 		return nil, nil, err
-	}
-	if upgrade.Mutated {
-		if err := writeConfigAtomic(path, tree); err != nil {
-			return nil, nil, fmt.Errorf("runtime: write upgraded config %s: %w", path, err)
-		}
 	}
 	return tree, sources, nil
 }
@@ -137,26 +158,4 @@ func extraSections(tree map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return extra
-}
-
-// writeConfigAtomic writes tree to path via a temp-file-in-same-dir +
-// rename, so a crash mid-write never leaves a partially-written
-// config.toml (R-14.106 precedent for this pattern).
-func writeConfigAtomic(path string, tree map[string]interface{}) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }() // no-op once the rename below succeeds
-
-	if err := toml.NewEncoder(tmp).Encode(tree); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
 }

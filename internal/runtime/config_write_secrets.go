@@ -109,6 +109,48 @@ func checkLiteralForSecrets(field string, value interface{}) error {
 	return nil
 }
 
+// ScanTreeForSecrets walks every leaf of tree (dotted-path style, via
+// flattenTree) and applies the same LooksLikeSecret heuristic
+// checkLiteralForSecrets uses for a single `config set` literal, so any
+// caller that accepts a whole document at once — not just one key at a
+// time — gets the identical guard. Returns the first *SecretLiteralError
+// found (map iteration order is unspecified, but tree round-trips
+// deterministically for a given input document, and this is a refuse/
+// don't-refuse decision, not a report needing every match).
+//
+// R-14 CR FINDING (P1-E03-W1-S05-T8, blocking fix 3): `cascade config
+// set` refuses a secret-shaped literal via checkLiteralForSecrets, but
+// `cascade config edit` (cmd/cascade/config/config_write.go) called only
+// DecodeConfigFile + Validate, neither of which screens values — so a
+// secret pasted through $EDITOR was written to config.toml in plaintext.
+// Same value class, opposite outcome, purely because of which verb the
+// user happened to type. ScanTreeForSecrets closes that gap: `edit`'s
+// RunE now calls it on the decoded edited tree before writing, exactly
+// like `set` already does for its one literal.
+func ScanTreeForSecrets(tree map[string]interface{}) error {
+	leaves := map[string]interface{}{}
+	flattenTree(tree, "", leaves)
+	keys := sortedTreeKeys(leaves)
+	for _, k := range keys {
+		if err := checkLiteralForSecrets(k, leaves[k]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sortedTreeKeys returns leaves' keys sorted, so ScanTreeForSecrets'
+// first-match error is deterministic across runs (map iteration order is
+// not) rather than depending on Go's randomised map order.
+func sortedTreeKeys(leaves map[string]interface{}) []string {
+	keys := make([]string, 0, len(leaves))
+	for k := range leaves {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // Validate whole-file-checks tree: a syntactically well-formed generic
 // TOML document (the caller decoded it to get here) whose [runtime],
 // [elevation], and [logging] sections — the only sections this package

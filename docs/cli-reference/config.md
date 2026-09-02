@@ -1,12 +1,110 @@
 # `cascade config`
 
-Skeleton reference for the `config` noun (07-CLI-COMMAND-TREE.md §config).
-The handlers documented here (`internal/runtime.ListEffectiveHandler`,
-`internal/runtime.PathHandler`) are fully implemented and unit-tested
-against `internal/runtime`; cobra mounting onto `cascade config ...` is a
-forward-stub pending D/S-06.T1's cobra root
-(`// CASCADE-ALLOW: P1-E03-W1-S04-T1`, 06-FORGE-SPEC §5.19). Until that
-lands, these subcommands are not reachable from the built binary.
+Reference for the `config` noun (07-CLI-COMMAND-TREE.md §config,
+08-INIT-CONFIG-SPEC.md §3). All eight subcommands — `get`, `set`, `unset`,
+`list`, `validate`, `edit`, `reload`, `path` — are fully implemented in
+`cmd/cascade/config` (P1-E03-W1-S05-T8) and exercised end to end against a
+real `*cobra.Command` tree in `cmd/cascade/config/config_test.go` +
+`config_edit_test.go`.
+
+**Mounting status:** mounted. `cmd/cascade/root.go`'s `mountConfigCmd`
+attaches `config.NewConfigCmd(deps)` to the real root (see `git log --
+cmd/cascade/root.go`, `bc2e09f fix(cli): mount config and extend the
+exit-code rules to command groups`) — `cascade config ...` is reachable
+from the built `cascade` binary. This corrects a stale claim from an
+earlier draft of this document (R-14 CR, P1-E03-W1-S05-T8, nit 7): the
+"not reachable, no registration hook" note described a real blocker at
+the time this ticket's code landed, but root.go gained the mount point
+and used it before this doc was updated to match. Every example in this
+file was captured from a real, standalone-mounted build
+(`config.NewConfigCmd` under a throwaway root carrying root.go's own
+persistent flags) — behaviourally identical to the real mount, since
+`mountConfigCmd` passes the same `Deps` shape.
+
+## `cascade config get <key>`
+
+Prints one key's resolved (effective) value.
+
+```
+$ cascade config get logging.level
+logging.level = debug (file)
+```
+
+`--json` emits `{"key","value","source"}`. An unknown key exits
+`not-found` (exit 3) with a nearest-match suggestion (from `set`'s own
+dotted-path resolver).
+
+## `cascade config set <key> <value>` / `<key>=<value>`
+
+Both call shapes are accepted (07-CLI-COMMAND-TREE.md uses the
+space-separated form; this ticket's own acceptance criteria use the
+`=`-joined form — both are supported rather than picking one). `value` is
+parsed as a TOML literal (`true`, `42`, `1.5`, `"text"`, `["a","b"]`); the
+write is structure-preserving (comments, blank lines, and surrounding key
+order in `config.toml` survive untouched — see
+`../config-reference.md` §Round-trip fidelity) and validate-before-write
+(disk is never touched if the resulting file would fail `config validate`).
+
+```
+$ cascade config set retrieval.fusion.k=80
+retrieval.fusion.k = 80
+```
+
+A secret-shaped value (bearer-token prefix, PEM header, bare high-entropy
+token >=40 chars) is refused and redirected:
+
+```
+$ cascade config set registry.pubkey_path="ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+Error: invalid-input: config set registry.pubkey_path: runtime: config set
+registry.pubkey_path: value looks like a secret (matches known bearer-token
+prefix "ghp_"); use `cascade vault set` instead
+```
+
+An unknown key is refused with a nearest-match suggestion and no write:
+
+```
+$ cascade config set totally.unknown.key=1
+Error: invalid-input: config set totally.unknown.key: runtime: config key
+"totally.unknown.key": unknown config key (did you mean "daemon.socket"?)
+```
+
+## `cascade config unset <key>`
+
+Removes `key`'s line, reverting it to its schema default on next load. An
+already-unset key is a no-op, not an error.
+
+```
+$ cascade config unset logging.level
+logging.level removed (now reverts to its schema default)
+```
+
+## `cascade config edit`
+
+Opens `$EDITOR` (falling back to `vi`) on `config.toml`. On save, the
+edited content is decoded and run through `config validate`'s same check;
+an invalid result is refused and `config.toml` is left byte-for-byte
+unchanged. A valid result is written atomically and triggers the same
+best-effort daemon-reload notification `set`/`unset` use.
+
+```
+$ EDITOR=vim cascade config edit
+config.toml updated and validated
+```
+
+## `cascade config reload`
+
+Sends the running daemon `SIGHUP` (found via its pidfile), which triggers
+`internal/runtime.HotReloader.Reload` — see `../config-reference.md` for
+the full hot-reload rules. No running daemon is not an error:
+
+```
+$ cascade config reload
+no running daemon (no pidfile found); nothing to reload
+```
+
+On Windows, sending a reload signal to an actually-running daemon returns
+an explicit `unsupported` (tier-2) refusal instead of silently no-op'ing —
+`SIGHUP` has no Windows equivalent.
 
 ## `cascade config list --effective`
 
@@ -53,7 +151,20 @@ socket = /Users/me/.cascade/daemon.sock
 
 ## `cascade config validate`
 
-Not implemented by this ticket. Planned surface: load config.toml through
-the same `internal/runtime.Load` path used by `list --effective` and
-report validation errors without applying them. Tracked for a later
-sprint; do not assume this subcommand exists until its own ticket lands.
+Decodes `config.toml` and runs `internal/runtime.Validate` (the same
+check every write path in `set`/`unset`/`edit`/hot-reload runs
+before touching disk) without applying anything.
+
+```
+$ cascade config validate
+config.toml is valid
+```
+
+An invalid file (malformed TOML, `[elevation]`/`[logging]` shape errors,
+or a `schema_version` newer than this binary supports) exits
+`invalid-input` (exit 2) naming the offending field.
+
+`Validate` type-checks only the two sections this repo owns
+([runtime], [elevation]) plus [logging]; every other 08 §3 section
+round-trips unvalidated (Art.1 — no invented validation for a section
+this ticket does not own).

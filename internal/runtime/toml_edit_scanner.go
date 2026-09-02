@@ -27,12 +27,15 @@ package runtime
 //	limitation, not a crash or data-loss bug (see toml_edit.go's package
 //	doc). `[[array-of-tables]]` headers are recognised only well enough
 //	to not be misread as a plain `[table]` header (never treated as a
-//	settable table context by this editor).
+//	settable table context by this editor). The atomic-write primitive
+//	(writeBytesAtomic/WriteBytesAtomic/dirOf/readOptionalFile) lives in
+//	the sibling toml_atomic_write.go, split out per R-14.117/Art.10.3
+//	(this ticket's R-14 CR fix pushed the combined file over the 300-line
+//	cap while fixing blocking fix 2's Windows path-separator bug).
 //
 // SPORT: runtime/toml-edit-engine (ADD, placeholder per T-8 sport_updates).
 
 import (
-	"os"
 	"strings"
 )
 
@@ -164,10 +167,8 @@ func findTopLevelEquals(line string) int {
 				inSingle = !inSingle
 			}
 		case '"':
-			if !inDouble || i == 0 || line[i-1] != '\\' {
-				if !inSingle {
-					inDouble = !inDouble
-				}
+			if !inSingle && (!inDouble || !isEscapedQuote(line, i)) {
+				inDouble = !inDouble
 			}
 		case '=':
 			if !inSingle && !inDouble {
@@ -176,6 +177,28 @@ func findTopLevelEquals(line string) int {
 		}
 	}
 	return -1
+}
+
+// isEscapedQuote reports whether the '"' at index i in s is escaped by
+// an odd-length run of backslashes immediately preceding it — TOML's
+// basic-string escape rule is that `\\` is one escaped backslash, so an
+// EVEN run of backslashes before a `"` leaves that quote un-escaped
+// (closes the string) and an ODD run leaves exactly one backslash
+// escaping the quote itself (string stays open).
+//
+// R-14 CR FINDING (P1-E03-W1-S05-T8, nit 5): the previous check looked
+// at only the single byte immediately before the quote, so a value
+// ending in an even number of backslashes then a quote — a plausible
+// Windows path such as `"C:\\"` — had its closing quote misread as
+// escaped (still "inside" the string), because that lone preceding byte
+// is itself a backslash even though the full run is escaped-backslash
+// pairs, not an escaped quote.
+func isEscapedQuote(s string, i int) bool {
+	n := 0
+	for j := i - 1; j >= 0 && s[j] == '\\'; j-- {
+		n++
+	}
+	return n%2 == 1
 }
 
 // findValueSpan reports [start, commentStart) for the value portion of
@@ -195,7 +218,13 @@ func findValueSpan(rest string) (start, commentStart int) {
 				inSingle = !inSingle
 			}
 		case '"':
-			if !inSingle {
+			// Same backslash-run-parity escape rule as
+			// findTopLevelEquals/isEscapedQuote (R-14 CR nit 5) — a value
+			// ending in an escaped backslash then a quote (e.g. a Windows
+			// path `"C:\\"`) must close the string on that quote, not stay
+			// "inside" it because the immediately preceding byte happens
+			// to be a backslash.
+			if !inSingle && (!inDouble || !isEscapedQuote(rest, i)) {
 				inDouble = !inDouble
 			}
 		case '#':
@@ -205,61 +234,4 @@ func findValueSpan(rest string) (start, commentStart int) {
 		}
 	}
 	return start, -1
-}
-
-// readOptionalFile reads path, tolerating a not-yet-existing file as an
-// empty document (matching config_load.go's Load: `cascade config set` on
-// a fresh CASCADE_HOME with no config.toml yet creates one rather than
-// erroring).
-func readOptionalFile(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err == nil {
-		return data, nil
-	}
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	return nil, err
-}
-
-// writeBytesAtomic writes data to path via the same temp-file-in-same-dir
-// + rename pattern as config_load.go's writeConfigAtomic (R-14.106
-// precedent this ticket's contract requires reusing rather than
-// reimplementing a second atomic-write primitive): a crash mid-write
-// leaves either the untouched original or nothing at the temp path, never
-// a truncated config.toml.
-func writeBytesAtomic(path string, data []byte) error {
-	dir := dirOf(path)
-	if dir != "" {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
-}
-
-// dirOf returns the directory portion of path without importing
-// path/filepath a second time in this file's import list beyond what it
-// already needs; kept trivially simple (no ".." handling required — every
-// caller passes an already-resolved PathProvider path).
-func dirOf(path string) string {
-	i := strings.LastIndexByte(path, '/')
-	if i < 0 {
-		return ""
-	}
-	return path[:i]
 }

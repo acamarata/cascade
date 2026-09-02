@@ -1,0 +1,21 @@
+true
+false
+0
+-1
+42
+3.14159
+"a plain string"
+"a string with \"escaped\" quotes"
+""
+[]
+[1,2,3]
+["a","b","c"]
+[true,false]
+1e10
+-1.5e-3
+0x1A
+0o17
+0b101
+2026-09-02
+2026-09-02T12:00:00Z
+'literal string'

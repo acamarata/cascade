@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,41 +11,16 @@ import (
 
 // Purpose: tests for the config.toml file-I/O and section-parsing
 //   behaviour in config_load.go (readAndUpgradeTree, parseElevationSection,
-//   resolveRuntimeSection, extraSections, writeConfigAtomic), exercised
-//   through the public Load entry point. Split out of a single
-//   config_test.go per R-14.117 (Art.10.3 file-cap remedy) —
-//   behaviour-preserving, moved code only.
+//   resolveRuntimeSection, extraSections), exercised through the public
+//   Load entry point. Split out of a single config_test.go per R-14.117
+//   (Art.10.3 file-cap remedy) — behaviour-preserving, moved code only.
+//   The schema-upgrade-on-read tests live in the sibling
+//   config_load_schema_test.go (same R-14.117 split, this ticket's fix).
 // Inputs: n/a (test-only).
 // Outputs: n/a (test-only).
 // Constraints: Art.7.1 — every test uses t.TempDir() and injected
 //   Getenv/Environ, never the real process environment or $HOME.
 // SPORT: runtime/config (ADD, placeholder per T-1 sport_updates).
-
-func TestLoad_SchemaUpgradeWriteFailureIsTypedError(t *testing.T) {
-	// A config file that needs a schema upgrade, sitting inside a
-	// directory Load has no write permission to: os.CreateTemp inside
-	// writeConfigAtomic must fail, and Load must surface that failure
-	// rather than silently dropping the upgrade.
-	dir := t.TempDir()
-	roDir := filepath.Join(dir, "readonly")
-	if err := os.Mkdir(roDir, 0o755); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-	cfgPath := writeConfigFile(t, roDir, "[runtime]\nprofile = \"local\"\n")
-	if err := os.Chmod(roDir, 0o555); err != nil {
-		t.Fatalf("Chmod: %v", err)
-	}
-	defer func() { _ = os.Chmod(roDir, 0o755) }() // allow t.TempDir() cleanup to succeed
-
-	_, err := Load(context.Background(), LoadOptions{
-		Path:    cfgPath,
-		Getenv:  func(string) string { return "" },
-		Environ: fakeEnviron(nil),
-	})
-	if err == nil {
-		t.Fatal("expected a write error from a read-only config directory, got nil")
-	}
-}
 
 func TestLoad_MissingFileFallsBackToDefaults(t *testing.T) {
 	dir := t.TempDir()
@@ -230,42 +204,6 @@ func TestLoad_ExtraSectionsPreservedNotWarned(t *testing.T) {
 	logging, ok := cfg.Extra["logging"].(map[string]interface{})
 	if !ok || logging["level"] != "debug" {
 		t.Errorf("Extra[logging] = %#v", cfg.Extra["logging"])
-	}
-}
-
-func TestLoad_SchemaUpgradeRewritesFileAtomicallyAndIsIdempotent(t *testing.T) {
-	dir := t.TempDir()
-	path := writeConfigFile(t, dir, "[runtime]\nprofile = \"local\"\n")
-
-	cfg1, err := Load(context.Background(), LoadOptions{Path: path, Getenv: func(string) string { return "" }, Environ: fakeEnviron(nil)})
-	if err != nil {
-		t.Fatalf("Load (first): %v", err)
-	}
-	if cfg1.SchemaVersion != CurrentSchemaVersion {
-		t.Errorf("SchemaVersion = %d, want %d", cfg1.SchemaVersion, CurrentSchemaVersion)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read rewritten config: %v", err)
-	}
-	if !strings.Contains(string(data), "schema_version") {
-		t.Errorf("rewritten config missing schema_version: %s", data)
-	}
-
-	// Second load against the now-current file must not mutate it again.
-	cfg2, err := Load(context.Background(), LoadOptions{Path: path, Getenv: func(string) string { return "" }, Environ: fakeEnviron(nil)})
-	if err != nil {
-		t.Fatalf("Load (second): %v", err)
-	}
-	data2, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read config after second load: %v", err)
-	}
-	if string(data) != string(data2) {
-		t.Errorf("second Load mutated the file; not idempotent:\nfirst:\n%s\nsecond:\n%s", data, data2)
-	}
-	if cfg2.Runtime.Profile != ProfileLocal {
-		t.Errorf("Profile after reload = %q, want local", cfg2.Runtime.Profile)
 	}
 }
 

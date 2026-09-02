@@ -1,0 +1,10 @@
+[a]
+[a.b.c]
+a = 1
+a.b = 1
+a = 1 # comment
+# just a comment
+[[array]]
+a = [1,2,3]
+a = "string with = inside"
+a = 'literal = string'

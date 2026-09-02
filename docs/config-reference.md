@@ -152,15 +152,100 @@ silently destroy every user's hand-written comments on the very first
 
 Every write this ticket performs — `set`, `unset`, `edit`'s apply step —
 goes through the same temp-file-in-the-same-directory-then-rename
-pattern `internal/runtime/config_load.go`'s pre-existing
-`writeConfigAtomic` established (R-14.106 precedent): the new content is
-written to a `.config-*.toml.tmp` file in the same directory first, then
-atomically renamed over the real path. A process crash or power loss
-between those two steps leaves either the untouched original file or an
-orphaned temp file — never a truncated or half-written `config.toml`.
-Proven in `internal/runtime/toml_edit_test.go`'s
+pattern: `internal/runtime/toml_atomic_write.go`'s `writeBytesAtomic`
+(exported as `WriteBytesAtomic` for `cmd/cascade/config`, the ONE
+implementation both packages call — R-14.106 precedent, R-14 CR blocking
+fix 2). The new content is written to a `.config-*.toml.tmp` file in the
+same directory as the target first, then atomically renamed over the
+real path. A process crash or power loss between those two steps leaves
+either the untouched original file or an orphaned temp file — never a
+truncated or half-written `config.toml`. Proven in
+`internal/runtime/toml_edit_test.go`'s
 `TestConfigWriter_CrashSimulation_TempFileNeverReplacesOnFailure` (a
 failed `Validate` step never even reaches the write call, so the original
-file's bytes are provably byte-for-byte unchanged) and by construction
-for the rename step itself (POSIX/Windows rename is atomic within one
-filesystem).
+file's bytes are provably byte-for-byte unchanged), in
+`internal/runtime/toml_edit_scanner_test.go`'s
+`TestWriteBytesAtomic_TempFileSameDirectoryAsTarget` (the temp file lands
+in the target's own directory on every OS — the directory-portion
+computation uses `filepath.Dir`, not a hardcoded `/` split, so this holds
+on Windows too), and by construction for the rename step itself
+(POSIX/Windows rename is atomic within one filesystem).
+
+**Trailing-newline exception to "byte-for-byte":** the one place this
+editor does not reproduce the source exactly is a file with no trailing
+newline — `toml_edit.go`'s line splitter/joiner always emits one on the
+way back out, since every `config.toml` this tool writes is meant to be
+a normal newline-terminated text file. This is a whitespace-only,
+end-of-file addition, never a content change, and is a stated exception
+to the round-trip-fidelity claim above rather than something the "never
+silently drops or corrupts" language covers. Pinned by
+`internal/runtime/toml_edit_scanner_test.go`'s
+`TestJoinLines_TrailingNewlineException`.
+
+## Read verbs never write: `get`/`list`/`validate`/daemon boot
+
+`internal/runtime.Load` (behind `get`, `list`, and daemon boot) runs the
+`schema_version` upgrade check on every read, but — as of this ticket's
+R-14 CR fix (blocking fix 1) — the result is computed **in memory only**
+and never persisted. A legacy `config.toml` (predating `schema_version`,
+possibly hand-annotated with comments, unusual quoting, or a non-default
+key order) is returned to the caller with `SchemaVersion` already
+resolved to the current value, but the file on disk is left completely
+untouched. `cascade config validate` never went through this path at all
+(`DecodeConfigFile` intentionally skips the upgrade step — validating a
+file must never write to it), so it was already safe; `get`/`list` and
+daemon boot are the paths this fix corrects.
+
+Before this fix, any of those four operations on a legacy file
+round-tripped the entire document through `toml.Marshal`, which does not
+preserve comments, quote style, or key order — a purely read-only
+command silently destroyed a hand-edited file's formatting on first use.
+No code path in this ticket persists a schema upgrade to disk. There has
+never been a real schema-2 migration (`internal/runtime/schema.go`'s
+`migrationSteps` is empty — schema 1 is the only generation P1 has
+shipped), so there is nothing a persisted rewrite would preserve that
+isn't already reconstructed, identically, on every `Load`. The day a real
+migration lands, it must be persisted only from an explicit write verb
+(`set`/`unset`), through the structure-preserving line editor, never
+through `toml.Marshal` — this design intentionally leaves no
+`toml.Marshal`-based write path in `internal/runtime/config_load.go` for
+that future ticket to reach for by habit.
+
+Proven in `internal/runtime/config_load_schema_test.go`'s
+`TestLoad_SchemaUpgradeIsInMemoryOnlyAndNeverWritesTheFile` and
+`cmd/cascade/config/config_test.go`'s
+`TestConfigCLI_ReadVerbsNeverMutateLegacyFile` /
+`TestConfigCLI_DaemonBootReadNeverMutatesLegacyFile`, which assert a
+hand-annotated legacy fixture is byte-identical after each of
+`get`/`list`/`list --effective`/`validate`/a bare `Load` call.
+
+## Secret screening applies to every write path, not just `set`
+
+`cascade config set` refuses a secret-shaped literal (bare base64 >=40
+chars, a known bearer-token prefix, a PEM header —
+`internal/runtime.LooksLikeSecret`) before it ever reaches disk. Prior to
+this ticket's R-14 CR fix (blocking fix 3), `cascade config edit` did
+not apply the same screening: it called only `DecodeConfigFile` +
+`Validate`, neither of which inspects values, so a secret pasted through
+`$EDITOR` was written to `config.toml` in plaintext — the exact value
+class `set` refuses, admitted through the other write verb. `edit` now
+calls `internal/runtime.ScanTreeForSecrets` (walks every leaf of the
+edited document with the same `LooksLikeSecret` heuristic `set` uses) and
+refuses to apply the edit, unmodified-on-disk, on the first match.
+
+**Explicit position on `get`/`list` redaction:** neither verb redacts a
+secret-shaped value that is already present in `config.toml` — the
+effective view (`*Config.EffectiveEntries`, both verbs' underlying
+source) prints every value as-decoded, with no secret-pattern check at
+the output layer. This is a real gap, distinct from the write-time
+screening above: a value that reaches the file through a channel this
+screening doesn't cover (a file written before this fix existed, or a
+future write path that skips `checkLiteralForSecrets`/`ScanTreeForSecrets`)
+is echoed unredacted by `get`/`list`. This ticket's contract scopes it
+out (07/08's `get`/`list` behavior is C/S-04.T1's read surface, which
+this ticket only mounts, not reimplements) and no output-layer redaction
+exists anywhere in this CLI surface today. Recorded here as a stated,
+open gap rather than an implicit assumption — the fix, when scoped, is an
+output-layer filter over `EffectiveEntries` keyed on the same
+`LooksLikeSecret` heuristic, applied uniformly to `get`, `list`, and
+`list --effective`.

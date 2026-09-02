@@ -1,15 +1,16 @@
 // Purpose: exercises the full `cascade config` command tree end to end
-//   against a real *cobra.Command execution (SetArgs+Execute), NOT
-//   individual handler functions — this is the CLI-surface test level
-//   the ticket contract calls out ("BUILD AND RUN the binary... paste
-//   real observed output"). Because cmd/cascade/root.go is out of this
-//   ticket's files_scope and carries no subcommand-registration hook a
-//   later package can call into without editing it (see config.go's
-//   package doc, MOUNTING NOTE), these tests build a standalone root
-//   carrying the SAME persistent flags root.go registers
-//   (--json/--profile/--config/-q/-v) so NewConfigCmd's behavior is
-//   proven under the real global-flag contract it will run under once
-//   mounted, without this package needing write access to root.go.
+//
+//	against a real *cobra.Command execution (SetArgs+Execute), NOT
+//	individual handler functions — this is the CLI-surface test level
+//	the ticket contract calls out ("BUILD AND RUN the binary... paste
+//	real observed output"). Because cmd/cascade/root.go is out of this
+//	ticket's files_scope and carries no subcommand-registration hook a
+//	later package can call into without editing it (see config.go's
+//	package doc, MOUNTING NOTE), these tests build a standalone root
+//	carrying the SAME persistent flags root.go registers
+//	(--json/--profile/--config/-q/-v) so NewConfigCmd's behavior is
+//	proven under the real global-flag contract it will run under once
+//	mounted, without this package needing write access to root.go.
 package config
 
 import (

@@ -126,43 +126,21 @@ func newEditCmd(deps Deps) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path := deps.Paths.ConfigPath()
-			original, err := os.ReadFile(path)
-			if err != nil && !os.IsNotExist(err) {
-				return cascade.Wrap(cascade.KindInternal, err, "read config.toml")
-			}
-			tmp, err := os.CreateTemp("", "cascade-config-edit-*.toml")
+			tmpPath, cleanup, err := writeEditScratchFile(path)
 			if err != nil {
-				return cascade.Wrap(cascade.KindInternal, err, "create edit scratch file")
+				return err
 			}
-			defer func() { _ = os.Remove(tmp.Name()) }()
-			if _, err := tmp.Write(original); err != nil {
-				_ = tmp.Close()
-				return cascade.Wrap(cascade.KindInternal, err, "write edit scratch file")
-			}
-			if err := tmp.Close(); err != nil {
-				return cascade.Wrap(cascade.KindInternal, err, "close edit scratch file")
+			defer cleanup()
+
+			if err := runEditor(cmd, deps, tmpPath); err != nil {
+				return err
 			}
 
-			editorCmd := exec.CommandContext(cmd.Context(), editorCommand(deps), tmp.Name()) //nolint:gosec // $EDITOR is an intentional, user-controlled launch, the standard `git commit`/`crontab -e` pattern
-			editorCmd.Stdin = cmd.InOrStdin()
-			editorCmd.Stdout = cmd.OutOrStdout()
-			editorCmd.Stderr = cmd.OutOrStderr()
-			if err := editorCmd.Run(); err != nil {
-				return cascade.Wrap(cascade.KindUnavailable, err, "run $EDITOR")
-			}
-
-			edited, err := os.ReadFile(tmp.Name())
+			edited, _, err := readAndCheckEditedConfig(tmpPath)
 			if err != nil {
-				return cascade.Wrap(cascade.KindInternal, err, "read edited config")
+				return err
 			}
-			tree, err := runtime.DecodeConfigFile(tmp.Name())
-			if err != nil {
-				return cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml is invalid; not applied")
-			}
-			if err := runtime.Validate(tree); err != nil {
-				return cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml failed validation; not applied")
-			}
-			if err := writeConfigFile(path, edited); err != nil {
+			if err := runtime.WriteBytesAtomic(path, edited); err != nil {
 				return cascade.Wrap(cascade.KindInternal, err, "apply edited config.toml")
 			}
 			triggerReload(cmd, deps)
@@ -171,29 +149,69 @@ func newEditCmd(deps Deps) *cobra.Command {
 	}
 }
 
-// writeConfigFile is the edit verb's own crash-safe write — identical
-// temp-in-same-dir + rename shape as internal/runtime's writeBytesAtomic,
-// duplicated here only because that helper is unexported across the
-// package boundary; both implement the same R-14.106 pattern.
-func writeConfigFile(path string, data []byte) error {
-	dir := path[:strings.LastIndexByte(path, '/')+1]
-	if dir == "" {
-		dir = "."
+// writeEditScratchFile copies path's current content (tolerating a
+// not-yet-existing file) into a fresh scratch file for $EDITOR to open,
+// returning its path and a cleanup func that removes it.
+func writeEditScratchFile(path string) (tmpPath string, cleanup func(), err error) {
+	original, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return "", nil, cascade.Wrap(cascade.KindInternal, err, "read config.toml")
 	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
+	tmp, err := os.CreateTemp("", "cascade-config-edit-*.toml")
 	if err != nil {
-		return err
+		return "", nil, cascade.Wrap(cascade.KindInternal, err, "create edit scratch file")
 	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if _, err := tmp.Write(data); err != nil {
+	cleanup = func() { _ = os.Remove(tmp.Name()) }
+	if _, err := tmp.Write(original); err != nil {
 		_ = tmp.Close()
-		return err
+		cleanup()
+		return "", nil, cascade.Wrap(cascade.KindInternal, err, "write edit scratch file")
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		cleanup()
+		return "", nil, cascade.Wrap(cascade.KindInternal, err, "close edit scratch file")
 	}
-	return os.Rename(tmpPath, path)
+	return tmp.Name(), cleanup, nil
+}
+
+// runEditor launches deps' $EDITOR (or vi) against tmpPath, wired to
+// cmd's own stdio so an interactive editor works exactly as it would from
+// a real terminal.
+func runEditor(cmd *cobra.Command, deps Deps, tmpPath string) error {
+	editorCmd := exec.CommandContext(cmd.Context(), editorCommand(deps), tmpPath) //nolint:gosec // $EDITOR is an intentional, user-controlled launch, the standard `git commit`/`crontab -e` pattern
+	editorCmd.Stdin = cmd.InOrStdin()
+	editorCmd.Stdout = cmd.OutOrStdout()
+	editorCmd.Stderr = cmd.OutOrStderr()
+	if err := editorCmd.Run(); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "run $EDITOR")
+	}
+	return nil
+}
+
+// readAndCheckEditedConfig reads tmpPath back, decodes it, and runs the
+// same two gates a write must always pass before it reaches disk:
+// Validate (shape) and ScanTreeForSecrets (R-14 CR fix, P1-E03-W1-S05-T8,
+// blocking fix 3 — `edit` previously applied neither the secret screen
+// nor anything beyond Validate, so a secret pasted through $EDITOR
+// reached disk in plaintext, the exact value class `set` already
+// refuses). Disk is untouched by this function; the caller only writes
+// edited once both gates pass.
+func readAndCheckEditedConfig(tmpPath string) (edited []byte, tree map[string]interface{}, err error) {
+	edited, err = os.ReadFile(tmpPath)
+	if err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindInternal, err, "read edited config")
+	}
+	tree, err = runtime.DecodeConfigFile(tmpPath)
+	if err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml is invalid; not applied")
+	}
+	if err := runtime.Validate(tree); err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml failed validation; not applied")
+	}
+	if err := runtime.ScanTreeForSecrets(tree); err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml not applied")
+	}
+	return edited, tree, nil
 }
 
 // triggerReload best-effort-notifies a running daemon after a successful

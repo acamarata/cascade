@@ -1,8 +1,9 @@
 // Purpose: `cascade config edit` CLI tests — split out of config_test.go
-//   per R-14.117/Art.10.3 (300-line file cap): the edit verb needs its
-//   own fake-$EDITOR harness (fakeEditorScript/newTestRootWithEnv),
-//   which is a cohesive, separable seam from the rest of the command
-//   tree's tests.
+//
+//	per R-14.117/Art.10.3 (300-line file cap): the edit verb needs its
+//	own fake-$EDITOR harness (fakeEditorScript/newTestRootWithEnv),
+//	which is a cohesive, separable seam from the rest of the command
+//	tree's tests.
 package config
 
 import (
@@ -47,6 +48,37 @@ func TestConfigCLI_Edit_ValidSaveApplies(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `level = "debug"`) {
 		t.Fatalf("got:\n%s", data)
+	}
+}
+
+// TestConfigCLI_Edit_SecretShapedValueRejected is blocking fix 3's
+// required test: R-14 CR (P1-E03-W1-S05-T8) found that `edit` applied no
+// secret screening at all, so a value `set` would refuse (a bearer-prefix
+// token, here) went straight to disk in plaintext when pasted through
+// $EDITOR. `edit` must refuse it and leave config.toml untouched, exactly
+// like `set` already does for the same literal.
+func TestConfigCLI_Edit_SecretShapedValueRejected(t *testing.T) {
+	dir := t.TempDir()
+	const original = "[logging]\nlevel = \"info\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	editor := fakeEditorScript(t, `registry.pubkey_path = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"`)
+	root, _, _ := newTestRootWithEnv(t, dir, map[string]string{"EDITOR": editor})
+
+	_, _, err := run(t, root, "config", "edit")
+	if err == nil {
+		t.Fatal("expected edit to refuse a secret-shaped value")
+	}
+	if !strings.Contains(err.Error(), "vault set") {
+		t.Fatalf("expected vault-set redirect in error, got %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != original {
+		t.Fatalf("disk changed on a secret-shaped edit:\n%s", data)
 	}
 }
 
