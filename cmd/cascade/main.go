@@ -24,6 +24,8 @@ package main
 import (
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/acamarata/cascade/internal/output"
 )
 
@@ -38,10 +40,23 @@ import (
 // Execute() parses it.
 var noColorFlag bool
 
-func main() {
-	root := newRootCmd()
+// registerNoColorFlag attaches the --no-color persistent flag to root,
+// pointing it at the package-level noColorFlag var. Split out of main() as
+// its own function (CR fix, P1-E04-W1-S06-T5) purely for testability: no
+// test can call main() directly (it calls os.Exit), so nothing previously
+// proved --no-color was registered, appeared in --help, parsed correctly,
+// or that its value reached output.NewDefault's colour decision below.
+// root_test.go now calls this same function against the same newRootCmd()
+// tree main() builds, giving --no-color the same coverage every other
+// persistent flag already has.
+func registerNoColorFlag(root *cobra.Command) {
 	root.PersistentFlags().BoolVar(&noColorFlag, "no-color", false,
 		"disable colored output (also respects NO_COLOR; see docs/cli-output-contract.md)")
+}
+
+func main() {
+	root := newRootCmd()
+	registerNoColorFlag(root)
 
 	err := root.Execute()
 

@@ -40,6 +40,20 @@ type Envelope struct {
 	Version int `json:"version"`
 	// OK is true on success, false on failure. Exactly one of Data/Error is
 	// populated, matching OK.
+	//
+	// OK is not derived from Error != nil at marshal time — it is a
+	// separate wire field (a public, versioned contract; see EnvelopeVersion)
+	// that a consuming script can check without also having to reason about
+	// whether Error's absence is itself meaningful. That means OK and Error
+	// CAN be set inconsistently by a hand-built Envelope{} literal (e.g.
+	// OK: true with a non-nil Error). CR fix (P1-E04-W1-S06-T5): rather than
+	// deriving OK at marshal time — which would touch MarshalLine and risk
+	// the golden fixtures — the sanctioned rule is constructor discipline:
+	// NewOKEnvelope and NewErrEnvelope are the ONLY places in this module
+	// that construct an Envelope for actual output (Writer.Result/Fail
+	// route through them exclusively); a hand-built Envelope{} literal
+	// outside a _test.go file is itself the bug, not a case OK needs to
+	// defend against.
 	OK bool `json:"ok"`
 	// Data is the command's result payload on success. Omitted (not merely
 	// null) when there is none.

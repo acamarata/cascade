@@ -90,12 +90,17 @@ func New(stdout, stderr io.Writer, jsonMode, quiet, verbose, noColorFlag bool) *
 }
 
 // NewDefault constructs a Writer bound to the real process os.Stdout and
-// os.Stderr. It is the ONLY place in the module that is allowed to
-// reference those two identifiers outside a _test.go file (the
-// .golangci.yml forbidigo rule added by this ticket enforces that
-// everywhere else, repo-wide, with this package as the sole exemption) —
-// every command reaches the real streams by holding a Writer built here,
-// never by naming os.Stdout/os.Stderr itself.
+// os.Stderr. Within cmd/**, it is the ONLY place allowed to reference those
+// two identifiers outside a _test.go file: the .golangci.yml forbidigo rule
+// added by this ticket is scoped to cmd/** only (a repo-wide ban also
+// caught plugins/examples' standalone example plugin, which legitimately
+// prints on its own account — see the rule's own comment in .golangci.yml),
+// so every cmd/** command reaches the real streams by holding a Writer
+// built here rather than naming os.Stdout/os.Stderr itself. Nothing today
+// stops an internal/** package outside this one from writing to stdout
+// directly; R-14.137 tracks closing that gap with an AST gate that makes
+// "only NewDefault touches the real streams" a whole-program property
+// instead of a cmd/**-scoped one.
 func NewDefault(jsonMode, quiet, verbose, noColorFlag bool) *Writer {
 	return New(os.Stdout, os.Stderr, jsonMode, quiet, verbose, noColorFlag)
 }
@@ -219,12 +224,23 @@ func (w *Writer) Result(data any) error {
 // Fail is never suppressed by Quiet (errors must always be visible) and
 // does not itself compute the process exit status — see ExitCode
 // (exitcodes.go) for that, called separately by the composition root.
+//
+// In JSON mode, a failed envelope write is not silently dropped: unlike
+// Result (which surfaces the write error to its caller, since a data
+// command whose result never arrived is a real failure), Fail's own
+// signature is void — it is called from main's unconditional error path,
+// which has no further error-handling step of its own. If the stdout
+// envelope write fails, Fail falls back to a best-effort plain-text line on
+// stderr so the operator gets SOME signal rather than a process that exited
+// non-zero with no visible explanation at all.
 func (w *Writer) Fail(err error) {
 	if err == nil {
 		return
 	}
 	if w.mode.JSON {
-		_ = w.writeEnvelope(NewErrEnvelope(err))
+		if writeErr := w.writeEnvelope(NewErrEnvelope(err)); writeErr != nil {
+			fmt.Fprintf(w.stderr, "error: %v (also failed to write --json envelope: %v)\n", err, writeErr) //nolint:errcheck // best-effort fallback of last resort
+		}
 		return
 	}
 	fmt.Fprintf(w.stderr, "error: %v\n", err) //nolint:errcheck // best-effort diagnostic

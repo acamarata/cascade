@@ -97,6 +97,27 @@ func TestFail_JSONMode_WritesStdoutEnvelope(t *testing.T) {
 	}
 }
 
+// TestFail_JSONMode_EnvelopeWriteErrorFallsBackToStderr covers the CR fix
+// (P1-E04-W1-S06-T5): a failed --json envelope write during Fail must not
+// vanish silently — it falls back to a best-effort stderr line so an
+// operator piping --json output somewhere that fails (closed pipe, disk
+// full) still sees SOMETHING, rather than a process that exited non-zero
+// with zero visible explanation.
+func TestFail_JSONMode_EnvelopeWriteErrorFallsBackToStderr(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	w := output.New(failingWriter{}, stderr, true, false, false, false)
+	w.Fail(cascade.New(cascade.KindNotFound, "widget missing"))
+	if stderr.Len() == 0 {
+		t.Fatal("Fail (json, failing stdout) wrote nothing to stderr, want a fallback error line")
+	}
+	if !strings.Contains(stderr.String(), "widget missing") {
+		t.Errorf("Fail fallback stderr = %q, missing original error message", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "boom: write failed") {
+		t.Errorf("Fail fallback stderr = %q, missing envelope write error", stderr.String())
+	}
+}
+
 func TestFail_NeverSuppressedByQuiet(t *testing.T) {
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	w := output.New(stdout, stderr, false, true, false, false)
