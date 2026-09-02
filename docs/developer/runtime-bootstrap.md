@@ -131,12 +131,79 @@ never `time.Now()` directly (02-TARGET-STRUCTURE.md §v1.1; R-14.11 makes
 `pkg/clock`). Production code uses `NewSystemClock()`; tests must use
 `NewFixedClock` so time-dependent assertions stay deterministic.
 
+## Logging (P1-E03-W1-S04-T2)
+
+`internal/runtime.Config.Logging` is the typed view of `[logging]` (08
+§3, hot reload class — the whole section is live-reconfigurable, no
+`config.restart.required` is ever emitted for these keys):
+
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `logging.level` | `debug\|info\|warn\|error` | `info` | unrecognised value is a typed `*runtime.ConfigError` |
+| `logging.format` | `json\|text` | `json` | unrecognised value is a typed `*runtime.ConfigError` |
+| `logging.rotation.max_size_mb` | positive int | **none** | see below |
+| `logging.rotation.max_files` | positive int | **none** | see below |
+
+**R-14.107 is binding:** the rotation keys have no numeric default.
+Rotation stays fully disabled — the log file grows forever — unless
+`max_size_mb` AND `max_files` are both explicitly set in `config.toml`.
+`internal/runtime.loggingRotation.Enabled()` is the single source of
+truth for this check; nothing in this ticket invents a fallback number.
+An unrecognised key inside `[logging.rotation]` is a hard typed error
+(the table is small and closed); an unrecognised key at the top level of
+`[logging]` only warns, matching `[runtime]`'s additive-safe tolerance —
+08 leaves room for later keys under `[logging]` itself.
+
+`internal/runtime.NewLogger` wraps `log/slog`: a JSON handler by
+default, a text handler when `format = "text"`, at the configured
+level — constructor-injected everywhere, never `slog.SetDefault`.
+`Logger.SetLevel(slog.Level)` updates the active handler's minimum level
+without rebuilding it, for C/S-05.T8's hot-reload engine.
+
+`internal/runtime.RotatingWriter` (rotation.go) is the size-based
+rotation writer behind the log file: it wraps `PathProvider`'s log
+directory (`internal/runtime.LogFilePath`, since `PathProvider` itself
+has no dedicated `LogPath()` — deriving it in logger.go avoided touching
+paths.go, which this ticket's `files_scope` does not name), rotates via
+`os.Rename` when a write would cross `MaxSizeMB` (numbered backups
+`<path>.1` newest .. `<path>.MaxFiles` oldest, oldest pruned first), and
+emits one JSON line into the fresh active file naming the rotated path
+and its sequence number. `Reconfigure(maxSizeMB, maxFiles int)` updates
+the thresholds live; `<=0` for either disables rotation, mirroring
+R-14.107's "both or neither" semantics on a hot reload. All file
+operations serialise under one mutex, so concurrent writers never
+produce a torn line. No CGO, no platform-specific syscalls — `os.Rename`
+is available on every platform this ticket targets, including the
+windows/amd64 tier-2 build.
+
+`internal/runtime.LogProvider` (logger.go) is the constructor-injected
+pairing Bootstrap builds from `Config.Logging` and `PathProvider`:
+`Logger()` returns the `*slog.Logger`, `SetLevel`/`Reconfigure` forward
+to the wrapped `Logger`/`RotatingWriter` for hot-reload, and `Close()`
+flushes and closes the log file.
+
+## `cascade daemon logs [-f]` (P1-E03-W1-S04-T2)
+
+`internal/runtime.DaemonLogsHandler` (daemon_logs.go) reads the log file
+at `LogFilePath(paths)` and writes it to `stdout` (diagnostics — a
+missing or, in follow mode, disappeared file — go to `stderr`, per
+D/S-06.T5's output contract). It never requires a live daemon: reading
+the file is all it does. `-f` polls via `os.Stat` (no inotify/FSEvents
+dependency) and streams new lines until the caller's context is
+cancelled. See `../cli-reference/daemon.md` for the CLI-facing
+description; cobra mounting is a forward-stub pending D/S-06.T2 (same
+allowed-fail pattern as `cascade config`'s handlers, 06-FORGE-SPEC
+§5.19).
+
 ## Bootstrap
 
 `internal/runtime.Bootstrap` is the composed entrypoint: it resolves
 `PathProvider`, calls `Load` against the resolved config path, stamps
-`Config.Runtime.Home`/`DataDir` from the resolved paths, and returns a
-`*Runtime` holding the active `Profile`, `PathProvider`, `*Config`, and
-`Clock`. It is the startup-sequence anchor later tickets (S-04.T2,
-S-05.T3, S-05.T4) extend by wiring in additional `change:` entries —
-they must not construct `PathProvider` or `Config` themselves.
+`Config.Runtime.Home`/`DataDir` from the resolved paths, constructs the
+`LogProvider` described above from `Config.Logging` and `PathProvider`,
+and returns a `*Runtime` holding the active `Profile`, `PathProvider`,
+`*Config`, `Clock`, and `Log`. `Runtime.Close()` closes the log file (a
+nil `*Runtime` or nil `Log` is a safe no-op). It is the startup-sequence
+anchor later tickets (S-05.T3, S-05.T4) extend by wiring in additional
+`change:` entries — they must not construct `PathProvider`, `Config`, or
+`LogProvider` themselves.

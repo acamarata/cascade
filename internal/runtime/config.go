@@ -64,6 +64,38 @@ type elevationSection struct {
 	HelperPubkey string `toml:"helper_pubkey"`
 }
 
+// loggingSection is the typed view of [logging] (08-INIT-CONFIG-SPEC §3,
+// hot reload class — level, format, and rotation are all
+// live-reconfigurable via LogProvider.SetLevel/Reconfigure in logger.go,
+// C/S-05.T8's hot-reload engine calls both without a restart). The raw
+// [logging] table also survives untouched in Config.Extra (T-1's generic
+// round-trip/schema-rewrite mechanism does not know this ticket exists),
+// so this type is an additional typed read, never a replacement for that
+// preservation.
+type loggingSection struct {
+	// Level is one of debug|info|warn|error; "" (unset) resolves to
+	// "info".
+	Level string
+	// Format is json|text; "" (unset) resolves to "json".
+	Format   string
+	Rotation loggingRotation
+}
+
+// loggingRotation is [logging.rotation]. Per R-14.107, NEITHER key has a
+// numeric default: a nil field means "not set in config.toml", and
+// rotation stays fully disabled unless both are set. Build code must
+// never invent a value here.
+type loggingRotation struct {
+	MaxSizeMB *int
+	MaxFiles  *int
+}
+
+// Enabled reports whether both rotation keys are explicitly set
+// (R-14.107: no numeric defaults, disabled unless both are present).
+func (r loggingRotation) Enabled() bool {
+	return r.MaxSizeMB != nil && r.MaxFiles != nil
+}
+
 // ConfigError is the typed error the loader returns for malformed TOML,
 // an unrecognised key inside a section this ticket owns, a type mismatch,
 // or a missing required field.
@@ -87,6 +119,7 @@ type Config struct {
 	SchemaVersion int
 	Runtime       runtimeSection
 	Elevation     elevationSection
+	Logging       loggingSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file. These are
 	// valid future 08 §3 sections this ticket does not own; they are
@@ -161,17 +194,10 @@ type LoadOptions struct {
 	Warn func(format string, args ...interface{})
 }
 
-// Load reads and validates config.toml, resolves the active profile, runs
-// the schema_version upgrade-rewrite frame, and applies generic
-// CASCADE_<SECTION>__<KEY> env overrides on top of the file. A missing
-// file is not an error: every field resolves to its default.
-func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
+// loadOptionDefaults resolves opts' optional accessors to their
+// production fallbacks (os.Getenv, os.Environ, a no-op warn sink),
+// factored out of Load to keep it under Art.10.3's 50-line function cap.
+func loadOptionDefaults(opts LoadOptions) (Getenv, func() []string, func(string, ...interface{})) {
 	getenv := opts.Getenv
 	if getenv == nil {
 		getenv = os.Getenv
@@ -184,6 +210,21 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 	if warn == nil {
 		warn = func(string, ...interface{}) {}
 	}
+	return getenv, environ, warn
+}
+
+// Load reads and validates config.toml, resolves the active profile, runs
+// the schema_version upgrade-rewrite frame, and applies generic
+// CASCADE_<SECTION>__<KEY> env overrides on top of the file. A missing
+// file is not an error: every field resolves to its default.
+func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	getenv, environ, warn := loadOptionDefaults(opts)
 
 	tree, sources, err := readAndUpgradeTree(opts.Path)
 	if err != nil {
@@ -201,6 +242,11 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		return nil, err
 	}
 
+	logging, err := parseLoggingSection(tree, warn)
+	if err != nil {
+		return nil, err
+	}
+
 	profile, profSource, err := resolveRuntimeSection(tree, opts.ProfileFlag, getenv, warn)
 	if err != nil {
 		return nil, err
@@ -211,6 +257,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		SchemaVersion: schemaVersionOf(tree),
 		Runtime:       runtimeSection{Profile: profile},
 		Elevation:     elevation,
+		Logging:       logging,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

@@ -40,6 +40,20 @@ type Runtime struct {
 	Paths   PathProvider
 	Config  *Config
 	Clock   Clock
+	// Log is the *slog.Logger + rotation writer pairing (logger.go),
+	// constructed from Config.Logging and Paths (S-04.T2 task 3). Later
+	// subsystems receive it (or its .Logger()) via constructor
+	// injection — never a package-global slog.SetDefault.
+	Log *LogProvider
+}
+
+// Close releases resources Bootstrap opened — currently just the log
+// file. Safe to call on a *Runtime returned with a nil Log.
+func (r *Runtime) Close() error {
+	if r == nil || r.Log == nil {
+		return nil
+	}
+	return r.Log.Close()
 }
 
 // Bootstrap runs the full startup sequence: resolve paths, load and
@@ -74,10 +88,16 @@ func Bootstrap(ctx context.Context, opts BootstrapOptions) (*Runtime, error) {
 	cfg.Runtime.Home = paths.Root()
 	cfg.Runtime.DataDir = paths.DataDir()
 
+	log, err := NewLogProvider(cfg.Logging, paths, clock)
+	if err != nil {
+		return nil, fmt.Errorf("runtime: bootstrap log: %w", err)
+	}
+
 	return &Runtime{
 		Profile: cfg.Runtime.Profile,
 		Paths:   paths,
 		Config:  cfg,
 		Clock:   clock,
+		Log:     log,
 	}, nil
 }
