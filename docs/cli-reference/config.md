@@ -168,3 +168,45 @@ or a `schema_version` newer than this binary supports) exits
 ([runtime], [elevation]) plus [logging]; every other 08 §3 section
 round-trips unvalidated (Art.1 — no invented validation for a section
 this ticket does not own).
+
+## `[hooks]` section (P1-E03-W1-S05-T1)
+
+08-INIT-CONFIG-SPEC.md §3's `[hooks]` row: hook definitions, reload class
+**hot** (R-14.9 — an edit is picked up on the next reload without a daemon
+restart). Each `[[hooks]]` array-of-tables entry maps to
+`internal/hooks.HookConfig`:
+
+```toml
+[[hooks]]
+id = "notify-on-register"       # optional — see below
+trigger = "plugin.registered"   # exact-match against an event bus Kind
+action_type = "plugin-call"     # "plugin-call" | "agent-note" ONLY at W1
+[hooks.action_params]
+plugin = "notifier"
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Stable hook identifier. If omitted, derived deterministically from `trigger` + `action_type` + a hash of `action_params`, so two config files declaring the same hook get the same id across a daemon restart without hand-assignment. |
+| `trigger` | string | The event bus `Kind` string this hook fires on (exact match — no wildcard syntax at W1). |
+| `action_type` | string | `plugin-call` invokes a plugin via the composition root's `PluginDispatcher` (wired to C/S-05.T7's plugin registry); `agent-note` writes a structured note via `NoteWriter` (wired once G/S-13's journal/memory domain ships). |
+| `action_params` | table of string→string | Opaque to the engine — interpreted by whichever `PluginDispatcher`/`NoteWriter` implementation is wired in. |
+
+**W1 action-type restriction (security ruling, 04 §Epic C S-05.T1):**
+`shell` and any action type other than `plugin-call`/`agent-note` are
+refused — at both config load/registration time and again, independently,
+at dispatch time (defense-in-depth) — with a `policy-denied` error. Shell
+actions are deliberately NOT available yet; they land only once
+I/S-18.T5's policy-routed risk ladder exists to gate them. A config file
+naming `action_type = "shell"` fails validation rather than being
+silently dropped or downgraded.
+
+**Audit:** every hook fire — success, dispatch error, timeout, panic, or
+refusal — publishes a `hooks.fire` event to the event bus carrying
+`{hook_id, trigger, action_type, params_hash, result_code, err_msg, ts}`.
+The raw `action_params` are never published, only a hash of them; an error
+message that happens to echo back a secret-shaped param value is
+redacted before publication. See `docs/developer/hooks.md` for the full
+engine contract (timeout bound, at-least-once/idempotency, audit
+guarantee) and the composition-root wiring this section's fields feed
+into.
