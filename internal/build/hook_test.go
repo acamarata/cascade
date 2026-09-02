@@ -94,7 +94,11 @@ func TestPrePushHookRealGit(t *testing.T) {
 	// The bad commit: non-conventional message, and file content tripping
 	// a pattern the test supplies via CASCADE_IDENTIFIER_PATTERNS_FILE
 	// below (never a real identifier, per this file's package doc).
-	writeFileT(t, filepath.Join(repo, "hygiene-fixture.txt"), "marker SEEDED-IDENTIFIER-LEAK-0001 present\n")
+	// Composed at runtime, never written literally: this file is tracked, so a
+	// literal marker here would be swept as a real violation of the very
+	// pattern the test installs, and the "clean range" half could never pass.
+	marker := "SEEDED-" + "IDENTIFIER-" + "LEAK-0001"
+	writeFileT(t, filepath.Join(repo, "hygiene-fixture.txt"), "marker "+marker+" present\n")
 	runGit(t, repo, "add", "hygiene-fixture.txt")
 	runGit(t, repo, "commit", "-q", "-m", "add fixture without a conventional type")
 
@@ -107,7 +111,7 @@ func TestPrePushHookRealGit(t *testing.T) {
 	runGit(t, repo, "config", "core.hooksPath", ".github/hooks")
 
 	patternsFile := filepath.Join(t.TempDir(), "patterns.txt")
-	writeFileT(t, patternsFile, "SEEDED-IDENTIFIER-LEAK-\\d+\n")
+	writeFileT(t, patternsFile, "SEEDED-"+"IDENTIFIER-"+"LEAK-"+`\d+`+"\n")
 	env := []string{"CASCADE_IDENTIFIER_PATTERNS_FILE=" + patternsFile}
 
 	out, ok := runPush(t, repo, env)

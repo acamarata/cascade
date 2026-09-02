@@ -120,23 +120,33 @@ func TestSweepCommitMessages(t *testing.T) {
 	}
 }
 
+// TestSweepFiles_SeededFixtures scans the fixtures through SweepContent
+// rather than SweepFiles. SweepFiles deliberately skips any path under a
+// testdata segment (SweepSkipsPath) — seeded fixtures exist to CONTAIN the
+// strings the gate hunts for, so scanning them would make the gate
+// permanently red on its own test data and block every push. Reading the
+// fixture here and scanning its bytes exercises the same matching logic
+// without re-entering the exclusion this test is not testing.
 func TestSweepFiles_SeededFixtures(t *testing.T) {
 	root := sweepModuleRoot(t)
-	fixtureDir := filepath.Join("internal", "build", "testdata", "seeded-violations", "identifiers")
-	pats := []*regexp.Regexp{regexp.MustCompile(`SEEDED-IDENTIFIER-LEAK-\d+`)}
-
-	v, err := SweepFiles(pats, root, []string{filepath.Join(fixtureDir, "leak.txt")})
-	if err != nil {
-		t.Fatalf("SweepFiles: %v", err)
+	scanFixture := func(t *testing.T, rel string, pats []*regexp.Regexp) []SweepViolation {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read fixture %s: %v", rel, err)
+		}
+		return SweepContent(pats, rel, data)
 	}
+	fixtureDir := filepath.Join("internal", "build", "testdata", "seeded-violations", "identifiers")
+	// Composed at runtime — see the note in hook_test.go.
+	pats := []*regexp.Regexp{regexp.MustCompile("SEEDED-" + "IDENTIFIER-" + "LEAK-" + `\d+`)}
+
+	v := scanFixture(t, filepath.Join(fixtureDir, "leak.txt"), pats)
 	if len(v) == 0 {
 		t.Fatal("expected the seeded leak fixture to trip the marker pattern, found none")
 	}
 
-	clean, err := SweepFiles(pats, root, []string{filepath.Join(fixtureDir, "clean.txt")})
-	if err != nil {
-		t.Fatalf("SweepFiles: %v", err)
-	}
+	clean := scanFixture(t, filepath.Join(fixtureDir, "clean.txt"), pats)
 	if len(clean) != 0 {
 		t.Fatalf("expected the clean fixture to produce zero hits, got %+v", clean)
 	}
@@ -150,10 +160,7 @@ func TestSweepFiles_SeededFixtures(t *testing.T) {
 		regexp.MustCompile(`/Users/[A-Za-z0-9_.-]+`),
 		regexp.MustCompile(`[A-Za-z0-9._%+-]+@gmail\.com`),
 	}
-	shapes, err := SweepFiles(shapePats, root, []string{filepath.Join(fixtureDir, "leak.txt")})
-	if err != nil {
-		t.Fatalf("SweepFiles (shape patterns): %v", err)
-	}
+	shapes := scanFixture(t, filepath.Join(fixtureDir, "leak.txt"), shapePats)
 	if len(shapes) < 2 {
 		t.Fatalf("expected >=2 shape-pattern hits on the leak fixture (home path + gmail), got %d: %+v", len(shapes), shapes)
 	}
@@ -230,5 +237,33 @@ func TestIdentifierSweepGate_Live(t *testing.T) {
 	}
 	if len(violations) > 0 {
 		t.Fatalf("identifier sweep: %d violation(s) found:\n%s", len(violations), FormatSweepViolations(violations))
+	}
+}
+
+// TestSweepSkipsPath pins the exclusion that keeps the gate off its own
+// fixtures. It matches whole path segments only: an unanchored "testdata"
+// check is how the lint wall came to exempt every path merely containing
+// that word, and this gate must not repeat it.
+func TestSweepSkipsPath(t *testing.T) {
+	skipped := []string{
+		"internal/build/testdata/seeded-violations/identifiers/leak.txt",
+		"testdata/x.txt",
+		"pkg/plugin/testdata/example-pbd.toml",
+	}
+	kept := []string{
+		"internal/build/sweep.go",
+		"internal/nottestdatagen/gen.go",
+		"docs/testdata-guide.md",
+		"pkg/testdataset/x.go",
+	}
+	for _, p := range skipped {
+		if !SweepSkipsPath(p) {
+			t.Errorf("SweepSkipsPath(%q) = false, want true", p)
+		}
+	}
+	for _, p := range kept {
+		if SweepSkipsPath(p) {
+			t.Errorf("SweepSkipsPath(%q) = true, want false (substring, not a path segment)", p)
+		}
 	}
 }

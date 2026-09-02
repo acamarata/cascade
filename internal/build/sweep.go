@@ -52,6 +52,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -174,13 +175,33 @@ func ListTrackedFiles(root string) ([]string, error) {
 	return files, nil
 }
 
+// SweepSkipsPath reports whether rel is fixture data the sweep must not
+// scan. Seeded-violation fixtures exist precisely to CONTAIN the strings
+// the gate hunts for, so scanning them makes the gate permanently red on
+// its own test data and blocks every push — which is exactly what
+// happened before this exclusion existed. The match is on whole path
+// segments, never a substring: an unanchored "testdata" check is how the
+// lint wall came to exempt every path merely containing that word.
+func SweepSkipsPath(rel string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
+		if seg == "testdata" {
+			return true
+		}
+	}
+	return false
+}
+
 // SweepFiles reads each of relFiles under root and scans its content
 // against patterns. A read error (including a non-UTF8/binary file this
 // gate cannot meaningfully scan) is returned as an error, never silently
-// skipped — fail closed, per this file's package doc.
+// skipped — fail closed, per this file's package doc. Paths under a
+// testdata segment are excluded per SweepSkipsPath.
 func SweepFiles(patterns []*regexp.Regexp, root string, relFiles []string) ([]SweepViolation, error) {
 	var out []SweepViolation
 	for _, rel := range relFiles {
+		if SweepSkipsPath(rel) {
+			continue
+		}
 		data, err := os.ReadFile(root + string(os.PathSeparator) + rel)
 		if err != nil {
 			return nil, fmt.Errorf("identifier sweep: reading %s: %w", rel, err)
