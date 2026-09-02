@@ -27,7 +27,18 @@
 //	default for tests and for callers that already know they are the only
 //	process (e.g. storetest's per-test t.TempDir() database).
 //
-// SPORT: providers.sqlite.Driver/ADDED (P1-E02-W1-S02-T2).
+// Domain scoping (P1-E02-W1-S02-T5): the bare *Driver stays unscoped —
+// existing callers keep working unchanged. Driver.Scoped (scope.go, split
+// under R-14.117's 300-line cap) returns a domain-bound provider.Store
+// that enforces the fail-closed cross-domain capability check — the
+// "symmetric read guard" alongside executor.go's submitScoped write
+// guard — on any call whose namespace differs from the scoped domain.
+// GrantChecker (executor.go) is the locally-declared injection seam a
+// composition root wires a real internal/storage.CapabilityRegistry into.
+//
+// SPORT: providers.sqlite.Driver/ADDED (P1-E02-W1-S02-T2),
+//
+//	providers.sqlite.Driver/CHANGED (P1-E02-W1-S02-T5, domain scoping).
 package sqlite
 
 import (

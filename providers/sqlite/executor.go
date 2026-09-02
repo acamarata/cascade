@@ -40,6 +40,78 @@ var ErrDomainOwned = cascade.New(cascade.KindConflict, "sqlite: domain already o
 // single-writer invariant across two processes.
 var ErrDaemonOwnsStore = cascade.New(cascade.KindConflict, "sqlite: store is owned by a live daemon (daemon-owns-store refusal)")
 
+// CapOp identifies which operation a cross-domain capability check
+// covers. Declared locally rather than imported from
+// internal/storage.Op: providers/** may import pkg/** only, never
+// internal/** (Art.10.2, depguard's plugins-providers-boundary rule) — the
+// same reason SocketProbe and Migrator are locally-declared, duck-typed
+// injection seams rather than direct internal/ imports. A composition-root
+// adapter (outside this package) is what maps internal/storage.Op onto
+// CapOp when it wires a real *storage.CapabilityRegistry in as a
+// GrantChecker.
+type CapOp uint8
+
+const (
+	// CapOpRead covers Get and Scan (cross-domain reads). Mirrors
+	// internal/storage.OpRead's bit position so a straightforward adapter
+	// need not remap values, though nothing in this package assumes that.
+	CapOpRead CapOp = 1 << iota
+	// CapOpWrite covers Put, Delete, and Tx (cross-domain writes).
+	CapOpWrite
+)
+
+// GrantChecker is the injected cross-domain capability-grant check
+// Scoped's writes (via submitScoped, below) and reads (scope.go's
+// checkAccess) call before letting one domain's Store handle touch
+// another domain's data. A nil GrantChecker means "this Driver was opened
+// unscoped" — see Driver.Scoped's doc — and every domain-scoped store
+// requires a non-nil checker: submitScoped and checkAccess both treat a
+// nil checker as an automatic denial, never a silent bypass. The real
+// implementation, internal/storage.CapabilityRegistry, is wired in by the
+// composition root (cmd/ or internal/daemon) through a thin adapter this
+// package never imports directly — the ErrScopeDenied doc explains what
+// that adapter has NOT yet been wired for (Art.1: no caller assembles it
+// yet outside this package's own tests).
+type GrantChecker interface {
+	// Check reports whether srcDomain may perform op against dstDomain's
+	// data right now. A non-nil error means "denied" — submitScoped and
+	// checkAccess propagate it unchanged to the caller, never
+	// re-wrapping or discarding it.
+	Check(ctx context.Context, srcDomain, dstDomain string, op CapOp) error
+}
+
+// ErrScopeDenied is the fail-closed sentinel a domain-scoped Store (see
+// Driver.Scoped) returns when a cross-domain operation has no injected
+// GrantChecker to consult at all — the "nil registry" half of this
+// ticket's fail-closed contract (a failed Check call instead propagates
+// whatever typed error the checker itself returned, e.g.
+// internal/storage.ErrDomainForbidden through the composition-root
+// adapter). Wraps cascade.KindPermissionDenied, the same Kind
+// internal/storage.ErrDomainForbidden wraps, so a caller inspecting only
+// the Kind sees one consistent "access denied" classification regardless
+// of which layer produced it.
+var ErrScopeDenied = cascade.New(cascade.KindPermissionDenied, "sqlite: cross-domain access denied (no capability checker configured)")
+
+// submitScoped is submit's domain-scoped variant: fn reaches the write
+// queue only when dstDomain equals srcDomain (no cross-domain check
+// needed — a domain never needs a grant to write its own data), or
+// checker.Check grants srcDomain the CapOpWrite it needs against
+// dstDomain. A nil checker or a failed Check denies the write BEFORE it
+// is ever queued — submit is never called on the denied path, so the
+// write genuinely never executes, not merely "executes but is later
+// rejected."
+func (e *WriteExecutor) submitScoped(ctx context.Context, srcDomain, dstDomain string, checker GrantChecker, fn func(*sql.Tx) error) error {
+	if srcDomain != dstDomain {
+		if checker == nil {
+			return ErrScopeDenied
+		}
+		if err := checker.Check(ctx, srcDomain, dstDomain, CapOpWrite); err != nil {
+			return err
+		}
+	}
+	return e.submit(ctx, dstDomain, fn)
+}
+
 // writeJob is one unit of work the executor's drainer runs as a single
 // *sql.Tx against the write connection.
 type writeJob struct {
