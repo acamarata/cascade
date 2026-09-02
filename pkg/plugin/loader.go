@@ -1,10 +1,11 @@
 package plugin
 
 import (
+	"errors"
 	"io"
 	"strings"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -27,10 +28,9 @@ import (
 // Decoding is strict: any top-level or nested key present in the document
 // that does not correspond to a field on Manifest (or one of its component
 // types) is rejected with ErrCodeParse, exactly like a syntactically
-// malformed document — BurntSushi/toml has no DisallowUnknownFields
-// decoder option, so strictness is achieved by decoding then inspecting the
-// returned MetaData.Undecoded() key list, which is empty only when every
-// key in the document was consumed by a Manifest field.
+// malformed document — via the decoder's DisallowUnknownFields, which
+// fails closed during decode itself (first-class strictness, rather than
+// decoding then inspecting what was left over).
 //
 // ParseManifest is fail-closed: on any decode error or any validation
 // failure, it returns the zero Manifest and a non-nil error — never a
@@ -41,20 +41,21 @@ import (
 func ParseManifest(r io.Reader) (Manifest, error) {
 	var m Manifest
 
-	meta, err := toml.NewDecoder(r).Decode(&m)
-	if err != nil {
-		return Manifest{}, cascade.Wrap(cascade.KindInvalidInput, err, "plugin manifest: decode TOML")
-	}
-
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		keys := make([]string, len(undecoded))
-		for i, k := range undecoded {
-			keys[i] = k.String()
+	dec := toml.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&m); err != nil {
+		var strictErr *toml.StrictMissingError
+		if errors.As(err, &strictErr) {
+			keys := make([]string, len(strictErr.Errors))
+			for i := range strictErr.Errors {
+				keys[i] = strings.Join(strictErr.Errors[i].Key(), ".")
+			}
+			return Manifest{}, cascade.Newf(
+				ErrCodeParse.Kind(),
+				"plugin manifest: unknown key(s): %s", strings.Join(keys, ", "),
+			)
 		}
-		return Manifest{}, cascade.Newf(
-			ErrCodeParse.Kind(),
-			"plugin manifest: unknown key(s): %s", strings.Join(keys, ", "),
-		)
+		return Manifest{}, cascade.Wrap(cascade.KindInvalidInput, err, "plugin manifest: decode TOML")
 	}
 
 	if errs := Validate(m); len(errs) > 0 {

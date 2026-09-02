@@ -118,14 +118,14 @@ type CommandSpec struct {
 type Provides struct {
 	// Intents is the set of natural-language capabilities this plugin can
 	// satisfy via the intent install flow.
-	Intents []IntentSpec `toml:"intents"`
+	Intents []IntentSpec `toml:"intents,omitempty"`
 	// Tools is the set of agent-callable tools this plugin exposes.
-	Tools []ToolSpec `toml:"tools"`
+	Tools []ToolSpec `toml:"tools,omitempty"`
 	// Domains is the set of storage domains this plugin registers.
-	Domains []DomainSpec `toml:"domains"`
+	Domains []DomainSpec `toml:"domains,omitempty"`
 	// Commands is the set of CLI verbs (with optional RPC mounts) this
 	// plugin contributes to the host's command tree.
-	Commands []CommandSpec `toml:"commands"`
+	Commands []CommandSpec `toml:"commands,omitempty"`
 }
 
 // PermissionDisplay is one entry in the user consent dialog shown before a

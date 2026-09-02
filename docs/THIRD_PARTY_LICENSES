@@ -19,7 +19,7 @@ locally with:
 
 Module                                 License        Source
 --------------------------------------- -------------- ------------------------------------------------------------------
-github.com/BurntSushi/toml             MIT            https://github.com/BurntSushi/toml/blob/v1.6.0/COPYING
+github.com/pelletier/go-toml/v2        MIT            https://github.com/pelletier/go-toml/blob/v2.4.3/LICENSE
 github.com/inconshreveable/mousetrap   Apache-2.0     https://github.com/inconshreveable/mousetrap/blob/v1.1.0/LICENSE
 github.com/spf13/cobra                 Apache-2.0     https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
 github.com/spf13/pflag                 BSD-3-Clause   https://github.com/spf13/pflag/blob/v1.0.9/LICENSE
@@ -32,7 +32,7 @@ ONLY on GOOS=windows (cobra's windows "double-click" detection) — it does
 not appear under darwin/linux go-licenses runs, which is why the union across
 all three release GOOSes, not a single-platform run, is required. go.yaml.in/
 yaml/v3 and gopkg.in/check.v1 are test-only transitive dependencies of
-BurntSushi/toml and are never compiled into any cascade binary on any release
+pelletier/go-toml and are never compiled into any cascade binary on any release
 platform. All four remain in go.sum (required to build/test the module
 graph); the latter two are intentionally absent from this report, which
 documents what actually ships, not the full go.sum.

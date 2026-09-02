@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // Purpose: the config.toml file-I/O and section-parsing helpers behind
@@ -42,7 +42,7 @@ func readAndUpgradeTree(path string) (map[string]interface{}, map[string]ConfigS
 	data, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		if _, decErr := toml.Decode(string(data), &tree); decErr != nil {
+		if decErr := toml.Unmarshal(data, &tree); decErr != nil {
 			return nil, nil, &ConfigError{Reason: fmt.Sprintf("malformed TOML in %s: %v", path, decErr)}
 		}
 		markSources(tree, "", sources, SourceFile)

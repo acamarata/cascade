@@ -43,7 +43,7 @@ var LicenseAllowlist = map[string]bool{
 // GitHub license API / LICENSE file. Update this map in the same change
 // that adds or upgrades a require line in go.mod.
 var KnownModuleLicenses = map[string]string{
-	"github.com/BurntSushi/toml":           "MIT",
+	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
 	"github.com/inconshreveable/mousetrap": "Apache-2.0",
 	"github.com/spf13/pflag":               "BSD-3-Clause",

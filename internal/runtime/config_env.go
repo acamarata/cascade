@@ -3,7 +3,7 @@ package runtime
 import (
 	"strings"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // Purpose: generic tree-manipulation helpers and the
@@ -117,7 +117,7 @@ func parseEnvLiteral(raw string) interface{} {
 	var holder struct {
 		V interface{} `toml:"v"`
 	}
-	if _, err := toml.Decode("v = "+raw, &holder); err == nil {
+	if err := toml.Unmarshal([]byte("v = "+raw), &holder); err == nil {
 		return holder.V
 	}
 	return raw

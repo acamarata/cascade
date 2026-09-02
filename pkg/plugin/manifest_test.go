@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/acamarata/cascade/pkg/plugin"
 )
