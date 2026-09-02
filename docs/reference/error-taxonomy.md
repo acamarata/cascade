@@ -148,20 +148,60 @@ code tables.
 Rule: **taxonomy kinds at API boundaries, internal wrapping free.** Exported
 API surfaces — `pkg/` and `cmd/` composition — must return a
 `*cascade.Error` (directly or via one of this package's constructors), never
-a raw `fmt.Errorf(...)` or `errors.New(...)` value. `internal/` packages may
-wrap however they like; the taxonomy's own inspection helpers
-(`errors.Is`/`cascade.KindOf`) see through that wrapping.
+a raw `fmt.Errorf(...)`, `errors.New(...)`, or `errors.Join(...)` value.
+`internal/` packages may wrap however they like; the taxonomy's own
+inspection helpers (`errors.Is`/`cascade.KindOf`) see through that wrapping.
 
-The gate lives in `internal/build` (`boundary_test.go`, run by
-`go test ./internal/build/...`): an AST scanner walks `pkg/` and `cmd/`
-(skipping `_test.go` files and `testdata/`) for `fmt.Errorf`/`errors.New`
-call expressions.
+The gate lives in `internal/build` (`boundary_test.go` +
+`boundary_seeded_test.go`, run by `go test ./internal/build/...`): an AST
+scanner walks `pkg/` and `cmd/` (skipping `_test.go` files and `testdata/`)
+for `fmt.Errorf`/`errors.New`/`errors.Join` call expressions, resolving each
+file's import aliases first so an aliased import (`import ferrors "fmt"`
+then `ferrors.Errorf(...)`) still resolves to `fmt.Errorf`. A dot-import of
+`fmt` or `errors` anywhere in a scanned tree is rejected outright at the
+import declaration, independent of how the dot-imported names are used,
+since a dot-imported call site is not a `*ast.SelectorExpr` and cannot be
+matched by selector at all.
 
-- **Real tree** (`TestBoundaryLint_RealTree`) must find zero violations.
-- **Seeded fixture** (`TestBoundaryLint_SeededViolation`,
-  `internal/build/testdata/seeded-violations/boundary/violation.go`)
-  deliberately contains both raw-constructor forms and must find at least
-  one violation of each — proving the lint's failing case actually fails.
+- **Real tree** (`TestBoundaryLint_RealTree`) must find zero violations —
+  zero denied calls and zero dot-imports of `fmt`/`errors`.
+- **Seeded fixtures** under
+  `internal/build/testdata/seeded-violations/boundary/` deliberately
+  contain one case per denied construct, each proven red by its own test:
+  `violation.go` (`TestBoundaryLint_SeededViolation`, the original
+  `fmt.Errorf` + `errors.New` case), `alias_violation.go`
+  (`TestBoundaryLint_SeededViolation_ImportAlias`, `fmt.Errorf` reached
+  through an import alias), `dotimport_violation.go`
+  (`TestBoundaryLint_SeededViolation_DotImport`, a dot-imported `errors`),
+  and `join_violation.go`
+  (`TestBoundaryLint_SeededViolation_ErrorsJoin`, `errors.Join`).
+
+### What this lint does and does not prove (R-14.120)
+
+The boundary lint is an AST scan of `pkg/` and `cmd/` non-test source. It
+proves **"no raw-error-constructor call is written directly in `pkg/` or
+`cmd/` source, under its own name, an alias, or a dot-import."** It does
+**not** prove, and cannot by construction of what an AST scan of those two
+trees can see, the stronger claim "no raw error value can reach a caller of
+`pkg/` or `cmd/`":
+
+- A raw error minted inside `internal/` with `fmt.Errorf`/`errors.New`/
+  `errors.Join` — all of which `internal/` is free to use per this
+  document's Rule above — and then **returned unchanged through a `pkg/` or
+  `cmd/` boundary** is invisible to this scanner: the constructor call
+  itself is not textually present in the scanned trees, only its
+  already-built value flowing through a return statement, and the scanner
+  does not trace values across package boundaries.
+- A **bespoke type that implements the `error` interface directly** (no
+  `fmt`/`errors` constructor call anywhere) produces no AST node this lint
+  watches for at all.
+
+Per **R-14.118**, closing that class of evasion is the responsibility of
+the ticket that owns each `pkg`/`cmd` boundary — via `cascade.Wrap` at the
+exact point where an `internal/` error crosses out — not of this lint. Do
+not read a green `TestBoundaryLint_RealTree` as proof that every error
+surfaced by `pkg/`/`cmd/` carries a taxonomy kind; read it only as proof
+that no raw constructor call is written in those trees' own source.
 
 ## Consumer rules (for B and D)
 
