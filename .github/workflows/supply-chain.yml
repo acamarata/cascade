@@ -47,6 +47,8 @@ jobs:
           go-version-file: go.mod
 
       - name: Install govulncheck
+        # govulncheck stays on @latest deliberately: the point of this lane is a
+        # current vulnerability database, and the tool and DB ship together.
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: govulncheck ./...
@@ -71,7 +73,7 @@ jobs:
       # dependency directly from its LICENSE file text rather than a
       # maintained registry, catching any drift in the registry itself.
       - name: Install go-licenses
-        run: go install github.com/google/go-licenses@latest
+        run: go install github.com/google/go-licenses@v1.6.0
 
       - name: go-licenses check (permissive allowlist)
         run: |

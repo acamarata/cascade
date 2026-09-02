@@ -44,7 +44,7 @@ jobs:
           hits=$(find . -type d -path '*/testdata/fuzz' \
             -not -path './internal/testdata/fuzz' \
             -not -path '*/testdata/seeded-violations/*' \
-            -not -path './.git/*' 2>/dev/null || true)
+            -not -path './.git/*' 2>/tmp/find.err || { echo '::error::find failed; corpus check is broken, not clean'; cat /tmp/find.err; exit 1; })
           if [ -n "$hits" ]; then
             echo "fuzz corpus found outside internal/testdata/fuzz/:"
             echo "$hits"
@@ -57,7 +57,7 @@ jobs:
           set -eu
           hits=$(find ./internal/build/testdata/seeded-violations/fuzz-corpus -type d \
             -path '*/testdata/fuzz' \
-            -not -path '*/internal/testdata/fuzz' 2>/dev/null || true)
+            -not -path '*/internal/testdata/fuzz' 2>/tmp/find.err || { echo '::error::find failed; corpus check is broken, not clean'; cat /tmp/find.err; exit 1; })
           if [ -z "$hits" ]; then
             echo "expected the seeded fuzz-corpus fixture to trip the location gate, found nothing"
             exit 1
@@ -78,7 +78,16 @@ jobs:
       - name: Discover and run FuzzXxx targets
         run: |
           set -eu
-          targets=$(go test -list '^Fuzz' ./... 2>/dev/null | grep '^Fuzz' || true)
+          # Discovery must fail loud. Previously stderr was discarded and
+          # grep's exit swallowed by `|| true`, so a broken toolchain and a
+          # genuinely empty target set were indistinguishable and both
+          # reported green.
+          if ! listing=$(go test -list '^Fuzz' ./... 2>/tmp/fuzz-list.err); then
+            echo "::error::go test -list failed; fuzz discovery is broken, not empty"
+            cat /tmp/fuzz-list.err
+            exit 1
+          fi
+          targets=$(printf '%s\n' "$listing" | grep '^Fuzz' || true)
           if [ -z "$targets" ]; then
             echo "no FuzzXxx targets exist yet (P1-E01-W1-S01-T3 ships the lane only; targets arrive with parser/decoder tickets) — green-empty by design"
             exit 0
