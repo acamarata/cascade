@@ -96,11 +96,17 @@ func New(stdout, stderr io.Writer, jsonMode, quiet, verbose, noColorFlag bool) *
 // caught plugins/examples' standalone example plugin, which legitimately
 // prints on its own account — see the rule's own comment in .golangci.yml),
 // so every cmd/** command reaches the real streams by holding a Writer
-// built here rather than naming os.Stdout/os.Stderr itself. Nothing today
-// stops an internal/** package outside this one from writing to stdout
-// directly; R-14.137 tracks closing that gap with an AST gate that makes
-// "only NewDefault touches the real streams" a whole-program property
-// instead of a cmd/**-scoped one.
+// built here rather than naming os.Stdout/os.Stderr itself. R-14.137's AST
+// gate (internal/build/outputgate.go) makes "only NewDefault touches the
+// real streams" a whole-program property instead of a cmd/**-scoped one:
+// it scans every non-exempt package (not only cmd/**) for a direct
+// os.Stdout/os.Stderr reference or bare fmt.Print*, catching a helper
+// package's own stdout write at its definition site even when nothing at
+// its call site names os/fmt at all. It exempts this package (the
+// sanctioned writer itself) and plugins/examples/** (D/S-06.T5's own
+// carve-out); see the gate's package doc for what it still cannot prove
+// (a captured os.Stdout read back through a variable/field/parameter needs
+// real dataflow analysis this AST scan does not do).
 func NewDefault(jsonMode, quiet, verbose, noColorFlag bool) *Writer {
 	return New(os.Stdout, os.Stderr, jsonMode, quiet, verbose, noColorFlag)
 }

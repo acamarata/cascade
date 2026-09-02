@@ -17,6 +17,7 @@ those first for the sibling gates this document does not repeat.
 | Stub gate | Art.1.2 | `stubgate.go` | `testdata/seeded-violations/stubgate/` |
 | Clean-root gate | Art.10.1 | `cleanroot.go` | `testdata/seeded-violations/cleanroot/` |
 | AST clock/rand gate | Art.7.3 (R-14.132) | `clockgate.go` | `testdata/seeded-violations/clockgate/` |
+| Output-seam AST gate | R-14.137 | `outputgate.go` | `testdata/seeded-violations/outputgate/` |
 | Coverage floor + ratchet | Art.4 | `coveragegate.go` | `testdata/seeded-violations/coverage/` |
 | No-sleep lint | Art.7.3 | `hygiene.go` | `testdata/seeded-violations/hygiene/` |
 | No-network unit lane | Art.7.2 | `hygiene.go` | `testdata/seeded-violations/hygiene/` |
@@ -82,6 +83,60 @@ functions) — it deliberately does NOT add `time.Tick`/`After`/`NewTimer`/
 `Unix`, a separate forbidigo gap R-14.132 named but did not assign here.
 Exempt: `_test.go` files and the two canonical Clock implementations
 (`internal/runtime/clock.go`, `internal/testkit/clock.go`).
+
+## Output-seam AST gate (R-14.137)
+
+The output seam: nothing outside `internal/output` may write to the
+process's real stdout/stderr — `internal/output.Writer` is the only
+sanctioned path (the CLI's human/JSON/quiet modes and its versioned
+envelope all flow through it). The existing `.golangci.yml` forbidigo rule
+(D/S-06.T5) enforces a narrower version of this, scoped to `cmd/**` only,
+and CR of D/S-06.T5 proved it defeated two non-exotic ways: an aliased
+import (`osalias "os"`, then `osalias.Stdout`) reports zero forbidigo
+issues, since forbidigo matches selector TEXT, not a resolved identifier
+(the same root cause R-14.120 and R-14.132 fixed elsewhere); and ANY
+indirection through a helper package outside `cmd/**` evades it entirely,
+since the rule is per-file text matching scoped to one directory.
+
+This gate (`outputgate.go`) resolves each file's import aliases before
+matching, exactly as `clockgate.go` does, and denies: `os.Stdout`,
+`os.Stderr`, and the bare `fmt.Print`/`fmt.Println`/`fmt.Printf` family —
+matched as a general selector-text match anywhere in the AST (not only as a
+call's `Fun`), because `os.Stdout`/`os.Stderr` are data references, not
+calls, and can appear as a plain argument
+(`fmt.Fprintln(os.Stdout, ...)`). **`fmt.Fprint*` targeting stdout/stderr**
+is caught this same way, for free: the `os.Stdout`/`os.Stderr` selector
+inside its argument list is what the general match finds — no dedicated
+`Fprint*`-argument rule was added, since one would only ever fire in cases
+the general rule already requires. `fmt.Fprint*` to a real `io.Writer` is
+never denied — that is the sanctioned pattern.
+
+**Cross-package (R-14.137's specific requirement):** unlike the cmd/-only
+forbidigo rule, this gate scans every non-exempt package under `cmd/`,
+`internal/`, `pkg/`, `providers/`, and `plugins/` — not only `cmd/`. That
+converts the whole-program property ("nothing outside `internal/output`
+writes to the real streams") into a per-file one at the DEFINITION site: a
+helper in some other package that writes to `os.Stdout` directly is caught
+where it is written, even though the call site that reaches it (e.g. from
+`cmd/`) names no os/fmt identifier at all and would look innocent to a
+`cmd/`-only scan. Proven by
+`TestOutputGate_SeededViolationRed_CrossPackageHelper`.
+
+**What this does NOT catch, stated rather than implied** (no dataflow
+analysis, by construction of a per-file AST scan):
+`os.Stdout`/`os.Stderr` captured into a variable, struct field, or function
+parameter and read back later (`w := os.Stdout` then `w.Write(...)`
+elsewhere breaks the direct-selector match); a file descriptor obtained any
+other way (`os.NewFile(1, ...)`, or a third-party/vendored dependency's own
+direct write); or a bespoke `io.Writer` whose `Write` method itself,
+ultimately, forwards to a captured `os.Stdout`. Closing any of these needs
+real dataflow/type-aware analysis (effectively `golang.org/x/tools/go/packages`
++ SSA), a dependency this ticket is not authorized to add (R-14.115).
+
+Exempt: `_test.go` files, `internal/output/**` (the sanctioned Writer
+package itself), and `plugins/examples/**` (the standalone example plugin
+legitimately prints on its own account, per D/S-06.T5's own carve-out —
+scoped to that directory only, not all of `plugins/**`).
 
 ## Coverage floor + ratchet (Art.4)
 
