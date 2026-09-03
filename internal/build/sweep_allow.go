@@ -1,4 +1,5 @@
-// Package build's identifier-sweep allow list.
+// Package build implements the repository's own build-time gates. This
+// file holds the identifier sweep's allow list.
 //
 // Allow patterns are separated from the deny sweep in sweep.go because they
 // pull in the opposite direction and the distinction is worth keeping visible
