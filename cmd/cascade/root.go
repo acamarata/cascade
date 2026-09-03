@@ -14,14 +14,22 @@
 package main
 
 import (
+	"context"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/cmd/cascade/config"
+	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// daemonlessProbeTimeout bounds the socket-probe dial PersistentPreRunE
+// runs before every command. Matches probeSocket's own 2s production
+// default (internal/runtime/recovery_scan.go).
+const daemonlessProbeTimeout = 2 * time.Second
 
 // GlobalFlags holds the persistent flag values shared by every subcommand.
 // Subcommands read this struct directly (same package) or, from outside the
@@ -69,10 +77,11 @@ func newRootCmd() *cobra.Command {
 			}
 			return nil
 		},
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			if globalFlags.Quiet && globalFlags.Verbose {
 				return cascade.New(cascade.KindInvalidInput, "--quiet and --verbose are mutually exclusive")
 			}
+			cmd.SetContext(probeDaemonlessAndAttach(cmd.Context()))
 			return nil
 		},
 	}
@@ -239,4 +248,37 @@ func (l lazyPaths) LogDir() string {
 }
 func (l lazyPaths) StorageRoot(profile runtime.Profile) string {
 	return l.get(func(p runtime.PathProvider) string { return p.StorageRoot(profile) })
+}
+
+// probeDaemonlessAndAttach is the §D-3 socket-probe auto-fallback: run
+// ALWAYS, for every command, before any subcommand's RunE — there is no
+// --daemonless flag (07-CLI-COMMAND-TREE's global-flag set is fixed),
+// this probe is the only activation path. It stats+dials the socket via
+// runtime.ProbeDaemonless (which itself reuses probeSocket, the SAME
+// function recovery scanning uses — no second probe), attaches the
+// resulting DaemonlessState to ctx for every command/subsystem to read
+// via runtime.DaemonlessStateFrom, and — in non-quiet mode — emits a
+// stderr notice through internal/output (never a bare fmt.Print) when
+// embedded mode activates.
+//
+// A path-resolution failure (e.g. HOME unresolvable) is reported the same
+// way lazyPaths handles it elsewhere in this file: the probe is skipped,
+// ctx is returned unchanged, and DaemonlessStateFrom's ok=false tells a
+// caller "unknown," never "confirmed not embedded" — never a guessed
+// answer standing in for a real one.
+func probeDaemonlessAndAttach(ctx context.Context) context.Context {
+	paths, err := runtime.NewDefaultPathProvider()
+	if err != nil {
+		return ctx
+	}
+	st := runtime.ProbeDaemonless(paths.SocketPath(), daemonlessProbeTimeout, nil)
+	if st.Embedded && !globalFlags.Quiet {
+		w := output.NewDefault(globalFlags.JSON, globalFlags.Quiet, globalFlags.Verbose, noColorFlag)
+		if st.ProbeErr != nil {
+			w.Warn("daemon liveness undecidable (%v); running in embedded (daemonless) mode", st.ProbeErr)
+		} else {
+			w.Warn("daemon not running; running in embedded (daemonless) mode")
+		}
+	}
+	return runtime.WithDaemonlessState(ctx, st)
 }
