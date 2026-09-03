@@ -71,6 +71,23 @@ func TestRunQueueTests_Fake(t *testing.T) {
 	})
 }
 
+// TestRunQueueTests_Fake_WithClock proves RunQueueTests' WithQueueClock
+// deterministic AckTimeout path (R-14.136) against a driver that exposes a
+// clock seam: fakeQueue reads clock.Now() instead of the wall clock when
+// constructed via newFakeQueueWithClock, so clock.Advance moves the
+// driver's own notion of "now" and the redelivery in
+// testQueueAckTimeoutDeterministic happens on the very next Dequeue with no
+// polling or sleeping. Without this test, WithQueueClock and
+// testQueueAckTimeoutDeterministic are only exercised by other packages'
+// driver-conformance tests, never by this package's own suite.
+func TestRunQueueTests_Fake_WithClock(t *testing.T) {
+	clock := newFakeClock()
+	RunQueueTests(t, func(t *testing.T) provider.Queue {
+		t.Helper()
+		return newFakeQueueWithClock(4, clock)
+	}, WithQueueClock(clock))
+}
+
 // alwaysNotFoundStore is a minimal in-package test-only double (Art.1.1:
 // never in pkg/provider non-test files) whose Get always reports
 // KindNotFound and whose other methods no-op successfully. It exists only

@@ -21,14 +21,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"fmt"
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 	"io"
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // fakeVectorStore is a minimal functional provider.VectorStore: exact
@@ -210,80 +208,36 @@ type fakeQueueMsg struct {
 	visibleAt time.Time // zero means "immediately visible"
 }
 
-// fakeQueue is a minimal functional provider.Queue with real
-// visibility-timeout semantics (wall-clock based — acceptable in a
-// test-only double) and an optional bounded Capacity for the
-// enqueue-overflow suite case.
-type fakeQueue struct {
-	mu       sync.Mutex
-	messages map[string][]*fakeQueueMsg
-	seq      int
-	capacity int
+// fakeClock is a minimal AdvanceableClock (see queue_suite.go) double: Now
+// reports a monotonically-advancing instant that only moves when Advance
+// is called, never from the wall clock. It exists so
+// TestRunQueueTests_Fake_WithClock can drive fakeQueue's AckTimeout case
+// deterministically (R-14.136) instead of via the real-time polling
+// fallback.
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
 }
 
-func newFakeQueue(capacity int) *fakeQueue {
-	return &fakeQueue{messages: make(map[string][]*fakeQueueMsg), capacity: capacity}
+// newFakeClock returns a fakeClock seeded at the real current time (the
+// seed value itself is arbitrary — only relative advances matter to
+// fakeQueue's visibility-timeout comparisons).
+func newFakeClock() *fakeClock {
+	return &fakeClock{now: time.Now()}
 }
 
-// Capacity implements BoundedQueue.
-func (f *fakeQueue) Capacity(string) int { return f.capacity }
-
-func (f *fakeQueue) Enqueue(_ context.Context, ns string, payload []byte) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.capacity > 0 && len(f.messages[ns]) >= f.capacity {
-		return "", cascade.Newf(cascade.KindQuotaExhausted, "namespace %q is at capacity %d", ns, f.capacity)
-	}
-	f.seq++
-	id := fmt.Sprintf("msg-%d", f.seq)
-	f.messages[ns] = append(f.messages[ns], &fakeQueueMsg{id: id, payload: payload})
-	return id, nil
+// Now returns the clock's current instant.
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
 }
 
-func (f *fakeQueue) Dequeue(_ context.Context, ns string, visibility time.Duration) (*provider.Message, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	now := time.Now()
-	for _, msg := range f.messages[ns] {
-		if msg.visibleAt.After(now) {
-			continue
-		}
-		f.seq++
-		msg.receipt = fmt.Sprintf("receipt-%d", f.seq)
-		msg.visibleAt = now.Add(visibility)
-		return &provider.Message{ID: msg.id, Payload: msg.payload, Receipt: msg.receipt}, nil
-	}
-	return nil, nil
-}
-
-func (f *fakeQueue) Ack(_ context.Context, ns, receipt string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i, msg := range f.messages[ns] {
-		if msg.receipt != receipt {
-			continue
-		}
-		if !msg.visibleAt.After(time.Now()) {
-			return cascade.Newf(cascade.KindTimeout, "receipt %q already expired", receipt)
-		}
-		f.messages[ns] = append(f.messages[ns][:i], f.messages[ns][i+1:]...)
-		return nil
-	}
-	return cascade.Newf(cascade.KindTimeout, "receipt %q not found (expired and redelivered)", receipt)
-}
-
-func (f *fakeQueue) Nack(_ context.Context, ns, receipt string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, msg := range f.messages[ns] {
-		if msg.receipt != receipt {
-			continue
-		}
-		if !msg.visibleAt.After(time.Now()) {
-			return cascade.Newf(cascade.KindTimeout, "receipt %q already expired", receipt)
-		}
-		msg.visibleAt = time.Time{}
-		return nil
-	}
-	return cascade.Newf(cascade.KindTimeout, "receipt %q not found (expired and redelivered)", receipt)
+// Advance moves the clock forward by d and returns the new instant,
+// satisfying storetest.AdvanceableClock.
+func (c *fakeClock) Advance(d time.Duration) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+	return c.now
 }
