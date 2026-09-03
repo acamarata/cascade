@@ -1,0 +1,19 @@
+# TEST-ONLY fixture corpus of representative secret-shaped values
+# (P1-E03-W1-S05-T2, §D-31). Used exclusively by redact_test.go and
+# bundle_test.go to prove "no value matching this corpus survives in a
+# produced bundle" (plan AC). This file is NOT loaded by redact.go at
+# runtime — there is no RegisterCorpusSource hook and no live
+# recall-index coupling; redact.go's heuristics are pattern-based, not
+# corpus-lookup-based. One representative value per §D-31 secret shape,
+# one per line, "#"-prefixed lines are comments and blank lines ignored.
+
+sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789
+ghp_1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcd12
+AKIAIOSFODNN7EXAMPLE1
+postgres://dbuser:S3cr3tP4ssw0rdXyz@db.example.com:5432/appdb
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dQw4w9WgXcQ_rerferf12345
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj
+-----END PRIVATE KEY-----
+password=Tr0ub4dor&3ZQXKPLM
+api_key: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1908
