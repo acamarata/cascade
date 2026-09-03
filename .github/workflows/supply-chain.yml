@@ -75,9 +75,23 @@ jobs:
       - name: Install go-licenses
         run: go install github.com/google/go-licenses@v1.6.0
 
+      # modernc.org/mathutil is ignored here, and ONLY here. Its LICENSE is a
+      # plain BSD-3-Clause (source retention, binary reproduction, and a
+      # no-endorsement clause naming "the authors" and "the contributors"),
+      # but that wording differs enough from the canonical template that
+      # go-licenses' text classifier will not match it and reports the module
+      # as unlicensed. The license was read in full and identified by hand,
+      # and internal/build/licenses.go records it as BSD-3-Clause, which is on
+      # this same allowlist.
+      #
+      # The ignore is scoped to one module on purpose. Widening the allowlist
+      # or dropping the tool would hide every future classification failure,
+      # and a classifier that cannot read a licence is exactly the signal this
+      # lane exists to raise.
       - name: go-licenses check (permissive allowlist)
         run: |
           go-licenses check ./... \
+            --ignore=modernc.org/mathutil \
             --allowed_licenses=MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,CC0-1.0
 
   dependency-review:
