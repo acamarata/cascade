@@ -2,31 +2,37 @@
 
 package daemon
 
-// Purpose: Run — `cascade daemon run`'s foreground implementation on every
+// Purpose: Run, `cascade daemon run`'s foreground implementation on every
 //   non-Windows platform (06-FORGE-SPEC §2: unix socket, 0600 perms).
-//   Creates the IPC socket, writes the pidfile, serves (accepts and, at
-//   this ticket, immediately closes — D/S-06.T3 owns protocol handling)
-//   connections while tracking an active-connection count, and drains on
-//   SIGTERM/SIGINT within the configured [daemon] shutdown_grace window.
-// Inputs: RunOptions — resolved Settings, the pidfile path, an injected
-//   *slog.Logger/runtime.Clock, and two test seams: Signals (an injectable
-//   os.Signal channel — production wires signal.Notify itself when nil) and
-//   Ready (closed once the socket is listening and the pidfile is written,
-//   letting a test synchronize on readiness instead of sleeping, R-14.136).
+//   Creates the IPC socket, writes the pidfile, and serves real JSON-RPC
+//   and SSE connections through the http.Server the composition root
+//   builds: accepted connections are handed to that server instead of
+//   being closed immediately, restoring the reachability internal/rpc's
+//   handler and SSE bridge always had in tests but never had in a running
+//   daemon. Tracks an active-connection count and drains on SIGTERM/SIGINT
+//   within the configured [daemon] shutdown_grace window.
+// Inputs: RunOptions: resolved Settings, the pidfile path, an injected
+//   *slog.Logger/runtime.Clock, the real *http.Server (Server) built by
+//   NewRPCServer, and two test seams: Signals (an injectable os.Signal
+//   channel; production wires signal.Notify itself when nil) and Ready
+//   (closed once the socket is listening and the pidfile is written,
+//   letting a test synchronize on readiness instead of sleeping).
 // Outputs: nil on a clean drained shutdown; a typed error on socket/pidfile
 //   failure (also recorded in the Manifest as a fail-loud ERROR line).
-// Constraints: this file only creates and removes the socket — no
-//   JSON-RPC or other protocol handling belongs here (ticket scope). Split
-//   across lifecycle_unix_{start,stop,status,prober}.go under R-14.117 to
-//   stay under Art.10.3's 300-line file cap; see this ticket's final
-//   report for the exact split.
-// SPORT: internal/daemon (ADD, per T-2 sport_updates).
+// Constraints: this file creates and removes the socket and drives the
+//   real IPC hand-off (lifecycle_unix_serve.go carries the http.Server
+//   wiring itself, split out to stay under the 300-line file cap). It
+//   does not construct rpc.Registry, the events bus, or any RPC method:
+//   those stay the composition root's job (cmd/cascade/daemon_unix.go)
+//   and internal/rpc's own job, never this package's.
+// SPORT: internal/daemon (CHANGE).
 
 import (
 	"context"
 	"errors"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -69,6 +75,16 @@ type RunOptions struct {
 	Executable func() (string, error)
 	Args       func() []string
 	Environ    func() []string
+	// Server is the real IPC HTTP server (built by NewRPCServer, POST
+	// /rpc and, when its Handler was constructed with an SSE handler,
+	// GET /events too) that every accepted connection is served through.
+	// A nil Server falls back to a bare http.Server{Handler:
+	// http.NotFoundHandler()} internally, which still accepts and closes
+	// connections correctly (accept mechanics and drain refusal both
+	// still run for real) but answers nothing on the wire. Production
+	// (cmd/cascade/daemon_unix.go) always supplies a real one; tests that
+	// only care about accept/drain mechanics may leave this nil.
+	Server *http.Server
 }
 
 // Run serves the daemon in the foreground until ctx is canceled or a
@@ -100,8 +116,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	var active int64
-	acceptDone := make(chan struct{})
-	go acceptLoop(ln, opts.Upgrade, opts.Logger, &active, acceptDone)
+	srv := opts.Server
+	if srv == nil {
+		srv = &http.Server{Handler: http.NotFoundHandler()}
+	}
+	wrapped := &drainRefusingListener{Listener: ln, upgrade: opts.Upgrade, log: opts.Logger}
+	serveDone := serveRPC(wrapped, srv, &active)
 
 	select {
 	case <-sigs:
@@ -115,8 +135,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return nil
 	}
 
+	shutdownRPCServer(srv, opts.Settings.ShutdownGrace)
 	_ = ln.Close()
-	<-acceptDone
+	<-serveDone
 	drain(opts, &active)
 	return nil
 }
@@ -214,38 +235,12 @@ func dialable(path string) bool {
 	return true
 }
 
-// acceptLoop accepts connections until ln is closed. A connection accepted
-// while upgrade is mid-Drain is refused with ErrDraining (logged, closed
-// without ever being counted) rather than silently accepted and dropped —
-// this ticket's HARD REQUIREMENT 1. Every other connection is counted
-// while "handled"; this ticket has no protocol to run against it yet
-// (D/S-06.T3), so it is closed immediately after accept.
-func acceptLoop(ln net.Listener, upgrade *UpgradeManager, log *slog.Logger, active *int64, done chan<- struct{}) {
-	defer close(done)
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		if upgrade != nil && upgrade.Draining() {
-			_ = conn.Close()
-			if log != nil {
-				log.Warn("daemon: connection refused during drain", slog.String("error", ErrDraining.Error()))
-			}
-			continue
-		}
-		atomic.AddInt64(active, 1)
-		_ = conn.Close()
-		atomic.AddInt64(active, -1)
-	}
-}
-
 // drain logs the connection count at drain entry and exit, per this
 // ticket's contract ("Active connection count is tracked and logged via
-// slog at drain entry and exit"). At this ticket the accept loop closes
-// every connection immediately, so there is nothing to wait out beyond
-// ln.Close() itself (already done by the caller); the grace window exists
-// for D/S-06.T3's real protocol handling to consume once it lands.
+// slog at drain entry and exit"). The caller (Run) has already run the
+// real graceful-then-forced http.Server shutdown before calling drain, so
+// the count logged at "drain end" reflects the true post-shutdown state,
+// not a placeholder.
 func drain(opts RunOptions, active *int64) {
 	if opts.Logger == nil {
 		return

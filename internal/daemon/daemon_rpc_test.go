@@ -19,7 +19,7 @@ import (
 )
 
 func TestNewRPCServer_WiresHandlerAndConnContext(t *testing.T) {
-	srv := NewRPCServer(rpc.NewRegistry())
+	srv := NewRPCServer(rpc.NewRegistry(), nil)
 	if srv.Handler == nil {
 		t.Fatal("NewRPCServer: Handler is nil")
 	}

@@ -1,36 +1,61 @@
-# Daemon startup and crash recovery
+# Daemon startup, IPC surface, and crash recovery
 
-This document covers the daemon's startup sequence and its crash-safety
-recovery scan: what the scan checks, how it decides an artifact is stale,
-and what it does when it cannot decide. Package home:
-[`internal/runtime`](../internal/runtime) (`bootstrap.go`, `recovery.go`,
-`recovery_scan.go`, `lockfile.go`).
+This document covers the daemon's startup sequence, the IPC surface it
+serves once started, and its crash-safety recovery scan: what the scan
+checks, how it decides an artifact is stale, and what it does when it
+cannot decide. Package home: [`internal/runtime`](../internal/runtime)
+(`bootstrap.go`, `recovery.go`, `recovery_scan.go`, `lockfile.go`,
+`domain_registry.go`) and [`internal/daemon`](../internal/daemon)
+(`lifecycle_unix.go`, `lifecycle_unix_serve.go`, `daemon.go`).
+
+## IPC surface
+
+Once the socket is bound, every accepted connection is served for real:
+`POST /rpc` (JSON-RPC 2.0, `internal/rpc`) and `GET /events` (a
+server-sent-events bridge to the daemon's internal event bus,
+`internal/rpc`'s `SSEHandler`) are both mounted on the same
+`*http.Server`. A connection accepted while the daemon is mid-drain
+(upgrade-in-place or ordinary shutdown) is refused rather than accepted
+and silently dropped. `GET /events` binds to a single event-bus namespace,
+`"daemon"`, the only namespace anything publishes to today (the
+upgrade-in-place engine's `ShutdownRequested` event).
 
 ## Startup sequence
 
-`Bootstrap` (`internal/runtime/bootstrap.go`) is the single entrypoint the
-daemon's startup path calls into. It runs these steps in order:
+`cascade daemon run`'s real entrypoint
+(`cmd/cascade/daemon_unix.go`'s `platformDaemonRun`) runs these steps in
+order:
 
-1. Resolve paths (`PathProvider`). This establishes the pidfile path
-   (`Root()/daemon.pid`) and the IPC socket path.
-2. Run the crash-safety recovery scan (`Scan`, described below).
-3. Load and validate `config.toml`, running the schema-version upgrade
-   frame if needed.
-4. Construct the log provider.
-5. Start the metrics registry, and the periodic metrics emitter if a
-   metrics event bus was supplied.
+1. Resolve paths and load `config.toml`, running the schema-version
+   upgrade frame if needed, and resolve `[daemon]` settings (socket path,
+   shutdown grace).
+2. Construct the log provider.
+3. Open the daemon's on-disk store (`cascade.db`, `providers/sqlite`) and
+   construct the event bus over it.
+4. Run the crash-safety recovery scan (`runtime.Scan`, described below),
+   with a real `StoreDomainRegistry` (backed by the same store) wired in
+   for the orphaned-advisory-lock step.
+5. Serve the IPC surface (above) and, for a real release build, the
+   upgrade-in-place engine (see below), until a termination signal or the
+   context is canceled.
 
-The recovery scan runs immediately after paths resolve and before
-anything else, including config load. This placement is deliberate: the
-scan's own socket probe is the daemon's write-arbitration contract's
-socket-probe-first rule, and it has to run before any lock on the daemon's
-store or advisory-lock state is taken. A scan that ran after lock
-acquisition could never clean up the very lock blocking it, since it would
-already be blocked waiting on that lock.
+`internal/runtime.Bootstrap` covers the same path/config/log sequence for
+callers that do not also need the daemon-specific store, event bus, and
+recovery-registry wiring; the daemon's own run path calls `runtime.Scan`
+directly rather than through `Bootstrap`, so it keeps using the same
+injectable `PathProvider` every other `cascade daemon` verb in that file
+uses, rather than `Bootstrap`'s own `Getenv`/`HomeDir`-based path
+resolution.
 
-The scan's result (a `*RecoveryEvent`, or `nil` on a clean start) is not
-consumed further inside `Bootstrap`. If a recovery event was produced, it
-was already published to the event bus by the scan itself; `Bootstrap` has
+The recovery scan runs before the IPC surface is served. This placement is
+deliberate: the scan's own socket probe is the daemon's write-arbitration
+contract's socket-probe-first rule, and it has to run before any lock on
+the daemon's store or advisory-lock state is taken. A scan that ran after
+lock acquisition could never clean up the very lock blocking it, since it
+would already be blocked waiting on that lock.
+
+The scan's result (a `*RecoveryEvent`, or `nil` on a clean start) is
+published to the daemon's event bus by the scan itself; the caller has
 nothing further to do with it.
 
 ## Crash recovery
@@ -91,10 +116,14 @@ The pidfile is read and its content parsed as an integer pid:
 
 ### Orphaned advisory locks
 
-This step depends on an injected registry of advisory-lock records. If no
-registry is wired in, the step is skipped outright and reported as such
-in the code's own comments. No advisory-lock cleanup happens, which is
-reported honestly rather than silently pretending to check. Where a registry is present:
+This step depends on an injected registry of advisory-lock records. In
+the real daemon startup path this is `runtime.StoreDomainRegistry`
+(`internal/runtime/domain_registry.go`): a `provider.Store`-backed
+ledger of `lock_id`/`owner_pid` records, sharing the daemon's own
+`cascade.db`. A caller that supplies no registry (`nil`) skips the step
+outright, reported as such rather than silently pretending to check;
+this is still true for any composition root that has no store to build
+one from. Where a registry is present:
 
 - Every advisory-lock record is checked against its stored owner pid.
 - Only locks whose owner pid is unambiguously confirmed dead are
@@ -244,13 +273,23 @@ There is no separate `daemon.upgrade` verb and no signal a user sends by
 hand. Package home: [`internal/daemon`](../internal/daemon)
 (`upgrade.go`, `upgrade_conntracker.go`).
 
-When a termination trigger reaches a running daemon, it compares the
-on-disk `cascade` binary's SHA-256 hash against the hash embedded in the
-running process at build time. If the two match, this is a logged no-op
-and the daemon shuts down and restarts the ordinary way (stop, then a
-fresh spawn). If they differ, the binary on disk has been replaced since
-this daemon started, and the daemon drains and re-execs itself in place
-instead:
+The upgrade-in-place engine is only wired into a running daemon's
+termination path for a real release build: an unreleased (`dev`) build's
+embedded hash never matches any on-disk binary by construction, so
+enabling this path unconditionally would make every ordinary shutdown
+signal on a dev build attempt a drain-and-relaunch instead of a clean
+exit. Every build this repository's own CI and test suite runs is a dev
+build, so this guard is what keeps `cascade daemon stop`/`restart`
+working during development at all; it costs a release build nothing,
+since a release build's hash is real and CheckSkew works as designed.
+
+When a termination trigger reaches a running daemon carrying a real
+release build hash, it compares the on-disk `cascade` binary's SHA-256
+hash against the hash embedded in the running process at build time. If
+the two match, this is a logged no-op and the daemon shuts down and
+restarts the ordinary way (stop, then a fresh spawn). If they differ, the
+binary on disk has been replaced since this daemon started, and the
+daemon drains and re-execs itself in place instead:
 
 1. Stop accepting new IPC connections; a connection accepted after this
    point is refused rather than accepted and silently dropped.

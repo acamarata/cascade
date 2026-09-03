@@ -250,26 +250,34 @@ func classifyPID(rec pidRecord, ok bool, prober ProcessProber) livenessState {
 	return livenessRunning
 }
 
-// NewRPCServer builds the *http.Server that serves D/S-06.T3's JSON-RPC 2.0
-// handler on the daemon's unix socket: a mux routing POST rpc.RPCPath
-// ("/rpc") to rpc.NewHandler(registry), with ConnContext wired to
-// rpc.ConnContext so every accepted connection's socket-peer UID is
-// resolved once and available to the handler's ownership check (non-owner
-// UID -> HTTP 403, before the JSON-RPC layer is ever reached).
+// NewRPCServer builds the *http.Server that serves the daemon's IPC
+// surface on its unix socket: POST rpc.RPCPath ("/rpc") always, and GET
+// rpc.EventsPath ("/events") too when sse is non-nil, both routed to the
+// SAME rpc.Handler value (rpc.Handler.ServeHTTP already branches on path
+// and method internally, per handler.go) so the mux never has to decide
+// between NewHandler and NewHandlerWithSSE at more than one call site.
+// ConnContext is wired to rpc.ConnContext so every accepted connection's
+// socket-peer UID is resolved once and available to the handler's
+// ownership check (non-owner UID -> HTTP 403, before the JSON-RPC layer
+// is ever reached).
 //
-// Socket creation and the accept-loop/drain lifecycle remain in
-// lifecycle_unix.go (D/S-06.T2, out of this ticket's authorized write
-// set); the caller Serve(ln)s this server over that listener. As of this
-// ticket, lifecycle_unix.go's acceptLoop still closes every accepted
-// connection immediately after accept rather than handing it to a server
-// built by this function — wiring that hand-off is a lifecycle_unix.go
-// change this ticket's hard constraints do not authorize (files_scope
-// change: only daemon.go), and is recorded as a BLOCKER in this ticket's
-// journal for a follow-up amendment, the same pattern R-14.113/R-14.116
-// used for an analogous cross-ticket wiring gap.
-func NewRPCServer(registry *rpc.Registry) *http.Server {
+// Socket creation and the accept/drain lifecycle live in
+// lifecycle_unix.go; Run hands each accepted connection to this server.
+// lifecycle_unix.go's accept loop used to close every connection
+// immediately instead of ever reaching this server; that gap is closed
+// now.
+func NewRPCServer(registry *rpc.Registry, sse *rpc.SSEHandler) *http.Server {
+	var handler http.Handler
+	if sse != nil {
+		handler = rpc.NewHandlerWithSSE(registry, sse)
+	} else {
+		handler = rpc.NewHandler(registry)
+	}
 	mux := http.NewServeMux()
-	mux.Handle(rpc.RPCPath, rpc.NewHandler(registry))
+	mux.Handle(rpc.RPCPath, handler)
+	if sse != nil {
+		mux.Handle(rpc.EventsPath, handler)
+	}
 	return &http.Server{
 		Handler:     mux,
 		ConnContext: rpc.ConnContext,
