@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -128,5 +129,37 @@ func TestNewMCPCmd_MountsServeAndTools(t *testing.T) {
 	}
 	if !names["serve"] || !names["tools"] {
 		t.Fatalf("mcp command tree = %v, want serve and tools mounted", names)
+	}
+}
+
+// TestProductionMCPDeps_ServeStdio drives productionMCPDeps' real
+// ServeStdio closure (and therefore serveStdioReal) end to end: an empty
+// reader hits Scan's immediate-EOF branch, so Serve returns nil without
+// requiring any real stdin/stdout — no `net` import, no subprocess.
+func TestProductionMCPDeps_ServeStdio(t *testing.T) {
+	deps := productionMCPDeps()
+	if deps.NewTools == nil || deps.Paths == nil || deps.ServeStdio == nil || deps.ServeSocket == nil || deps.StdinIsPipe == nil {
+		t.Fatal("productionMCPDeps left a field nil")
+	}
+	if reg := deps.NewTools(); reg == nil {
+		t.Fatal("NewTools() returned nil registry")
+	}
+	out := &bytes.Buffer{}
+	err := deps.ServeStdio(context.Background(), strings.NewReader(""), out)
+	if err != nil {
+		t.Fatalf("ServeStdio with an empty reader: %v", err)
+	}
+}
+
+// TestStdinIsPipe_MatchesRealStat calls the real stdinIsPipe() (backed by
+// os.Stdin.Stat(), the same real syscall LaProbe-style coverage in
+// internal/elevation exercises directly) and checks its result against an
+// independently computed expectation from the same Stat call, rather than
+// only asserting it does not panic.
+func TestStdinIsPipe_MatchesRealStat(t *testing.T) {
+	info, err := os.Stdin.Stat()
+	want := err == nil && (info.Mode()&os.ModeCharDevice) == 0
+	if got := stdinIsPipe(); got != want {
+		t.Errorf("stdinIsPipe() = %v, want %v (from os.Stdin.Stat())", got, want)
 	}
 }

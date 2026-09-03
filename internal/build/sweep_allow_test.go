@@ -1,6 +1,9 @@
 package build
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 // TestParseAllowPatterns_SeparatesDenyFromAllow pins that a "!" line never
 // becomes a denial and a plain line never becomes an exemption. Getting this
@@ -75,5 +78,61 @@ func TestFilterAllowed_NoAllowsIsIdentity(t *testing.T) {
 	kept, dropped := FilterAllowed(in, nil)
 	if dropped != 0 || len(kept) != 1 {
 		t.Fatalf("no allow patterns must drop nothing, got kept=%v dropped=%d", kept, dropped)
+	}
+}
+
+// TestLoadAllowPatterns_PrefersFileOverEnv mirrors
+// TestLoadPatterns_PrefersFileOverEnv: the file-pointer source wins when
+// both are set, covering LoadAllowPatterns' file branch and its call into
+// ParseAllowPatterns on real file content.
+func TestLoadAllowPatterns_PrefersFileOverEnv(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "allow.txt")
+	writeFileT(t, path, "!^FAKE-FILE-ALLOW$\n")
+	t.Setenv(IdentifierPatternsFileEnvVar, path)
+	t.Setenv(IdentifierPatternsEnvVar, "!^FAKE-ENV-ALLOW$\n")
+
+	allow, err := LoadAllowPatterns()
+	if err != nil {
+		t.Fatalf("LoadAllowPatterns: %v", err)
+	}
+	if len(allow) != 1 || allow[0].String() != "^FAKE-FILE-ALLOW$" {
+		t.Fatalf("expected exactly the file-sourced allow pattern, got %v", allow)
+	}
+}
+
+// TestLoadAllowPatterns_FileReadError covers the ReadFile-error branch of
+// the file-pointer case: the env var points at a path with nothing there.
+func TestLoadAllowPatterns_FileReadError(t *testing.T) {
+	t.Setenv(IdentifierPatternsFileEnvVar, filepath.Join(t.TempDir(), "missing-allow.txt"))
+	t.Setenv(IdentifierPatternsEnvVar, "")
+	if _, err := LoadAllowPatterns(); err == nil {
+		t.Fatal("expected fail-closed error for a missing allow pattern file")
+	}
+}
+
+// TestLoadAllowPatterns_InlineEnv covers the inline (non-file) env var
+// branch on its own, with the file pointer unset.
+func TestLoadAllowPatterns_InlineEnv(t *testing.T) {
+	t.Setenv(IdentifierPatternsFileEnvVar, "")
+	t.Setenv(IdentifierPatternsEnvVar, "!^FAKE-INLINE-ALLOW$\n")
+
+	allow, err := LoadAllowPatterns()
+	if err != nil {
+		t.Fatalf("LoadAllowPatterns: %v", err)
+	}
+	if len(allow) != 1 || allow[0].String() != "^FAKE-INLINE-ALLOW$" {
+		t.Fatalf("expected exactly the inline allow pattern, got %v", allow)
+	}
+}
+
+// TestLoadAllowPatterns_FailsClosedWithNoSource covers the neither-
+// configured branch: no pattern source at all must be an error, not an
+// unarmed (silently-empty) allow list.
+func TestLoadAllowPatterns_FailsClosedWithNoSource(t *testing.T) {
+	t.Setenv(IdentifierPatternsFileEnvVar, "")
+	t.Setenv(IdentifierPatternsEnvVar, "")
+	if _, err := LoadAllowPatterns(); err == nil {
+		t.Fatal("expected fail-closed error when neither allow-pattern source is configured")
 	}
 }

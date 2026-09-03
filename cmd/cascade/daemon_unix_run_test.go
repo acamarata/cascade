@@ -114,3 +114,29 @@ func TestPlatformDaemonRestart_SpawnError(t *testing.T) {
 		t.Fatalf("err = %v, want KindUnavailable from the failed spawn", err)
 	}
 }
+
+// TestRelaunchExecArgs covers both branches of relaunchExecArgs: a
+// resolved executable path prefixes relaunchArgs(), and an Executable()
+// error yields nil rather than a malformed argv.
+func TestRelaunchExecArgs(t *testing.T) {
+	deps := newRunTestDeps(t, func() (string, error) { return "/opt/cascade/bin/cascade", nil })
+	got := relaunchExecArgs(deps)()
+	want := []string{"/opt/cascade/bin/cascade", "daemon", "run"}
+	if len(got) != len(want) {
+		t.Fatalf("relaunchExecArgs()() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("relaunchExecArgs()()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRelaunchExecArgs_ExecutableError(t *testing.T) {
+	deps := newRunTestDeps(t, func() (string, error) {
+		return "", cascade.Newf(cascade.KindUnavailable, "simulated os.Executable failure")
+	})
+	if got := relaunchExecArgs(deps)(); got != nil {
+		t.Errorf("relaunchExecArgs()() = %v, want nil on Executable() error", got)
+	}
+}
