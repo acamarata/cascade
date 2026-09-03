@@ -10,6 +10,7 @@ Available Commands:
   config      Inspect and edit cascade's config.toml
   daemon      Manage the cascade daemon process
   help        Help about any command
+  mcp         Serve the policy-filtered MCP tool registry
   version     Print the cascade version, commit, build date, and install channel
 
 Flags:

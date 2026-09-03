@@ -100,8 +100,17 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newCompletionCmd(root))
 	mountConfigCmd(root)
 	mountDaemonCmd(root)
+	mountMCPCmd(root)
 
 	return root
+}
+
+// mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following
+// mountDaemonCmd's exact pattern.
+func mountMCPCmd(root *cobra.Command) {
+	cmd := newMCPCmd(productionMCPDeps())
+	guardUnknownSubcommands(cmd)
+	root.AddCommand(cmd)
 }
 
 // mountDaemonCmd attaches the `daemon` command tree (D/S-06.T2), following
