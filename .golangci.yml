@@ -66,6 +66,22 @@ linters:
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
               desc: "pkg/** may never import internal/** (12-QUALITY-CONSTITUTION.md Art.10.2) — pkg is the public SDK surface"
+        # D-24 / P1-E04-W1-S07-T6: internal/elevation is the hardware root of
+        # trust for the elevation flow and must be self-contained — its
+        # private key material must never be reachable through cascade's own
+        # vault/secrets domain (a compromise of that domain must not also
+        # compromise the elevation key, and vice versa). No _test.go
+        # exclusion here: the boundary holds for elevation's own tests too,
+        # since a test importing internal/secrets would prove nothing about
+        # production wiring and would defeat the point of the gate.
+        elevation-no-vault:
+          files:
+            - "**/internal/elevation/**/*.go"
+          deny:
+            - pkg: "github.com/acamarata/cascade/internal/secrets"
+              desc: "internal/elevation must not import internal/secrets — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
+            - pkg: "github.com/acamarata/cascade/internal/vault"
+              desc: "internal/elevation must not import internal/vault — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
 
     forbidigo:
       # 02-TARGET-STRUCTURE.md §v1.1: no bare time.Now/time.Since in domain
