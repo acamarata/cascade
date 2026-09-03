@@ -32,11 +32,8 @@ package daemon
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"io"
 	"log/slog"
-	"os"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -76,12 +73,6 @@ const (
 // leaves it as syscall.Exec.
 var execFunc = syscall.Exec
 
-// BuildHash returns the build-time embedded hash. It is a package
-// function (every UpgradeManager in one process shares the same answer)
-// and a method below, matching the contract's "UpgradeManager.BuildHash()"
-// call shape for holders of an instance.
-func BuildHash() string { return buildHash }
-
 // ErrDraining is the typed error a connection accepted after Drain has
 // begun receives, rather than being silently accepted and dropped.
 var ErrDraining = cascade.New(cascade.KindUnavailable, "daemon: draining for upgrade, connection refused")
@@ -103,35 +94,6 @@ type UpgradeManager struct {
 // nil; their features then degrade to documented no-ops, never errors.
 func NewUpgradeManager(clock runtime.Clock, sleep func(time.Duration), store provider.Store, bus *events.Bus, logger *slog.Logger) *UpgradeManager {
 	return &UpgradeManager{Clock: clock, Sleep: sleep, Store: store, Events: bus, Logger: logger}
-}
-
-// BuildHash returns the running binary's embedded build hash.
-func (m *UpgradeManager) BuildHash() string { return BuildHash() }
-
-// CheckSkew reports whether the binary on disk at binaryPath differs from
-// the running process's embedded BuildHash, streaming the file through
-// SHA-256 rather than loading it whole. Any I/O failure (missing file,
-// permission denied, a directory instead of a file) is a typed
-// cascade.KindUnavailable error, never swallowed into a false "no skew".
-func (m *UpgradeManager) CheckSkew(binaryPath string) (bool, error) {
-	sum, err := hashFile(binaryPath)
-	if err != nil {
-		return false, cascade.Wrapf(cascade.KindUnavailable, err, "daemon: upgrade: hash %s", binaryPath)
-	}
-	return sum != m.BuildHash(), nil
-}
-
-func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Draining reports whether Drain has been called. The accept loop

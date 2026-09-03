@@ -108,6 +108,11 @@ func TestDrainTimeout(t *testing.T) {
 // on-disk binary drives Drain + Relaunch; matching hashes perform a
 // logged no-op and never touch execFunc.
 func TestRestartTriggersUpgrade(t *testing.T) {
+	// Stamp a digest so this exercises the real skew comparison. An
+	// unstamped build now reports no skew by design, and without this
+	// the test would pass only because the sentinel never equals a hash,
+	// which is the bug that made dev builds relaunch on every shutdown.
+	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	t.Run("skew", func(t *testing.T) {
 		orig := execFunc
 		t.Cleanup(func() { execFunc = orig })
@@ -158,6 +163,11 @@ func TestRestartTriggersUpgrade(t *testing.T) {
 // lifecycle_unix.go's attemptUpgrade does — converges on a clean,
 // recoverable "not running" state rather than a half-alive one).
 func TestAttemptUpgrade_RelaunchFailure_NonBricking(t *testing.T) {
+	// Stamp a digest so this exercises the real skew comparison. An
+	// unstamped build now reports no skew by design, and without this
+	// the test would pass only because the sentinel never equals a hash,
+	// which is the bug that made dev builds relaunch on every shutdown.
+	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	orig := execFunc
 	t.Cleanup(func() { execFunc = orig })
 	execFunc = func(string, []string, []string) error { return errors.New("exec format error") }

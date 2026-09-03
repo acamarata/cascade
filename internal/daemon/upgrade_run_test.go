@@ -25,6 +25,11 @@ import (
 // stubbed execFunc, and Run returns nil (the line execFunc's stub makes
 // reachable; a real successful exec never returns at all).
 func TestRun_UpgradeOnSignal_Relaunches(t *testing.T) {
+	// Stamp a digest so this exercises the real skew comparison. An
+	// unstamped build now reports no skew by design, and without this
+	// the test would pass only because the sentinel never equals a hash,
+	// which is the bug that made dev builds relaunch on every shutdown.
+	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	orig := execFunc
 	t.Cleanup(func() { execFunc = orig })
 	var execCalled bool

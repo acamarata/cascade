@@ -64,6 +64,11 @@ func writeTempBinary(t *testing.T, contents string) string {
 // TestSkewDetected: a modified on-disk binary reports skew against the
 // (dev-default) embedded BuildHash.
 func TestSkewDetected(t *testing.T) {
+	// Stamp a digest so this exercises the real skew comparison. An
+	// unstamped build now reports no skew by design, and without this
+	// the test would pass only because the sentinel never equals a hash,
+	// which is the bug that made dev builds relaunch on every shutdown.
+	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	m, _ := newTestManager(t, nil, nil)
 	path := writeTempBinary(t, "not-the-build-hash-contents")
 
@@ -110,6 +115,10 @@ func TestNoSkewNoOp(t *testing.T) {
 // TestCheckSkew_UnreadableBinary surfaces the I/O failure as a typed
 // cascade.KindUnavailable error rather than silently reporting no skew.
 func TestCheckSkew_UnreadableBinary(t *testing.T) {
+	// Stamp a real digest first. An unstamped build short-circuits before
+	// the hash is attempted, which is correct but would take this test off
+	// the path it exists to cover.
+	setBuildHash(t, "0000000000000000000000000000000000000000000000000000000000000000")
 	m, _ := newTestManager(t, nil, nil)
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
 
