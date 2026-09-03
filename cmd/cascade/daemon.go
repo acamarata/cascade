@@ -1,14 +1,20 @@
 // Purpose: the `cascade daemon` subcommand group (07-CLI-COMMAND-TREE.md
 //
-//	§daemon) — run/start/stop/restart/status — mounted on the root cobra
-//	tree D/S-06.T1 built. This file is the platform-independent half: cobra
-//	wiring, config loading, and internal/output rendering. The actual
-//	lifecycle calls are platform-specific (daemon_unix.go / daemon_windows.
-//	go, R-14.117 sibling split — Windows refuses every verb with the same
-//	typed error, unix does the real work) so this file never branches on
-//	GOOS itself; it calls platformDaemon{Run,Start,Stop,Restart,Status},
-//	whose SYMBOL differs by which file the build tag selected, matching
-//	this repo's established pattern (hotreload_signal_windows.go).
+//	§daemon) — run/start/stop/restart/status/install/uninstall — mounted on
+//	the root cobra tree D/S-06.T1 built. This file is the platform-
+//	independent half: cobra wiring, config loading, and internal/output
+//	rendering. The lifecycle verbs' actual work is platform-specific
+//	(daemon_unix.go / daemon_windows.go, R-14.117 sibling split — Windows
+//	refuses every verb with the same typed error, unix does the real work)
+//	so this file never branches on GOOS itself for those; it calls
+//	platformDaemon{Run,Start,Stop,Restart,Status}, whose SYMBOL differs by
+//	which file the build tag selected, matching this repo's established
+//	pattern (hotreload_signal_windows.go). install/uninstall (D/S-07.T2)
+//	follow the SAME never-branch-on-GOOS discipline but without a sibling
+//	daemon_unix.go/daemon_windows.go split of their own: the platform
+//	difference lives entirely inside internal/daemon/service.NewInstaller()
+//	(itself build-tag-selected), so this file only ever holds a
+//	service.Installer interface value.
 //
 // Inputs: cobra args/flags; a daemonDeps injected at construction so no
 //
@@ -21,10 +27,12 @@
 //
 // Constraints: Art.10.2 — cmd/ is the sole composition root; internal/
 //
-//	daemon takes every dependency by injection and never reaches for the
-//	real environment itself.
+//	daemon and internal/daemon/service take every dependency by injection
+//	and never reach for the real environment themselves.
 //
-// SPORT: cmd/cascade/daemon (ADD, per T-2 sport_updates).
+// SPORT: cmd/cascade/daemon (ADD, per T-2 sport_updates; CHANGE, per
+//
+//	D/S-07.T2 sport_updates — adds install/uninstall).
 package main
 
 import (
@@ -34,6 +42,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/daemon/service"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -46,6 +55,21 @@ type daemonDeps struct {
 	Environ    func() []string
 	Clock      runtime.Clock
 	Executable func() (string, error)
+	// HomeDir resolves the real user home directory install/uninstall's
+	// service units are rooted under (~/Library/LaunchAgents, ~/.config/
+	// systemd/user) — distinct from Paths.Root() (CASCADE_HOME). Injected
+	// so tests never touch the real home directory (Art.7.1).
+	HomeDir func() (string, error)
+	// Getuid resolves the effective uid launchd's gui/<uid> domain target
+	// needs on darwin. Injected (rather than called directly from a
+	// command's RunE) purely so this file never reaches for the real
+	// environment itself, matching every other daemonDeps field.
+	Getuid func() int
+	// Installer is the platform service-unit manager (darwin launchd,
+	// linux systemd, windows typed refusal) install/uninstall drive.
+	// Resolved once via service.NewInstaller() in production; every test
+	// injects a fake.
+	Installer service.Installer
 }
 
 // productionDaemonDeps builds daemonDeps against the real environment. The
@@ -59,6 +83,9 @@ func productionDaemonDeps() daemonDeps {
 		Environ:    os.Environ,
 		Clock:      runtime.SystemClock{},
 		Executable: os.Executable,
+		HomeDir:    os.UserHomeDir,
+		Getuid:     os.Getuid,
+		Installer:  service.NewInstaller(),
 	}
 }
 
@@ -73,6 +100,8 @@ func newDaemonCmd(deps daemonDeps) *cobra.Command {
 	root.AddCommand(newDaemonStopCmd(deps))
 	root.AddCommand(newDaemonRestartCmd(deps))
 	root.AddCommand(newDaemonStatusCmd(deps))
+	root.AddCommand(newDaemonInstallCmd(deps))
+	root.AddCommand(newDaemonUninstallCmd(deps))
 	return root
 }
 

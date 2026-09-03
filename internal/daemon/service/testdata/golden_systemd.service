@@ -1,0 +1,12 @@
+[Unit]
+Description=Cascade daemon
+After=default.target
+
+[Service]
+ExecStart=/usr/local/bin/cascade daemon run
+Type=simple
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
