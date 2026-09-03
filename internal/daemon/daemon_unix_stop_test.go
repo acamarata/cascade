@@ -11,6 +11,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -123,6 +124,91 @@ func TestStop_NeverExits_BoundedTimeoutError(t *testing.T) {
 	}
 	if len(signals) != 2 {
 		t.Errorf("signals = %v, want exactly [SIGTERM, SIGKILL] before giving up", signals)
+	}
+}
+
+// TestStop_CorruptPIDFile_ReadErrorIsSurfaced covers Stop's readPIDFile
+// error branch (distinct from the "not present at all" and "process gone"
+// cases above): a pidfile that exists but is not valid JSON must surface
+// readPIDFile's KindIntegrity error rather than being treated as
+// not-running.
+func TestStop_CorruptPIDFile_ReadErrorIsSurfaced(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "daemon.pid")
+	if err := writeFileHelper(pidPath, "not json"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Stop(context.Background(), StopOptions{
+		PIDPath:    pidPath,
+		Prober:     fakeProber{},
+		Signal:     func(int, syscall.Signal) error { return nil },
+		SocketGone: func() bool { return true },
+		Sleep:      noopSleep,
+	})
+	if !cascade.HasKind(err, cascade.KindIntegrity) {
+		t.Fatalf("err = %v, want KindIntegrity", err)
+	}
+}
+
+// TestStop_SIGKILLSignalError_IsSurfaced covers the SIGKILL-send error
+// branch, distinct from TestStop_SignalError_IsSurfaced below which only
+// exercises the SIGTERM-send error (the earlier of the two identical-
+// shaped branches). The SIGTERM must succeed and the grace window must
+// elapse (SocketGone stays false) so Stop actually reaches the SIGKILL
+// call before failing it.
+func TestStop_SIGKILLSignalError_IsSurfaced(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "daemon.pid")
+	if err := writePIDFile(pidPath, pidRecord{PID: 555}); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("boom")
+	_, err := Stop(context.Background(), StopOptions{
+		PIDPath: pidPath,
+		Prober:  fakeProber{alive: map[int]bool{555: true}},
+		Signal: func(_ int, sig syscall.Signal) error {
+			if sig == syscall.SIGKILL {
+				return boom
+			}
+			return nil
+		},
+		SocketGone: func() bool { return false },
+		Sleep:      noopSleep,
+	})
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Fatalf("err = %v, want KindUnavailable", err)
+	}
+}
+
+// TestStop_RefusesToExit_WithLogger_WarnsOnEscalation proves the
+// `opts.Logger != nil` branch: when a Logger is supplied, escalating to
+// SIGKILL must emit the documented warning line naming the pid. The other
+// escalation tests above pass no Logger and so never exercise this branch.
+func TestStop_RefusesToExit_WithLogger_WarnsOnEscalation(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "daemon.pid")
+	if err := writePIDFile(pidPath, pidRecord{PID: 555}); err != nil {
+		t.Fatal(err)
+	}
+	log, records := newRecordingLogger()
+	var signals []syscall.Signal
+	opts := stopOptsFor(pidPath, &signals, stopGraceAttempts+2)
+	opts.Logger = log
+	res, err := Stop(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Escalated {
+		t.Fatalf("res = %+v, want Escalated=true", res)
+	}
+	var sawWarn bool
+	for _, r := range *records {
+		if r.Level == slog.LevelWarn && r.Message == "daemon: stop: SIGTERM grace window elapsed, escalating to SIGKILL" {
+			sawWarn = true
+		}
+	}
+	if !sawWarn {
+		t.Error("did not see the SIGKILL-escalation warning log line")
 	}
 }
 

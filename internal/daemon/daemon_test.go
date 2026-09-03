@@ -109,6 +109,18 @@ func TestClassifyPID(t *testing.T) {
 			livenessRecycled,
 		},
 		{
+			// actual StartTime BEFORE rec.StartedAt (a negative diff before
+			// the abs()) — the recycled process happens to have started
+			// earlier than the pidfile's recorded time, e.g. clock skew
+			// between the write and the ps probe. Exercises classifyPID's
+			// `if diff < 0 { diff = -diff }` branch, distinct from the
+			// "recycled" case above where actual is AFTER rec.StartedAt.
+			"alive, PID recycled: actual start time is BEFORE the recorded one",
+			pidRecord{PID: 6, StartedAt: base}, true,
+			fakeProber{alive: map[int]bool{6: true}, startTime: map[int]time.Time{6: base.Add(-time.Hour)}},
+			livenessRecycled,
+		},
+		{
 			"alive, start time unknown: best-effort running", pidRecord{PID: 5, StartedAt: base}, true,
 			fakeProber{alive: map[int]bool{5: true}}, livenessRunning,
 		},
@@ -147,6 +159,13 @@ func resolveSettingsCases() []resolveSettingsCase {
 				"daemon": map[string]interface{}{"socket": "/custom.sock", "shutdown_grace": "5s"},
 			}},
 			wantSocket: "/custom.sock", wantGrace: 5 * time.Second, wantSet: true,
+		},
+		{
+			name: "daemon section present but shutdown_grace key absent: falls back, grace unset",
+			cfg: &runtime.Config{Extra: map[string]interface{}{
+				"daemon": map[string]interface{}{"socket": "/custom.sock"},
+			}},
+			wantSocket: "/custom.sock",
 		},
 		{
 			name: "shutdown_grace as bare TOML integer seconds",
