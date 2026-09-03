@@ -29,6 +29,22 @@ import (
 // error — conservative per the brief: when in doubt, do not proceed to
 // remove anything.
 func probeSocket(path string, timeout time.Duration, dial Dialer) (live, stale bool, err error) {
+	// KNOWN GAP (CR follow-up, not fixed here — deliberately out of this
+	// ticket's scope): os.Stat FOLLOWS symlinks, so a dangling symlink at
+	// path (its target removed, the link itself left behind) resolves to
+	// ENOENT here exactly like a genuinely missing socket file, and is
+	// classified "clean state" — the link itself is never removed, by
+	// this scanner or by anything else in the tree. A later
+	// net.Listen(path) can then fail with a confusing "address already in
+	// use"-shaped error from the stale link, not the clear
+	// DAEMON_ALREADY_RUNNING or ENOENT a caller would expect. Left
+	// undecided rather than papered over here because "remove any
+	// dangling symlink at the socket path" is a real behavior change with
+	// its own question (a symlink there could in principle be an
+	// operator's deliberate redirect, not just scanner debris) that this
+	// ticket's brief never names — it belongs in a scoped follow-up, not
+	// a silent addition to the HOW steps this scanner was reviewed
+	// against.
 	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
 		// No socket file at all: nothing was left behind, nothing to
 		// probe. This is the ordinary clean-startup case.

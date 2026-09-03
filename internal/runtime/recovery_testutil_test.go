@@ -22,9 +22,12 @@ import (
 	"time"
 )
 
-// fakeEventBus records every Publish call for assertion.
+// fakeEventBus records every Publish call for assertion. A non-nil
+// publishErr makes Publish fail without recording the call — the
+// Bus.Publish-failure seam recovery.go's Scan must propagate.
 type fakeEventBus struct {
-	published []fakeEvent
+	published  []fakeEvent
+	publishErr error
 }
 
 type fakeEvent struct {
@@ -33,6 +36,9 @@ type fakeEvent struct {
 }
 
 func (b *fakeEventBus) Publish(_ context.Context, namespace, kind, source string, payload []byte) error {
+	if b.publishErr != nil {
+		return b.publishErr
+	}
 	b.published = append(b.published, fakeEvent{namespace, kind, source, payload})
 	return nil
 }

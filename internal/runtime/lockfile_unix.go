@@ -32,6 +32,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// killFn is the underlying POSIX kill(2) call ProcessAlive probes
+// through. Overridable ONLY in tests (lockfile_unix_test.go), confined
+// to _test.go per Art.1, to exercise ProcessAlive's Undecided/default
+// branch: no real, unprivileged kill(pid, 0) can produce an errno other
+// than ESRCH or EPERM (EINVAL cannot occur for a real signal value of
+// 0 — see ProcessAlive's doc comment below), so that branch is otherwise
+// unreachable without this narrow seam. Production always uses the real
+// unix.Kill.
+var killFn = unix.Kill
+
 // ProcessAlive sends signal 0 to pid — POSIX's standard "does this
 // process exist" probe: the kernel performs its full existence and
 // permission check without ever delivering a signal.
@@ -54,7 +64,7 @@ func ProcessAlive(pid int) (ProcessLiveness, error) {
 	if pid <= 0 {
 		return ProcessLivenessUndecided, fmt.Errorf("lockfile: invalid pid %d", pid)
 	}
-	err := unix.Kill(pid, 0)
+	err := killFn(pid, 0)
 	switch {
 	case err == nil:
 		return ProcessLivenessAlive, nil

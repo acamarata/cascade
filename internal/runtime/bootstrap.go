@@ -115,6 +115,13 @@ func Bootstrap(ctx context.Context, opts BootstrapOptions) (*Runtime, error) {
 	// socket-probe-first contract. A live daemon on the socket aborts
 	// Bootstrap immediately; a stale pidfile/socket/lock is cleaned up
 	// and reported, never silently.
+	// The *RecoveryEvent itself is deliberately discarded here: Bootstrap
+	// has no consumer for it at this composition-root layer — Scan
+	// already publishes it to opts.RecoveryBus internally when one is
+	// supplied, so there is nothing further for Bootstrap's caller to do
+	// with the return value. A stated choice, not an oversight, on the
+	// same footing as internal/events/scheduler/retention_register.go's
+	// discarded non-error return values from its own registered runnables.
 	if _, err := Scan(ctx, RecoveryOptions{
 		PidfilePath: filepath.Join(paths.Root(), "daemon.pid"),
 		SocketPath:  paths.SocketPath(),
