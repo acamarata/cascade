@@ -57,6 +57,18 @@ type RunOptions struct {
 	// Ready, if non-nil, is closed once the socket is listening and the
 	// pidfile is written — a test synchronization point (no sleeps).
 	Ready chan<- struct{}
+	// Upgrade, if non-nil, is consulted on every termination trigger
+	// before Run's normal drain-and-exit: a detected binary-version skew
+	// (R-14.12) drains the listener in place and exec-relaunches instead
+	// of a plain exit. nil preserves Run's exact pre-upgrade behavior.
+	// Executable/Args/Environ are read only when Upgrade is set — see
+	// upgrade.go's package doc for why the wiring lives here rather than
+	// at the Restart()/CLI composition layer (lifecycle_unix_stop.go and
+	// cmd/cascade/daemon_unix.go are outside this ticket's files_scope).
+	Upgrade    *UpgradeManager
+	Executable func() (string, error)
+	Args       func() []string
+	Environ    func() []string
 }
 
 // Run serves the daemon in the foreground until ctx is canceled or a
@@ -68,22 +80,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 	}
 	manifest.Register(ipcSocketSubsystem)
 
-	ln, err := listenSocket(opts.Settings.SocketPath)
+	ln, cleanup, err := setUpSocketAndPIDFile(opts, manifest)
 	if err != nil {
-		manifest.Failed(ipcSocketSubsystem, err.Error())
-		return cascade.Wrap(cascade.KindUnavailable, err, "daemon: listen socket")
-	}
-	defer func() { _ = ln.Close(); _ = os.Remove(opts.Settings.SocketPath) }()
-
-	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
-		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
-		return cascade.Wrap(cascade.KindUnavailable, err, "daemon: create pidfile directory")
-	}
-	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: opts.Clock.Now()}); err != nil {
-		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
 		return err
 	}
-	defer func() { _ = removePIDFile(opts.PIDPath) }()
+	defer cleanup()
 
 	manifest.Started(ipcSocketSubsystem, opts.Settings.SocketPath)
 	if opts.Ready != nil {
@@ -100,17 +101,76 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	var active int64
 	acceptDone := make(chan struct{})
-	go acceptLoop(ln, &active, acceptDone)
+	go acceptLoop(ln, opts.Upgrade, opts.Logger, &active, acceptDone)
 
 	select {
 	case <-sigs:
 	case <-ctx.Done():
 	}
 
+	if attemptUpgrade(ctx, opts, ln) {
+		// A successful Relaunch never returns to its caller — this line
+		// is reachable only when a test's execFunc stub returns. A real
+		// successful exec replaces the process image before it gets here.
+		return nil
+	}
+
 	_ = ln.Close()
 	<-acceptDone
 	drain(opts, &active)
 	return nil
+}
+
+// setUpSocketAndPIDFile binds the unix socket and writes the pidfile,
+// recording either failure on manifest. cleanup closes/removes both and
+// must run via defer regardless of how Run later exits.
+func setUpSocketAndPIDFile(opts RunOptions, manifest *Manifest) (net.Listener, func(), error) {
+	ln, err := listenSocket(opts.Settings.SocketPath)
+	if err != nil {
+		manifest.Failed(ipcSocketSubsystem, err.Error())
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: listen socket")
+	}
+	socketCleanup := func() { _ = ln.Close(); _ = os.Remove(opts.Settings.SocketPath) }
+
+	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
+		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
+		socketCleanup()
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: create pidfile directory")
+	}
+	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: opts.Clock.Now()}); err != nil {
+		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
+		socketCleanup()
+		return nil, nil, err
+	}
+	return ln, func() { _ = removePIDFile(opts.PIDPath); socketCleanup() }, nil
+}
+
+// attemptUpgrade consults opts.Upgrade, if set, before Run's ordinary
+// drain-and-exit. nil Upgrade/Executable, a CheckSkew error, a "no skew"
+// result, or a failed Relaunch all report false so Run falls through to
+// its normal shutdown — the non-bricking fallback this ticket requires:
+// Run's own deferred cleanup still removes the socket and pidfile.
+func attemptUpgrade(ctx context.Context, opts RunOptions, ln net.Listener) bool {
+	if opts.Upgrade == nil || opts.Executable == nil {
+		return false
+	}
+	execPath, err := opts.Executable()
+	if err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Warn("daemon: upgrade: resolve executable failed", slog.String("error", err.Error()))
+		}
+		return false
+	}
+	args := []string{execPath}
+	if opts.Args != nil {
+		args = opts.Args()
+	}
+	var env []string
+	if opts.Environ != nil {
+		env = opts.Environ()
+	}
+	relaunched, _ := opts.Upgrade.AttemptUpgrade(ctx, execPath, ln, nil, opts.Settings.ShutdownGrace, args, env)
+	return relaunched
 }
 
 // listenSocket binds a unix socket at path with 0600 permissions. A stale
@@ -154,15 +214,25 @@ func dialable(path string) bool {
 	return true
 }
 
-// acceptLoop accepts connections until ln is closed. Each connection is
-// counted while it is being handled; this ticket has no protocol to run
-// against it yet (D/S-06.T3), so it is closed immediately after accept.
-func acceptLoop(ln net.Listener, active *int64, done chan<- struct{}) {
+// acceptLoop accepts connections until ln is closed. A connection accepted
+// while upgrade is mid-Drain is refused with ErrDraining (logged, closed
+// without ever being counted) rather than silently accepted and dropped —
+// this ticket's HARD REQUIREMENT 1. Every other connection is counted
+// while "handled"; this ticket has no protocol to run against it yet
+// (D/S-06.T3), so it is closed immediately after accept.
+func acceptLoop(ln net.Listener, upgrade *UpgradeManager, log *slog.Logger, active *int64, done chan<- struct{}) {
 	defer close(done)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
+		}
+		if upgrade != nil && upgrade.Draining() {
+			_ = conn.Close()
+			if log != nil {
+				log.Warn("daemon: connection refused during drain", slog.String("error", ErrDraining.Error()))
+			}
+			continue
 		}
 		atomic.AddInt64(active, 1)
 		_ = conn.Close()

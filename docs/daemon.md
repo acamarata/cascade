@@ -236,3 +236,46 @@ platform-unsupported: unix socket probe skipped
 Each of these lines carries structured fields (path, pid, lock ID, or
 error) alongside the message; consult those fields for the specifics of
 what the scan found.
+
+## Upgrade in place
+
+`cascade daemon restart` is the only user-facing trigger for an upgrade.
+There is no separate `daemon.upgrade` verb and no signal a user sends by
+hand. Package home: [`internal/daemon`](../internal/daemon)
+(`upgrade.go`, `upgrade_conntracker.go`).
+
+When a termination trigger reaches a running daemon, it compares the
+on-disk `cascade` binary's SHA-256 hash against the hash embedded in the
+running process at build time. If the two match, this is a logged no-op
+and the daemon shuts down and restarts the ordinary way (stop, then a
+fresh spawn). If they differ, the binary on disk has been replaced since
+this daemon started, and the daemon drains and re-execs itself in place
+instead:
+
+1. Stop accepting new IPC connections; a connection accepted after this
+   point is refused rather than accepted and silently dropped.
+2. Wait, up to the configured `shutdown_grace`, for any in-flight
+   connection to finish. Anything still running once grace elapses is
+   force-closed.
+3. `exec()` the on-disk binary with the same arguments and environment.
+   The process keeps its PID; no new process is spawned and no window
+   opens where nothing is listening on the socket.
+
+If the `exec()` call itself fails (the new binary is missing or not
+executable, for example), the daemon has already drained and cannot go
+back to serving. It falls through to its normal shutdown path instead
+of trying to limp on with a closed listener. The pidfile and socket are
+cleaned up exactly as they are on any other clean exit, so `cascade
+daemon start` (or the crash-recovery scan) finds a clean, restartable
+state rather than a half-alive process.
+
+**Resume leg (allowed-fail, W1).** Before a drain begins, the daemon
+writes a best-effort checkpoint of its current write-ahead-log position.
+On the next startup this checkpoint is read back and logged if present;
+if it is absent or unreadable, startup proceeds as a clean start with no
+error. Actually resuming in-flight session state from that checkpoint is
+not implemented yet: this leg only records and reports the position.
+
+**Windows.** The daemon does not run on Windows at all (tier-2), so
+there is nothing to upgrade in place there; every daemon verb, including
+`restart`, refuses with the same typed unsupported-platform error.
