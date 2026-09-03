@@ -99,8 +99,21 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newCompletionCmd(root))
 	mountConfigCmd(root)
+	mountDaemonCmd(root)
 
 	return root
+}
+
+// mountDaemonCmd attaches the `daemon` command tree (D/S-06.T2), following
+// mountConfigCmd's exact pattern: cmd/cascade/daemon.go's newDaemonCmd is
+// package-local (daemon.go lives in package main, unlike config's
+// subpackage), so this is a direct call rather than an import, but the
+// deferred-environment-resolution and guardUnknownSubcommands treatment are
+// identical.
+func mountDaemonCmd(root *cobra.Command) {
+	cmd := newDaemonCmd(productionDaemonDeps())
+	guardUnknownSubcommands(cmd)
+	root.AddCommand(cmd)
 }
 
 // usageArgs adapts a cobra positional-argument validator so its errors carry

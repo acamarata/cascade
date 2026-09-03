@@ -8,6 +8,7 @@ Usage:
 Available Commands:
   completion  Generate shell completion scripts
   config      Inspect and edit cascade's config.toml
+  daemon      Manage the cascade daemon process
   help        Help about any command
   version     Print the cascade version, commit, build date, and install channel
 
