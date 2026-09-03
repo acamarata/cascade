@@ -58,8 +58,8 @@ channel: <script|brew|oci|node-managed|manual>
 ```
 
 The version/commit/date fields are set at build time via `-ldflags -X`
-(owned by A-T6's build tooling). A plain `go build ./cmd/cascade` — as done
-in development — prints `dev` / `none` / `unknown` and channel `manual`,
+(owned by A-T6's build tooling). A plain `go build ./cmd/cascade`, as done
+in development, prints `dev` / `none` / `unknown` and channel `manual`,
 since nothing stamped those variables.
 
 ## `cascade completion`
@@ -95,7 +95,7 @@ cascade completion bash > /etc/bash_completion.d/cascade             # Linux
 source <(cascade completion zsh)
 ```
 
-**zsh** (persistent — ensure the target directory is on `$fpath`):
+**zsh** (persistent; ensure the target directory is on `$fpath`):
 
 ```sh
 cascade completion zsh > "${fpath[1]}/_cascade"

@@ -1,7 +1,7 @@
 # Error taxonomy
 
 The single error taxonomy for the whole `cascade` binary, per T0 ruling
-R-14.2/R-14.3. Package home: [`pkg/cascade`](../../pkg/cascade) — the public
+R-14.2/R-14.3. Package home: [`pkg/cascade`](../../pkg/cascade): the public
 core package holding the kinds, the wire-code tables, and the constructors
 and inspection helpers. Call sites read `cascade.ErrNotFound` /
 `cascade.Kind`, never a package literally named `errors` (this package is
@@ -10,7 +10,7 @@ named `cascade` for exactly that reason).
 This is the plan's acceptance artifact for A-T7
 (`P1-E01-W1-S01-T7`): the kinds table, the codes, and all three wire
 mappings. `B/S-02.T1` (storage family interfaces) and `D/S-06.T3` (JSON-RPC
-framework) both consume this taxonomy with **zero additions** — domain
+framework) both consume this taxonomy with **zero additions**; domain
 sentinels live in their owning package (see [Sentinel values](#sentinel-values-and-domain-errors)
 below), never here.
 
@@ -61,7 +61,7 @@ if cascade.HasKind(err, cascade.KindTimeout) { ... }
 ```
 
 Every taxonomy error is a `*cascade.Error{Kind, Msg, Err}`. `errors.Is`
-between two taxonomy errors compares **only the Kind** — this is what lets
+between two taxonomy errors compares **only the Kind**: this is what lets
 `errors.Is(err, cascade.ErrNotFound)` succeed for *any* `KindNotFound` error
 regardless of message, and what lets an `internal/` package wrap freely
 (`fmt.Errorf("dispatch failed: %w", err)`) without the caller losing the
@@ -73,7 +73,7 @@ ability to recover the kind.
 `cascade.ErrConflict`, ...) for convenience at call sites. **Domain-specific
 sentinel error values** (for example storage's `ErrDomainOwned`) belong in
 their **owning package**, each wrapping exactly one frozen kind from this
-taxonomy — they are never added to `pkg/cascade`. This is what keeps the
+taxonomy; they are never added to `pkg/cascade`. This is what keeps the
 taxonomy consumable by `B/S-02.T1` and `D/S-06.T3` with zero additions.
 
 ## Wire mappings
@@ -93,7 +93,7 @@ boundary to `os.Exit`.
 
 | Code | Meaning | Kind |
 |---|---|---|
-| 0 | ok | — (no error) |
+| 0 | ok | n/a (no error) |
 | 1 | internal | `KindInternal` (also the fallback for a non-taxonomy error) |
 | 2 | invalid-input | `KindInvalidInput` |
 | 3 | not-found | `KindNotFound` |
@@ -137,7 +137,7 @@ taxonomy's codes sit at the top of that server-error band,
 
 ### Plugin RPC
 
-Plugin RPC reuses the JSON-RPC table **verbatim** — same codes, same shape.
+Plugin RPC reuses the JSON-RPC table **verbatim**: same codes, same shape.
 `cascade.PluginRPCError` is a type alias for `cascade.RPCError`, and
 `cascade.NewPluginRPCError(err)` is `cascade.NewRPCError(err)` under a
 plugin-facing name, so the two protocols cannot drift apart into separate
@@ -146,7 +146,7 @@ code tables.
 ## Boundary lint
 
 Rule: **taxonomy kinds at API boundaries, internal wrapping free.** Exported
-API surfaces — `pkg/` and `cmd/` composition — must return a
+API surfaces (`pkg/` and `cmd/` composition) must return a
 `*cascade.Error` (directly or via one of this package's constructors), never
 a raw `fmt.Errorf(...)`, `errors.New(...)`, or `errors.Join(...)` value.
 `internal/` packages may wrap however they like; the taxonomy's own
@@ -163,7 +163,7 @@ import declaration, independent of how the dot-imported names are used,
 since a dot-imported call site is not a `*ast.SelectorExpr` and cannot be
 matched by selector at all.
 
-- **Real tree** (`TestBoundaryLint_RealTree`) must find zero violations —
+- **Real tree** (`TestBoundaryLint_RealTree`) must find zero violations:
   zero denied calls and zero dot-imports of `fmt`/`errors`.
 - **Seeded fixtures** under
   `internal/build/testdata/seeded-violations/boundary/` deliberately
@@ -186,8 +186,8 @@ trees can see, the stronger claim "no raw error value can reach a caller of
 `pkg/` or `cmd/`":
 
 - A raw error minted inside `internal/` with `fmt.Errorf`/`errors.New`/
-  `errors.Join` — all of which `internal/` is free to use per this
-  document's Rule above — and then **returned unchanged through a `pkg/` or
+  `errors.Join`, all of which `internal/` is free to use per this
+  document's Rule above, and then **returned unchanged through a `pkg/` or
   `cmd/` boundary** is invisible to this scanner: the constructor call
   itself is not textually present in the scanned trees, only its
   already-built value flowing through a return statement, and the scanner
@@ -197,8 +197,8 @@ trees can see, the stronger claim "no raw error value can reach a caller of
   watches for at all.
 
 Per **R-14.118**, closing that class of evasion is the responsibility of
-the ticket that owns each `pkg`/`cmd` boundary — via `cascade.Wrap` at the
-exact point where an `internal/` error crosses out — not of this lint. Do
+the ticket that owns each `pkg`/`cmd` boundary, via `cascade.Wrap` at the
+exact point where an `internal/` error crosses out, not of this lint. Do
 not read a green `TestBoundaryLint_RealTree` as proof that every error
 surfaced by `pkg/`/`cmd/` carries a taxonomy kind; read it only as proof
 that no raw constructor call is written in those trees' own source.

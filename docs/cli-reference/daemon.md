@@ -10,7 +10,7 @@ This page documents the one subcommand this ticket
 
 Reads the single log file every daemon subsystem writes to
 (`internal/runtime.LogFilePath`, under `PathProvider.LogDir()`) and
-prints it to stdout. **Does not require a live daemon process** — the
+prints it to stdout. **Does not require a live daemon process**: the
 handler reads the file directly; if the daemon has never run, it prints
 a diagnostic to stderr and exits cleanly rather than erroring.
 
@@ -21,7 +21,7 @@ $ cascade daemon logs
 ```
 
 `-f` (follow) keeps streaming new lines as they are appended, polling via
-`os.Stat` (no inotify/FSEvents dependency — R-14.115: no new module
+`os.Stat` (no inotify/FSEvents dependency; R-14.115: no new module
 dependency for this ticket), until interrupted:
 
 ```
@@ -31,7 +31,7 @@ $ cascade daemon logs -f
 
 If the log file disappears while following (log directory removed,
 rotated out from under the reader, ...), the handler prints a diagnostic
-to stderr and exits cleanly — this is not treated as a failure.
+to stderr and exits cleanly; this is not treated as a failure.
 
 Output contract (D/S-06.T5): log content goes to **stdout**; diagnostics
 (missing file, disappeared file) go to **stderr**.
@@ -43,7 +43,7 @@ capability behind this subcommand and is unit-tested directly against a
 log file path, independent of any CLI layer. Only the cobra command
 mounting onto `cascade daemon logs` is deferred
 (`// CASCADE-ALLOW: P1-E03-W1-S04-T2`, 06-FORGE-SPEC §5.19 allowed-fail
-pattern) — it is not reachable from the built binary until D/S-06.T2
+pattern); it is not reachable from the built binary until D/S-06.T2
 adds the `daemon` noun's cobra subtree. `run` / `start` / `stop` /
 `restart` / `status` / `install` / `uninstall` are D/S-06.T2's surface
 entirely; nothing behind them exists yet.

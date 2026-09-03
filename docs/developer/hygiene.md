@@ -3,7 +3,7 @@
 Status: active from Wave 1 (P1-E01-W1-S01-T5). This repo is public
 (cascade PRI hard rule 3): no personal account or lane identifier may land
 in a tracked file or a commit message. Machine enforcement lives in
-`internal/build/commits.go` and `internal/build/sweep.go`, run two ways —
+`internal/build/commits.go` and `internal/build/sweep.go`, run two ways:
 locally via a pre-push hook, and in CI (`.github/workflows/ci.yml`,
 `hygiene` job).
 
@@ -20,13 +20,13 @@ type(scope)?: subject
 `CommitTypes`). `scope` is optional, parenthesized, and may contain
 letters, digits, `_.-/`. A trailing `!` before the colon marks a breaking
 change. `subject` must be non-empty. Body and trailer lines (a
-`Signed-off-by:` line, for example) are never format-checked — only the
+`Signed-off-by:` line, for example) are never format-checked: only the
 header.
 
 Merge commits (more than one parent) are always skipped; the checker never
 expects `Merge branch 'x' into y` to parse as conventional.
 
-The checker runs over a **range** of commits, not just `HEAD` — a
+The checker runs over a **range** of commits, not just `HEAD`: a
 multi-commit push is fully checked, not just its tip.
 
 ## Identifier sweep: what it does, and its one hard limitation
@@ -41,16 +41,16 @@ against would itself violate the rule the sweep exists to enforce. The
 pattern list comes from exactly one of two external sources, resolved in
 this order by `build.LoadPatterns`:
 
-1. **Local dev machines** — an untracked file, one RE2 pattern per line
+1. **Local dev machines**: an untracked file, one RE2 pattern per line
    (blank lines and `#` comments ignored), pointed to by
    `CASCADE_IDENTIFIER_PATTERNS_FILE` (default:
-   `.claude/hygiene/identifier-patterns.txt` — under the already-gitignored
+   `.claude/hygiene/identifier-patterns.txt`, under the already-gitignored
    `.claude/` tree).
-2. **CI** — the same one-pattern-per-line format, inline, in the masked
+2. **CI**: the same one-pattern-per-line format, inline, in the masked
    variable/secret `CASCADE_IDENTIFIER_PATTERNS`.
 
 If neither source is configured, or the configured one is unreadable or
-parses to zero usable patterns, the sweep **fails closed** — it blocks the
+parses to zero usable patterns, the sweep **fails closed**: it blocks the
 push/CI run, it never silently skips the check.
 
 The sweep ships with **zero hardcoded patterns of its own.** An earlier
@@ -58,20 +58,20 @@ draft added two "structural" built-ins (any `/Users/<name>` path, any
 `@gmail.com`-shaped address) as always-on defense in depth. Probing them
 against the real tree immediately false-positived on
 `docs/cli-reference/config.md`'s documented example paths
-(`/Users/me/.cascade/...`) — legitimate tracked content, not a leak. A
+(`/Users/me/.cascade/...`), legitimate tracked content, not a leak. A
 hardcoded pattern with no allowlist mechanism either has to special-case
-content it doesn't understand, or it blocks every push once wired in — so
+content it doesn't understand, or it blocks every push once wired in, so
 this gate has none, and the external pattern source is the only thing that
 decides what a "leak" looks like in this repo.
 
 ### What the sweep does NOT catch
 
-- An identifier absent from the loaded pattern set — the sweep is only as
+- An identifier absent from the loaded pattern set: the sweep is only as
   good as its pattern source.
 - Obfuscated, base64/rot13-encoded, or whitespace-mangled identifiers.
 - An identifier embedded in binary content or image/EXIF metadata (a
-  non-UTF8 file read is a hard error — fail closed — not a silent skip).
-- History outside the scanned commit range or the current tree — a prior
+  non-UTF8 file read is a hard error, fail closed, not a silent skip).
+- History outside the scanned commit range or the current tree: a prior
   push that already leaked an identifier is not retroactively caught.
 
 **A green sweep is proof the configured patterns found nothing. It is

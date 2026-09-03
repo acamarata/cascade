@@ -2,12 +2,12 @@
 
 Status: active from Wave 1 (P1-E01-W1-S01-T8). This document is the
 executable-gate companion to `.claude/planning/p1/12-QUALITY-CONSTITUTION.md`
-(not tracked in this public repo — see the plan's own docs for readers with
+(not tracked in this public repo; see the plan's own docs for readers with
 access to it): every article that names a CI-enforced gate is implemented
 in `internal/build/`, proven RED on a seeded-violation fixture and GREEN on
 the real tree, and wired into `.github/workflows/ci.yml`. This complements
 `docs/developer/lint-wall.md` (A-T2's architecture/size/boundary gates) and
-`docs/developer/hygiene.md` (A-T5's commit + identifier-sweep gates) — read
+`docs/developer/hygiene.md` (A-T5's commit + identifier-sweep gates). Read
 those first for the sibling gates this document does not repeat.
 
 ## Gate index
@@ -36,11 +36,11 @@ fixtures materialize under `t.TempDir()` where the check writes anything
 
 Denies, in shipped (non-`_test.go`) files under `cmd/`, `internal/`,
 `pkg/`, `providers/`, `plugins/`: a directive-style `TODO`/`FIXME`/`XXX`
-comment (the marker word must START the comment body — a sentence that
+comment (the marker word must START the comment body: a sentence that
 merely mentions the word does not fire, closing a real false-positive this
 gate's own package doc and `plugins/examples/example-builtin/plugin.go`
 tripped during development), a string literal containing "not implemented"
-or "unimplemented" (AST-matched, not a raw text scan — comments discussing
+or "unimplemented" (AST-matched, not a raw text scan; comments discussing
 the rule are invisible to this path by construction), a
 `Mock`/`Fake`/`Noop`-prefixed type declaration, or a `return nil, nil`
 line trailed by a placeholder marker comment.
@@ -48,7 +48,7 @@ line trailed by a placeholder marker comment.
 **Escape:** `// CASCADE-ALLOW: <ticket-id> <reason>` on the offending line
 or the line above it. The ticket-id must match this plan's contract-id
 grammar (`P<n>-<Epic><n>-W<n>-S<n>-T<n>`) and the reason must be non-empty.
-Art.1.2 also requires "an open ticket" — this repo's ticket state
+Art.1.2 also requires "an open ticket": this repo's ticket state
 (`.claude/planning/p1/phase/**`) is gitignored (PRI hard rule 3), so a
 public-repo CI checkout has no ticket database to query. The gate
 therefore verifies the comment's SYNTACTIC shape only; verifying the
@@ -58,7 +58,7 @@ here rather than silently overclaimed.
 
 ## Clean-root gate (Art.10.1)
 
-Scans `git ls-files` (never a raw filesystem walk — a gitignored build
+Scans `git ls-files` (never a raw filesystem walk; a gitignored build
 artifact like the local `/cascade` binary must never be flagged) for the
 repo root's tracked entries and fails on anything outside the
 RELEASE-STATE allowlist: `README.md`, `LICENSE`, `CHANGELOG.md`,
@@ -66,7 +66,7 @@ RELEASE-STATE allowlist: `README.md`, `LICENSE`, `CHANGELOG.md`,
 `.goreleaser.yaml`, `Makefile`, and the directories `.github/ cmd/
 internal/ pkg/ providers/ plugins/ apps/ docs/ testdata/`. This is the
 RELEASE-STATE set (09-REVIEW-RESOLUTIONS.md §Round 7), not today's Wave-1
-tree — `CHANGELOG.md`, `install.sh`, and `Makefile` are on the allowlist
+tree. `CHANGELOG.md`, `install.sh`, and `Makefile` are on the allowlist
 despite not existing yet; their absence is never a violation, only an
 extra untracked path is.
 
@@ -79,7 +79,7 @@ technique `internal/build/boundary_test.go` uses for the raw-error
 boundary rule) and additionally rejects a dot-import of `time` or
 `math/rand` outright. Denied set mirrors `.golangci.yml`'s forbidigo list
 exactly (`time.Now`, `time.Since`, the seeded/unseeded `math/rand` draw
-functions) — it deliberately does NOT add `time.Tick`/`After`/`NewTimer`/
+functions); it deliberately does NOT add `time.Tick`/`After`/`NewTimer`/
 `Unix`, a separate forbidigo gap R-14.132 named but did not assign here.
 Exempt: `_test.go` files and the two canonical Clock implementations
 (`internal/runtime/clock.go`, `internal/testkit/clock.go`).
@@ -87,7 +87,7 @@ Exempt: `_test.go` files and the two canonical Clock implementations
 ## Output-seam AST gate (R-14.137)
 
 The output seam: nothing outside `internal/output` may write to the
-process's real stdout/stderr — `internal/output.Writer` is the only
+process's real stdout/stderr: `internal/output.Writer` is the only
 sanctioned path (the CLI's human/JSON/quiet modes and its versioned
 envelope all flow through it). The existing `.golangci.yml` forbidigo rule
 (D/S-06.T5) enforces a narrower version of this, scoped to `cmd/**` only,
@@ -100,20 +100,20 @@ since the rule is per-file text matching scoped to one directory.
 
 This gate (`outputgate.go`) resolves each file's import aliases before
 matching, exactly as `clockgate.go` does, and denies: `os.Stdout`,
-`os.Stderr`, and the bare `fmt.Print`/`fmt.Println`/`fmt.Printf` family —
+`os.Stderr`, and the bare `fmt.Print`/`fmt.Println`/`fmt.Printf` family:
 matched as a general selector-text match anywhere in the AST (not only as a
 call's `Fun`), because `os.Stdout`/`os.Stderr` are data references, not
 calls, and can appear as a plain argument
 (`fmt.Fprintln(os.Stdout, ...)`). **`fmt.Fprint*` targeting stdout/stderr**
 is caught this same way, for free: the `os.Stdout`/`os.Stderr` selector
-inside its argument list is what the general match finds — no dedicated
+inside its argument list is what the general match finds; no dedicated
 `Fprint*`-argument rule was added, since one would only ever fire in cases
 the general rule already requires. `fmt.Fprint*` to a real `io.Writer` is
-never denied — that is the sanctioned pattern.
+never denied: that is the sanctioned pattern.
 
 **Cross-package (R-14.137's specific requirement):** unlike the cmd/-only
 forbidigo rule, this gate scans every non-exempt package under `cmd/`,
-`internal/`, `pkg/`, `providers/`, and `plugins/` — not only `cmd/`. That
+`internal/`, `pkg/`, `providers/`, and `plugins/`, not only `cmd/`. That
 converts the whole-program property ("nothing outside `internal/output`
 writes to the real streams") into a per-file one at the DEFINITION site: a
 helper in some other package that writes to `os.Stdout` directly is caught
@@ -135,21 +135,21 @@ real dataflow/type-aware analysis (effectively `golang.org/x/tools/go/packages`
 
 Exempt: `_test.go` files, `internal/output/**` (the sanctioned Writer
 package itself), and `plugins/examples/**` (the standalone example plugin
-legitimately prints on its own account, per D/S-06.T5's own carve-out —
+legitimately prints on its own account, per D/S-06.T5's own carve-out,
 scoped to that directory only, not all of `plugins/**`).
 
 ## Coverage floor + ratchet (Art.4)
 
 Consumes the `coverage` job's profile (`internal/build/coveragegate.go`
 parses the raw Go coverage-profile format directly, aggregating statement
-coverage per package — no dependency on `go/packages` or a new module).
+coverage per package, no dependency on `go/packages` or a new module).
 **Statements only**: Go's stdlib coverage tooling has no branch-coverage
 mode, and this repo has adopted no separate branch-coverage tool, so the
 Branches column in Art.4's table is a named, honest gap, not silently
 claimed. Tiers are assigned by directory: `internal/{policy,secrets,audit}`
 = security (≥90%), `cmd/**` = CLI (≥70%), `providers/**` + `plugins/**` =
 plugins (≥80%), everything else under `internal/**` = core (≥85%). `pkg/**`
-is excluded from Art.4 floors entirely — it is the public SDK contract
+is excluded from Art.4 floors entirely: it is the public SDK contract
 surface (often zero-statement by construction: an interface has no
 executable body), governed instead by the dead-code and godoc gates below.
 The ratchet compares each package's measured coverage against
@@ -157,7 +157,7 @@ The ratchet compares each package's measured coverage against
 even above the floor. Live check: `TestCoverageGate_Live`, gated by
 `CASCADE_COVERAGE_PROFILE` (a nested `go test ./...` inside a running
 `go test` process was probed directly during development and hangs on
-build-cache lock contention past 5 minutes — this is why the check is
+build-cache lock contention past 5 minutes; this is why the check is
 env-var-gated against an already-produced profile, exactly like the
 hygiene gates below, rather than running the suite itself).
 
@@ -168,11 +168,11 @@ hygiene gates below, rather than running the suite itself).
   `internal/sync/**` (declared, not yet populated) and one individually
   justified pre-existing file outside this ticket's scope,
   `internal/storage/storetest/queue_suite.go` (a hard-capped, documented
-  poll loop) — see `hygiene.go`'s package doc for the full reasoning; that
+  poll loop); see `hygiene.go`'s package doc for the full reasoning; that
   file's owner should adopt a `CASCADE-ALLOW` comment in-file once it is
   next in scope, at which point the hardcoded entry should be removed.
 - **No-network unit lane** (Art.7.2): an untagged `_test.go` file may not
-  import `net` or `net/http` — a REAL, provable rule that is intentionally
+  import `net` or `net/http`, a REAL, provable rule that is intentionally
   stricter than Art.7.2's literal text (an `httptest`-only unit test would
   also need the `integration` build tag) because a precise "is this call a
   real outbound request or a local httptest server" static check cannot be
@@ -192,15 +192,15 @@ hygiene gates below, rather than running the suite itself).
 
 Cross-file, cross-package AST scan: a symbol is "used" if its bare
 identifier (same package) or a cross-package qualified selector (alias
-resolved) appears ANYWHERE in the scanned tree — including its own
-declaring file, including `_test.go` files — EXCLUDING the identifier
+resolved) appears ANYWHERE in the scanned tree, including its own
+declaring file, including `_test.go` files, EXCLUDING the identifier
 occurrence that IS its own declaration. An earlier draft excluded only
 same-FILE occurrences and immediately false-positived on the most common
 Go idiom there is (`v := Fn()` never re-spells the return type `Fn`
 returns); the position-based fix dropped the false-positive count from 16
 in `internal/build` alone to zero, confirmed by direct probe. This is
 still not full type-aware analysis (that needs `go/types` + import
-resolution, effectively `golang.org/x/tools/go/packages` — a dependency
+resolution, effectively `golang.org/x/tools/go/packages`, a dependency
 this ticket is not authorized to add, R-14.115): a symbol reached only
 through struct embedding without ever naming its type can still evade it.
 `internal/**` unused exported symbols hard-fail CI. `pkg/**` unused
@@ -214,17 +214,17 @@ Every exported top-level `func`/`type`/`const`/`var` in `pkg/**` must carry
 a preceding doc comment. Separately, every `pkg/**` subpackage that
 declares at least one exported top-level function must ship at least one
 `Example*` function in a `_test.go` file (scoped per-package, not per
-symbol — this repo's existing `pkg/cascade`, `pkg/plugin`, `pkg/provider`
+symbol, this repo's existing `pkg/cascade`, `pkg/plugin`, `pkg/provider`
 each already ship one or more).
 
 ## Flake quarantine registry (Art.7.5 / Art.6)
 
-`internal/build/flake-registry.json` (currently `[]` — no test has ever
+`internal/build/flake-registry.json` (currently `[]`, no test has ever
 flaked in this repo) is a REGISTRY, not a flake detector: nothing in this
 gate re-runs the suite hunting for flakiness. `ValidateFlakeRegistry`
 requires every entry to name the exact test (`<import path>.<TestName>`),
 an owning ticket matching the plan's id grammar, a non-empty reason, and a
-non-past `YYYY-MM-DD` expiry — an EXPIRED entry is itself a violation, the
+non-past `YYYY-MM-DD` expiry: an EXPIRED entry is itself a violation, the
 "retried away forever" failure Art.7.5 exists to prevent. `IsQuarantined`
 lets a future test runner consult the registry before treating a failure
 as blocking.
@@ -238,6 +238,6 @@ golangci-lint run --allow-parallel-runners internal/build/...
 ```
 
 The two live checks (`TestCoverageGate_Live`, `TestHygieneEnvironment_Live`)
-skip locally unless their env vars are set — see the CI job comments in
+skip locally unless their env vars are set; see the CI job comments in
 `.github/workflows/ci.yml` (`coverage-gate`, `redirected-home`) for exactly
 how to reproduce them.

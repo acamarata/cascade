@@ -6,8 +6,8 @@ Status: landed Wave 1 (P1-E03-W1-S05-T1). Ticket contract:
 The hooks engine dispatches configured actions in response to typed
 events on the daemon's event bus (`internal/events`, C/S-04.T3), auditing
 every fire outcome. It is **restricted by design at W1** to exactly two
-action types: `plugin-call` and `agent-note`. Shell actions are refused —
-permanently, at this wave — pending I/S-18.T5's policy-routed risk
+action types: `plugin-call` and `agent-note`. Shell actions are refused,
+permanently, at this wave, pending I/S-18.T5's policy-routed risk
 ladder (04-PEWS-PLAN-W1-W3.md §Epic C S-05.T1, the plan's own security
 ruling).
 
@@ -17,40 +17,40 @@ See `docs/cli-reference/config.md`'s `[hooks]` section for the
 `config.toml` schema (`id`, `trigger`, `action_type`, `action_params`;
 08-INIT-CONFIG-SPEC.md §3, reload class hot). Decoding config.toml into
 `internal/hooks.HookConfig` and calling `Registry.Register` for each
-entry is composition-root work — **not yet wired** — this ticket defines
+entry is composition-root work (**not yet wired**); this ticket defines
 and validates the shape only.
 
 ## Package shape
 
-- **`HookConfig`** (`hooks.go`) — the config row: `ID`, `Trigger`,
+- **`HookConfig`** (`hooks.go`): the config row: `ID`, `Trigger`,
   `ActionType`, `ActionParams map[string]string`.
-- **`Registry`** (`registry.go`) — `Register`/`Deregister`/`List`/
+- **`Registry`** (`registry.go`): `Register`/`Deregister`/`List`/
   `MatchTriggers`. Refuses `shell` and any unrecognised `ActionType`
   **before** a hook is stored, with a `cascade.KindPolicyDenied` error
   (see "Error kind" below). If `ID` is omitted, `DeriveHookID` derives a
   deterministic slug from `trigger` + `action_type` + a hash of
   `action_params`, so a hook's identity survives a daemon restart without
   hand-assignment. A hook's `Trigger` may never name the engine's own
-  audit event kind (`hooks.fire`) — refused at registration, the first of
+  audit event kind (`hooks.fire`), refused at registration, the first of
   two re-entrancy guards (see "Re-entrancy" below).
-- **`Dispatcher`** (`dispatcher.go`) — subscribes to a namespace on an
+- **`Dispatcher`** (`dispatcher.go`): subscribes to a namespace on an
   `*events.Bus`, matches incoming events against a `Registry` by exact
   trigger string, and dispatches each match's action bounded by a
   configurable timeout. Construct via `NewDispatcher(DispatcherConfig)`;
-  every field is required — this package invents no default namespace,
+  every field is required: this package invents no default namespace,
   cursor name, or timeout value.
-- **`PluginDispatcher`** / **`NoteWriter`** (`hooks.go`) — the two W1
+- **`PluginDispatcher`** / **`NoteWriter`** (`hooks.go`): the two W1
   action-type seams, injected interfaces only. `PluginDispatcher` is
   wired to C/S-05.T7's plugin registry once that ticket lands;
   `NoteWriter` is wired to the journal/memory domain once G/S-13 ships.
   **Neither has a real production implementation anywhere in this tree
-  yet** — stated plainly (Art.1), not left implicit. Only test fakes
+  yet**, stated plainly (Art.1), not left implicit. Only test fakes
   exist, confined to `_test.go`.
-- **`HookFire`** / audit (`audit.go`) — every fire attempt (success,
+- **`HookFire`** / audit (`audit.go`): every fire attempt (success,
   dispatch error, timeout, panic, or refusal) publishes exactly one
   `HookFire` to the event bus. See "Audit contract" below.
 
-## Bounded execution — the "must not hang" guarantee
+## Bounded execution: the "must not hang" guarantee
 
 `Dispatcher.dispatchHook` bounds every action by `ActionTimeout`, even
 when the action ignores `context` cancellation and blocks forever. The
@@ -59,17 +59,17 @@ mechanism: the action runs in its own goroutine, sending its outcome on a
 of whether anyone is still listening. `dispatchHook` itself waits on a
 `select` between that channel and the timeout's `context.Done()`. If the
 timeout fires first, `dispatchHook` synthesizes a `ResultTimeout` outcome,
-audits it, and returns immediately — the dispatch loop is never blocked
+audits it, and returns immediately: the dispatch loop is never blocked
 longer than `ActionTimeout` by any single hook, no matter what that
 hook's action does. The abandoned goroutine is not (and cannot be)
-killed — Go has no such primitive — so a permanently-blocking action
+killed (Go has no such primitive), so a permanently-blocking action
 leaks one goroutine per fire; if it later does return, its outcome is
 silently discarded (nobody is listening on the channel any more), never
 producing a second audit record for the same fire.
 
 ## Failure policy
 
-A hook's own failure — dispatch error, timeout, or panic — is **recorded,
+A hook's own failure (dispatch error, timeout, or panic) is **recorded,
 never propagated to the triggering event's publisher**. `Dispatcher.Run`
 consumes events from its own subscription loop; nothing about a hook
 failing changes whether the event that triggered it was "handled" from
@@ -86,19 +86,19 @@ recording the failure and moving on.
 Two, explicitly bounded, guards:
 
 1. **Direct self-loop**: a hook can never be configured to fire on the
-   engine's own audit trail — `Registry.Register` refuses a `HookConfig`
+   engine's own audit trail: `Registry.Register` refuses a `HookConfig`
    whose `Trigger` names `EventKindHookFire` ("hooks.fire"), and
    `Dispatcher.handleEvent` independently skips any incoming event of
    that kind before even consulting the registry (defense-in-depth,
    mirroring the shell-refusal pattern).
 2. **Longer cycles are NOT prevented.** `PluginDispatcher`/`NoteWriter`
    are opaque injected interfaces with no real implementation in this
-   ticket — this package has no visibility into what a dispatched action
+   ticket: this package has no visibility into what a dispatched action
    ultimately publishes. A cycle across independently-triggered hooks
    (hook A's plugin-call causes some plugin to publish an event matching
    hook B's trigger, whose action causes an event matching A's trigger
    again) is possible and unbounded by anything in this package today.
-   Call-depth tracking or a per-event hook-fire budget is unimplemented —
+   Call-depth tracking or a per-event hook-fire budget is unimplemented,
    stated as an explicit gap (Art.1), not silently assumed away. Whichever
    ticket wires a real `PluginDispatcher` should read this section before
    assuming the engine bounds fan-out on its behalf.
@@ -108,7 +108,7 @@ Two, explicitly bounded, guards:
 `internal/events`' delivery guarantee is **at-least-once**: a crash
 between an event landing in the bus's store and its subscription cursor
 committing redelivers that event on the next `Subscribe` with the same
-cursor name. The hooks engine inherits this unmodified — it performs **no
+cursor name. The hooks engine inherits this unmodified: it performs **no
 de-duplication** of its own. Consequence, stated plainly: a hook's action
 **may run twice** for the same logical event. Whether that is safe is the
 injected implementation's responsibility, not this package's:
@@ -117,7 +117,7 @@ injected implementation's responsibility, not this package's:
   exists") is safe as-is.
 - A non-idempotent action (e.g. "increment a counter", "send exactly one
   notification") is **not** safe without the implementation adding its
-  own guard, e.g. keyed on `hookID` plus the triggering event's `Seq` —
+  own guard, e.g. keyed on `hookID` plus the triggering event's `Seq`,
   which `Dispatcher` does not currently thread through to
   `PluginDispatcher`/`NoteWriter`. This is a forward note for whichever
   ticket wires the first concrete implementation, not a defect in this
@@ -125,8 +125,8 @@ injected implementation's responsibility, not this package's:
 
 ## Audit contract
 
-Every fire attempt — success, dispatch error, timeout, panic, or
-action-type refusal — publishes exactly one `HookFire` event to the
+Every fire attempt (success, dispatch error, timeout, panic, or
+action-type refusal) publishes exactly one `HookFire` event to the
 configured audit namespace:
 
 ```json
@@ -137,12 +137,12 @@ configured audit namespace:
 
 `result_code` is one of `success`, `error`, `panic`, `timeout`, `refused`.
 There is exactly one call site that turns a fire outcome into a
-publish (`Dispatcher.emitAudit`) — "every fire is audited" is enforced by
+publish (`Dispatcher.emitAudit`): "every fire is audited" is enforced by
 construction, not by convention: no code path in `dispatchHook` returns
 without going through it.
 
 **Secret handling.** `HookFire` carries `params_hash` (a SHA-256 digest of
-the hook's `action_params`), **never the raw params themselves** — that
+the hook's `action_params`), **never the raw params themselves**; that
 is a structural guarantee, not a filter that could be bypassed. The one
 remaining leak surface is `err_msg`, sourced from whatever error text a
 `PluginDispatcher`/`NoteWriter` implementation returns, which this
@@ -154,7 +154,7 @@ mitigates the one leak vector this package DOES control: every
 of it stripped from `err_msg` before publication. This does **not** catch
 a secret-shaped value introduced by the downstream implementation from
 some source other than this hook's own params, or a secret that does not
-match the heuristic's shape — stated plainly, not claimed as complete.
+match the heuristic's shape; stated plainly, not claimed as complete.
 
 ## Error kind: `HOOK_ACTION_NOT_PERMITTED`
 
@@ -176,14 +176,14 @@ every `HookFire`'s `result_code`/`err_msg` fields instead.
 ## Composition-root wiring (forward notes, out of this ticket's scope)
 
 - Decode `config.toml`'s `[[hooks]]` entries into `HookConfig` and call
-  `Registry.Register` for each — no such loader exists yet.
+  `Registry.Register` for each; no such loader exists yet.
 - Construct the real `PluginDispatcher` over C/S-05.T7's plugin registry
   (`internal/plugins`), respecting `internal/storage/capability.go`'s
-  cross-domain grant model exactly as any other cross-domain caller must —
+  cross-domain grant model exactly as any other cross-domain caller must,
   this package never bypasses it, since it never touches storage directly;
   whichever ticket wires the concrete `PluginDispatcher` is responsible for
   routing through the real registry rather than around it.
 - Construct the real `NoteWriter` once G/S-13's journal/memory domain
   ships.
 - Choose and inject the daemon's real `ActionTimeout`, trigger/audit
-  namespaces, and cursor name — this package supplies no defaults.
+  namespaces, and cursor name; this package supplies no defaults.

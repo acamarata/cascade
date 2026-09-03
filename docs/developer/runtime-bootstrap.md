@@ -18,18 +18,18 @@ first match wins:
 
 An empty value at any level means "not set" and falls through to the
 next. A non-empty, unrecognised value at *any* level (not just the
-default) is a hard, typed `*runtime.InvalidProfileError` — the loader
+default) is a hard, typed `*runtime.InvalidProfileError`: the loader
 never silently coerces a bad value to the default.
 
 `Profile` is a closed enum: `local` | `server` | `worker`
-(02-TARGET-STRUCTURE.md §Profiles — local and server run the same binary
+(02-TARGET-STRUCTURE.md §Profiles: local and server run the same binary
 with different storage/provider wiring; worker enrolls against a
 controller and holds no local storage).
 
 ## Path layout
 
 `internal/runtime.PathProvider` is the only place in the tree allowed to
-call `os.UserHomeDir` — every other package receives paths through this
+call `os.UserHomeDir`: every other package receives paths through this
 interface, injected, never derives them itself. Layout:
 
 | Path | Resolution |
@@ -43,7 +43,7 @@ interface, injected, never derives them itself. Layout:
 
 `NewPathProvider(getenv, homeDir)` takes both accessors as parameters so
 tests can inject fakes rooted at `t.TempDir()` (12-QUALITY-CONSTITUTION.md
-Art.7.1 — a test must never touch the real home or XDG dirs).
+Art.7.1: a test must never touch the real home or XDG dirs).
 `NewDefaultPathProvider()` is the one production call site that binds
 those parameters to the real environment; only `Bootstrap` and other
 production entrypoints should call it.
@@ -51,12 +51,12 @@ production entrypoints should call it.
 ## Config loading
 
 `internal/runtime.Load` reads `config.toml` from the resolved path (a
-missing file is not an error — every field falls back to its default,
+missing file is not an error: every field falls back to its default,
 and `Load` never creates the file as a side effect):
 
 1. Decode the file into a generic tree; a parse failure is a typed
    `*runtime.ConfigError`.
-2. Run the schema_version upgrade-rewrite frame (below) — this may
+2. Run the schema_version upgrade-rewrite frame (below); this may
    rewrite the file atomically.
 3. Apply generic `CASCADE_<SECTION>__<KEY>` environment overrides:
    double underscore maps to a TOML dot, so
@@ -67,9 +67,9 @@ and `Load` never creates the file as a side effect):
    `CASCADE_PROFILE`, `CASCADE_CONFIG`, `CASCADE_SOCKET`,
    `CASCADE_NO_INPUT`, `CASCADE_YES`, `CASCADE_TELEMETRY`, and every
    `CASCADE_INIT_*` name are reserved and never treated as a generic
-   override — they have their own dedicated resolution paths.
+   override, since they have their own dedicated resolution paths.
 4. Validate the two sections this ticket owns (below).
-5. Preserve every other top-level section verbatim in `Config.Extra` —
+5. Preserve every other top-level section verbatim in `Config.Extra`:
    these are valid future 08 §3 sections (`logging`, `storage`,
    `retrieval`, ...) this ticket does not own; they round-trip through a
    schema rewrite untouched and are never validated, defaulted, or
@@ -78,13 +78,13 @@ and `Load` never creates the file as a side effect):
 
 Every effective key carries a source annotation
 (`default` | `file` | `env` | `flag`), retrievable via `Config.Source` or
-`Config.EffectiveEntries()` — the data behind `cascade config list
+`Config.EffectiveEntries()`, the data behind `cascade config list
 --effective` (see `../cli-reference/config.md`).
 
 ### Sections this ticket owns
 
 **`[runtime]`** (cold reload class): `profile` resolves through the
-cascade above. `home` and `data_dir` are never read from the file — they
+cascade above. `home` and `data_dir` are never read from the file: they
 are always the resolved `PathProvider` values, stamped in by `Bootstrap`
 after `Load` returns, so there is no second, independent way to
 configure paths alongside `CASCADE_HOME`. An unrecognised key inside
@@ -93,7 +93,7 @@ later additive keys).
 
 **`[elevation]`** (cold-only / non-hot-reloadable per 08
 §[elevation]): `allow_remote` (bool) and `helper_pubkey` (string). An
-unrecognised key inside `[elevation]` is a hard, typed error — unlike
+unrecognised key inside `[elevation]` is a hard, typed error, unlike
 `[runtime]`, this section does not tolerate silent drift, because it is
 security-classified. `helper_pubkey` is required when `allow_remote` is
 `true` (a missing-required-field typed error naming the field). This
@@ -105,7 +105,7 @@ daemon trust store.
 ## schema_version upgrade-rewrite frame
 
 `internal/runtime.UpgradeSchema` detects a config tree's current
-`schema_version` (0 when the key is absent — the legacy/unversioned
+`schema_version` (0 when the key is absent, the legacy/unversioned
 case) and runs every applicable migration step up to
 `CurrentSchemaVersion`, mutating the tree in place. `Load` calls it
 whenever a config file exists, and atomically rewrites the file (temp
@@ -115,7 +115,7 @@ changed.
 The frame is idempotent by construction: a second run against an
 already-current tree performs zero steps and reports `Mutated=false`
 without touching the file. A `schema_version` newer than the binary
-understands is a hard `*runtime.SchemaError` — downgrade is never
+understands is a hard `*runtime.SchemaError`: downgrade is never
 attempted.
 
 `migrationSteps` is empty today: schema 1 is the only generation that
@@ -127,14 +127,14 @@ real transform to `migrationSteps` the day schema 2 needs one.
 
 Every domain type in this package reads time through `runtime.Clock`,
 never `time.Now()` directly (02-TARGET-STRUCTURE.md §v1.1; R-14.11 makes
-`internal/runtime` the canonical home for this interface — there is no
+`internal/runtime` the canonical home for this interface; there is no
 `pkg/clock`). Production code uses `NewSystemClock()`; tests must use
 `NewFixedClock` so time-dependent assertions stay deterministic.
 
 ## Logging (P1-E03-W1-S04-T2)
 
 `internal/runtime.Config.Logging` is the typed view of `[logging]` (08
-§3, hot reload class — the whole section is live-reconfigurable, no
+§3, hot reload class: the whole section is live-reconfigurable, no
 `config.restart.required` is ever emitted for these keys):
 
 | Key | Type | Default | Notes |
@@ -145,25 +145,25 @@ never `time.Now()` directly (02-TARGET-STRUCTURE.md §v1.1; R-14.11 makes
 | `logging.rotation.max_files` | positive int | **none** | see below |
 
 **R-14.107 is binding:** the rotation keys have no numeric default.
-Rotation stays fully disabled — the log file grows forever — unless
+Rotation stays fully disabled (the log file grows forever) unless
 `max_size_mb` AND `max_files` are both explicitly set in `config.toml`.
 `internal/runtime.loggingRotation.Enabled()` is the single source of
 truth for this check; nothing in this ticket invents a fallback number.
 An unrecognised key inside `[logging.rotation]` is a hard typed error
 (the table is small and closed); an unrecognised key at the top level of
-`[logging]` only warns, matching `[runtime]`'s additive-safe tolerance —
+`[logging]` only warns, matching `[runtime]`'s additive-safe tolerance;
 08 leaves room for later keys under `[logging]` itself.
 
 `internal/runtime.NewLogger` wraps `log/slog`: a JSON handler by
 default, a text handler when `format = "text"`, at the configured
-level — constructor-injected everywhere, never `slog.SetDefault`.
+level, constructor-injected everywhere, never `slog.SetDefault`.
 `Logger.SetLevel(slog.Level)` updates the active handler's minimum level
 without rebuilding it, for C/S-05.T8's hot-reload engine.
 
 `internal/runtime.RotatingWriter` (rotation.go) is the size-based
 rotation writer behind the log file: it wraps `PathProvider`'s log
 directory (`internal/runtime.LogFilePath`, since `PathProvider` itself
-has no dedicated `LogPath()` — deriving it in logger.go avoided touching
+has no dedicated `LogPath()`; deriving it in logger.go avoided touching
 paths.go, which this ticket's `files_scope` does not name), rotates via
 `os.Rename` when a write would cross `MaxSizeMB` (numbered backups
 `<path>.1` newest .. `<path>.MaxFiles` oldest, oldest pruned first), and
@@ -172,7 +172,7 @@ and its sequence number. `Reconfigure(maxSizeMB, maxFiles int)` updates
 the thresholds live; `<=0` for either disables rotation, mirroring
 R-14.107's "both or neither" semantics on a hot reload. All file
 operations serialise under one mutex, so concurrent writers never
-produce a torn line. No CGO, no platform-specific syscalls — `os.Rename`
+produce a torn line. No CGO, no platform-specific syscalls: `os.Rename`
 is available on every platform this ticket targets, including the
 windows/amd64 tier-2 build.
 
@@ -185,8 +185,8 @@ flushes and closes the log file.
 ## `cascade daemon logs [-f]` (P1-E03-W1-S04-T2)
 
 `internal/runtime.DaemonLogsHandler` (daemon_logs.go) reads the log file
-at `LogFilePath(paths)` and writes it to `stdout` (diagnostics — a
-missing or, in follow mode, disappeared file — go to `stderr`, per
+at `LogFilePath(paths)` and writes it to `stdout` (diagnostics; a
+missing or, in follow mode, disappeared file, go to `stderr`, per
 D/S-06.T5's output contract). It never requires a live daemon: reading
 the file is all it does. `-f` polls via `os.Stat` (no inotify/FSEvents
 dependency) and streams new lines until the caller's context is
@@ -205,5 +205,5 @@ and returns a `*Runtime` holding the active `Profile`, `PathProvider`,
 `*Config`, `Clock`, and `Log`. `Runtime.Close()` closes the log file (a
 nil `*Runtime` or nil `Log` is a safe no-op). It is the startup-sequence
 anchor later tickets (S-05.T3, S-05.T4) extend by wiring in additional
-`change:` entries — they must not construct `PathProvider`, `Config`, or
+`change:` entries. They must not construct `PathProvider`, `Config`, or
 `LogProvider` themselves.

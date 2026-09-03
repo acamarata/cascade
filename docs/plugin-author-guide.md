@@ -1,7 +1,7 @@
 # Plugin author guide
 
 Status: seeded from Wave 1 (P1-E03-W1-S05-T7, the Epic C acceptance
-ticket). This file currently documents the ONE pattern T7 establishes —
+ticket). This file currently documents the ONE pattern T7 establishes:
 compile-time builtin registration. Ticket contract:
 `.claude/planning/p1/phase/epics/E-C/waves/W-1/sprints/S-05/tickets/T-7.yaml`;
 spec: `02-TARGET-STRUCTURE.md` §"First-party plugin catalog v1" and
@@ -13,12 +13,12 @@ this ticket's scope (O/S-31) and are not documented here yet.
 
 A **builtin** plugin (`Manifest.Runtime == plugin.RuntimeBuiltin`) is Go
 code linked directly into the `cascade` binary. It never runs as a
-separate process, so it has no wire protocol to implement — instead it
+separate process, so it has no wire protocol to implement; instead it
 registers itself with the host at compile time, via `init()`.
 
 ### The pattern
 
-1. Implement `plugin.BuiltinHandlers` — the three-method dispatch
+1. Implement `plugin.BuiltinHandlers`: the three-method dispatch
    surface the host calls once your plugin is loaded:
 
    ```go
@@ -32,7 +32,7 @@ registers itself with the host at compile time, via `init()`.
    Every method is ctx-first (02-TARGET-STRUCTURE.md §v1.1). Each
    `name` argument matches one of your manifest's declared
    `provides.tools[].name` / `provides.intents[].name` /
-   `provides.commands[].name` entries — return an error for any
+   `provides.commands[].name` entries. Return an error for any
    unrecognized name rather than a zero value, so a caller can tell
    "not implemented yet" from "succeeded with nothing to report".
 
@@ -46,7 +46,7 @@ registers itself with the host at compile time, via `init()`.
    ```
 
    `RegisterBuiltin` is safe to call concurrently and is a pure
-   append — it performs NO validation itself.
+   append: it performs NO validation itself.
    `internal/plugins.BuiltinRegistry.Load` is what runs `plugin.Validate`
    against every registered manifest and rejects invalid ones; an
    author who wants to check a manifest before shipping runs
@@ -60,7 +60,7 @@ registers itself with the host at compile time, via `init()`.
    ```
 
    A blank import is the entire integration surface for a builtin
-   plugin — there is no manifest file on disk to install, no process to
+   plugin: there is no manifest file on disk to install, no process to
    supervise, no manifest hash to verify at load time (that machinery
    exists for the process/wasm/remote runtime modes, not builtin).
 
@@ -72,13 +72,13 @@ sharing the "greet" verb.
 
 `RegisterBuiltin` always seeds a registered plugin's `Grants` to
 `[]string{"read"}`. This is the ONLY grant a builtin plugin receives
-automatically in W1 — there is no consent dialog, no capability request
+automatically in W1: there is no consent dialog, no capability request
 flow, and no call into the capability-policy engine (I/S-17.T1, not yet
 built). A plugin that needs more than read access declares it via
 `Manifest.Requires` and `Manifest.Permissions` as normal; the
 policy-engine ticket is what will actually enforce those declarations.
 Until then, `internal/plugins.BuiltinRegistry.Grants(id)` is a read-only
-mirror of what `RegisterBuiltin` seeded — it grants nothing beyond
+mirror of what `RegisterBuiltin` seeded: it grants nothing beyond
 `"read"` on its own.
 
 ## RPC naming convention
@@ -96,7 +96,7 @@ is the normative source for this pattern.
 computes the string; `internal/plugins.BuiltinRegistry.NewCobraCommand`
 builds the matching `*cobra.Command` descriptor, whose `RunE` dispatches
 straight into your `BuiltinHandlers.RunCommand`. T7 defines the naming
-and the descriptor construction only — the JSON-RPC method dispatch that
+and the descriptor construction only. The JSON-RPC method dispatch that
 actually routes an incoming `plugin.<id>.<cmd>` call to your handler is
 D/S-06.T3's, not yet built.
 
@@ -109,7 +109,7 @@ D/S-06.T3's, not yet built.
   noun or utility verb (`config`, `daemon`, `provider`, `plugin`,
   `node`, `sync`, `backup`, `vault`, `chat`, `recall`, `memory`,
   `context`, `fleet`, `mcp`, `init`, `run`, `status`, `doctor`,
-  `migrate`, `self-update`, `uninstall`, `version`, `completion`) — see
+  `migrate`, `self-update`, `uninstall`, `version`, `completion`); see
   `pkg/plugin/validate.go`'s `reservedCommandNames` for the
   authoritative, current list.
 
