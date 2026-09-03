@@ -1,4 +1,4 @@
-//go:build linux && !cgo
+//go:build linux && (!cgo || !pam)
 
 // Purpose: the CGO_ENABLED=0 fallback for linux, mirroring
 //

@@ -1,4 +1,4 @@
-//go:build linux && cgo
+//go:build linux && cgo && pam
 
 // Purpose: linux ElevationKeystore backend: PAM authenticates the calling
 //

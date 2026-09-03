@@ -75,6 +75,32 @@ jobs:
       - name: go test ./...
         run: go test ./... -v
 
+  # The linux PAM keystore sits behind `cgo && pam` and is the only code in
+  # the tree that needs a system header. Releases build with CGO_ENABLED=0,
+  # so this file never reaches a shipped binary, and no other job compiles
+  # it. Without this job it would be code nothing ever builds.
+  #
+  # It is a build and vet job, not a test job: exercising PAM needs a
+  # configured stack and a real user, which a runner does not have.
+  linux-pam-build:
+    name: linux pam keystore (build only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install PAM headers
+        run: sudo apt-get update && sudo apt-get install -y libpam0g-dev
+
+      - name: go build -tags pam ./...
+        run: CGO_ENABLED=1 go build -tags pam ./...
+
+      - name: go vet -tags pam ./...
+        run: CGO_ENABLED=1 go vet -tags pam ./...
+
   race:
     name: race detector
     runs-on: ubuntu-latest

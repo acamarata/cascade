@@ -1,4 +1,4 @@
-//go:build linux && cgo && integration
+//go:build linux && cgo && pam && integration
 
 // Purpose: Art.2 real-counterpart integration test for the linux
 //
