@@ -87,12 +87,17 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 		return err
 	}
 
+	server, err := buildRPCServer(bus, deps.Clock)
+	if err != nil {
+		return err
+	}
+
 	opts := daemon.RunOptions{
 		Settings: settings,
 		PIDPath:  daemon.PIDFilePath(paths),
 		Logger:   logProvider.Logger(),
 		Clock:    deps.Clock,
-		Server:   buildRPCServer(bus, deps.Clock),
+		Server:   server,
 		Environ:  deps.Environ,
 	}
 	wireUpgrade(&opts, deps, store, bus, logProvider.Logger())

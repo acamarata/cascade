@@ -33,9 +33,12 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/mcp"
+	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 	"github.com/acamarata/cascade/providers/sqlite"
 )
@@ -93,12 +96,24 @@ func openRuntimeStore(ctx context.Context, paths runtime.PathProvider) (provider
 // than imported, since that file is out of scope for this change). A
 // future addition of another namespace's producer decides its own SSE
 // binding or a real cross-namespace fan-in; that is not invented here.
-func buildRPCServer(bus *events.Bus, clock runtime.Clock) *http.Server {
+func buildRPCServer(bus *events.Bus, clock runtime.Clock) (*http.Server, error) {
 	knownEventKind := func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
 	}
 	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
-	return daemon.NewRPCServer(rpc.NewRegistry(), sse)
+
+	registry := rpc.NewRegistry()
+	// Register the MCP dispatcher on the daemon's own socket. Without this
+	// the transport exists, is tested, and is reachable only through the
+	// separate socket the mcp command binds for itself, which is not the
+	// socket a client connecting to the daemon uses. The tool registry
+	// applies its own exposure filter, so registering the method here does
+	// not widen what a caller can reach.
+	tools := mcp.NewToolRegistry(plugin.Builtins)
+	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
+		return nil, err
+	}
+	return daemon.NewRPCServer(registry, sse), nil
 }
 
 // relaunchExecArgs builds RunOptions.Args: the argv UpgradeManager's
