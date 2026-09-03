@@ -27,6 +27,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -81,10 +82,8 @@ func openRuntimeStore(ctx context.Context, paths runtime.PathProvider) (provider
 }
 
 // buildRPCServer constructs the daemon's real IPC server: POST /rpc
-// through an empty rpc.Registry (no RPC method has been registered onto
-// it yet anywhere in this repo; registering the real method set is a
-// separate concern from composition-root wiring) and GET /events through
-// an SSEHandler bound to bus.
+// through an rpc.Registry carrying the MCP dispatcher and the status.get
+// handler (D/S-07.T1), and GET /events through an SSEHandler bound to bus.
 //
 // The SSE handler binds to exactly ONE bus namespace, "daemon". This is
 // the disclosed limitation internal/rpc/sse.go's package doc names
@@ -96,7 +95,19 @@ func openRuntimeStore(ctx context.Context, paths runtime.PathProvider) (provider
 // than imported, since that file is out of scope for this change). A
 // future addition of another namespace's producer decides its own SSE
 // binding or a real cross-namespace fan-in; that is not invented here.
-func buildRPCServer(bus *events.Bus, clock runtime.Clock) (*http.Server, error) {
+//
+// buildRPCServer also returns the *daemon.Manifest and the active-
+// connection *int64 it built the status.get handler against. The caller
+// (platformDaemonRun) MUST pass both of these same values on as
+// RunOptions.Manifest and RunOptions.Connections, so status.get reads
+// Run's real, live subsystem states and connection count rather than a
+// second, disconnected copy: this ticket's contract calls this out by
+// name ("assemble every field from live daemon state... no mock or
+// placeholder return", D/S-07.T1). registerStatusHandler below is the
+// composition-root wiring this closes: without it, status.get would exist,
+// be tested, and be unreachable from a live daemon, exactly the pattern
+// R-14.166 named and forbade going forward.
+func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
 	}
@@ -111,9 +122,28 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock) (*http.Server, error) 
 	// not widen what a caller can reach.
 	tools := mcp.NewToolRegistry(plugin.Builtins)
 	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return daemon.NewRPCServer(registry, sse), nil
+
+	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
+	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
+}
+
+// registerStatusHandler builds this composition root's *daemon.Manifest
+// and active-connection counter, registers status.get against them, and
+// returns both so the caller can hand the SAME values to daemon.Run via
+// RunOptions: the one seam that makes status.get's Connections and
+// Health fields real instead of stubbed (see buildRPCServer's doc
+// comment). The start time is read here, immediately before Run's own
+// socket/pidfile setup, so uptime is accurate to within the few
+// milliseconds of composition-root work between the two, using the SAME
+// injected clock Run itself uses (Art.7.1).
+func registerStatusHandler(registry *rpc.Registry, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings) (*daemon.Manifest, *int64) {
+	manifest := daemon.NewManifest(logger, clock)
+	connections := new(int64)
+	provider := daemon.NewStatusProvider(clock, clock.Now(), settings.SocketPath, connections, manifest)
+	registry.Register(daemon.StatusMethod, provider.Handler())
+	return manifest, connections
 }
 
 // relaunchExecArgs builds RunOptions.Args: the argv UpgradeManager's

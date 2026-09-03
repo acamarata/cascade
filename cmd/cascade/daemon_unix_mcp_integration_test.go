@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -34,7 +35,7 @@ func TestBuildRPCServer_MCPReachableOverRealSocket(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	bus := events.New(storetest.NewMemStore(), clock)
 
-	srv, err := buildRPCServer(bus, clock)
+	srv, _, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: "mcpe2e.sock"})
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

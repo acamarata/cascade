@@ -1,0 +1,7 @@
+FIELD        VALUE
+version      1.2.3-test
+pid          4242
+uptime_s     12.500
+connections  2
+socket_path  /var/run/cascade/daemon.sock
+health       ok

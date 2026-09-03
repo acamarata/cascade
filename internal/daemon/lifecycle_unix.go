@@ -85,6 +85,16 @@ type RunOptions struct {
 	// (cmd/cascade/daemon_unix.go) always supplies a real one; tests that
 	// only care about accept/drain mechanics may leave this nil.
 	Server *http.Server
+	// Connections, if non-nil, is the externally-owned active-connection
+	// counter Run increments/decrements via http.Server.ConnState
+	// (lifecycle_unix_serve.go's serveRPC) instead of allocating its own
+	// Run-private counter. The composition root (cmd/cascade/
+	// daemon_unix_run.go) passes the SAME pointer to
+	// internal/daemon.NewStatusProvider, so status.get's Connections field
+	// reports this real, live count rather than a second, disconnected
+	// one. nil preserves Run's original behavior (a fresh, Run-private
+	// counter); every caller that does not set this field is unaffected.
+	Connections *int64
 }
 
 // Run serves the daemon in the foreground until ctx is canceled or a
@@ -115,13 +125,16 @@ func Run(ctx context.Context, opts RunOptions) error {
 		sigs = ch
 	}
 
-	var active int64
+	active := opts.Connections
+	if active == nil {
+		active = new(int64)
+	}
 	srv := opts.Server
 	if srv == nil {
 		srv = &http.Server{Handler: http.NotFoundHandler()}
 	}
 	wrapped := &drainRefusingListener{Listener: ln, upgrade: opts.Upgrade, log: opts.Logger}
-	serveDone := serveRPC(wrapped, srv, &active)
+	serveDone := serveRPC(wrapped, srv, active)
 
 	select {
 	case <-sigs:
@@ -138,7 +151,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	shutdownRPCServer(srv, opts.Settings.ShutdownGrace)
 	_ = ln.Close()
 	<-serveDone
-	drain(opts, &active)
+	drain(opts, active)
 	return nil
 }
 
