@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/acamarata/cascade/internal/runtime"
@@ -51,13 +52,37 @@ type verbRule struct {
 	conditional func(params json.RawMessage) bool
 }
 
-// hasJSONField reports whether raw (a JSON object) contains key with a
-// truthy-ish presence (any non-null value). Used by the conditional rules
-// below to detect a params field's presence without depending on its type.
-func hasJSONField(raw json.RawMessage, key string) bool {
+// The three helpers below back the conditional rules in elevationTable.
+// All of them FAIL CLOSED: when a helper cannot prove that a request is the
+// harmless case, it reports true and the verb is elevated.
+//
+// The direction matters more than it looks. These helpers do not decide
+// whether a request is valid, they decide whether it needs authorisation.
+// A helper that returns false on input it could not parse hands an attacker
+// a bypass: send the privileged verb with a payload the helper chokes on and
+// the elevation gate disappears, while the handler downstream may still
+// decode the payload its own way and act on it. Refusing to guess, and
+// demanding elevation whenever the answer is unclear, costs a legitimate
+// caller one authorisation prompt on a malformed request. Guessing the other
+// way costs the user the gate.
+
+// unparseableParams reports whether raw cannot be read as a JSON object.
+// Callers treat this as "elevate": params we cannot read cannot be shown to
+// be a narrowing.
+func unparseableParams(raw json.RawMessage) (map[string]json.RawMessage, bool) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return false
+		return nil, true
+	}
+	return m, false
+}
+
+// hasJSONField reports whether raw contains key with any non-null value.
+// Unreadable params elevate.
+func hasJSONField(raw json.RawMessage, key string) bool {
+	m, bad := unparseableParams(raw)
+	if bad {
+		return true
 	}
 	v, ok := m[key]
 	if !ok {
@@ -66,12 +91,14 @@ func hasJSONField(raw json.RawMessage, key string) bool {
 	return string(v) != "null"
 }
 
-// jsonFieldEquals reports whether raw's key field, decoded as a string,
-// equals want.
+// jsonFieldEquals reports whether raw's key field equals want. Unreadable
+// params elevate, and so does a value present in some shape other than the
+// string this rule expects, because such a value cannot be shown to differ
+// from want.
 func jsonFieldEquals(raw json.RawMessage, key, want string) bool {
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return false
+	m, bad := unparseableParams(raw)
+	if bad {
+		return true
 	}
 	v, ok := m[key]
 	if !ok {
@@ -79,9 +106,41 @@ func jsonFieldEquals(raw json.RawMessage, key, want string) bool {
 	}
 	var s string
 	if err := json.Unmarshal(v, &s); err != nil {
-		return false
+		return true
 	}
 	return s == want
+}
+
+// jsonFieldEnables reports whether raw's key field requests turning a flag
+// ON. It accepts the JSON boolean true and the string "true", because both
+// reach the daemon in practice: a typed client marshals a Go bool, while a
+// shell client sending hand-built JSON often quotes it.
+//
+// Only a value that positively reads as OFF returns false. An absent key
+// returns false as well, since a request that does not mention the flag is
+// not turning it on. Everything else elevates.
+func jsonFieldEnables(raw json.RawMessage, key string) bool {
+	m, bad := unparseableParams(raw)
+	if bad {
+		return true
+	}
+	v, ok := m[key]
+	if !ok {
+		return false
+	}
+	var b bool
+	if err := json.Unmarshal(v, &b); err == nil {
+		return b
+	}
+	var s string
+	if err := json.Unmarshal(v, &s); err == nil {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case "false", "0", "no", "off", "":
+			return false
+		}
+		return true
+	}
+	return true
 }
 
 // elevationTable is the authoritative elevated-verb table, transcribed from
@@ -130,11 +189,11 @@ var elevationTable = []verbRule{
 		return jsonFieldEquals(p, "direction", "loosen")
 	}},
 	{method: "elevation.set_allow_remote", conditional: func(p json.RawMessage) bool {
-		return jsonFieldEquals(p, "allow_remote", "true") || hasJSONField(p, "enable")
+		return jsonFieldEnables(p, "allow_remote") || jsonFieldEnables(p, "enable")
 	}},
 	// R-14.48: enabling [plugins].enable_remote_runtime is elevated.
 	{method: "plugins.set_enable_remote_runtime", conditional: func(p json.RawMessage) bool {
-		return jsonFieldEquals(p, "enable_remote_runtime", "true") || hasJSONField(p, "enable")
+		return jsonFieldEnables(p, "enable_remote_runtime") || jsonFieldEnables(p, "enable")
 	}},
 	{method: "uninstall.purge_data", always: true},
 }
