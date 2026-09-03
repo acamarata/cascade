@@ -82,7 +82,7 @@ func ParsePatterns(raw string) ([]*regexp.Regexp, error) {
 	var pats []*regexp.Regexp
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, allowPrefix) {
 			continue
 		}
 		re, err := regexp.Compile(line)
@@ -95,6 +95,87 @@ func ParsePatterns(raw string) ([]*regexp.Regexp, error) {
 		return nil, errors.New("identifier sweep: pattern source produced zero patterns (fail closed)")
 	}
 	return pats, nil
+}
+
+// allowPrefix marks an allow pattern in a pattern source. A line beginning
+// with it is compiled as an exemption rather than a denial.
+const allowPrefix = "!"
+
+// ParseAllowPatterns decodes the allow ("!"-prefixed) lines of a pattern
+// source. Allow patterns exist for the narrow case where a denied string is
+// REQUIRED to appear somewhere: the copyright holder's name in LICENSE is
+// the motivating example, since a licence that does not name its holder is
+// not a licence.
+//
+// An allow pattern suppresses a hit only when it matches the SAME line that
+// tripped the denial. It is deliberately not a file-level exemption. Skipping
+// the whole file would stop scanning it for every other pattern, so a leaked
+// address or lane identifier buried in that file would sail through. Here the
+// file stays fully scanned and only the one justified line is forgiven.
+//
+// Unlike ParsePatterns, an empty result is NOT an error: having no exemptions
+// is the normal, stricter case.
+func ParseAllowPatterns(raw string) ([]*regexp.Regexp, error) {
+	var out []*regexp.Regexp
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, allowPrefix) {
+			continue
+		}
+		body := strings.TrimSpace(strings.TrimPrefix(line, allowPrefix))
+		if body == "" {
+			return nil, errors.New("identifier sweep: empty allow pattern (fail closed)")
+		}
+		re, err := regexp.Compile(body)
+		if err != nil {
+			return nil, fmt.Errorf("identifier sweep: invalid allow pattern %q: %w", body, err)
+		}
+		out = append(out, re)
+	}
+	return out, nil
+}
+
+// LoadAllowPatterns resolves allow patterns from the same source LoadPatterns
+// uses, so both live in one file and cannot drift apart.
+func LoadAllowPatterns() ([]*regexp.Regexp, error) {
+	switch {
+	case os.Getenv(IdentifierPatternsFileEnvVar) != "":
+		data, err := os.ReadFile(os.Getenv(IdentifierPatternsFileEnvVar))
+		if err != nil {
+			return nil, fmt.Errorf("identifier sweep: reading pattern file: %w (fail closed)", err)
+		}
+		return ParseAllowPatterns(string(data))
+	case os.Getenv(IdentifierPatternsEnvVar) != "":
+		return ParseAllowPatterns(os.Getenv(IdentifierPatternsEnvVar))
+	default:
+		return nil, fmt.Errorf("identifier sweep: no pattern source configured (fail closed)")
+	}
+}
+
+// FilterAllowed drops violations whose snippet is matched by an allow
+// pattern. It reports how many it dropped so a caller can surface the count:
+// an exemption that silently swallows hits is how a gate stops being a gate.
+func FilterAllowed(violations []SweepViolation, allows []*regexp.Regexp) ([]SweepViolation, int) {
+	if len(allows) == 0 {
+		return violations, 0
+	}
+	var kept []SweepViolation
+	dropped := 0
+	for _, v := range violations {
+		exempt := false
+		for _, re := range allows {
+			if re.MatchString(v.Snippet) {
+				exempt = true
+				break
+			}
+		}
+		if exempt {
+			dropped++
+			continue
+		}
+		kept = append(kept, v)
+	}
+	return kept, dropped
 }
 
 // LoadPatternsFromFile reads and parses the pattern file at path.
