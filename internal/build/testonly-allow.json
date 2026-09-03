@@ -1,0 +1,192 @@
+[
+  {
+    "symbol": "internal/rpc.ElevationMiddleware",
+    "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
+    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
+  },
+  {
+    "symbol": "internal/rpc.NewNonceLedger",
+    "reason": "Constructed only by the elevation middleware, which is not installed yet. Retire together with the ElevationMiddleware entry.",
+    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, alongside ElevationMiddleware"
+  },
+  {
+    "symbol": "internal/policy.IsDaemonlessElevationAllowed",
+    "reason": "The daemonless elevation guard is built before any elevated verb has a command implementation. Nothing it could guard exists yet.",
+    "expected_caller": "the command implementation of the first elevated verb, before it executes without a daemon"
+  },
+  {
+    "symbol": "internal/policy.ErrElevationRequired",
+    "reason": "The typed refusal the daemonless guard returns. Unused until that guard has a caller.",
+    "expected_caller": "the same command implementation that calls IsDaemonlessElevationAllowed"
+  },
+  {
+    "symbol": "internal/runtime.DaemonlessElevationPrecondition",
+    "reason": "Evaluates the injected precondition for the daemonless guard and shares its fate.",
+    "expected_caller": "the daemonless execution path, once an elevated verb can be invoked without a daemon"
+  },
+  {
+    "symbol": "internal/storage/migrate.Apply",
+    "reason": "VERIFIED GAP, not merely pending. The sqlite driver takes a Migrator seam that defaults to nil and its own doc says the real migrator is wired by the composition root. Nothing wires it, so a shipped daemon creates only the base table and applies no migration. Harmless while the base schema is the whole schema; a silent data problem the first time a migration exists.",
+    "expected_caller": "the composition root that opens the store, cmd/cascade/daemon_unix_run.go openRuntimeStore, which must pass a real Migrator"
+  },
+  {
+    "symbol": "internal/storage.Bootstrap",
+    "reason": "Storage bootstrap is not on the daemon start path, which opens the sqlite driver directly. Same family as the migrator gap above and should be resolved with it.",
+    "expected_caller": "the composition root that opens the store"
+  },
+  {
+    "symbol": "internal/runtime.NewStoreAuditRecorder",
+    "reason": "The audit recorder is built and tested but not attached to any store the daemon opens, so no audit records are written by a running daemon.",
+    "expected_caller": "the composition root that opens the store"
+  },
+  {
+    "symbol": "internal/runtime.NewHotReloader",
+    "reason": "Config hot reload is built and tested and not started by the daemon, so a config change is not picked up by a running process.",
+    "expected_caller": "the daemon run path in cmd/cascade/daemon_unix.go"
+  },
+  {
+    "symbol": "internal/runtime.NewReloadWatcher",
+    "reason": "The filesystem watcher behind hot reload. Shares the reloader's fate.",
+    "expected_caller": "the daemon run path, alongside NewHotReloader"
+  },
+  {
+    "symbol": "internal/events/scheduler.RegisterRetentionJobs",
+    "reason": "Retention jobs are defined but never registered with a running scheduler, so retention does not run in a shipped daemon.",
+    "expected_caller": "the daemon run path where the scheduler is started"
+  },
+  {
+    "symbol": "internal/runtime.NewBaselineChecker",
+    "reason": "Built and tested; no caller on the daemon start path.",
+    "expected_caller": "the daemon start path or the doctor command"
+  },
+  {
+    "symbol": "internal/runtime.DaemonLogsHandler",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the daemon logs command"
+  },
+  {
+    "symbol": "internal/runtime.Bootstrap",
+    "reason": "Deliberate and documented: cmd/cascade/daemon_unix.go calls runtime.Scan directly and explains why in a comment at its call site. Listed for visibility, not as a defect.",
+    "expected_caller": "none by design; revisit only if that comment's reasoning changes"
+  },
+  {
+    "symbol": "internal/runtime.DaemonlessStateFrom",
+    "reason": "Daemonless state accessor, used once daemonless verbs read it.",
+    "expected_caller": "daemonless command implementations"
+  },
+  {
+    "symbol": "internal/runtime.OpenEmbeddedReadStore",
+    "reason": "The read-only open used by the daemonless read path, awaiting the first daemonless read verb.",
+    "expected_caller": "daemonless read verb implementations"
+  },
+  {
+    "symbol": "internal/runtime.NewFixedClock",
+    "reason": "A deterministic clock provided for tests in other packages. Shipping code correctly uses the system clock.",
+    "expected_caller": "none; test-facing by design, kept out of a test-only package because production types reference the Clock interface"
+  },
+  {
+    "symbol": "internal/daemon.NewConnTracker",
+    "reason": "The connection tracker is constructed inside the serve path rather than by name from outside.",
+    "expected_caller": "none directly; retire if the serve path stops using the type"
+  },
+  {
+    "symbol": "internal/storage.Export",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the export command"
+  },
+  {
+    "symbol": "internal/storage.Import",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the import command"
+  },
+  {
+    "symbol": "internal/storage.SetExportClock",
+    "reason": "Determinism seam for export, unused until export has a command.",
+    "expected_caller": "the export command"
+  },
+  {
+    "symbol": "internal/storage.NewCapabilityRegistry",
+    "reason": "Cross-domain capability grants are built and not consulted by any shipped path yet.",
+    "expected_caller": "the storage composition root, once a plugin requests a cross-domain grant"
+  },
+  {
+    "symbol": "internal/storage.ReservedPluginHostNamespace",
+    "reason": "Reserved-namespace constant, consulted once plugin storage namespacing is enforced at runtime.",
+    "expected_caller": "the plugin host storage path"
+  },
+  {
+    "symbol": "internal/storage.StorageHealthCheck",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command's check registry"
+  },
+  {
+    "symbol": "internal/storage/queue.New",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the queue consumer, scheduled with its command surface"
+  },
+  {
+    "symbol": "internal/events.EventKindPluginRegistered",
+    "reason": "An event kind defined ahead of the plugin registration path that will publish it.",
+    "expected_caller": "the plugin registration path"
+  },
+  {
+    "symbol": "internal/hooks.NewRegistry",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the daemon run path, once hooks are dispatched"
+  },
+  {
+    "symbol": "internal/hooks.NewDispatcher",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the daemon run path, once hooks are dispatched"
+  },
+  {
+    "symbol": "internal/doctor.DefaultOutcomeExitCode",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.NewCheckRegistry",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.NewDoctorSelfCheck",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.NewMCPIntegrationCheck",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.NewSubsystemCensusCheck",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.RedactLines",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.Render",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.UseColor",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "internal/doctor.WriteBundle",
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
+    "expected_caller": "the doctor command"
+  },
+  {
+    "symbol": "providers/postgres.Open",
+    "reason": "The postgres provider is selectable by configuration, but no shipped code path resolves a provider by name yet, so nothing constructs it. Postgres is therefore unreachable in a running daemon regardless of configuration.",
+    "expected_caller": "the provider resolution path that maps a configured driver name to its Open function"
+  }
+]
