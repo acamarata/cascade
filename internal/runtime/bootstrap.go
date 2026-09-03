@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"path/filepath"
 	"time"
 )
 
@@ -44,6 +46,23 @@ type BootstrapOptions struct {
 	// DefaultMetricsInterval (60s, per T-4's contract). Ignored when
 	// MetricsBus is nil.
 	MetricsInterval time.Duration
+	// RecoveryLog receives the crash-safety recovery scanner's WARN
+	// output (P1-E03-W1-S05-T3). A nil value falls back to
+	// slog.Default() — see recovery.go's Scan for why this cannot wait
+	// for the real LogProvider, which is itself constructed later in
+	// this same function, after config is loaded.
+	RecoveryLog *slog.Logger
+	// RecoveryBus, if non-nil, receives the recovery scan's
+	// RecoveryEvent (only when one is produced — see Scan's no-event-on-
+	// clean-state contract). A nil value is the honest default: no
+	// composition-root caller yet constructs a real EventBus here either
+	// (see MetricsBus's doc comment above for the identical situation).
+	RecoveryBus EventBus
+	// RecoveryRegistry, if non-nil, is consulted for the recovery scan's
+	// orphaned-advisory-lock step. See recovery.go's DomainRegistry doc
+	// comment for why production wiring leaves this nil today
+	// (CONTRACT-DEVIATIONS, this ticket's journal).
+	RecoveryRegistry DomainRegistry
 }
 
 // Runtime is the fully resolved bootstrap result. Later tickets extend the
@@ -88,6 +107,23 @@ func Bootstrap(ctx context.Context, opts BootstrapOptions) (*Runtime, error) {
 	paths, err := NewPathProvider(opts.Getenv, opts.HomeDir)
 	if err != nil {
 		return nil, fmt.Errorf("runtime: bootstrap paths: %w", err)
+	}
+
+	// Crash-safety recovery scan (P1-E03-W1-S05-T3): the FIRST startup
+	// action after paths resolve, before config load and before any
+	// domain lock acquisition, per §D-3 write-arbitration's
+	// socket-probe-first contract. A live daemon on the socket aborts
+	// Bootstrap immediately; a stale pidfile/socket/lock is cleaned up
+	// and reported, never silently.
+	if _, err := Scan(ctx, RecoveryOptions{
+		PidfilePath: filepath.Join(paths.Root(), "daemon.pid"),
+		SocketPath:  paths.SocketPath(),
+		Clock:       clock,
+		Log:         opts.RecoveryLog,
+		Bus:         opts.RecoveryBus,
+		Registry:    opts.RecoveryRegistry,
+	}); err != nil {
+		return nil, fmt.Errorf("runtime: bootstrap recovery scan: %w", err)
 	}
 
 	cfg, err := Load(ctx, LoadOptions{
