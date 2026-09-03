@@ -47,23 +47,45 @@ func ConnContext(ctx context.Context, conn net.Conn) context.Context {
 var ownerUID = osGetuid
 
 // Handler is the JSON-RPC 2.0 http.Handler: UID gate, then Parse, then
-// SkewCheck, then Registry.Dispatch, wrapped in ResponseEnvelope.
+// SkewCheck, then Registry.Dispatch, wrapped in ResponseEnvelope. It also
+// mounts GET EventsPath -> sse (D/S-06.T4) alongside POST RPCPath, when an
+// SSEHandler is supplied — see NewHandlerWithSSE.
 type Handler struct {
 	registry *Registry
+	sse      *SSEHandler
 }
 
-// NewHandler builds a Handler dispatching through registry. The daemon
-// composition root mounts it at RPCPath on the daemon's HTTP mux, per this
-// ticket's contract.
+// NewHandler builds a Handler dispatching through registry, with no SSE
+// route mounted. The daemon composition root mounts it at RPCPath on the
+// daemon's HTTP mux, per T3's contract.
 func NewHandler(registry *Registry) *Handler {
 	return &Handler{registry: registry}
 }
 
-// ServeHTTP implements http.Handler. Order, per this ticket's contract:
-// UID check (via ConnContext) -> HTTP 403 before the JSON-RPC layer ->
-// Parse -> version-skew check -> elevation middleware (inside
-// Registry.Dispatch's middleware chain) -> handler dispatch.
+// NewHandlerWithSSE builds a Handler that also serves GET EventsPath
+// through sse, alongside POST RPCPath — this ticket's "mount GET /events
+// -> SSEHandler alongside POST /rpc on the existing HTTP mux" contract.
+// The daemon composition root (internal/daemon/daemon.go, out of this
+// ticket's files_scope) still constructs the *events.Bus and *SSEHandler
+// and switches NewRPCServer from NewHandler to this constructor; see this
+// ticket's completion report for why that wiring step could not land
+// here.
+func NewHandlerWithSSE(registry *Registry, sse *SSEHandler) *Handler {
+	return &Handler{registry: registry, sse: sse}
+}
+
+// ServeHTTP implements http.Handler. POST RPCPath follows this ticket's
+// contract order: UID check (via ConnContext) -> HTTP 403 before the
+// JSON-RPC layer -> Parse -> version-skew check -> elevation middleware
+// (inside Registry.Dispatch's middleware chain) -> handler dispatch. GET
+// EventsPath delegates to h.sse, which runs its own UID-independent SSE
+// handshake (the SSE bridge has no elevation/version-skew concerns of its
+// own — it is a read-only event tail).
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.sse != nil && r.URL.Path == EventsPath && r.Method == http.MethodGet {
+		h.sse.ServeHTTP(w, r)
+		return
+	}
 	if r.URL.Path != RPCPath || r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
