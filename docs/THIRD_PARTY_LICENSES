@@ -36,6 +36,7 @@ modernc.org/libc                       BSD-3-Clause   https://gitlab.com/cznic/l
 modernc.org/mathutil                   BSD-3-Clause   https://gitlab.com/cznic/mathutil/blob/v1.7.1/LICENSE
 modernc.org/memory                     BSD-3-Clause   https://gitlab.com/cznic/memory/blob/v1.12.1/LICENSE-GO
 modernc.org/sqlite                     BSD-3-Clause   https://gitlab.com/cznic/sqlite/blob/v1.58.0/LICENSE
+mvdan.cc/sh/v3                         BSD-3-Clause   https://github.com/mvdan/sh/blob/v3.10.0/LICENSE
 
 This list is scoped to modules actually IMPORTED by cascade's own packages
 across the release GOOS matrix (the go-licenses default: `go list -deps`
@@ -91,3 +92,11 @@ its SIMD fast path at runtime). Verified directly against each module's
 own top-level LICENSE file: zeebo/blake3 is public domain / CC0-1.0,
 klauspost/cpuid/v2 is MIT — both recorded above and in
 internal/build/licenses.go's KnownModuleLicenses registry.
+
+P1-E09-W2-S17-T3 promoted mvdan.cc/sh/v3 from an indirect dependency to a
+direct one: internal/policy's command classifier parses shell command
+strings with its syntax package, so the module is now compiled into the
+shipped binaries and belongs in this report. It has no runtime
+dependencies of its own outside the standard library. Verified directly
+against the module's own top-level LICENSE file: BSD-3-Clause, already
+recorded in internal/build/licenses.go's KnownModuleLicenses registry.

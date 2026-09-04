@@ -1,0 +1,1 @@
+if true; then for f in a; do ls; done; fi

@@ -208,5 +208,10 @@
     "symbol": "internal/audit.ParseFilter",
     "reason": "The token form of the query filter exists for the command line to hand its flags in. This ticket owns the query engine and is explicitly told not to build the CLI or RPC surface, so the only caller that can exist today is the test that proves the parser refuses an unknown field instead of widening the result set.",
     "expected_caller": "the `cascade policy audit query` command surface (04-PEWS-PLAN-W1-W3.md Epic I S-18.T6)"
+  },
+  {
+    "symbol": "internal/policy.NewCommandClassifier",
+    "reason": "The classifier is built one ticket before the evaluator that consumes it. Its own contract assigns the wiring to the deny-list and evaluation ticket in the same sprint, which injects the CommandClassifier seam that resolves a level once before the policy layers run. Constructing it from a caller that then discarded the level would prove nothing, so the state is recorded here instead of faked.",
+    "expected_caller": "the policy evaluation engine's injected CommandClassifier seam (04-PEWS-PLAN-W1-W3.md Epic I S-17.T4)"
   }
 ]
