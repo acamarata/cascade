@@ -112,6 +112,7 @@ func newRootCmd() *cobra.Command {
 	mountMCPCmd(root)
 	mountStatusCmd(root)
 	mountElevateHelperCmd(root)
+	mountVaultCmd(root)
 
 	return root
 }
