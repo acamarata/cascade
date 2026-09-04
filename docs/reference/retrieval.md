@@ -285,3 +285,101 @@ for the ones it cannot compute.
 
 The citations model, the recall command surface and context assembly all
 read this shape.
+
+## Citations and provenance
+
+A citation is a claim about where an answer came from. A wrong citation is
+worse than no citation: it manufactures confidence in the one place a
+reader has no way to check. Every rule below exists so a citation cannot
+claim more than the retrieval path actually established.
+
+Citations attach to the fused results, in the order fusion ranked them. A
+citation's rank is its position in that list.
+
+### What a citation carries
+
+| Field | Meaning |
+| --- | --- |
+| Chunk id | The stable chunk id whose rank and score the citation reports. |
+| Merged chunk ids | The other chunks folded in by same-file dedupe, sorted. Absent when nothing merged. |
+| Path | The source path, exactly as fusion resolved it for that chunk id. Absent when the source has no path. |
+| Lines | The 1-based, inclusive line span. Absent when the source has no lines. |
+| Corpus id | The corpus of the record the scope resolver authorized. |
+| Trust | The effective trust tag: the least trusted of everything that went into the citation. |
+| Rank | 1-based position in the fused ranking; the strongest rank after a merge. |
+| Score, raw score | The normalized and pre-normalization scores behind that rank. |
+| Strategies | The contributing legs, sorted by name. |
+
+Every location field is optional at the record level. A field the source
+did not supply is absent, never defaulted: a fabricated line range is
+exactly the kind of error nothing downstream can catch.
+
+### Never cite what the caller may not see
+
+Assembling a citation set requires a source resolver — the query path's
+scope filter — and there is no way to assemble one without it. A result the
+resolver does not authorize produces no citation at all: not its path, not
+its corpus, not its line numbers, and nothing in the rendered output. Those
+results are counted in `Withheld` and are otherwise invisible.
+
+A result whose leg claims a corpus the authorized record does not agree
+with is withheld on the same rule. The disagreement means the chunk was
+reached through a corpus the session was not cleared for, and the
+fail-closed reading of a disagreement about authorization is to withhold.
+
+### Trust is never laundered
+
+A citation's trust is the least trusted of the fused result's tag and the
+authorized record's tag. Fusion already resolves a chunk two differently
+classified paths reported to the untrusted side; re-deriving trust from the
+record alone would make the trusted half reappear in the citation. A merge
+combines the same way, so a merged citation is never reported as safer than
+its least safe half.
+
+### Citation-level dedupe
+
+Two citations naming the same path with overlapping known line spans merge
+into one. This is citation-level dedupe and is distinct from fusion's
+result-level dedupe, which collapses one chunk id returned by several legs.
+
+The merged citation takes its identity, rank and scores from the stronger
+half, so its numbers still describe a real result. The span is the union,
+the strategies are the union, the trust is the lesser, and the folded chunk
+ids are listed. Citations with no line information never merge: two chunks
+from one file have not been shown to be the same region.
+
+Two citations claiming one span from two different corpora do not merge —
+that would attribute one corpus's content to another. It is a conflict
+error.
+
+### Markdown footnote rendering
+
+The `--cite` output and MCP search responses render the set as Markdown
+footnotes: a reference `[^n]` inline, and one definition line per citation.
+
+```
+[^1]: docs/retrieval.md lines 10-24 (score: 1.000)
+[^2]: corpus memories (score: 0.427) [untrusted]
+```
+
+Footnote numbers are 1-based positions in the set, not retrieval ranks,
+which have gaps wherever a merge or a withheld result removed a row. A
+source with no path is identified by its corpus, or by its chunk id when it
+has neither. Scores render at fixed width so a very small score is never
+shown in exponential form. A citation whose trust is anything other than
+trusted is marked `[untrusted]`, because the rendered form is what a reader
+actually sees.
+
+Rendering is deterministic: the same set produces the same bytes, on every
+run and every platform.
+
+### Error paths
+
+| Case | Result |
+| --- | --- |
+| Nil result list | Invalid-input error. |
+| Empty result list | An empty set and no error — an answer with no sources is correctly cited by citing nothing. |
+| No source resolver | Invalid-input error. Citations are never assembled without knowing what the session may see. |
+| Result with no chunk id | Invalid-input error. |
+| Overlapping span claimed by two corpora | Conflict error. |
+| Result the resolver withholds | No citation, counted in `Withheld`. |

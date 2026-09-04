@@ -1,8 +1,13 @@
 [
   {
     "symbol": "internal/context.Discover",
-    "reason": "This ticket delivers role-anchored tier discovery and the TierRole/TierRecord types only; merge/precedence semantics over the resolved []TierRecord (and the harness-generation or CLI surface that would call Discover for a working directory) are an explicitly deferred follow-on ticket, not part of this one's scope.",
-    "expected_caller": "the tier-merge ticket that consumes []TierRecord (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T2), or the command/composition-root surface built on top of it"
+    "reason": "Role-anchored tier discovery ships ahead of the surface that resolves a working directory. Its merge consumer (the tier-merge ticket) has since landed and takes an already-resolved []TierRecord, so it does not call Discover either; the first production caller is the composition root that turns a cwd into a merged instruction context, which is the harness-generation / context-assembly ticket, not this one.",
+    "expected_caller": "the Claude Code instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3) or context assembly (S-09.T1), whichever first turns a working directory into a merged instruction context; retire this entry together with internal/context.MergeTiers"
+  },
+  {
+    "symbol": "internal/context.MergeTiers",
+    "reason": "The merge model is specified against an already-resolved []TierRecord, so its only caller is the surface that pairs it with Discover. That surface does not exist yet: no ticket before this one turns a working directory into a merged instruction context. Building the precedence engine before its consumer is the right order, since the consumer is specified against this result type; shipping a consumer that assembles instructions without a decided precedence rule would not be.",
+    "expected_caller": "the Claude Code instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3), which calls Discover then MergeTiers to render a harness instruction file; retire this entry and the internal/context.Discover entry together when it lands"
   },
   {
     "symbol": "internal/rpc.ElevationMiddleware",
@@ -153,6 +158,16 @@
     "symbol": "internal/retrieval/fusion.NewVectorLeg",
     "reason": "The query-time vector leg, built alongside the scope filter that binds it. Its production caller is the same query path, and it shares that path's fate.",
     "expected_caller": "the recall command surface, in the same change that resolves the scope filter"
+  },
+  {
+    "symbol": "internal/retrieval/citations.Assemble",
+    "reason": "The citation model ships one ticket ahead of the surfaces that show a citation. Assembling provenance has to exist before the recall surface can render it and before context assembly can attribute what it assembled, which is why it lands first; nothing that ships asks for a citation set yet. It must not stay unreachable once a recall surface exists, because an answer that cites nothing is the state this model exists to end.",
+    "expected_caller": "the recall command surface and its --cite flag (04-PEWS-PLAN-W1-W3.md Wave 2 Epic F S-11.T3), which assembles the set from the fused results it just ranked, and the MCP search response built on the same call"
+  },
+  {
+    "symbol": "internal/retrieval/citations.Render",
+    "reason": "The Markdown footnote form of an assembled citation set. It is unreachable for exactly as long as Assemble is, and shares its fate: the only two consumers of the rendered form are the --cite output and the MCP search response, neither of which exists yet.",
+    "expected_caller": "the recall command surface's --cite output (Epic F S-11.T3), in the same change that first calls Assemble"
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
