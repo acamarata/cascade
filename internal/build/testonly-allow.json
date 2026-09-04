@@ -21,8 +21,8 @@
   },
   {
     "symbol": "internal/runtime.NewBaselineChecker",
-    "reason": "Built and tested; no caller on the daemon start path.",
-    "expected_caller": "the daemon start path or the doctor command"
+    "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens.",
+    "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs"
   },
   {
     "symbol": "internal/runtime.DaemonLogsHandler",
@@ -81,8 +81,8 @@
   },
   {
     "symbol": "internal/storage.StorageHealthCheck",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command's check registry"
+    "reason": "Adapting this into a doctor.Check needs a live *sql.DB, which the doctor command has no handle on: nothing in cmd/ opens the storage database, and the adapter itself belongs in internal/storage, not in the CLI layer.",
+    "expected_caller": "the storage doctor.Check adapter, registered from productionCheckRegistry in cmd/cascade/doctor.go once storage exposes one"
   },
   {
     "symbol": "internal/storage/queue.New",
@@ -105,49 +105,14 @@
     "expected_caller": "the daemon run path, once hooks are dispatched"
   },
   {
-    "symbol": "internal/doctor.DefaultOutcomeExitCode",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.NewCheckRegistry",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.NewDoctorSelfCheck",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
     "symbol": "internal/doctor.NewMCPIntegrationCheck",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
+    "reason": "The mcp_integration check takes a HarnessDiscoverer. No production implementation of that interface exists anywhere in the tree, so the doctor command cannot mount this check without a hand-written stand-in that would probe nothing (Art.1). The command's composition root (productionCheckRegistry in cmd/cascade/doctor.go) names the gap in a comment.",
+    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real HarnessDiscoverer"
   },
   {
     "symbol": "internal/doctor.NewSubsystemCensusCheck",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.RedactLines",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.Render",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.UseColor",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
-  },
-  {
-    "symbol": "internal/doctor.WriteBundle",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the doctor command"
+    "reason": "The subsystem_census check takes a SubsystemStateProvider. Nothing in the tree implements DeclaredSubsystems/RunningSubsystems, so the doctor command cannot mount this check against a real data source yet.",
+    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real SubsystemStateProvider"
   },
   {
     "symbol": "providers/postgres.Open",

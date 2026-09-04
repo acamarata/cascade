@@ -9,6 +9,7 @@ Available Commands:
   completion     Generate shell completion scripts
   config         Inspect and edit cascade's config.toml
   daemon         Manage the cascade daemon process
+  doctor         Diagnose the local cascade installation
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
   status         One-shot summary of the running daemon
