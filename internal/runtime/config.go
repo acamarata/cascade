@@ -120,6 +120,11 @@ type Config struct {
 	Runtime       runtimeSection
 	Elevation     elevationSection
 	Logging       loggingSection
+	// Retrieval is the [retrieval.reranker] slice of [retrieval] this
+	// ticket owns (config_retrieval.go). Like Logging, it is an
+	// additional typed read: the raw [retrieval] table also survives
+	// untouched in Extra, so S-12.T4's keys round-trip unharmed.
+	Retrieval retrievalSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file. These are
 	// valid future 08 §3 sections this ticket does not own; they are
@@ -247,6 +252,11 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		return nil, err
 	}
 
+	retrieval, err := parseRetrievalSection(tree)
+	if err != nil {
+		return nil, err
+	}
+
 	profile, profSource, err := resolveRuntimeSection(tree, opts.ProfileFlag, getenv, warn)
 	if err != nil {
 		return nil, err
@@ -258,6 +268,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Runtime:       runtimeSection{Profile: profile},
 		Elevation:     elevation,
 		Logging:       logging,
+		Retrieval:     retrieval,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

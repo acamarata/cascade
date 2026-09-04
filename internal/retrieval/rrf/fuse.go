@@ -59,6 +59,12 @@ type accumulator struct {
 // A nil lists is a caller bug and is refused. An empty lists, or lists
 // whose legs all matched nothing, is a query that found nothing: it
 // returns an empty result set and no error.
+//
+// Fuse is where the ranking ends unless the optional reranker stage is
+// switched on. That stage is Rerank (reranker.go), which a caller runs
+// over this function's output; with retrieval.reranker.enabled false —
+// the default — it returns what Fuse returned, untouched and unread, so
+// the two orderings cannot diverge.
 func Fuse(lists []RankedList, k int64) ([]FusedResult, error) {
 	if lists == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "rrf: nil ranked-list input")
