@@ -1,0 +1,32 @@
+{
+  "corpus": {
+    "id": "project3-docs",
+    "scope_ref": "project:project3",
+    "privacy": "project",
+    "visibility": "shared",
+    "trust": "trusted"
+  },
+  "membership": {
+    "scope": "project:project3",
+    "chain": ["user:local", "workspace:shared-workspace", "project:project3"],
+    "edges": []
+  },
+  "records": [
+    {
+      "id": "project3/docs/retrieval.md#scope-filter",
+      "corpus_id": "project3-docs",
+      "scope_ref": "project:project3",
+      "privacy": "project",
+      "visibility": "shared",
+      "trust": "trusted"
+    },
+    {
+      "id": "project3/docs/retrieval.md#ranking",
+      "corpus_id": "project3-docs",
+      "scope_ref": "project:project3",
+      "privacy": "project",
+      "visibility": "shared",
+      "trust": "trusted"
+    }
+  ]
+}

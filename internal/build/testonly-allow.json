@@ -168,5 +168,10 @@
     "symbol": "internal/retrieval.ChunkerFor",
     "reason": "This ticket (ingest/chunk pipeline) ships MarkdownChunker and CodeChunker plus the ChunkerFor extension-to-chunker selector, but the file-system walk that reads real files off disk and dispatches them into ChunkerFor is a separate, not-yet-built ticket (T2 owns the storage write path per this ticket's own HOW section). Nothing that ships walks a directory and calls ChunkerFor yet.",
     "expected_caller": "the ingest-walk entry point that reads a repo's files and calls ChunkerFor(path) before Chunk-ing each one, landing with the T2 FTS5-indexing ticket"
+  },
+  {
+    "symbol": "internal/retrieval/corpus.NewStore",
+    "reason": "The corpus and scope model ships ahead of every consumer that reads it. Query-time fusion, the recall command surface, the retrieval config surface, context assembly, the team capability and grant wiring and the auto-advance ceiling are all later tickets, and each one is the thing that would construct a store. Building the classification and membership rules first is the right order, since those consumers are specified against this model; shipping a consumer that reads content without it would not be.",
+    "expected_caller": "the retrieval fusion path that applies a scope filter before its query legs, and the context assembly path that takes a session scope as a required input"
   }
 ]

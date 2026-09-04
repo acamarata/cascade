@@ -1,0 +1,40 @@
+{
+  "corpus": {
+    "id": "project1-docs",
+    "scope_ref": "project:project1",
+    "privacy": "project",
+    "visibility": "scope-local",
+    "trust": "trusted"
+  },
+  "membership": {
+    "scope": "project:project1",
+    "chain": ["user:local", "workspace:shared-workspace", "project:project1"],
+    "edges": []
+  },
+  "records": [
+    {
+      "id": "project1/docs/retrieval.md#scope-filter",
+      "corpus_id": "project1-docs",
+      "scope_ref": "project:project1",
+      "privacy": "project",
+      "visibility": "scope-local",
+      "trust": "trusted"
+    },
+    {
+      "id": "project1/docs/retrieval.md#ranking",
+      "corpus_id": "project1-docs",
+      "scope_ref": "project:project1",
+      "privacy": "project",
+      "visibility": "scope-local",
+      "trust": "trusted"
+    },
+    {
+      "id": "project1/vendor/notes/upstream-readme.md#scope-filter",
+      "corpus_id": "project1-docs",
+      "scope_ref": "project:project1",
+      "privacy": "project",
+      "visibility": "scope-local",
+      "trust": "untrusted-source"
+    }
+  ]
+}
