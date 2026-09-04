@@ -59,3 +59,36 @@ quarantine entries end to end.
 
 Regenerate only if the detector's contract changes. A fixture edit that makes a
 near-miss file quarantinable is a behaviour change, not a fixture fix.
+
+## pkce-exchange-fixture.json — the OAuth broker's recorded exchange
+
+Provenance for the PKCE fixture (P1-E08-W2-S15-T2).
+
+| | |
+|---|---|
+| What it is | The request and response SHAPE of one RFC 7636 authorization-code-with-PKCE exchange: which parameters the authorization request and the token request must carry, which they must never carry, and what a success, a refresh and a verifier-mismatch response look like. |
+| Captured with | `curl` 8.7.1 (x86_64-apple-darwin24.0) libcurl/8.7.1. |
+| Captured on | 2026-09-04. |
+| Captured against | A local RFC 7636-conformant authorization server (Go `net/http/httptest`), **not** a third-party production IdP. |
+| Contains a real credential | No. `FIXTURE-ACCESS-NOT-A-REAL-TOKEN` and `FIXTURE-REFRESH-NOT-A-REAL-TOKEN` are literals; they authenticate to nothing. |
+
+**What it proves.** `TestOAuthPKCEFixture` (build tag `integration`) runs the
+real loopback listener and the real HTTP exchanger against a server that
+performs the RFC 7636 §4.6 verifier check, and asserts that the request cascade
+actually put on the wire matches every field of this fixture — method, content
+type, the exact parameter set, and the absence of `client_secret` and
+`code_challenge` from the token request.
+
+**What it does not prove, and this is deliberate rather than hidden.** The
+counterpart is a local conformant server, not a vendor's IdP. So this pins
+cascade's request against the RFC's normative parameter set; it does not prove
+that Anthropic's or Google's authorization servers accept it. That check needs
+the real endpoints and belongs to the driver tickets (J/S-19.T2, J/S-19.T4),
+which have them. Recording a fixture from a vendor IdP here would have required
+a real client registration and a real operator consent, and would have put a
+real grant's response shape — and the temptation to keep its values — into a
+public repository.
+
+**Regenerating it.** Only if RFC 7636's parameter set changes, or a driver finds
+a vendor that requires an additional parameter. Update the table's tool version
+and date in the same commit.
