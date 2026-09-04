@@ -39,6 +39,7 @@ type setResultView struct {
 func newVaultSetCmd(deps vaultDeps) *cobra.Command {
 	var valueFile string
 	var rename bool
+	var fromQuarantine string
 	cmd := &cobra.Command{
 		Use:   "set NAME",
 		Short: "Store a secret, reading its value from stdin",
@@ -49,18 +50,35 @@ func newVaultSetCmd(deps vaultDeps) *cobra.Command {
 			"If NAME already exists, an interactive run asks whether to update it in\n" +
 			"place or save the new value as NAME_2. Under CASCADE_NO_INPUT=1 the value\n" +
 			"updates in place silently, matching `vault import`'s overwrite behaviour;\n" +
-			"pass --rename to save under the suffixed name instead.",
+			"pass --rename to save under the suffixed name instead.\n\n" +
+			"--from-quarantine ID promotes a detection the secret detector recorded:\n" +
+			"the NAME comes from the entry's suggested name, and the value is\n" +
+			"re-supplied here, because the detector never stored one. Under\n" +
+			"CASCADE_NO_INPUT=1 the value must be piped in or named by --value-file.",
 		Example: "  cascade vault set API_TOKEN < token.txt\n" +
 			"  printf %s \"$TOKEN\" | cascade vault set API_TOKEN\n" +
-			"  cascade vault set API_TOKEN --value-file ./token.txt --rename",
-		Args:        usageArgs(cobra.ExactArgs(1)),
+			"  cascade vault set API_TOKEN --value-file ./token.txt --rename\n" +
+			"  printf %s \"$TOKEN\" | cascade vault set --from-quarantine 4f3a2b1c9d8e7f60",
+		Args:        usageArgs(cobra.MaximumNArgs(1)),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if fromQuarantine != "" {
+				if len(args) != 0 {
+					return cascade.New(cascade.KindInvalidInput,
+						"vault: --from-quarantine takes the NAME from the quarantine entry; do not also pass one")
+				}
+				return runVaultPromote(cmd, deps, fromQuarantine, valueFile)
+			}
+			if len(args) != 1 {
+				return cascade.New(cascade.KindInvalidInput, "vault: set needs a NAME")
+			}
 			return runVaultSet(cmd, deps, args[0], valueFile, rename)
 		},
 	}
 	cmd.Flags().StringVar(&valueFile, "value-file", "", "read the value from this file instead of stdin")
 	cmd.Flags().BoolVar(&rename, "rename", false, "on a name collision, save as NAME_2 instead of updating in place")
+	cmd.Flags().StringVar(&fromQuarantine, "from-quarantine", "",
+		"promote the quarantine entry with this id: its suggested name becomes NAME")
 	return cmd
 }
 

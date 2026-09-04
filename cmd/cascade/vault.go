@@ -29,6 +29,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -63,6 +64,13 @@ type vaultDeps struct {
 	Gate secrets.ElevationGate
 	// ReadFile loads a --value-file / import file.
 	ReadFile func(string) ([]byte, error)
+	// Quarantine opens the secret detector's quarantine ledger. Injected
+	// for the same reason NewCustody is: a test must never write to the
+	// operator's real profile data directory.
+	Quarantine func() (*secrets.QuarantineStore, error)
+	// StdinIsPiped reports whether stdin carries data. Injected so the
+	// CASCADE_NO_INPUT refusal is testable without a real terminal.
+	StdinIsPiped func() bool
 }
 
 // productionVaultDeps builds vaultDeps against the real environment.
@@ -89,6 +97,15 @@ func productionVaultDeps() vaultDeps {
 			getenv,
 		),
 		ReadFile: os.ReadFile,
+		Quarantine: func() (*secrets.QuarantineStore, error) {
+			dir := paths.get(func(p runtime.PathProvider) string { return p.DataDir() })
+			if dir == "" {
+				return nil, cascade.New(cascade.KindUnavailable,
+					"vault: could not resolve the cascade data directory")
+			}
+			return secrets.NewQuarantineStore(filepath.Join(dir, quarantineDirName), runtime.NewSystemClock())
+		},
+		StdinIsPiped: productionStdinIsPiped,
 	}
 }
 
@@ -121,6 +138,7 @@ func newVaultCmd(deps vaultDeps) *cobra.Command {
 		newVaultRotateCmd(deps),
 		newVaultImportCmd(deps),
 		newVaultAuditCmd(deps),
+		newVaultQuarantineCmd(deps),
 	)
 	return cmd
 }

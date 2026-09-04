@@ -76,3 +76,86 @@ built with `CGO_ENABLED=0` therefore has no authenticator available, and
 that reason. Storage, listing and import continue to work: they are not elevated
 verbs. Windows refuses the elevated verbs outright as a tier-2 platform, with a
 typed unsupported error rather than a panic.
+
+## Quarantine
+
+Cascade scans content at its own internal boundaries for credential material
+before that content is written down or sent anywhere. The scanner is **local
+only**: `internal/secrets` imports nothing but the standard library, `pkg/cascade`
+and a hash, on every path including error paths. A detector that reported
+somebody's secrets to a network service would be a worse outcome than the leak
+it was built to prevent, so the property is enforced by an import-boundary gate
+over the whole package rather than by review.
+
+### Three signals, and why entropy alone is never enough
+
+| Signal | What it is | On its own |
+|---|---|---|
+| Pattern | A named shape from the registry: a vendor API-key prefix, a JWT triplet, PEM private-key armour, a URL authority with an inline password, a base64 blob that decodes to JSON naming a credential field. | Enough. These shapes do not occur by accident. |
+| Entropy | Shannon entropy per character over value-shaped runs of 16 characters or more, above `[secrets] entropy_floor` (default 3.5 bits/char). | **Never enough.** Reported as a hint, always below the quarantine threshold. |
+| Context name | A field named `key`/`secret`/`token`/`pass`/`cred`/`auth` within 64 bytes to the left. | Lifts an entropy run to quarantine-eligible, and supplies the `UPPER_SNAKE` name to store it under. |
+
+Only a finding that reaches `[secrets] confidence_threshold` (default 0.8) is
+quarantined. Both keys are validated on load and on reload; a rejected reload
+leaves the running configuration in force rather than dropping to no rules.
+
+### Where the dial is set, and what it costs
+
+A missed secret is a leak and a false positive is an annoyance, so the design
+leans toward catching things. It does **not** lean all the way, because a
+detector that quarantines ordinary content gets switched off, and a switched-off
+detector misses everything. Two exclusions are therefore deliberate and are
+false negatives on purpose:
+
+- **Structured identifiers.** A UUID, a 32-or-more-character pure hex string (a
+  git object id, a checksum) or a pure digit run is capped below the threshold
+  *even when a credential-named field sits beside it*. `request_token_id =
+  <uuid>` is a request id. Quarantining every trace id and commit sha in a
+  developer's notes is how the feature earns being disabled.
+- **Alphabetic runs.** The entropy signal only considers runs that mix letters
+  and digits. `getUserByIdentifier` and `AWS_SECRET_ACCESS_KEY` are above any
+  usable entropy floor and are not credentials. A purely alphabetic secret with
+  no vendor prefix is therefore invisible to the entropy signal — a pattern
+  match still finds it.
+
+The counterpart is the diagnostic-bundle redactor (`internal/doctor`), which is
+tuned the opposite way: recall-first, over-redacting by design. That is correct
+there, because over-redaction costs a reader a little context, while here it
+costs the operator their trust in the tool.
+
+### The quarantine ledger
+
+Findings go to an append-only ledger under the profile data directory, mode 0600,
+alongside a 0600 key file. A record carries the class, the byte offset and
+length, the confidence, the suggested name, a caller-supplied source reference
+and a **keyed** BLAKE3 fingerprint of the flagged bytes. It does not carry the
+value: `QuarantineEntry` has no field that could hold one, and neither does
+`DetectionHit`. The fingerprint is keyed with a per-store key so that a ledger
+pasted into a bug report cannot be dictionary-attacked back to a short secret,
+which a bare hash would allow.
+
+A torn line costs that one record, not the file: refusing to read the whole
+ledger because one line is damaged would hide every other finding from the
+person who has to review them, and nothing in the ledger is ever overwritten.
+
+### Getting out of quarantine
+
+Every entry has two exits, and both are recorded:
+
+```
+cascade vault quarantine list                      # metadata only, never values
+cascade vault set --from-quarantine <id>           # promote into the vault
+cascade vault quarantine release <id>              # the detector was wrong
+```
+
+`vault set --from-quarantine` takes the NAME from the entry's suggested name and
+reads the **value from stdin** (or `--value-file`), because the detector never
+stored one — there is nothing to recover but the name and the location. Under
+`CASCADE_NO_INPUT=1` with nothing piped in, promotion is a hard error rather
+than a prompt nobody can answer. The entry is released as `promoted` only after
+the vault write succeeds.
+
+`quarantine release` retires a wrong detection. The entry stops appearing in
+`quarantine list`; the ledger keeps the record that it existed and that it was
+released. A quarantine with no way out is data loss, so recovery is part of the
+feature rather than an afterthought.

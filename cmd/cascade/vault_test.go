@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -32,6 +33,10 @@ func testVaultDeps(t *testing.T, gate secrets.ElevationGate, env map[string]stri
 		},
 		Gate:     gate,
 		ReadFile: os.ReadFile,
+		Quarantine: func() (*secrets.QuarantineStore, error) {
+			return secrets.NewQuarantineStore(filepath.Join(dir, "quarantine"), runtime.NewSystemClock())
+		},
+		StdinIsPiped: func() bool { return true },
 	}
 }
 
@@ -257,7 +262,7 @@ func TestVaultMountedOnRealRoot(t *testing.T) {
 	if vault == nil {
 		t.Fatal("`vault` is not mounted on the real root command")
 	}
-	want := map[string]bool{"set": false, "get": false, "list": false, "rotate": false, "import": false, "audit": false}
+	want := map[string]bool{"set": false, "get": false, "list": false, "rotate": false, "import": false, "audit": false, "quarantine": false}
 	for _, sub := range vault.Commands() {
 		if _, ok := want[sub.Name()]; ok {
 			want[sub.Name()] = true
