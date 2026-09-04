@@ -70,6 +70,18 @@ const (
 func RegisterRetentionJobs(ctx context.Context, s *Scheduler, db *sql.DB, cfg storage.RetentionConfig, clock runtime.Clock) error {
 	pruner := storage.DomainPruner{}
 	cfg = cfg.Normalize()
+	// Prune REFUSES with KindInvalidInput when cfg.Clock is nil, and
+	// Normalize does not fill it (it only defaults VacuumInterval and
+	// BatchCap). The composition root registers these jobs with a zero
+	// RetentionConfig, so without this default the prune runnable would
+	// return that error on every single fire for the life of the daemon:
+	// a scheduled job that can never succeed, and the event log never
+	// pruned (R-14.157's unbounded-log finding, unchanged). VacuumJob
+	// below already takes the same clock; the pruner gets it here for
+	// the same reason.
+	if cfg.Clock == nil {
+		cfg.Clock = clock
+	}
 	if err := s.RegisterRunnable(retentionPruneOwner, func(ctx context.Context) error {
 		_, err := pruner.Prune(ctx, db, cfg)
 		return err

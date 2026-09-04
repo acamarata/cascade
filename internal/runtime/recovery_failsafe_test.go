@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -190,5 +191,62 @@ func TestRecoveryScan_BusPublishErrorPropagates(t *testing.T) {
 	}
 	if len(bus.published) != 0 {
 		t.Fatalf("bus.published = %v, want none (Publish itself failed)", bus.published)
+	}
+}
+
+// TestRecoveryScan_DanglingSocketSymlinkIsNotClean pins the R-14.161
+// decision taken at the W1 hardening gate. probeSocket used os.Stat,
+// which follows symlinks, so a dangling symlink at the socket path
+// resolved to ENOENT exactly like a missing socket and short-circuited to
+// "clean state" — the dialer was never reached and the operator got a
+// confusing bind failure afterwards from a path the scan had just called
+// clean.
+//
+// With os.Lstat the link itself is seen, so the probe proceeds to dial.
+// The dial fails with ENOENT (the target is gone), which is neither
+// success nor ECONNREFUSED, so Scan reports the state as undecidable
+// rather than clean. The assertion that matters is that the dialer WAS
+// invoked: had the Lstat change been reverted to Stat, the early return
+// would fire first and dialed would stay false.
+//
+// The scanner still removes nothing. Whether a symlink at the socket path
+// is scanner debris or an operator's deliberate redirect is a separate
+// question this gate did not decide, so the link is left in place and the
+// test asserts that too.
+func TestRecoveryScan_DanglingSocketSymlinkIsNotClean(t *testing.T) {
+	dir := t.TempDir()
+	sockPath := filepath.Join(dir, "daemon.sock")
+	target := filepath.Join(dir, "gone.sock")
+	if err := os.Symlink(target, sockPath); err != nil {
+		t.Fatalf("seed dangling symlink: %v", err)
+	}
+	pidPath := filepath.Join(dir, "daemon.pid")
+	if err := os.WriteFile(pidPath, []byte(intToBytes(deadPid(t))), 0o644); err != nil {
+		t.Fatalf("seed pidfile: %v", err)
+	}
+
+	enoent := errors.New("dial unix: no such file or directory")
+	dialed := false
+	_, err := Scan(context.Background(), RecoveryOptions{
+		PidfilePath: pidPath,
+		SocketPath:  sockPath,
+		Clock:       NewFixedClock(time.Unix(9400, 0)),
+		Log:         testLogger(&bytes.Buffer{}),
+		Dial: func(network, address string, timeout time.Duration) (io.Closer, error) {
+			dialed = true
+			return dialerStub(false, enoent)(network, address, timeout)
+		},
+	})
+	if !dialed {
+		t.Fatal("dangling socket symlink short-circuited as a clean state: the dialer was never reached")
+	}
+	if err == nil {
+		t.Fatal("Scan over a dangling socket symlink: want an undecidable error, got nil")
+	}
+	if !errors.Is(err, enoent) {
+		t.Fatalf("Scan error = %v, want it to wrap %v", err, enoent)
+	}
+	if _, statErr := os.Lstat(sockPath); statErr != nil {
+		t.Fatalf("the symlink was removed by an undecidable probe: %v", statErr)
 	}
 }

@@ -63,7 +63,18 @@ jobs:
       - name: Bench PR head
         run: |
           set -eu
-          go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/new.txt 2>&1 || true
+          # The bench run's exit code is asserted, never swallowed. `-run '^$'`
+          # skips every ordinary test, so a package with zero benchmarks still
+          # exits 0; a non-zero exit therefore means a compile error or a
+          # panicking benchmark, which must fail this lane rather than be
+          # reported as "no targets yet" (Art.7.4: no wrapper masks a failure).
+          status=0
+          go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/new.txt 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::error::bench run failed (exit $status); this is a broken build, not an empty target set"
+            cat /tmp/new.txt
+            exit "$status"
+          fi
           if ! grep -q '^Benchmark' /tmp/new.txt; then
             echo "no Benchmark targets exist yet — green-empty by design (§D-38: budgets/benches arrive with consuming subsystem tickets)"
             exit 0
@@ -74,12 +85,21 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           set -eu
-          if ! grep -q '^Benchmark' /tmp/new.txt 2>/dev/null; then
+          if ! grep -q '^Benchmark' /tmp/new.txt; then
             echo "skipping base-branch bench: no Benchmark targets on head"
             exit 0
           fi
           git worktree add /tmp/base "origin/${{ github.event.pull_request.base.ref }}"
-          (cd /tmp/base && go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/old.txt 2>&1 || true)
+          # The base branch may legitimately predate a benchmark that only
+          # exists on the head, so an empty result is tolerated here; a
+          # non-zero exit is still a broken base build and is reported.
+          status=0
+          (cd /tmp/base && go test ./... -run '^$' -bench=. -benchmem -count=3 > /tmp/old.txt 2>&1) || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::error::base-branch bench run failed (exit $status)"
+            cat /tmp/old.txt
+            exit "$status"
+          fi
 
       - name: benchstat old vs new
         if: github.event_name == 'pull_request'

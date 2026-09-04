@@ -29,23 +29,24 @@ import (
 // error — conservative per the brief: when in doubt, do not proceed to
 // remove anything.
 func probeSocket(path string, timeout time.Duration, dial Dialer) (live, stale bool, err error) {
-	// KNOWN GAP (CR follow-up, not fixed here — deliberately out of this
-	// ticket's scope): os.Stat FOLLOWS symlinks, so a dangling symlink at
-	// path (its target removed, the link itself left behind) resolves to
-	// ENOENT here exactly like a genuinely missing socket file, and is
-	// classified "clean state" — the link itself is never removed, by
-	// this scanner or by anything else in the tree. A later
-	// net.Listen(path) can then fail with a confusing "address already in
-	// use"-shaped error from the stale link, not the clear
-	// DAEMON_ALREADY_RUNNING or ENOENT a caller would expect. Left
-	// undecided rather than papered over here because "remove any
-	// dangling symlink at the socket path" is a real behavior change with
-	// its own question (a symlink there could in principle be an
-	// operator's deliberate redirect, not just scanner debris) that this
-	// ticket's brief never names — it belongs in a scoped follow-up, not
-	// a silent addition to the HOW steps this scanner was reviewed
-	// against.
-	if _, statErr := os.Stat(path); errors.Is(statErr, os.ErrNotExist) {
+	// os.Lstat, not os.Stat (R-14.161, decided at the W1 hardening gate).
+	// Stat FOLLOWS symlinks, so a dangling symlink at path (its target
+	// removed, the link itself left behind) resolved to ENOENT exactly
+	// like a genuinely missing socket file and was classified "clean
+	// state". The later net.Listen(path) then failed against a path that
+	// still holds a directory entry, and the operator saw a startup
+	// failure the recovery scan claimed to have already handled.
+	//
+	// Lstat sees the link itself, so a dangling link is no longer read as
+	// "nothing here": the probe proceeds to dial, the dial fails with
+	// ENOENT rather than ECONNREFUSED, and the scan returns the
+	// undecidable error below. That is deliberate. The scanner still
+	// removes nothing, because a symlink at the socket path could be an
+	// operator's redirect rather than scanner debris, and deciding to
+	// delete it is a behavior change this gate did not authorize. What
+	// changes is only that the state is reported loudly instead of
+	// silently mislabelled clean.
+	if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
 		// No socket file at all: nothing was left behind, nothing to
 		// probe. This is the ordinary clean-startup case.
 		return false, false, nil

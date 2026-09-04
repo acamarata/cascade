@@ -90,9 +90,32 @@ func TestEventBusReplayCursor(t *testing.T) {
 	replayCursorProcessTwo(ctx, t, dbPath, clock, namespace, cursorName)
 }
 
-// replayCursorProcessOne publishes 3 events, consumes 2, then vanishes
-// without calling Unsubscribe or Close — a kill -9, not a clean shutdown —
-// leaving its 3rd published event undelivered.
+// replayCursorProcessOne stands in for a process that published three
+// events, consumed and committed the first two, then vanished without a
+// clean shutdown. It establishes that state DIRECTLY, writing the cursor
+// record through the Store API, rather than by subscribing and counting
+// channel receives.
+//
+// A live subscription cannot establish it at all. The delivery goroutine
+// commits the cursor after each SEND onto the subscriber's channel, and
+// that channel is buffered, so with three events and an eight-slot buffer
+// the loop pushes all three and commits seq 3 long before a consumer has
+// read two of them. Which value the cursor holds when the driver closes is
+// then decided by a race between two goroutines, and only one of its three
+// outcomes is the one this test asserts: at 1 it fails with "resumed
+// delivery Seq = 2" (the intermittent failure R-14.175 recorded), and at 3
+// process two finds nothing to deliver and blocks until the test binary's
+// ten-minute timeout. Both were reproduced at the W1 hardening gate; an
+// instrumented run put the cursor at something other than 2 in 188 of 200
+// iterations.
+//
+// Seeding the state removes the race without weakening an assertion. What
+// this test exists to prove is that a restart resumes from the last
+// COMMITTED offset and re-delivers nothing before it, and process two
+// still checks exactly that. The live path (a running subscription does
+// advance the durable cursor) is covered by
+// TestEventBusCursorAdvancesOnDelivery; the opposite crash window by
+// TestEventBusReplayCursor_UncommittedCursorRedelivers.
 func replayCursorProcessOne(ctx context.Context, t *testing.T, dbPath string, clock *testkit.FrozenClock, namespace, cursorName string) {
 	t.Helper()
 	driver1, err := sqlite.Open(ctx, dbPath)
@@ -106,57 +129,12 @@ func replayCursorProcessOne(ctx context.Context, t *testing.T, dbPath string, cl
 			t.Fatalf("Publish %d: %v", i, perr)
 		}
 	}
-	sub1, err := bus1.Subscribe(ctx, namespace, cursorName, 8)
-	if err != nil {
-		t.Fatalf("Subscribe (process 1): %v", err)
+	seedCursor(ctx, t, driver1, namespace, cursorName, 2)
+	if cerr := bus1.Close(); cerr != nil {
+		t.Fatalf("closing bus1: %v", cerr)
 	}
-	for i := 0; i < 2; i++ {
-		ev := <-sub1.Events
-		if ev.Seq != uint64(i+1) {
-			t.Fatalf("process 1 event %d Seq = %d, want %d", i, ev.Seq, i+1)
-		}
-	}
-	if err := driver1.Close(); err != nil {
-		t.Fatalf("closing driver1: %v", err)
-	}
-}
-
-// replayCursorProcessTwo opens a fresh Bus/Driver over the SAME database
-// file — the "restart" — and proves the durable cursor resumes exactly
-// where process one left off, and that Publish sequence numbering
-// recovered correctly too.
-func replayCursorProcessTwo(ctx context.Context, t *testing.T, dbPath string, clock *testkit.FrozenClock, namespace, cursorName string) {
-	t.Helper()
-	driver2, err := sqlite.Open(ctx, dbPath)
-	if err != nil {
-		t.Fatalf("sqlite.Open (process 2): %v", err)
-	}
-	t.Cleanup(func() { _ = driver2.Close() })
-	bus2 := events.New(driver2, clock)
-	t.Cleanup(func() { _ = bus2.Close() })
-
-	sub2, err := bus2.Subscribe(ctx, namespace, cursorName, 8)
-	if err != nil {
-		t.Fatalf("Subscribe (process 2): %v", err)
-	}
-	select {
-	case ev, ok := <-sub2.Events:
-		if !ok {
-			t.Fatal("process 2 Events closed with no event delivered")
-		}
-		if ev.Seq != 3 {
-			t.Fatalf("resumed delivery Seq = %d, want 3 (no re-delivery of already-committed 1,2)", ev.Seq)
-		}
-	case err := <-sub2.Errs:
-		t.Fatalf("unexpected Errs receive: %v", err)
-	}
-
-	next, err := bus2.Publish(ctx, namespace, events.EventKindPluginRegistered, "test", nil)
-	if err != nil {
-		t.Fatalf("Publish after restart: %v", err)
-	}
-	if next.Seq != 4 {
-		t.Fatalf("post-restart Publish Seq = %d, want 4", next.Seq)
+	if cerr := driver1.Close(); cerr != nil {
+		t.Fatalf("closing driver1: %v", cerr)
 	}
 }
 

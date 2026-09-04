@@ -92,8 +92,27 @@ jobs:
             echo "no FuzzXxx targets exist yet (P1-E01-W1-S01-T3 ships the lane only; targets arrive with parser/decoder tickets) — green-empty by design"
             exit 0
           fi
+          if ! all=$(go list -f '{{.ImportPath}}' ./... 2>/tmp/go-list.err); then
+            echo "::error::go list failed; package resolution is broken, not empty"
+            cat /tmp/go-list.err
+            exit 1
+          fi
           echo "$targets" | while IFS= read -r name; do
-            pkgs=$(go list -f '{{.ImportPath}}' ./... | xargs -I{} sh -c "go test -list '^${name}\$' {} 2>/dev/null | grep -q '^${name}\$' && echo {}" || true)
+            # Resolution must not be masked: a target discovered above whose
+            # owning package cannot be found is a broken toolchain, and
+            # silently skipping it would fuzz nothing while reporting green
+            # (Art.7.4). Each per-package probe's own exit is the membership
+            # answer, so only THAT one is allowed to be non-zero.
+            pkgs=
+            for cand in $all; do
+              if go test -list "^${name}\$" "$cand" 2>/dev/null | grep -q "^${name}\$"; then
+                pkgs="$pkgs $cand"
+              fi
+            done
+            if [ -z "$pkgs" ]; then
+              echo "::error::target $name was discovered but resolves to no package; fuzz coverage would be silently skipped"
+              exit 1
+            fi
             for pkg in $pkgs; do
               echo "fuzzing $name in $pkg"
               go test "$pkg" -run '^$' -fuzz "^${name}\$" -fuzztime=60s
