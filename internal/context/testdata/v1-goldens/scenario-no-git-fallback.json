@@ -1,0 +1,14 @@
+{
+  "description": "cwd is outside any git repository: PRI falls back to cwd itself; ASI overshoots past HOME (the temp root is HOME's direct parent) and is dropped",
+  "layout": ["homedir", "plain/workdir"],
+  "git_repo": "",
+  "home_offset": "homedir",
+  "cwd_offset": "plain/workdir",
+  "expect": [
+    {"role": "GCI", "present": true, "dir": "homedir"},
+    {"role": "ASI", "present": false, "dir": ""},
+    {"role": "PPI", "present": true, "dir": "plain"},
+    {"role": "PRI", "present": true, "dir": "plain/workdir"},
+    {"role": "PAI", "present": false, "dir": ""}
+  ]
+}

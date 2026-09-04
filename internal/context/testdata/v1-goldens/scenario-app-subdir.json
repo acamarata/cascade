@@ -1,0 +1,14 @@
+{
+  "description": "cwd sits strictly below the git root: PAI present alongside a normal ASI/PPI/PRI walk",
+  "layout": ["homedir", "elsewhere/proj/repo", "elsewhere/proj/repo/appdir"],
+  "git_repo": "elsewhere/proj/repo",
+  "home_offset": "homedir",
+  "cwd_offset": "elsewhere/proj/repo/appdir",
+  "expect": [
+    {"role": "GCI", "present": true, "dir": "homedir"},
+    {"role": "ASI", "present": true, "dir": "elsewhere"},
+    {"role": "PPI", "present": true, "dir": "elsewhere/proj"},
+    {"role": "PRI", "present": true, "dir": "elsewhere/proj/repo"},
+    {"role": "PAI", "present": true, "dir": "elsewhere/proj/repo/appdir"}
+  ]
+}

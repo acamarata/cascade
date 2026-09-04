@@ -1,0 +1,14 @@
+{
+  "description": "repo and HOME sit in disjoint subtrees (the common real-world layout): ASI and PPI both present, no boundary interaction",
+  "layout": ["homedir", "elsewhere/proj/repo"],
+  "git_repo": "elsewhere/proj/repo",
+  "home_offset": "homedir",
+  "cwd_offset": "elsewhere/proj/repo",
+  "expect": [
+    {"role": "GCI", "present": true, "dir": "homedir"},
+    {"role": "ASI", "present": true, "dir": "elsewhere"},
+    {"role": "PPI", "present": true, "dir": "elsewhere/proj"},
+    {"role": "PRI", "present": true, "dir": "elsewhere/proj/repo"},
+    {"role": "PAI", "present": false, "dir": ""}
+  ]
+}

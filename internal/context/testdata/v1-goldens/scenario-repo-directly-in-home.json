@@ -1,0 +1,14 @@
+{
+  "description": "repo lives directly inside HOME: PPI's raw candidate equals HOME and must be dropped rather than duplicate GCI",
+  "layout": ["repo"],
+  "git_repo": "repo",
+  "home_offset": "",
+  "cwd_offset": "repo",
+  "expect": [
+    {"role": "GCI", "present": true, "dir": ""},
+    {"role": "ASI", "present": false, "dir": ""},
+    {"role": "PPI", "present": false, "dir": ""},
+    {"role": "PRI", "present": true, "dir": "repo"},
+    {"role": "PAI", "present": false, "dir": ""}
+  ]
+}

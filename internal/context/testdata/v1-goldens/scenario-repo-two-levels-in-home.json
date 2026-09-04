@@ -1,0 +1,14 @@
+{
+  "description": "repo lives two levels inside HOME (mirrors v1's home_is_gci_only_not_also_pci): ASI's raw candidate equals HOME and is dropped, PPI survives distinct",
+  "layout": ["proj", "proj/repo"],
+  "git_repo": "proj/repo",
+  "home_offset": "",
+  "cwd_offset": "proj/repo",
+  "expect": [
+    {"role": "GCI", "present": true, "dir": ""},
+    {"role": "ASI", "present": false, "dir": ""},
+    {"role": "PPI", "present": true, "dir": "proj"},
+    {"role": "PRI", "present": true, "dir": "proj/repo"},
+    {"role": "PAI", "present": false, "dir": ""}
+  ]
+}
