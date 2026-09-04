@@ -188,5 +188,30 @@
     "symbol": "internal/memory.NewPromotionLadder",
     "reason": "The mechanical promotion lane is complete and tested, but the consolidation surface that records observations during a session is a later ticket. Retire this entry together with the ledger constructor entry.",
     "expected_caller": "the memory review-queue CLI (04-PEWS-PLAN-W1-W3.md Epic G S-14.T3), which observes and reviews candidates through the ladder"
+  },
+  {
+    "symbol": "internal/audit.New",
+    "reason": "The audit log is built and its only intended caller, the vault audit verb, deliberately refuses to print an empty list while nothing injects a writer. Wiring follows when a subsystem actually records events.",
+    "expected_caller": "cmd/cascade/vault_audit.go, once a writer is injected into internal/secrets"
+  },
+  {
+    "symbol": "internal/retrieval/embed.New",
+    "reason": "The embed pipeline is complete; the ingest and recall command surface that drives it is a later ticket in this epic.",
+    "expected_caller": "the recall and index command surface, P1-E06-W2-S11-T3"
+  },
+  {
+    "symbol": "internal/storage/cache.New",
+    "reason": "The cache domain is implemented against the storage interfaces; no shipping path opens a cache yet.",
+    "expected_caller": "the composition root that opens the store, when a subsystem needs caching"
+  },
+  {
+    "symbol": "providers/fs.New",
+    "reason": "A storage provider implementation. Nothing resolves a provider by name in shipping code yet, which is the same gap recorded for the postgres provider.",
+    "expected_caller": "the provider resolution path that maps a configured driver name to its constructor"
+  },
+  {
+    "symbol": "providers/localvector.New",
+    "reason": "The local vector provider. Same gap: no shipping path resolves a vector provider by configured name yet.",
+    "expected_caller": "the provider resolution path, alongside the embed pipeline's consumer"
   }
 ]

@@ -124,6 +124,22 @@ func deadcodeCollectUsed(moduleRoot, modulePath string, parsed map[string]*ast.F
 		}
 		dir = filepath.ToSlash(dir)
 		aliasToDir := scanImportAliases(f, modulePath)
+		// selectorFields collects the Sel half of every qualified
+		// reference, so the bare-identifier pass below can skip them.
+		// Without this, a call like cascade.New(...) inside a package that
+		// also declares its own New credits THIS package's New as used,
+		// because ast.Inspect walks into the selector and sees a bare
+		// Ident named "New". The gate then reports a symbol as reachable
+		// on the strength of an unrelated call to a different package's
+		// function of the same name, which is a false negative in the one
+		// direction that matters: it hides unwired code.
+		selectorFields := make(map[token.Pos]bool)
+		ast.Inspect(f, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok {
+				selectorFields[sel.Sel.Pos()] = true
+			}
+			return true
+		})
 		ast.Inspect(f, func(n ast.Node) bool {
 			if sel, ok := n.(*ast.SelectorExpr); ok {
 				if id, ok2 := sel.X.(*ast.Ident); ok2 {
@@ -132,7 +148,7 @@ func deadcodeCollectUsed(moduleRoot, modulePath string, parsed map[string]*ast.F
 					}
 				}
 			}
-			if id, ok := n.(*ast.Ident); ok {
+			if id, ok := n.(*ast.Ident); ok && !selectorFields[id.Pos()] {
 				sym := DeadCodeSymbol{Dir: dir, Name: id.Name}
 				if pos, tracked := declPos[sym]; tracked && pos != id.Pos() {
 					used[sym] = true
