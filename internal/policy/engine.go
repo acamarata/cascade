@@ -90,6 +90,18 @@ type EvalRequest struct {
 	// Attributes are the request facts a standing grant's conditions
 	// match against.
 	Attributes map[string]string
+	// Verb is the RPC method name, when the action is one. It lets the
+	// approval queue refuse an elevation-class verb at its boundary
+	// (§5.14) in addition to the elevation layer in front of Evaluate.
+	Verb string
+	// Action is the canonical text of what will run, and Params its
+	// parameters. The approval queue hashes both and binds the approval
+	// to those digests, so an approval cannot be spent on a request that
+	// changed after it was shown.
+	Action string
+	Params []byte
+	// Summary is the human-readable description an approval prompt shows.
+	Summary string
 }
 
 // EvalOutcome is one decision.
@@ -108,6 +120,11 @@ type EvalOutcome struct {
 	Layer DecisionLayer `json:"layer"`
 	// Reason is a short human-readable explanation.
 	Reason string `json:"reason"`
+	// ApprovalRequestID names the approval queue entry an ask verdict was
+	// filed as, when a queue is attached. It is the ONLY approval field an
+	// outcome carries: the token, the nonce and the action hash stay in
+	// daemon memory (§5.24).
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
 }
 
 // Engine evaluates actions against the policy layers. It holds no cache:
@@ -118,6 +135,11 @@ type Engine struct {
 	registry CapabilityRegistry
 	grants   GrantStore
 	autonomy *Controller
+	// approvals is the S-18.T3 sink an ask verdict is filed with. It is
+	// optional and held as an INTERFACE: the engine never reaches into the
+	// queue's implementation, and an engine with none attached still
+	// evaluates identically.
+	approvals ApprovalQueue
 }
 
 // NewEngine returns an Engine over the three collaborators. All three are
@@ -169,10 +191,14 @@ func (e *Engine) Evaluate(ctx context.Context, req EvalRequest) (EvalOutcome, er
 		return denyOutcome(L4, LayerFailClosed, "capability is not registered"), err
 	}
 	level := maxLevel(req.Level, capDef.Class().Risk())
-	if out, ok := e.grantOutcome(ctx, req, level); ok {
-		return out, nil
+	out, ok := e.grantOutcome(ctx, req, level)
+	if !ok {
+		out = e.autonomyOutcome(level, level > safeLevel(req.Level))
 	}
-	return e.autonomyOutcome(level, level > safeLevel(req.Level)), nil
+	// The S-18 seam, landed on top of T1's: an ask verdict is filed with
+	// the approval queue, and a queue that refuses the action downgrades
+	// the outcome to deny rather than leaving it at ask.
+	return e.enqueueAsk(ctx, req, out), nil
 }
 
 // grantOutcome consults layer 3. It reports ok only for a grant that

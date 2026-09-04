@@ -253,5 +253,10 @@
     "symbol": "providers/embeddings/bgem3.New",
     "reason": "The BGE-M3 sidecar client is a seam whose server does not exist yet: the native sidecar ships as a separate post-P1 artifact (01-FEATURE-INVENTORY, Local-LLM row; the 04-PEWS-PLAN DECIDED ruling for F/S-12.T2). P1 deliberately ships the wire spec (providers/embeddings/bgem3/SPEC.md) and the client that speaks it WITHOUT registering it as an active embedder lane, because a registered lane with no sidecar behind it would be a capability that appears to work; the absence is documented instead (Art.1.3). The client's protocol conformance is asserted against a spec-conformance server that exists only under _test.go (Art.1.1).",
     "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket"
+  },
+  {
+    "symbol": "internal/policy.NewApprovalQueue",
+    "reason": "The approval queue ships before the surface that drives it. Its consumer is the CLI/RPC approval surface (S-18.T6), which is the ticket that constructs the queue at the daemon composition root and exposes list/approve/deny; the policy engine reaches the queue through the injected ApprovalQueue interface (Engine.WithApprovalQueue), never through this constructor. Building the queue and its single-use ledger before the surface is the right order, since the surface is specified against this queue's types; shipping an approval surface with no queue behind it would not be.",
+    "expected_caller": "the daemon composition root in cmd/cascade that wires the approval surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic I S-18.T6), in the SAME change that registers the first approval command; retire this entry then"
   }
 ]
