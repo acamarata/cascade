@@ -1,0 +1,35 @@
+{
+  "provenance": {
+    "source": "acamarata/cascade-v1 (archived, GitHub read-only) crates/cascade-rag/src/ingest/chunker.rs, harvested via ARCHIVE-MAP.md's local clone ../cascade-v1/ per this ticket's SPEC-SALVAGE note (input only, no v1 Rust source or logic is reused by internal/retrieval; v1's own ingest chunker-selection helper, real production Rust content)",
+    "tool": "n/a - real source file copied verbatim from the local v1 archive clone, no extraction tool",
+    "date": "2026-09-03"
+  },
+  "input_path": "chunker.rs",
+  "input": "//! Chunker selection and file utility helpers for the ingest pipeline.\n//!\n//! # Contents\n//! - [`chunker_for_path`] — maps file extension to the right [`Chunker`] impl.\n//! - [`hex_blake3`] — BLAKE3 content hash (canonical; see `cascade_db::content_hash`).\n//! - [`file_mtime`] — extract mtime from a path.\n//!\n//! SPORT: MASTER-CRATES.md → cascade-rag::ingest::chunker\n\nuse std::path::Path;\nuse std::time::UNIX_EPOCH;\n\nuse crate::chunk::hierarchical::HierarchicalChunker;\nuse crate::chunk::markdown::MarkdownChunker;\nuse crate::chunk::semantic::SemanticChunker;\nuse crate::chunk::{Chunker, ChunkerConfig};\n\n// ── Chunker selection ─────────────────────────────────────────────────────────\n\n/// Select the appropriate [`Chunker`] for `path` based on its extension.\n///\n/// # Purpose\n/// Centralises the extension→chunker mapping so it can be tested independently\n/// and reused by the batch pipeline.\n///\n/// # Inputs\n/// `path` — any path; only the extension is inspected.\n/// `config` — chunker size/overlap parameters.\n///\n/// # Outputs\n/// A `Box<dyn Chunker>` ready to call `.chunk()`.\n///\n/// SPORT: MASTER-CRATES.md → cascade-rag::ingest::chunker_for_path\npub fn chunker_for_path(path: &Path, config: &ChunkerConfig) -> Box<dyn Chunker> {\n    let ext = path\n        .extension()\n        .and_then(|e| e.to_str())\n        .unwrap_or(\"\")\n        .to_ascii_lowercase();\n\n    match ext.as_str() {\n        \"md\" | \"mdx\" => Box::new(MarkdownChunker),\n\n        #[cfg(feature = \"code-chunker\")]\n        \"rs\" | \"ts\" | \"tsx\" | \"js\" | \"jsx\" | \"py\" => {\n            use crate::chunk::code::CodeChunker;\n            Box::new(CodeChunker::new(config.clone()))\n        }\n\n        // Prose / other plain text — hierarchical preserves paragraph structure.\n        \"txt\" | \"rst\" | \"org\" | \"adoc\" | \"tex\" => {\n            Box::new(HierarchicalChunker::new(config.clone()))\n        }\n\n        // Default: semantic sliding window.\n        _ => Box::new(SemanticChunker::with_config(config.clone())),\n    }\n}\n\n// ── Helpers ───────────────────────────────────────────────────────────────────\n\n/// Compute a hex-encoded BLAKE3 digest of `bytes`.\n///\n/// Delegates to `cascade_db::content_hash` — the canonical hash function for\n/// all dedup, delta-detection, and cache keys in Cascade (locked decision #2).\npub(super) fn hex_blake3(bytes: &[u8]) -> String {\n    cascade_db::content_hash(bytes)\n}\n\n/// Extract the file's mtime as Unix seconds, or `None` if unavailable.\npub(super) fn file_mtime(path: &Path) -> Option<i64> {\n    std::fs::metadata(path)\n        .ok()\n        .and_then(|m| m.modified().ok())\n        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())\n        .map(|d| d.as_secs() as i64)\n}\n",
+  "chunks": [
+    {
+      "start_byte": 0,
+      "end_byte": 1299,
+      "lang": "rust",
+      "id": "fd9d5752a53d0994a77737c6f4246828187fdc91bf598c8d7160fb501e6deb7e"
+    },
+    {
+      "start_byte": 1299,
+      "end_byte": 2569,
+      "lang": "rust",
+      "id": "286cf6790853b98a9a97646f3178aa7488936ecc14537f22b2aee1c6a0e283ae"
+    },
+    {
+      "start_byte": 2569,
+      "end_byte": 2731,
+      "lang": "rust",
+      "id": "78527247e4ec9857317f9bc56bf5793c981fd872e3bc8aa4170bae6bb48798b0"
+    },
+    {
+      "start_byte": 2731,
+      "end_byte": 2965,
+      "lang": "rust",
+      "id": "50c0da99907f01195d17da91dfd542b1e7d755597a88d5e3f3b34de347525a8c"
+    }
+  ]
+}

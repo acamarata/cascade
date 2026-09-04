@@ -1,0 +1,47 @@
+{
+  "provenance": {
+    "source": "github.com/acamarata/cascade pkg/cascade/kinds.go (this repo's own frozen error-taxonomy source, real production content, not authored for this test)",
+    "tool": "n/a - real source file copied verbatim, no extraction tool",
+    "date": "2026-09-03"
+  },
+  "input_path": "kinds.go",
+  "input": "package cascade\n\n// Kind identifies one member of the taxonomy's closed error-kind enumeration\n// (T0 ruling R-14.3). The set is FROZEN at exactly 14 members; adding,\n// removing, or renaming a kind requires a T0 amendment to R-14.3 — it is not\n// a build-time decision. capability-denied and quota-exhausted are distinct\n// by design: a capability a tier does not sell must never be retried or\n// rotated as if it were a spent quota (PCI provider-capability-flags,\n// 2026-09-01).\n//\n// The zero value is intentionally invalid (not a member of the taxonomy) so\n// a forgotten Kind field reads as a bug rather than silently meaning\n// KindNotFound. Callers that need to test membership use Valid.\ntype Kind uint8\n\n// The frozen 14-kind enumeration, in the order R-14.3 lists them. Declaration\n// order here is the single source AllKinds walks; codes.go's tables are keyed\n// off these same constants so the three wire tables (CLI exit, JSON-RPC,\n// plugin RPC) stay total and non-overlapping by construction.\nconst (\n\t_ Kind = iota // 0 is deliberately not a valid Kind\n\n\t// KindNotFound reports that a named resource does not exist.\n\tKindNotFound\n\t// KindInvalidInput reports that caller-supplied input failed validation.\n\tKindInvalidInput\n\t// KindConflict reports a state conflict (e.g. optimistic-concurrency\n\t// mismatch, duplicate creation of a uniquely-keyed resource).\n\tKindConflict\n\t// KindUnavailable reports that a dependency is temporarily unreachable\n\t// and the caller may retry.\n\tKindUnavailable\n\t// KindTimeout reports that an operation exceeded its deadline.\n\tKindTimeout\n\t// KindCanceled reports that an operation was canceled by its caller\n\t// (context cancellation, SIGINT).\n\tKindCanceled\n\t// KindPermissionDenied reports that the caller lacks the rights an\n\t// operation requires, with no elevation path being offered.\n\tKindPermissionDenied\n\t// KindElevationRequired reports that the operation needs an elevation\n\t// flow (e.g. a fresh attestation) before it can proceed.\n\tKindElevationRequired\n\t// KindPolicyDenied reports that policy evaluation (internal/policy)\n\t// refused the operation.\n\tKindPolicyDenied\n\t// KindCapabilityDenied reports that the active tier does not sell the\n\t// requested capability at all. Distinct from KindQuotaExhausted: never\n\t// retry or rotate accounts in response to this kind.\n\tKindCapabilityDenied\n\t// KindQuotaExhausted reports that a purchased capability's quota is\n\t// spent for the current window; retry/rotation is a valid response.\n\tKindQuotaExhausted\n\t// KindUnsupported reports that the operation is recognized but not\n\t// implemented on the current platform, build, or configuration.\n\tKindUnsupported\n\t// KindIntegrity reports that a verification step (checksum, signature,\n\t// schema) failed.\n\tKindIntegrity\n\t// KindInternal reports an unclassified internal failure. It is the\n\t// fallback kind for wire mapping when no more specific kind applies.\n\tKindInternal\n)\n\n// kindNames holds the display string for each valid Kind, indexed by Kind\n// value. Index 0 is the invalid zero value's placeholder.\nvar kindNames = [...]string{\n\t\"\",\n\t\"not-found\",\n\t\"invalid-input\",\n\t\"conflict\",\n\t\"unavailable\",\n\t\"timeout\",\n\t\"canceled\",\n\t\"permission-denied\",\n\t\"elevation-required\",\n\t\"policy-denied\",\n\t\"capability-denied\",\n\t\"quota-exhausted\",\n\t\"unsupported\",\n\t\"integrity\",\n\t\"internal\",\n}\n\n// String returns the kind's stable lowercase-hyphenated name, e.g.\n// \"not-found\" or \"elevation-required\". These strings are part of the wire\n// contract (they appear in JSON-RPC error data and CLI diagnostics) and must\n// never change once a kind ships.\nfunc (k Kind) String() string {\n\tif !k.Valid() {\n\t\treturn \"invalid-kind\"\n\t}\n\treturn kindNames[k]\n}\n\n// Valid reports whether k is a member of the frozen R-14.3 taxonomy\n// enumeration. The zero value and any value beyond KindInternal are invalid.\nfunc (k Kind) Valid() bool {\n\treturn k >= KindNotFound && k <= KindInternal\n}\n\n// AllKinds returns the closed set of taxonomy kinds in R-14.3's declaration\n// order. Tests use it to assert the enumeration stays exactly 14 members\n// (zero additions, zero omissions) and that every wire table is total over\n// this same set.\nfunc AllKinds() []Kind {\n\treturn []Kind{\n\t\tKindNotFound,\n\t\tKindInvalidInput,\n\t\tKindConflict,\n\t\tKindUnavailable,\n\t\tKindTimeout,\n\t\tKindCanceled,\n\t\tKindPermissionDenied,\n\t\tKindElevationRequired,\n\t\tKindPolicyDenied,\n\t\tKindCapabilityDenied,\n\t\tKindQuotaExhausted,\n\t\tKindUnsupported,\n\t\tKindIntegrity,\n\t\tKindInternal,\n\t}\n}\n",
+  "chunks": [
+    {
+      "start_byte": 17,
+      "end_byte": 714,
+      "lang": "go",
+      "id": "c4eba25761e8695734fc2bb84ef6f90eb84c8bcf8e238f3cf9d86f5a17dc715f"
+    },
+    {
+      "start_byte": 716,
+      "end_byte": 2929,
+      "lang": "go",
+      "id": "12def4c5a715ad8c45d153f100760ab24f10cf9272b8a7c18ae46e924f6e7060"
+    },
+    {
+      "start_byte": 2931,
+      "end_byte": 3334,
+      "lang": "go",
+      "id": "29277017d879cb5cee1aa66179ccfaaea10d16f91d1973d8ce3442169f9f2d52"
+    },
+    {
+      "start_byte": 3336,
+      "end_byte": 3690,
+      "lang": "go",
+      "id": "a67120e269d8719b67a5cd6be19b183b309abd6ab1609c7dd5cbeddf16326123"
+    },
+    {
+      "start_byte": 3692,
+      "end_byte": 3916,
+      "lang": "go",
+      "id": "7c7429752c0407b92d76da991cc510579cabf8f04ae3a8bd4ac0b9b8f52e58a3"
+    },
+    {
+      "start_byte": 3918,
+      "end_byte": 4477,
+      "lang": "go",
+      "id": "016727a795c5f899394d1a0ed18942e0f53eff0c33e0bc638ea46f13e155815c"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "provenance": {
+    "source": "github.com/acamarata/cascade README.md (this repo's own top-level readme, real production content, not authored for this test)",
+    "tool": "n/a - real source file copied verbatim, no extraction tool",
+    "date": "2026-09-03"
+  },
+  "input_path": "README.md",
+  "input": "# Cascade\n\nLocal-first AI agent runtime: one CLI and daemon for agents, context, model routing\n(Conductor), plugins, and storage that runs the same from a laptop to a server.\n\n**Status: v2 is in early development on a clean sheet.** The complete v1 implementation\n(released through v1.16) is archived read-only at\n[acamarata/cascade-v1](https://github.com/acamarata/cascade-v1).\n\nMIT licensed.\n\n## Building from source\n\nCascade builds with the Go toolchain, version 1.26.2 or newer, and has no CGO or\nexternal build dependencies.\n\n```bash\ngit clone https://github.com/acamarata/cascade.git\ncd cascade\ngo build ./...\n```\n\nSupported release platforms:\n\n| OS | Architecture |\n|---|---|\n| darwin | arm64 |\n| darwin | amd64 |\n| linux | amd64 |\n| linux | arm64 |\n| windows | amd64 |\n\nCross-compile for any of them with `GOOS` and `GOARCH`, for example\n`GOOS=linux GOARCH=arm64 go build ./...`.\n",
+  "chunks": [
+    {
+      "start_byte": 0,
+      "end_byte": 395,
+      "lang": "markdown",
+      "headings": [
+        "Cascade"
+      ],
+      "id": "bc2a0b2f812a7d1cbff16e910de2ea67363d9a63611225c9067cd1a20de01c70"
+    },
+    {
+      "start_byte": 395,
+      "end_byte": 888,
+      "lang": "markdown",
+      "headings": [
+        "Cascade",
+        "Building from source"
+      ],
+      "id": "619edb509229cd936c2c78d000a5542e167c89a78abbc94f80602e377888107a"
+    }
+  ]
+}
