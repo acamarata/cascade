@@ -72,6 +72,11 @@ type memoryDeps struct {
 	// Call reaches the daemon. Production uses the SDK client; tests
 	// substitute a recorder.
 	Call memoryCallFunc
+	// Editor launches $EDITOR for `memory soul edit`. It is injected for
+	// the reason Call is: a test must be able to prove the
+	// CASCADE_NO_INPUT guard fires BEFORE a subprocess is created, which
+	// is only observable when creating one is something a test can watch.
+	Editor soulEditorFunc
 }
 
 // productionMemoryDeps builds memoryDeps against the real environment.
@@ -81,6 +86,7 @@ func productionMemoryDeps() memoryDeps {
 		Getenv:  os.Getenv,
 		Environ: os.Environ,
 		Call:    clientMemoryCall,
+		Editor:  productionSoulEditor,
 	}
 }
 
@@ -118,15 +124,18 @@ func newMemoryCmd(deps memoryDeps) *cobra.Command {
 		Short: "Remember, recall and forget memory records",
 		Long: "Read and write the memory store: the markdown files that are the\n" +
 			"source of truth for everything cascade remembers.\n\n" +
-			"Every verb is non-interactive and takes its input from flags and\n" +
-			"arguments only. `memory forget` destroys a record; run it with\n" +
-			"--dry-run first to see exactly what it would retire.",
+			"Every verb but `soul edit` is non-interactive and takes its input\n" +
+			"from flags and arguments only; `soul edit` opens $EDITOR and has\n" +
+			"a --content <file> equivalent for automation. `memory forget`\n" +
+			"destroys a record; run it with --dry-run first to see exactly\n" +
+			"what it would retire.",
 	}
 	cmd.AddCommand(
 		newMemoryRememberCmd(deps),
 		newMemoryRecallCmd(deps),
 		newMemoryForgetCmd(deps),
 		newMemoryListCmd(deps),
+		newMemorySoulCmd(deps),
 	)
 	return cmd
 }
@@ -243,14 +252,22 @@ func newMemoryListCmd(deps memoryDeps) *cobra.Command {
 // every error on the way out. Scrubbing happens HERE, at the boundary,
 // rather than at each call site, so no verb can forget to do it.
 func memoryCall(cmd *cobra.Command, deps memoryDeps, method string, params, out any) error {
+	return scrubDiagnostic(memoryCallRaw(cmd, deps, method, params, out))
+}
+
+// memoryCallRaw performs the same call and returns the error UNSCRUBBED,
+// for one caller: `memory soul edit`, which must ask whether the failure
+// was "no soul document yet" before starting the user from an empty
+// document. scrubDiagnostic deliberately terminates the error chain, so
+// that classification has to happen before the scrub; every error read
+// through this function is scrubbed by its caller before it can reach a
+// terminal.
+func memoryCallRaw(cmd *cobra.Command, deps memoryDeps, method string, params, out any) error {
 	socketPath, err := memoryResolveSocket(cmd.Context(), deps)
 	if err != nil {
-		return scrubDiagnostic(err)
+		return err
 	}
-	if err := deps.Call(cmd.Context(), socketPath, method, params, out); err != nil {
-		return scrubDiagnostic(err)
-	}
-	return nil
+	return deps.Call(cmd.Context(), socketPath, method, params, out)
 }
 
 // memoryResolveSocket loads config.toml — the single resolution model every
