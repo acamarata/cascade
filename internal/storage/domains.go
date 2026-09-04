@@ -11,7 +11,8 @@ import (
 
 // Purpose: define the CLOSED cascade.db domain layout — R-14.5's ratified
 //
-//	ten-domain list — as a typed enum, plus Bootstrap, the idempotent
+//	list, amended to ELEVEN by R-16.51 — as a typed enum, plus Bootstrap,
+//	the idempotent
 //	function that stamps a fresh or existing cascade.db with each
 //	domain's anchor table, WAL mode, and the initial schema_version.
 //
@@ -21,9 +22,10 @@ import (
 //	self-grant registration, not yet in-tree).
 //
 // Outputs: BootstrapReport{TablesCreated, Delta}, or a *cascade.Error.
-// Constraints: the domain set is CLOSED by R-14.5 — DomainID is a defined
+// Constraints: the domain set is CLOSED by R-14.5 as amended by R-16.51 —
 //
-//	string type with exactly ten constants, never a bare string at any
+//	DomainID is a defined string type with exactly eleven constants
+//	(the R-14.5 ten plus `policy`), never a bare string at any
 //	call site. golangci-lint's exhaustive analyzer (R-14.101,
 //	default-signifies-exhaustive: false) is enabled repo-wide, so any
 //	future switch over DomainID that omits a case — including one added
@@ -38,17 +40,24 @@ import (
 //
 //	internal.storage.domains.Bootstrap/ADDED (P1-E02-W1-S03-T1).
 
-// DomainID identifies one of the ten cascade.db domains RATIFIED as forged
-// by T0 ruling R-14.5. The set is closed: adding, removing, or renaming a
-// domain requires a T0 amendment to R-14.5 (exactly as pkg/cascade.Kind's
+// DomainID identifies one of the eleven cascade.db domains RATIFIED as
+// forged by T0 ruling R-14.5 and amended by R-16.51. The set is closed:
+// adding, removing, or renaming a domain requires a T0 amendment to R-14.5
+// (R-16.51 is exactly such an amendment, and the only one so far — it adds
+// `policy`, the domain internal/policy's grants, standing grants, deny-list
+// patterns, autonomy-profile state and classifier cache live in; the
+// approval-token single-use ledger stays in `audit` per 06 §5.24). Exactly
+// as pkg/cascade.Kind's
 // taxonomy is closed by R-14.3). DomainID is a defined string type so a
 // typo is a compile-time type mismatch, never a silently-wrong runtime
 // string threaded through Store's namespace argument.
 type DomainID string
 
-// The closed ten-domain enumeration (R-14.5: "context, memory, audit,
-// secrets, sessions, config, retrieval, blobs, queue, jobs ... jobs and
-// sessions ARE distinct domains"). Declaration order here is AllDomains's
+// The closed eleven-domain enumeration: the R-14.5 ten ("context, memory,
+// audit, secrets, sessions, config, retrieval, blobs, queue, jobs ... jobs
+// and sessions ARE distinct domains") plus R-16.51's `policy`, appended
+// last so the ten ratified positions keep the order every existing
+// consumer already observes. Declaration order here is AllDomains's
 // order, and AllDomains is built from this exact sequence (never map
 // iteration), so both are deterministic across runs and across builds.
 const (
@@ -62,6 +71,11 @@ const (
 	DomainBlobs     DomainID = "blobs"
 	DomainQueue     DomainID = "queue"
 	DomainJobs      DomainID = "jobs"
+	// DomainPolicy is the R-16.51 eleventh domain: internal/policy's
+	// grants, standing grants, deny-list patterns, autonomy-profile state
+	// and classifier cache. Registered by P1-E09-W2-S17-T1; the domain's
+	// migration is authored by the B/S-02.T3 migration builder.
+	DomainPolicy DomainID = "policy"
 )
 
 // ReservedPluginHostNamespace is the R-14.100 reserved PluginStorage
@@ -89,8 +103,9 @@ type DomainMeta struct {
 
 // AllDomains is the closed, deterministically-ordered list of every
 // cascade.db domain. Consumers that must handle every domain (Bootstrap,
-// StorageHealthCheck, and any future domain-aware code) range over this
-// slice rather than hard-coding the ten values, so a future R-14.5
+// StorageHealthCheck, `cascade doctor --storage`, and any future
+// domain-aware code) range over this slice rather than hard-coding the
+// eleven values, so a future R-14.5
 // amendment changes only this one declaration.
 var AllDomains = []DomainMeta{
 	{ID: DomainContext, TablePrefix: "context", OwnerPkg: "internal/context (Epic E)"},
@@ -103,6 +118,7 @@ var AllDomains = []DomainMeta{
 	{ID: DomainBlobs, TablePrefix: "blobs", OwnerPkg: "providers/fs (R-14.6)"},
 	{ID: DomainQueue, TablePrefix: "queue", OwnerPkg: "internal/storage/queue"},
 	{ID: DomainJobs, TablePrefix: "jobs", OwnerPkg: "internal/fleet (task/job dispatch; owning epic not yet finalized beyond R-14.5)"},
+	{ID: DomainPolicy, TablePrefix: "policy", OwnerPkg: "internal/policy (Epic I; R-16.51)"},
 }
 
 // Clock abstracts time.Now so Bootstrap never reads the wall clock
@@ -175,7 +191,7 @@ const bootstrapStampChecksum = "bootstrap-stamp"
 // domain logic.
 const healthProbeTable = "__health_probe__"
 
-// Bootstrap idempotently creates the ten domain anchor tables plus the
+// Bootstrap idempotently creates the eleven domain anchor tables plus the
 // reserved health-probe table, sets WAL mode, and stamps the initial
 // schema_version row. Calling Bootstrap twice on the same database is a
 // no-op on the second call (§5.9): TablesCreated is 0, Delta reports zero,

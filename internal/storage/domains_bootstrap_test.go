@@ -36,9 +36,10 @@ func TestBootstrap_CreatesDomainAnchorTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
-	// Ten domain anchors + one reserved health-probe table.
-	if report.TablesCreated != 11 {
-		t.Errorf("TablesCreated = %d, want 11", report.TablesCreated)
+	// Eleven domain anchors (R-14.5's ten as amended by R-16.51, which
+	// adds `policy`) + one reserved health-probe table.
+	if report.TablesCreated != 12 {
+		t.Errorf("TablesCreated = %d, want 12", report.TablesCreated)
 	}
 
 	tables := sqliteMasterTableNames(t, db)

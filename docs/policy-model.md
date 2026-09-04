@@ -124,3 +124,109 @@ redirection syntax are not something the classifier can reason about, so
 it does not pretend to. Every Windows-native form falls through the same
 table every other command reaches, misses, and is refused at L4. The
 caller asks for permission and a person decides.
+
+## Capabilities
+
+A capability is a named permission the runtime exposes. Nothing in the
+runtime can be reached by a name the capability registry does not hold.
+
+Each capability carries three things:
+
+| Field | Meaning |
+|---|---|
+| `Name` | The stable identifier, e.g. `memory.read`. Lowercase dot-separated segments of `[a-z0-9_-]`. |
+| `Desc` | The description a user is shown when asked to reason about it. |
+| `DefaultPolicy` | The action class the capability confers when nothing narrower applies. |
+
+`DefaultPolicy` is an action class from the ladder above, not a second
+enum, so there is one ladder in the code rather than two that can drift.
+It is read through a fail-closed accessor: a capability whose default
+policy is unset or out of range reads as `destructive_privileged` (L4,
+deny), never as `read`.
+
+The registry surface is `Add`, `Remove`, `Lookup` and `List`. Lookup of a
+name that is not registered is `capability-not-found`. So is a lookup of a
+name the grammar forbids: a name that could never have been registered can
+never match a stored key either. `Add` refuses a duplicate rather than
+overwriting one, because silently replacing a capability would silently
+replace the action class it confers. An empty registry permits nothing.
+
+## Grants
+
+A grant records that one subject holds one capability.
+
+| Field | Meaning |
+|---|---|
+| `Subject` | `{Kind, ID}`, where kind is `user`, `agent` or `plugin`. There is no anonymous and no wildcard subject. |
+| `Capability` | The registered capability name held. |
+| `Conditions` | Key/value pairs the request must match exactly. Empty means unconditional. |
+| `ScopeClass` | The widest reach the grant confers, in the corpus visibility vocabulary. |
+| `ExpiresAt` | When the grant stops applying. Zero means it does not expire on its own. |
+
+Grants persist in the `policy` storage domain — the eleventh domain, added
+to the closed domain set for exactly this purpose. Standing grants,
+deny-list patterns, autonomy-profile state and the classifier cache share
+it. The approval-token single-use ledger stays in the `audit` domain.
+Everything is written through the storage abstraction; nothing in the
+policy layer opens a database.
+
+### How a check is decided
+
+`Check` reads the store on every call. There is no grant cache, which is
+what makes revocation immediate: the decision after a `Revoke` finds
+nothing. The steps, in order, are all deny steps:
+
+1. The subject must name somebody, or the answer is `subject-unknown`.
+2. The capability must be registered, or the answer is
+   `capability-not-found`. This happens before any grant row is read, so a
+   grant naming a capability that was removed can never be honoured.
+3. A grant row must exist for exactly this subject and capability.
+4. The row must decode and must validate after decoding. An unparseable
+   row is a denial, never an allow.
+5. The decoded row must name the subject and capability its key claims.
+   The key is not trusted to describe its own contents.
+6. The grant must not have expired, measured against an injected clock. A
+   grant expires *at* its expiry instant, not after it.
+7. Every condition on the grant must be matched exactly by the request's
+   attributes. A missing attribute denies.
+
+Every refusal collapses to one of three identifiers —
+`capability-not-found`, `subject-unknown`, `grant-denied` — so a caller
+cannot learn from a refusal whether a grant was never made, was revoked,
+or expired. A refusal always comes back with the zero decision, whose
+`Granted` field is false, so a caller that drops the error still denies.
+
+## Shared visibility and the team carrier
+
+The visibility classes themselves are not defined by the policy layer.
+They belong to the corpus model, which owns the enum, its ordering by
+reach, and the resolution of a record's class against its corpus:
+
+| Class | Reach |
+|---|---|
+| `private` | The owning scope only. |
+| `scope-local` | The owning scope's chain. |
+| `shared` | The chain, plus scopes reached by a declared edge. |
+| `team` | Content intended to be carried to everyone who has the repository. |
+
+The policy layer adds the team carrier: the rule that decides whether one
+already-resolved record may actually be carried to the team.
+
+Three conditions must all hold, and each is checked separately so a
+refusal says which one failed:
+
+1. The record's trust level is `trusted`. Untrusted-source content is
+   data, never something the user vouched for, so it is not carried to
+   anyone else however its visibility class is marked. The corpus model
+   already forces a record inside an untrusted corpus down to
+   untrusted-source; this is the check that acts on that.
+2. The resolved visibility class is `team`.
+3. The privacy tier is not `personal`.
+
+**A grant narrows; it never widens.** The effective reach of a record
+under a grant is the narrower of the record's own class and the grant's
+scope class. A `team`-class grant over a private record yields private. A
+grant is never consulted for permission to raise a record, so there is no
+ordering of the two in which one widens the other. A scope class that
+cannot be read collapses the result to `private` rather than passing the
+other side through.

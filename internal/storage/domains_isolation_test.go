@@ -29,7 +29,7 @@ import (
 // reserved `plugin.__host__.*` PluginStorage namespace — this ticket does
 // not implement PluginStorage (that is O/S-32.T3/T4's surface, layered on
 // pkg/provider.Store's namespace argument, never on these anchor tables),
-// but the closed ten-domain set must never encroach on a namespace R-14.100
+// but the closed eleven-domain set must never encroach on a namespace R-14.100
 // already reserved elsewhere.
 func TestDomainIsolation_WritesUnreachableAcrossDomains(t *testing.T) {
 	db := openTestDB(t)

@@ -10,7 +10,8 @@
 // Outputs: RiskLevel (L0..L4), ActionClass (read .. destructive_privileged),
 //
 //	ActionClass.Risk (the ladder mapping), and the unexported safeLevel /
-//	maxLevel helpers every classifier path funnels through.
+//	maxLevel / safeActionClass helpers every classifier and capability
+//	path funnels through.
 //
 // Constraints: 06-FORGE-SPEC §5.15 is the normative ladder and it is
 //
@@ -21,7 +22,9 @@
 //	makes maxLevel a correct combinator for the wrapper rule
 //	max(wrapper, inner).
 //
-// SPORT: internal/policy RiskLevel/ADDED, ActionClass/ADDED (P1-E09-W2-S17-T3).
+// SPORT: internal/policy RiskLevel/ADDED, ActionClass/ADDED (P1-E09-W2-S17-T3);
+//
+//	safeActionClass/ADDED (P1-E09-W2-S17-T1).
 package policy
 
 // RiskLevel is one rung of the 06-FORGE-SPEC §5.15 risk ladder.
@@ -182,4 +185,22 @@ func (a ActionClass) Risk() RiskLevel {
 	default:
 		return L4
 	}
+}
+
+// safeActionClass maps any ActionClass to one that is safe to act on, the
+// twin of safeLevel one rung up the vocabulary. A valid class passes
+// through unchanged; the zero value and anything out of range become
+// ClassDestructivePrivileged, which sits on L4 and therefore denies.
+//
+// This is the binding S-17.T1 needs: Capability.DefaultPolicy is an
+// ActionClass, and Capability.Class reads it through here, so a capability
+// row that reached memory without passing Validate — decoded from storage,
+// say, or built by a caller that forgot the field — presents as
+// destructive_privileged rather than as read. There is no path by which an
+// unset default policy reads as "allow".
+func safeActionClass(a ActionClass) ActionClass {
+	if !a.Valid() {
+		return ClassDestructivePrivileged
+	}
+	return a
 }

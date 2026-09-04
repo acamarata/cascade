@@ -54,7 +54,7 @@ func TestBootstrap_FailsOnClosedDB(t *testing.T) {
 // against modernc-sqlite (a CREATE TABLE IF NOT EXISTS on an ALREADY-
 // present table is a true no-op under query_only and does not error,
 // which is why this test drops the table first rather than reusing an
-// existing one). The ten domain anchors and the health-probe table are
+// existing one). The eleven domain anchors and the health-probe table are
 // all already present, so bootstrapDomainTables itself is a no-op and
 // Bootstrap fails specifically inside the ledger-stamp step.
 func TestBootstrap_FailsWhenLedgerTableCreateErrors(t *testing.T) {

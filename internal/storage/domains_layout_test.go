@@ -1,8 +1,9 @@
 // Purpose: R-14.5 domain-layout tests — proves AllDomains carries exactly
 //
-//	the ten ratified domains, in a fixed order, and that the exhaustive
+//	the eleven ratified domains (R-14.5's ten as amended by R-16.51,
+//	which adds `policy`), in a fixed order, and that the exhaustive
 //	switch every real DomainID consumer must write actually recognizes
-//	all ten. Split from domains_test.go as a sibling file per R-14.117
+//	all eleven. Split from domains_test.go as a sibling file per R-14.117
 //	(Art.10.3 300-line cap; mechanical relocation, no behavior change).
 //
 // SPORT: internal.storage.domains.AllDomains/ADDED,
@@ -17,17 +18,18 @@ import (
 )
 
 // TestDomainLayout_AllDomainsDeterministic asserts AllDomains carries
-// exactly the R-14.5 ten domains, in a fixed, repeatable order, and that
+// exactly the eleven ratified domains (R-14.5's ten plus R-16.51's
+// `policy`), in a fixed, repeatable order, and that
 // every switch consumer of DomainID (domainLayoutExhaustiveSwitch below)
 // compiles exhaustively — golangci-lint's `exhaustive` analyzer (R-14.101)
 // is the enforcement layer that catches a forgotten case at lint time; this
-// test proves the same ten values at run time.
+// test proves the same eleven values at run time.
 func TestDomainLayout_AllDomainsDeterministic(t *testing.T) {
 	want := []storage.DomainID{
 		storage.DomainContext, storage.DomainMemory, storage.DomainAudit,
 		storage.DomainSecrets, storage.DomainSessions, storage.DomainConfig,
 		storage.DomainRetrieval, storage.DomainBlobs, storage.DomainQueue,
-		storage.DomainJobs,
+		storage.DomainJobs, storage.DomainPolicy,
 	}
 	if len(storage.AllDomains) != len(want) {
 		t.Fatalf("AllDomains has %d entries, want %d", len(storage.AllDomains), len(want))
@@ -61,13 +63,13 @@ func TestDomainLayout_AllDomainsDeterministic(t *testing.T) {
 // consumer (Bootstrap, StorageHealthCheck) must write: golangci-lint's
 // `exhaustive` analyzer fails the build if a case is missing here, which
 // is the point — a forgotten R-14.5 domain becomes a lint failure, not a
-// silent gap. Returns true for every one of the ten recognized IDs.
+// silent gap. Returns true for every one of the eleven recognized IDs.
 func domainLayoutExhaustiveSwitch(id storage.DomainID) bool {
 	switch id {
 	case storage.DomainContext, storage.DomainMemory, storage.DomainAudit,
 		storage.DomainSecrets, storage.DomainSessions, storage.DomainConfig,
 		storage.DomainRetrieval, storage.DomainBlobs, storage.DomainQueue,
-		storage.DomainJobs:
+		storage.DomainJobs, storage.DomainPolicy:
 		return true
 	}
 	return false
