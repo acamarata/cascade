@@ -99,6 +99,87 @@ egress-time substitution, the team capability and grant wiring, context
 assembly and auto-advance enforcement are each their own subsystem, and
 none of them are reachable from this package.
 
+## Embed pipeline
+
+Package home: [`internal/retrieval/embed`](../../internal/retrieval/embed).
+
+The embed pipeline is the write half of retrieval. It takes the chunks the
+ingest stage produced for one corpus, embeds them, and writes the vectors
+into that corpus's vector namespace, which is where the query-time
+embedding leg reads them from.
+
+### Batching
+
+Chunks are grouped and embedded a batch at a time through the `Embedder`
+seam, never one call per chunk. A per-item call dominates wall time on
+every real embedding backend, so the batch is the unit of work: the
+pipeline groups, the provider embeds, and the results come back in input
+order.
+
+### Content-hash dedupe
+
+A chunk's id is the hash of its content, so "have we embedded this
+already" is answerable without re-embedding anything. The pipeline keeps a
+ledger of which content it has embedded, into which namespace, under which
+model, and skips anything already there.
+
+The consequences are worth stating plainly, because embedding is the
+expensive step:
+
+- Re-running over an unchanged corpus makes no embedding calls at all and
+  writes no vectors. It is a no-op.
+- Editing a file changes only the chunks that actually changed; the rest
+  keep their ids and are skipped.
+- Identical content appearing twice, in one run or at two paths, is
+  embedded once.
+- The same content in two corpora is embedded once per corpus, because
+  each corpus's index holds its own copy.
+
+Vectors are written as insert-or-replace keyed by the chunk id, so even a
+redundant write cannot produce a duplicate row.
+
+### One model per namespace
+
+A vector namespace holds exactly one embedding space. The first write into
+a namespace binds it to the model that produced the vectors, and every
+later write is checked against that binding: a different model, or the
+same model at a different vector width, is refused and nothing is written.
+
+This is a refusal rather than a warning because the failure is otherwise
+undetectable. Similarity between vectors from two unrelated embedding
+spaces returns a perfectly plausible number; nothing downstream can tell
+that the number is meaningless. Switching models therefore means indexing
+into a new namespace, or re-indexing the existing one, and never mixing.
+
+### What a failed run leaves behind
+
+Batches commit one at a time. A batch that fails, at the embedder or at
+the vector store, writes no vectors and records nothing in the ledger, so
+no half-written batch lands. Batches that already committed stay
+committed, and the ledger names exactly those, so re-running resumes at
+the failed batch and re-embeds nothing that already succeeded.
+
+The write order within a batch is vectors first, ledger second. An
+interruption between the two leaves vectors that the ledger does not know
+about, so the next run embeds them again and replaces the same rows:
+wasted work, never a gap. The other order would leave a ledger entry with
+no vector behind it, and every later run would skip content the index does
+not actually hold.
+
+### Error paths
+
+| Situation | Result |
+| --- | --- |
+| No chunks | A no-op. No provider call, no write, no error. An ingest that produced nothing is an ordinary outcome. |
+| Corpus not fully classified | Refused as invalid input before any work. There is no default classification. |
+| Chunk id is not its content's hash | Refused as an integrity failure. Dedupe and the vector key both rest on that being true, so it is verified rather than trusted. |
+| Embedder fails | Reported as unavailable, with the count of what committed before it. |
+| Embedder returns the wrong count, model, or vector width | Refused as an integrity failure; that batch writes nothing. |
+| Vector store fails | Reported as unavailable; that batch writes nothing. |
+
+Nothing in this pipeline reaches the network. An embedding backend that
+does is an `Embedder` implementation, and the network call belongs there.
+
 ## RRF fusion
 
 Package homes: [`internal/retrieval/rrf`](../../internal/retrieval/rrf) for the
