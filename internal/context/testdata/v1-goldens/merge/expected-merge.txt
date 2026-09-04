@@ -1,0 +1,54 @@
+# Expected merge of tier-gci.md .. tier-pai.md, written by hand from the
+# SPECIFICATION's own words (R-14.15 precedence + R-14.16 section grammar),
+# NOT generated from internal/context's output. See ../README.md for how
+# each line was derived and for the v1 provenance of the input files.
+#
+# sections: one line per surviving MergedSection, in emission order,
+#           "<ordinal> <ROLE> <heading>"; a preamble is written (preamble).
+# dropped:  one line per input block that did NOT survive, with the tier
+#           that beat it. Every block of every input file appears in exactly
+#           one of the two lists — nothing may vanish unaccounted for.
+
+sections
+0 GCI (preamble)
+0 GCI Cascade Hierarchy
+0 GCI Orchestration Doctrine
+0 GCI Behavioral Doctrine
+0 GCI Engineering Quality Doctrine
+0 GCI Process and Phase Doctrine
+0 GCI Hard Rules Index
+0 GCI File Operations
+0 GCI Writing Quality
+0 GCI No AI Attribution (Hard Rule)
+1 ASI (preamble)
+1 ASI Cascade Position
+1 ASI Product Identity
+1 ASI Repository Inventory
+1 ASI Backend Adapter
+1 ASI Shared Infrastructure
+1 ASI SPORT Paths
+1 ASI Phase State
+1 ASI Inbox
+1 ASI Cross-Repo Contracts
+1 ASI Credentials
+2 PPI (preamble)
+2 PPI Project Identity
+2 PPI Tech Stack
+2 PPI Source Layout
+2 PPI Environment Variables
+2 PPI Master Lists
+2 PPI Task Pipeline
+2 PPI QA Gates
+2 PPI Memory
+3 PRI (preamble)
+3 PRI Repository Identity
+3 PRI Repository Rules
+3 PRI Master List
+4 PAI (preamble)
+4 PAI App Identity
+4 PAI App-Specific Rules
+
+dropped
+2 PPI Cascade Position -> won by ASI
+3 PRI Cascade Position -> won by ASI
+4 PAI Cascade Position -> won by ASI

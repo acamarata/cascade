@@ -171,13 +171,8 @@
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
-    "reason": "The projection is the memory store's derived read side, built one ticket before the surfaces that run it. Nothing that ships constructs one yet because the memory CLI verbs and the recall fusion path are later tickets; both need a projection to exist before they can query or schedule it, which is why it lands first. It must not stay unconstructed once either exists, because a projection nothing runs indexes nothing.",
-    "expected_caller": "the memory CLI verbs (04-PEWS-PLAN-W1-W3.md Wave 2 Epic G S-13.T3), which run the projection behind remember/recall, and the recall fusion path (Epic F S-11), which queries the rows it writes"
-  },
-  {
-    "symbol": "internal/memory.NewFileStore",
-    "reason": "This ticket delivers the files-first memory store itself: the record types, the on-disk format and the CRUD surface. Nothing constructs a store yet because the surfaces that would are later tickets in the same sprint, which this one is the chain head for. Building the store before its callers is the right order; leaving it unconstructed once the CLI verb exists would not be.",
-    "expected_caller": "the memory CLI verbs (04-PEWS-PLAN-W1-W3.md Wave 2 Epic G S-13.T3, memory.remember / memory.recall), and the database projection built over the same tree (Epic G S-13.T2), each of which constructs a store rooted at the configured memory path"
+    "reason": "The projection is the memory store's derived read side. The memory CLI verbs have now landed (P1-E07-W2-S13-T3) and deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. So the remaining gap is one caller, not two, and it is named below. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
+    "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
   },
   {
     "symbol": "internal/audit.HashParams",
@@ -228,5 +223,25 @@
     "symbol": "providers/localvector.New",
     "reason": "The local vector provider. Same gap: no shipping path resolves a vector provider by configured name yet.",
     "expected_caller": "the provider resolution path, alongside the embed pipeline's consumer"
+  },
+  {
+    "symbol": "internal/retrieval/rrf.Rerank",
+    "reason": "The optional post-fusion reranker stage. It is off by default (retrieval.reranker.enabled = false) and no Reranker implementation exists anywhere in the tree yet, so nothing that ships can call it with a usable configuration. The stage was built before its driver deliberately: it gives the api-backed reranker a fixed seam to land against, and its security properties are the ones worth fixing before a real implementation exists rather than after.",
+    "expected_caller": "the recall command surface, once a Reranker driver is registered (Epic J sprint 19 ticket 6, wave 3)"
+  },
+  {
+    "symbol": "internal/policy.NewMemoryRegistry",
+    "reason": "P1-E09-W2-S17-T1 delivers the capability registry, grant model and TEAM carrier as internals only; its files_scope is internal/policy, and the contract states explicitly that daemon-boot wiring of the production registry singleton lands with the consuming daemon ticket. The in-memory registry is a real, complete implementation (Art.1), not a stub — it is simply not yet constructed by the composition root.",
+    "expected_caller": "the daemon composition root that builds the policy registry at boot from the `policy` storage domain, and the policy CLI/RPC surface (04 §Epic I S-18.T6)"
+  },
+  {
+    "symbol": "internal/policy.NewStoreGrants",
+    "reason": "The B-layer-backed grant store built by P1-E09-W2-S17-T1. It is exercised end to end against a real providers/sqlite database in its own tests; what is missing is only the composition root that opens the store and hands it in, which the contract places outside this ticket's files_scope.",
+    "expected_caller": "the daemon composition root, alongside NewMemoryRegistry; then the policy evaluation engine (S-17.T2) and the policy CLI/RPC surface (S-18.T6)"
+  },
+  {
+    "symbol": "internal/policy.NewTeamCarrier",
+    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
+    "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
   }
 ]
