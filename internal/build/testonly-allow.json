@@ -1,5 +1,10 @@
 [
   {
+    "symbol": "internal/context.Discover",
+    "reason": "This ticket delivers role-anchored tier discovery and the TierRole/TierRecord types only; merge/precedence semantics over the resolved []TierRecord (and the harness-generation or CLI surface that would call Discover for a working directory) are an explicitly deferred follow-on ticket, not part of this one's scope.",
+    "expected_caller": "the tier-merge ticket that consumes []TierRecord (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T2), or the command/composition-root surface built on top of it"
+  },
+  {
     "symbol": "internal/rpc.ElevationMiddleware",
     "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
     "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
@@ -23,36 +28,6 @@
     "symbol": "internal/runtime.DaemonlessElevationPrecondition",
     "reason": "Evaluates the injected precondition for the daemonless guard and shares its fate.",
     "expected_caller": "the daemonless execution path, once an elevated verb can be invoked without a daemon"
-  },
-  {
-    "symbol": "internal/storage/migrate.Apply",
-    "reason": "VERIFIED GAP, not merely pending. The sqlite driver takes a Migrator seam that defaults to nil and its own doc says the real migrator is wired by the composition root. Nothing wires it, so a shipped daemon creates only the base table and applies no migration. Harmless while the base schema is the whole schema; a silent data problem the first time a migration exists.",
-    "expected_caller": "the composition root that opens the store, cmd/cascade/daemon_unix_run.go openRuntimeStore, which must pass a real Migrator"
-  },
-  {
-    "symbol": "internal/storage.Bootstrap",
-    "reason": "Storage bootstrap is not on the daemon start path, which opens the sqlite driver directly. Same family as the migrator gap above and should be resolved with it.",
-    "expected_caller": "the composition root that opens the store"
-  },
-  {
-    "symbol": "internal/runtime.NewStoreAuditRecorder",
-    "reason": "The audit recorder is built and tested but not attached to any store the daemon opens, so no audit records are written by a running daemon.",
-    "expected_caller": "the composition root that opens the store"
-  },
-  {
-    "symbol": "internal/runtime.NewHotReloader",
-    "reason": "Config hot reload is built and tested and not started by the daemon, so a config change is not picked up by a running process.",
-    "expected_caller": "the daemon run path in cmd/cascade/daemon_unix.go"
-  },
-  {
-    "symbol": "internal/runtime.NewReloadWatcher",
-    "reason": "The filesystem watcher behind hot reload. Shares the reloader's fate.",
-    "expected_caller": "the daemon run path, alongside NewHotReloader"
-  },
-  {
-    "symbol": "internal/events/scheduler.RegisterRetentionJobs",
-    "reason": "Retention jobs are defined but never registered with a running scheduler, so retention does not run in a shipped daemon.",
-    "expected_caller": "the daemon run path where the scheduler is started"
   },
   {
     "symbol": "internal/runtime.NewBaselineChecker",
@@ -188,5 +163,10 @@
     "symbol": "providers/postgres.Open",
     "reason": "The postgres provider is selectable by configuration, but no shipped code path resolves a provider by name yet, so nothing constructs it. Postgres is therefore unreachable in a running daemon regardless of configuration.",
     "expected_caller": "the provider resolution path that maps a configured driver name to its Open function"
+  },
+  {
+    "symbol": "internal/retrieval.ChunkerFor",
+    "reason": "This ticket (ingest/chunk pipeline) ships MarkdownChunker and CodeChunker plus the ChunkerFor extension-to-chunker selector, but the file-system walk that reads real files off disk and dispatches them into ChunkerFor is a separate, not-yet-built ticket (T2 owns the storage write path per this ticket's own HOW section). Nothing that ships walks a directory and calls ChunkerFor yet.",
+    "expected_caller": "the ingest-walk entry point that reads a repo's files and calls ChunkerFor(path) before Chunk-ing each one, landing with the T2 FTS5-indexing ticket"
   }
 ]

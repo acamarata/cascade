@@ -68,24 +68,22 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 	}
 	defer func() { _ = logProvider.Close() }()
 
-	store, closeStore, err := openRuntimeStore(ctx, paths)
+	store, rawDB, closeStore, err := openRuntimeStore(ctx, paths, deps.Clock)
 	if err != nil {
 		return err
 	}
 	defer closeStore()
 
 	bus := events.New(store, deps.Clock)
-
-	if _, err := runtime.Scan(ctx, runtime.RecoveryOptions{
-		PidfilePath: daemon.PIDFilePath(paths),
-		SocketPath:  settings.SocketPath,
-		Clock:       deps.Clock,
-		Log:         logProvider.Logger(),
-		Bus:         &runtimeEventBusAdapter{bus: bus},
-		Registry:    runtime.NewStoreDomainRegistry(store),
-	}); err != nil {
+	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
 		return err
 	}
+
+	cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
+	if err != nil {
+		return err
+	}
+	defer cleanupBackground()
 
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings)
 	if err != nil {

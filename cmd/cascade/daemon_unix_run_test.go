@@ -77,9 +77,16 @@ func nonexistentExecutable(t *testing.T) func() (string, error) {
 // runtime.Load's own ctx.Err() check would reject before ever reaching
 // daemon.Run) makes Run's internal select fire on ctx.Done() once the
 // deadline passes, so this returns nil without a real termination signal.
+// The budget is 300ms, not a tighter value: openRuntimeStore's real
+// Migrator (R-14.175 wiring) now does real, ctx-bound disk I/O during
+// Open — migrate.Apply's ledger bootstrap plus storage.Bootstrap's ten
+// R-14.5 domain anchor tables — and that work must have room to finish
+// before this test's deadline fires, or ctx expiring mid-setup (a
+// legitimate outcome, just not the one this test exists to prove) reads
+// as a setup error instead of daemon.Run's own ctx.Done() select firing.
 func TestPlatformDaemonRun_ReturnsOnContextCancel(t *testing.T) {
 	deps := newRunTestDeps(t, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	if err := platformDaemonRun(ctx, deps); err != nil {
 		t.Fatalf("platformDaemonRun with a bounded-timeout context: %v", err)

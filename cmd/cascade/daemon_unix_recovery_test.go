@@ -82,7 +82,7 @@ func TestPlatformDaemonRun_OrphanedAdvisoryLock_CleanedUpByProductionPath(t *tes
 	paths := deps.Paths
 
 	pid := deadPid(t)
-	seedStore, closeSeed, err := openRuntimeStore(context.Background(), paths)
+	seedStore, _, closeSeed, err := openRuntimeStore(context.Background(), paths, deps.Clock)
 	if err != nil {
 		t.Fatalf("openRuntimeStore (seed): %v", err)
 	}
@@ -97,7 +97,7 @@ func TestPlatformDaemonRun_OrphanedAdvisoryLock_CleanedUpByProductionPath(t *tes
 		t.Fatalf("platformDaemonRun: %v", err)
 	}
 
-	verifyStore, closeVerify, err := openRuntimeStore(context.Background(), paths)
+	verifyStore, _, closeVerify, err := openRuntimeStore(context.Background(), paths, deps.Clock)
 	if err != nil {
 		t.Fatalf("openRuntimeStore (verify): %v", err)
 	}

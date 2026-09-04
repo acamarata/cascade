@@ -29,8 +29,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -38,10 +36,8 @@ import (
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
-	"github.com/acamarata/cascade/providers/sqlite"
 )
 
 // runtimeEventBusAdapter satisfies runtime.EventBus's string-kind Publish
@@ -60,8 +56,9 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 	return err
 }
 
-// openRuntimeStore opens the real on-disk cascade.db (providers/sqlite's
-// modernc-sqlite driver) under paths.DataDir() — the SAME paths value
+// openRuntimeStore is now defined in daemon_unix_store.go, alongside the
+// real Migrator wiring (migrate.Apply + storage.Bootstrap) it closes
+// over. It still opens paths.DataDir()/cascade.db — the SAME paths value
 // loadDaemonConfig already resolved from deps.Paths, so this never
 // diverges from where the rest of platformDaemonRun looks for CASCADE_HOME
 // (see platformDaemonRun's doc comment for why that must stay deps.Paths,
@@ -70,16 +67,6 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // registry (built over this same store) as an input, not an output. See
 // runtime.StoreDomainRegistry's doc comment for why no such registry
 // existed anywhere in the tree before now.
-func openRuntimeStore(ctx context.Context, paths runtime.PathProvider) (provider.Store, func(), error) {
-	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "create data directory")
-	}
-	driver, err := sqlite.Open(ctx, filepath.Join(paths.DataDir(), "cascade.db"))
-	if err != nil {
-		return nil, nil, err
-	}
-	return driver, func() { _ = driver.Close() }, nil
-}
 
 // buildRPCServer constructs the daemon's real IPC server: POST /rpc
 // through an rpc.Registry carrying the MCP dispatcher and the status.get
@@ -161,4 +148,20 @@ func relaunchExecArgs(deps daemonDeps) func() []string {
 		}
 		return append([]string{execPath}, relaunchArgs()...)
 	}
+}
+
+// runRecoveryScan runs the real crash-recovery scan (runtime.Scan) over
+// store's DomainRegistry — split out of platformDaemonRun under
+// Art.10.3's 50-line function cap (mechanical relocation, same
+// composition-root concern, not a new one).
+func runRecoveryScan(ctx context.Context, paths runtime.PathProvider, settings daemon.Settings, deps daemonDeps, logProvider *runtime.LogProvider, bus *events.Bus, store provider.Store) error {
+	_, err := runtime.Scan(ctx, runtime.RecoveryOptions{
+		PidfilePath: daemon.PIDFilePath(paths),
+		SocketPath:  settings.SocketPath,
+		Clock:       deps.Clock,
+		Log:         logProvider.Logger(),
+		Bus:         &runtimeEventBusAdapter{bus: bus},
+		Registry:    runtime.NewStoreDomainRegistry(store),
+	})
+	return err
 }
