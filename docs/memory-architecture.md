@@ -293,3 +293,107 @@ written alongside them answer similarity queries, so a memory record takes
 part in hybrid recall from the moment it is written. Ranked results are
 ordered deterministically, so the same query over the same store returns
 the same answer on any machine.
+
+## SOUL store
+
+The SOUL is the persistent identity document: the system's own model of the
+person it serves. It lives in two files under `{CASCADE_HOME}/memory/soul/`.
+
+| File | What it holds | Who writes it |
+|---|---|---|
+| `SOUL.md` | The document body, plain markdown, no header | The store, and the user's own editor |
+| `soul-ledger.json` | Format version, version counter, content digest, reconcile pointer, audit log | The store only |
+
+The body is a plain file with no frontmatter because it is the one file a
+person is expected to open and edit. Everything machine-managed lives in the
+ledger beside it, out of the way.
+
+### Three routes, one write path
+
+A change reaches the SOUL by exactly three routes, and every one of them
+calls the same internal `applyEdit`. That function is the only place in the
+package that moves the version counter or appends to the audit log.
+
+| Route | Reached by | Recorded as |
+|---|---|---|
+| a | `cascade memory soul edit` (or `--content <file>`) | `cli` |
+| b | An edit made to `SOUL.md` in any editor, adopted on load | `file-reconcile` |
+| c | `SoulStore.EditViaChat`, the chat-mediated API | `chat` |
+
+There is no fourth route. Every accepted write increases the version by
+exactly one and appends exactly one audit entry, and the version is
+monotonic *across* routes, not per route.
+
+### Version semantics and the audit log
+
+An audit entry is `{version, route, edited_at, delta_hash}` and carries no
+document text at all. `delta_hash` is the BLAKE3 digest of
+`"<previous content hash>:<new content hash>"` — the digest of the
+*transition*, not of the content — so the log is verifiable (the same change
+always hashes the same way) while the document is not recoverable from it.
+This matters because the whole log ships in every export: an entry that
+carried a body or a diff would leak the user's identity document twice.
+
+### Divergence detection (route b)
+
+`SoulStore.Get` and `DetectDivergence` hash the file on disk and compare it
+against the digest the ledger recorded. Three outcomes:
+
+- **Agree.** Nothing moves. No version, no entry, no event, no note. Only the
+  bookkeeping pointer that records "the two sides were seen to agree".
+- **Clean external edit** (the file changed; the store's last write had been
+  seen on disk). The file's content is what the user meant, so it is adopted
+  through `applyEdit(route=file-reconcile)`: version bumped, entry appended.
+  The user's own edit becomes a recorded change rather than an untracked one.
+- **Conflict** (the file changed *and* the store's last write had not been
+  seen on disk). Both sides may have moved. Nothing is merged, adopted or
+  discarded: a typed `memory.soul.diverged` event goes to the bus, a
+  `divergence-note.json` is left for `cascade doctor`, and the call refuses
+  with `ErrSoulDiverged`. `soul show` reports it and still prints the file.
+
+Neither the event nor the note carries soul text or a machine path; both name
+versions, digests and an instant, because both are read by things that have
+no business seeing the document.
+
+A conflict is not a dead end. Route (b) refuses to resolve one on its own,
+but an explicit write — `soul edit` or the chat API — is a person saying what
+the document should now say, so it is honoured, and the divergence is on the
+bus and in the note before that write lands.
+
+### Write ordering
+
+`applyEdit` writes `SOUL.md` first and the ledger second. The reverse order
+would leave a ledger claiming a version and an audit entry for content that
+is not on disk: a confident but *wrong* model of the user. With this order an
+interruption leaves real content on disk and a ledger that has not claimed
+it, which the next read reports as a divergence — the content survives and
+nothing is claimed that was not written.
+
+### Export
+
+`cascade memory soul export` produces exactly this envelope and nothing else:
+
+```json
+{
+  "schema_version": 1,
+  "exported_at": "2026-03-01T12:00:00Z",
+  "soul": { "body": "…", "schema": "cascade.soul/v1" },
+  "audit_entries": [
+    { "version": 1, "route": "cli", "edited_at": "…", "delta_hash": "…" }
+  ]
+}
+```
+
+No other memory record, no file path, no environment or machine detail. This
+is the most personal file cascade produces, so the field set is asserted in
+tests against the actual exported bytes, with canaries planted in the same
+store and the same directory to prove none of them travels with it.
+
+### Automation parity
+
+`soul edit` is the only interactive verb in the memory tree. Its
+non-interactive equivalent is `soul edit --content <file>`, which opens no
+editor and reads no environment. With `CASCADE_NO_INPUT=1` set, opening an
+editor is a hard error raised *before* any subprocess is created, so an
+automated run gets a refusal it can read instead of a process waiting on a
+terminal that is not there.

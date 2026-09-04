@@ -27,6 +27,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -80,9 +81,50 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 //
 // Without this call every memory verb would dial a socket whose far end
 // has never heard of memory.*.
-func registerMemoryHandler(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) {
-	memory.NewHandler(memory.NewFileStore(memoryStoreDir(paths), clock), clock).Register(registry)
+func registerMemoryHandler(
+	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus,
+) {
+	base := memoryStoreDir(paths)
+	memory.NewHandler(memory.NewFileStore(base, clock), clock).Register(registry)
+	memory.NewSoulHandler(memory.NewFileSoulStore(base, clock, soulDivergenceSink{bus})).Register(registry)
 }
+
+// soulDivergenceSink publishes the SOUL store's conflict event on the real
+// bus. It is the composition root's adapter for the same reason
+// runtimeEventBusAdapter above is: internal/memory declares the sink it
+// needs structurally and never imports internal/events, so the memory
+// store stays testable with no bus at all.
+//
+// The published payload is the event's own fields — versions, digests, an
+// instant — and carries no soul text. That is not incidental: a bus event
+// fans out to every subscriber, and the SOUL is the one document in the
+// system that must not travel to a subscriber that only asked to know
+// something changed.
+type soulDivergenceSink struct {
+	bus *events.Bus
+}
+
+// SoulDiverged publishes ev in the memory namespace. A nil bus discards
+// the event, which is the documented no-bus configuration rather than a
+// nil-pointer panic inside a store the daemon otherwise serves fine.
+func (s soulDivergenceSink) SoulDiverged(ctx context.Context, ev memory.DivergenceEvent) error {
+	if s.bus == nil {
+		return nil
+	}
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	_, err = s.bus.Publish(ctx, soulEventNamespace, events.EventKind(ev.EventName()),
+		soulEventSource, payload)
+	return err
+}
+
+// The bus coordinates the SOUL's divergence event is published under.
+const (
+	soulEventNamespace = "memory"
+	soulEventSource    = "internal/memory"
+)
 
 // buildRPCServer constructs the daemon's real IPC server: POST /rpc
 // through an rpc.Registry carrying the MCP dispatcher and the status.get
@@ -131,7 +173,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// The memory.* namespace (G/S-13.T3). Registered here for the same
 	// reason status.get is: a handler the composition root never mounts is
 	// a subsystem that ships built, tested and unreachable.
-	registerMemoryHandler(registry, paths, clock)
+	registerMemoryHandler(registry, paths, clock, bus)
 
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil

@@ -1,8 +1,9 @@
 // Purpose: `cascade memory`'s rendering half — the human tables for
 //
-//	remember/recall/forget/list, the --json payload shapes (the same
-//	structs, so the two views cannot drift apart), and scrubDiagnostic,
-//	the one filter every error leaving this command passes through.
+//	remember/recall/forget/list and for soul show/edit/export, the --json
+//	payload shapes (the same structs, so the two views cannot drift
+//	apart), and scrubDiagnostic, the one filter every error leaving this
+//	command passes through.
 //
 // Inputs: decoded memory.* RPC results; error values from the store, the
 //
@@ -23,6 +24,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -172,4 +174,51 @@ func scrubDiagnostic(err error) error {
 		kind = cascade.KindInternal
 	}
 	return cascade.New(kind, scrubText(err.Error()))
+}
+
+// soulShowView renders memory.soul.show.
+type soulShowView struct {
+	memory.SoulShowResult
+}
+
+// String prints the document, then the version, then — only when the store
+// says so — the divergence warning. The warning is not silently folded
+// into the body: a reader must be able to tell a current document from one
+// the file on disk has moved past.
+func (v soulShowView) String() string {
+	out := fmt.Sprintf("%s\n\nsoul version %d", v.Body, v.Version)
+	if v.Diverged {
+		out += "\nwarning: the soul file and the store both changed since the last " +
+			"reconcile; neither side was applied"
+	}
+	return out
+}
+
+// soulEditView renders memory.soul.edit.
+type soulEditView struct {
+	memory.SoulEditResult
+}
+
+// String reports the version the write produced, which is the proof the
+// change was recorded rather than merely accepted.
+func (v soulEditView) String() string {
+	return fmt.Sprintf("soul updated to version %d", v.Version)
+}
+
+// soulExportView renders memory.soul.export as indented JSON.
+type soulExportView struct {
+	memory.SoulExport
+}
+
+// String renders the envelope. Marshalling cannot fail for this struct —
+// every field is a string, an int, a time or a slice of those — so the
+// error branch returns a message rather than swallowing anything: an
+// export that printed a partial envelope would be worse than one that
+// printed none.
+func (v soulExportView) String() string {
+	data, err := json.MarshalIndent(v.SoulExport, "", "  ")
+	if err != nil {
+		return "soul export could not be rendered"
+	}
+	return string(data)
 }
