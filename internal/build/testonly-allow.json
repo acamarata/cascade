@@ -258,5 +258,20 @@
     "symbol": "internal/policy.NewApprovalQueue",
     "reason": "The approval queue ships before the surface that drives it. Its consumer is the CLI/RPC approval surface (S-18.T6), which is the ticket that constructs the queue at the daemon composition root and exposes list/approve/deny; the policy engine reaches the queue through the injected ApprovalQueue interface (Engine.WithApprovalQueue), never through this constructor. Building the queue and its single-use ledger before the surface is the right order, since the surface is specified against this queue's types; shipping an approval surface with no queue behind it would not be.",
     "expected_caller": "the daemon composition root in cmd/cascade that wires the approval surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic I S-18.T6), in the SAME change that registers the first approval command; retire this entry then"
+  },
+  {
+    "symbol": "internal/secrets.NewDetector",
+    "reason": "The detector is built before the boundaries that scan. This ticket (P1-E08-W2-S15-T3) ships detection, scoring and quarantine together with the operator's review and recovery verbs, but the two places content is actually scanned - the memory write path and the recall pipeline - are owned by other tickets in this sprint and wave, and are being built in parallel. Wiring a scanner into a boundary that is itself mid-change would couple two lanes for no gain; the detector is a pure function over bytes, so the boundary calls it when the boundary is ready.",
+    "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15 T4's Rewriter, which consumes DetectionHit.SuggestedName as its typed-tag NAME ref); retire this entry together with internal/secrets.DefaultRegistry"
+  },
+  {
+    "symbol": "internal/secrets.DefaultRegistry",
+    "reason": "The pattern table is only constructed by whoever constructs a Detector, so it becomes production-reachable in exactly the same change that retires the NewDetector entry. Splitting the table into its own reviewable value is what makes 'what does cascade consider a credential' answerable in one file; it is not a separate unwired feature.",
+    "expected_caller": "the same composition point as internal/secrets.NewDetector (S-15.T4's Rewriter / the memory-write scan boundary); retire the two entries together"
+  },
+  {
+    "symbol": "internal/secrets.ParseDetectionConfig",
+    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today.",
+    "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry"
   }
 ]

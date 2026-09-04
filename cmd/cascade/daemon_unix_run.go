@@ -83,10 +83,19 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // has never heard of memory.*.
 func registerMemoryHandler(
 	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus,
+	admin *memory.AdminHandler,
 ) {
 	base := memoryStoreDir(paths)
 	memory.NewHandler(memory.NewFileStore(base, clock), clock).Register(registry)
 	memory.NewSoulHandler(memory.NewFileSoulStore(base, clock, soulDivergenceSink{bus})).Register(registry)
+	// admin is nil only where no scheduler was wired (the Windows daemon
+	// stub, and any future caller that serves RPC without background
+	// jobs). Registering memory.consolidate against a nil handler would
+	// turn the verb into a panic at the far end of an RPC, so the verb is
+	// simply absent there and the CLI reports an unknown method.
+	if admin != nil {
+		admin.Register(registry)
+	}
 }
 
 // soulDivergenceSink publishes the SOUL store's conflict event on the real
@@ -152,7 +161,7 @@ const (
 // composition-root wiring this closes: without it, status.get would exist,
 // be tested, and be unreachable from a live daemon, exactly the pattern
 // R-14.166 named and forbade going forward.
-func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider) (*http.Server, *daemon.Manifest, *int64, error) {
+func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
 	}
@@ -173,7 +182,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// The memory.* namespace (G/S-13.T3). Registered here for the same
 	// reason status.get is: a handler the composition root never mounts is
 	// a subsystem that ships built, tested and unreachable.
-	registerMemoryHandler(registry, paths, clock, bus)
+	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
 
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil

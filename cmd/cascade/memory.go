@@ -45,12 +45,11 @@ import (
 
 // memoryDialTimeout bounds the whole dial+request+response round trip
 // against the daemon's local unix socket. A fixed duration literal, not a
-// clock read (Art.7.3 governs bare time.Now/After/Tick/Sleep; a static
-// timeout value is neither).
+// clock read (Art.7.3 governs bare time.Now/After/Tick/Sleep).
 const memoryDialTimeout = 5 * time.Second
 
-// memoryDefaultK is `memory recall`'s default result cap. A recall with no
-// bound would page a whole store into a terminal; ten is a screenful.
+// memoryDefaultK is `memory recall`'s default result cap: a recall with
+// no bound would page a whole store into a terminal.
 const memoryDefaultK = 10
 
 // memoryCallFunc performs one JSON-RPC call against the daemon at
@@ -126,9 +125,9 @@ func newMemoryCmd(deps memoryDeps) *cobra.Command {
 			"source of truth for everything cascade remembers.\n\n" +
 			"Every verb but `soul edit` is non-interactive and takes its input\n" +
 			"from flags and arguments only; `soul edit` opens $EDITOR and has\n" +
-			"a --content <file> equivalent for automation. `memory forget`\n" +
-			"destroys a record; run it with --dry-run first to see exactly\n" +
-			"what it would retire.",
+			"a --content <file> equivalent for automation. `memory forget` and\n" +
+			"`memory consolidate` retire records; run either with --dry-run\n" +
+			"first to see exactly what it would retire.",
 	}
 	cmd.AddCommand(
 		newMemoryRememberCmd(deps),
@@ -136,6 +135,7 @@ func newMemoryCmd(deps memoryDeps) *cobra.Command {
 		newMemoryForgetCmd(deps),
 		newMemoryListCmd(deps),
 		newMemorySoulCmd(deps),
+		newMemoryConsolidateCmd(deps),
 	)
 	return cmd
 }

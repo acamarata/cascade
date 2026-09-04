@@ -47,9 +47,13 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 	bus := events.New(store, clock)
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
 
-	sched, cleanup, err := startScheduler(ctx, store, rawDB, clock, bus, logger)
+	sched, admin, cleanup, err := startScheduler(
+		ctx, store, rawDB, paths, nil, clock, bus, logger)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
+	}
+	if admin == nil {
+		t.Fatal("startScheduler returned no memory AdminHandler, so memory.consolidate would be unreachable")
 	}
 	t.Cleanup(func() {
 		cancel()
@@ -60,7 +64,10 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledJobs: %v", err)
 	}
-	wantOwners := map[string]bool{"retention-prune": false, "retention-vacuum": false}
+	wantOwners := map[string]bool{
+		"retention-prune": false, "retention-vacuum": false,
+		memoryConsolidateOwner: false, memoryStalenessOwner: false,
+	}
 	for _, j := range jobs {
 		if _, ok := wantOwners[j.Owner]; ok {
 			wantOwners[j.Owner] = true
@@ -68,11 +75,11 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 	}
 	for owner, seen := range wantOwners {
 		if !seen {
-			t.Errorf("retention job owner %q not found in the running scheduler's ListScheduledJobs (%d jobs total)", owner, len(jobs))
+			t.Errorf("scheduled job owner %q not found in the running scheduler's ListScheduledJobs (%d jobs total)", owner, len(jobs))
 		}
 	}
 	if orphaned := sched.OrphanedJobs(); len(orphaned) != 0 {
-		t.Errorf("OrphanedJobs = %v, want none — a retention job registered against a different Scheduler than the one Activated would show up here", orphaned)
+		t.Errorf("OrphanedJobs = %v, want none — a job registered against a different Scheduler than the one Activated would show up here", orphaned)
 	}
 }
 

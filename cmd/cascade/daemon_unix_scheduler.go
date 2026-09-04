@@ -39,6 +39,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -84,18 +85,29 @@ func newSchedulerOwnerID() (string, error) {
 // caller is expected to have already cancelled ctx (or its parent)
 // before calling cleanup, matching every other platformDaemonRun
 // subsystem's shutdown order.
-func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, clock runtime.Clock, bus *events.Bus, logger *slog.Logger) (*scheduler.Scheduler, func(context.Context), error) {
+func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, paths runtime.PathProvider, cfg *runtime.Config, clock runtime.Clock, bus *events.Bus, logger *slog.Logger) (*scheduler.Scheduler, *memory.AdminHandler, func(context.Context), error) {
 	ownerID, err := newSchedulerOwnerID()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sched := scheduler.New(store, schedulerNamespace, clock, bus, ownerID, schedulerLeaseTTL)
 
 	if err := scheduler.RegisterRetentionJobs(ctx, sched, rawDB, storage.RetentionConfig{}, clock); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	// The memory maintenance jobs (G/S-13.T4) register on the SAME
+	// scheduler, before Activate, so they are scheduled rather than
+	// reported as orphaned. The AdminHandler this returns is the one the
+	// memory.consolidate verb must be served by: it shares the
+	// Consolidator — and therefore the re-entrancy guard — with the
+	// scheduled job, so a manual run and a background run can never be in
+	// flight over the same tree at once.
+	admin, err := registerMemoryJobs(ctx, sched, paths, cfg, clock, bus, logger)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	if _, err := sched.Activate(ctx); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	loopDone := make(chan struct{})
@@ -112,5 +124,5 @@ func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, cl
 			logger.Error("scheduler close failed", "error", err)
 		}
 	}
-	return sched, cleanup, nil
+	return sched, admin, cleanup, nil
 }

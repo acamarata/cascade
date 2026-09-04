@@ -397,3 +397,150 @@ editor and reads no environment. With `CASCADE_NO_INPUT=1` set, opening an
 editor is a hard error raised *before* any subprocess is created, so an
 automated run gets a refusal it can read instead of a process waiting on a
 terminal that is not there.
+
+## Consolidation and staleness
+
+Two background jobs maintain the store. Both run inside the daemon on the
+cron scheduler, both take their instants from the injected clock, and both
+are safe to run twice.
+
+### What consolidation is allowed to do
+
+Consolidation retires exact duplicates. It groups live records by
+`(kind, BLAKE3 of the normalized body)` and merges only groups whose
+bodies are byte-identical after normalization. Normalization folds line
+endings (`\r\n` and `\r` to `\n`), strips trailing spaces and tabs from
+each line, and trims leading and trailing blank lines. Nothing else folds:
+a changed word, a changed character, a changed indent, or the same body
+filed under a different kind all keep records apart.
+
+Nothing similar is ever merged. Embedding-distance clustering exists only
+behind `[memory].consolidation_embedding`, which is off by default and
+which this build **refuses** rather than silently downgrading to
+exact-hash grouping — the flag requires an index that is not present yet,
+and a caller who switched it on believes near-duplicates are being merged.
+
+The job never rewrites content. Every member of a group already says
+exactly the same thing, so there is nothing to merge into the survivor:
+the survivor's file is left untouched on disk and the others are
+tombstoned. A background job can take a duplicate away; it can never
+author a new sentence into a record the user wrote.
+
+The survivor is the member with the earliest `CreatedAt`, ties broken by
+canonical address. The oldest record is the one a user is most likely to
+remember writing.
+
+### Nothing is retired without an account of it
+
+Before any member is tombstoned, the job writes
+
+```
+{base}/consolidations/{kind}/{survivor}.consolidation.json
+```
+
+holding the body every member shared and, for each retired record, its
+address, description, scope reference, commit, supersedes reference,
+confidence, origin, session, timestamps, content hash and TTL. A retired
+record is fully reconstructible from that file. The account **accumulates**:
+a later run that retires another duplicate into the same survivor unions
+its members into the existing file rather than replacing it, and a file
+that cannot be parsed is refused rather than overwritten.
+
+### The crash contract
+
+The order is: write the account, then tombstone each member (the store
+itself writes a tombstone before removing a file), then emit the event.
+
+* Interrupted before the account lands — the tree is exactly as it was.
+  Every record is live, nothing to explain.
+* Interrupted during the account write — the previous account survives,
+  because the write is temp-plus-rename.
+* Interrupted between tombstones — some members are retired and some are
+  live, and the account already names every one of them. The next run
+  finishes the job.
+
+There is no state in which a half-written merge exists, because no content
+is ever rewritten.
+
+### Idempotency
+
+A second run over an already-consolidated tree forms no group of two,
+writes nothing, emits nothing, and returns
+`ConsolidationReport{Merged: 0, NoChange: true}`. Grouping order comes from
+a sorted key list, never from a map walk, so the same corpus always
+produces the same result on any machine.
+
+### Staleness is a heuristic and is treated as one
+
+The staleness scan flags records that nothing has updated in longer than
+`[memory].staleness_window_days` (30 days by default), judged on
+`Provenance.UpdatedAt`, falling back to `CreatedAt` for a record that was
+never rewritten. There is no recall-tracking field in the store, so a
+record that is read constantly and never edited will be flagged. That is
+precisely why the queue is advisory.
+
+The scan has exactly one power: it writes addresses into
+`{base}/staleness/{kind}.staleness.json`. It never edits a record, never
+tombstones one, never changes a confidence, and nothing in this build acts
+on the queue automatically. It is an input to review and a *candidate*
+list for the forget pipeline — a candidate is something a person decides
+about.
+
+**It is reversible.** Each scan recomputes the whole set from the tree
+rather than appending to what is already stored, so a record that has since
+been updated is dropped from the queue on the next scan with no manual
+step. Age is not wrongness, and "this looked old once" is not allowed to
+harden into a standing judgement about a user's memory.
+
+A scan that changes nothing writes no file and emits no event, and returns
+`StalenessReport{Queued: 0, Idempotent: true}`.
+
+### Events
+
+| Event | Payload |
+|---|---|
+| `memory.consolidated` | `{member_ids, consolidated_id, method, consolidated_at}` — the retired addresses and the survivor's. |
+| `memory.stale_queued` | `{stale_ids, queued_at}` — only the addresses *newly* queued by that scan. |
+
+Both payloads carry addresses and counts, never a record's body. A bus
+event fans out to every subscriber, and a subscriber that only asked to
+know a consolidation happened must not receive the text of the records it
+retired.
+
+A sink failure is non-fatal for both jobs. By the time an event is offered
+the work is already durable; failing the job afterwards would report work
+as undone that is in fact done.
+
+### Scheduling and exclusion
+
+Both jobs register on the daemon's cron scheduler at startup, as
+`memory-consolidate` and `memory-staleness`, at the schedules
+`[memory].consolidation_schedule` and `[memory].staleness_schedule`
+(`@every 24h0m0s` by default). Registration is real: the runnables the
+production composition root builds are the ones the tests fire.
+
+Exclusion between daemons is the scheduler's own advisory lock. A second
+daemon over the same store never acquires the lease, never activates, and
+therefore never ticks these jobs at all; a shared store across daemons is
+unsupported. Neither job takes a second lock of its own, which would be a
+parallel mechanism that could disagree with the first.
+
+Within one process, `cascade memory consolidate` and the scheduled job
+share one consolidator and one re-entrancy guard. A run that arrives while
+another is in flight stands down and reports `skipped`, rather than racing
+it or blocking a user's command behind a background job.
+
+### Config
+
+| Key | Default | Meaning |
+|---|---|---|
+| `memory.consolidation_schedule` | `@every 24h0m0s` | Cron spec for the consolidation job. |
+| `memory.staleness_schedule` | `@every 24h0m0s` | Cron spec for the staleness scan. |
+| `memory.staleness_window_days` | `30` | Age past which a record is flagged. |
+| `memory.consolidation_embedding` | `false` | Embedding clustering. Refused by this build. |
+
+A wrong type on any of these keys is a hard refusal of the section: a user
+who wrote a window must never be told a different one is running. The
+daemon logs the refusal and falls back to the documented defaults rather
+than failing to start, so a typo in a maintenance window cannot stop the
+memory store being served.

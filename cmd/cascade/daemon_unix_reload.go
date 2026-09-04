@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -101,10 +102,10 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // new concern). On a startScheduler failure this also stops the watcher
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
-func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (func(), error) {
+func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, func(), error) {
 	_, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// schedCtx is deliberately its own cancellation, not ctx directly:
@@ -114,14 +115,15 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	// returns. schedCancel, called from the returned cleanup, is what
 	// actually stops the scheduler's tick loop on shutdown.
 	schedCtx, schedCancel := context.WithCancel(ctx)
-	_, schedCleanup, err := startScheduler(schedCtx, store, rawDB, deps.Clock, bus, logProvider.Logger())
+	_, admin, schedCleanup, err := startScheduler(
+		schedCtx, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger())
 	if err != nil {
 		schedCancel()
 		watcher.Stop()
-		return nil, err
+		return nil, nil, err
 	}
 
-	return func() {
+	return admin, func() {
 		watcher.Stop()
 		schedCancel()
 		schedCleanup(context.Background())

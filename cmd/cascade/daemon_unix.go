@@ -79,13 +79,13 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 		return err
 	}
 
-	cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
+	memoryAdmin, cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
 	if err != nil {
 		return err
 	}
 	defer cleanupBackground()
 
-	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths)
+	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin)
 	if err != nil {
 		return err
 	}
