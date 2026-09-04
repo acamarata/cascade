@@ -34,6 +34,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/transport"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/plugin"
@@ -68,6 +69,21 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // runtime.StoreDomainRegistry's doc comment for why no such registry
 // existed anywhere in the tree before now.
 
+// registerMemoryHandler mounts the memory.* namespace on the daemon's RPC
+// router, rooted at memoryStoreDir (cmd/cascade/memory.go). It lives in
+// THIS file rather than beside the command because cmd/cascade may not
+// import internal/rpc outside the three composition-root files the
+// cmd-rpc-server-boundary rule exempts, and this file is one of them: a
+// command that reached for the server package would be one step from
+// hand-rolling its own outbound JSON-RPC, which is the thing the boundary
+// exists to prevent.
+//
+// Without this call every memory verb would dial a socket whose far end
+// has never heard of memory.*.
+func registerMemoryHandler(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) {
+	memory.NewHandler(memory.NewFileStore(memoryStoreDir(paths), clock), clock).Register(registry)
+}
+
 // buildRPCServer constructs the daemon's real IPC server: POST /rpc
 // through an rpc.Registry carrying the MCP dispatcher and the status.get
 // handler (D/S-07.T1), and GET /events through an SSEHandler bound to bus.
@@ -94,7 +110,7 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // composition-root wiring this closes: without it, status.get would exist,
 // be tested, and be unreachable from a live daemon, exactly the pattern
 // R-14.166 named and forbade going forward.
-func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings) (*http.Server, *daemon.Manifest, *int64, error) {
+func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
 	}
@@ -111,6 +127,11 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
 		return nil, nil, nil, err
 	}
+
+	// The memory.* namespace (G/S-13.T3). Registered here for the same
+	// reason status.get is: a handler the composition root never mounts is
+	// a subsystem that ships built, tested and unreachable.
+	registerMemoryHandler(registry, paths, clock)
 
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil

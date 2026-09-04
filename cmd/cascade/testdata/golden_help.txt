@@ -12,6 +12,7 @@ Available Commands:
   doctor         Diagnose the local cascade installation
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
+  memory         Remember, recall and forget memory records
   status         One-shot summary of the running daemon
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel

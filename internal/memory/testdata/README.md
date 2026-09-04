@@ -89,3 +89,36 @@ above report what the tests actually ran against.
 `internal/testdata/fuzz/FuzzFrontmatterParse/`, not here, per the module
 convention that every fuzz corpus shares that one home. See that
 directory's own README for seed-by-seed provenance.
+
+## `rpc-golden.json` — the memory.* wire recording (P1-E07-W2-S13-T3)
+
+`rpc-golden.json` is a RECORDING of one real `memory.remember` →
+`memory.recall` exchange, not a hand-written expectation. It was captured
+by `TestRPCGoldenRoundTrip` in
+`internal/memory/rpc_integration_test.go`, which serves the real
+`internal/rpc` Registry/Handler pipeline — the same one
+`cmd/cascade/daemon_unix_run.go`'s `buildRPCServer` builds — over a real
+unix socket and sends real HTTP/1.1 `POST /rpc` requests to it.
+
+| Field | Value |
+|---|---|
+| Tool | `net/http` (`http.Client` over a `net.Dialer` unix `DialContext`), no SDK, no hand-rolled framing |
+| Captured | 2026-09-04 |
+| Daemon | the in-process `rpc.NewHandler(registry)` server this repository ships, at the commit that landed P1-E07-W2-S13-T3 |
+| Store | `memory.NewFileStore` in `t.TempDir()`, with the frozen test clock (`2026-01-02T03:04:05Z`) |
+| Request 1 | `memory.remember`, id `"1"`, params `{"content":"the golden note","type":"project","name":"golden-note","provenance":"session-golden"}` |
+| Request 2 | `memory.recall`, id `"2"`, params `{"query":"golden","k":5}` |
+
+**Re-recording it.** Run the integration lane with
+`CASCADE_MEMORY_GOLDEN_UPDATE=1`:
+
+```
+go test -tags=integration -run TestRPCGoldenRoundTrip ./internal/memory/...
+```
+
+**One normalization, and why.** `server_version` is replaced with
+`<server_version>` before the comparison. It is the version of the binary
+that recorded the fixture, so pinning it would make the fixture assert the
+build rather than the wire shape, and every release would rewrite it for no
+behavioural reason. Every other byte — including the record's frozen
+timestamps and its BLAKE3 content hash — is compared literally.

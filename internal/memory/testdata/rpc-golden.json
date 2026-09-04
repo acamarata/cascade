@@ -1,0 +1,39 @@
+{
+  "recall": {
+    "id": "2",
+    "jsonrpc": "2.0",
+    "protocol_version": "1.0.0",
+    "result": {
+      "units": [
+        {
+          "Body": "the golden note",
+          "CommitSHA": "",
+          "Confidence": 1,
+          "Description": "",
+          "ExpiresAt": null,
+          "Kind": "project",
+          "Name": "golden-note",
+          "Provenance": {
+            "ContentHash": "050752c1125cdf07e6744b00c83fc2f101c4322fbadbc5fd6b6774e1be38b781",
+            "CreatedAt": "2026-01-02T03:04:05Z",
+            "Origin": "session",
+            "SessionID": "session-golden",
+            "UpdatedAt": "2026-01-02T03:04:05Z"
+          },
+          "ScopeRef": "local",
+          "Supersedes": ""
+        }
+      ]
+    },
+    "server_version": "\u003cserver_version\u003e"
+  },
+  "remember": {
+    "id": "1",
+    "jsonrpc": "2.0",
+    "protocol_version": "1.0.0",
+    "result": {
+      "id": "project/golden-note"
+    },
+    "server_version": "\u003cserver_version\u003e"
+  }
+}
