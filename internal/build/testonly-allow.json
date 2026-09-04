@@ -248,5 +248,10 @@
     "symbol": "internal/policy.NewEngine",
     "reason": "The evaluation entry point that binds R-14.26 layers 3-6 has no shipping caller yet: the surfaces that ask for a policy decision (the approval queue S-18.T3, the dry-run simulator S-18.T4, the hook routing S-18.T5 and the CLI surface S-18.T6) are later tickets in this sprint, and layers 1-2 (deny-list, elevation) compose in front of it from S-17.T4. The engine is fully implemented and exercised against the real grant store; only its callers are outstanding.",
     "expected_caller": "the first policy-decision consumer to land — the approval queue (04-PEWS-PLAN-W1-W3.md Epic I S-18.T3) or the dry-run simulator (S-18.T4); retire this entry together with internal/policy.NewController"
+  },
+  {
+    "symbol": "providers/embeddings/bgem3.New",
+    "reason": "The BGE-M3 sidecar client is a seam whose server does not exist yet: the native sidecar ships as a separate post-P1 artifact (01-FEATURE-INVENTORY, Local-LLM row; the 04-PEWS-PLAN DECIDED ruling for F/S-12.T2). P1 deliberately ships the wire spec (providers/embeddings/bgem3/SPEC.md) and the client that speaks it WITHOUT registering it as an active embedder lane, because a registered lane with no sidecar behind it would be a capability that appears to work; the absence is documented instead (Art.1.3). The client's protocol conformance is asserted against a spec-conformance server that exists only under _test.go (Art.1.1).",
+    "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket"
   }
 ]

@@ -151,6 +151,44 @@ spaces returns a perfectly plausible number; nothing downstream can tell
 that the number is meaningless. Switching models therefore means indexing
 into a new namespace, or re-indexing the existing one, and never mixing.
 
+### Local embeddings (BGE-M3 sidecar)
+
+Package home: [`providers/embeddings/bgem3`](../../providers/embeddings/bgem3).
+Wire contract: [`SPEC.md`](../../providers/embeddings/bgem3/SPEC.md).
+
+Local embedding runs out of process. The model, and the native code that
+executes it, live in a sidecar the daemon talks to over a small
+length-prefixed JSON protocol; the core stays pure Go with no native
+dependency of its own.
+
+**What ships here, and what does not.** P1 ships two things: the protocol
+specification, precise enough to implement a sidecar from, and the client
+that speaks it. It does not ship the sidecar. That is a separate artifact,
+built after P1, and until it exists local embedding is a capability cascade
+does not have.
+
+The client is therefore **not wired**. No configuration key selects it, the
+embed pipeline does not reach it, and no command exercises it. That is
+deliberate: a lane registered with nothing behind it would look like a
+working feature.
+
+**A call with no sidecar present is an error.** It is never an empty or
+zero-filled vector. This matters more here than the usual argument for
+failing loudly: a fabricated embedding is indistinguishable from a real one
+once it is written, similarity against it returns an ordinary-looking
+number, and the only way back is a full reindex. So the client refuses, and
+it refuses just as firmly when the sidecar answers badly — a different
+model, a different vector width, the wrong number of vectors, or a
+component that is not a finite number all produce an integrity error and no
+vectors at all. A slow or wedged sidecar cannot hold the caller either: the
+call is bounded, and giving up closes the stream rather than leaving a
+half-read response behind.
+
+The client-to-real-sidecar integration test runs when that artifact exists.
+In P1 the client is tested against a conformance server that lives only in
+the package's own tests, which proves the client, not the sidecar, and is
+described that way rather than counted as more than it is.
+
 ### What a failed run leaves behind
 
 Batches commit one at a time. A batch that fails, at the embedder or at
