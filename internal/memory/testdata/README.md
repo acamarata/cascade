@@ -45,6 +45,44 @@ so the honest account of where these files came from is this:
 | `entry_project.md` | A body in mixed scripts (Arabic, CJK, Greek, a combining sequence); a fractional-second timestamp that is not nanosecond-precise. |
 | `entry_reference.md` | The empty cases: empty description, empty body, confidence at the lower bound, and a TTL set. |
 
+## Projection tests: the real database counterpart
+
+The projection tests (`db_projection_test.go`) do not use a fixture file.
+They build their world at run time and assert against the real
+counterparts, which is the stronger form of the same rule the goldens
+above follow:
+
+- **The database is real.** Each test opens an actual SQLite database with
+  `providers/sqlite`, in its own `t.TempDir()`, and every row, posting and
+  version stamp is written and read back through it. Nothing about the
+  storage layer is simulated, so a query that passes has passed against
+  the engine that ships.
+- **The vector index is real.** `providers/localvector` runs over that same
+  database, so vector writes and deletes are observed through the store
+  rather than through a counter kept by the test.
+- **The embedder is the one double**, confined to `_test.go`. It stands in
+  for a network service, and derives each vector from the text's own
+  BLAKE3 digest, so the same body always embeds to the same vector with no
+  model and no network. Its output is checked with
+  `provider.EmbedModel.ValidBatch`, the specification's own check, and one
+  test deliberately makes it violate that contract to prove the check is
+  enforced rather than decorative.
+- **The determinism assertions compare whole dumps.** A rebuild is compared
+  to the previous projection key by key and byte by byte, so no single
+  field is trusted to stand for the whole.
+
+### Provenance of the versions in use
+
+| Component | Version | How to check |
+|---|---|---|
+| SQLite driver | `modernc.org/sqlite`, the version pinned in `go.mod` | `go list -m modernc.org/sqlite` |
+| SQLite engine | the amalgamation that release transpiles, pure Go, no CGO | that driver release's notes |
+
+The versions are deliberately not copied here as literals. A number written
+into this file would drift from `go.mod` the first time the module is
+upgraded, and would then document a version nothing uses; the commands
+above report what the tests actually ran against.
+
 ## Fuzz corpus
 
 `FuzzFrontmatterParse`'s seed corpus lives at

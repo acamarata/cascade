@@ -10,14 +10,25 @@
 // diffed and version-controlled with ordinary tools, which is the point of
 // keeping it in files rather than in a database.
 //
-// Later work projects this tree into an index for search. That projection
-// is derived state and nothing else: it can be deleted and rebuilt from
-// the tree alone, and nothing it holds is needed to reconstruct a record.
-// When the two disagree, THE FILE IS AUTHORITATIVE and the projection is
-// stale; the response is to rebuild the projection, never to write the
-// file back from it. A tombstone is part of that contract rather than an
-// implementation detail: it is how a projection learns of a deletion by
-// scanning, without needing a previous listing to diff against.
+// ProjectionJob projects this tree into an index for search. That
+// projection is derived state and nothing else: it can be deleted and
+// rebuilt from the tree alone, and nothing it holds is needed to
+// reconstruct a record. When the two disagree, THE FILE IS AUTHORITATIVE
+// and the projection is stale; the response is to rebuild the projection,
+// never to write the file back from it. A tombstone is part of that
+// contract rather than an implementation detail: it is how a projection
+// learns of a deletion by scanning, without needing a previous listing to
+// diff against.
+//
+// # The projection cannot widen what a query may see
+//
+// A record the store refuses to read is refused by the projection too, and
+// any row it previously had is withdrawn, so nothing unreadable, retired
+// or expired can be reached through the index that could not be reached
+// through the store. Refusals are reported rather than silent: one damaged
+// file costs exactly its own row and is named in the run's result, in the
+// same spirit as a listing that parses nothing so one bad file cannot make
+// a kind unlistable.
 //
 // # Drift is expected, not corruption
 //
