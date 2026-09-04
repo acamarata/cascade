@@ -1,0 +1,9 @@
+---
+format: 1
+name: "units-and-clock"
+kind: "user"
+description: "Stated unit and clock preferences"
+scope_ref: "global"
+commit_sha: ""
+supersedes: ""
+expires_at: 

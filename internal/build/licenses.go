@@ -77,6 +77,7 @@ var LicenseAllowlist = map[string]bool{
 // added no new transitive dependency (golang.org/x/sys was already
 // direct).
 var KnownModuleLicenses = map[string]string{
+	"mvdan.cc/sh/v3":                       "BSD-3-Clause",
 	"github.com/godbus/dbus/v5":            "BSD-2-Clause",
 	"golang.org/x/crypto":                  "BSD-3-Clause",
 	"github.com/pelletier/go-toml/v2":      "MIT",
