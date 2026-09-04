@@ -2,12 +2,12 @@
   {
     "symbol": "internal/context.Discover",
     "reason": "Role-anchored tier discovery ships ahead of the surface that resolves a working directory. Its merge consumer (the tier-merge ticket) has since landed and takes an already-resolved []TierRecord, so it does not call Discover either; the first production caller is the composition root that turns a cwd into a merged instruction context, which is the harness-generation / context-assembly ticket, not this one.",
-    "expected_caller": "the Claude Code instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3) or context assembly (S-09.T1), whichever first turns a working directory into a merged instruction context; retire this entry together with internal/context.MergeTiers"
+    "expected_caller": "the harness instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3) or context assembly (S-09.T1), whichever first turns a working directory into a merged instruction context; retire this entry together with internal/context.MergeTiers"
   },
   {
     "symbol": "internal/context.MergeTiers",
     "reason": "The merge model is specified against an already-resolved []TierRecord, so its only caller is the surface that pairs it with Discover. That surface does not exist yet: no ticket before this one turns a working directory into a merged instruction context. Building the precedence engine before its consumer is the right order, since the consumer is specified against this result type; shipping a consumer that assembles instructions without a decided precedence rule would not be.",
-    "expected_caller": "the Claude Code instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3), which calls Discover then MergeTiers to render a harness instruction file; retire this entry and the internal/context.Discover entry together when it lands"
+    "expected_caller": "the harness instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3), which calls Discover then MergeTiers to render a harness instruction file; retire this entry and the internal/context.Discover entry together when it lands"
   },
   {
     "symbol": "internal/rpc.ElevationMiddleware",
