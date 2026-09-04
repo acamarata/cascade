@@ -82,6 +82,31 @@ linters:
               desc: "internal/elevation must not import internal/secrets — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
             - pkg: "github.com/acamarata/cascade/internal/vault"
               desc: "internal/elevation must not import internal/vault — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
+        # D/S-07.T3: cmd/cascade must dial the daemon exclusively through
+        # internal/client.Client — never by importing internal/rpc (the
+        # JSON-RPC server-side dispatch package) to assemble a request by
+        # hand, the way status.go did before this ticket. Three existing
+        # cmd/cascade files are exempted because they are the composition
+        # root that BUILDS the server side (or signs/verifies its wire
+        # types), not a client making an outbound call: daemon_unix_run.go
+        # constructs the real rpc.Registry/Handler/SSEHandler the daemon
+        # serves; mcp.go builds the MCP transport's own, separate
+        # rpc.Registry/Handler; elevate_helper.go only references
+        # rpc.Attestation, the elevation wire type, to sign/verify it, and
+        # issues no RPC call at all. A file NOT on this list that imports
+        # internal/rpc is, by construction, either a new hand-rolled client
+        # (forbidden) or a new composition-root file that must earn its own
+        # exemption here, in review, by name.
+        cmd-rpc-server-boundary:
+          files:
+            - "**/cmd/cascade/**/*.go"
+            - "!**/cmd/cascade/daemon_unix_run.go"
+            - "!**/cmd/cascade/mcp.go"
+            - "!**/cmd/cascade/elevate_helper.go"
+            - "!**/*_test.go"
+          deny:
+            - pkg: "github.com/acamarata/cascade/internal/rpc"
+              desc: "cmd/cascade must not import internal/rpc directly to dial the daemon — use internal/client.Client instead (P1-E04-W1-S07-T3); see .golangci.yml's cmd-rpc-server-boundary comment for the narrow composition-root exemptions"
 
     forbidigo:
       # 02-TARGET-STRUCTURE.md §v1.1: no bare time.Now/time.Since in domain

@@ -2,11 +2,12 @@
 //
 //	summary ✦; rpc: status.get"), the read surface a user or CI script
 //	dials first against the daemon. This file is the CLI-side half: a
-//	cobra subcommand that dials the daemon's real JSON-RPC socket
-//	(D/S-06.T3) with a raw JSON-RPC 2.0 request (the Go client SDK,
-//	S-07.T3, does not exist yet at this ticket's execution point) and
-//	renders the response through internal/output - a human table by
-//	default, the versioned --json envelope with --json.
+//	cobra subcommand that dials the daemon through the Go IPC client SDK
+//	(internal/client, D/S-07.T3) — never a hand-rolled JSON-RPC request of
+//	its own (hard requirement 1; enforced by .golangci.yml's
+//	cmd-rpc-server-boundary depguard rule) — and renders the response
+//	through internal/output - a human table by default, the versioned
+//	--json envelope with --json.
 //
 // Inputs: cobra args/flags; a statusDeps injected at construction so no
 //
@@ -22,7 +23,9 @@
 //	os.Stdout/os.Stderr directly (internal/output's contract, enforced by
 //	forbidigo + internal/build's AST output gate).
 //
-// SPORT: cmd/cascade/status (ADD, per T-1 sport_updates).
+// SPORT: cmd/cascade/status (CHANGE, per T-3 sport_updates — routed
+//
+//	through internal/client.Client).
 package main
 
 import (
@@ -32,7 +35,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -40,9 +42,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/output"
-	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -72,9 +74,9 @@ func productionStatusDeps() statusDeps {
 		Paths:   lazyPaths{},
 		Getenv:  os.Getenv,
 		Environ: os.Environ,
-		DialContext: func(ctx context.Context, socketPath string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
-		},
+		// The SDK's own dialer, so the daemon socket is reached one way
+		// from every command rather than by a re-derived local copy.
+		DialContext: client.UnixDialer,
 	}
 }
 
@@ -100,47 +102,20 @@ func newStatusCmd(deps statusDeps) *cobra.Command {
 	}
 }
 
-// fetchStatus resolves the daemon's socket path from config, dials it, and
-// calls status.get over a raw JSON-RPC 2.0 request/response, per this
-// ticket's contract: the CLI dials the D/S-06.T3 raw client, not a Go SDK
-// (which does not exist at this ticket's execution point).
+// fetchStatus resolves the daemon's socket path from config and calls
+// status.get through internal/client.Client — the ONLY way this file
+// reaches the daemon (hard requirement 1). No JSON-RPC request/response
+// framing is assembled here; that lives entirely in internal/client, and
+// its own tests (client_integration_test.go) prove it against a real
+// daemon-shaped socket.
 func fetchStatus(ctx context.Context, deps statusDeps) (daemon.StatusResponse, error) {
 	settings, err := resolveStatusSocket(ctx, deps)
 	if err != nil {
 		return daemon.StatusResponse{}, err
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return deps.DialContext(ctx, settings.SocketPath)
-			},
-		},
-		Timeout: statusDialTimeout,
-	}
-
-	reqBody, err := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "cascade-status",
-		"method":  daemon.StatusMethod,
-	})
-	if err != nil {
-		return daemon.StatusResponse{}, cascade.Wrap(cascade.KindInternal, err, "cascade status: marshal request")
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix"+rpc.RPCPath, bytes.NewReader(reqBody))
-	if err != nil {
-		return daemon.StatusResponse{}, cascade.Wrap(cascade.KindInternal, err, "cascade status: build request")
-	}
-
-	httpResp, err := client.Do(httpReq)
-	if err != nil {
-		return daemon.StatusResponse{}, cascade.Wrap(cascade.KindUnavailable, err,
-			"cascade status: daemon not running or unreachable at "+settings.SocketPath+"; start it with `cascade daemon start`")
-	}
-	defer func() { _ = httpResp.Body.Close() }()
-
-	return decodeStatusEnvelope(httpResp.Body)
+	c := client.New(settings.SocketPath, client.DialFunc(deps.DialContext), statusDialTimeout)
+	return c.Status(ctx)
 }
 
 // resolveStatusSocket loads config.toml (the single resolution model every
