@@ -1,11 +1,13 @@
 //go:build darwin
 
 // Package runtime (daemonless_darwin.go): Purpose: darwin-specific documentation seam for §D-24 daemonless
-//   elevation preconditions. The actual query (S-07.T6's ElevationTrustStore
-//   for enrollment + ElevationKeystore.IsAvailable for LocalAuthentication)
-//   lives in internal/elevation, which cannot be imported from here — see
-//   ElevationPrecondition's doc comment (daemonless.go) for the cycle.
-//   cmd/cascade (composition root) wires the real check.
+//
+//	elevation preconditions. The actual query (S-07.T6's ElevationTrustStore
+//	for enrollment + ElevationKeystore.IsAvailable for LocalAuthentication)
+//	lives in internal/elevation, which cannot be imported from here — see
+//	ElevationPrecondition's doc comment (daemonless.go) for the cycle.
+//	cmd/cascade (composition root) wires the real check.
+//
 // SPORT: internal/runtime EmbeddedRuntime/CHANGED (darwin).
 package runtime
 

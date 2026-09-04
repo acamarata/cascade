@@ -1,10 +1,14 @@
 // Purpose: unit tests for daemonless.go: socket probe, §D-3 write
-//   arbitration (real flock, real sqlite.Open, no fake lock manager), the
-//   read-only fallback, and the embedded-append -> daemon-replay
-//   direction.
+//
+//	arbitration (real flock, real sqlite.Open, no fake lock manager), the
+//	read-only fallback, and the embedded-append -> daemon-replay
+//	direction.
+//
 // Constraints: package runtime_test (external): internal/events imports
-//   internal/runtime, so a white-box test also importing internal/events
-//   would cycle. Everything used here is already exported.
+//
+//	internal/runtime, so a white-box test also importing internal/events
+//	would cycle. Everything used here is already exported.
+//
 // SPORT: internal/runtime EmbeddedRuntime/ADDED (tests).
 package runtime_test
 

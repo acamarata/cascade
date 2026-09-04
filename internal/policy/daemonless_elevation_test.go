@@ -1,12 +1,14 @@
 // Purpose: proves §D-24 daemonless elevation fails closed, and — the
-//   requirement this file exists to satisfy — that IsDaemonlessElevationAllowed
-//   cannot drift from internal/rpc's canonical elevated-verb table because
-//   it is DERIVED from rpc.IsElevated, not a second transcription. Every
-//   case below checks agreement between the two functions directly; a
-//   future edit that reintroduces a hand-copied list here would only pass
-//   this file by accident, and TestElevationClassificationMatchesRPCTable
-//   specifically would catch any divergence introduced by a refactor that
-//   stopped calling rpc.IsElevated.
+//
+//	requirement this file exists to satisfy — that IsDaemonlessElevationAllowed
+//	cannot drift from internal/rpc's canonical elevated-verb table because
+//	it is DERIVED from rpc.IsElevated, not a second transcription. Every
+//	case below checks agreement between the two functions directly; a
+//	future edit that reintroduces a hand-copied list here would only pass
+//	this file by accident, and TestElevationClassificationMatchesRPCTable
+//	specifically would catch any divergence introduced by a refactor that
+//	stopped calling rpc.IsElevated.
+//
 // SPORT: internal/policy DaemonlessElevationGuard/ADDED (tests).
 package policy
 

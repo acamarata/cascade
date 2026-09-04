@@ -1,15 +1,17 @@
 //go:build darwin
 
 // Purpose: darwin Art.2 real-counterpart golden-fixture validation — split
-//   out of service_darwin_test.go purely to satisfy Art.10.3's 300-line
-//   file cap (R-14.117: a ticket may split a file it owns into additional
-//   sibling files in the same package to satisfy the cap; the split is
-//   behaviour-preserving, moved code only). Structurally parses
-//   testdata/golden_launchd.plist (see testdata/README.md for its
-//   plutil-conversion provenance) and renderLaunchdPlist's own output
-//   using only the standard library's encoding/xml — never a golden-blob
-//   string compare — and proves the escaping/marker guarantees
-//   renderLaunchdPlist makes.
+//
+//	out of service_darwin_test.go purely to satisfy Art.10.3's 300-line
+//	file cap (R-14.117: a ticket may split a file it owns into additional
+//	sibling files in the same package to satisfy the cap; the split is
+//	behaviour-preserving, moved code only). Structurally parses
+//	testdata/golden_launchd.plist (see testdata/README.md for its
+//	plutil-conversion provenance) and renderLaunchdPlist's own output
+//	using only the standard library's encoding/xml — never a golden-blob
+//	string compare — and proves the escaping/marker guarantees
+//	renderLaunchdPlist makes.
+//
 // SPORT: internal/daemon/service (ADD, per T-2 sport_updates).
 package service
 
@@ -22,7 +24,6 @@ import (
 	"sort"
 	"testing"
 )
-
 
 // plistEntry is one top-level dict key/value pair.
 type plistEntry struct {

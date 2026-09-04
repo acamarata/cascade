@@ -1,17 +1,21 @@
 // Package policy (classifier_table.go): Purpose: the 06-FORGE-SPEC §5.15
-//   classification table: which command lands on which rung.
+//
+//	classification table: which command lands on which rung.
+//
 // Inputs: a resolved command base name and its argument words.
 // Outputs: an ActionClass resolved to a RiskLevel, or a refusal.
 // Constraints: the table is an ALLOW LIST of commands whose effect can be
-//   decided from argv alone. A command that embeds an interpreter
-//   (awk, sed, perl, python, node, ruby, php, osascript) is deliberately
-//   absent: its argument is a program this classifier cannot read, so it
-//   must be refused rather than guessed at. Absence is the fail-closed
-//   answer, so a missing entry costs a refusal, never a permissive rung.
-//   Where a command's effect depends on a subcommand or a flag, the rule
-//   says so, and an argument that is not a static literal refuses the
-//   whole invocation rather than classifying on the arguments it could
-//   read.
+//
+//	decided from argv alone. A command that embeds an interpreter
+//	(awk, sed, perl, python, node, ruby, php, osascript) is deliberately
+//	absent: its argument is a program this classifier cannot read, so it
+//	must be refused rather than guessed at. Absence is the fail-closed
+//	answer, so a missing entry costs a refusal, never a permissive rung.
+//	Where a command's effect depends on a subcommand or a flag, the rule
+//	says so, and an argument that is not a static literal refuses the
+//	whole invocation rather than classifying on the arguments it could
+//	read.
+//
 // SPORT: internal/policy commandTable/ADDED (P1-E09-W2-S17-T3).
 package policy
 

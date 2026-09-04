@@ -34,7 +34,9 @@ func TestRun_HappyPathAllOK(t *testing.T) {
 func TestRun_AnyErrorOutcome(t *testing.T) {
 	checks := []Check{
 		&fakeCheck{name: "ok", runFn: func(context.Context) (CheckResult, error) { return CheckResult{Status: StatusOK}, nil }},
-		&fakeCheck{name: "bad", runFn: func(context.Context) (CheckResult, error) { return CheckResult{Status: StatusError, Message: "boom"}, nil }},
+		&fakeCheck{name: "bad", runFn: func(context.Context) (CheckResult, error) {
+			return CheckResult{Status: StatusError, Message: "boom"}, nil
+		}},
 	}
 	report := Run(context.Background(), checks, RunOptions{Clock: fixedTestClock()})
 	if report.Outcome() != OutcomeError {

@@ -1,29 +1,37 @@
 // Package policy (daemonless_elevation.go): Purpose: §D-24 daemonless elevation enforcement — the fail-closed gate
-//   embedded-mode command dispatch consults before running any elevated
-//   verb.
+//
+//	embedded-mode command dispatch consults before running any elevated
+//	verb.
+//
 // Inputs: a verb (method) name, and the two daemonless preconditions
-//   (helperEnrolled, authenticatorAvailable) the caller has already
-//   determined via internal/elevation (platform keystore/trust queries —
-//   this package never touches internal/elevation directly, per §D-24's
-//   own layering: internal/policy decides POLICY, internal/elevation
-//   decides HARDWARE FACTS).
+//
+//	(helperEnrolled, authenticatorAvailable) the caller has already
+//	determined via internal/elevation (platform keystore/trust queries —
+//	this package never touches internal/elevation directly, per §D-24's
+//	own layering: internal/policy decides POLICY, internal/elevation
+//	decides HARDWARE FACTS).
+//
 // Outputs: IsDaemonlessElevationAllowed's bool; ErrElevationRequired for
-//   callers that want a typed refusal directly.
+//
+//	callers that want a typed refusal directly.
+//
 // Constraints: R-14.163 fail closed — unknown verb, unavailable keystore,
-//   or missing enrollment all refuse. NO SECOND ELEVATED-VERB LIST: this
-//   file transcribes nothing from 06-FORGE-SPEC §5.14 itself. It calls
-//   internal/rpc.IsElevated(verb, nil) — the ALREADY-CANONICAL table
-//   (internal/rpc/elevation.go's elevationTable, independently verified
-//   against spec by TestElevationTableMatchesSpec in that package) — with
-//   nil params, which every elevationTable rule (rpc's unparseableParams
-//   helpers) treats as "cannot prove this is the narrow/harmless case,
-//   elevate." That is the correct daemonless semantics: a one-shot
-//   embedded command has no per-request attestation retry loop the way
-//   the RPC layer does, so the coarser verb-level classification
-//   ("would this method EVER need elevation") is what daemonless
-//   enforcement needs, and it falls straight out of IsElevated's existing
-//   fail-closed behavior on unreadable params — no new logic duplicates
-//   the table.
+//
+//	or missing enrollment all refuse. NO SECOND ELEVATED-VERB LIST: this
+//	file transcribes nothing from 06-FORGE-SPEC §5.14 itself. It calls
+//	internal/rpc.IsElevated(verb, nil) — the ALREADY-CANONICAL table
+//	(internal/rpc/elevation.go's elevationTable, independently verified
+//	against spec by TestElevationTableMatchesSpec in that package) — with
+//	nil params, which every elevationTable rule (rpc's unparseableParams
+//	helpers) treats as "cannot prove this is the narrow/harmless case,
+//	elevate." That is the correct daemonless semantics: a one-shot
+//	embedded command has no per-request attestation retry loop the way
+//	the RPC layer does, so the coarser verb-level classification
+//	("would this method EVER need elevation") is what daemonless
+//	enforcement needs, and it falls straight out of IsElevated's existing
+//	fail-closed behavior on unreadable params — no new logic duplicates
+//	the table.
+//
 // SPORT: internal/policy DaemonlessElevationGuard/ADDED.
 package policy
 

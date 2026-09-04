@@ -1,16 +1,24 @@
 // Package runtime (daemonless.go): Purpose: the headless embedded runtime (§D-3/§D-24, P1-E04-W1-S07-T4).
-//   Socket-probe auto-fallback, EmbeddedMode carried on a context, and
-//   §D-3 write-arbitration for the daemonless path.
+//
+//	Socket-probe auto-fallback, EmbeddedMode carried on a context, and
+//	§D-3 write-arbitration for the daemonless path.
+//
 // Inputs: a unix socket path + Dialer (probe), a cascade.db path
-//   (arbitration).
+//
+//	(arbitration).
+//
 // Outputs: DaemonlessState (embedded yes/no), a *sqlite.Driver for writes
-//   (full arbitration) or reads (read-only fallback when the daemon owns
-//   the store).
+//
+//	(full arbitration) or reads (read-only fallback when the daemon owns
+//	the store).
+//
 // Constraints: reuses probeSocket (recovery_scan.go) verbatim rather than
-//   defining a second probe — same package, same semantics. Reuses
-//   providers/sqlite.Open for ALL write-path arbitration (socket-probe +
-//   exclusive flock + ErrDaemonOwnsStore already live there); this file
-//   adds no second flock implementation. No bare time.Now/time.Sleep.
+//
+//	defining a second probe — same package, same semantics. Reuses
+//	providers/sqlite.Open for ALL write-path arbitration (socket-probe +
+//	exclusive flock + ErrDaemonOwnsStore already live there); this file
+//	adds no second flock implementation. No bare time.Now/time.Sleep.
+//
 // SPORT: internal/runtime EmbeddedRuntime/ADDED.
 package runtime
 
@@ -269,7 +277,7 @@ func (it *readOnlyIterator) Next(context.Context) bool {
 	return true
 }
 
-func (it *readOnlyIterator) Key() string  { return it.key }
+func (it *readOnlyIterator) Key() string   { return it.key }
 func (it *readOnlyIterator) Value() []byte { return it.val }
 func (it *readOnlyIterator) Err() error {
 	if it.err != nil {

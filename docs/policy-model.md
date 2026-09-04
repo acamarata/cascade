@@ -230,3 +230,90 @@ grant is never consulted for permission to raise a record, so there is no
 ordering of the two in which one widens the other. A scope class that
 cannot be read collapses the result to `private` rather than passing the
 other side through.
+
+## Dry-run simulation
+
+`Engine.Simulate` answers "what would happen if I did this" without doing
+it. The supervisor's escalation ladder and the secret detector both need
+to pre-classify a prospective action, and doing that through the live path
+would fill the audit log and the approval queue with questions nobody
+asked.
+
+### There is one implementation of the rules
+
+`Simulate` does not predict a decision. It runs the same
+`Engine.Evaluate` every live caller runs, on an engine that differs from
+the live one in exactly one field — the approval sink — and reports what
+came back. The verdict, the rung, the deciding layer and the explanation
+in a report are the engine's own values, copied and not recomputed.
+
+This matters more than it sounds. A simulator that carried its own copy of
+the rules would be indistinguishable from a correct one right up until the
+two drifted, and by then the user would have made a decision on the wrong
+one.
+
+### It writes nothing
+
+Evaluation's only write is the approval enqueue an `ask` verdict
+produces. During a simulation that sink is replaced by a discarding one,
+which asks the live queue the read-only half of its admission question —
+is this action admissible, would it coalesce with a prompt already open,
+is there room — and files nothing. Nothing else on the path writes: the
+capability registry, the grant store and the autonomy profile are reads,
+and the single-use ledger and the audit log are reached only from the
+queue's write half, which a simulation never enters.
+
+A simulation therefore leaves the audit domain, the policy domain and the
+pending set byte-identical to how it found them.
+
+### It is conservative where it cannot be exact
+
+Two states the live queue resolves by mutating first — closing a batch
+whose window has elapsed, and pruning entries past their retention window
+— are read as they stand. Both disagreements run in the same direction:
+the report refuses where the live path might have admitted, never the
+reverse. A dry run is never more permissive than the action itself.
+
+An approval sink built outside `internal/policy` cannot be previewed at
+all, because there is no way to know that its enqueue does not write. Such
+a sink is refused rather than called, which downgrades the report to
+`deny`.
+
+### It does not widen what the caller can see
+
+A report carries the simulated subject's own grants on the capability that
+was asked about, and nothing else. A request that failed at the subject or
+capability gate carries no grants at all, so a simulation cannot be used
+to enumerate another principal's entitlements or to probe the registry.
+
+### The report
+
+| Field | Meaning |
+| --- | --- |
+| `verdict` | The canonical verdict the live path would reach: allow, ask or deny. |
+| `elevation_required` | The action's verb is elevation-class (§5.14). A flag, never a fourth verdict value; derived from the RPC layer's canonical table. |
+| `risk_level` | The rung actually evaluated, after the capability's own class was folded in. Never lower than the requested rung. |
+| `matched_rule` | The layer that decided, e.g. `standing-grant`. |
+| `applicable_grants` | The subject's own grants on this capability, with the deciding one marked. |
+| `explanation` | The engine's own reason for the decision. |
+| `auto_advance` | Whether an autonomous loop could proceed without a human turn. |
+| `effective_scope` | How far this action's material could travel once the resolved sensitivity tier narrows the grant's reach. |
+| `would_emit_audit` | Whether the live path would have written an audit row. Informational: this run wrote none. |
+
+One field is deliberately absent from a report that a live outcome
+carries: the approval request id. The live path files an entry and quotes
+its id; a simulation files nothing, and minting an id would hand the
+caller a reference to an approval nobody can ever answer.
+
+### Fail-closed
+
+An action whose class cannot be resolved lands on L4 and denies — the
+level enum has no permissive zero, so a request whose level was never set
+is treated as unclassifiable rather than as a read.
+
+The sensitivity tier a caller asks to simulate under is subject to the
+same rule. A tier the model does not recognise, including an unset one, is
+unresolvable, and an unresolvable tier is the restricted one. There is no
+value of that field, present or absent, that widens the reported reach:
+the tier narrows the grant's own class through the same choke point the
+live carrier narrows through.

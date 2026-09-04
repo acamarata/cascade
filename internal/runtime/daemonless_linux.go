@@ -1,10 +1,12 @@
 //go:build linux
 
 // Package runtime (daemonless_linux.go): Purpose: linux-specific documentation seam for §D-24 daemonless
-//   elevation preconditions — mirrors daemonless_darwin.go. The real
-//   enrolled-helper + PAM-availability query lives in internal/elevation
-//   (cannot be imported here, see ElevationPrecondition's doc comment in
-//   daemonless.go); cmd/cascade wires it.
+//
+//	elevation preconditions — mirrors daemonless_darwin.go. The real
+//	enrolled-helper + PAM-availability query lives in internal/elevation
+//	(cannot be imported here, see ElevationPrecondition's doc comment in
+//	daemonless.go); cmd/cascade wires it.
+//
 // SPORT: internal/runtime EmbeddedRuntime/CHANGED (linux).
 package runtime
 

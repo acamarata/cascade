@@ -1,20 +1,26 @@
 // Package policy (classifier_words.go): Purpose: resolution of the parts of
-//   a command that are not its argv: words (with their quoting and
-//   escaping), output redirections, and environment prefixes.
+//
+//	a command that are not its argv: words (with their quoting and
+//	escaping), output redirections, and environment prefixes.
+//
 // Inputs: AST words, redirections and assignments.
 // Outputs: the literal string a word will expand to when that can be known,
-//   and the risk a redirection or an environment prefix adds on its own.
+//
+//	and the risk a redirection or an environment prefix adds on its own.
+//
 // Constraints: resolution is exact or it fails. mvdan.cc/sh keeps
-//   backslashes in literal values, so unescaping is this classifier's job:
-//   without it `\rm` and `r"m"` reach the table as strings that miss the
-//   `rm` row while still running rm. A word carrying any expansion the
-//   parser cannot evaluate statically (a parameter, a substitution, an
-//   arithmetic expression, a glob) resolves to nothing, and every caller
-//   treats that as a refusal rather than as an empty string. Redirections
-//   that write are at least a workspace mutation even when the command in
-//   front of them only reads, and an environment prefix that changes how a
-//   command is RESOLVED or LOADED is destructive-privileged: it can turn
-//   any invocation into an attacker's binary.
+//
+//	backslashes in literal values, so unescaping is this classifier's job:
+//	without it `\rm` and `r"m"` reach the table as strings that miss the
+//	`rm` row while still running rm. A word carrying any expansion the
+//	parser cannot evaluate statically (a parameter, a substitution, an
+//	arithmetic expression, a glob) resolves to nothing, and every caller
+//	treats that as a refusal rather than as an empty string. Redirections
+//	that write are at least a workspace mutation even when the command in
+//	front of them only reads, and an environment prefix that changes how a
+//	command is RESOLVED or LOADED is destructive-privileged: it can turn
+//	any invocation into an attacker's binary.
+//
 // SPORT: internal/policy resolveWord/ADDED (P1-E09-W2-S17-T3).
 package policy
 

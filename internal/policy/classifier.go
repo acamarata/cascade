@@ -1,26 +1,34 @@
 // Package policy (classifier.go): Purpose: CommandClassifier, the seam the
-//   policy evaluation engine calls to put a shell command on the
-//   06-FORGE-SPEC §5.15 risk ladder before anything is allowed to run it.
+//
+//	policy evaluation engine calls to put a shell command on the
+//	06-FORGE-SPEC §5.15 risk ladder before anything is allowed to run it.
+//
 // Inputs: a context (cancellation only; classification is pure computation
-//   with no clock and no I/O) and one shell command string.
+//
+//	with no clock and no I/O) and one shell command string.
+//
 // Outputs: a RiskLevel, and on refusal a *ClassifyError whose level is
-//   always L4.
+//
+//	always L4.
+//
 // Constraints: FAIL CLOSED in every direction §5.15 names. Input that will
-//   not parse, an empty command, a command name that is not a static
-//   literal, an AST node form this file does not model, and a command name
-//   the table does not carry all return L4. There is no permissive
-//   fallthrough and no default rung: the switch that assigns a level is
-//   total over the table and everything outside the table is refused.
-//   Windows-native forms (PowerShell cmdlets, cmd.exe builtins) are NOT
-//   special-cased and there is no build-tagged classification code
-//   (R-14.28): they reach the same table, miss, and are refused as
-//   (L4, classify-unknown) like any other unrecognised form.
-//   There is no second dangerous-command list in this repository to derive
-//   from: internal/rpc's elevationTable enumerates elevated RPC VERBS, a
-//   different vocabulary from shell argv, and nothing else in the tree
-//   enumerates shell commands. The table below is therefore the first one,
-//   and it is asserted against a verbatim transcription of the §5.15 prose
-//   in classifier_test.go rather than against itself.
+//
+//	not parse, an empty command, a command name that is not a static
+//	literal, an AST node form this file does not model, and a command name
+//	the table does not carry all return L4. There is no permissive
+//	fallthrough and no default rung: the switch that assigns a level is
+//	total over the table and everything outside the table is refused.
+//	Windows-native forms (PowerShell cmdlets, cmd.exe builtins) are NOT
+//	special-cased and there is no build-tagged classification code
+//	(R-14.28): they reach the same table, miss, and are refused as
+//	(L4, classify-unknown) like any other unrecognised form.
+//	There is no second dangerous-command list in this repository to derive
+//	from: internal/rpc's elevationTable enumerates elevated RPC VERBS, a
+//	different vocabulary from shell argv, and nothing else in the tree
+//	enumerates shell commands. The table below is therefore the first one,
+//	and it is asserted against a verbatim transcription of the §5.15 prose
+//	in classifier_test.go rather than against itself.
+//
 // SPORT: internal/policy CommandClassifier/ADDED (P1-E09-W2-S17-T3).
 package policy
 

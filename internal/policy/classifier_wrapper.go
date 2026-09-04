@@ -1,21 +1,29 @@
 // Package policy (classifier_wrapper.go): Purpose: indirection resolution:
-//   the 06-FORGE-SPEC §5.15 wrapper rule max(wrapper, resolved-inner), and
-//   the word, redirection and environment-prefix resolution every
-//   indirection depends on.
+//
+//	the 06-FORGE-SPEC §5.15 wrapper rule max(wrapper, resolved-inner), and
+//	the word, redirection and environment-prefix resolution every
+//	indirection depends on.
+//
 // Inputs: a wrapper command name and its argument words; individual AST
-//   words, redirections and assignments.
+//
+//	words, redirections and assignments.
+//
 // Outputs: a RiskLevel for the whole wrapper form, resolved literal
-//   strings, or a refusal.
+//
+//	strings, or a refusal.
+//
 // Constraints: §5.15 says an unresolvable inner makes the whole form L4.
-//   That is the load-bearing rule here, and it decides three questions
-//   this file answers the same way every time: an inner that is not a
-//   static literal is refused, an inner whose body is not in the command
-//   string at all (a make recipe, an npm script) is refused, and a wrapper
-//   with no inner at all (an interactive shell, a bare ssh session) is
-//   refused. Word resolution unescapes deliberately: mvdan.cc/sh keeps
-//   backslashes in literal values, so `\rm` and `r\m` reach this code as
-//   distinct strings that must both resolve to `rm` or the table can be
-//   walked straight past.
+//
+//	That is the load-bearing rule here, and it decides three questions
+//	this file answers the same way every time: an inner that is not a
+//	static literal is refused, an inner whose body is not in the command
+//	string at all (a make recipe, an npm script) is refused, and a wrapper
+//	with no inner at all (an interactive shell, a bare ssh session) is
+//	refused. Word resolution unescapes deliberately: mvdan.cc/sh keeps
+//	backslashes in literal values, so `\rm` and `r\m` reach this code as
+//	distinct strings that must both resolve to `rm` or the table can be
+//	walked straight past.
+//
 // SPORT: internal/policy classifyWrapper/ADDED (P1-E09-W2-S17-T3).
 package policy
 

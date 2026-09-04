@@ -128,7 +128,7 @@ func TestRedactValue_EmptyValueUnchanged(t *testing.T) {
 
 func TestFilterAllowedFields_OnlyAllowlistedKeysSurvive(t *testing.T) {
 	fields := map[string]string{
-		"os":                  "darwin",
+		"os":                    "darwin",
 		"AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 	}
 	out := FilterAllowedFields(fields, DefaultAllowedFields())
