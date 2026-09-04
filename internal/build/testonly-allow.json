@@ -15,16 +15,6 @@
     "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, alongside ElevationMiddleware"
   },
   {
-    "symbol": "internal/policy.IsDaemonlessElevationAllowed",
-    "reason": "The daemonless elevation guard is built before any elevated verb has a command implementation. Nothing it could guard exists yet.",
-    "expected_caller": "the command implementation of the first elevated verb, before it executes without a daemon"
-  },
-  {
-    "symbol": "internal/policy.ErrElevationRequired",
-    "reason": "The typed refusal the daemonless guard returns. Unused until that guard has a caller.",
-    "expected_caller": "the same command implementation that calls IsDaemonlessElevationAllowed"
-  },
-  {
     "symbol": "internal/runtime.DaemonlessElevationPrecondition",
     "reason": "Evaluates the injected precondition for the daemonless guard and shares its fate.",
     "expected_caller": "the daemonless execution path, once an elevated verb can be invoked without a daemon"

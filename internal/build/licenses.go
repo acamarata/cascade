@@ -1,14 +1,14 @@
 // Package build (this file) holds the dependency-license allowlist gate
 // from P1-E01-W1-S01-T3 (12-QUALITY-CONSTITUTION.md Art.10 supply-chain
 // clause; dependency-rules.md #2 "no GPL/LGPL/AGPL dependencies"). It is a
-// self-contained Go implementation — no new module dependency is added
-// (R-14.115 forbids a concurrent dependency-adding ticket) — so it runs
+// self-contained Go implementation - no new module dependency is added
+// (R-14.115 forbids a concurrent dependency-adding ticket) - so it runs
 // identically in CI (`.github/workflows/supply-chain.yml`, which also runs
 // the real `go-licenses` tool as a belt-and-braces check) and locally via
 // `go test ./internal/build/...` without requiring any extra tool install.
 //
 // Design: go.mod's require directives are parsed directly (a hand-rolled
-// parser — golang.org/x/mod/modfile would itself be a new dependency), then
+// parser - golang.org/x/mod/modfile would itself be a new dependency), then
 // every module path is looked up in a maintained registry mapping it to its
 // verified SPDX license identifier. A module missing from the registry is
 // UNKNOWN (fails closed); a module present but not on the allowlist is a
@@ -26,8 +26,8 @@ import (
 
 // LicenseAllowlist is the permissive-license set this repo accepts
 // (dependency-rules.md #2): MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0,
-// ISC, CC0-1.0. Anything else — GPL/LGPL/AGPL/SSPL or an unrecognised
-// license — fails the gate.
+// ISC, CC0-1.0. Anything else - GPL/LGPL/AGPL/SSPL or an unrecognised
+// license - fails the gate.
 var LicenseAllowlist = map[string]bool{
 	"MIT":          true,
 	"BSD-2-Clause": true,
@@ -44,29 +44,41 @@ var LicenseAllowlist = map[string]bool{
 // that adds or upgrades a require line in go.mod.
 //
 // P1-E02-W1-S02-T2 (R-14.130) added modernc.org/sqlite (the pure-Go, no-CGO
-// SQLite driver — §2/02-TARGET-STRUCTURE mandate) and its transitive
+// SQLite driver - §2/02-TARGET-STRUCTURE mandate) and its transitive
 // closure: modernc.org/libc, modernc.org/mathutil, modernc.org/memory,
-// golang.org/x/sys (promoted direct — the §D-3 linux flock path calls
+// golang.org/x/sys (promoted direct - the §D-3 linux flock path calls
 // unix.Flock), github.com/dustin/go-humanize, github.com/google/uuid,
 // github.com/mattn/go-isatty, github.com/ncruces/go-strftime,
 // github.com/remyoudompheng/bigfft. Every one verified against its
-// module-cache LICENSE file — all BSD-3-Clause or MIT, both allowlisted.
+// module-cache LICENSE file - all BSD-3-Clause or MIT, both allowlisted.
 //
 // P1-E02-W1-S02-T4 added github.com/zeebo/blake3 (providers/fs's BLAKE3-256
-// content-addressing hash — see providers/fs/blobstore.go's package doc)
+// content-addressing hash - see providers/fs/blobstore.go's package doc)
 // and its one runtime dependency github.com/klauspost/cpuid/v2 (CPU
 // feature detection blake3 uses for its SIMD fast paths). Verified against
 // each module's module-cache LICENSE file: zeebo/blake3 is public domain /
-// CC0-1.0, klauspost/cpuid/v2 is MIT — both allowlisted.
+// CC0-1.0, klauspost/cpuid/v2 is MIT - both allowlisted.
+//
+// The vault ticket (internal/secrets) added github.com/godbus/dbus/v5 (the
+// pure-Go D-Bus client the linux secret-service custody backend speaks, so
+// no libsecret cgo binding is needed) and golang.org/x/crypto (the
+// XChaCha20-Poly1305/ChaCha20-Poly1305 AEAD and scrypt KDF the encrypted
+// file-vault fallback uses to write real age v1 files). Verified against
+// each module's module-cache LICENSE file: godbus/dbus is BSD-2-Clause,
+// golang.org/x/crypto is BSD-3-Clause; both allowlisted. Neither added a
+// new transitive dependency (x/crypto's golang.org/x/sys was already
+// direct).
 //
 // P1-E03-W1-S05-T8 added github.com/fsnotify/fsnotify (internal/runtime's
-// hot-reload config.toml watcher, hotreload_watch.go) — this ticket was
+// hot-reload config.toml watcher, hotreload_watch.go) - this ticket was
 // the sole dependency-adding ticket in flight per R-14.115. Verified
 // against the module-cache LICENSE file: fsnotify is BSD-3-Clause
 // (Copyright (c) 2012 The Go Authors / fsnotify Authors), allowlisted; it
 // added no new transitive dependency (golang.org/x/sys was already
 // direct).
 var KnownModuleLicenses = map[string]string{
+	"github.com/godbus/dbus/v5":            "BSD-2-Clause",
+	"golang.org/x/crypto":                  "BSD-3-Clause",
 	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
 	"github.com/inconshreveable/mousetrap": "Apache-2.0",
@@ -88,7 +100,7 @@ var KnownModuleLicenses = map[string]string{
 
 // LicenseDependency is one require-directive entry parsed from a go.mod:
 // its module path and declared version (version is carried for reporting
-// only — the registry is keyed by path).
+// only - the registry is keyed by path).
 type LicenseDependency struct {
 	Path    string
 	Version string
@@ -111,7 +123,7 @@ type LicenseViolation struct {
 //
 // and the single-line form ("require module v1.2.3"). It ignores module/
 // go/toolchain/replace/exclude directives and blank/comment lines. It never
-// touches the filesystem or network — callers pass file bytes directly, so
+// touches the filesystem or network - callers pass file bytes directly, so
 // both the real go.mod and seeded-violation fixtures use the same path.
 func ParseGoModRequires(data []byte) ([]LicenseDependency, error) {
 	var deps []LicenseDependency

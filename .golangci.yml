@@ -7,7 +7,7 @@
 #   errcheck, staticcheck, govet, revive, exhaustive, depguard, funlen.
 #
 # forbidigo (P1-E01-W1-S01-T4) additionally carries 02-TARGET-STRUCTURE.md
-# §v1.1's "clock injection everywhere (no bare time.Now in domain logic —
+# §v1.1's "clock injection everywhere (no bare time.Now in domain logic -
 # lint)" and 12-QUALITY-CONSTITUTION.md Art.7.3's seeded-randomness rule:
 # both are enforced as forbidden call patterns, not prose. See the
 # "forbidigo" settings block and its exclusions.rules entries below.
@@ -39,14 +39,14 @@ linters:
     depguard:
       rules:
         # Art.10.2: plugins/** and providers/** may import pkg/** (and
-        # stdlib/third-party) but never internal/** — internal is the
+        # stdlib/third-party) but never internal/** - internal is the
         # module's private implementation, not a stable contract surface
         # for first-party plugin/provider code.
         # _test.go is excluded here to AGREE with the Go-level arch gate in
         # internal/build/arch_test.go, which has always exempted test files.
         # A driver's tests must run the shared conformance suite, which lives
         # at internal/storage/storetest, so denying it here while the arch gate
-        # permits it forced a per-driver //nolint — two enforcement layers
+        # permits it forced a per-driver //nolint - two enforcement layers
         # disagreeing, papered over at each call site. Production code in
         # plugins/ and providers/ is still denied internal/** by both layers.
         plugins-providers-boundary:
@@ -56,7 +56,7 @@ linters:
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
-              desc: "plugins/** and providers/** may import pkg/** only — never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"
+              desc: "plugins/** and providers/** may import pkg/** only - never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"
         # Art.10.2: pkg/ is the public SDK surface (godoc'd, API-stable per
         # Art.10.4); it must never reach into the module's private
         # internal/** implementation packages.
@@ -65,9 +65,9 @@ linters:
             - "**/pkg/**/*.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
-              desc: "pkg/** may never import internal/** (12-QUALITY-CONSTITUTION.md Art.10.2) — pkg is the public SDK surface"
+              desc: "pkg/** may never import internal/** (12-QUALITY-CONSTITUTION.md Art.10.2) - pkg is the public SDK surface"
         # D-24 / P1-E04-W1-S07-T6: internal/elevation is the hardware root of
-        # trust for the elevation flow and must be self-contained — its
+        # trust for the elevation flow and must be self-contained - its
         # private key material must never be reachable through cascade's own
         # vault/secrets domain (a compromise of that domain must not also
         # compromise the elevation key, and vice versa). No _test.go
@@ -79,11 +79,35 @@ linters:
             - "**/internal/elevation/**/*.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/secrets"
-              desc: "internal/elevation must not import internal/secrets — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
+              desc: "internal/elevation must not import internal/secrets - the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
             - pkg: "github.com/acamarata/cascade/internal/vault"
-              desc: "internal/elevation must not import internal/vault — the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
+              desc: "internal/elevation must not import internal/vault - the elevation keystore is NOT vault-backed (D-24; this ticket's hard 'no vault dependency' requirement)"
+        # The mirror of elevation-no-vault, for the vault side. The
+        # elevation keystore authorises reading a secret; the vault holds
+        # the secrets. Each domain must be compromisable without reaching
+        # the other, so the boundary is denied in BOTH directions rather
+        # than only from elevation outwards. internal/secrets takes its
+        # authorisation decision through an injected ElevationGate that
+        # cmd/cascade wires, so nothing in the package needs the import.
+        # providers/** and plugins/** are denied for a different reason:
+        # the vault is reached BY provider code, never the reverse, and a
+        # provider package on the vault's import path would put
+        # third-party plugin code inside the process boundary that holds
+        # every secret. No _test.go exclusion, for the same reason the
+        # elevation rule has none: a test importing across the boundary
+        # would prove nothing about production wiring.
+        secrets-domain-boundary:
+          files:
+            - "**/internal/secrets/**/*.go"
+          deny:
+            - pkg: "github.com/acamarata/cascade/internal/elevation"
+              desc: "internal/secrets must not import internal/elevation - the vault and the elevation root of trust are separate domains; the broker takes an injected ElevationGate instead"
+            - pkg: "github.com/acamarata/cascade/providers"
+              desc: "internal/secrets must not import providers/** - providers reach the vault, never the reverse"
+            - pkg: "github.com/acamarata/cascade/plugins"
+              desc: "internal/secrets must not import plugins/** - plugin code must never be on the vault's import path"
         # D/S-07.T3: cmd/cascade must dial the daemon exclusively through
-        # internal/client.Client — never by importing internal/rpc (the
+        # internal/client.Client - never by importing internal/rpc (the
         # JSON-RPC server-side dispatch package) to assemble a request by
         # hand, the way status.go did before this ticket. Three existing
         # cmd/cascade files are exempted because they are the composition
@@ -106,30 +130,30 @@ linters:
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"
-              desc: "cmd/cascade must not import internal/rpc directly to dial the daemon — use internal/client.Client instead (P1-E04-W1-S07-T3); see .golangci.yml's cmd-rpc-server-boundary comment for the narrow composition-root exemptions"
+              desc: "cmd/cascade must not import internal/rpc directly to dial the daemon - use internal/client.Client instead (P1-E04-W1-S07-T3); see .golangci.yml's cmd-rpc-server-boundary comment for the narrow composition-root exemptions"
 
     forbidigo:
       # 02-TARGET-STRUCTURE.md §v1.1: no bare time.Now/time.Since in domain
-      # logic — inject a Clock (internal/runtime.Clock or a structurally
+      # logic - inject a Clock (internal/runtime.Clock or a structurally
       # identical testkit.Clock) instead, so tests can freeze it (Art.7.3).
       # 12-QUALITY-CONSTITUTION.md Art.7.3: no unseeded global math/rand
-      # source usage in domain logic — inject an explicitly seeded
+      # source usage in domain logic - inject an explicitly seeded
       # *rand.Rand instead, so tests are reproducible. forbidigo matches
       # each pattern against the bare SELECTOR text (e.g. "time.Now", not
-      # "time.Now()" — verified by probe, not assumed), so a properly
-      # seeded `r.Intn(...)` on a *rand.Rand VALUE never matches — its
-      # selector is the variable, never the "rand" package identifier —
+      # "time.Now()" - verified by probe, not assumed), so a properly
+      # seeded `r.Intn(...)` on a *rand.Rand VALUE never matches - its
+      # selector is the variable, never the "rand" package identifier -
       # and rand.New/rand.NewSource (construction, not draws) are
       # deliberately absent from the forbidden set.
       forbid:
         - pattern: '^time\.Now$'
-          msg: "bare time.Now() is forbidden in domain logic — inject a Clock and call its Now() instead (02-TARGET-STRUCTURE.md §v1.1; internal/testkit.FrozenClock for tests)"
+          msg: "bare time.Now() is forbidden in domain logic - inject a Clock and call its Now() instead (02-TARGET-STRUCTURE.md §v1.1; internal/testkit.FrozenClock for tests)"
         - pattern: '^time\.Since$'
-          msg: "bare time.Since() is forbidden in domain logic — inject a Clock and compute elapsed from its Now() instead (02-TARGET-STRUCTURE.md §v1.1)"
+          msg: "bare time.Since() is forbidden in domain logic - inject a Clock and compute elapsed from its Now() instead (02-TARGET-STRUCTURE.md §v1.1)"
         - pattern: '^rand\.(Int|Int31|Int31n|Int63|Int63n|Intn|Float32|Float64|Perm|Shuffle|Read|NormFloat64|ExpFloat64|Seed)$'
-          msg: "unseeded global math/rand usage is forbidden in domain logic — inject an explicitly seeded *rand.Rand instead (12-QUALITY-CONSTITUTION.md Art.7.3)"
+          msg: "unseeded global math/rand usage is forbidden in domain logic - inject an explicitly seeded *rand.Rand instead (12-QUALITY-CONSTITUTION.md Art.7.3)"
         # D/S-06.T5: cmd/** must never write to os.Stdout/os.Stderr (or the
-        # implicitly-stdout fmt.Print/Println/Printf) directly — the
+        # implicitly-stdout fmt.Print/Println/Printf) directly - the
         # internal/output.Writer seam is the only sanctioned path. Scoped
         # to cmd/** only (via the path-except exclusion below) rather than
         # repo-wide: a repo-wide ban also caught plugins/examples'
@@ -137,15 +161,15 @@ linters:
         # demonstrate its own I/O, independent of the cascade CLI), so
         # this stays exactly as scoped as the contract asks for.
         - pattern: '^os\.Stdout$'
-          msg: "direct os.Stdout access is forbidden outside internal/output — construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
+          msg: "direct os.Stdout access is forbidden outside internal/output - construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
         - pattern: '^os\.Stderr$'
-          msg: "direct os.Stderr access is forbidden outside internal/output — construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
+          msg: "direct os.Stderr access is forbidden outside internal/output - construct/consume an internal/output.Writer instead (D/S-06.T5, docs/cli-output-contract.md)"
         - pattern: '^fmt\.Print$'
-          msg: "bare fmt.Print targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
+          msg: "bare fmt.Print targets os.Stdout implicitly and is forbidden outside internal/output - use an internal/output.Writer instead (D/S-06.T5)"
         - pattern: '^fmt\.Println$'
-          msg: "bare fmt.Println targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
+          msg: "bare fmt.Println targets os.Stdout implicitly and is forbidden outside internal/output - use an internal/output.Writer instead (D/S-06.T5)"
         - pattern: '^fmt\.Printf$'
-          msg: "bare fmt.Printf targets os.Stdout implicitly and is forbidden outside internal/output — use an internal/output.Writer instead (D/S-06.T5)"
+          msg: "bare fmt.Printf targets os.Stdout implicitly and is forbidden outside internal/output - use an internal/output.Writer instead (D/S-06.T5)"
       analyze-types: false
 
     exhaustive:
@@ -175,7 +199,7 @@ linters:
 
     rules:
       # Art.7.3 exempts tests themselves from the clock/rand determinism
-      # rules those articles otherwise impose on domain logic — a test
+      # rules those articles otherwise impose on domain logic - a test
       # calling time.Now() to derive a unique tmp name, or math/rand for
       # non-determinism it explicitly wants, is not the failure mode these
       # rules exist to catch. ANCHORED at the filename suffix, same
@@ -185,7 +209,7 @@ linters:
         linters:
           - forbidigo
       # internal/runtime/clock.go (owned by C/S-04.T1, not this ticket) and
-      # internal/testkit/clock.go (this ticket) ARE the Clock abstractions —
+      # internal/testkit/clock.go (this ticket) ARE the Clock abstractions -
       # their SystemClock.Now()/RealClock.Now() are the one sanctioned
       # place bare time.Now() belongs, because they are what everything
       # else's injected Clock ultimately calls.
@@ -196,7 +220,7 @@ linters:
         linters:
           - forbidigo
       # D/S-06.T5: the os.Stdout/os.Stderr/bare-fmt.Print* forbidigo
-      # patterns added above are scoped to cmd/** only — golangci-lint has
+      # patterns added above are scoped to cmd/** only - golangci-lint has
       # no per-pattern path scope within one linter's forbid list, so this
       # is done via path-except + a text match on those five rules' own
       # messages (each contains "D/S-06.T5", a substring no pre-existing
