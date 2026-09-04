@@ -124,6 +124,17 @@ type Scheduler struct {
 	leaseTTL  time.Duration
 	lock      *advisoryLock
 
+	// closeMu serializes Close with itself. It is NOT mu: Close must hold
+	// a lock across the advisory-lock Release (a Store round trip), while
+	// mu is a short critical section every other method takes. Without
+	// this, two concurrent Closes (the caller's explicit one and
+	// watchCancellation's context-triggered one) race: the loser sees
+	// active already false and returns nil BEFORE the winner's Release
+	// has landed, so a shutdown that returns on the loser lets the
+	// process exit with the lease still written. The next daemon then
+	// fails Activate with KindConflict for the rest of the lease.
+	closeMu sync.Mutex
+
 	mu         sync.Mutex
 	active     bool
 	ticking    bool

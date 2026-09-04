@@ -15,28 +15,49 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
+// exitingProber is a ProcessProber whose process stays alive for the first
+// aliveFor liveness probes and is gone from then on: the seam every Stop
+// escalation test below drives, now that Stop's exit predicate is the
+// PROCESS being gone rather than the socket file being unlinked (the
+// socket vanishes while the old daemon still owns its store, so it never
+// meant "gone"; see pollGone).
+type exitingProber struct {
+	pid      int
+	aliveFor int
+	probes   *int
+}
+
+func (p exitingProber) IsAlive(pid int) bool {
+	*p.probes++
+	return pid == p.pid && *p.probes <= p.aliveFor
+}
+
+// StartTime reports unknown, the honest answer for a fake that models no
+// process table: classifyPID documents unknown as "IsAlive decides".
+func (exitingProber) StartTime(int) (time.Time, bool) { return time.Time{}, false }
+
 // stopOptsFor builds StopOptions for pid 555, recording every signal sent
-// into signals and reporting SocketGone true only once polled more than
-// socketGoneAfter times — the shape every Stop escalation test below
-// drives with a different socketGoneAfter.
-func stopOptsFor(pidPath string, signals *[]syscall.Signal, socketGoneAfter int) StopOptions {
-	polls := 0
+// into signals, whose process stays alive for aliveFor liveness probes.
+// SocketGone reports the socket already unlinked from the very first poll:
+// that is exactly the production ordering (Run's deferred cleanup unlinks
+// the socket before the composition root's defers close the store), and
+// Stop must nonetheless keep waiting for the process itself.
+func stopOptsFor(pidPath string, signals *[]syscall.Signal, aliveFor int) StopOptions {
+	probes := 0
 	return StopOptions{
 		PIDPath: pidPath,
-		Prober:  fakeProber{alive: map[int]bool{555: true}},
+		Prober:  exitingProber{pid: 555, aliveFor: aliveFor, probes: &probes},
 		Signal: func(_ int, sig syscall.Signal) error {
 			*signals = append(*signals, sig)
 			return nil
 		},
-		SocketGone: func() bool {
-			polls++
-			return polls > socketGoneAfter
-		},
-		Sleep: noopSleep,
+		SocketGone: func() bool { return true },
+		Sleep:      noopSleep,
 	}
 }
 
@@ -93,8 +114,8 @@ func TestStop_RefusesToExit_EscalatesToSIGKILL(t *testing.T) {
 		t.Fatal(err)
 	}
 	var signals []syscall.Signal
-	// socketGoneAfter = stopGraceAttempts + 2: never gone during the grace
-	// window (stopGraceAttempts polls), only after a couple more post-SIGKILL.
+	// aliveFor = stopGraceAttempts + 2: the process is still alive through
+	// the whole grace window, exiting only a couple of probes after SIGKILL.
 	res, err := Stop(context.Background(), stopOptsFor(pidPath, &signals, stopGraceAttempts+2))
 	if err != nil {
 		t.Fatal(err)

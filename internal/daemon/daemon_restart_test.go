@@ -59,10 +59,14 @@ func TestRestart_StopSucceeds_StartFails_StopResultStillReported(t *testing.T) {
 	}
 	spawnBoom := errors.New("spawn boom")
 
+	// aliveFor 1: the process is alive for Stop's opening liveness check
+	// and gone by its first post-SIGTERM poll, the ordinary clean-exit
+	// shape now that process exit (not socket removal) is the predicate.
+	probes := 0
 	res, err := Restart(context.Background(), RestartOptions{
 		Stop: StopOptions{
 			PIDPath:    pidPath,
-			Prober:     fakeProber{alive: map[int]bool{555: true}},
+			Prober:     exitingProber{pid: 555, aliveFor: 1, probes: &probes},
 			Signal:     func(int, syscall.Signal) error { return nil },
 			SocketGone: func() bool { return true },
 			Sleep:      noopSleep,

@@ -119,7 +119,12 @@ func (s *Scheduler) watchCancellation(ctx, waitCtx context.Context) {
 }
 
 // Close releases the advisory lock and marks the scheduler inactive. It is
-// idempotent and safe to call whether or not Activate ever succeeded.
+// idempotent and safe to call whether or not Activate ever succeeded, and
+// a Close that finds the scheduler already closing does not return until
+// that other Close's Release has actually landed (closeMu) — a caller
+// that exits the process on Close's return, as the daemon's shutdown
+// does, would otherwise leave the lease written for a concurrent
+// watchCancellation to never finish removing.
 // Together with a fatal in-Tick error (scheduler_tick.go) and a lease
 // simply not being renewed before it expires (lock.go), this is one of
 // the three ways a held lease actually goes away: (1) Close — an explicit
@@ -129,6 +134,12 @@ func (s *Scheduler) watchCancellation(ctx, waitCtx context.Context) {
 // nothing runs, including Close, so the lease is only ever recovered by a
 // future Acquire noticing it has expired (lock.go's Acquire).
 func (s *Scheduler) Close(ctx context.Context) error {
+	// Held for the whole function, Release included, so a second Close
+	// cannot report "already closed" until the first has actually
+	// released the lease. See Scheduler.closeMu.
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+
 	s.mu.Lock()
 	if !s.active {
 		s.mu.Unlock()
