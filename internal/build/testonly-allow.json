@@ -163,5 +163,60 @@
     "symbol": "internal/retrieval/corpus.NewStore",
     "reason": "The corpus and scope model ships ahead of every consumer that reads it. Query-time fusion, the recall command surface, the retrieval config surface, context assembly, the team capability and grant wiring and the auto-advance ceiling are all later tickets, and each one is the thing that would construct a store. Building the classification and membership rules first is the right order, since those consumers are specified against this model; shipping a consumer that reads content without it would not be.",
     "expected_caller": "the retrieval fusion path that applies a scope filter before its query legs, and the context assembly path that takes a session scope as a required input"
+  },
+  {
+    "symbol": "internal/audit.New",
+    "reason": "The audit log is built ahead of every caller that records security events. The policy engine, approval queue, config reload path, and elevation middleware are each later tickets that will inject audit.Writer; building the log first is the correct order.",
+    "expected_caller": "the daemon composition root that injects audit.Writer into policy, approval, config-reload, and elevation middleware"
+  },
+  {
+    "symbol": "internal/audit.ApplySchema",
+    "reason": "Schema runs at daemon start alongside all other domain migrations. The daemon start path applies it once the composition root is built.",
+    "expected_caller": "the daemon start migration pass in cmd/cascade/daemon_unix_run.go"
+  },
+  {
+    "symbol": "internal/audit.(*Log).Query",
+    "reason": "Query surface ships ahead of the audit command that exposes it to users.",
+    "expected_caller": "the audit query/list command once its surface is built (Wave 3)"
+  },
+  {
+    "symbol": "internal/audit.(*Log).Explain",
+    "reason": "Explain ships ahead of the audit explain command that exposes it to users.",
+    "expected_caller": "the audit explain command once its surface is built (Wave 3)"
+  },
+  {
+    "symbol": "internal/retrieval/rrf.Fuse",
+    "reason": "The ranking core is built before the two surfaces that call it. The citations model and the recall command are separate tickets in this sprint, and until one of them exists nothing that ships asks for a fused ranking. Building the ranker first is the right order; leaving it unreachable once a recall surface exists would not be.",
+    "expected_caller": "the recall command surface (Epic F sprint 11 ticket 3), which runs both legs and fuses them"
+  },
+  {
+    "symbol": "internal/retrieval/rrf.DefaultK",
+    "reason": "The smoothing constant the recall surface will pass into Fuse. It is unreachable for exactly as long as Fuse is, and is asserted against the value the retrieval reference documents rather than against a second copy of itself.",
+    "expected_caller": "the recall command surface, in the same change that first calls Fuse"
+  },
+  {
+    "symbol": "internal/retrieval/rrf.StrategyFTS",
+    "reason": "The full-text leg's name. The vector leg names itself and ships; the full-text leg is a different ticket in the preceding sprint and has not landed, so nothing in the running program labels a list with this name yet.",
+    "expected_caller": "the full-text index leg (Epic F sprint 10 ticket 2), which labels its ranked list with it"
+  },
+  {
+    "symbol": "internal/retrieval/fusion.NewScopeFilter",
+    "reason": "The one scope-enforcement mechanism in retrieval, built before the query path that applies it. It has to exist before either leg can be narrowed by it, which is why it lands first; it must not stay unreachable once a query path exists, because an unapplied scope filter enforces nothing.",
+    "expected_caller": "the recall command surface (Epic F sprint 11 ticket 3), which resolves the filter before running either leg"
+  },
+  {
+    "symbol": "internal/retrieval/fusion.NewVectorLeg",
+    "reason": "The query-time vector leg, built alongside the scope filter that binds it. Its production caller is the same query path, and it shares that path's fate.",
+    "expected_caller": "the recall command surface, in the same change that resolves the scope filter"
+  },
+  {
+    "symbol": "internal/memory.NewFileStore",
+    "reason": "This ticket delivers the files-first memory store itself: the record types, the on-disk format and the CRUD surface. Nothing constructs a store yet because the surfaces that would are later tickets in the same sprint, which this one is the chain head for. Building the store before its callers is the right order; leaving it unconstructed once the CLI verb exists would not be.",
+    "expected_caller": "the memory CLI verbs (04-PEWS-PLAN-W1-W3.md Wave 2 Epic G S-13.T3, memory.remember / memory.recall), and the database projection built over the same tree (Epic G S-13.T2), each of which constructs a store rooted at the configured memory path"
+  },
+  {
+    "symbol": "internal/memory.AllKinds",
+    "reason": "The ordered taxonomy accessor exists for callers that must walk every kind rather than act on one: a listing across the whole store, and the projection's full-tree scan. The store's own operations take a kind from the caller, so nothing in this ticket's surface walks the set. Validation uses the unexported ordered slice directly.",
+    "expected_caller": "the memory CLI's list-across-all-kinds path (Epic G S-13.T3) and the projection's full-tree rebuild (Epic G S-13.T2), both of which iterate every kind directory"
   }
 ]

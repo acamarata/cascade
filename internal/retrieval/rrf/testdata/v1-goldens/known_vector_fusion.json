@@ -1,0 +1,12 @@
+{
+  "name": "known_vector_fusion",
+  "k": 60,
+  "lists": [
+    { "strategy": "fts5", "weight": 1.0, "hits": ["0001", "0002"] },
+    { "strategy": "dense", "weight": 1.0, "hits": ["0002", "0001"] }
+  ],
+  "expected": [
+    { "chunk_id": "0001", "raw_score": 0.03252247488101534, "strategies": ["dense", "fts5"] },
+    { "chunk_id": "0002", "raw_score": 0.03252247488101534, "strategies": ["dense", "fts5"] }
+  ]
+}

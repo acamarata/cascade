@@ -1,0 +1,12 @@
+{
+  "name": "source_weights",
+  "k": 60,
+  "lists": [
+    { "strategy": "fts5", "weight": 2.0, "hits": ["0010"] },
+    { "strategy": "dense", "weight": 1.0, "hits": ["0020"] }
+  ],
+  "expected": [
+    { "chunk_id": "0010", "raw_score": 0.03278688524590164, "strategies": ["fts5"] },
+    { "chunk_id": "0020", "raw_score": 0.01639344262295082, "strategies": ["dense"] }
+  ]
+}

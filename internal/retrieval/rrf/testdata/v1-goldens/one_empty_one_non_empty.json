@@ -1,0 +1,12 @@
+{
+  "name": "one_empty_one_non_empty",
+  "k": 60,
+  "lists": [
+    { "strategy": "fts5", "weight": 1.0, "hits": ["0001", "0002"] },
+    { "strategy": "dense", "weight": 1.0, "hits": [] }
+  ],
+  "expected": [
+    { "chunk_id": "0001", "raw_score": 0.01639344262295082, "strategies": ["fts5"] },
+    { "chunk_id": "0002", "raw_score": 0.016129032258064516, "strategies": ["fts5"] }
+  ]
+}

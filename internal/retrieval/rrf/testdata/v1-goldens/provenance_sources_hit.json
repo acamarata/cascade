@@ -1,0 +1,13 @@
+{
+  "name": "provenance_sources_hit",
+  "k": 60,
+  "lists": [
+    { "strategy": "fts5", "weight": 1.0, "hits": ["0055", "0099"] },
+    { "strategy": "dense", "weight": 1.0, "hits": ["0055", "0077"] }
+  ],
+  "expected": [
+    { "chunk_id": "0055", "raw_score": 0.03278688524590164, "strategies": ["dense", "fts5"] },
+    { "chunk_id": "0077", "raw_score": 0.016129032258064516, "strategies": ["dense"] },
+    { "chunk_id": "0099", "raw_score": 0.016129032258064516, "strategies": ["fts5"] }
+  ]
+}

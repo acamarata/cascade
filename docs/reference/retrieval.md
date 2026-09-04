@@ -98,3 +98,109 @@ and its corpus and scope flags, the retrieval configuration surface,
 egress-time substitution, the team capability and grant wiring, context
 assembly and auto-advance enforcement are each their own subsystem, and
 none of them are reachable from this package.
+
+## RRF fusion
+
+Package homes: [`internal/retrieval/rrf`](../../internal/retrieval/rrf) for the
+ranking core, [`internal/retrieval/fusion`](../../internal/retrieval/fusion)
+for the scope filter and the vector leg.
+
+A query runs two legs: a full-text leg and an embedding-similarity leg.
+Each returns its own ranked list, and the two are merged by Reciprocal
+Rank Fusion, which ranks on position rather than on score. That matters
+because the two legs score on incomparable scales; their agreement about
+ordering is comparable, and their raw numbers are not.
+
+### The formula and its constants
+
+For a chunk `d`, the fused score is the sum over the legs that returned it
+of `weight / (k + rank)`, where `rank` is 1-based. A leg that did not
+return `d` contributes nothing for `d`.
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `k` | 60 | Smoothing constant. Larger values flatten the advantage of a top-1 hit relative to the rest of its list. Configurable: the fusion call takes it as a parameter. |
+| neutral leg weight | 1.0 | The multiplier that leaves standard RRF unchanged. A heavier leg contributes proportionally more; a leg weighted 0 contributes nothing while still being recorded as having run. |
+
+### Determinism
+
+The fused order is a function of the input values alone. Two properties
+produce that:
+
+- Each chunk's contributions are summed in a fixed order, by leg name and
+  then rank. Floating-point addition is not associative, so summing in
+  arrival order would let the same query score differently when the legs
+  were collected in a different order, and a difference in the last bits is
+  enough to flip an exact tie.
+- Ties in the fused score break on the chunk id, ascending. Exact ties are
+  routine rather than rare: any two chunks holding mirrored ranks across
+  two equally weighted legs tie exactly. Without a stated rule their order
+  would come from map iteration and differ between runs of one query.
+
+### Dedupe
+
+Identity is the chunk id, the stable content-addressed identifier the
+chunker assigns. A chunk both legs returned produces exactly one result
+whose score is the sum of both contributions, so agreement between the legs
+raises a result rather than merely recording it twice.
+
+Identical content at two paths shares one chunk id by design, so the merged
+result can see more than one source path. It keeps the lexicographically
+first, which does not depend on which leg was read first. If the legs
+disagree about the trust tag, the merged result takes the untrusted side.
+
+This is result-level dedupe. Collapsing overlapping line ranges within one
+file is a separate, later step belonging to citations.
+
+### Normalization
+
+Fused scores are min-max normalized into `[0,1]` across the fused list,
+after fusion rather than per leg, so the best result in the answer is 1 and
+the worst is 0. Normalization is monotone, so it never reorders anything.
+
+A single result, and a set whose scores are all equal, both normalize to 1
+rather than 0: the formula is undefined with no range, and 0 would report
+the best available evidence as no evidence.
+
+### Scope
+
+Scope is enforced in exactly one place, before either leg runs. The filter
+resolves the asking session's authorized records through the corpus model,
+and hands the legs the narrowed set: a list of vector namespaces to open,
+and a predicate the full-text leg binds into its own query. There is no
+scope filtering after ranking anywhere in the retrieval path, and the
+ranking core has no access to the model that would let it make a scope
+decision at all.
+
+A vector namespace holds a whole corpus, while classification is per
+record, so the driver can return an id the model withheld. Such an id has
+no resolved classification, and content with no resolved classification is
+withheld, on the driver's raw response and before anything is ranked.
+
+### The vector leg
+
+The leg embeds the query text once and asks each scope-bound namespace for
+its nearest neighbours, merging the answers and cutting to the requested
+count.
+
+When no embedder is configured the leg is skipped. Fusion continues on the
+full-text leg alone and a `retrieval.vector_leg.unavailable` event is
+recorded, so a half-strength query is visible to the doctor rather than
+looking like a thin index. A missing embedder is a supported local
+configuration, not a fault, and the leg never substitutes invented vectors
+for the ones it cannot compute.
+
+### What a result carries
+
+| Field | Meaning |
+| --- | --- |
+| Chunk id | The identity the result was deduped on. |
+| Path | The source path, chosen deterministically when the legs saw more than one. |
+| Corpus id | The corpus the chunk was retrieved from. |
+| Trust | The trust tag, carried through unchanged. Fusion never enforces it; context assembly and the auto-advance ceiling do. |
+| Raw score | The fused score before normalization, the value the ranking is decided by. |
+| Score | The normalized score, in `[0,1]`. |
+| Strategies | The legs that contributed, sorted by name. |
+
+The citations model, the recall command surface and context assembly all
+read this shape.

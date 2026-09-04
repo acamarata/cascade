@@ -1,0 +1,12 @@
+{
+  "name": "tie_break_determinism",
+  "k": 60,
+  "lists": [
+    { "strategy": "a", "weight": 1.0, "hits": ["0100", "0050"] },
+    { "strategy": "b", "weight": 1.0, "hits": ["0050", "0100"] }
+  ],
+  "expected": [
+    { "chunk_id": "0050", "raw_score": 0.03252247488101534, "strategies": ["a", "b"] },
+    { "chunk_id": "0100", "raw_score": 0.03252247488101534, "strategies": ["a", "b"] }
+  ]
+}
