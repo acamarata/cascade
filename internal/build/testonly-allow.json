@@ -165,26 +165,6 @@
     "expected_caller": "the retrieval fusion path that applies a scope filter before its query legs, and the context assembly path that takes a session scope as a required input"
   },
   {
-    "symbol": "internal/audit.New",
-    "reason": "The audit log is built ahead of every caller that records security events. The policy engine, approval queue, config reload path, and elevation middleware are each later tickets that will inject audit.Writer; building the log first is the correct order.",
-    "expected_caller": "the daemon composition root that injects audit.Writer into policy, approval, config-reload, and elevation middleware"
-  },
-  {
-    "symbol": "internal/audit.ApplySchema",
-    "reason": "Schema runs at daemon start alongside all other domain migrations. The daemon start path applies it once the composition root is built.",
-    "expected_caller": "the daemon start migration pass in cmd/cascade/daemon_unix_run.go"
-  },
-  {
-    "symbol": "internal/audit.(*Log).Query",
-    "reason": "Query surface ships ahead of the audit command that exposes it to users.",
-    "expected_caller": "the audit query/list command once its surface is built (Wave 3)"
-  },
-  {
-    "symbol": "internal/audit.(*Log).Explain",
-    "reason": "Explain ships ahead of the audit explain command that exposes it to users.",
-    "expected_caller": "the audit explain command once its surface is built (Wave 3)"
-  },
-  {
     "symbol": "internal/retrieval/rrf.Fuse",
     "reason": "The ranking core is built before the two surfaces that call it. The citations model and the recall command are separate tickets in this sprint, and until one of them exists nothing that ships asks for a fused ranking. Building the ranker first is the right order; leaving it unreachable once a recall surface exists would not be.",
     "expected_caller": "the recall command surface (Epic F sprint 11 ticket 3), which runs both legs and fuses them"
@@ -218,5 +198,15 @@
     "symbol": "internal/memory.AllKinds",
     "reason": "The ordered taxonomy accessor exists for callers that must walk every kind rather than act on one: a listing across the whole store, and the projection's full-tree scan. The store's own operations take a kind from the caller, so nothing in this ticket's surface walks the set. Validation uses the unexported ordered slice directly.",
     "expected_caller": "the memory CLI's list-across-all-kinds path (Epic G S-13.T3) and the projection's full-tree rebuild (Epic G S-13.T2), both of which iterate every kind directory"
+  },
+  {
+    "symbol": "internal/audit.HashParams",
+    "reason": "The audit log is built before the subsystems that write to it. HashParams is how a caller records what an action's parameters were without recording the parameters themselves, so it becomes reachable in the same change that gives policy, the approval queue, config reload, and the elevation middleware their injected audit.Writer. Wiring it earlier would mean inventing a caller that records nothing real.",
+    "expected_caller": "the policy decision path (04-PEWS-PLAN-W1-W3.md Epic I S-17.T2) and the elevation middleware (Epic D S-06.T3), in the change that injects audit.Writer into each"
+  },
+  {
+    "symbol": "internal/audit.ParseFilter",
+    "reason": "The token form of the query filter exists for the command line to hand its flags in. This ticket owns the query engine and is explicitly told not to build the CLI or RPC surface, so the only caller that can exist today is the test that proves the parser refuses an unknown field instead of widening the result set.",
+    "expected_caller": "the `cascade policy audit query` command surface (04-PEWS-PLAN-W1-W3.md Epic I S-18.T6)"
   }
 ]

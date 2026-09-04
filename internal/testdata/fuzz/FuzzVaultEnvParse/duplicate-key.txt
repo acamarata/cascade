@@ -1,0 +1,2 @@
+go test fuzz v1
+string("K=1\nK=2\nK=3\n")
