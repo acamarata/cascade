@@ -155,14 +155,14 @@
     "expected_caller": "the recall command surface, in the same change that resolves the scope filter"
   },
   {
+    "symbol": "internal/memory.NewProjectionJob",
+    "reason": "The projection is the memory store's derived read side, built one ticket before the surfaces that run it. Nothing that ships constructs one yet because the memory CLI verbs and the recall fusion path are later tickets; both need a projection to exist before they can query or schedule it, which is why it lands first. It must not stay unconstructed once either exists, because a projection nothing runs indexes nothing.",
+    "expected_caller": "the memory CLI verbs (04-PEWS-PLAN-W1-W3.md Wave 2 Epic G S-13.T3), which run the projection behind remember/recall, and the recall fusion path (Epic F S-11), which queries the rows it writes"
+  },
+  {
     "symbol": "internal/memory.NewFileStore",
     "reason": "This ticket delivers the files-first memory store itself: the record types, the on-disk format and the CRUD surface. Nothing constructs a store yet because the surfaces that would are later tickets in the same sprint, which this one is the chain head for. Building the store before its callers is the right order; leaving it unconstructed once the CLI verb exists would not be.",
     "expected_caller": "the memory CLI verbs (04-PEWS-PLAN-W1-W3.md Wave 2 Epic G S-13.T3, memory.remember / memory.recall), and the database projection built over the same tree (Epic G S-13.T2), each of which constructs a store rooted at the configured memory path"
-  },
-  {
-    "symbol": "internal/memory.AllKinds",
-    "reason": "The ordered taxonomy accessor exists for callers that must walk every kind rather than act on one: a listing across the whole store, and the projection's full-tree scan. The store's own operations take a kind from the caller, so nothing in this ticket's surface walks the set. Validation uses the unexported ordered slice directly.",
-    "expected_caller": "the memory CLI's list-across-all-kinds path (Epic G S-13.T3) and the projection's full-tree rebuild (Epic G S-13.T2), both of which iterate every kind directory"
   },
   {
     "symbol": "internal/audit.HashParams",
@@ -178,5 +178,15 @@
     "symbol": "internal/policy.NewCommandClassifier",
     "reason": "The classifier is built one ticket before the evaluator that consumes it. Its own contract assigns the wiring to the deny-list and evaluation ticket in the same sprint, which injects the CommandClassifier seam that resolves a level once before the policy layers run. Constructing it from a caller that then discarded the level would prove nothing, so the state is recorded here instead of faked.",
     "expected_caller": "the policy evaluation engine's injected CommandClassifier seam (04-PEWS-PLAN-W1-W3.md Epic I S-17.T4)"
+  },
+  {
+    "symbol": "internal/memory.NewFileCandidateLedger",
+    "reason": "The candidate ledger is built one ticket before the two surfaces that drive it. Nothing that ships opens a memory store base directory for candidates yet, so constructing one from a caller that then discarded it would prove nothing.",
+    "expected_caller": "the memory review-queue CLI (04-PEWS-PLAN-W1-W3.md Epic G S-14.T3) and the forget pipeline (Epic G S-14.T4), which construct the ledger over the same store base the memory CLI already resolves"
+  },
+  {
+    "symbol": "internal/memory.NewPromotionLadder",
+    "reason": "The mechanical promotion lane is complete and tested, but the consolidation surface that records observations during a session is a later ticket. Retire this entry together with the ledger constructor entry.",
+    "expected_caller": "the memory review-queue CLI (04-PEWS-PLAN-W1-W3.md Epic G S-14.T3), which observes and reviews candidates through the ladder"
   }
 ]

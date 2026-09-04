@@ -169,3 +169,127 @@ Encoding writes a fixed key order with no map iteration reaching the file.
 Listings are lexically ordered. The content hash is BLAKE3, implemented in
 pure Go, and depends on nothing but the bytes it is given, so the same body
 produces the same digest on every platform and every run.
+
+## Candidate ledger
+
+Not everything worth noticing is worth remembering. An observation starts
+as a candidate: one file per candidate under `candidates/<kind>/`, holding
+the sessions that have referenced it, the count those references add up to,
+its status, and the draft record it would become. Candidates live beside
+the record tree rather than inside it, so nothing walking the store can
+mistake a candidate for something the system already believes.
+
+A candidate is `pending` until it is promoted, `promoted` once a durable
+record has been written from it, and `reverted` once a promotion has been
+taken back.
+
+The counting rule is deliberately hard to game. Recording the same
+observation many times inside one session counts once: the session is what
+makes an observation distinct, so the count tracks how many sessions have
+independently said the same thing. The session list is a sorted set, so the
+stored file and every decision taken from it are the same whatever order
+the observations arrived in.
+
+Evidence that cannot be read is never treated as no evidence. A candidate
+file this build cannot parse is refused, and a file declaring a newer
+format version is refused as unsupported rather than read on a guess.
+Either way nothing is promoted from it, because a wrong guess here would
+write a false belief that then persists.
+
+## Promotion ladder
+
+A candidate is promoted once it has been referenced at least three times
+across at least two distinct sessions. Promotion is mechanical: no model is
+asked and no one is prompted, and the same sequence of observations always
+produces the same promotions. Both conditions are checked because they ask
+different questions. The reference count asks whether the observation
+recurred; the session count asks whether it recurred anywhere other than
+the conversation that first produced it, since a belief attested only
+inside one session is the one most likely to be an artifact of it.
+
+Promotion writes the durable record first and marks the candidate promoted
+second. An interruption between the two leaves a candidate that can be
+promoted again, rather than one claiming a record that was never written.
+Once a candidate is promoted, further observations of it change nothing,
+write nothing and emit nothing, so a repetitive caller cannot rewrite a
+durable record through the ladder.
+
+Reverting takes a promotion back. The candidate becomes `reverted` and
+keeps its counts, the reason, and the time, so a promotion someone later
+asks about can still be accounted for. Reverting does not delete the
+durable record: removing that is the forget path's decision, not this one's.
+The next observation of a reverted candidate restarts the count at one with
+only the observing session, so a candidate that was taken back has to earn
+the threshold again rather than slipping back through on the count it had
+before.
+
+Both transitions emit a typed event, so no promotion or revert happens
+silently.
+
+## DB projection
+
+Scanning every file answers a recall query correctly and slowly: the cost
+grows with the size of the store, and every query pays it again. The
+projection is the fast path. It reads the tree and writes a row per record
+into the memory domain of the local database, with a full-text posting set
+and an embedding, so a query touches an index instead of the file system.
+
+It is derived state under the rule above: delete it, corrupt it, or open a
+store that never had one, and a run puts it back from the files alone.
+
+### What a run does
+
+A run walks every kind, reads each live record, and compares it with the
+row it already has:
+
+| Situation | What happens |
+|---|---|
+| No row yet | The row, its postings and its embedding are written. |
+| Row matches the record exactly | Nothing is written. A second run over an unchanged store writes nothing at all. |
+| Body changed | The row and postings are rewritten and the record is embedded again. |
+| Only a description, scope or confidence changed | The row and postings are rewritten. The embedding is left alone, because the text it was computed from did not change. |
+| Record tombstoned, or its file removed outright | The row is marked deleted, and its postings and its vector are removed. |
+| Record cannot be read | Nothing is indexed, any row it had is withdrawn, and the run reports the refusal. |
+
+The comparison covers the whole row, not just the body hash, for the same
+reason a write to a file does: treating a changed description as "no
+change" would leave the index disagreeing with the file.
+
+Deletion is noticed by comparing the live listing with the rows on hand,
+rather than by looking for tombstone files. That catches a tombstone and
+also catches a record file deleted with an ordinary `rm`, which leaves no
+tombstone behind.
+
+### Rebuilds
+
+The projection carries a layout version. When the version stamped in the
+database is not the one the running build writes, a run does not try to
+patch rows written under a layout it does not know: it drops the whole
+projection and rebuilds. That is always available, because the files hold
+everything, and it is idempotent, so two rebuilds over the same tree
+produce identical bytes.
+
+### The index cannot show you more than the store would
+
+A record the store refuses to read, because it is damaged or declares a
+format version this build does not know, is refused here too, and any row
+it previously had is withdrawn. Retired records and records whose expiry
+has passed are excluded from results, judged against the same injected
+clock the rest of the store uses. Each record's scope travels with its row,
+so a hit can never escape the scope its own file declares.
+
+A refusal is reported, never silent. One unreadable file costs exactly its
+own record: the run continues over the rest of the store and names what it
+could not project, in the same spirit as a listing that parses nothing so
+one bad file cannot make a whole kind unlistable.
+
+### Recall integration
+
+A hit is a pointer, not an authority. The body stored in a row is what the
+file said when it was last projected, and if the two disagree the file
+wins. Recall uses the projection to find candidates quickly, in two legs
+over the same rows: the postings answer term queries, and the embeddings
+written alongside them answer similarity queries, so a memory record takes
+part in hybrid recall from the moment it is written. Ranked results are
+ordered deterministically, so the same query over the same store returns
+the same answer on any machine.
