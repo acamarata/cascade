@@ -36,6 +36,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/memory/review"
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
@@ -44,6 +45,8 @@ import (
 const (
 	memoryConsolidateOwner = "memory-consolidate"
 	memoryStalenessOwner   = "memory-staleness"
+	// memoryReviewDigestOwner is the weekly review digest (G/S-14.T3).
+	memoryReviewDigestOwner = "memory-review-digest"
 )
 
 // memoryJobsEventNamespace is the bus namespace the two jobs publish
@@ -103,7 +106,38 @@ func registerMemoryJobs(
 	if err := registerStalenessJob(ctx, s, scanner, jobCfg, logger); err != nil {
 		return nil, err
 	}
+	ledger := memory.NewFileCandidateLedger(base, store, clock, sink)
+	queue := review.NewQueue(ledger, clock, sink)
+	if err := registerReviewDigestJob(ctx, s, queue, jobCfg, sink, logger); err != nil {
+		return nil, err
+	}
 	return memory.NewAdminHandler(consolidator, jobCfg.Consolidation), nil
+}
+
+// registerReviewDigestJob registers the weekly review digest (G/S-14.T3).
+//
+// The job READS. It builds the digest for the window ending now and
+// publishes it; it promotes nothing, retires nothing and writes nothing at
+// all, so a daemon that has been running for a year has changed no
+// candidate by having fired this fifty-two times.
+func registerReviewDigestJob(
+	ctx context.Context, s *scheduler.Scheduler, queue *review.Queue,
+	jobCfg memory.JobConfig, sink memory.DigestEventSink, logger *slog.Logger,
+) error {
+	job := review.NewDigestJob(queue, jobCfg.ReviewDigestCadence, sink)
+	if err := s.RegisterRunnable(memoryReviewDigestOwner, func(runCtx context.Context) error {
+		digest, runErr := job.Run(runCtx)
+		if runErr != nil {
+			return runErr
+		}
+		logger.Debug("memory review digest fired", "pending", len(digest.Pending),
+			"promoted", len(digest.Promoted), "unreadable", len(digest.Unreadable))
+		return nil
+	}); err != nil {
+		return err
+	}
+	return s.ScheduleJob(ctx, memoryReviewDigestOwner,
+		jobCfg.ReviewDigestSchedule, memoryReviewDigestOwner)
 }
 
 // registerStalenessJob is the staleness half of registerMemoryJobs, split
@@ -165,7 +199,38 @@ type memoryJobEventSink struct {
 var (
 	_ memory.ConsolidationEventSink = memoryJobEventSink{}
 	_ memory.StalenessEventSink     = memoryJobEventSink{}
+	_ memory.CandidateEventSink     = memoryJobEventSink{}
+	_ memory.DigestEventSink        = memoryJobEventSink{}
+	_ review.ActionEventSink        = memoryJobEventSink{}
 )
+
+// CandidatePromoted publishes a promotion by the mechanical lane or by an
+// approved review.
+func (s memoryJobEventSink) CandidatePromoted(ctx context.Context, ev memory.PromotionEvent) error {
+	return s.publish(ctx, ev.EventName(), ev)
+}
+
+// CandidateReverted publishes a promotion taken back.
+func (s memoryJobEventSink) CandidateReverted(ctx context.Context, ev memory.RevertEvent) error {
+	return s.publish(ctx, ev.EventName(), ev)
+}
+
+// ReviewActed publishes one human review action, a skip included: an audit
+// trail that recorded only the actions that changed something could not
+// answer "did anyone look at this".
+func (s memoryJobEventSink) ReviewActed(ctx context.Context, ev review.ActionEvent) error {
+	return s.publish(ctx, ev.EventName(), ev)
+}
+
+// MemoryWeeklyDigestReady publishes the weekly review digest.
+//
+// Publishing is the whole of the delivery this build performs. The digest
+// is put on the local event bus and nothing else: no mail is sent, no
+// webhook is called, and no bridge is notified. Anything outbound is a
+// subscriber's decision, not this job's.
+func (s memoryJobEventSink) MemoryWeeklyDigestReady(ctx context.Context, ev memory.MemoryWeeklyDigest) error {
+	return s.publish(ctx, ev.EventName(), ev)
+}
 
 // MemoryConsolidated publishes the consolidation event.
 func (s memoryJobEventSink) MemoryConsolidated(ctx context.Context, ev memory.ConsolidatedEvent) error {

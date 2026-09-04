@@ -30,12 +30,17 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/memory/review"
+	"github.com/acamarata/cascade/internal/retrieval/fusion"
+	"github.com/acamarata/cascade/internal/retrieval/recall"
+	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/plugin"
@@ -86,8 +91,20 @@ func registerMemoryHandler(
 	admin *memory.AdminHandler,
 ) {
 	base := memoryStoreDir(paths)
-	memory.NewHandler(memory.NewFileStore(base, clock), clock).Register(registry)
+	store := memory.NewFileStore(base, clock)
+	memory.NewHandler(store, clock).Register(registry)
 	memory.NewSoulHandler(memory.NewFileSoulStore(base, clock, soulDivergenceSink{bus})).Register(registry)
+	// The memory.review.* namespace (G/S-14.T3). Its queue is built over
+	// the SAME store tree and a candidate ledger rooted at the same base
+	// the scheduled digest job uses. Two ledger values over one tree is
+	// not two mechanisms: the ledger holds no in-process state, every
+	// write it makes is one atomic file write, and the files ARE the
+	// state — unlike the Consolidator, whose in-process re-entrancy guard
+	// is exactly why the manual and scheduled consolidation paths must
+	// share one value.
+	sink := memoryJobEventSink{bus: bus}
+	ledger := memory.NewFileCandidateLedger(base, store, clock, sink)
+	review.NewHandler(review.NewQueue(ledger, clock, sink)).Register(registry)
 	// admin is nil only where no scheduler was wired (the Windows daemon
 	// stub, and any future caller that serves RPC without background
 	// jobs). Registering memory.consolidate against a nil handler would
@@ -184,6 +201,11 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// a subsystem that ships built, tested and unreachable.
 	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
 
+	// The recall.* namespace (F/S-11.T3), registered for the same reason.
+	if err := registerRecallHandler(registry, paths, bus); err != nil {
+		return nil, nil, nil, err
+	}
+
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }
@@ -236,4 +258,41 @@ func runRecoveryScan(ctx context.Context, paths runtime.PathProvider, settings d
 		Registry:    runtime.NewStoreDomainRegistry(store),
 	})
 	return err
+}
+
+// recallIndexDir is where the retrieval index lives: {CASCADE_HOME}/data/
+// retrieval. It sits under the data directory rather than beside the
+// config because, unlike the memory store, it is derived state a user
+// never edits by hand: it is rebuilt from the sources, and a corrupt or
+// absent one is repaired by rebuilding rather than by opening it.
+func recallIndexDir(paths runtime.PathProvider) string {
+	return filepath.Join(paths.DataDir(), "retrieval")
+}
+
+// registerRecallHandler mounts the recall.* namespace on the daemon's RPC
+// router, reading the index catalog under recallIndexDir. It lives in
+// THIS file for the reason registerMemoryHandler does: cmd/cascade may
+// not import internal/rpc outside the composition-root files the
+// cmd-rpc-server-boundary rule exempts, and this is one of them.
+//
+// Without this call every `cascade recall` would dial a socket whose far
+// end has never heard of recall.query.
+//
+// WHICH LEGS ARE WIRED, stated plainly. The query-time vector leg is
+// registered with no embedder and no vector store, which is the state
+// this build is in: no embedding provider is configured at this
+// composition root yet, and the full-text leg (F/S-10.T2) has not landed.
+// The leg's own contract covers that case — it SKIPS, publishing its
+// unavailability event on the real bus rather than inventing vectors — so
+// a recall here reports that no retrieval leg is available
+// (KindUnavailable) rather than returning an empty result set a user
+// would read as an empty index. Adding a leg is a change to this call.
+func registerRecallHandler(registry *rpc.Registry, paths runtime.PathProvider, bus *events.Bus) error {
+	catalog := recall.NewFileCatalog(filepath.Join(recallIndexDir(paths), recall.CatalogFileName))
+	svc, err := recall.NewService(catalog, rrf.Params{}, fusion.NewVectorLeg(nil, nil, bus))
+	if err != nil {
+		return err
+	}
+	recall.NewHandler(svc).Register(registry)
+	return nil
 }

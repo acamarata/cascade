@@ -9,15 +9,15 @@ package memory
 // Constraints: params decode into a concrete struct, never interface{};
 //   every refusal is a taxonomy error; no clock read outside the injected
 //   Clock the Consolidator already holds; no platform-specific imports.
+//   The [memory] configuration this verb and the background jobs share
+//   lives in job_config.go (300-line cap split, P1-E07-W2-S14-T3).
 // SPORT: internal.memory.rpc_admin.Handler (ADD, P1-E07-W2-S13-T4).
 
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/acamarata/cascade/internal/rpc"
-	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // MethodConsolidate runs the consolidation job once and returns its
@@ -108,149 +108,4 @@ func (h *AdminHandler) Consolidate(ctx context.Context, params json.RawMessage) 
 		return nil, err
 	}
 	return report, nil
-}
-
-// The [memory] config keys this subsystem reads. They are named here, in
-// the package that gives them meaning, so the composition root does not
-// spell them as literals.
-const (
-	// ConfigKeyConsolidationSchedule is the cron spec of the consolidation
-	// job.
-	ConfigKeyConsolidationSchedule = "consolidation_schedule"
-	// ConfigKeyStalenessSchedule is the cron spec of the staleness scan.
-	ConfigKeyStalenessSchedule = "staleness_schedule"
-	// ConfigKeyStalenessWindowDays is the staleness window, in days.
-	ConfigKeyStalenessWindowDays = "staleness_window_days"
-	// ConfigKeyConsolidationEmbedding is the default-off embedding
-	// clustering flag.
-	ConfigKeyConsolidationEmbedding = "consolidation_embedding"
-)
-
-// The default schedules for the two background jobs. Both are daily: the
-// work is cheap (a tree walk and a hash per record), and a job that runs
-// less often than the queue it feeds is reviewed would make the queue tell
-// a user something that stopped being true weeks ago.
-const (
-	// DefaultConsolidationSchedule is the consolidation job's cron spec.
-	DefaultConsolidationSchedule = "@every 24h0m0s"
-	// DefaultStalenessSchedule is the staleness scan's cron spec.
-	DefaultStalenessSchedule = "@every 24h0m0s"
-)
-
-// JobConfig is the resolved [memory] section: everything the two
-// background jobs and the memory.consolidate verb need, with the shipped
-// defaults already applied.
-type JobConfig struct {
-	// ConsolidationSchedule and StalenessSchedule are cron specs the
-	// scheduler parses. They are passed through verbatim; this package
-	// does not parse them, so a bad spec is refused by the scheduler with
-	// the scheduler's own error rather than by a second parser here that
-	// could disagree with it.
-	ConsolidationSchedule string
-	StalenessSchedule     string
-	// Consolidation is the consolidation job's configuration.
-	Consolidation ConsolidationConfig
-	// Staleness is the staleness scan's configuration.
-	Staleness StalenessConfig
-}
-
-// DefaultJobConfig returns the shipped configuration, which is what an
-// absent [memory] section resolves to.
-func DefaultJobConfig() JobConfig {
-	return JobConfig{
-		ConsolidationSchedule: DefaultConsolidationSchedule,
-		StalenessSchedule:     DefaultStalenessSchedule,
-		Staleness:             StalenessConfig{Window: DefaultStalenessWindow},
-	}
-}
-
-// ParseJobConfig reads the raw [memory] table the config loader decoded.
-//
-// It is strict about the keys it owns and silent about the ones it does
-// not: a wrong TYPE on one of this subsystem's keys is a hard refusal,
-// because a user who wrote staleness_window_days = "30" configured a
-// window and must not be told the daemon started with a different one.
-// Keys this subsystem does not own (memory.review_cadence, S-14's) are
-// passed over untouched rather than refused, since they belong to another
-// ticket's parser reading the same table.
-//
-// A nil or absent table resolves to DefaultJobConfig with no error.
-func ParseJobConfig(raw any) (JobConfig, error) {
-	out := DefaultJobConfig()
-	if raw == nil {
-		return out, nil
-	}
-	table, ok := raw.(map[string]any)
-	if !ok {
-		return out, cascade.Newf(cascade.KindInvalidInput, "[memory] must be a table")
-	}
-	if err := parseScheduleKeys(table, &out); err != nil {
-		return DefaultJobConfig(), err
-	}
-	if err := parseWindowKey(table, &out); err != nil {
-		return DefaultJobConfig(), err
-	}
-	if v, present := table[ConfigKeyConsolidationEmbedding]; present {
-		enabled, isBool := v.(bool)
-		if !isBool {
-			return DefaultJobConfig(), configTypeError(ConfigKeyConsolidationEmbedding, "a boolean")
-		}
-		out.Consolidation.EmbeddingEnabled = enabled
-	}
-	return out, nil
-}
-
-// parseScheduleKeys reads the two cron-spec keys.
-func parseScheduleKeys(table map[string]any, out *JobConfig) error {
-	for _, spec := range []struct {
-		key string
-		dst *string
-	}{
-		{ConfigKeyConsolidationSchedule, &out.ConsolidationSchedule},
-		{ConfigKeyStalenessSchedule, &out.StalenessSchedule},
-	} {
-		v, present := table[spec.key]
-		if !present {
-			continue
-		}
-		s, isString := v.(string)
-		if !isString || s == "" {
-			return configTypeError(spec.key, "a non-empty cron spec string")
-		}
-		*spec.dst = s
-	}
-	return nil
-}
-
-// parseWindowKey reads staleness_window_days, accepting the integer TOML
-// decodes a bare number into as well as a float, and refusing a value that
-// is not a positive number of days.
-func parseWindowKey(table map[string]any, out *JobConfig) error {
-	v, present := table[ConfigKeyStalenessWindowDays]
-	if !present {
-		return nil
-	}
-	var days float64
-	switch n := v.(type) {
-	case int64:
-		days = float64(n)
-	case int:
-		days = float64(n)
-	case float64:
-		days = n
-	default:
-		return configTypeError(ConfigKeyStalenessWindowDays, "a positive number of days")
-	}
-	if days <= 0 {
-		return configTypeError(ConfigKeyStalenessWindowDays, "a positive number of days")
-	}
-	out.Staleness.Window = time.Duration(days * float64(24*time.Hour))
-	return nil
-}
-
-// configTypeError builds the one refusal shape this parser returns, so
-// every message reads the same way and names the fully dotted key.
-func configTypeError(key, want string) error {
-	return cascade.Newf(cascade.KindInvalidInput,
-		"memory.%s must be %s", key, want)
 }

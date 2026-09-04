@@ -544,3 +544,101 @@ who wrote a window must never be told a different one is running. The
 daemon logs the refusal and falls back to the documented defaults rather
 than failing to start, so a typo in a maintenance window cannot stop the
 memory store being served.
+
+## Review queue
+
+Promotion at the threshold is mechanical and stays that way. The review
+queue is the complementary human lane: it shows what the mechanical lane
+decided and what it has not decided, and it carries out the four actions a
+person can take about that.
+
+`cascade memory review` with no address only reads. It lists two sections:
+
+- **Pending**: candidates still *below* the promotion threshold. They are
+  listed because their counts are below it, which is a fact about the
+  evidence, not a suggestion that they should be promoted. The thresholds
+  in force are printed beside the counts so the claim can be checked rather
+  than trusted.
+- **Promoted**: promotions still standing. These are already durable
+  records; they are listed because a revert is the only way to take one
+  back, and that is not possible without knowing which records they were.
+
+Three things the two tables do not show are still reported, because a queue
+that renders as empty while work is waiting is telling a reader something
+untrue: the number of pending candidates a live defer is hiding, the
+candidates that have already crossed the threshold and belong to the
+mechanical lane, and the addresses of candidate records that could not be
+read.
+
+Listing changes nothing. Neither does the digest. Nothing in this surface
+promotes, retires or hides anything as a side effect of being viewed.
+
+### Actions
+
+An action is explicit and addressed. There is no bulk mode: an action flag
+with no `<kind>/<name>` address is refused rather than applied to whatever
+the listing happened to contain.
+
+| Action | Flag | What it does |
+|---|---|---|
+| approve | `--auto-approve` | Promotes the candidate now, ahead of the mechanical threshold. |
+| skip | `--auto-skip` | Leaves it exactly as it is. Recorded in the audit, changes nothing in the ledger. |
+| defer | `--defer-days N` | Writes `SnoozeUntil`, hiding it from the queue for N days (7 by default, 365 at most). |
+| revert | `--revert` | Takes back a promotion. |
+
+`CASCADE_MEMORY_REVIEW_ACTION` selects the action when no flag does, for
+callers that cannot pass flags. Flags win over it, and two actions at once
+are a refusal rather than a precedence rule.
+
+A defer changes *when* a candidate is shown and nothing else. Its counts,
+sessions and status are untouched, so a deferred candidate that reaches the
+threshold is still promoted mechanically on the same terms. Deferring is a
+statement about a person's attention, not about the evidence.
+
+A revert leaves the durable record in place. The candidate becomes
+`reverted`, and its next observation restarts the count at one, so a
+retracted belief has to earn the threshold again. Deleting the record the
+promotion wrote is `cascade memory forget`'s job, and the revert output
+says so.
+
+Every action emits a typed audit event, including a skip: an audit that
+recorded only the actions that changed something could not answer whether
+anyone looked.
+
+### Weekly digest
+
+A scheduled job (`memory-review-digest`) builds a digest once a cadence and
+publishes it on the event bus as `memory.review.weekly_digest`. It reads
+and reports; it promotes nothing and writes nothing at all, so a daemon
+that has fired it fifty-two times has changed no candidate by doing so.
+
+The payload carries the window it speaks for (`since`, `until`), the
+thresholds in force, the pending candidates, the promotions made *inside*
+the window, and the addresses of anything unreadable. Every candidate is
+reported as an address plus counts. No description, body or draft text ever
+enters the payload, because a bus event fans out to every subscriber and a
+subscriber that asked to know a review is due must not receive the text of
+what is being reviewed.
+
+The window is derived from the clock and the cadence, not from a stored
+cursor. There is nothing to lose or corrupt, and re-running a digest for
+the same instant recomputes the same answer byte for byte. An empty week is
+published like any other: an event that appeared only when there was news
+could not be told apart from a job that had stopped running.
+
+Publishing to the local bus is the whole of the delivery this build
+performs. No mail is sent, no webhook is called, and no bridge is notified;
+anything outbound is a subscriber's decision.
+
+### Config
+
+| Key | Default | Meaning |
+|---|---|---|
+| `memory.review_cadence_days` | `7` | Digest period, in whole days. |
+
+The cadence is one key rather than a schedule beside a window, because the
+digest reports on exactly the stretch of time since its previous fire. Two
+keys could be set to disagree, and a window shorter than the period would
+silently skip promotions. A cadence that is not a positive whole number of
+days is refused rather than read as "off": a user who wants no digest
+disables the job.

@@ -13,6 +13,7 @@ Available Commands:
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
+  recall         Search the retrieval index and print cited results
   status         One-shot summary of the running daemon
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel

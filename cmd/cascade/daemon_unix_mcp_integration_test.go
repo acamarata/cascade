@@ -35,7 +35,7 @@ func TestBuildRPCServer_MCPReachableOverRealSocket(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	bus := events.New(storetest.NewMemStore(), clock)
 
-	srv, _, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: "mcpe2e.sock"}, fakeMemoryPaths{root: t.TempDir()})
+	srv, _, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: "mcpe2e.sock"}, fakeMemoryPaths{root: t.TempDir()}, nil)
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

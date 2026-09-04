@@ -51,7 +51,7 @@ func startMemoryDaemon(t *testing.T) (memoryDeps, string) {
 
 	storeRoot := t.TempDir()
 	registry := rpc.NewRegistry()
-	registerMemoryHandler(registry, fakeMemoryPaths{root: storeRoot}, runtime.SystemClock{})
+	registerMemoryHandler(registry, fakeMemoryPaths{root: storeRoot}, runtime.SystemClock{}, nil, nil)
 
 	sockPath := filepath.Join(sockDir, "daemon.sock")
 	ln, err := net.Listen("unix", sockPath)
@@ -215,4 +215,71 @@ func TestMemoryCLIIsNonInteractive(t *testing.T) {
 	// The dialer is the SDK's own; naming it here keeps the import honest
 	// about what this file proves it uses.
 	var _ client.DialFunc = client.UnixDialer
+}
+
+// TestMemoryReviewCLIEndToEnd is the both-directions wiring proof for the
+// review queue: the CLI verb reaches memory.review.list/act over a real
+// socket, and the actions land in the real candidate ledger on disk.
+//
+// Deleting the review registration from registerMemoryHandler fails this
+// with "unknown method", and deleting the verb from newMemoryCmd fails it
+// with "unknown command".
+func TestMemoryReviewCLIEndToEnd(t *testing.T) {
+	deps, storeRoot := startMemoryDaemon(t)
+	base := filepath.Join(storeRoot, "memory")
+	clock := runtime.SystemClock{}
+	ledger := memory.NewFileCandidateLedger(base, memory.NewFileStore(base, clock), clock, nil)
+
+	draft := func(name string) memory.MemoryEntry {
+		return memory.MemoryEntry{
+			Name: name, Kind: memory.KindProject, Description: "d", Body: "b\n",
+			ScopeRef: "global", Confidence: 0.5,
+			Provenance: memory.Provenance{Origin: memory.OriginSession, SessionID: "s-1"},
+		}
+	}
+	if _, err := ledger.Observe(context.Background(),
+		memory.Observation{SessionID: "s-1", Draft: draft("below")}); err != nil {
+		t.Fatalf("seeding a candidate: %v", err)
+	}
+
+	out, err := runMemory(t, deps, "review")
+	if err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	if !strings.Contains(out, "project/below") {
+		t.Fatalf("the queue did not reach the terminal: %q", out)
+	}
+
+	if out, err = runMemory(t, deps, "review", "project/below", "--defer-days", "2"); err != nil {
+		t.Fatalf("defer: %v", err)
+	}
+	if !strings.Contains(out, "deferred project/below") {
+		t.Fatalf("defer printed %q", out)
+	}
+	if out, err = runMemory(t, deps, "review"); err != nil {
+		t.Fatalf("review after defer: %v", err)
+	}
+	if strings.Contains(out, "project/below") || !strings.Contains(out, "hidden by a defer") {
+		t.Fatalf("the deferred candidate was not hidden and counted: %q", out)
+	}
+
+	if out, err = runMemory(t, deps, "review", "project/below", "--auto-approve"); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if !strings.Contains(out, "promoted project/below") {
+		t.Fatalf("approve printed %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(base, "project", "below.md")); err != nil {
+		t.Fatalf("an approved candidate did not become a durable record: %v", err)
+	}
+	if out, err = runMemory(t, deps, "review", "--section", "promoted"); err != nil {
+		t.Fatalf("review --section promoted: %v", err)
+	}
+	if !strings.Contains(out, "project/below") {
+		t.Fatalf("the promotion is not reviewable: %q", out)
+	}
+
+	if _, err = runMemory(t, deps, "review", "project/absent", "--auto-skip"); err == nil {
+		t.Error("skipping an absent candidate must fail")
+	}
 }

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("OPENAI_API_KEY=sk-Nn4vQ2tR7yWx1Zb8Ka3Ld6Mf9Ph0Sj2Uv5Xy8Ac1De4Gi7\n")

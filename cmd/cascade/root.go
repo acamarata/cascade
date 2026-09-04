@@ -105,6 +105,17 @@ func newRootCmd() *cobra.Command {
 	// them and every later command lands on a tree the tests do not see.
 	registerNoColorFlag(root)
 
+	mountSubcommands(root)
+
+	return root
+}
+
+// mountSubcommands attaches every command group to root. It is a separate
+// function only so newRootCmd stays inside the 50-line cap as the tree
+// grows; the list itself is the composition, and it stays in one place so
+// there is exactly one tree the binary, the tests and the golden help
+// fixture all see.
+func mountSubcommands(root *cobra.Command) {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newCompletionCmd(root))
 	mountConfigCmd(root)
@@ -115,8 +126,7 @@ func newRootCmd() *cobra.Command {
 	mountElevateHelperCmd(root)
 	mountVaultCmd(root)
 	mountMemoryCmd(root)
-
-	return root
+	mountRecallCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("The daily standup moved to ten in the morning and the notes are shared.\n")

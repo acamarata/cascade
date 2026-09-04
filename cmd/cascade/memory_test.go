@@ -32,7 +32,7 @@ import (
 // a test that builds its own tree cannot see it. Deleting the
 // mountMemoryCmd line from root.go makes every case below fail.
 func TestMemoryVerbsResolveOnTheRealRootCommand(t *testing.T) {
-	for _, verb := range []string{"remember", "recall", "forget", "list"} {
+	for _, verb := range []string{"remember", "recall", "forget", "list", "review"} {
 		t.Run(verb, func(t *testing.T) {
 			cmd, _, err := newRootCmd().Find([]string{"memory", verb})
 			if err != nil {
@@ -57,6 +57,7 @@ func TestMemoryFlagSurface(t *testing.T) {
 		"recall":   {"k", "type"},
 		"forget":   {"dry-run"},
 		"list":     {"type", "limit", "cursor"},
+		"review":   {"section", "auto-approve", "auto-skip", "defer-days", "revert"},
 	}
 	root := newRootCmd()
 	for verb, flags := range cases {
@@ -84,6 +85,12 @@ type memoryHarness struct {
 	calls  []recordedCall
 	result any
 	err    error
+	// env is the process environment this invocation sees. It is a map
+	// rather than the real environment because CASCADE_MEMORY_REVIEW_ACTION
+	// selects an action that writes to a user's memory, and a test that
+	// read the real environment would be one exported variable away from
+	// asserting something other than what it set.
+	env map[string]string
 }
 
 func (h *memoryHarness) deps(t *testing.T) memoryDeps {
@@ -91,7 +98,7 @@ func (h *memoryHarness) deps(t *testing.T) memoryDeps {
 	root := t.TempDir()
 	return memoryDeps{
 		Paths:   fakeMemoryPaths{root: root},
-		Getenv:  func(string) string { return "" },
+		Getenv:  func(k string) string { return h.env[k] },
 		Environ: func() []string { return nil },
 		Call: func(_ context.Context, _, method string, params, out any) error {
 			h.calls = append(h.calls, recordedCall{Method: method, Params: params})

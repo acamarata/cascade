@@ -130,34 +130,9 @@
     "expected_caller": "the ingest-walk entry point that reads a repo's files and calls ChunkerFor(path) before Chunk-ing each one, landing with the T2 FTS5-indexing ticket"
   },
   {
-    "symbol": "internal/retrieval/corpus.NewStore",
-    "reason": "The corpus and scope model ships ahead of every consumer that reads it. Query-time fusion, the recall command surface, the retrieval config surface, context assembly, the team capability and grant wiring and the auto-advance ceiling are all later tickets, and each one is the thing that would construct a store. Building the classification and membership rules first is the right order, since those consumers are specified against this model; shipping a consumer that reads content without it would not be.",
-    "expected_caller": "the retrieval fusion path that applies a scope filter before its query legs, and the context assembly path that takes a session scope as a required input"
-  },
-  {
     "symbol": "internal/retrieval/rrf.StrategyFTS",
     "reason": "The full-text leg's name. The vector leg names itself and ships; the full-text leg is a different ticket in the preceding sprint and has not landed, so nothing in the running program labels a list with this name yet.",
     "expected_caller": "the full-text index leg (Epic F sprint 10 ticket 2), which labels its ranked list with it"
-  },
-  {
-    "symbol": "internal/retrieval/fusion.NewScopeFilter",
-    "reason": "The one scope-enforcement mechanism in retrieval, built before the query path that applies it. It has to exist before either leg can be narrowed by it, which is why it lands first; it must not stay unreachable once a query path exists, because an unapplied scope filter enforces nothing.",
-    "expected_caller": "the recall command surface (Epic F sprint 11 ticket 3), which resolves the filter before running either leg"
-  },
-  {
-    "symbol": "internal/retrieval/fusion.NewVectorLeg",
-    "reason": "The query-time vector leg, built alongside the scope filter that binds it. Its production caller is the same query path, and it shares that path's fate.",
-    "expected_caller": "the recall command surface, in the same change that resolves the scope filter"
-  },
-  {
-    "symbol": "internal/retrieval/citations.Assemble",
-    "reason": "The citation model ships one ticket ahead of the surfaces that show a citation. Assembling provenance has to exist before the recall surface can render it and before context assembly can attribute what it assembled, which is why it lands first; nothing that ships asks for a citation set yet. It must not stay unreachable once a recall surface exists, because an answer that cites nothing is the state this model exists to end.",
-    "expected_caller": "the recall command surface and its --cite flag (04-PEWS-PLAN-W1-W3.md Wave 2 Epic F S-11.T3), which assembles the set from the fused results it just ranked, and the MCP search response built on the same call"
-  },
-  {
-    "symbol": "internal/retrieval/citations.Render",
-    "reason": "The Markdown footnote form of an assembled citation set. It is unreachable for exactly as long as Assemble is, and shares its fate: the only two consumers of the rendered form are the --cite output and the MCP search response, neither of which exists yet.",
-    "expected_caller": "the recall command surface's --cite output (Epic F S-11.T3), in the same change that first calls Assemble"
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
@@ -180,14 +155,9 @@
     "expected_caller": "the policy evaluation engine's injected CommandClassifier seam (04-PEWS-PLAN-W1-W3.md Epic I S-17.T4)"
   },
   {
-    "symbol": "internal/memory.NewFileCandidateLedger",
-    "reason": "The candidate ledger is built one ticket before the two surfaces that drive it. Nothing that ships opens a memory store base directory for candidates yet, so constructing one from a caller that then discarded it would prove nothing.",
-    "expected_caller": "the memory review-queue CLI (04-PEWS-PLAN-W1-W3.md Epic G S-14.T3) and the forget pipeline (Epic G S-14.T4), which construct the ledger over the same store base the memory CLI already resolves"
-  },
-  {
     "symbol": "internal/memory.NewPromotionLadder",
-    "reason": "The mechanical promotion lane is complete and tested, but the consolidation surface that records observations during a session is a later ticket. Retire this entry together with the ledger constructor entry.",
-    "expected_caller": "the memory review-queue CLI (04-PEWS-PLAN-W1-W3.md Epic G S-14.T3), which observes and reviews candidates through the ladder"
+    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design — the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead.",
+    "expected_caller": "the session surface that records memory observations as they occur (04-PEWS-PLAN-W1-W3.md Epic G S-14.T4 forget pipeline's sibling observation path / the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
   },
   {
     "symbol": "internal/audit.New",
@@ -235,11 +205,6 @@
     "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
   },
   {
-    "symbol": "internal/retrieval/rrf.FuseWith",
-    "reason": "The config-to-fusion hook ships with the [retrieval] config surface, before the surface that runs a query does. Its callers are the recall command and RPC surface and the index-lifecycle rebuild, none of which have landed; wiring it today would mean inventing one of them here. The translation it performs is exercised end-to-end against a real file corpus in internal/retrieval's acceptance test, so it is not an untested guess, only an unwired one.",
-    "expected_caller": "the recall query path (04-PEWS-PLAN-W1-W3.md Wave 2 Epic F S-11.T3's cascade recall CLI/RPC surface), which loads the config, fuses the legs under it and cites the result; retire this entry when that surface lands"
-  },
-  {
     "symbol": "internal/policy.NewController",
     "reason": "The autonomy profile's running-profile holder ships ahead of the composition root that binds it. Its production caller is the daemon boot path that loads config.toml and registers the [policy] section with the hot-reload engine; that wiring lives in internal/runtime + cmd/cascade, which this ticket's files_scope does not include. Building the fail-closed holder before the surface that feeds it is the right order: the surface is specified against this API, and a boot path that applied a policy section without a decided restrict-only resolution would be the unsafe half to ship first.",
     "expected_caller": "the daemon config-load/hot-reload wiring that registers the [policy] section (04-PEWS-PLAN-W1-W3.md Epic C S-05.T8 consumer in internal/runtime + cmd/cascade); retire this entry together with internal/policy.NewEngine"
@@ -273,5 +238,10 @@
     "symbol": "internal/secrets.ParseDetectionConfig",
     "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today.",
     "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry"
+  },
+  {
+    "symbol": "internal/secrets.NewOAuthBroker",
+    "reason": "The OAuth broker's production constructor - the one that wires the real loopback listener, the real HTTPS token client and the platform browser opener - ships ahead of any surface that runs an authorization. P1-E08-W2-S15-T2 defines the pkg/provider.OAuthBroker contract and implements it, and is explicitly scoped to declare no cmd/cascade surface (contract: 'the CLI flag itself is declared by J/S-20.T1'; 'no W2-to-W3 driver wiring occurs here'). Building the broker before its callers is the deliberate order: the Wave 3 drivers are specified against this interface, so it has to exist first. The unexported core constructor newOAuthBroker is what the tests use; this entry covers only the seam-wiring wrapper.",
+    "expected_caller": "cmd/cascade's `provider add --oauth` command (J/S-20.T1), or the first Wave 3 driver that runs an authorization (J/S-19.T2 Anthropic, J/S-19.T4 Gemini) - whichever lands first; retire this entry then"
   }
 ]

@@ -5,8 +5,10 @@
 //	This file is the CLI half: the cobra tree, the injected call seam that
 //	reaches the daemon through the Go IPC client SDK (internal/client,
 //	never a hand-rolled JSON-RPC request — .golangci.yml's
-//	cmd-rpc-server-boundary depguard rule), and the flag surface. Rendering
-//	and the diagnostic scrub live in memory_view.go.
+//	cmd-rpc-server-boundary depguard rule), and the flag surface. The
+//	socket resolution and the one scrubbed call boundary live in
+//	memory_call.go; rendering and the diagnostic scrub live in
+//	memory_view.go.
 //
 // Inputs: cobra args/flags; a memoryDeps injected at construction so no
 //
@@ -36,11 +38,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/client"
-	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/memory"
-	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // memoryDialTimeout bounds the whole dial+request+response round trip
@@ -136,6 +135,7 @@ func newMemoryCmd(deps memoryDeps) *cobra.Command {
 		newMemoryListCmd(deps),
 		newMemorySoulCmd(deps),
 		newMemoryConsolidateCmd(deps),
+		newMemoryReviewCmd(deps),
 	)
 	return cmd
 }
@@ -246,55 +246,4 @@ func newMemoryListCmd(deps memoryDeps) *cobra.Command {
 	flags.IntVar(&params.Limit, "limit", 0, "maximum records per page (default 100)")
 	flags.StringVar(&params.Cursor, "cursor", "", "resume after this canonical address")
 	return cmd
-}
-
-// memoryCall resolves the daemon socket and performs one RPC, scrubbing
-// every error on the way out. Scrubbing happens HERE, at the boundary,
-// rather than at each call site, so no verb can forget to do it.
-func memoryCall(cmd *cobra.Command, deps memoryDeps, method string, params, out any) error {
-	return scrubDiagnostic(memoryCallRaw(cmd, deps, method, params, out))
-}
-
-// memoryCallRaw performs the same call and returns the error UNSCRUBBED,
-// for one caller: `memory soul edit`, which must ask whether the failure
-// was "no soul document yet" before starting the user from an empty
-// document. scrubDiagnostic deliberately terminates the error chain, so
-// that classification has to happen before the scrub; every error read
-// through this function is scrubbed by its caller before it can reach a
-// terminal.
-func memoryCallRaw(cmd *cobra.Command, deps memoryDeps, method string, params, out any) error {
-	socketPath, err := memoryResolveSocket(cmd.Context(), deps)
-	if err != nil {
-		return err
-	}
-	return deps.Call(cmd.Context(), socketPath, method, params, out)
-}
-
-// memoryResolveSocket loads config.toml — the single resolution model every
-// CLI command uses (08 §2) — and resolves the daemon's socket path from it,
-// falling back to the path provider's derived default.
-func memoryResolveSocket(ctx context.Context, deps memoryDeps) (string, error) {
-	cfg, err := runtime.Load(ctx, runtime.LoadOptions{
-		Path:    deps.Paths.ConfigPath(),
-		Getenv:  deps.Getenv,
-		Environ: deps.Environ,
-	})
-	if err != nil {
-		return "", cascade.Wrap(cascade.KindInvalidInput, err, "cascade memory: load config.toml")
-	}
-	settings, err := daemon.ResolveSettings(cfg, deps.Paths)
-	if err != nil {
-		return "", err
-	}
-	return settings.SocketPath, nil
-}
-
-// memoryWriter builds this command's output.Writer from the resolved global
-// flags, mirroring statusOutputWriter's established local convention.
-func memoryWriter(cmd *cobra.Command) *output.Writer {
-	jsonOut, _ := cmd.Flags().GetBool("json")
-	quiet, _ := cmd.Flags().GetBool("quiet")
-	verbose, _ := cmd.Flags().GetBool("verbose")
-	noColor, _ := cmd.Flags().GetBool("no-color")
-	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
 }
