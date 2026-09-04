@@ -135,16 +135,6 @@
     "expected_caller": "the retrieval fusion path that applies a scope filter before its query legs, and the context assembly path that takes a session scope as a required input"
   },
   {
-    "symbol": "internal/retrieval/rrf.Fuse",
-    "reason": "The ranking core is built before the two surfaces that call it. The citations model and the recall command are separate tickets in this sprint, and until one of them exists nothing that ships asks for a fused ranking. Building the ranker first is the right order; leaving it unreachable once a recall surface exists would not be.",
-    "expected_caller": "the recall command surface (Epic F sprint 11 ticket 3), which runs both legs and fuses them"
-  },
-  {
-    "symbol": "internal/retrieval/rrf.DefaultK",
-    "reason": "The smoothing constant the recall surface will pass into Fuse. It is unreachable for exactly as long as Fuse is, and is asserted against the value the retrieval reference documents rather than against a second copy of itself.",
-    "expected_caller": "the recall command surface, in the same change that first calls Fuse"
-  },
-  {
     "symbol": "internal/retrieval/rrf.StrategyFTS",
     "reason": "The full-text leg's name. The vector leg names itself and ships; the full-text leg is a different ticket in the preceding sprint and has not landed, so nothing in the running program labels a list with this name yet.",
     "expected_caller": "the full-text index leg (Epic F sprint 10 ticket 2), which labels its ranked list with it"
@@ -243,5 +233,20 @@
     "symbol": "internal/policy.NewTeamCarrier",
     "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
     "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
+  },
+  {
+    "symbol": "internal/retrieval/rrf.FuseWith",
+    "reason": "The config-to-fusion hook ships with the [retrieval] config surface, before the surface that runs a query does. Its callers are the recall command and RPC surface and the index-lifecycle rebuild, none of which have landed; wiring it today would mean inventing one of them here. The translation it performs is exercised end-to-end against a real file corpus in internal/retrieval's acceptance test, so it is not an untested guess, only an unwired one.",
+    "expected_caller": "the recall query path (04-PEWS-PLAN-W1-W3.md Wave 2 Epic F S-11.T3's cascade recall CLI/RPC surface), which loads the config, fuses the legs under it and cites the result; retire this entry when that surface lands"
+  },
+  {
+    "symbol": "internal/policy.NewController",
+    "reason": "The autonomy profile's running-profile holder ships ahead of the composition root that binds it. Its production caller is the daemon boot path that loads config.toml and registers the [policy] section with the hot-reload engine; that wiring lives in internal/runtime + cmd/cascade, which this ticket's files_scope does not include. Building the fail-closed holder before the surface that feeds it is the right order: the surface is specified against this API, and a boot path that applied a policy section without a decided restrict-only resolution would be the unsafe half to ship first.",
+    "expected_caller": "the daemon config-load/hot-reload wiring that registers the [policy] section (04-PEWS-PLAN-W1-W3.md Epic C S-05.T8 consumer in internal/runtime + cmd/cascade); retire this entry together with internal/policy.NewEngine"
+  },
+  {
+    "symbol": "internal/policy.NewEngine",
+    "reason": "The evaluation entry point that binds R-14.26 layers 3-6 has no shipping caller yet: the surfaces that ask for a policy decision (the approval queue S-18.T3, the dry-run simulator S-18.T4, the hook routing S-18.T5 and the CLI surface S-18.T6) are later tickets in this sprint, and layers 1-2 (deny-list, elevation) compose in front of it from S-17.T4. The engine is fully implemented and exercised against the real grant store; only its callers are outstanding.",
+    "expected_caller": "the first policy-decision consumer to land — the approval queue (04-PEWS-PLAN-W1-W3.md Epic I S-18.T3) or the dry-run simulator (S-18.T4); retire this entry together with internal/policy.NewController"
   }
 ]

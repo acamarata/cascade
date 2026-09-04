@@ -383,3 +383,60 @@ run and every platform.
 | Result with no chunk id | Invalid-input error. |
 | Overlapping span claimed by two corpora | Conflict error. |
 | Result the resolver withholds | No citation, counted in `Withheld`. |
+
+## Configuration
+
+The `[retrieval]` section of `config.toml` is the whole externally tunable
+surface of the pipeline above. Its reload class is hot: a valid change is
+picked up by a running daemon and takes effect on the next query, without
+a restart.
+
+| Key | Type | Default | Valid range | Hot reload | Description |
+| --- | --- | --- | --- | --- | --- |
+| `retrieval.sources` | array of strings | none | each entry non-empty and unique | yes | The corpus sources the ingest and index-lifecycle surfaces read. |
+| `retrieval.fusion.k` | integer | 60 | greater than zero | yes | The RRF smoothing constant. This IS the `k` of the fusion formula; there is no separate top-K key. |
+| `retrieval.fusion.weights` | table of numbers | none | each weight finite and not negative | yes | Per-leg fusion weights, keyed by leg name (`fts5`, `vector`). An unset table leaves every leg neutral. |
+| `retrieval.reranker.enabled` | boolean | `false` | — | yes | Gates the optional post-fusion reranker stage. |
+
+`retrieval.fusion.enabled` is documented with the fusion gate it belongs
+to and is not validated by this surface.
+
+```toml
+[retrieval]
+sources = ["handbook", "notes"]
+
+[retrieval.fusion]
+k = 60
+weights = { fts5 = 1.0, vector = 1.0 }
+
+[retrieval.reranker]
+enabled = false
+```
+
+Every key is readable with `cascade config get retrieval.<key>` and
+writable with `cascade config set retrieval.<key> <value>`. Setting a key
+to the value it already holds converges: the file is unchanged and the
+reload is a no-op.
+
+### Validation fails closed
+
+The loader refuses the whole config rather than falling back to a default,
+for every case below. An operator who configured retrieval and silently
+received the defaults would have been misled about what their system is
+doing, which is a worse outcome than a startup that stops and says why.
+
+| Case | Result |
+| --- | --- |
+| Unknown key under `[retrieval]` or `[retrieval.fusion]` or `[retrieval.reranker]` | Config error naming the key. |
+| `[retrieval]`, `[retrieval.fusion]` or `[retrieval.reranker]` is not a table | Config error naming the section. |
+| `sources` is not an array, or an entry is not a string | Config error naming the entry by index. |
+| An empty or duplicated `sources` entry | Config error naming the entry by index. |
+| `fusion.k` is not an integer, or is zero or negative | Config error. A non-positive `k` is refused, never defaulted. |
+| `fusion.weights` is not a table, or a weight is not a finite, non-negative number | Config error naming the weight. |
+| `reranker.enabled` is not a boolean | Config error. |
+| A fusion weight names a leg that did not run in the query | Invalid-input error from the fusion. A misspelled leg name would otherwise look exactly like an applied weight. |
+| `reranker.enabled = true` with no reranker implementation registered | Invalid-input error from the reranker stage. |
+
+The same rules apply to a value supplied through the environment
+(`CASCADE_RETRIEVAL__FUSION__K` and friends): an override is held to the
+file's standard, so an exported bad value is reported rather than ignored.
