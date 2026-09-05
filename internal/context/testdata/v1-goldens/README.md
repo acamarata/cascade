@@ -141,3 +141,109 @@ keying every preamble as the empty string so they all compete -- would delete
 four of the five files' titles and front matter, which is the silent-override
 failure the merge model exists to prevent. Recorded as a deliberate reading
 of a case the ruling does not name.
+
+---
+
+# cc/: provenance for the CC harness instruction fixtures (T-3)
+
+Expected-output fixtures for `TestCCGolden` in `internal/context/gen_cc_test.go`,
+covering `CCInstructionWriter.Generate`.
+
+- tool: `git show <tag>:<path>`
+- source repo: `../cascade-v1` (local clone, see `.claude/planning/p1/ARCHIVE-MAP.md`)
+- tag: `archive/p9-integration`
+- date harvested: 2026-09-05
+- source files (pinned at the tag, byte-identical to the tag's working tree):
+  - `crates/cascade-cli/src/cmd/generate_instructions/cc.rs`
+    (`render_cc_header`, `CASCADE_HEADER_MARKER`, `CASCADE_HEADER_CLOSE`) --
+    the emitted block's exact wording, marker strings and layout
+  - `crates/cascade-cli/src/cmd/generate_instructions/tests.rs`
+    (`cc_claude_md_written`, `cc_idempotent`, `agents_md_is_symlink`) --
+    the behaviour the emitted file had to satisfy
+  - `crates/cascade-types/src/cascade_tier.rs` (`description`) -- the
+    parenthesised tier description in the header line
+- tier inputs: the five `../merge/tier-*.md` files already harvested for T-2
+  (their own provenance is in the section above)
+
+## Inputs: derived from harvested tiers, not hand-written
+
+The `MergedContext` each fixture is rendered from is produced by running the
+real S-08.T1/T2 pipeline (`MergeTiers`) over the five harvested `tier-*.md`
+files, exactly as `TestCCGolden` does at run time. Nothing about the input is
+invented here.
+
+## Outputs: assembled from v1's format and the hand-written merge manifest
+
+R-14.17 calls for harvesting v1-generated `CLAUDE.md` OUTPUTS. The section
+above records why none exists in the archive: **the v1 clone preserves no
+rendered output carrying the generator's marker**, only the generator and its
+tests. That finding still holds for this ticket, and the same honest
+substitute is used: the expected outputs were assembled from two sources that
+are both independent of `CCInstructionWriter`.
+
+1. The BLOCK FORMAT is v1's, read off `render_cc_header` at the pinned tag:
+   the opening and closing marker strings verbatim, the
+   `## Cascade Context — <ROLE> Tier (<description>)` heading line, the
+   `**MCP server:**` line, and the two `cascade.search` /
+   `cascade.context_slice` call lines in that order.
+2. WHICH SECTIONS each tier's file carries comes from `../merge/expected-merge.txt`,
+   which was itself written by hand from R-14.15 and R-14.16 rather than from
+   any implementation. Each fixture's body is that tier's surviving sections,
+   in manifest order, taken verbatim from its harvested tier file.
+
+The assembly was done by a throwaway script implementing the section grammar
+a second time, from the ruling's words, and cross-checked against the
+manifest: a heading in the manifest that the second splitter could not find
+was a hard error rather than a silent omission. No byte of any fixture came
+out of `internal/context`.
+
+Verified by mutation: renaming `cascade.search` to `cascade.lookup` in the
+renderer turns all five fixtures red, and deleting the emission-order sort in
+`groupByRole` turns `TestCCGoldenOrderIsMostGeneralFirst` red.
+
+## The two v2 deltas from v1's format
+
+1. **The CLI fallback line** (ratified by 18-T0-RULINGS-R16 R-16.43). Every
+   generated block ends its header with:
+
+   > If the cascade MCP tools are unavailable, run `cascade recall` and
+   > `cascade context slice` through Bash instead.
+
+   v1's post-mortem found the MCP server could be dead while the instruction
+   still told the harness to call it, so the harness did nothing at all. This
+   line makes an outage a degradation instead of a silent no-op. It is the
+   only wording change from the harvested header.
+
+2. **A digest attribute on the opening marker.** v1's marker was a bare
+   `<!-- cascade:generate-instructions -->` and its idempotency check was
+   "is the marker present", which cannot tell a regenerated block from one a
+   user edited afterwards. v2 records `digest=sha256:<hex>` of the block's
+   body, so a hand edit is detected and the write refuses (or backs up)
+   rather than destroying it. A v1 marker with no digest attribute is treated
+   as intact, so upgrading a v1-written file still works.
+
+   The fixtures carry the literal `<DIGEST>` placeholder in that position.
+   `loadCCGolden` computes the real hash with `crypto/sha256` directly rather
+   than calling the package's own `bodyDigest`, so a broken digest helper
+   cannot make the golden agree with it.
+
+## Fixture format
+
+One file per tier, named `<role>.CLAUDE.md`, holding the exact bytes
+`Generate` must return for that tier's `HarnessFile.Content`.
+
+| Fixture | tier | v1 source tier file |
+|---|---|---|
+| `gci.CLAUDE.md` | GCI | `../merge/tier-gci.md` |
+| `asi.CLAUDE.md` | ASI | `../merge/tier-asi.md` |
+| `ppi.CLAUDE.md` | PPI | `../merge/tier-ppi.md` |
+| `pri.CLAUDE.md` | PRI | `../merge/tier-pri.md` |
+| `pai.CLAUDE.md` | PAI | `../merge/tier-pai.md` |
+
+## What v1 did that v2 does not
+
+v1's `generate_cc` also created an `AGENTS.md` symlink and rewrote
+`settings.json` for MCP registration. Neither is part of this ticket's
+generator seam: the first belongs to the OpenCode/Codex generators (S-09.T3),
+the second to MCP registration, and both are outside `files_scope` here.
+Recorded so the omission reads as scope rather than loss.
