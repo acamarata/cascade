@@ -34,7 +34,7 @@
 //	EvalOutcome/ADDED, DecisionLayer/ADDED (P1-E09-W2-S18-T1);
 //	DataClass/ADDED, Trace/ADDED, LayerResult/ADDED,
 //	SameTurnAuthorizer/ADDED, ElevationVerifier/ADDED
-//	(P1-E09-W2-S17-T2).
+//	(P1-E09-W2-S17-T2); denylist-defaults/CHANGE (P1-E09-W2-S17-T4).
 package policy
 
 import "github.com/acamarata/cascade/pkg/cascade"
@@ -167,10 +167,13 @@ type Engine struct {
 	// classifier resolves the action text to a rung, ONCE per evaluation.
 	// NewEngine attaches the real classifier; WithClassifier replaces it.
 	classifier CommandClassifier
-	// denyList is the configurable portion of layer 1, owned by S-17.T4.
-	// The unconditional portion is in layers.go and needs no collaborator.
+	// denyList is the configurable portion of layer 1. NewEngine attaches
+	// DefaultDenyList (no configured rows); WithDenyList replaces it. The
+	// unconditional portion is in layers.go and needs no collaborator.
 	denyList DenyLister
-	// sameTurn is the layer 1 override seam, owned by S-17.T4.
+	// sameTurn is the layer 1 override seam. NewEngine attaches
+	// NoSameTurnAuth, so an engine nobody wired an authorizer into refuses
+	// every deny-list entry rather than relying on a nil check to mean it.
 	sameTurn SameTurnAuthorizer
 	// elevation is the layer 2 verifier over the in-memory nonce ledger.
 	elevation ElevationVerifier
@@ -204,6 +207,8 @@ func NewEngine(registry CapabilityRegistry, grants GrantStore, autonomy *Control
 		grants:     grants,
 		autonomy:   autonomy,
 		classifier: NewCommandClassifier(),
+		denyList:   DefaultDenyList(),
+		sameTurn:   NoSameTurnAuth(),
 	}, nil
 }
 

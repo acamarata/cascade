@@ -362,6 +362,123 @@ be read counts as a match. A valid same-turn authorization overrides the ENTRY a
 else: it records the override in the trace and CONTINUES to layer 2, so every elevated
 verb still faces the elevation check.
 
+## The deny-list engine
+
+The deny-list is the last line: it names what must not happen whatever the profile says,
+whatever grant is held and whatever approval was given. Layer 1 sits above the grant
+store, the capability class, the autonomy profile and the approval queue, so none of them
+can release an entry, and an elevated verb that passes its attestation at layer 2 has
+already been refused at layer 1 if the deny-list named it.
+
+### The interface
+
+`DenyListEngine` is the operator surface over the configurable rows. It embeds the
+`DenyLister` seam layer 1 and the approval queue already consume, so the matching question
+is asked in exactly one way:
+
+| Method | Question |
+|---|---|
+| `Denied(ctx, action)` | is this command listed |
+| `Add(ctx, pattern, class)` | store a row, scoped to an action class |
+| `Remove(ctx, pattern)` | delete a row; removing an absent one is not an error |
+| `List(ctx)` | every row, in pattern order |
+| `ContainsClass(ctx, class, action)` | is this (class, action) pair listed |
+
+`ContainsClass` is a second QUERY SHAPE over the same rows `Denied` matches, never a
+second store. It is what a standing-grant guard asks before creating a grant.
+
+### Rows and classes
+
+A row is `{pattern, class}`. An EMPTY class is the wildcard and means every class; any
+other value must be one of the five action classes, and an out-of-range one is refused at
+write. `ContainsClass(class, action)` matches the action against rows whose class equals
+the argument or is empty. `Denied` ignores the scoping, because it asks about a command
+rather than about a class.
+
+Rows live in the `policy` storage domain beside the grant rows, reached through the
+storage abstraction and never through direct SQL. They are cached in memory and the cache
+is dropped on every `Add` and `Remove`, so a row an operator just wrote is in force on the
+very next question.
+
+### Pattern grammar
+
+A pattern is `*` and `?` over the WHOLE command string, with no path-separator semantics.
+`filepath.Match` is deliberately not used: its `*` cannot cross a `/`, so `rm *` there
+would silently fail to match `rm -rf /home/user`, and a deny-list entry that under-matches
+fails OPEN. Character classes and escapes are refused rather than half-implemented, which
+keeps the grammar small enough to reason about.
+
+### What the matcher sees
+
+Matching consumes the RECURSIVELY NORMALIZED form of the command, not the string the
+caller typed. One row naming one operation therefore matches that operation reached
+through quoting, backslash escaping, an absolute path, an environment-assignment prefix, a
+nested shell, a command substitution, a chained operator, a subshell, an `xargs`
+indirection or a remote command. The normalizer uses the classifier's own word resolution,
+so there is no second unescaper to drift.
+
+### Fail-closed rules
+
+- A pattern the grammar rejects is refused at write, AND refused again at match, so a row
+  that reached storage by another route cannot be walked past.
+- A row that will not decode, a row whose stored pattern no longer satisfies the grammar
+  and a row filed under another pattern's key each refuse the whole read. None is skipped:
+  a listing that quietly omitted a deny-list row would hide the entry an operator relies
+  on.
+- A command the normalizer cannot resolve is an error, and layer 1 reads a deny-lister
+  error as a match.
+- A command whose ARGUMENTS cannot be read produces a partial form, which matches any
+  pattern that unread tail could have completed. `rm -rf $TARGET` does not slip past a
+  `rm -rf *` entry.
+
+## Same-turn authorization
+
+Same-turn authorization is the one exception the risk ladder grants, and it is a window
+rather than a permission.
+
+`SameTurnLedger.Authorize(ctx, subject, action)` records the authorization and returns a
+crypto-random nonce identifying it. `Authorized(ctx, subject, action)` is the seam layer 1
+consults, and it CONSUMES the entry it finds. `Consume` withdraws one authorization and
+`EndTurn` drops them all.
+
+The window is as narrow as it can be made:
+
+- it binds to ONE subject and ONE exact action string. Nothing is normalized here on
+  purpose, because normalizing would WIDEN the window;
+- it is SINGLE USE. The first question spends it, so it cannot be replayed;
+- it NEVER PERSISTS. The ledger is memory with no storage behind it, a restart drops
+  every authorization, and a backstop expiry closes a window whose turn never ended;
+- it is NOT INHERITABLE. A later action in the same turn has its own key and finds
+  nothing;
+- it CANNOT STAND IN FOR AN ATTESTATION. `Authorize` refuses every elevated verb outright
+  with an elevation-required refusal, so a nonce for one can never exist. The verb table
+  is the canonical elevated-verb table, not a copy;
+- a second `Authorize` for a live action is a conflict, so it cannot quietly extend the
+  window the first one opened.
+
+### Which entries an authorization may override
+
+| Entry | Overridable | Why |
+|---|---|---|
+| the ladder's own top-rung sentence | yes | being authorizable in-turn is what that rung reserves |
+| a configured row | yes | the operator who wrote the row is the one typing the authorization |
+| a deny-list that could not be READ | NO | nobody can authorize past an entry nobody can see |
+
+A non-overridable entry does not consult the authorizer at all, so a live authorization is
+never spent on an action it could not have covered.
+
+Overriding is not allowing in ANY case. Layer 1 records the override and continues to
+layer 2; every later layer still applies, and the top rung's hard floor still clamps it to
+a refusal. What an authorization changes is which layer decides, not whether the stack
+says yes.
+
+### Defaults
+
+An engine is built with `DefaultDenyList` (no configured rows) and `NoSameTurnAuth`
+(nothing is ever authorized). Both are complete named behaviours rather than placeholders:
+`DefaultDenyList` refuses a write rather than accepting one it cannot keep, and
+`NoSameTurnAuth` answers every question with no.
+
 **Layer 2 consults ONLY the in-memory elevation nonce ledger, which is the
 attestation-replay ledger. The approval queue's ledger is approval-token replay and is
 NEVER consulted by layer 2.** An elevated verb with no verified attestation is denied

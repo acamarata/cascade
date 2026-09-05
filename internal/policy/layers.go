@@ -29,11 +29,14 @@
 //
 //	A valid same-turn authorization at layer 1 does NOT allow and does NOT
 //	terminate: it records the override and CONTINUES to layer 2, so every
-//	§5.14 elevated verb still faces the elevation check (R-21.231).
+//	§5.14 elevated verb still faces the elevation check (R-21.231). It
+//	overrides only an entry denyListHit marks overridable; an unreadable
+//	deny-list is never overridable.
 //
 // SPORT: internal/policy policy-engine/ADDED,
 //
-//	data-class-layer-zero/ADDED (P1-E09-W2-S17-T2).
+//	data-class-layer-zero/ADDED (P1-E09-W2-S17-T2);
+//	denylist-overridability/CHANGE (P1-E09-W2-S17-T4).
 package policy
 
 import (
@@ -94,35 +97,73 @@ func (c *evalRun) layerDataClass() (LayerResult, error) {
 // records the override and returns undecided, so evaluation continues to
 // layer 2 (R-21.231).
 func (c *evalRun) layerDenyList(ctx context.Context) (LayerResult, *EvalOutcome) {
-	rule, listed := c.denyListEntry(ctx)
-	if !listed {
+	hit := c.denyListEntry(ctx)
+	if !hit.listed {
 		return c.pass(LayerDenyList, "no deny-list entry matches"), nil
 	}
-	if c.sameTurnAuthorized(ctx) {
+	// A non-overridable entry does not CONSULT the authorizer at all, so a
+	// live authorization is not spent on an action it could not have
+	// covered.
+	if hit.overridable && c.sameTurnAuthorized(ctx) {
 		c.sameTurn = true
 		return c.pass(LayerDenyList,
-			rule+", overridden by same-turn authorization; the elevation check still applies"), nil
+			hit.rule+", overridden by same-turn authorization; the elevation check still applies"), nil
 	}
-	return c.decide(LayerDenyList, VerdictDeny, false, rule)
+	return c.decide(LayerDenyList, VerdictDeny, false, hit.rule)
+}
+
+// denyListHit is what layer 1 found: whether an entry matched, which one,
+// and whether a same-turn authorization may override THAT entry.
+//
+// Overridable is the whole of the exception, stated in one place so it
+// cannot be widened by accident:
+//
+//   - the §5.15 sentence that reserves L4 for same-turn authorization is
+//     overridable, because being overridable in-turn is what that sentence
+//     says the rung is for;
+//   - a configured row the operator added is overridable, because the
+//     operator who wrote the row is the one typing the authorization;
+//   - a deny-list that could not be READ is NEVER overridable. Nobody can
+//     authorize past an entry nobody can see, and an unreadable list is
+//     exactly the state an attacker would arrange for.
+//
+// Overriding is not allowing in any case (R-21.231): evaluation continues
+// to layer 2, every later layer still applies, and hardVerdictFloor still
+// clamps L4 to a deny.
+type denyListHit struct {
+	rule        string
+	listed      bool
+	overridable bool
 }
 
 // denyListEntry answers whether the action is on either portion of the
-// deny-list, and names the entry that matched.
-func (c *evalRun) denyListEntry(ctx context.Context) (string, bool) {
+// deny-list, names the entry that matched, and says whether that entry is
+// one a same-turn authorization may override.
+func (c *evalRun) denyListEntry(ctx context.Context) denyListHit {
+	if c.cfg.denyList != nil {
+		denied, err := c.cfg.denyList.Denied(ctx, c.req.Action)
+		if err != nil {
+			return denyListHit{
+				rule:   "the deny-list could not be read, so the action is treated as listed",
+				listed: true,
+			}
+		}
+		if denied {
+			return denyListHit{
+				rule:        "the configured deny-list names this action",
+				listed:      true,
+				overridable: true,
+			}
+		}
+	}
 	if c.level == L4 {
-		return "a destructive or privileged action is deny-listed and is authorized in the same turn only", true
+		return denyListHit{
+			rule:        "a destructive or privileged action is deny-listed and is authorized in the same turn only",
+			listed:      true,
+			overridable: true,
+		}
 	}
-	if c.cfg.denyList == nil {
-		return "", false
-	}
-	denied, err := c.cfg.denyList.Denied(ctx, c.req.Action)
-	if err != nil {
-		return "the deny-list could not be read, so the action is treated as listed", true
-	}
-	if denied {
-		return "the configured deny-list names this action", true
-	}
-	return "", false
+	return denyListHit{}
 }
 
 // sameTurnAuthorized consults the layer 1 override seam. No authorizer
