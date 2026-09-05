@@ -15,6 +15,7 @@ package hooks
 
 import (
 	"context"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"testing"
 	"time"
 
@@ -103,10 +104,13 @@ func TestDispatcher_TriggerMatching_Miss_NoAudit(t *testing.T) {
 func TestNewDispatcher_ValidatesEveryRequiredField(t *testing.T) {
 	bus, clock := testBus(t)
 	base := func() DispatcherConfig {
+		fw, tok := testFirewall(t)
 		return DispatcherConfig{
 			Registry:         NewRegistry(),
 			Bus:              bus,
 			Clock:            clock,
+			Egress:           fw,
+			EgressToken:      tok,
 			PluginDispatcher: &fakePluginDispatcher{},
 			NoteWriter:       &fakeNoteWriter{},
 			ActionTimeout:    time.Second,
@@ -124,6 +128,8 @@ func TestNewDispatcher_ValidatesEveryRequiredField(t *testing.T) {
 		{"missing Registry", func(c *DispatcherConfig) { c.Registry = nil }},
 		{"missing Bus", func(c *DispatcherConfig) { c.Bus = nil }},
 		{"missing Clock", func(c *DispatcherConfig) { c.Clock = nil }},
+		{"missing Egress", func(c *DispatcherConfig) { c.Egress = nil }},
+		{"zero EgressToken", func(c *DispatcherConfig) { c.EgressToken = egress.Capability{} }},
 		{"missing PluginDispatcher", func(c *DispatcherConfig) { c.PluginDispatcher = nil }},
 		{"missing NoteWriter", func(c *DispatcherConfig) { c.NoteWriter = nil }},
 		{"non-positive ActionTimeout", func(c *DispatcherConfig) { c.ActionTimeout = 0 }},

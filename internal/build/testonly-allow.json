@@ -260,11 +260,6 @@
     "expected_caller": "the daemon composition root, alongside egress.NewEngine"
   },
   {
-    "symbol": "internal/hooks/egress.TierUnset",
-    "reason": "The named zero value of SensitivityTier. It exists so that a caller reading the vocabulary sees that the unset tier is a real member that resolves to restricted, rather than discovering the fail-closed rule by accident. No production caller passes it on purpose, and one that did would be refused on every class that does not admit restricted content.",
-    "expected_caller": "none by design; it is the zero value, and the gate is asked to accept a named constant over a bare empty string"
-  },
-  {
     "symbol": "internal/policy.NewStoreDenyList",
     "reason": "The B-layer-backed configurable deny-list. The policy evaluation engine it plugs into (internal/policy.NewEngine) has no shipping caller yet either, and an engine built by nobody cannot be handed a deny-list by anybody. NewEngine attaches DefaultDenyList in the meantime, which is the empty-list behaviour and is fully wired.",
     "expected_caller": "the composition root that builds the policy engine, in the SAME change that retires the internal/policy.NewEngine entry"

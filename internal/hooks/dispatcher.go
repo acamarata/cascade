@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
@@ -41,6 +42,8 @@ type Dispatcher struct {
 	registry         *Registry
 	bus              *events.Bus
 	clock            runtime.Clock
+	firewall         Interceptor
+	egressToken      egress.Capability
 	pluginDispatcher PluginDispatcher
 	noteWriter       NoteWriter
 	actionTimeout    time.Duration
@@ -54,9 +57,19 @@ type Dispatcher struct {
 // (Art.1: this package invents no numeric or namespace defaults — the
 // composition root, which knows the real config, supplies them all).
 type DispatcherConfig struct {
-	Registry         *Registry
-	Bus              *events.Bus
-	Clock            runtime.Clock
+	Registry *Registry
+	Bus      *events.Bus
+	Clock    runtime.Clock
+	// Egress is the outbound firewall every dispatched action's
+	// parameters pass through. It is required: the composition root owns
+	// the vault and the detector, and a dispatcher built without it would
+	// hand operator-configured parameters straight across a process
+	// boundary.
+	Egress Interceptor
+	// EgressToken is the capability the registry issued for
+	// EgressClassHook. It is required for the same reason Egress is: the
+	// zero capability names no class and is refused.
+	EgressToken      egress.Capability
 	PluginDispatcher PluginDispatcher
 	NoteWriter       NoteWriter
 	ActionTimeout    time.Duration
@@ -75,6 +88,11 @@ func NewDispatcher(cfg DispatcherConfig) (*Dispatcher, error) {
 		return nil, fmt.Errorf("hooks: dispatcher: Bus is required")
 	case cfg.Clock == nil:
 		return nil, fmt.Errorf("hooks: dispatcher: Clock is required")
+	case cfg.Egress == nil:
+		return nil, fmt.Errorf("hooks: dispatcher: Egress is required")
+	case cfg.EgressToken.Class() != egress.EgressClassHook:
+		return nil, fmt.Errorf("hooks: dispatcher: EgressToken must be the capability for %q",
+			string(egress.EgressClassHook))
 	case cfg.PluginDispatcher == nil:
 		return nil, fmt.Errorf("hooks: dispatcher: PluginDispatcher is required")
 	case cfg.NoteWriter == nil:
@@ -94,6 +112,8 @@ func NewDispatcher(cfg DispatcherConfig) (*Dispatcher, error) {
 		registry:         cfg.Registry,
 		bus:              cfg.Bus,
 		clock:            cfg.Clock,
+		firewall:         cfg.Egress,
+		egressToken:      cfg.EgressToken,
 		pluginDispatcher: cfg.PluginDispatcher,
 		noteWriter:       cfg.NoteWriter,
 		actionTimeout:    cfg.ActionTimeout,
@@ -209,12 +229,20 @@ func (d *Dispatcher) runAction(ctx context.Context, hook HookConfig) (outcome ho
 
 	switch hook.ActionType {
 	case ActionTypePluginCall:
-		if err := d.pluginDispatcher.DispatchPluginCall(ctx, hook.ID, hook.ActionParams); err != nil {
+		params, ferr := interceptParams(ctx, d.firewall, d.egressToken, hook.ActionParams)
+		if ferr != nil {
+			return hookOutcome{result: ResultRefused, err: ferr}
+		}
+		if err := d.pluginDispatcher.DispatchPluginCall(ctx, hook.ID, params); err != nil {
 			return hookOutcome{result: ResultError, err: err}
 		}
 		return hookOutcome{result: ResultSuccess}
 	case ActionTypeAgentNote:
-		if err := d.noteWriter.WriteAgentNote(ctx, hook.ID, hook.ActionParams); err != nil {
+		params, ferr := interceptParams(ctx, d.firewall, d.egressToken, hook.ActionParams)
+		if ferr != nil {
+			return hookOutcome{result: ResultRefused, err: ferr}
+		}
+		if err := d.noteWriter.WriteAgentNote(ctx, hook.ID, params); err != nil {
 			return hookOutcome{result: ResultError, err: err}
 		}
 		return hookOutcome{result: ResultSuccess}

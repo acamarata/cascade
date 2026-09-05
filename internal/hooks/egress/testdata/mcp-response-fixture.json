@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":7,"result":{"output":{"content":[{"type":"text","text":"deploy finished; the runner used SECRET_PLACEHOLDER to authenticate"}],"is_error":false},"triggered":[]}}

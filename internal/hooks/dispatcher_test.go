@@ -127,10 +127,13 @@ func awaitAuditFire(t *testing.T, ctx context.Context, sub *events.Subscription,
 
 func newTestDispatcher(t *testing.T, reg *Registry, bus *events.Bus, clock *testkit.FrozenClock, pd PluginDispatcher, nw NoteWriter, timeout time.Duration) *Dispatcher {
 	t.Helper()
+	fw, tok := testFirewall(t)
 	d, err := NewDispatcher(DispatcherConfig{
 		Registry:         reg,
 		Bus:              bus,
 		Clock:            clock,
+		Egress:           fw,
+		EgressToken:      tok,
 		PluginDispatcher: pd,
 		NoteWriter:       nw,
 		ActionTimeout:    timeout,

@@ -57,7 +57,8 @@ type CoverageTier string
 
 // The four Art.4 package-class tiers.
 const (
-	// TierSecurity covers internal/{policy,secrets,audit} (>=90%).
+	// TierSecurity covers internal/{policy,secrets,audit} and the egress
+	// firewall (>=90%).
 	TierSecurity CoverageTier = "security"
 	// TierCore covers the rest of internal/** (>=85%).
 	TierCore CoverageTier = "core"
@@ -80,6 +81,10 @@ var coverageSecurityPackages = map[string]bool{
 	"internal/policy":  true,
 	"internal/secrets": true,
 	"internal/audit":   true,
+	// The egress firewall is the last boundary before bytes leave the
+	// process. It is security-class work by function rather than by
+	// directory prefix, so it is named here.
+	"internal/hooks/egress": true,
 }
 
 // PackageTier classifies importPath (module-relative, e.g.

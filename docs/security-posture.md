@@ -159,3 +159,102 @@ the vault write succeeds.
 `quarantine list`; the ledger keeps the record that it existed and that it was
 released. A quarantine with no way out is data loss, so recovery is part of the
 feature rather than an afterthought.
+
+## The egress firewall
+
+Egress is the last boundary. Whatever the firewall misses leaves the machine,
+and whatever it mangles the user sees as a broken tool. The two costs pull in
+opposite directions, and the resolution is stated once here: on this path,
+refusing to send is the safe failure.
+
+### Two passes
+
+Every outbound write goes through `Intercept`, which runs two passes in order.
+
+**The substitution pass** replaces credential material with a typed
+vault-reference tag. It runs in two stages of its own. First, an exact-substring
+match over every value the vault holds, tagged unconditionally: no entropy
+floor, no confidence threshold, no detector opinion. A secret the operator
+stored is a secret whatever it looks like, and a shapeless passphrase is exactly
+the case a shape-based detector misses. Second, the detector finds credential
+material the vault has never seen, at the confidence the operator configured.
+
+The grammar is the same one the turn rewriter uses, and there is no other:
+
+```
+<password>NAME</password>   <apikey>NAME</apikey>   <token>NAME</token>
+<connstr>NAME</connstr>     <pii kind="ssn|dob|account">NAME</pii>
+```
+
+`NAME` is a vault reference, never a value. The placeholder encodes nothing
+derived from the secret: not the bytes, not a hash, not the length. Two secrets
+of different lengths stored under one name substitute to identical output, which
+is what makes a length oracle impossible. Substituting already-substituted
+content changes nothing further, and identical input gives identical bytes.
+
+**The sensitivity pass** checks the tier the caller declared against what the
+destination class admits:
+
+| Declared tier | Admitted |
+|---|---|
+| `local-only` | only on a class whose registrant set `AllowLocalOnly` |
+| `restricted` | only on a class whose registrant set `AllowRestricted` |
+| `internal` | on any enabled class |
+| `public` | always |
+
+The tier is an explicit argument on every call. It is never derived from the
+content and never carried on a context: a byte slice declares nothing about
+itself, and a classification that can be lost by dropping a context is not a
+classification. An unset or unrecognised tier resolves to `restricted`, so the
+permissive answer is never the default one.
+
+### The choke point
+
+Registration is not advisory. Every outbound byte requires two things: a
+registered class, and a capability the firewall issued. A caller cannot
+construct a capability, because its only field is unexported and its only
+constructor is the registry's. Classes are refused by default: an unregistered
+class is refused before any content is examined, and a registered class that is
+not enabled is refused with nothing written.
+
+Refusals are total. On an unknown class, a disabled class, a missing capability,
+a tier the class does not admit, content the rewriter cannot parse, a vault that
+cannot be read, and a substitution that fails partway, the caller receives an
+error and nothing to write. There is no path that hands back partially
+substituted bytes.
+
+### Registered classes
+
+| Class | State | Owner |
+|---|---|---|
+| `mcp.response` | enabled | the tool-protocol response path |
+| `hook.response` | enabled | the hook engine's outbound action crossing |
+| `telemetry` | disabled, deferred | reserved so a caller gets a named refusal |
+| `oauth` | enabled | the token-endpoint call the vault's broker makes |
+| `provider-intake` | enabled | provider intake; health and recovery probes reuse it |
+| `spike-measurement` | enabled | a measurement spike, deleted with the spike |
+| `backup-target` | enabled, admits restricted | a remote backup destination |
+| `plugin-remote` | disabled until the remote-runtime key is set | the remote plugin runtime |
+| `registry-fetch` | enabled | the plugin registry fetch |
+
+Telemetry egress is deferred. Nothing in this documentation, the command help or
+the readme claims it is active, and the class refuses every call.
+
+Each subsystem that later gains an outbound path registers its own class and
+calls `Intercept` before writing. The package's own documentation carries the
+full owner list, and a drift test fails when that list and the specification's
+diverge by a single byte.
+
+### The import allowlist
+
+Network I/O is egress, so a package importing `net` or `net/http` must be one
+that goes through the firewall. The arch gate enforces an allowlist and turns
+red on a new importer that is on neither half of it: the set the ruling names,
+and the set of packages that predate the ruling, each carrying the reason it is
+still there. Naming them is what keeps the second list from becoming a place to
+hide.
+
+Spawning a process is not egress. It carries a separate, single-member list
+bound by the driver-boundary rules, and the two lists are never merged: merging
+them would let a `net/http` importer hide behind a process-spawn exemption. The
+gate refuses both smuggling directions.

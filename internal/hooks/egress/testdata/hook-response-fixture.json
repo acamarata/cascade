@@ -1,0 +1,1 @@
+{"hook_id":"deploy-plugin-call-0123456789ab","trigger":"deploy.finished","action_type":"plugin-call","action_params":{"endpoint":"https://example.invalid/deploy","credential":"SECRET_PLACEHOLDER"},"result_code":"success"}
