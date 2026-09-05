@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<token>\u30c8\u30fc\u30af\u30f3</token>")

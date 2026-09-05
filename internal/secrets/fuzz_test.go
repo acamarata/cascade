@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // detectorFuzzSeedDir is the by-target seed corpus, in the shared home
@@ -107,4 +108,79 @@ func decodeDetectorSeed(raw string) string {
 		}
 	}
 	return raw
+}
+
+// tagFuzzSeedDir is the tag parser's by-target seed corpus.
+const tagFuzzSeedDir = "../testdata/fuzz/FuzzTagParser"
+
+// FuzzTagParser drives ParseTag and the tag scanner over arbitrary input.
+//
+// The properties are stronger than "it did not panic". A tag that parses
+// must render back to the exact bytes it was read from, so the parser
+// cannot quietly drop or normalise content. Every span the scanner calls
+// a tag must itself parse, must lie inside the input and must not overlap
+// its neighbour, because the rewriter treats those spans as already
+// protected and would leave a credential alone on a wrong answer. And a
+// rewrite with no hits must return the input unchanged.
+func FuzzTagParser(f *testing.F) {
+	addTagSeeds(f)
+	rewriter := NewRewriter()
+	f.Fuzz(func(t *testing.T, data string) {
+		if tag, err := ParseTag([]byte(data)); err == nil {
+			if tag.String() != data {
+				t.Fatalf("ParseTag(%q) rendered back as %q", data, tag.String())
+			}
+		}
+		checkTagSpans(t, data)
+		if !utf8.ValidString(data) {
+			return
+		}
+		result, err := rewriter.Rewrite([]byte(data), nil)
+		if err != nil {
+			t.Fatalf("rewriting %q with no hits: %v", data, err)
+		}
+		if string(result.Text) != data {
+			t.Fatalf("rewriting %q with no hits produced %q", data, string(result.Text))
+		}
+	})
+}
+
+// checkTagSpans asserts the scanner's spans are real, parseable and
+// disjoint.
+func checkTagSpans(t *testing.T, data string) {
+	t.Helper()
+	previousEnd := 0
+	for _, span := range scanTags(data) {
+		if span.start < previousEnd || span.end > len(data) || span.start >= span.end {
+			t.Fatalf("scanTags returned span %+v for %d bytes", span, len(data))
+		}
+		if _, err := ParseTag([]byte(data[span.start:span.end])); err != nil {
+			t.Fatalf("scanTags returned a span that does not parse: %q: %v", data[span.start:span.end], err)
+		}
+		previousEnd = span.end
+	}
+}
+
+// addTagSeeds loads the checked-in corpus, and fails rather than skips
+// when it is missing: an unseeded target explores far less.
+func addTagSeeds(f *testing.F) {
+	f.Helper()
+	entries, err := os.ReadDir(tagFuzzSeedDir)
+	if err != nil {
+		f.Fatalf("reading the tag seed corpus: %v", err)
+	}
+	if len(entries) == 0 {
+		f.Fatal("the tag seed corpus is empty")
+	}
+	for _, entry := range entries {
+		raw, rerr := os.ReadFile(filepath.Join(tagFuzzSeedDir, entry.Name())) //nolint:gosec // fixed test corpus path
+		if rerr != nil {
+			f.Fatalf("reading seed %s: %v", entry.Name(), rerr)
+		}
+		f.Add(decodeDetectorSeed(string(raw)))
+	}
+	f.Add("<apikey>")
+	f.Add("</apikey>")
+	f.Add("<pii kind=\"\">A</pii>")
+	f.Add(strings.Repeat("<password>", 64) + "DEEP" + strings.Repeat("</password>", 64))
 }

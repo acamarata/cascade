@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<pii kind=\"ssn\">TAXPAYER_ID</pii><pii kind=\"dob\">BIRTH_DATE</pii><pii kind=\"account\">BANK_ACCOUNT</pii>")

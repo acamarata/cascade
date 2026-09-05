@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<password>WIFI_PASSWORD</password> <apikey>OPENAI_API_KEY</apikey> <token>BEARER_TOKEN</token> <connstr>DATABASE_URL</connstr>")
