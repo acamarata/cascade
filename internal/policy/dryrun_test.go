@@ -83,8 +83,7 @@ func simInput(capability string, level RiskLevel) DryRunInput {
 	return DryRunInput{Request: EvalRequest{
 		Subject:    testSubject(),
 		Capability: capability,
-		Level:      level,
-		Action:     "write a.txt",
+		Action:     commandForLevel(level),
 		Params:     []byte(`{"path":"a.txt"}`),
 		Summary:    "write a.txt",
 	}}
@@ -153,8 +152,10 @@ func TestDryRunVerdictDeny(t *testing.T) {
 	if res.Verdict != VerdictDeny || res.RiskLevel != L4 {
 		t.Fatalf("report = %+v, want a deny at L4", res)
 	}
-	if res.MatchedRule != LayerCapabilityDefault.String() {
-		t.Errorf("MatchedRule = %q, want the capability-default layer", res.MatchedRule)
+	// The capability's class raised the action to the deny rung, and the
+	// deny-list layer is what a destructive action then meets first.
+	if res.MatchedRule != LayerDenyList.String() {
+		t.Errorf("MatchedRule = %q, want the deny-list layer", res.MatchedRule)
 	}
 	if res.WouldEmitAudit {
 		t.Error("a deny reached the queue")
@@ -162,14 +163,17 @@ func TestDryRunVerdictDeny(t *testing.T) {
 }
 
 // TestDryRunElevationRequired proves ElevationRequired is a FLAG and not a
-// verdict (R-14.27): the same elevation-class verb is reported alongside an
-// allow on the read rung and alongside a deny at the ask rung, where the
-// queue refuses it as local-only.
+// verdict (R-14.27): with layer 2 satisfied by a verified attestation, the
+// same elevation-class verb is reported alongside an allow on the read
+// rung and alongside a deny at the ask rung, where the queue refuses it as
+// local-only.
 func TestDryRunElevationRequired(t *testing.T) {
 	f := newDryRunFixture(t)
+	f.engine.WithElevationVerifier(grantingElevation{})
 
 	read := simInput(readCap().Name, L0)
 	read.Request.Verb = "vault.get"
+	read.Request.ElevationNonce = "attested-in-this-turn"
 	allowed := f.simulate(t, read)
 	if !allowed.ElevationRequired || allowed.Verdict != VerdictAllow {
 		t.Errorf("report = %+v, want an allow that still flags elevation", allowed)
@@ -177,6 +181,7 @@ func TestDryRunElevationRequired(t *testing.T) {
 
 	ask := simInput(approvalCap().Name, L2)
 	ask.Request.Verb = "vault.get"
+	ask.Request.ElevationNonce = "attested-in-this-turn"
 	refused := f.simulate(t, ask)
 	if !refused.ElevationRequired {
 		t.Error("an elevation-class verb was not flagged at the ask rung")

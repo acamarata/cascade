@@ -204,3 +204,90 @@ func safeActionClass(a ActionClass) ActionClass {
 	}
 	return a
 }
+
+// DataClass is the sensitivity of the DATA an action would move, in the
+// R-21.27 ordering public < internal < confidential < secret. It is a
+// different axis from RiskLevel: the rung says how dangerous the ACTION is,
+// the class says how sensitive the MATERIAL is. Layer 0 of the evaluation
+// stack compares the class against the ceiling the destination lane
+// tolerates, which is why a standing grant on the action can never release
+// it: the grant authorizes the verb, not the disclosure.
+//
+// Like every other enum in this package the zero value is not a member.
+type DataClass uint8
+
+// The four classes, in R-21.27 order. Numeric order is sensitivity order.
+const (
+	_ DataClass = iota // 0 is deliberately not a valid DataClass
+
+	// DataClassPublic may travel anywhere, including a free-tier lane.
+	DataClassPublic
+	// DataClassInternal may travel to a lane whose provider policy says
+	// the material is not trained on.
+	DataClassInternal
+	// DataClassConfidential travels only to a lane the operator opted in
+	// for it.
+	DataClassConfidential
+	// DataClassSecret never leaves a local runtime.
+	DataClassSecret
+)
+
+// dataClassNames holds the stable wire name for each class, indexed by
+// value. Index 0 is the invalid zero value's placeholder.
+var dataClassNames = [...]string{"", "public", "internal", "confidential", "secret"}
+
+// String returns the class's stable name, e.g. "confidential".
+func (d DataClass) String() string {
+	if !d.Valid() {
+		return "invalid-data-class"
+	}
+	return dataClassNames[d]
+}
+
+// Valid reports whether d names one of the four classes.
+func (d DataClass) Valid() bool { return d >= DataClassPublic && d <= DataClassSecret }
+
+// safeDataClass maps any DataClass to one that is safe to act on: a valid
+// class passes through, and the zero value and anything out of range become
+// DataClassSecret. The fail-closed direction is the SENSITIVE one, so an
+// unset class is treated as the most restricted material rather than as
+// publishable, and a request that forgot the field is refused by any lane
+// that is not local.
+func safeDataClass(d DataClass) DataClass {
+	if !d.Valid() {
+		return DataClassSecret
+	}
+	return d
+}
+
+// LayerResult is what ONE layer of the evaluation stack answered. Every
+// layer that ran appends one, in the order it ran, whether or not it
+// decided; that is what makes the trace a record of the evaluation rather
+// than a reconstruction of it.
+type LayerResult struct {
+	// Index is the layer's position in the R-21.236 stack, 0 through 6.
+	Index uint8 `json:"index"`
+	// Layer names the layer.
+	Layer DecisionLayer `json:"layer"`
+	// Verdict is the verdict this layer yielded. A layer that did not
+	// decide carries the invalid zero value, which reads as "this layer
+	// settled nothing" and never as an allow.
+	Verdict Verdict `json:"verdict,omitempty"`
+	// Rule names the rule that matched, or the reason nothing did.
+	Rule string `json:"rule"`
+	// Decided reports whether this layer settled the evaluation.
+	Decided bool `json:"decided"`
+}
+
+// Trace is the explain-why record of ONE evaluation: every layer that ran,
+// which one decided, and the rendered explanation. It is produced BY the
+// evaluation, not derived from its result afterwards, so an explanation
+// that disagrees with its verdict is not a state this type can reach.
+type Trace struct {
+	// Layers are the layer results in evaluation order.
+	Layers []LayerResult `json:"layers"`
+	// MatchedRule is the deciding layer's rule.
+	MatchedRule string `json:"matched_rule"`
+	// Explanation is the human-readable rendering of Layers.
+	Explanation string `json:"explanation"`
+}

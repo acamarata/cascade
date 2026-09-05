@@ -60,7 +60,11 @@ func newEngineFixture(t *testing.T) *engineFixture {
 
 // readRequest is a request for the fixture's read capability at level.
 func readRequest(level RiskLevel) EvalRequest {
-	return EvalRequest{Subject: testSubject(), Capability: readCap().Name, Level: level}
+	return EvalRequest{
+		Subject:    testSubject(),
+		Capability: readCap().Name,
+		Action:     commandForLevel(level),
+	}
 }
 
 // TestPermissiveProfileCannotReleaseALowerLayerDenial is the property the
@@ -76,18 +80,18 @@ func TestPermissiveProfileCannotReleaseALowerLayerDenial(t *testing.T) {
 		wantErr bool
 	}{
 		{"classifier top rung", readRequest(L4), false},
-		{"classifier could not parse (unset level reads as L4)", readRequest(0), false},
-		{"classifier out-of-range level", readRequest(RiskLevel(200)), false},
+		{"the classifier could not parse the action (it reads as L4)", readRequest(0), false},
+		{"the classifier does not know the command form", readRequest(RiskLevel(200)), false},
 		{"capability is not registered", EvalRequest{
-			Subject: testSubject(), Capability: "memory.forge", Level: L0,
+			Subject: testSubject(), Capability: "memory.forge", Action: commandForLevel(L0),
 		}, true},
 		{"capability name is malformed", EvalRequest{
-			Subject: testSubject(), Capability: "Memory Read;rm -rf /", Level: L0,
+			Subject: testSubject(), Capability: "Memory Read;rm -rf /", Action: commandForLevel(L0),
 		}, true},
 		{"capability class raises an L0 request to L4", EvalRequest{
-			Subject: testSubject(), Capability: destructiveCap().Name, Level: L0,
+			Subject: testSubject(), Capability: destructiveCap().Name, Action: commandForLevel(L0),
 		}, false},
-		{"subject names nobody", EvalRequest{Capability: readCap().Name, Level: L0}, true},
+		{"subject names nobody", EvalRequest{Capability: readCap().Name, Action: commandForLevel(L0)}, true},
 	}
 	for _, tc := range cases {
 		out, err := f.engine.Evaluate(ctx, tc.req)
@@ -112,7 +116,7 @@ func TestPermissiveProfileCannotReleaseALowerLayerDenial(t *testing.T) {
 func TestUnknownCapabilityDeniesByIdentity(t *testing.T) {
 	f := newEngineFixture(t)
 	out, err := f.engine.Evaluate(context.Background(), EvalRequest{
-		Subject: testSubject(), Capability: "memory.forge", Level: L0,
+		Subject: testSubject(), Capability: "memory.forge", Action: commandForLevel(L0),
 	})
 	if !errors.Is(err, ErrCapabilityNotFound) {
 		t.Fatalf("error = %v, want ErrCapabilityNotFound", err)
@@ -142,7 +146,7 @@ func TestStandingGrantCannotPreAuthoriseL4(t *testing.T) {
 		t.Fatalf("Grant: %v", err)
 	}
 	out, err := f.engine.Evaluate(ctx, EvalRequest{
-		Subject: testSubject(), Capability: destructiveCap().Name, Level: L0,
+		Subject: testSubject(), Capability: destructiveCap().Name, Action: commandForLevel(L0),
 	})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)

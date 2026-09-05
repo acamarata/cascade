@@ -317,3 +317,85 @@ unresolvable, and an unresolvable tier is the restricted one. There is no
 value of that field, present or absent, that widens the reported reach:
 the tier narrows the grant's own class through the same choke point the
 live carrier narrows through.
+
+## The policy engine
+
+Every action reaches exactly one decision, through `Engine.Evaluate(ctx, EvalRequest)`.
+The daemon, the CLI and the dry-run simulator all call that function; none of them
+classifies anything itself, and none of them receives a bare verdict.
+
+`EvalRequest` carries the subject, the capability, the command text, the parameters, the
+data class of the material the action would move and the attributes a grant's conditions
+match against. It carries no risk level: the engine resolves the rung once, from the
+command text, through the classifier described above.
+
+`EvalOutcome` carries the verdict (`allow` / `ask` / `deny`, with no permissive zero
+value), whether an autonomous loop may advance past the action, the rung actually
+evaluated, the layer that decided, a one-line reason and the full `Trace`.
+
+### The seven layers
+
+| # | Layer | What it consults | What it can answer |
+|---|---|---|---|
+| 0 | `data-class` | the request's data class against the destination's ceiling | terminal refusal only |
+| 1 | `deny-list` | the unconditional never-allow set, plus the configured list | deny, or continue |
+| 2 | `elevation` | the in-memory elevation nonce ledger | deny, or continue |
+| 3 | `standing-grant` | the grant store | the grant's own verdict |
+| 4 | `capability-default` | the capability's action class | the profile's slot for the raised rung |
+| 5 | `autonomy-profile` | the running profile | the profile's slot for the rung |
+| 6 | `fail-closed` | nothing | deny |
+
+Layer 0 runs on EVERY evaluation and is NOT part of first-match-wins. A refusal there is
+terminal and arrives as `ErrDataClassDenied`, so a standing grant that would allow the
+action can never release the disclosure: the grant authorizes the verb, not the material.
+A request that declares no destination is not leaving the machine, so the layer has
+nothing to compare against and records that it passed.
+
+Layers 1 to 6 are first-match-wins in that order. The rung is resolved once, before layer
+0, and folded with the capability's own action class; the fold can only raise it. Layers
+consume the resolved rung and never re-classify.
+
+Layer 1's unconditional portion is the risk ladder's own sentence: a destructive or
+privileged action is deny-listed and is authorized in the same turn only. The configurable
+portion is the deny-list engine, consulted when one is attached; a deny-list that cannot
+be read counts as a match. A valid same-turn authorization overrides the ENTRY and nothing
+else: it records the override in the trace and CONTINUES to layer 2, so every elevated
+verb still faces the elevation check.
+
+**Layer 2 consults ONLY the in-memory elevation nonce ledger, which is the
+attestation-replay ledger. The approval queue's ledger is approval-token replay and is
+NEVER consulted by layer 2.** An elevated verb with no verified attestation is denied
+there, one layer before the approval queue would have refused to carry it.
+
+The autonomy profile is layer 5 and is therefore consulted LAST, for actions no layer
+above settled. That is what lets it restrict what the lower layers permitted while never
+releasing what they refused.
+
+### Explain-why
+
+`Trace` records one `LayerResult` per layer that ran, in the order they ran: the layer's
+index, its name, the verdict it yielded, the rule that matched or the reason nothing did,
+and whether it decided. `ExplainTrace` renders those results as one line each, marking the
+deciding line.
+
+The trace is produced BY the evaluation, not derived from the result afterwards, and the
+outcome's verdict and reason are read from the same `LayerResult` the trace records. An
+explanation that disagrees with its verdict is therefore not a state the type can reach.
+Rendering is a fixed walk over an ordered slice with no map iteration and no clock, so
+identical inputs produce byte-identical output.
+
+An ask that the approval queue then refuses is the one case with two deciding lines: the
+layer that asked, and the fail-closed line saying why the ask could not be filed. Both are
+shown rather than the first being overwritten.
+
+### Fail-closed rules
+
+- An unclassifiable action, a classifier refusal and a missing classifier all resolve to
+  the top rung. None is reported to the caller as an error: an unclassifiable action IS a
+  classification.
+- An invalid subject and an unregistered capability are terminal refusals that reach no
+  layer. Both still carry a trace, because a refusal with no explanation is the one answer
+  a user cannot act on.
+- An unset data class reads as the most restricted material; an unset verdict on a
+  `LayerResult` reads as "settled nothing" and never as an allow.
+- A missing autonomy profile falls through layer 5 to layer 6 and denies.

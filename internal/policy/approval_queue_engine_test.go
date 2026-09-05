@@ -35,8 +35,7 @@ func evalRequest() EvalRequest {
 	return EvalRequest{
 		Subject:    testSubject(),
 		Capability: approvalCap().Name,
-		Level:      L2,
-		Action:     "edit-a",
+		Action:     commandForLevel(L2),
 		Params:     []byte(`{"path":"a.txt"}`),
 		Summary:    "write edit-a",
 	}
@@ -112,9 +111,14 @@ func TestEngineDowngradesWhenTheQueueRefuses(t *testing.T) {
 		t.Fatalf("an empty summary is filled in from the capability name; verdict = %s, want ask", blank.Verdict)
 	}
 
-	// An elevation-class verb is the real case.
+	// An elevation-class verb is the real case. It reaches the queue only
+	// once layer 2 is satisfied by a verified attestation; the queue then
+	// refuses it because §5.14 reserves it for the local helper. Without
+	// the attestation the refusal is layer 2's own, one layer earlier.
+	eng.WithElevationVerifier(grantingElevation{})
 	elevated := evalRequest()
 	elevated.Verb = "vault.rotate"
+	elevated.ElevationNonce = "attested-in-this-turn"
 	out, err := eng.Evaluate(ctx, elevated)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)

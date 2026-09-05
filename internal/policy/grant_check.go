@@ -73,6 +73,7 @@ func (s *StoreGrants) Check(ctx context.Context, req CheckRequest) (Decision, er
 		Capability: capDef,
 		ScopeClass: g.ScopeClass,
 		ExpiresAt:  g.ExpiresAt,
+		Verdict:    g.EffectiveVerdict(),
 	}, nil
 }
 

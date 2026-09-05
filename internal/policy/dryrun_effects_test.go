@@ -161,8 +161,7 @@ func TestDryRunDoesNotWidenVisibility(t *testing.T) {
 	stranger := DryRunInput{Request: EvalRequest{
 		Subject:    Subject{Kind: SubjectAgent, ID: "lane-z"},
 		Capability: approvalCap().Name,
-		Level:      L2,
-		Action:     "write a.txt",
+		Action:     commandForLevel(L2),
 		Summary:    "write a.txt",
 	}}
 	res := f.simulate(t, stranger)

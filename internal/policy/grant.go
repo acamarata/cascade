@@ -157,6 +157,23 @@ type Grant struct {
 	// ExpiresAt is when the grant stops applying. The zero value means it
 	// does not expire on its own; a Revoke still ends it immediately.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
+	// Verdict is what a match yields, so a grant can say "ask" or "deny"
+	// as well as "allow" (R-21.237). A row that names no verdict yields
+	// allow, which is what a grant record has meant since the grant model
+	// landed: the row's existence IS the authorization, and a grant is
+	// written only by an authorizing act. Read it through
+	// EffectiveVerdict, never directly.
+	Verdict Verdict `json:"verdict,omitempty"`
+}
+
+// EffectiveVerdict is what a matching grant yields. An out-of-range value
+// reads as deny (safeVerdict), and an UNSET value reads as allow, per the
+// field's own documented meaning.
+func (g Grant) EffectiveVerdict() Verdict {
+	if g.Verdict == 0 {
+		return VerdictAllow
+	}
+	return safeVerdict(g.Verdict)
 }
 
 // Validate refuses a grant that could not be evaluated. It does not
@@ -216,6 +233,9 @@ type Decision struct {
 	ScopeClass corpus.VisibilityClass
 	// ExpiresAt is the grant's expiry, zero when it does not expire.
 	ExpiresAt time.Time
+	// Verdict is the matched grant's own verdict, already resolved
+	// through Grant.EffectiveVerdict.
+	Verdict Verdict
 }
 
 // Clock abstracts time.Now so no expiry check reads the wall clock

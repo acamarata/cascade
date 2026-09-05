@@ -62,10 +62,29 @@ func (e *Engine) enqueueAsk(ctx context.Context, req EvalRequest, out EvalOutcom
 		Summary:    approvalSummary(req),
 	})
 	if err != nil {
-		return denyOutcome(out.Level, out.Layer, askRefusalReason(err))
+		return downgradeToDeny(out, askRefusalReason(err))
 	}
 	out.ApprovalRequestID = res.RequestID
 	return out
+}
+
+// downgradeToDeny turns an ask the queue refused into a deny WITHOUT
+// rewriting the trace of how the ask was reached. The refusal is appended
+// as a further fail-closed step, so the explanation still names the layer
+// that decided to ask and then says why the ask could not be filed. An
+// explanation that quietly replaced the deciding layer would teach a
+// reader a rule the engine does not have.
+func downgradeToDeny(out EvalOutcome, reason string) EvalOutcome {
+	refusal := LayerResult{
+		Index:   LayerFailClosed.Index(),
+		Layer:   LayerFailClosed,
+		Verdict: VerdictDeny,
+		Rule:    reason,
+		Decided: true,
+	}
+	denied := denyOutcome(out.Level, out.Layer, reason)
+	denied.Trace = traceOf(append(out.Trace.Layers, refusal))
+	return denied
 }
 
 // askRefusalReason renders why the queue would not take the action, in

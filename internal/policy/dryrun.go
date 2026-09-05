@@ -69,7 +69,7 @@ func (e *Engine) Simulate(ctx context.Context, in DryRunInput) (DryRunResult, er
 			cascade.New(cascade.KindInvalidInput, "policy: nil engine")
 	}
 	if ctx == nil {
-		return deniedSimulation(in.Request.Level, "a simulation needs a context"),
+		return deniedSimulation(L4, "a simulation needs a context"),
 			cascade.New(cascade.KindInvalidInput, "policy: Simulate needs a context")
 	}
 	sink := &discardEffects{live: e.approvals}
@@ -87,11 +87,16 @@ func (e *Engine) Simulate(ctx context.Context, in DryRunInput) (DryRunResult, er
 // attaching one would make the simulated path take a branch the live path
 // does not take, which is the first way a simulator drifts.
 func (e *Engine) observeOnly(sink *discardEffects) *Engine {
-	sim := &Engine{registry: e.registry, grants: e.grants, autonomy: e.autonomy}
+	// The copy is field-for-field from the receiver, so a collaborator
+	// added to the engine later is carried into the simulation without
+	// this function being remembered. Dropping one would make the
+	// simulated path take a branch the live path does not take, which is
+	// the first way a simulator drifts.
+	sim := *e
 	if e.approvals != nil {
 		sim.approvals = sink
 	}
-	return sim
+	return &sim
 }
 
 // report renders the outcome Evaluate produced. Every policy field is

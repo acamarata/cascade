@@ -1,15 +1,5 @@
 [
   {
-    "symbol": "internal/context.Discover",
-    "reason": "Role-anchored tier discovery ships ahead of the surface that resolves a working directory. Its merge consumer (the tier-merge ticket) has since landed and takes an already-resolved []TierRecord, so it does not call Discover either; the first production caller is the composition root that turns a cwd into a merged instruction context, which is the harness-generation / context-assembly ticket, not this one.",
-    "expected_caller": "the harness instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3) or context assembly (S-09.T1), whichever first turns a working directory into a merged instruction context; retire this entry together with internal/context.MergeTiers"
-  },
-  {
-    "symbol": "internal/context.MergeTiers",
-    "reason": "The merge model is specified against an already-resolved []TierRecord, so its only caller is the surface that pairs it with Discover. That surface does not exist yet: no ticket before this one turns a working directory into a merged instruction context. Building the precedence engine before its consumer is the right order, since the consumer is specified against this result type; shipping a consumer that assembles instructions without a decided precedence rule would not be.",
-    "expected_caller": "the harness instruction-generation surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic E S-08 T3), which calls Discover then MergeTiers to render a harness instruction file; retire this entry and the internal/context.Discover entry together when it lands"
-  },
-  {
     "symbol": "internal/rpc.ElevationMiddleware",
     "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
     "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
@@ -150,13 +140,8 @@
     "expected_caller": "the `cascade policy audit query` command surface (04-PEWS-PLAN-W1-W3.md Epic I S-18.T6)"
   },
   {
-    "symbol": "internal/policy.NewCommandClassifier",
-    "reason": "The classifier is built one ticket before the evaluator that consumes it. Its own contract assigns the wiring to the deny-list and evaluation ticket in the same sprint, which injects the CommandClassifier seam that resolves a level once before the policy layers run. Constructing it from a caller that then discarded the level would prove nothing, so the state is recorded here instead of faked.",
-    "expected_caller": "the policy evaluation engine's injected CommandClassifier seam (04-PEWS-PLAN-W1-W3.md Epic I S-17.T4)"
-  },
-  {
     "symbol": "internal/memory.NewPromotionLadder",
-    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design — the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead.",
+    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead.",
     "expected_caller": "the session surface that records memory observations as they occur (04-PEWS-PLAN-W1-W3.md Epic G S-14.T4 forget pipeline's sibling observation path / the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
   },
   {
@@ -191,8 +176,8 @@
   },
   {
     "symbol": "internal/policy.NewMemoryRegistry",
-    "reason": "P1-E09-W2-S17-T1 delivers the capability registry, grant model and TEAM carrier as internals only; its files_scope is internal/policy, and the contract states explicitly that daemon-boot wiring of the production registry singleton lands with the consuming daemon ticket. The in-memory registry is a real, complete implementation (Art.1), not a stub — it is simply not yet constructed by the composition root.",
-    "expected_caller": "the daemon composition root that builds the policy registry at boot from the `policy` storage domain, and the policy CLI/RPC surface (04 §Epic I S-18.T6)"
+    "reason": "P1-E09-W2-S17-T1 delivers the capability registry, grant model and TEAM carrier as internals only; its files_scope is internal/policy, and the contract states explicitly that daemon-boot wiring of the production registry singleton lands with the consuming daemon ticket. The in-memory registry is a real, complete implementation (Art.1), not a stub \u2014 it is simply not yet constructed by the composition root.",
+    "expected_caller": "the daemon composition root that builds the policy registry at boot from the `policy` storage domain, and the policy CLI/RPC surface (04 \u00a7Epic I S-18.T6)"
   },
   {
     "symbol": "internal/policy.NewStoreGrants",
@@ -201,8 +186,8 @@
   },
   {
     "symbol": "internal/policy.NewTeamCarrier",
-    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
-    "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
+    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order \u2014 leaving it unwired once a sharing path exists would not be.",
+    "expected_caller": "the policy evaluation engine (04 \u00a7Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
   },
   {
     "symbol": "internal/policy.NewController",
@@ -212,7 +197,7 @@
   {
     "symbol": "internal/policy.NewEngine",
     "reason": "The evaluation entry point that binds R-14.26 layers 3-6 has no shipping caller yet: the surfaces that ask for a policy decision (the approval queue S-18.T3, the dry-run simulator S-18.T4, the hook routing S-18.T5 and the CLI surface S-18.T6) are later tickets in this sprint, and layers 1-2 (deny-list, elevation) compose in front of it from S-17.T4. The engine is fully implemented and exercised against the real grant store; only its callers are outstanding.",
-    "expected_caller": "the first policy-decision consumer to land — the approval queue (04-PEWS-PLAN-W1-W3.md Epic I S-18.T3) or the dry-run simulator (S-18.T4); retire this entry together with internal/policy.NewController"
+    "expected_caller": "the first policy-decision consumer to land \u2014 the approval queue (04-PEWS-PLAN-W1-W3.md Epic I S-18.T3) or the dry-run simulator (S-18.T4); retire this entry together with internal/policy.NewController"
   },
   {
     "symbol": "providers/embeddings/bgem3.New",
@@ -225,23 +210,33 @@
     "expected_caller": "the daemon composition root in cmd/cascade that wires the approval surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic I S-18.T6), in the SAME change that registers the first approval command; retire this entry then"
   },
   {
-    "symbol": "internal/secrets.NewDetector",
-    "reason": "The detector is built before the boundaries that scan. This ticket (P1-E08-W2-S15-T3) ships detection, scoring and quarantine together with the operator's review and recovery verbs, but the two places content is actually scanned - the memory write path and the recall pipeline - are owned by other tickets in this sprint and wave, and are being built in parallel. Wiring a scanner into a boundary that is itself mid-change would couple two lanes for no gain; the detector is a pure function over bytes, so the boundary calls it when the boundary is ready.",
-    "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15 T4's Rewriter, which consumes DetectionHit.SuggestedName as its typed-tag NAME ref); retire this entry together with internal/secrets.DefaultRegistry"
-  },
-  {
-    "symbol": "internal/secrets.DefaultRegistry",
-    "reason": "The pattern table is only constructed by whoever constructs a Detector, so it becomes production-reachable in exactly the same change that retires the NewDetector entry. Splitting the table into its own reviewable value is what makes 'what does cascade consider a credential' answerable in one file; it is not a separate unwired feature.",
-    "expected_caller": "the same composition point as internal/secrets.NewDetector (S-15.T4's Rewriter / the memory-write scan boundary); retire the two entries together"
+    "symbol": "internal/secrets.NewScrubber",
+    "reason": "The scrubber is the composed rewrite boundary - one detector over the default registry, one rewriter, one configuration - and it ships before the two boundaries that will scan. This ticket (P1-E08-W2-S15-T4) owns the tag grammar and the rewrite direction; the memory-write path and the recall pipeline that call a scrubber are other tickets in this sprint and wave, built in parallel, and the action-boundary rehydration that reverses the rewrite is S-16.T2. Wiring into a boundary that is itself mid-change would couple two lanes for no gain. Building the constructor here is what retired the internal/secrets.NewDetector and internal/secrets.DefaultRegistry entries: the detector and its pattern table are now constructed by shipping code, and this single entry stands in place of the two.",
+    "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15), or the action-boundary rehydration point (S-16.T2) - whichever lands first; retire this entry then, together with internal/secrets.ParseDetectionConfig once the [secrets] section has a typed consumer"
   },
   {
     "symbol": "internal/secrets.ParseDetectionConfig",
-    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today.",
+    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC \u00a73, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today.",
     "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry"
   },
   {
     "symbol": "internal/secrets.NewOAuthBroker",
     "reason": "The OAuth broker's production constructor - the one that wires the real loopback listener, the real HTTPS token client and the platform browser opener - ships ahead of any surface that runs an authorization. P1-E08-W2-S15-T2 defines the pkg/provider.OAuthBroker contract and implements it, and is explicitly scoped to declare no cmd/cascade surface (contract: 'the CLI flag itself is declared by J/S-20.T1'; 'no W2-to-W3 driver wiring occurs here'). Building the broker before its callers is the deliberate order: the Wave 3 drivers are specified against this interface, so it has to exist first. The unexported core constructor newOAuthBroker is what the tests use; this entry covers only the seam-wiring wrapper.",
     "expected_caller": "cmd/cascade's `provider add --oauth` command (J/S-20.T1), or the first Wave 3 driver that runs an authorization (J/S-19.T2 Anthropic, J/S-19.T4 Gemini) - whichever lands first; retire this entry then"
+  },
+  {
+    "symbol": "internal/context.GenerateCCInstructions",
+    "reason": "The working-directory pipeline (discover the tiers, merge them under the precedence rule, render the harness instruction files, materialize each one) is complete and drives Discover, MergeTiers, CCInstructionWriter.Generate and WriteHarnessFile from a single entry point, which is what retired the separate Discover and MergeTiers entries. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. The gap is one wiring change wide and is named here rather than hidden behind an unexported seam.",
+    "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test"
+  },
+  {
+    "symbol": "internal/policy.DataClassInternal",
+    "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
+    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
+  },
+  {
+    "symbol": "internal/policy.DataClassConfidential",
+    "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
+    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
   }
 ]
