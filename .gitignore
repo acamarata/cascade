@@ -22,3 +22,6 @@
 *.out
 coverage.txt
 coverage.html
+
+# Coverage profiles written by the gate checks and contract check lines.
+.cover/

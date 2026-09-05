@@ -39,6 +39,51 @@ the input's real ATX headings or top-level declarations — see below).
   preamble yield four chunks via the regex fallback's `rust` pattern;
   verified by eye against the real file's three functions.
 
+## v1-goldens/fts5_queries.json (full-text ranking golden)
+
+`fts5_queries.json` is a different shape from the chunk goldens above and
+is checked by `TestGoldenFTS5`. It is a KNOWN-ITEM retrieval fixture: each
+query is a distinctive passage lifted out of one document, so the correct
+answer is the document the passage came from, and the recorded expectation
+is that document's SOURCE PATH rather than any engine's ranked output.
+Nothing in it is this implementation's own output, so the golden cannot
+pass by agreeing with itself.
+
+- **queries** (15) come from `acamarata/cascade-v1` (archived, read-only
+  per `.claude/planning/p1/ARCHIVE-MAP.md`) at
+  `crates/cascade-rag/tests/fixtures/eval/queries.jsonl`, the dataset that
+  repo's own `scripts/gen-eval-corpus.py` generated from its 89 public
+  documents (dataset `cascade-docs-known-item` v1.0.0, generated from
+  commit `6c7ec3e35b0f994d0a488b2c35a678fbe59f4c42`). Only the queries
+  whose ground-truth document is one of the five documents below were
+  taken. Harvested from the local archive clone `../cascade-v1/` on
+  2026-09-05.
+- **documents** (5) are that same repo's own files, copied verbatim:
+  `docs/target-dir-hygiene.md`, `docs/coverage-baseline-2026-08-23.md`,
+  `.github/wiki/Scheduler.md`, `.github/wiki/Plugin-Development.md`,
+  `.github/wiki/RAG-Pipeline.md`. Input only, per SPEC-SALVAGE: no v1
+  logic or source is reused, and v1's Rust FTS5 ranker is not consulted
+  (it has no reusable Go golden form, the same reason recorded for the
+  chunk goldens above).
+
+### Engine provenance for this fixture (Art.2 §2)
+
+- **Storage engine**: SQLite through `providers/sqlite` (the pure-Go
+  `modernc.org/sqlite` driver, version as pinned in `go.mod`), opened by
+  the test on a real database file under `t.TempDir()`, never a mock
+  store.
+- **Tokenizer**: exact-token, Unicode-lowercased ASCII alphanumeric runs,
+  bounded at 64 characters (`internal/retrieval.tokenize`). This is
+  NARROWER than the `porter unicode61` tokenizer the ticket contract names:
+  Porter stemming is deliberately not implemented, because a hand-written
+  stemmer would be this package's own approximation of SQLite's asserted
+  against itself. Matching is therefore never wider than a stemmed index
+  would be. See `fts5_schema.go` for the recorded contract deviation on the
+  storage layout, and this ticket's journal for both sides quoted.
+- **Ranking**: BM25 with k1 = 1.2, b = 0.75, inverse document frequency in
+  the non-negative "plus one" form, ties broken by ascending chunk id.
+- **Captured**: 2026-09-05.
+
 ## fuzz corpus
 
 `FuzzChunk`'s seed corpus does NOT live in this directory. Per

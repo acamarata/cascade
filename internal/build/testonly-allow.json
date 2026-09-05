@@ -248,5 +248,30 @@
     "symbol": "internal/retrieval.NewLeg",
     "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change.",
     "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired"
+  },
+  {
+    "symbol": "internal/hooks/egress.NewEngine",
+    "reason": "The egress firewall is built before the composition root that owns the vault, the detector and the hooks dispatcher. The dispatcher already REQUIRES an engine and a capability, so the firewall is not optional; what is missing is the daemon wiring that constructs the dispatcher at all, which no ticket has landed yet. Building the boundary before the callers is the right order; leaving it unconstructed once a dispatcher is started would not be.",
+    "expected_caller": "the daemon composition root, in the SAME change that first constructs hooks.NewDispatcher"
+  },
+  {
+    "symbol": "internal/hooks/egress.DefaultRegistry",
+    "reason": "Supplies the registered classes to the engine and issues the hook capability. Retire together with the NewEngine entry.",
+    "expected_caller": "the daemon composition root, alongside egress.NewEngine"
+  },
+  {
+    "symbol": "internal/hooks/egress.TierUnset",
+    "reason": "The named zero value of SensitivityTier. It exists so that a caller reading the vocabulary sees that the unset tier is a real member that resolves to restricted, rather than discovering the fail-closed rule by accident. No production caller passes it on purpose, and one that did would be refused on every class that does not admit restricted content.",
+    "expected_caller": "none by design; it is the zero value, and the gate is asked to accept a named constant over a bare empty string"
+  },
+  {
+    "symbol": "internal/policy.NewStoreDenyList",
+    "reason": "The B-layer-backed configurable deny-list. The policy evaluation engine it plugs into (internal/policy.NewEngine) has no shipping caller yet either, and an engine built by nobody cannot be handed a deny-list by anybody. NewEngine attaches DefaultDenyList in the meantime, which is the empty-list behaviour and is fully wired.",
+    "expected_caller": "the composition root that builds the policy engine, in the SAME change that retires the internal/policy.NewEngine entry"
+  },
+  {
+    "symbol": "internal/policy.NewSameTurnLedger",
+    "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired.",
+    "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine"
   }
 ]
