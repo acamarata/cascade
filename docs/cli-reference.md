@@ -114,3 +114,16 @@ cascade completion fish > ~/.config/fish/completions/cascade.fish  # persistent
 cascade completion powershell | Out-String | Invoke-Expression   # current session
 # add the same line to your PowerShell profile for persistence
 ```
+
+## `cascade memory forget <kind>/<name>`
+
+Retires one record: the file is unlinked after its tombstone is written,
+the derived index is scrubbed, and the backup lane is told not to restore
+it. Nothing prompts, so `--dry-run` is the way to look before leaping and
+`--reason` records why, with the retirement, for later.
+
+The output lists every place the record left a mark and what happened to
+each, including the marks kept on purpose (the tombstone, the account, the
+consolidation account) and the ones nothing here can reach (a candidate
+draft, and the bytes themselves, which are unlinked and not shredded). See
+`docs/memory-architecture.md` § Forget pipeline.

@@ -36,6 +36,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/memory/forget"
 	"github.com/acamarata/cascade/internal/memory/review"
 	"github.com/acamarata/cascade/internal/runtime"
 )
@@ -194,6 +195,21 @@ type memoryJobEventSink struct {
 	bus *events.Bus
 }
 
+// memoryForgetOption builds the forget pipeline this daemon serves
+// memory.forget with, as a Handler option the composition root applies in
+// one line.
+//
+// No index is attached. This daemon runs no projection job, so there is no
+// index to scrub; attaching a job nothing fills would let the verb report
+// a clean index it never had. The verb's own output says the index leg was
+// not configured, which is the honest answer until the projection is
+// scheduled here.
+func memoryForgetOption(
+	base string, store memory.MemoryStore, clock runtime.Clock, sink memory.ForgetEventSink,
+) memory.HandlerOption {
+	return memory.WithForgetPipeline(forget.NewPipeline(base, store, clock, sink))
+}
+
 // Compile-time proof that the adapter still satisfies both sinks, so a
 // drifting interface fails the build here rather than at the call site.
 var (
@@ -201,6 +217,7 @@ var (
 	_ memory.StalenessEventSink     = memoryJobEventSink{}
 	_ memory.CandidateEventSink     = memoryJobEventSink{}
 	_ memory.DigestEventSink        = memoryJobEventSink{}
+	_ memory.ForgetEventSink        = memoryJobEventSink{}
 	_ review.ActionEventSink        = memoryJobEventSink{}
 )
 
@@ -239,6 +256,17 @@ func (s memoryJobEventSink) MemoryConsolidated(ctx context.Context, ev memory.Co
 
 // MemoryStaleQueued publishes the staleness event.
 func (s memoryJobEventSink) MemoryStaleQueued(ctx context.Context, ev memory.StaleQueuedEvent) error {
+	return s.publish(ctx, ev.EventName(), ev)
+}
+
+// MemoryForgotten publishes the retirement of one record.
+//
+// This is the note the backup and sync lane reads to keep a forgotten
+// record out of an incremental export, which is why the forget pipeline
+// treats a failure here as worth reporting even though the record is
+// already gone by then. The payload carries the address, the instant and
+// the caller's reason, and no part of the record's text.
+func (s memoryJobEventSink) MemoryForgotten(ctx context.Context, ev memory.ForgottenEvent) error {
 	return s.publish(ctx, ev.EventName(), ev)
 }
 

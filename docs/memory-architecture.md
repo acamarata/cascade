@@ -642,3 +642,86 @@ keys could be set to disagree, and a window shorter than the period would
 silently skip promotions. A cadence that is not a positive whole number of
 days is refused rather than read as "off": a user who wants no digest
 disables the job.
+
+## Forget pipeline
+
+`cascade memory forget <kind>/<name>` is the one verb in this system that
+destroys a user's own record. It runs a pipeline rather than a delete, and
+the pipeline's contract is not "the record is gone" but "here is every
+place this record left a mark, and here is what happened to each".
+
+### What it does, in order
+
+1. **Account first.** Before anything is removed, an account is written to
+   `{base}/forgotten/{kind}/{name}.forget.json`, carrying the entity id,
+   the reason, the request instant and the schema version. Every later
+   state is therefore legible on disk: an interrupted forget says which
+   address it was retiring and how far it got.
+2. **Index second.** The projected row, its full-text postings and its
+   vector are removed through the projection's `ScrubRecord`.
+3. **Record third.** The store writes the tombstone and unlinks the file,
+   in that order, so the deletion is durable from the moment the tombstone
+   lands.
+4. **Event last.** A `memory.forgotten` event carrying the address, the
+   instant and the reason is published, so the backup and sync lane can
+   exclude the entity from an incremental export. Without it, a restore
+   would bring a forgotten record back.
+
+The index is scrubbed **before** the file is removed, not after. A crash in
+that window leaves a record that is still on disk and still returned by the
+file-scanning verbs, with only a derived index briefly behind the files,
+which is the state this system already treats as normal and repairs on the
+next projection run. The reverse order would leave the opposite: a record
+the user has been told is gone, still answering searches out of a stale row
+that carries its body.
+
+### Idempotence and resumption
+
+A second forget of a completed address does nothing and reports
+`already_forgotten`. A forget of an address whose account is incomplete
+resumes: the scrub removes nothing when there is nothing to remove, the
+delete is skipped when the record is already gone, and the event is emitted
+only if the account says it has not been. No interruption leaves work that
+a later call cannot finish. The account is only marked complete once every
+step, the event included, has succeeded.
+
+### What survives a forget
+
+The verb reports all of this on every call, so nothing has to be inferred
+from silence.
+
+| Place | Disposition | Why |
+|---|---|---|
+| Record file | removed | Unlinked after its tombstone is written. |
+| Projection row and postings | removed | Retracted exactly, from the row's own stored token set. |
+| Vector index entry | removed | Deleted by address. |
+| Tombstone | kept | Removing it would bring the record back on the next scan. |
+| Forget account | kept | Records the address, time and reason, and never the record's text. |
+| Consolidation account | kept | It explains what happened to *other* records; editing it would take their explanation away. |
+| Staleness queue | kept | Holds addresses only; the next scan recomputes it without this record. |
+| Backup and sync note | kept | The event is the point: it is what stops a restore returning the record. |
+| Candidate ledger and review queue | **unreachable** | A candidate for this address keeps its draft, which repeats the record's text. The ledger contract has no delete for this pipeline to call. |
+| Record bytes on disk | **unreachable** | The file is unlinked, not shredded. The bytes may remain recoverable from the file system, a backup or a snapshot. |
+
+A forget of one record changes exactly two things in the tree besides the
+account: the record file goes and its tombstone appears. Lexical
+neighbours, records of other kinds, records of the same name in another
+kind, consolidation accounts and the review queue are untouched.
+
+When no index is wired to the pipeline, the two index rows above report
+`not_configured` rather than `removed`. That is not the same claim as "the
+index was clean", and the verb does not make the stronger one.
+
+### Verification, and the orphan check
+
+The scrub is verified by re-running it: a second `ScrubRecord` of the same
+address that removes nothing is a direct assertion of absence, rather than
+trust in the first call's return code.
+
+`ProjectionJob.Orphans` is the doctor check for the whole store: it reports
+every projected row still answering queries for a record the files no
+longer hold. That is this system's equivalent of an orphaned blob, and
+finding one means a forget was interrupted between removing the file and
+scrubbing the index, or that the projection has not run since a record was
+deleted outside the store. A row already marked retired is not an orphan:
+its body and postings are cleared and it answers nothing.

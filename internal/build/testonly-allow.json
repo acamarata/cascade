@@ -126,7 +126,7 @@
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
-    "reason": "The projection is the memory store's derived read side. The memory CLI verbs have now landed (P1-E07-W2-S13-T3) and deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. So the remaining gap is one caller, not two, and it is named below. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
+    "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
     "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
   },
   {
@@ -141,8 +141,8 @@
   },
   {
     "symbol": "internal/memory.NewPromotionLadder",
-    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead.",
-    "expected_caller": "the session surface that records memory observations as they occur (04-PEWS-PLAN-W1-W3.md Epic G S-14.T4 forget pipeline's sibling observation path / the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
+    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
+    "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
   },
   {
     "symbol": "internal/audit.New",

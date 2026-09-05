@@ -92,7 +92,10 @@ func registerMemoryHandler(
 ) {
 	base := memoryStoreDir(paths)
 	store := memory.NewFileStore(base, clock)
-	memory.NewHandler(store, clock).Register(registry)
+	sink := memoryJobEventSink{bus: bus}
+	// Without the forget pipeline (G/S-14.T4) memory.forget would tombstone
+	// the file and stop: no index scrub, no note to the backup lane.
+	memory.NewHandler(store, clock, memoryForgetOption(base, store, clock, sink)).Register(registry)
 	memory.NewSoulHandler(memory.NewFileSoulStore(base, clock, soulDivergenceSink{bus})).Register(registry)
 	// The memory.review.* namespace (G/S-14.T3). Its queue is built over
 	// the SAME store tree and a candidate ledger rooted at the same base
@@ -102,7 +105,6 @@ func registerMemoryHandler(
 	// state — unlike the Consolidator, whose in-process re-entrancy guard
 	// is exactly why the manual and scheduled consolidation paths must
 	// share one value.
-	sink := memoryJobEventSink{bus: bus}
 	ledger := memory.NewFileCandidateLedger(base, store, clock, sink)
 	review.NewHandler(review.NewQueue(ledger, clock, sink)).Register(registry)
 	// admin is nil only where no scheduler was wired (the Windows daemon

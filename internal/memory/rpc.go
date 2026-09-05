@@ -109,13 +109,38 @@ type RememberResult struct {
 type Handler struct {
 	store MemoryStore
 	clock Clock
+	// forget is the full retirement pipeline, when one is wired. It is
+	// optional rather than required so this handler stays constructible
+	// from a caller that has only a store; memory.forget says in its own
+	// result which of the two it was, and never claims the pipeline's
+	// guarantees without the pipeline.
+	forget Forgetter
+}
+
+// HandlerOption configures a Handler at construction. It is a variadic
+// option rather than a wider constructor because the store and the clock
+// are the only two things every caller has, and a third positional
+// argument would make every existing call site pass a nil it does not
+// mean.
+type HandlerOption func(*Handler)
+
+// WithForgetPipeline makes memory.forget run the full retirement pipeline
+// instead of a bare store delete. Without it the verb still tombstones the
+// record, and its result reports that no index was scrubbed and no backup
+// note was sent.
+func WithForgetPipeline(f Forgetter) HandlerOption {
+	return func(h *Handler) { h.forget = f }
 }
 
 // NewHandler returns a Handler serving store, taking its timestamps from
 // clk. Both are required; a nil store would turn every call into a panic
 // at the far end of an RPC, which is a crash reported as a hang.
-func NewHandler(store MemoryStore, clk Clock) *Handler {
-	return &Handler{store: store, clock: clk}
+func NewHandler(store MemoryStore, clk Clock, opts ...HandlerOption) *Handler {
+	h := &Handler{store: store, clock: clk}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Register binds all four memory.* methods on r. This is the whole of the

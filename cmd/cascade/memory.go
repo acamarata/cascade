@@ -199,11 +199,15 @@ func newMemoryForgetCmd(deps memoryDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "forget <kind>/<name>",
 		Short: "Retire one memory record by its canonical address",
-		Long: "Tombstone the record at <kind>/<name>. This is destructive: the\n" +
-			"record's file is removed and a tombstone is left in its place, so\n" +
-			"the deletion survives an interruption. Nothing else is touched —\n" +
-			"no other record, and no other kind. The bytes are NOT scrubbed\n" +
-			"from the disk; that is the forget pipeline's job, not this verb's.\n\n" +
+		Long: "Retire the record at <kind>/<name>. This is destructive: the\n" +
+			"record's file is removed, a tombstone is left in its place so the\n" +
+			"deletion survives an interruption, the derived index is scrubbed\n" +
+			"and the backup lane is told not to restore it. Nothing else is\n" +
+			"touched: no other record, and no other kind.\n\n" +
+			"The output lists every place this record leaves a mark and what\n" +
+			"happened to each, including the marks that are kept on purpose and\n" +
+			"the ones nothing here can reach. The bytes are NOT scrubbed from\n" +
+			"the disk.\n\n" +
 			"Nothing prompts. Use --dry-run to see what would be retired.",
 		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -215,7 +219,9 @@ func newMemoryForgetCmd(deps memoryDeps) *cobra.Command {
 			return memoryWriter(cmd).Result(forgetView{result})
 		},
 	}
-	cmd.Flags().BoolVar(&params.DryRun, "dry-run", false, "report what would be retired without retiring it")
+	flags := cmd.Flags()
+	flags.BoolVar(&params.DryRun, "dry-run", false, "report what would be retired without retiring it")
+	flags.StringVar(&params.Reason, "reason", "", "why the record is being retired, recorded with the retirement")
 	return cmd
 }
 

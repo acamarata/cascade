@@ -62,7 +62,29 @@ func (v forgetView) String() string {
 	if v.DryRun {
 		return fmt.Sprintf("would forget %s (dry run: nothing was removed)", v.ID)
 	}
-	return fmt.Sprintf("forgot %s (tombstoned; no other record was touched)", v.ID)
+	var buf bytes.Buffer
+	switch {
+	case v.AlreadyForgotten:
+		fmt.Fprintf(&buf, "%s was already forgotten; nothing was removed", v.ID)
+	default:
+		fmt.Fprintf(&buf, "forgot %s (tombstoned; no other record was touched)", v.ID)
+	}
+	if v.EventError != "" {
+		fmt.Fprintf(&buf, "\nthe backup lane was not told: %s", v.EventError)
+	}
+	if len(v.Traces) == 0 {
+		return buf.String()
+	}
+	buf.WriteString("\n\nwhere this record left a mark:\n")
+	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
+	// bytes.Buffer never fails a write, so tabwriter's writes through it
+	// never do either; errcheck still wants the result handled.
+	_, _ = fmt.Fprintf(tw, "PLACE\tRESULT\tDETAIL\n")
+	for _, t := range v.Traces {
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", t.Place, t.Disposition, t.Detail)
+	}
+	_ = tw.Flush()
+	return strings.TrimRight(buf.String(), "\n")
 }
 
 // unitsView renders a set of records for recall and list. Both verbs

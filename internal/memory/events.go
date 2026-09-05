@@ -140,3 +140,61 @@ func SummarizeCandidate(c CandidateEntry) CandidateSummary {
 		SnoozeUntil: utcPtr(c.SnoozeUntil),
 	}
 }
+
+// MemoryForgottenEvent names, on the audit bus, the retirement of one
+// record at a user's explicit request.
+const MemoryForgottenEvent = "memory.forgotten"
+
+// ForgottenEvent is the payload the forget pipeline publishes once a
+// record has been retired.
+//
+// It carries the ADDRESS, the instant and the stated reason, and never the
+// record's description or body. A bus event fans out to every subscriber,
+// and a subscriber that asked to know a record was forgotten must not
+// receive, as the price of that notice, a copy of the thing the user just
+// asked to be rid of. The same rule the weekly digest follows above, for
+// the same reason, and it matters more here.
+//
+// Its first consumer is the backup and sync lane, which uses it to exclude
+// the entity from an incremental export. That is why the event is emitted
+// at all: without it, a forgotten record comes back at the next restore,
+// which is not what a user who asked to forget something means.
+type ForgottenEvent struct {
+	// EntityID is the canonical "<kind>/<name>" address that was retired.
+	EntityID string `json:"entity_id"`
+	// Timestamp is when the retirement completed, from the injected clock.
+	Timestamp time.Time `json:"timestamp"`
+	// Reason is the caller's stated reason, verbatim and possibly empty.
+	// It is the user's own words about their own record, not the record's
+	// content.
+	Reason string `json:"reason"`
+}
+
+// EventName returns the bus name of this event.
+func (ForgottenEvent) EventName() string { return MemoryForgottenEvent }
+
+// ForgetEventSink receives one event per completed retirement.
+//
+// It is declared here, at the point of use, for the reason
+// ConsolidationEventSink gives. A sink failure is reported to the caller
+// but does NOT fail the forget: by the time the event is offered the
+// record is already gone, and refusing the call would tell a user their
+// forget failed when it did not. The failure is carried in the outcome
+// instead, so a caller can see that the backup lane was not told.
+type ForgetEventSink interface {
+	// MemoryForgotten reports one retirement.
+	MemoryForgotten(ctx context.Context, ev ForgottenEvent) error
+}
+
+// discardForgetEvents is the sink a pipeline built with no sink uses. It
+// is a real, complete implementation: a caller with no event bus is a
+// supported configuration, and the outcome still says the event was not
+// carried anywhere, so nothing is claimed that did not happen.
+type discardForgetEvents struct{}
+
+// MemoryForgotten discards the event.
+func (discardForgetEvents) MemoryForgotten(context.Context, ForgottenEvent) error { return nil }
+
+// DiscardForgetEvents returns the no-op forget sink, for a caller that
+// runs the pipeline with no bus wired.
+func DiscardForgetEvents() ForgetEventSink { return discardForgetEvents{} }
