@@ -1,5 +1,8 @@
 # v1-goldens: provenance
 
+> Package-level provenance index for every `internal/context` fixture:
+> [`../README.md`](../README.md). Start there.
+
 Golden scenario fixtures for `TestDiscoverGolden` (`internal/context/discover_test.go`),
 harvested per T-1's task list from v1's role-anchored tier resolver.
 

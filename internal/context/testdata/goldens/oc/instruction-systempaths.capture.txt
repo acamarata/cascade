@@ -1,0 +1,5 @@
+var wX=(A)=>["AGENTS.md",...A?[]:["CLAUDE.md"],"CONTEXT.md"];function zb(A){let j=ne
+
+B=[k6.join(r.config,"AGENTS.md"),...!e.disableClaudeCodePrompt?[k6.join(r.home,".claude","CLAUDE.md")]:[]],s=wX(e.disableClaudeCodePrompt),d=yield*S.make(i.fn("Instruction.
+
+m=i.fn("Instruction.systemPaths")(function*(){let g=yield*A.get(),l=yield*S.context,C=new Set;for(let G of B)if(yield*j.existsSafe(G)){C.add(k6.resolve(G));break}if(!z7.OPENCODE_DISABLE_PROJECT_CONFIG)for(let G of s){let Y=yield*j.findUp(G,l.directory,l.worktree).pipe(i.catch(()=>i.succeed([])));if(Y.length>0){Y.forEach((p)=>C.add(k6.resolve(p)));break}}if(g.instructions)for(let G of g.instructions){if(G.startsWith("https://")||G.startsWith("http://"))continue;let Y=G.startsWith("~/")?k6.join(r.home,G.slice(2)):G;(yield*(k6.isAbsolute(Y)?j.glob(k6.basename(Y),{cwd:k6.dirname(Y),absolute

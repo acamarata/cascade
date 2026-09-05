@@ -1,0 +1,16 @@
+# AGENTS.md instructions for <WORKSPACE>/app
+
+<INSTRUCTIONS>
+# GCI
+global tier marker GCIMARK
+
+--- project-doc ---
+
+# PRI
+pri tier marker PRIMARK
+
+
+# PAI
+pai tier marker PAIMARK
+
+</INSTRUCTIONS>

@@ -120,11 +120,6 @@
     "expected_caller": "the ingest-walk entry point that reads a repo's files and calls ChunkerFor(path) before Chunk-ing each one, landing with the T2 FTS5-indexing ticket"
   },
   {
-    "symbol": "internal/retrieval/rrf.StrategyFTS",
-    "reason": "The full-text leg's name. The vector leg names itself and ships; the full-text leg is a different ticket in the preceding sprint and has not landed, so nothing in the running program labels a list with this name yet.",
-    "expected_caller": "the full-text index leg (Epic F sprint 10 ticket 2), which labels its ranked list with it"
-  },
-  {
     "symbol": "internal/memory.NewProjectionJob",
     "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
     "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
@@ -230,6 +225,11 @@
     "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test"
   },
   {
+    "symbol": "internal/context.GenerateHarnessInstructions",
+    "reason": "The multi-harness pipeline (discover the tiers once, merge them once, then render and materialize the files of every harness serializer the registry lists) is complete and drives Discover, MergeTiers, every registered writer's Generate and WriteHarnessFile from a single entry point. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. It supersedes the CC-only pipeline entry above it, which should be retired in the same change.",
+    "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry and the internal/context.GenerateCCInstructions entry together in the change that adds the verb and its end-to-end test"
+  },
+  {
     "symbol": "internal/policy.DataClassInternal",
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
     "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
@@ -238,5 +238,15 @@
     "symbol": "internal/policy.DataClassConfidential",
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
     "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
+  },
+  {
+    "symbol": "internal/retrieval.NewIndex",
+    "reason": "The full-text index is complete and is driven end to end by the leg next to it, but nothing that ships constructs one yet: the daemon's recall composition root builds its service with the vector leg alone, and the ingest walk that would feed the index chunks off disk is a separate ticket. The index is a real implementation over the real store (Art.1), not a stub; it is simply not yet constructed by a composition root, and this entry must not outlive the change that builds one.",
+    "expected_caller": "the daemon's recall composition root, in the same change that opens the retrieval domain's store and hands the index to NewLeg alongside the ingest walk that populates it"
+  },
+  {
+    "symbol": "internal/retrieval.NewLeg",
+    "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change.",
+    "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired"
   }
 ]
