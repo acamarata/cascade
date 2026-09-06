@@ -1,6 +1,6 @@
 package audit
 
-// Purpose: the audit domain's on-record schema, the CLOSED eleven-value
+// Purpose: the audit domain's on-record schema, the CLOSED fourteen-value
 //   event-kind enum, the caller-supplied Event, the sealed Record that is
 //   written, the key layout inside the audit domain namespace, and the
 //   hash chain that makes a later alteration detectable rather than
@@ -11,7 +11,7 @@ package audit
 //   pkg/cascade taxonomy error.
 // Constraints: pure functions only, no clock, no I/O, no randomness
 //   beyond newID's crypto/rand draw. Validation FAILS CLOSED: an event
-//   kind outside the eleven, a non-JSON explain body, or a control
+//   kind outside the fourteen, a non-JSON explain body, or a control
 //   character in a field is refused, never stored "best effort".
 //
 //   CONTRACT DEVIATION (recorded, not papered over). The contract for
@@ -43,13 +43,13 @@ import (
 
 // Kind is the closed set of auditable event kinds. It is a defined string
 // type so a typo is a compile-time mismatch rather than a row nothing can
-// ever query for. The set is CLOSED at the eleven values below: a
+// ever query for. The set is CLOSED at the fourteen values below: a
 // consumer needing a twelfth amends this package's contract instead of
 // minting one at a call site, which is why Append refuses an unknown kind
 // outright.
 type Kind string
 
-// The eleven ratified event kinds.
+// The fourteen ratified event kinds (R-21.235).
 const (
 	KindPolicyDecide     Kind = "policy.decide"
 	KindPolicyRoute      Kind = "policy.route"
@@ -62,6 +62,15 @@ const (
 	KindElevationAttempt Kind = "elevation.attempt"
 	KindElevationGrant   Kind = "elevation.grant"
 	KindElevationDeny    Kind = "elevation.deny"
+
+	// R-21.235 ratifies fourteen, not eleven. I/S-18.T2 shipped eleven and
+	// its journal recorded the enum as "closed 11-value", so the ruling's
+	// remaining three were never added and every consumer of them failed
+	// closed at Append. H/S-16.T4's clipboard audit is the first to need
+	// one (R-14.200).
+	KindSecretsClipboardWrite  Kind = "secrets.clipboard_write"
+	KindSecretsQuarantineFlush Kind = "secrets.quarantine_flush"
+	KindVaultAccess            Kind = "vault.access"
 )
 
 // AllKinds is the enum in a stable, documented order. Ranging over this
@@ -72,6 +81,7 @@ var AllKinds = []Kind{
 	KindConfigReload,
 	KindApprovalGrant, KindApprovalDeny,
 	KindElevationAttempt, KindElevationGrant, KindElevationDeny,
+	KindSecretsClipboardWrite, KindSecretsQuarantineFlush, KindVaultAccess,
 }
 
 // validKinds is the membership set Valid consults, built once from
@@ -84,14 +94,14 @@ var validKinds = func() map[Kind]bool {
 	return m
 }()
 
-// Valid reports whether k is one of the eleven ratified kinds. Anything
+// Valid reports whether k is one of the fourteen ratified kinds. Anything
 // else, including the empty Kind, is invalid.
 func (k Kind) Valid() bool { return validKinds[k] }
 
 // Domain sentinels. Each names one refusal precisely and wraps exactly one
 // Kind from pkg/cascade's frozen fourteen; none is invented here.
 var (
-	// ErrUnknownKind is returned for an event kind outside the eleven.
+	// ErrUnknownKind is returned for an event kind outside the fourteen.
 	ErrUnknownKind = cascade.New(cascade.KindInvalidInput, "audit: unknown event kind")
 	// ErrInvalidEvent is returned for an otherwise malformed event.
 	ErrInvalidEvent = cascade.New(cascade.KindInvalidInput, "audit: invalid event")
@@ -154,7 +164,7 @@ const maxFieldBytes = 512
 // record "these were the parameters" without recording the parameters:
 // hash them with HashParams and store the digest.
 type Event struct {
-	// Kind is one of the eleven ratified kinds.
+	// Kind is one of the fourteen ratified kinds.
 	Kind Kind `json:"kind"`
 	// Actor names who or what took the action (a user id, a plugin id,
 	// "scheduler").

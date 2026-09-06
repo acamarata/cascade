@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -176,7 +177,7 @@ const (
 // composition-root wiring this closes: without it, status.get would exist,
 // be tested, and be unreachable from a live daemon, exactly the pattern
 // R-14.166 named and forbade going forward.
-func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler) (*http.Server, *daemon.Manifest, *int64, error) {
+func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
 	}
@@ -213,6 +214,16 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// connection rather than threading platformDaemonRun's rawDB through
 	// this function's signature.
 	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
+		return nil, nil, nil, err
+	}
+
+	// recall.index.* (F/S-11.T4), registered for the same reason. A nil
+	// store (some existing test harnesses' minimal buildRPCServer calls)
+	// leaves the namespace unregistered rather than reaching into a store
+	// that does not exist — see internal/daemon/recall_index.go's doc
+	// comment.
+	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
+	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
 		return nil, nil, nil, err
 	}
 

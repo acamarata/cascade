@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -82,6 +83,13 @@ func runtimeReaderCeiling() int {
 	ceiling := runtimeSchemaVersion
 	if scope.SchemaVersion > ceiling {
 		ceiling = scope.SchemaVersion
+	}
+	// lifecycle.SchemaVersion: the retrieval index domain's slot (F/S-11.T4).
+	// See lifecycle/migrate.go's SCHEMA VERSION doc comment for why this
+	// term is required, not optional, the moment that package's Migrate
+	// verb ever runs against this binary's cascade.db.
+	if lifecycle.SchemaVersion > ceiling {
+		ceiling = lifecycle.SchemaVersion
 	}
 	return ceiling
 }

@@ -92,3 +92,24 @@ public repository.
 **Regenerating it.** Only if RFC 7636's parameter set changes, or a driver finds
 a vendor that requires an additional parameter. Update the table's tool version
 and date in the same commit.
+
+## Clipboard fallback — pbcopy and xclip provenance (P1-E08-W2-S16-T4)
+
+The clipboard fallback's Art.2 external-contract counterparts are the real
+platform clipboard tools, not a stand-in. `TestClipboard_Darwin_RealPbcopy`
+and `TestClipboard_Linux_RealXclip` invoke them directly.
+
+| | |
+|---|---|
+| darwin tool | `/usr/bin/pbcopy`, part of the macOS base system (no separate version string; pbcopy takes no `--version` flag). |
+| darwin captured on | macOS 26.6.2 (Darwin kernel 25.6.0, arm64), 2026-09-06. |
+| linux tool | `xclip`, invoked as `xclip -selection clipboard -i` (write) and `xclip -selection clipboard -o` (read-back, test-only). |
+| linux capture method | `TestClipboard_Linux_RealXclip` skips (does not fail) when xclip is not installed on the host running the test; the linux CI lane runs it against its own installed xclip and records the version it resolves via `xclip -version` in that lane's own log. |
+| What is proved | The production ops writes a marker value through the tool's stdin, the tool's own read-back command reports the marker, and the ops's two-step clear (space, then empty) leaves the tool no longer reporting the marker. |
+| What is not proved | Neither test asserts a specific tool version pins the wire behavior — both tools' stdin-write/selection-read contract has been stable for over a decade, and clipboard content is inherently host-state, not a byte-for-byte fixture that could be checked in. |
+| Contains a real credential | No. Both tests write literal marker strings (`cascade-clipboard-<platform>-real-test-marker`), never a real secret. |
+
+**Regenerating.** Nothing to regenerate: these tests run the live tool on
+whatever host executes them, per Art.5's per-platform CI lane. Update the
+darwin version line if pbcopy's behavior is ever found to differ across macOS
+releases.

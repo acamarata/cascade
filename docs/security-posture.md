@@ -337,3 +337,77 @@ exactly one caller wins, and the winner writes a stable execution id before
 anything is dispatched. Executors de-duplicate on that id. A process killed
 between the consume and the run recovers by re-driving the same execution id:
 the consume is never lost, and a second execution is never issued.
+
+## Clipboard fallback
+
+The clipboard is the last-resort delivery channel for a value an operator must
+paste into a target that cannot be automated. It is time-bounded and audited,
+never an open API a caller can drop a secret into and walk away from.
+
+**The 30-second auto-clear.** A write to the clipboard schedules a two-step
+clear 30 seconds later: one write of a single ASCII space, then one
+zero-length write, in that order. The second step exists to defeat
+clipboard-history tools that would otherwise keep serving the last
+non-empty entry after the first overwrite. Both steps run and are recorded
+even if the first one's subprocess reports failure — a partially-successful
+clear is still recorded as an attempted clear, not silently dropped.
+
+**What is guaranteed and what is not, per platform.** On macOS, the write and
+both clear steps are single stdin-pipe invocations of `/usr/bin/pbcopy`; a
+process kill between write and clear is the gap the persisted pending-clear
+record below exists to close. On Linux, the same two-step pattern runs
+through `xclip -selection clipboard -i`; if xclip is absent or exits non-zero,
+the write fails closed with a typed `ErrClipboardUnavailable` before anything
+reaches the clipboard — there is no alternative delivery path, and Wayland
+(`wl-copy`) support is an explicit, tracked P2 deferral rather than a silent
+gap. **What clipboard delivery cannot guarantee on any platform**: a third
+process that reads and re-copies the clipboard's contents during the
+30-second window, before the clear fires, has already exfiltrated the value;
+the clear guarantees the value does not persist past the window, not that
+nothing observed it during the window. Nor can it guarantee it never clears a
+value the user copied afterward — see the pending-clear contract below.
+
+**Zero-payload audit contract.** Every write and every clear is recorded, and
+neither record ever carries the payload, a hash of it, or its byte length —
+only an opaque reference, the platform, and the write/clear timestamps. A
+reader of the audit trail can see that a clipboard delivery happened and when
+it was cleared; they can never recover or narrow down what was delivered from
+the trail alone.
+
+**Windows is refused, not degraded.** Windows is tier-2 scope (binary plus a
+headless one-shot; no daemon clipboard service), and clipboard delivery is not
+offered there at all. The refusal happens before any OS clipboard API is
+touched — there is no partial-support fallback that might silently leave a
+value on a Windows clipboard with no clear behind it.
+
+## Clipboard gate
+
+Clipboard delivery is a gated surface, not an open API: a caller cannot place
+a value on the clipboard without a verified approval token, and the pending
+clear survives a daemon restart rather than depending on the process that
+armed it staying alive.
+
+**Approval-token requirement.** A write refuses before any subprocess is
+spawned unless it carries an approval token that verifies — the same
+signature, expiry and domain-separation check every other approval consumes.
+An absent, expired or forged token refuses with a typed
+`ErrApprovalRequired` and touches nothing: no clipboard write, no persisted
+pending-clear row, no audit event.
+
+**The pending clear survives a restart.** The 30-second countdown is not only
+an in-process timer. The moment a value is written, a durable row — an
+opaque reference, the platform, the write time and the clear deadline, never
+the payload, a hash of it, or its length — is persisted so a daemon crash
+between write and clear does not leave a secret on the clipboard
+indefinitely. On the next start, every persisted row is re-armed: one whose
+deadline has already passed clears immediately, and one still within its
+window is rescheduled for its remaining time.
+
+**One calling verb.** The design admits exactly one caller: the elevated
+`cascade vault get --clipboard` verb, which obtains the approval token before
+calling in. No other command, plugin surface or RPC method is permitted to
+place a value on the clipboard. As of this section's writing the verb itself
+and the daemon-start re-arm call are not yet wired to the clipboard package
+described above (`internal/secrets`); a CI grep is designed to fail on any
+caller of `ClipboardWriter.Write` outside that verb once it exists, so the
+one-caller rule is enforced by the time either lands rather than assumed.

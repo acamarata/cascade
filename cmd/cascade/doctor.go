@@ -35,6 +35,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -81,6 +82,11 @@ func productionDoctorDeps() doctorDeps {
 func productionCheckRegistry() *doctor.CheckRegistry {
 	reg := doctor.NewCheckRegistry()
 	reg.Register(doctor.NewDoctorSelfCheck())
+	// retrieval_index (F/S-11.T4): a real data source (the on-disk
+	// retrieval index) exists unconditionally — unlike mcp_integration/
+	// subsystem_census above, no unimplemented interface stands between
+	// this check and something real to probe, so it is mounted.
+	reg.Register(lifecycle.NewDoctorCheck(buildRecallIndexManager(lazyPaths{}, runtime.SystemClock{})))
 	return reg
 }
 

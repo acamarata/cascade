@@ -46,7 +46,7 @@ func TestBuildRPCServer_StatusReachableOverRealSocket(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	sockPath := filepath.Join(dir, "d.sock")
 
-	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil)
+	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil, nil)
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

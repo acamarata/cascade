@@ -132,6 +132,9 @@ func newRecallCmd(deps recallDeps) *cobra.Command {
 	flags.StringVar(&params.Scope, "scope", "", "the session scope to search within")
 	flags.IntVar(&params.K, "k", 0, "maximum number of results to return (default 10)")
 	flags.BoolVar(&params.Cite, "cite", false, "print the Markdown citation block under the results")
+	// `recall index rebuild|verify|migrate|update` (F/S-11.T4), mounted on
+	// this same parent per 06 §5 rule 3's implied intra-sprint order.
+	cmd.AddCommand(newRecallIndexCmd(deps))
 	return cmd
 }
 

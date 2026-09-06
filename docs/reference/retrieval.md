@@ -547,3 +547,42 @@ network call.
 ```
 go test -race -count=1 ./internal/retrieval/eval/... -run '^Test(FusionGate|V1August2026Baseline|RecordedRealEmbedderFixture)$'
 ```
+
+## Index lifecycle
+
+Retrieval quality depends on the index matching the corpus. Four
+operations keep it there, exposed as `cascade recall index <verb>` and as
+the daemon RPC methods `recall.index.rebuild`, `.verify`, `.migrate` and
+`.update`.
+
+`verify` is read-only and answers the diagnostic question: it reports
+missing chunks (a source the index has not seen), orphaned chunks (an
+index entry whose source is gone), and vector-incomplete chunks (text
+indexed but never embedded, so the dense leg cannot retrieve it). A
+vector-incomplete index degrades quietly: full-text still answers, fusion
+still returns results, and only recall on paraphrased queries suffers.
+That is the failure this check exists to surface.
+
+`update` re-ingests only what a git diff reports changed since the last
+run, and is the ordinary path. `rebuild` re-runs the whole pipeline from a
+clean slate and is the repair path. `migrate` converges the on-disk schema
+for the retrieval domain.
+
+### Generation markers
+
+The index records a generation marker so drift is detectable rather than
+inferred. A rebuild resets it. `verify` compares the marker against the
+current source state, which is what lets `update` know where to resume and
+lets the doctor check report "current" rather than guessing.
+
+### The doctor check
+
+`cascade doctor` includes a `retrieval_index` check, registered in
+`productionCheckRegistry` so it runs in shipped binaries. It reports
+present, current and consistent, and it treats a fresh install with no
+index as OK rather than a warning: an absent index on a machine that has
+never indexed anything is expected, and warning about it trains people to
+ignore the tool.
+
+The check is not `--fix`-able by design. Rebuilding an index is expensive
+and destructive of timing, so it stays a deliberate invocation (R-21.189).

@@ -17,15 +17,19 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// ratifiedKinds is the eleven-value enum transcribed from the ticket
-// contract's own list, kept separate from AllKinds so the assertion below
-// compares the code against the spec instead of against itself.
+// ratifiedKinds is the fourteen-value enum transcribed from R-21.235's own
+// text ("the kind enum grows to fourteen (adds secrets.clipboard_write,
+// secrets.quarantine_flush, vault.access)"), kept separate from AllKinds so
+// the assertion below compares the code against the spec instead of against
+// itself. That separation is what caught the shortfall: I/S-18.T2 shipped
+// eleven and this transcription had been trimmed to match it.
 var ratifiedKinds = []string{
 	"policy.decide", "policy.route",
 	"approval.enqueue", "approval.dedup", "approval.expire",
 	"config.reload",
 	"approval.grant", "approval.deny",
 	"elevation.attempt", "elevation.grant", "elevation.deny",
+	"secrets.clipboard_write", "secrets.quarantine_flush", "vault.access",
 }
 
 func TestAuditKindEnumIsClosed(t *testing.T) {

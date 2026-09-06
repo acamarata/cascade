@@ -119,11 +119,55 @@ The CLI routes through the Go IPC client SDK (`internal/client`) to
 as an alias bound to the same handler value, so callers written against
 v1 keep working and the two names cannot answer differently.
 
+## `cascade recall index`
+
+The index lifecycle noun. Four subcommands, all mounted on the real root
+and all reachable from the built binary; each is also a daemon RPC method
+(`recall.index.rebuild`, `.verify`, `.migrate`, `.update`), registered by
+`internal/daemon.RegisterRecallIndexHandler` from `buildRPCServer`.
+
+| Subcommand | What it does |
+| --- | --- |
+| `rebuild` | Re-runs the whole ingest, chunk, index and embed pipeline over every registered source from a clean slate. |
+| `verify` | Reports missing, orphaned and vector-incomplete chunks against the registered sources. Read-only. |
+| `migrate` | Converges the retrieval index domain's on-disk schema to the one this binary ships. |
+| `update` | Re-ingests only the files a git diff reports changed since the last run. |
+
+`verify` is the one to reach for first: it is read-only and tells you
+whether the index is behind, inconsistent, or fine. `rebuild` is the
+documented repair path and is deliberately something a human or a script
+invokes, never something `cascade doctor --fix` triggers on its own
+(R-21.189).
+
+### The doctor check
+
+`cascade doctor` runs a `retrieval_index` check that reports whether the
+index is present, current and consistent. It is registered in
+`productionCheckRegistry`, so it runs in a shipped binary rather than only
+under test.
+
+A fresh install with no index yet reports OK, not a warning. An absent
+index on a machine that has never indexed anything is the expected state,
+and a check that cries about it teaches people to ignore `doctor`.
+
+### Schema versions
+
+The retrieval index shares one globally keyed migration ledger with every
+other domain in the same database file: `applied_migrations` has no
+per-MigrationSet identity column. A domain schema therefore claims the
+next unused version number for the whole file, and the binary must declare
+that it understands that version through `runtimeReaderCeiling()` in
+`cmd/cascade/daemon_unix_store.go`. Skipping the second half leaves a
+daemon that refuses to reopen the database it just wrote.
+
+`migrate` reports what it applied. An empty migration set writes no ledger
+row at all, and the result says so rather than claiming an application
+that never happened.
+
 ## Not here
 
 - `recall what` (the fused turns/threads/memories/files surface) and the
   `cascade what` hidden alias belong to V/S-47 (§D-21 strike).
-- `recall index rebuild|verify|migrate` belongs to F/S-11.T4.
 - The `[retrieval]` config surface belongs to F/S-12.T4.
 - The mirrored MCP tool `cascade_recall_query` is not exposed yet: the
   MCP tool table is sourced from plugin manifests
