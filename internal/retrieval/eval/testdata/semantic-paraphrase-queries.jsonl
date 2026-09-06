@@ -1,0 +1,6 @@
+{"query": "how does the review tooling decide which model runs against each changed file", "expected_ids": ["docs/FABLE-FULL-REVIEW-PROMPT.md"]}
+{"query": "why did the team decide against porting the codebase to the Go language", "expected_ids": ["docs/adr/ADR-P8-001-no-go-migration.md"]}
+{"query": "which hook configuration was confirmed not to disturb the user's other settings", "expected_ids": ["docs/cc-compat-matrix.md"]}
+{"query": "what happens when the primary execution path fails and a retry is attempted", "expected_ids": ["docs/conductor-flow-contract.md"]}
+{"query": "where should a newly added database file live among the existing data stores", "expected_ids": ["docs/storage-estate.md"]}
+{"query": "stale lock hygiene", "expected_ids": ["docs/target-dir-hygiene.md"]}

@@ -9,24 +9,23 @@ import (
 
 // Purpose: the TOML config loader's core types and the Load entry point —
 //   ConfigSource precedence, the two typed sections this ticket owns
-//   ([runtime], [elevation]), *Config and its effective-view accessors,
-//   and Load itself, which wires together the file-read/upgrade,
-//   env-override, and section-parsing steps that live in this package's
-//   sibling files (split from a single config.go per R-14.117: config_load.go
-//   owns file I/O and section parsing, config_env.go owns the generic
-//   CASCADE_<SECTION>__<KEY> env-override machinery and tree helpers,
-//   config_handlers.go owns the `cascade config` CLI-facing handlers).
+//   ([runtime], [elevation]), retrieval.fusion.enabled (F/S-12.T6), *Config
+//   and its effective-view accessors, and Load itself, which wires
+//   together the file-read/upgrade, env-override, and section-parsing
+//   steps in this package's sibling files (split from a single config.go
+//   per R-14.117: config_load.go owns file I/O and section parsing,
+//   config_env.go owns the generic CASCADE_<SECTION>__<KEY> env-override
+//   machinery, config_handlers.go owns the `cascade config` handlers).
 // Inputs: Load takes a context, the resolved config file path, the
 //   --profile flag value, and injected Getenv/Environ accessors.
-// Outputs: a *Config carrying the two typed sections this ticket owns,
-//   every other 08 §3 section preserved verbatim in Extra, and a source
+// Outputs: a *Config carrying the typed sections this ticket owns, every
+//   other 08 §3 section preserved verbatim in Extra, and a source
 //   annotation per effective key.
-// Constraints: Art.7.1 — Load performs its own file I/O but never touches
-//   $HOME directly (the caller resolves the path via PathProvider); tests
-//   always pass a t.TempDir() path. Art.1 — sections this ticket does not
-//   own (logging, storage, retrieval, ...) are preserved, never validated
-//   or defaulted here; inventing a default for an unowned section would be
-//   the R-14.107 mistake repeated.
+// Constraints: Art.7.1 — Load never touches $HOME directly (the caller
+//   resolves the path via PathProvider); tests always pass a t.TempDir()
+//   path. Art.1 — sections this ticket does not own are preserved, never
+//   validated or defaulted, except retrieval.fusion.enabled, which
+//   F/S-12.T6 owns end-to-end (R-16.49).
 // SPORT: runtime/config (ADD, placeholder per T-1 sport_updates).
 
 // ConfigSource names the precedence level that produced an effective
@@ -66,12 +65,9 @@ type elevationSection struct {
 
 // loggingSection is the typed view of [logging] (08-INIT-CONFIG-SPEC §3,
 // hot reload class — level, format, and rotation are all
-// live-reconfigurable via LogProvider.SetLevel/Reconfigure in logger.go,
-// C/S-05.T8's hot-reload engine calls both without a restart). The raw
-// [logging] table also survives untouched in Config.Extra (T-1's generic
-// round-trip/schema-rewrite mechanism does not know this ticket exists),
-// so this type is an additional typed read, never a replacement for that
-// preservation.
+// live-reconfigurable via LogProvider.SetLevel/Reconfigure in logger.go).
+// The raw [logging] table also survives untouched in Config.Extra, so
+// this type is an additional typed read, never a replacement.
 type loggingSection struct {
 	// Level is one of debug|info|warn|error; "" (unset) resolves to
 	// "info".
@@ -120,23 +116,23 @@ type Config struct {
 	Runtime       runtimeSection
 	Elevation     elevationSection
 	Logging       loggingSection
-	// Retrieval is the [retrieval.reranker] slice of [retrieval] this
-	// ticket owns (config_retrieval.go). Like Logging, it is an
-	// additional typed read: the raw [retrieval] table also survives
-	// untouched in Extra, so S-12.T4's keys round-trip unharmed.
+	// Retrieval is the [retrieval.reranker] slice of [retrieval]
+	// (config_retrieval.go); the raw table also survives in Extra.
 	Retrieval retrievalSection
+	// FusionEnabled is the effective retrieval.fusion.enabled
+	// (F/S-12.T6, R-16.9/R-16.49): an explicit value when set, else
+	// DefaultFusionEnabled. Resolved from the raw tree directly
+	// (resolveFusionEnabled below), not via fusionSection.
+	FusionEnabled bool
 	// Extra holds every top-level section other than schema_version,
-	// runtime, and elevation, exactly as decoded from the file. These are
-	// valid future 08 §3 sections this ticket does not own; they are
-	// preserved for round-tripping (schema_version rewrite) and are never
+	// runtime, and elevation, exactly as decoded from the file: valid
+	// future 08 §3 sections preserved for round-tripping, never
 	// validated or defaulted here.
 	Extra map[string]interface{}
 
 	sources map[string]ConfigSource
-	// rawTree is the full decoded document (env overrides applied, before
-	// Home/DataDir were stamped in) — kept only so the schema-upgrade
-	// rewrite can round-trip every section without polluting the file
-	// with derived, non-file-backed values.
+	// rawTree is the full decoded document (env overrides applied),
+	// kept so the schema-upgrade rewrite can round-trip every section.
 	rawTree map[string]interface{}
 }
 
@@ -257,6 +253,11 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		return nil, err
 	}
 
+	fusionEnabled, err := resolveFusionEnabled(tree)
+	if err != nil {
+		return nil, err
+	}
+
 	profile, profSource, err := resolveRuntimeSection(tree, opts.ProfileFlag, getenv, warn)
 	if err != nil {
 		return nil, err
@@ -269,8 +270,31 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Elevation:     elevation,
 		Logging:       logging,
 		Retrieval:     retrieval,
+		FusionEnabled: fusionEnabled,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,
 	}, nil
+}
+
+// DefaultFusionEnabled is the shipped default: the F/S-12.T6 gate verdict
+// measured against the committed fixtures (R-16.9).
+// TestRetrievalFusionEnabledDefault recomputes it every run and fails if
+// this constant disagrees.
+const DefaultFusionEnabled = true
+
+// resolveFusionEnabled reads retrieval.fusion.enabled out of tree; absent
+// resolves to DefaultFusionEnabled, present must be a bool.
+func resolveFusionEnabled(tree map[string]interface{}) (bool, error) {
+	table, _ := tree["retrieval"].(map[string]interface{})
+	fusion, _ := table["fusion"].(map[string]interface{})
+	raw, ok := fusion["enabled"]
+	if !ok {
+		return DefaultFusionEnabled, nil
+	}
+	enabled, ok := raw.(bool)
+	if !ok {
+		return false, &ConfigError{Field: "retrieval.fusion.enabled", Reason: "must be a boolean"}
+	}
+	return enabled, nil
 }

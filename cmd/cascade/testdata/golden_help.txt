@@ -8,6 +8,7 @@ Usage:
 Available Commands:
   completion     Generate shell completion scripts
   config         Inspect and edit cascade's config.toml
+  context        Session-scope and context-engine commands
   daemon         Manage the cascade daemon process
   doctor         Diagnose the local cascade installation
   help           Help about any command

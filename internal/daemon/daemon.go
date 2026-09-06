@@ -283,3 +283,12 @@ func NewRPCServer(registry *rpc.Registry, sse *rpc.SSEHandler) *http.Server {
 		ConnContext: rpc.ConnContext,
 	}
 }
+
+// ContextScopeMethod is the context.scope.show JSON-RPC method name
+// (E/S-08.T4). internal/client.Client.ContextScopeShow calls this exact
+// literal, matching StatusMethod's established client/daemon
+// cross-reference pattern above (internal/client imports internal/daemon;
+// the reverse import would cycle, so the daemon package -- not the client
+// package -- is this constant's canonical home). See context_scope.go in
+// this package for the registration function that binds it.
+const ContextScopeMethod = "context.scope.show"

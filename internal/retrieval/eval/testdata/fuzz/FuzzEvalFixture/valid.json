@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"tool\":\"eval-harness-fixture\",\"version\":\"1.0.0\",\"date\":\"2026-09-06\",\"records\":[{\"text\":\"a\",\"vector\":[0.1,0.2,0.3]},{\"text\":\"b\",\"vector\":[0.4,0.5,0.6]}]}")

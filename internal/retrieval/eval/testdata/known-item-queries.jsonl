@@ -1,0 +1,18 @@
+{"query": "piped exactly execute opencode invokes every", "expected_ids": ["docs/FABLE-FULL-REVIEW-PROMPT.md"]}
+{"query": "cheapest-fit rather just room", "expected_ids": ["docs/FABLE-FULL-REVIEW-PROMPT.md"]}
+{"query": "whole product thesis least confident holds", "expected_ids": ["docs/FABLE-FULL-REVIEW-PROMPT.md"]}
+{"query": "present vendored node modules artifacts flatted package port Migrating", "expected_ids": ["docs/adr/ADR-P8-001-no-go-migration.md"]}
+{"query": "claude archive inbox README-NEXT-PHASE module-architecture", "expected_ids": ["docs/adr/ADR-P8-001-no-go-migration.md"]}
+{"query": "adversarial review re-examined those rationales against actual repository", "expected_ids": ["docs/adr/ADR-P8-001-no-go-migration.md"]}
+{"query": "Verified registering hooks preserves every unrelated setting asserts every", "expected_ids": ["docs/cc-compat-matrix.md"]}
+{"query": "claude json every directory ever saw T-P8-02 removed second", "expected_ids": ["docs/cc-compat-matrix.md"]}
+{"query": "corrections cost pre-T-P8-07 Stop hook read CLAUDE SESSION", "expected_ids": ["docs/cc-compat-matrix.md"]}
+{"query": "execute fallback flow flow retried", "expected_ids": ["docs/conductor-flow-contract.md"]}
+{"query": "SKEPTIC ANGLES correctness completeness failure modes assumptions", "expected_ids": ["docs/conductor-flow-contract.md"]}
+{"query": "Firewall applies lane Both executor advisor through execute target", "expected_ids": ["docs/conductor-flow-contract.md"]}
+{"query": "provider-usage provider-usage cascade daemon usage days", "expected_ids": ["docs/storage-estate.md"]}
+{"query": "misreading index memory predate run", "expected_ids": ["docs/storage-estate.md"]}
+{"query": "database somewhere belong new database added", "expected_ids": ["docs/storage-estate.md"]}
+{"query": "window Access time right axis objects belonging stale", "expected_ids": ["docs/target-dir-hygiene.md"]}
+{"query": "feature combination anything current build actually touches stays", "expected_ids": ["docs/target-dir-hygiene.md"]}
+{"query": "single directory lock local-resource rule already forbids more", "expected_ids": ["docs/target-dir-hygiene.md"]}

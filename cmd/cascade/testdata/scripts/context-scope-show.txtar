@@ -1,0 +1,35 @@
+# context-scope-show.txtar
+#
+# Documents the `cascade context scope show` behavioral scenarios this
+# ticket's contract names. This module carries no testscript
+# (rogpeppe/testscript) dependency -- adding one needs the license gate
+# this repo has not cleared (see cmd/cascade/memory_integration_test.go's
+# own note making the same call for `cascade memory`). The scenarios below
+# are instead expressed as executable Go in
+# cmd/cascade/context_scope_test.go's TestContextScopeCLIBehavioralCoverage70
+# and TestContextScopeShowIsMountedOnRoot; this file records the intended
+# script form for when a testscript dependency is cleared.
+
+# Human output on an unresolved cwd resolves to a restricted general scope.
+exec cascade context scope show
+stdout 'kind\s+general'
+! stderr .
+
+# --json emits the versioned envelope with the same restricted result.
+exec cascade --json context scope show
+stdout '"kind":\s*"general"'
+
+# Caller-supplied fields (branch/task/session) are threaded through
+# unresolved-cwd results too -- they are never dropped by the general
+# fallback.
+exec cascade --json context scope show --session s1 --branch main
+stdout '"session":\s*"s1"'
+
+# An unknown subcommand under `context scope` is refused as invalid input,
+# not silently shown as help.
+! exec cascade context scope bogus
+stderr 'unknown command'
+
+# A positional argument to `show` is refused.
+! exec cascade context scope show extra-arg
+stderr 'unknown command'

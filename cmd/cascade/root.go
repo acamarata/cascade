@@ -127,6 +127,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountVaultCmd(root)
 	mountMemoryCmd(root)
 	mountRecallCmd(root)
+	mountContextCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following

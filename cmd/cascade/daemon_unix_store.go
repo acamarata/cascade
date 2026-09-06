@@ -38,6 +38,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -64,8 +65,25 @@ const runtimeSchemaVersion = 1
 func runtimeMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SchemaVersion:        runtimeSchemaVersion,
-		MinimumReaderVersion: runtimeSchemaVersion,
+		MinimumReaderVersion: runtimeReaderCeiling(),
 	}
+}
+
+// runtimeReaderCeiling is the highest on-disk schema_version this binary
+// can open. MigrationSet.MinimumReaderVersion is named for a floor but is
+// enforced as a CEILING (migrate/ledger.go refuses when onDisk > it), so
+// it must cover every domain set this binary bundles, not just this one.
+// The ledger keys schema_version globally with no per-set identity, so a
+// domain schema targeting 2 raises the whole file to 2 and a ceiling of
+// runtimeSchemaVersion (1) would make the daemon refuse to reopen the
+// database it had just written (R-14.198). Add a max() term here for each
+// new bundled domain set rather than hardcoding a literal.
+func runtimeReaderCeiling() int {
+	ceiling := runtimeSchemaVersion
+	if scope.SchemaVersion > ceiling {
+		ceiling = scope.SchemaVersion
+	}
+	return ceiling
 }
 
 // newRuntimeMigrator builds the sqlite.Migrator this composition root

@@ -478,3 +478,72 @@ doing, which is a worse outcome than a startup that stops and says why.
 The same rules apply to a value supplied through the environment
 (`CASCADE_RETRIEVAL__FUSION__K` and friends): an override is held to the
 file's standard, so an exported bad value is reported rather than ignored.
+
+## Evaluation and fusion default gate
+
+`internal/retrieval/eval` is the retrieval evaluation harness: it runs a
+committed known-item and semantic/paraphrase query set through the real
+full-text leg, the real vector leg, and the real RRF fusion, then measures
+whether fusion is worth turning on by default.
+
+### Query sets
+
+Two query sets are committed under `internal/retrieval/eval/testdata/`:
+
+- **Known-item** (`known-item-queries.jsonl`) — each query is a
+  distinctive passage lifted verbatim out of one corpus document, so the
+  ground truth (the document it came from) is objective by construction.
+  A working full-text leg is expected to find these with recall@10 = 1.0.
+- **Semantic/paraphrase** (`semantic-paraphrase-queries.jsonl`) — each
+  query rephrases a document's topic in different words than the document
+  itself uses. The full-text leg here matches only on the tokens it
+  shares with a query (it has no OR and no stemming), so a paraphrase
+  that reuses none of a document's own words is invisible to it; this is
+  the case the vector leg exists to cover.
+
+### Metrics
+
+- **Recall@10** — for a query, the fraction of its expected ids found
+  within the first 10 ranked results (rank 10 counts, rank 11 does not),
+  averaged over every query in the set.
+- **Relative recall lift** — `(rrf_recall_at_10 - fts5_recall_at_10) /
+  fts5_recall_at_10`, computed on the semantic/paraphrase set. A zero
+  FTS5-only denominator is a typed failure, never a permissive result: it
+  means the full-text leg matched nothing at all, and a lift computed
+  against zero would be undefined.
+- **No known-item loss** — every expected id the full-text leg found in
+  its own top 10 must remain in the RRF-fused top 10, per query, and the
+  aggregate RRF known-item recall@10 must not fall below the full-text
+  leg's own.
+
+### The fusion default gate
+
+`FusionDefaultGate` passes only when both hold on the committed fixtures:
+the semantic/paraphrase relative recall lift is at least 10 percent, and
+no known-item loss occurred. The measured boolean is the sole allowed
+default: a pass sets the shipped `retrieval.fusion.enabled` default to
+`true`; any failure — including the zero-denominator case above — sets it
+to `false` and `cascade doctor`'s `retrieval_fusion_default` check reports
+a warning naming the fallback. `internal/runtime`'s
+`TestRetrievalFusionEnabledDefault` and `internal/retrieval/eval`'s own
+test of the same name each recompute the verdict from the committed
+fixtures and fail if the shipped constant disagrees, so the default
+cannot drift from the evidence. An explicit `[retrieval.fusion] enabled =
+true|false` in `config.toml` always overrides the measured default; this
+adds no key beyond the one `[retrieval.fusion]` already documents above.
+
+### Fixture provenance and known gaps
+
+Every fixture's exact provenance (what real file or dataset it was
+harvested from, and — for the recorded embedding fixture — the honest
+limits of what could be produced in this environment, since no trained
+embedding model is available anywhere in this build) is recorded in
+`internal/retrieval/eval/testdata/README.md`. Replay is always offline:
+the vector leg's embedder reads the committed recording and makes no
+network call.
+
+### Local CI command
+
+```
+go test -race -count=1 ./internal/retrieval/eval/... -run '^Test(FusionGate|V1August2026Baseline|RecordedRealEmbedderFixture)$'
+```

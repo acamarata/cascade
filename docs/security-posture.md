@@ -258,3 +258,82 @@ Spawning a process is not egress. It carries a separate, single-member list
 bound by the driver-boundary rules, and the two lists are never merged: merging
 them would let a `net/http` importer hide behind a process-spawn exemption. The
 gate refuses both smuggling directions.
+
+## Approval tokens
+
+An ask-tier action reaches a human decision through the approval queue. What
+comes back from that decision is an approval token: a signed statement that one
+specific action, for one specific requester, was approved once.
+
+**Ed25519, from the vault.** The signing keypair lives in the vault under
+`cascade.approval.ed25519` and is loaded through the vault's non-elevated
+internal read path, not through the elevated `vault get` verb. Signing an
+approval must not itself raise an attestation prompt, or every approval would
+cost two. The private key is never held between signatures: it is fetched,
+used, and zeroed in the same call.
+
+**Five minutes, hard.** A token expires no later than five minutes after it was
+issued. The ceiling is not a default and not configurable; a caller cannot ask
+for longer. Both the issue instant and the expiry come from the injected clock,
+so an expiry check never reads the wall clock and never depends on the machine's
+timezone.
+
+**Verification refuses first.** Verification is stateless: it decodes, checks
+expiry, then checks the signature. An expired token is refused whether or not
+its signature is good, and bytes that cannot be decoded are refused before any
+signature is examined. There is no input that produces a token and no error
+without passing all of those.
+
+**Single use is the ledger's job.** Verification proves a token is authentic and
+current, not that it is unspent. Replay is caught at redemption by the
+single-use ledger in the audit domain, which records the token's nonce. The two
+responsibilities stay apart on purpose: a stateless verifier can run anywhere,
+and only the controller can spend.
+
+**Bridges carry a request id and nothing else.** When an approval decision is
+taken on another device, what crosses the bridge is the request id alone. The
+token, the nonce, the verb and the parameter digest all stay on the controller,
+which looks the request up and verifies it locally. The projection is a struct
+with one field, so widening the token cannot widen what a bridge sees.
+
+**Local-only actions.** The bridge-approvable set is ask-tier actions at risk
+L1-L2 and nothing else. Every elevated verb (vault get and rotate, approval and
+standing-grant administration, backup key handling, plugin and permission
+changes, node enrolment, sync conflict resolution that discards local state,
+policy or sensitivity loosening, enabling remote elevation or the remote plugin
+runtime, and purging data on uninstall) is local-only: it can never be approved
+from another device, and it can never be covered by a standing grant. So is
+anything on the deny-list. A standing grant naming either is refused before it
+reaches storage.
+
+## Approval-token record
+
+The bytes a signature covers are a domain-separated canonical-JSON record, not
+a bare hash of the parameters. Signing the parameters alone would let an
+approval for one verb be replayed as an approval for another verb that happens
+to take the same arguments.
+
+**The signed fields** are exactly: schema version, key id, request id, verb,
+parameter digest, requester, approver, origin, scope, target (node, session and
+task), risk, sensitivity, policy version, audience, issue time, expiry and
+nonce. There are no others, and a record carrying a field outside that list is
+refused.
+
+**One encoding.** Keys are sorted, there is no insignificant whitespace, and
+numbers and timestamps have one written form each. Verification re-encodes what
+it decoded and compares the result byte for byte with its input, so "canonical"
+is a decidable question rather than a list of formatting rules. Unknown fields,
+repeated keys and trailing content are each refused, and all of that happens
+before the signature is checked.
+
+**Domain separation.** The signing input is a fixed context string followed by
+the canonical encoding. A signature made in another context does not verify as
+an approval, and an approval signature does not verify anywhere else.
+
+**Redemption is controller-only.** Nodes never redeem an approval; they relay to
+the controller. The controller moves the record from approved to consuming with
+an atomic compare-and-set under a unique (request id, nonce) constraint, so
+exactly one caller wins, and the winner writes a stable execution id before
+anything is dispatched. Executors de-duplicate on that id. A process killed
+between the consume and the run recovers by re-driving the same execution id:
+the consume is never lost, and a second execution is never issued.

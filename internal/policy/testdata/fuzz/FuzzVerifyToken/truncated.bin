@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"approver\":\"user:owner\",\"audience\":\"controller\",\"expiry\":\"2026-03-01T12:05:00Z\",\"issued\":\"2026-03-01T12:00:00Z\",\"key_id\":\"approval-fixture-1\",\"nonce\":\"TVWXYZ0123456789ABCDEFGHJK\",\"origin\":\"cli\",\"params_digest\":\"sha256:0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"policy_version\":\"20")

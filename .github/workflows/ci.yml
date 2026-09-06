@@ -331,16 +331,44 @@ jobs:
           CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
         run: go test -tags=postgres -count=1 ./providers/postgres/... -v
 
+  retrieval-eval-gate:
+    # P1-E06-W2-S12-T6 (R-16.9): the retrieval evaluation harness over
+    # the committed corpus/query-set fixtures, the v1 August-2026
+    # regression baseline, and the fusion default gate cross-check
+    # between internal/retrieval/eval and internal/runtime. Public repo,
+    # GitHub-hosted runner, no paid tier and no matrix — same shape as
+    # the `lint` job above.
+    name: retrieval eval gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test (retrieval evaluation harness + fusion gate)
+        run: |
+          go test -race -count=1 ./internal/retrieval/eval/... ./internal/retrieval/rrf/... \
+            ./internal/runtime/... ./internal/doctor/...
+          go test -count=1 ./internal/retrieval/eval/... \
+            -run '^Test(FusionGate|V1August2026Baseline|RecordedRealEmbedderFixture|CoverageFloor85Statements80Branches)$' -v
+          go test -count=1 ./internal/runtime/... -run '^TestRetrievalFusionEnabledDefault$' -v
+          go test -count=1 ./internal/doctor/... -run '^TestRetrievalFusionGateNote$' -v
+
+      - name: go test (decoder fuzz smoke)
+        run: go test -run '^$' -fuzz '^FuzzEvalFixture$' -fuzztime=10s ./internal/retrieval/eval/
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home]
+    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

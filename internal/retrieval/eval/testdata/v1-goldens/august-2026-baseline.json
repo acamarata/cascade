@@ -1,0 +1,8 @@
+{
+  "tool": "cascade-v1 crates/cascade-rag tests/retrieval_eval.rs",
+  "version": "archive/p9-integration @ 539280154437c624fe816f7284925b22b68a12c1",
+  "date": "2026-08-28",
+  "metric": "mrr_at_10 (v1's own known-item MRR@10 over its 89-document/258-query corpus; NOT this ticket's recall@10 metric or 6-document subset)",
+  "fts5_only": 0.99418604,
+  "rrf_full": 0.99160206
+}

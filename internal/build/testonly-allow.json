@@ -30,11 +30,6 @@
     "expected_caller": "none by design; revisit only if that comment's reasoning changes"
   },
   {
-    "symbol": "internal/runtime.DaemonlessStateFrom",
-    "reason": "Daemonless state accessor, used once daemonless verbs read it.",
-    "expected_caller": "daemonless command implementations"
-  },
-  {
     "symbol": "internal/runtime.OpenEmbeddedReadStore",
     "reason": "The read-only open used by the daemonless read path, awaiting the first daemonless read verb.",
     "expected_caller": "daemonless read verb implementations"
@@ -268,5 +263,85 @@
     "symbol": "internal/policy.NewSameTurnLedger",
     "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired.",
     "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine"
+  },
+  {
+    "symbol": "internal/policy.NewApprovalSigner",
+    "reason": "The Ed25519 approval signer is built before the middleware that mints approvals. R-21.207 routes every action origin through one policy.Authorize middleware, and that middleware does not exist yet; nothing else may hold the signing key. Building the signer first is the right order, leaving it unbuilt once the middleware exists would not be.",
+    "expected_caller": "the policy.Authorize middleware (P1-E09-W2-S18-T5), in the SAME change that mints its first approval token"
+  },
+  {
+    "symbol": "internal/policy.NewApprovalVerifier",
+    "reason": "The verifier's production caller is the controller's redemption path, which is I/S-18.T3's ledger work. This ticket owns the data model only and ships no ledger, so nothing shipping verifies a token yet.",
+    "expected_caller": "the controller redemption path in internal/policy/ledger.go (P1-E09-W2-S18-T3), alongside the single-use nonce check"
+  },
+  {
+    "symbol": "internal/policy.BridgePayload",
+    "reason": "The request-id-only bridge projection is built ahead of the bridge that carries it. W/S-48.T4 owns the bridge leg and its fail-closed gate; until that lands, no shipping code sends an approval anywhere.",
+    "expected_caller": "the bridge approval leg (P1-E23-W5-S48-T4), in the SAME change that first sends an approval reference off-machine"
+  },
+  {
+    "symbol": "internal/policy.ElevationClassVerbs",
+    "reason": "The exported copy of the elevation-class enumeration exists for callers outside this package that need the list itself rather than a membership test; inside the package the membership test IsElevationClassVerb is the shipped path and is wired to CreateStandingGrant. No out-of-package caller exists yet.",
+    "expected_caller": "the verb registry that R-21.207 requires the policy.Authorize middleware to consult (P1-E09-W2-S18-T5)"
+  },
+  {
+    "symbol": "internal/policy.CreateStandingGrant",
+    "reason": "The standing-grant creation path is the data-model half of the standing_grant.create verb. That verb has no handler yet: this ticket ships no RPC surface and no CLI command by its own boundary ruling.",
+    "expected_caller": "the standing_grant.create RPC handler, in the SAME change that registers that verb on the daemon"
+  },
+  {
+    "symbol": "internal/policy.NextRedemptionState",
+    "reason": "The redemption CAS contract's state half. R-21.209 makes the controller the sole redemption authority and assigns the storage half to I/S-18.T3; this ticket defines and tests the states and transitions the ledger will drive.",
+    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3)"
+  },
+  {
+    "symbol": "internal/policy.ExecutionID",
+    "reason": "The stable execution identifier a winning redemption appends before dispatch. It is minted by the same ledger path as NextRedemptionState and shares its fate.",
+    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3), retired together with the NextRedemptionState entry"
+  },
+  {
+    "symbol": "internal/doctor.NewRetrievalFusionGateCheck",
+    "reason": "The retrieval_fusion_default check takes a FusionEnabledProvider. Nothing in cmd/cascade/doctor.go's productionCheckRegistry constructs one yet (that file and the *runtime.Config-to-provider adapter it needs are out of this ticket's files_scope), matching the same gap already recorded here for NewMCPIntegrationCheck and NewSubsystemCensusCheck.",
+    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that wires a *runtime.Config-backed FusionEnabledProvider adapter"
+  },
+  {
+    "symbol": "internal/retrieval/eval.LoadCorpus",
+    "reason": "internal/retrieval/eval is R-16.9's CI-only evaluation harness: 07-CLI-COMMAND-TREE.md ratifies no retrieval-eval verb, so this ticket adds no CLI/RPC/MCP/daemon surface by its own boundary ruling. The harness's only consumer is its own CI-gate test suite (TestFusionGate, TestV1August2026Baseline, TestRecordedRealEmbedderFixture) and internal/runtime's/internal/doctor's cross-package TestRetrievalFusionEnabledDefault/TestRetrievalFusionGateNote checks.",
+    "expected_caller": "a future retrieval-eval maintenance verb, if 07-CLI-COMMAND-TREE.md is ever amended to add one; until then this is deliberately CI-invoked infrastructure"
+  },
+  {
+    "symbol": "internal/retrieval/eval.LoadQuerySet",
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the known-item and semantic/paraphrase query-set fixtures the gate measures against.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.LoadRecordedEmbeddings",
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the provenance-stamped recorded-embedder fixture the vector leg replays.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.LoadBaseline",
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the harvested v1 August-2026 regression fixture TestV1August2026Baseline compares against.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.NewRecordedVectorEmbedder",
+    "reason": "Same CI-only harness as LoadCorpus in this file; the fusion.Embedder adapter the vector leg queries through during the harness's own test runs.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.RunKnownItem",
+    "reason": "Same CI-only harness as LoadCorpus in this file; runs the known-item query set through the real FTS5/vector/RRF legs.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.RunSemanticParaphrase",
+    "reason": "Same CI-only harness as LoadCorpus in this file; runs the semantic/paraphrase query set the fusion default gate measures its relative recall lift from.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+  },
+  {
+    "symbol": "internal/retrieval/eval.FusionDefaultGate",
+    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary — see LoadCorpus's entry in this file for why no CLI surface exists for it.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
   }
 ]

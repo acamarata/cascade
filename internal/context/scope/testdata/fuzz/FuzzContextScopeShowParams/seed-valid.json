@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"cwd\":\"/tmp\",\"user\":\"u1\",\"machine\":\"m1\",\"branch\":\"main\",\"task\":\"t1\",\"session\":\"s1\",\"explicit_overrides\":\"eo1\"}")

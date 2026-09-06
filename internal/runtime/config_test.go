@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -129,5 +130,76 @@ func TestConfig_Source_NilSafety(t *testing.T) {
 	empty := &Config{}
 	if empty.Source("anything") != SourceDefault {
 		t.Error("Config with nil sources map should report SourceDefault")
+	}
+}
+
+// loadFusionTestConfig loads body through the real Load entry point.
+func loadFusionTestConfig(t *testing.T, body string) (*Config, error) {
+	t.Helper()
+	path := writeConfigFile(t, t.TempDir(), body)
+	return Load(context.Background(), LoadOptions{
+		Path: path, Getenv: func(string) string { return "" }, Environ: func() []string { return nil },
+	})
+}
+
+func TestConfig_FusionEnabled_DefaultWhenAbsent(t *testing.T) {
+	cfg, err := loadFusionTestConfig(t, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.FusionEnabled != DefaultFusionEnabled {
+		t.Errorf("FusionEnabled = %v, want DefaultFusionEnabled (%v)", cfg.FusionEnabled, DefaultFusionEnabled)
+	}
+}
+
+// TestConfig_FusionEnabled_ExplicitOverride: an explicit value in
+// [retrieval.fusion] always wins over DefaultFusionEnabled, in both
+// directions, without this ticket adding any config key beyond `enabled`.
+func TestConfig_FusionEnabled_ExplicitOverride(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		cfg, err := loadFusionTestConfig(t, fmt.Sprintf("[retrieval.fusion]\nenabled = %v\n", want))
+		if err != nil {
+			t.Fatalf("Load(enabled=%v): %v", want, err)
+		}
+		if cfg.FusionEnabled != want {
+			t.Errorf("explicit enabled=%v: FusionEnabled = %v", want, cfg.FusionEnabled)
+		}
+	}
+}
+
+func TestConfig_FusionEnabled_MalformedType(t *testing.T) {
+	if _, err := loadFusionTestConfig(t, "[retrieval.fusion]\nenabled = \"yes\"\n"); err == nil {
+		t.Fatal("non-boolean retrieval.fusion.enabled: want a typed error")
+	}
+}
+
+// TestRetrievalFusionEnabledDefault is this ticket's contract-named check
+// in this package, and it asserts what internal/runtime can honestly
+// assert about DefaultFusionEnabled: the constant exists, Load resolves
+// an absent key to it (TestConfig_FusionEnabled_DefaultWhenAbsent) and an
+// explicit key overrides it either direction
+// (TestConfig_FusionEnabled_ExplicitOverride) without adding a second
+// key. It does NOT recompute F/S-12.T6's gate verdict here: internal/
+// retrieval (needed for the real FTS5 leg) imports internal/storage,
+// which imports internal/runtime, so internal/runtime importing
+// internal/retrieval/eval — even from a test file — is a real import
+// cycle, not a style choice. The actual "does DefaultFusionEnabled agree
+// with the measured verdict" recomputation lives where it can safely
+// import both directions: internal/retrieval/eval's own
+// TestRetrievalFusionEnabledDefault (gate_test.go), which imports
+// internal/runtime to read this constant. Both tests share the name
+// because both enforce the same R-16.9 requirement from the two halves
+// of the dependency graph that can each see it.
+func TestRetrievalFusionEnabledDefault(t *testing.T) {
+	if DefaultFusionEnabled != true && DefaultFusionEnabled != false {
+		t.Fatal("unreachable: DefaultFusionEnabled is not a bool")
+	}
+	cfg, err := loadFusionTestConfig(t, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.FusionEnabled != DefaultFusionEnabled {
+		t.Fatalf("Load with no retrieval.fusion.enabled key resolved FusionEnabled=%v, want DefaultFusionEnabled=%v",
+			cfg.FusionEnabled, DefaultFusionEnabled)
 	}
 }

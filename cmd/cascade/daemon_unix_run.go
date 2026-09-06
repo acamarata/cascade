@@ -204,6 +204,18 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
+	// context.scope.show (E/S-08.T4), registered for the same reason:
+	// the CLI's daemon-path client call (internal/client.Client.
+	// ContextScopeShow) dials this exact socket, so a daemon that never
+	// registers the method is the built-tested-unreachable pattern this
+	// composition root exists to close. See internal/daemon/
+	// context_scope.go's doc comment for why this owns a second sqlite
+	// connection rather than threading platformDaemonRun's rawDB through
+	// this function's signature.
+	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
+		return nil, nil, nil, err
+	}
+
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }
