@@ -154,3 +154,19 @@ func ErrKeystoreUnavailable(cause error) error {
 func ErrNoInput() error {
 	return cascade.New(cascade.KindPermissionDenied, "elevation: CASCADE_NO_INPUT=1 is set; refusing to prompt for local authentication")
 }
+
+// zero overwrites b's bytes so key material does not linger in memory
+// beyond the call that needed it.
+//
+// It lives in this untagged file, not beside one platform's backend,
+// because every backend that handles key material calls it: the darwin
+// cgo backend and the linux PAM backend both do. It was previously
+// defined in keystore_darwin_logic.go (//go:build darwin && cgo), which
+// left keystore_linux.go (//go:build linux && cgo && pam) referring to a
+// symbol that did not exist in its own build — that lane never compiled,
+// and no darwin-hosted build could reveal it.
+func zero(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}

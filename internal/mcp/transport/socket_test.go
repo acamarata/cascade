@@ -1,3 +1,9 @@
+// This file carries NO build tag on purpose: it asserts RegisterSocketMCP's
+// behaviour on BOTH platforms -- the real registration on unix, and the
+// tier-2 refusal socket_windows.go performs. MCPMethod now lives in the
+// untagged method.go so this file compiles on windows too; tagging the test
+// instead would have silently deleted the windows-refusal coverage.
+
 package transport_test
 
 import (

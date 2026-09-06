@@ -212,11 +212,24 @@ jobs:
       - name: snapshot git status (before)
         run: git status --porcelain > /tmp/git-status-before.txt
 
+      # GOCACHE and GOMODCACHE are pinned OUTSIDE the redirected HOME on
+      # purpose. Both default to a path under $HOME ($HOME/.cache/go-build
+      # and $HOME/go), so redirecting HOME and then running `go test` makes
+      # the Go toolchain itself populate the very directory the assertion
+      # below requires to be empty. Left unpinned this gate reports
+      # `.cache` and `go` as leaks on every run — a permanent red that says
+      # nothing about test hygiene and trains readers to ignore the job.
+      # Pinning them keeps the assertion meaningful: what remains under the
+      # redirected HOME afterwards was put there by a TEST, which is
+      # precisely the Art.7.1 violation this job exists to catch.
       - name: go test ./... (HOME redirected)
         env:
           HOME: /tmp/cascade-redirected-home
+          GOCACHE: /tmp/cascade-gocache
+          GOMODCACHE: /tmp/cascade-gomodcache
+          GOPATH: /tmp/cascade-gopath
         run: |
-          mkdir -p "$HOME"
+          mkdir -p "$HOME" /tmp/cascade-gocache /tmp/cascade-gomodcache /tmp/cascade-gopath
           go test ./...
 
       - name: snapshot git status (after)

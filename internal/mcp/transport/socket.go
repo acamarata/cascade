@@ -34,9 +34,8 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 )
 
-// MCPMethod is the JSON-RPC method name MCP requests are bridged through
-// on the daemon socket.
-const MCPMethod = "mcp.dispatch"
+// MCPMethod is declared in method.go, which carries no build tag: the
+// windows sibling's test needs the name to assert nothing was registered.
 
 // RegisterSocketMCP registers dispatcher as registry's mcp.dispatch
 // handler. On non-windows platforms this always succeeds; see

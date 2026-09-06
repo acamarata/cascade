@@ -110,6 +110,16 @@ func execRootDoctor(t *testing.T, deps doctorDeps, args ...string) (string, erro
 // This is the reachability proof (R-14.166): removing mountDoctorCmd from
 // newRootCmd makes this test fail with `unknown command "doctor"`.
 func TestDoctorIsMountedOnRoot(t *testing.T) {
+	// Art.7.1: this test drives the REAL production doctor deps, which
+	// resolve the data directory from $HOME and CREATE it (the quarantine
+	// store mkdirs $HOME/.cascade/data/quarantine). Without this
+	// redirection the test wrote into the operator's own ~/.cascade on
+	// every run, and into CI's redirected HOME, which is what the
+	// redirected-HOME job caught. Pointing HOME at t.TempDir() keeps the
+	// reachability proof intact -- the real root, the real deps, the real
+	// path resolution -- while leaving nothing behind.
+	t.Setenv("HOME", t.TempDir())
+
 	globalFlags = GlobalFlags{}
 	root := newRootCmd()
 	found, _, err := root.Find([]string{"doctor"})

@@ -232,16 +232,6 @@ func TestDarwinKeystore_Sign_ErrorMapping(t *testing.T) {
 	}
 }
 
-func TestZero(t *testing.T) {
-	b := []byte{1, 2, 3, 4}
-	zero(b)
-	for i, v := range b {
-		if v != 0 {
-			t.Errorf("zero() left b[%d] = %d, want 0", i, v)
-		}
-	}
-}
-
 // failingReader is an io.Reader that always errors, used to drive
 // GenerateKey's ed25519.GenerateKey error-mapping branch (there is no way
 // to make crypto/rand.Reader itself fail on a healthy host).

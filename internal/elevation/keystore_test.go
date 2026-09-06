@@ -196,3 +196,16 @@ func TestKeystore_Errors_AreTaxonomyKinds(t *testing.T) {
 		})
 	}
 }
+
+// TestZero covers the shared key-material wipe. It lives in the untagged
+// test file so it runs on every platform lane, matching where zero itself
+// is now defined.
+func TestZero(t *testing.T) {
+	b := []byte{1, 2, 3, 4}
+	zero(b)
+	for i, v := range b {
+		if v != 0 {
+			t.Errorf("zero() left b[%d] = %d, want 0", i, v)
+		}
+	}
+}

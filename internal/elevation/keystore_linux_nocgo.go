@@ -9,6 +9,7 @@
 //	fails closed on every operation rather than a missing symbol.
 //
 // SPORT: internal/elevation linuxNoCGOKeystore/ADDED (P1-E04-W1-S07-T6).
+
 package elevation
 
 // linuxNoCGOKeystore is the fallback used when the binary was built with

@@ -15,6 +15,7 @@
 //	row there. Art.2 external-contract: this runs the real xclip binary.
 //
 // SPORT: internal/secrets clipboard_linux.go/ADDED (P1-E08-W2-S16-T4).
+
 package secrets
 
 import (

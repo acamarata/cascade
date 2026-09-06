@@ -101,11 +101,3 @@ func (k darwinKeystore) loadPublic() ([]byte, error) {
 	}
 	return pub, nil
 }
-
-// zero overwrites b's bytes so key material does not linger in memory
-// beyond the call that needed it.
-func zero(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
-}

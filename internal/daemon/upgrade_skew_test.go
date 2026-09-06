@@ -1,3 +1,10 @@
+//go:build !windows
+
+// The tag matches upgrade.go and upgrade_skew.go, which are both
+// //go:build !windows. Without it this file compiled on windows while the
+// code it exercises did not, so the windows lane failed on `undefined:
+// buildHash` — a test that could never have run there regardless.
+
 package daemon
 
 import (
