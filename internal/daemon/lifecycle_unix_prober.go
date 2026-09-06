@@ -25,6 +25,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // unixProber is the zero-value-usable production ProcessProber.
@@ -66,4 +68,27 @@ func (unixProber) StartTime(pid int) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return t, true
+}
+
+// selfStartTime is the value recorded as this daemon's StartedAt.
+//
+// It must come from the SAME source classifyPID later compares it against
+// (daemon.go), or the two describe different events. The prober reports
+// when the PROCESS started; the clock reports when this line runs, which
+// is after config load, the store open and any migrations. On a warm
+// machine that gap is milliseconds and the comparison happens to work; in
+// a cold container it exceeded the two-second recycle tolerance, so a
+// second `daemon start` classified a perfectly healthy daemon as a
+// recycled PID, removed its pidfile and spawned a SECOND daemon onto the
+// same socket and database. That is R-14.205's linux failure, and it was
+// a like-for-unlike comparison rather than a race.
+//
+// The clock is the documented fallback for when the prober cannot resolve
+// a start time, which is the same "unknown, not proof" position
+// classifyPID already takes for that case.
+func selfStartTime(clock runtime.Clock) time.Time {
+	if started, ok := NewProber().StartTime(os.Getpid()); ok {
+		return started
+	}
+	return clock.Now()
 }

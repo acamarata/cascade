@@ -155,27 +155,44 @@ func Run(ctx context.Context, opts RunOptions) error {
 	return nil
 }
 
-// setUpSocketAndPIDFile binds the unix socket and writes the pidfile,
+// setUpSocketAndPIDFile writes the pidfile and THEN binds the unix socket,
 // recording either failure on manifest. cleanup closes/removes both and
 // must run via defer regardless of how Run later exits.
+//
+// The pidfile-before-socket order is load-bearing, not cosmetic (R-14.205):
+// Start's caller-side readiness probe treats "the socket answers a dial" as
+// its only external signal that the daemon is fully up, because it runs in
+// a separate process with no channel back into this one. Two sequential
+// statements in the SAME goroutine have a real happens-before relationship
+// no external observer can see around — so as long as the write completes
+// before the call that can make the socket dialable, any process that
+// observes a dialable socket is guaranteed the pidfile already exists.
+// The prior order (bind, then write) had no such guarantee: net.Listen
+// alone makes a unix socket dialable (the kernel queues the connection in
+// the listen backlog; no accept() is required), so a second `daemon start`
+// racing the first could see the socket answer while the pidfile write was
+// still in flight, read that as "nothing recorded", and spawn a second
+// daemon onto the same socket path. This ordering is a real guarantee worth
+// having, but it is NOT what caused R-14.205's linux failure: the reorder
+// alone was run against the linux container and the test still failed. That
+// cause was the like-for-unlike start-time comparison selfStartTime fixes.
 func setUpSocketAndPIDFile(opts RunOptions, manifest *Manifest) (net.Listener, func(), error) {
+	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
+		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: create pidfile directory")
+	}
+	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: selfStartTime(opts.Clock)}); err != nil {
+		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
+		return nil, nil, err
+	}
+
 	ln, err := listenSocket(opts.Settings.SocketPath)
 	if err != nil {
 		manifest.Failed(ipcSocketSubsystem, err.Error())
+		_ = removePIDFile(opts.PIDPath)
 		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: listen socket")
 	}
 	socketCleanup := func() { _ = ln.Close(); _ = os.Remove(opts.Settings.SocketPath) }
-
-	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
-		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
-		socketCleanup()
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: create pidfile directory")
-	}
-	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: opts.Clock.Now()}); err != nil {
-		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
-		socketCleanup()
-		return nil, nil, err
-	}
 	return ln, func() { _ = removePIDFile(opts.PIDPath); socketCleanup() }, nil
 }
 
