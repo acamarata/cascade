@@ -46,13 +46,17 @@ func clientModuleRoot(t *testing.T) string {
 }
 
 // cmdRPCBoundaryExempt mirrors .golangci.yml's cmd-rpc-server-boundary
-// rule's exemption list exactly — the three composition-root files
+// rule's exemption list exactly — the composition-root files
 // legitimately importing internal/rpc for reasons other than a
-// hand-rolled outbound call.
+// hand-rolled outbound call. daemon_unix_handlers.go was split out of
+// daemon_unix_run.go for the 300-line cap and carries the same daemon-SIDE
+// role: it serves RPC, it does not dial it, so the rule's "use
+// internal/client.Client instead" does not apply (R-14.197).
 var cmdRPCBoundaryExempt = map[string]bool{
-	"daemon_unix_run.go": true,
-	"mcp.go":             true,
-	"elevate_helper.go":  true,
+	"daemon_unix_run.go":      true,
+	"daemon_unix_handlers.go": true,
+	"mcp.go":                  true,
+	"elevate_helper.go":       true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

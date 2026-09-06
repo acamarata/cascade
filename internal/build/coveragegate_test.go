@@ -81,9 +81,23 @@ func TestCoverageGate_Live(t *testing.T) {
 	}
 	root := coverageModuleRoot(t)
 
-	data, err := os.ReadFile(profilePath)
+	// R-14.194: a Go test binary runs with its working directory set to the
+	// package directory, not the module root, so a RELATIVE profile path
+	// resolves against internal/build and misses a profile written at the
+	// root. ci.yml's coverage-gate job passes exactly such a relative path
+	// ("coverage.out", extracted to the workspace root by download-artifact),
+	// as does every developer following the .cover/ convention Art.7 asks
+	// for. Resolve relative paths against the module root so the gate reads
+	// the file the caller meant, rather than failing on a path that looks
+	// correct from where it was typed.
+	resolved := profilePath
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(root, profilePath)
+	}
+
+	data, err := os.ReadFile(resolved)
 	if err != nil {
-		t.Fatalf("coverage gate: reading profile %s: %v", profilePath, err)
+		t.Fatalf("coverage gate: reading profile %s (resolved to %s): %v", profilePath, resolved, err)
 	}
 	profile, err := ParseCoverageProfile(data)
 	if err != nil {

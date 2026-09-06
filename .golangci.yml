@@ -125,6 +125,7 @@ linters:
           files:
             - "**/cmd/cascade/**/*.go"
             - "!**/cmd/cascade/daemon_unix_run.go"
+            - "!**/cmd/cascade/daemon_unix_handlers.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
             - "!**/*_test.go"
