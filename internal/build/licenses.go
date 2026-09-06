@@ -93,10 +93,17 @@ var KnownModuleLicenses = map[string]string{
 	"github.com/remyoudompheng/bigfft":     "BSD-3-Clause",
 	"github.com/zeebo/blake3":              "CC0-1.0",
 	"golang.org/x/sys":                     "BSD-3-Clause",
-	"modernc.org/libc":                     "BSD-3-Clause",
-	"modernc.org/mathutil":                 "BSD-3-Clause",
-	"modernc.org/memory":                   "BSD-3-Clause",
-	"modernc.org/sqlite":                   "BSD-3-Clause",
+	// gopkg.in/yaml.v3 ships a dual license: the files ported from libyaml
+	// (apic.go, emitterc.go, parserc.go, readerc.go, scannerc.go, writerc.go,
+	// yamlh.go, yamlprivateh.go) stay under their original MIT, and the rest
+	// is Apache-2.0. Both halves are on LicenseAllowlist. The registry maps
+	// one identifier per module, so the more restrictive of the two is
+	// recorded here; verified against the module's own LICENSE file.
+	"gopkg.in/yaml.v3":     "Apache-2.0",
+	"modernc.org/libc":     "BSD-3-Clause",
+	"modernc.org/mathutil": "BSD-3-Clause",
+	"modernc.org/memory":   "BSD-3-Clause",
+	"modernc.org/sqlite":   "BSD-3-Clause",
 }
 
 // LicenseDependency is one require-directive entry parsed from a go.mod:

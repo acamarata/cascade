@@ -1,5 +1,15 @@
 [
   {
+    "symbol": "plugins/pbd/internal/pews.DecodeTicket",
+    "reason": "N/S-28.T1 defines the PEWS ticket-schema v2 contract and its YAML codec, and is explicitly scoped AWAY from the tree store, the validator, the authoring commands and the dispatch surface that read tickets. The decoder therefore ships one ticket before its first consumer by design: the schema is the thing those tickets are specified against, so building it second would mean specifying them against nothing. A codec with no reader is not a feature, and this entry must not outlive S-28.T2.",
+    "expected_caller": "the PEWS tree store and validator (P1-E14-W3-S28-T2), which decodes every ticket file it walks; retire this entry in that ticket"
+  },
+  {
+    "symbol": "plugins/pbd/internal/pews.EncodeTicket",
+    "reason": "The encoder half of the same S-28.T1 codec, and unreachable for the same scoping reason: the authoring path that writes a ticket back out is N/S-28.T4's, not this ticket's. It is exercised here only by the round-trip test, which is what proves the two halves agree about field order.",
+    "expected_caller": "the PEWS authoring/lifecycle surface (P1-E14-W3-S28-T4), which writes ticket YAML back to the tree; retire this entry in that ticket"
+  },
+  {
     "symbol": "internal/rpc.ElevationMiddleware",
     "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
     "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
@@ -115,11 +125,6 @@
     "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
   },
   {
-    "symbol": "internal/audit.ParseFilter",
-    "reason": "The token form of the query filter exists for the command line to hand its flags in. This ticket owns the query engine and is explicitly told not to build the CLI or RPC surface, so the only caller that can exist today is the test that proves the parser refuses an unknown field instead of widening the result set.",
-    "expected_caller": "the `cascade policy audit query` command surface (04-PEWS-PLAN-W1-W3.md Epic I S-18.T6)"
-  },
-  {
     "symbol": "internal/memory.NewPromotionLadder",
     "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
     "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
@@ -153,11 +158,6 @@
     "symbol": "providers/embeddings/bgem3.New",
     "reason": "The BGE-M3 sidecar client is a seam whose server does not exist yet: the native sidecar ships as a separate post-P1 artifact (01-FEATURE-INVENTORY, Local-LLM row; the 04-PEWS-PLAN DECIDED ruling for F/S-12.T2). P1 deliberately ships the wire spec (providers/embeddings/bgem3/SPEC.md) and the client that speaks it WITHOUT registering it as an active embedder lane, because a registered lane with no sidecar behind it would be a capability that appears to work; the absence is documented instead (Art.1.3). The client's protocol conformance is asserted against a spec-conformance server that exists only under _test.go (Art.1.1).",
     "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket"
-  },
-  {
-    "symbol": "internal/policy.NewApprovalQueue",
-    "reason": "The approval queue ships before the surface that drives it. Its consumer is the CLI/RPC approval surface (S-18.T6), which is the ticket that constructs the queue at the daemon composition root and exposes list/approve/deny; the policy engine reaches the queue through the injected ApprovalQueue interface (Engine.WithApprovalQueue), never through this constructor. Building the queue and its single-use ledger before the surface is the right order, since the surface is specified against this queue's types; shipping an approval surface with no queue behind it would not be.",
-    "expected_caller": "the daemon composition root in cmd/cascade that wires the approval surface (04-PEWS-PLAN-W1-W3.md Wave 2 Epic I S-18.T6), in the SAME change that registers the first approval command; retire this entry then"
   },
   {
     "symbol": "internal/secrets.NewScrubber",
@@ -220,19 +220,14 @@
     "expected_caller": "the verb registry that R-21.207 requires the policy.Authorize middleware to consult (P1-E09-W2-S18-T5)"
   },
   {
-    "symbol": "internal/policy.CreateStandingGrant",
-    "reason": "The standing-grant creation path is the data-model half of the standing_grant.create verb. That verb has no handler yet: this ticket ships no RPC surface and no CLI command by its own boundary ruling.",
-    "expected_caller": "the standing_grant.create RPC handler, in the SAME change that registers that verb on the daemon"
-  },
-  {
-    "symbol": "internal/policy.NextRedemptionState",
+    "symbol": "internal/policy.NextApprovalState",
     "reason": "The redemption CAS contract's state half. R-21.209 makes the controller the sole redemption authority and assigns the storage half to I/S-18.T3; this ticket defines and tests the states and transitions the ledger will drive.",
     "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3)"
   },
   {
     "symbol": "internal/policy.ExecutionID",
-    "reason": "The stable execution identifier a winning redemption appends before dispatch. It is minted by the same ledger path as NextRedemptionState and shares its fate.",
-    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3), retired together with the NextRedemptionState entry"
+    "reason": "The stable execution identifier a winning redemption appends before dispatch. It is minted by the same ledger path as NextApprovalState and shares its fate.",
+    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3), retired together with the NextApprovalState entry"
   },
   {
     "symbol": "internal/retrieval/eval.LoadCorpus",
