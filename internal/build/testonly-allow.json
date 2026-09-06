@@ -348,10 +348,5 @@
     "symbol": "internal/context.Assemble",
     "reason": "P1-E05-W2-S09-T1's token-budgeted context assembler. Its own ticket text names the CLI ticket that consumes it as separate work ('the S-09.T2 CLI ticket is a separate ticket that consumes this assembler; this ticket ships the assembler only') and this ticket's files_scope is add-only and forbids touching cmd/cascade, internal/daemon, internal/hooks or internal/mcp, so no legal file exists in this ticket to mount it from. Built and tested end to end, including the R-16.4 scope-leak fixture (TestContextAssemblyScopeLeak) against real corpus.Store/fusion.ScopeFilter components.",
     "expected_caller": "the S-09.T2 CLI ticket (the `cascade context assemble` verb / prompt-hydration path, R-16.6) that consumes this assembler"
-  },
-  {
-    "symbol": "pkg/provider.NaiveTokenCounter",
-    "reason": "R-14.97's documented approximate TokenCounter fallback. internal/context.Assemble deliberately never substitutes it for a nil TokenCounter (acceptance criterion: nil TokenCounter is a typed error, not a silent default to the naive estimator), so no shipping code constructs one; a caller that wants the approximation must inject it explicitly.",
-    "expected_caller": "the S-09.T2 CLI ticket, or any future caller that explicitly opts into the naive estimate instead of a real provider-supplied TokenCounter"
   }
 ]
