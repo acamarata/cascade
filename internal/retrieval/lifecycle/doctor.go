@@ -1,10 +1,10 @@
+package lifecycle
+
 // Purpose: the index-health check set registered into the C/S-05.T2
 // pluggable doctor framework: index presence, generation-marker currency,
 // and a verify summary — surfaced through `cascade doctor`.
 //
 // SPORT: internal.retrieval.lifecycle.DoctorCheck/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"fmt"

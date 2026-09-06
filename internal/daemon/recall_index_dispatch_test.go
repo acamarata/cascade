@@ -64,9 +64,17 @@ func TestRegisterRecallIndexHandler_AllFourMethodsDispatch(t *testing.T) {
 		})
 	}
 
-	// Before any rebuild: refuse, with guidance, rather than reporting a
-	// healthy empty index. A silent success here would tell a user their
-	// retrieval is fine when nothing is indexed at all.
+	assertRefusesBeforeIndex(t, dispatch)
+	assertSucceedsAfterRebuild(t, dispatch)
+}
+
+type dispatchFunc func(*testing.T, string) (any, *rpc.ErrorObject)
+
+// assertRefusesBeforeIndex pins the pre-rebuild contract: refuse with
+// guidance rather than report a healthy empty index. A silent success here
+// would tell a user their retrieval is fine when nothing is indexed at all.
+func assertRefusesBeforeIndex(t *testing.T, dispatch dispatchFunc) {
+	t.Helper()
 	t.Run("verify refuses before any index exists", func(t *testing.T) {
 		if _, errObj := dispatch(t, RecallIndexVerifyMethod); errObj == nil {
 			t.Fatal("verify on a never-built index succeeded; want a typed refusal")
@@ -77,9 +85,13 @@ func TestRegisterRecallIndexHandler_AllFourMethodsDispatch(t *testing.T) {
 			t.Fatal("update with no generation marker succeeded; want a typed refusal")
 		}
 	})
+}
 
-	// migrate converges the schema and rebuild establishes the index;
-	// after that verify and update both have something to work against.
+// assertSucceedsAfterRebuild runs migrate then rebuild, which establishes
+// the index, then re-runs verify and update now that both have something
+// to work against.
+func assertSucceedsAfterRebuild(t *testing.T, dispatch dispatchFunc) {
+	t.Helper()
 	for _, m := range []string{
 		RecallIndexMigrateMethod, RecallIndexRebuildMethod,
 		RecallIndexVerifyMethod, RecallIndexUpdateMethod,

@@ -30,18 +30,18 @@ type corpusRow struct {
 }
 
 // LoadCorpus decodes a JSONL corpus fixture: one corpusRow per line.
-func LoadCorpus(r io.Reader) (EvalCorpus, error) {
+func LoadCorpus(r io.Reader) (Corpus, error) {
 	var docs []Document
 	err := decodeJSONL(r, func(line []byte) error {
 		var row corpusRow
 		if jsonErr := json.Unmarshal(line, &row); jsonErr != nil {
 			return cascade.Wrap(cascade.KindInvalidInput, jsonErr, "eval: decoding corpus line")
 		}
-		docs = append(docs, Document{ID: row.ID, Text: row.Text})
+		docs = append(docs, Document(row))
 		return nil
 	})
 	if err != nil {
-		return EvalCorpus{}, err
+		return Corpus{}, err
 	}
 	return NewEvalCorpus(docs)
 }
@@ -55,7 +55,7 @@ type queryRow struct {
 
 // LoadQuerySet decodes a JSONL query-set fixture under name, validating
 // every expected id against corpus.
-func LoadQuerySet(name string, r io.Reader, corpus EvalCorpus) (QuerySet, error) {
+func LoadQuerySet(name string, r io.Reader, corpus Corpus) (QuerySet, error) {
 	var queries []Query
 	err := decodeJSONL(r, func(line []byte) error {
 		var row queryRow
@@ -101,7 +101,7 @@ func LoadRecordedEmbeddings(r io.Reader) (RecordedEmbeddings, error) {
 	}
 	records := make([]EmbeddingRecord, len(file.Records))
 	for i, row := range file.Records {
-		records[i] = EmbeddingRecord{Text: row.Text, Vector: row.Vector}
+		records[i] = EmbeddingRecord(row)
 	}
 	return NewRecordedEmbeddings(Provenance{Tool: file.Tool, Version: file.Version, Date: file.Date}, records)
 }

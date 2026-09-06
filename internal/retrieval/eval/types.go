@@ -36,38 +36,38 @@ type Document struct {
 	Text string
 }
 
-// EvalCorpus is the committed document set the harness builds a real FTS5
+// Corpus is the committed document set the harness builds a real FTS5
 // index and vector store over.
-type EvalCorpus struct {
+type Corpus struct {
 	Documents []Document
 }
 
-// NewEvalCorpus validates docs and returns an EvalCorpus. An empty set, a
+// NewEvalCorpus validates docs and returns an Corpus. An empty set, a
 // document with an empty id or text, or a duplicate id is refused: each
 // would make the harness's own accounting of what it indexed silently
 // wrong.
-func NewEvalCorpus(docs []Document) (EvalCorpus, error) {
+func NewEvalCorpus(docs []Document) (Corpus, error) {
 	if len(docs) == 0 {
-		return EvalCorpus{}, cascade.New(cascade.KindInvalidInput, "eval: corpus has no documents")
+		return Corpus{}, cascade.New(cascade.KindInvalidInput, "eval: corpus has no documents")
 	}
 	seen := make(map[string]bool, len(docs))
 	for _, d := range docs {
 		if d.ID == "" {
-			return EvalCorpus{}, cascade.New(cascade.KindInvalidInput, "eval: corpus document has an empty id")
+			return Corpus{}, cascade.New(cascade.KindInvalidInput, "eval: corpus document has an empty id")
 		}
 		if d.Text == "" {
-			return EvalCorpus{}, cascade.Newf(cascade.KindInvalidInput, "eval: corpus document %q has empty text", d.ID)
+			return Corpus{}, cascade.Newf(cascade.KindInvalidInput, "eval: corpus document %q has empty text", d.ID)
 		}
 		if seen[d.ID] {
-			return EvalCorpus{}, cascade.Newf(cascade.KindInvalidInput, "eval: duplicate corpus document id %q", d.ID)
+			return Corpus{}, cascade.Newf(cascade.KindInvalidInput, "eval: duplicate corpus document id %q", d.ID)
 		}
 		seen[d.ID] = true
 	}
-	return EvalCorpus{Documents: docs}, nil
+	return Corpus{Documents: docs}, nil
 }
 
 // IDs returns every document id in the corpus, for expected-id validation.
-func (c EvalCorpus) IDs() map[string]bool {
+func (c Corpus) IDs() map[string]bool {
 	out := make(map[string]bool, len(c.Documents))
 	for _, d := range c.Documents {
 		out[d.ID] = true
@@ -92,7 +92,7 @@ type QuerySet struct {
 // NewQuerySet validates queries against corpus and returns a QuerySet. An
 // empty set, a query with empty text, a query with no expected ids, or an
 // expected id absent from corpus is refused.
-func NewQuerySet(name string, queries []Query, corpus EvalCorpus) (QuerySet, error) {
+func NewQuerySet(name string, queries []Query, corpus Corpus) (QuerySet, error) {
 	if len(queries) == 0 {
 		return QuerySet{}, cascade.Newf(cascade.KindInvalidInput, "eval: query set %q has no queries", name)
 	}

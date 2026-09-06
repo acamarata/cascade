@@ -1,3 +1,5 @@
+package lifecycle
+
 // Purpose: turn a []Source into the concrete write plan a lifecycle verb
 // executes — chunking every file, building the corpus.Record set the
 // catalog document carries, and the per-corpus chunk-id manifest this
@@ -13,8 +15,6 @@
 // byte-identical chunk sequences (Art.7).
 //
 // SPORT: internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"sort"

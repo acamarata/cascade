@@ -103,10 +103,7 @@ func newContextScopeShowCmd(deps contextScopeDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return contextScopeOutputWriter(cmd).Result(contextScopeHumanView{
-				SessionScope: result.SessionScope,
-				Candidates:   result.Candidates,
-			})
+			return contextScopeOutputWriter(cmd).Result(contextScopeHumanView(result))
 		},
 	}
 	cmd.Flags().StringVar(&params.Branch, "branch", "", "attach this branch to the resolved scope")

@@ -45,7 +45,7 @@ var evalSession = corpus.Query{
 // store — the vector data itself is not what this ticket tests; the FTS5
 // index and the RRF fusion are), and returns the Legs RunKnownItem and
 // RunSemanticParaphrase query through.
-func buildEvalHarness(t *testing.T, fixtureCorpus eval.EvalCorpus, embeddings eval.RecordedEmbeddings) eval.Legs {
+func buildEvalHarness(t *testing.T, fixtureCorpus eval.Corpus, embeddings eval.RecordedEmbeddings) eval.Legs {
 	t.Helper()
 	driver, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "eval.db"))
 	if err != nil {
@@ -95,7 +95,7 @@ func buildEvalHarness(t *testing.T, fixtureCorpus eval.EvalCorpus, embeddings ev
 
 // loadEvalFixtures loads the committed corpus, both query sets, and the
 // recorded embeddings, failing the test on any load error.
-func loadEvalFixtures(t *testing.T) (eval.EvalCorpus, eval.QuerySet, eval.QuerySet, eval.RecordedEmbeddings) {
+func loadEvalFixtures(t *testing.T) (eval.Corpus, eval.QuerySet, eval.QuerySet, eval.RecordedEmbeddings) {
 	t.Helper()
 	fixtureCorpus := loadRealCorpus(t)
 	knownItem := loadQuerySet(t, "testdata/known-item-queries.jsonl", "known-item", fixtureCorpus)
@@ -104,13 +104,13 @@ func loadEvalFixtures(t *testing.T) (eval.EvalCorpus, eval.QuerySet, eval.QueryS
 	return fixtureCorpus, knownItem, semantic, embeddings
 }
 
-func loadQuerySet(t *testing.T, path, name string, c eval.EvalCorpus) eval.QuerySet {
+func loadQuerySet(t *testing.T, path, name string, c eval.Corpus) eval.QuerySet {
 	t.Helper()
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	qs, err := eval.LoadQuerySet(name, f, c)
 	if err != nil {
 		t.Fatalf("LoadQuerySet(%s): %v", name, err)
@@ -124,7 +124,7 @@ func loadRecordedEmbeddings(t *testing.T) eval.RecordedEmbeddings {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	rec, err := eval.LoadRecordedEmbeddings(f)
 	if err != nil {
 		t.Fatalf("LoadRecordedEmbeddings: %v", err)

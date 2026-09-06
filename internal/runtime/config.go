@@ -238,22 +238,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		sources[k] = SourceEnv
 	}
 
-	elevation, err := parseElevationSection(tree)
-	if err != nil {
-		return nil, err
-	}
-
-	logging, err := parseLoggingSection(tree, warn)
-	if err != nil {
-		return nil, err
-	}
-
-	retrieval, err := parseRetrievalSection(tree)
-	if err != nil {
-		return nil, err
-	}
-
-	fusionEnabled, err := resolveFusionEnabled(tree)
+	sec, err := parseConfigSections(tree, warn)
 	if err != nil {
 		return nil, err
 	}
@@ -267,14 +252,46 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 	return &Config{
 		SchemaVersion: schemaVersionOf(tree),
 		Runtime:       runtimeSection{Profile: profile},
-		Elevation:     elevation,
-		Logging:       logging,
-		Retrieval:     retrieval,
-		FusionEnabled: fusionEnabled,
+		Elevation:     sec.elevation,
+		Logging:       sec.logging,
+		Retrieval:     sec.retrieval,
+		FusionEnabled: sec.fusionEnabled,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,
 	}, nil
+}
+
+// configSections groups the four independent section parses Load performs.
+// Extracted from Load purely so each stays readable: Load itself had grown
+// past the 50-line funlen gate, and four near-identical parse-and-bail
+// blocks were the bulk of it.
+type configSections struct {
+	elevation     elevationSection
+	logging       loggingSection
+	retrieval     retrievalSection
+	fusionEnabled bool
+}
+
+// parseConfigSections runs each section parser in turn, returning on the
+// first failure so a malformed section is reported as itself rather than
+// as a later section's missing input.
+func parseConfigSections(tree map[string]interface{}, warn func(string, ...interface{})) (configSections, error) {
+	var s configSections
+	var err error
+	if s.elevation, err = parseElevationSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.logging, err = parseLoggingSection(tree, warn); err != nil {
+		return configSections{}, err
+	}
+	if s.retrieval, err = parseRetrievalSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.fusionEnabled, err = resolveFusionEnabled(tree); err != nil {
+		return configSections{}, err
+	}
+	return s, nil
 }
 
 // DefaultFusionEnabled is the shipped default: the F/S-12.T6 gate verdict

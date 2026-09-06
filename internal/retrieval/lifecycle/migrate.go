@@ -1,3 +1,5 @@
+package lifecycle
+
 // Purpose: `cascade recall index migrate` — surfaces and runs the
 // retrieval index domain's own schema migrations through the B/S-02.T3
 // portable migration builder (internal/storage/migrate).
@@ -26,8 +28,6 @@
 // migrate verb just wrote — see this ticket's journal for that wiring.
 //
 // SPORT: internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"database/sql"

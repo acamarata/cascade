@@ -1,3 +1,5 @@
+package lifecycle
+
 // Purpose: this package's own bookkeeping over provider.Store — the
 // per-corpus chunk-id manifest and the R-21.189 generation marker — plus
 // the catalog document reader/writer both rebuild and update share.
@@ -18,8 +20,6 @@
 // internal/retrieval/fts5_schema.go.
 //
 // SPORT: internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"encoding/json"

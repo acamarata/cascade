@@ -10,21 +10,23 @@
 // existing package owns all four.
 //
 // Purpose: prove context.scope.show is reachable end to end through the
-//   REAL production pieces: a real `git init` repository under
-//   t.TempDir() (Article-2's real Git counterpart), a real
-//   modernc.org/sqlite cascade.db file (the real SQLite counterpart), the
-//   real internal/rpc.Registry/Handler pipeline served over a real unix
-//   socket (matching internal/daemon/daemon_ipc_e2e_integration_test.go's
-//   own pattern), and the real internal/client.Client SDK dialing it (the
-//   spec-sourced JSON-RPC client fixture -- no hand-rolled request body).
+//
+//	REAL production pieces: a real `git init` repository under
+//	t.TempDir() (Article-2's real Git counterpart), a real
+//	modernc.org/sqlite cascade.db file (the real SQLite counterpart), the
+//	real internal/rpc.Registry/Handler pipeline served over a real unix
+//	socket (matching internal/daemon/daemon_ipc_e2e_integration_test.go's
+//	own pattern), and the real internal/client.Client SDK dialing it (the
+//	spec-sourced JSON-RPC client fixture -- no hand-rolled request body).
 //
 // MCP scope note: this ticket's own rpc.go and internal/mcp/
-//   context_scope_test.go record why no full-profile MCP tool
-//   cascade_context_scope_show exists yet (a builtin-plugin blank-import
-//   site outside this ticket's files_scope) -- so this file exercises the
-//   CLI-and-daemon RPC transport only, not an MCP round trip, matching
-//   the honestly-recorded state rather than fabricating MCP coverage for
-//   a tool that is not exposed.
+//
+//	context_scope_test.go record why no full-profile MCP tool
+//	cascade_context_scope_show exists yet (a builtin-plugin blank-import
+//	site outside this ticket's files_scope) -- so this file exercises the
+//	CLI-and-daemon RPC transport only, not an MCP round trip, matching
+//	the honestly-recorded state rather than fabricating MCP coverage for
+//	a tool that is not exposed.
 //
 // SPORT: internal/integration (ADD, E/S-08.T4).
 package integration

@@ -146,7 +146,7 @@ func TestV1August2026Baseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open baseline: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	baseline, err := eval.LoadBaseline(f)
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)

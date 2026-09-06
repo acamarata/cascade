@@ -13,7 +13,7 @@ import (
 	"github.com/acamarata/cascade/internal/retrieval/eval"
 )
 
-func mustCorpus(t *testing.T) eval.EvalCorpus {
+func mustCorpus(t *testing.T) eval.Corpus {
 	t.Helper()
 	c, err := eval.NewEvalCorpus([]eval.Document{{ID: "a", Text: "alpha"}, {ID: "b", Text: "beta"}})
 	if err != nil {

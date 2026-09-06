@@ -21,11 +21,11 @@ import (
 // cascade.db.
 type fakeContextScopePaths struct{ dir string }
 
-func (p fakeContextScopePaths) Root() string                        { return p.dir }
-func (p fakeContextScopePaths) ConfigPath() string                  { return p.dir + "/config.toml" }
-func (p fakeContextScopePaths) SocketPath() string                  { return p.dir + "/daemon.sock" }
-func (p fakeContextScopePaths) DataDir() string                     { return p.dir }
-func (p fakeContextScopePaths) LogDir() string                      { return p.dir + "/logs" }
+func (p fakeContextScopePaths) Root() string                         { return p.dir }
+func (p fakeContextScopePaths) ConfigPath() string                   { return p.dir + "/config.toml" }
+func (p fakeContextScopePaths) SocketPath() string                   { return p.dir + "/daemon.sock" }
+func (p fakeContextScopePaths) DataDir() string                      { return p.dir }
+func (p fakeContextScopePaths) LogDir() string                       { return p.dir + "/logs" }
 func (p fakeContextScopePaths) StorageRoot(_ runtime.Profile) string { return p.dir }
 
 // execRootContextScope drives the real root tree with the production

@@ -1,3 +1,5 @@
+package daemon
+
 // Purpose: registers context.scope.show (E/S-08.T4) on the daemon's RPC
 //   router, split out of daemon.go under its 300-line cap (the same split
 //   cmd/cascade/daemon_unix_handlers.go already applies to buildRPCServer's
@@ -31,8 +33,6 @@
 //
 // SPORT: internal/daemon (CHANGED, context.scope.show registration,
 //   E/S-08.T4).
-package daemon
-
 import (
 	"context"
 	"database/sql"

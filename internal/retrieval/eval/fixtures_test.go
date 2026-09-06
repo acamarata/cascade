@@ -27,7 +27,7 @@ func TestLoadCorpus_Real(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open corpus.jsonl: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	c, err := eval.LoadCorpus(f)
 	if err != nil {
 		t.Fatalf("LoadCorpus: %v", err)
@@ -37,13 +37,13 @@ func TestLoadCorpus_Real(t *testing.T) {
 	}
 }
 
-func loadRealCorpus(t *testing.T) eval.EvalCorpus {
+func loadRealCorpus(t *testing.T) eval.Corpus {
 	t.Helper()
 	f, err := os.Open("testdata/corpus.jsonl")
 	if err != nil {
 		t.Fatalf("open corpus.jsonl: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	c, err := eval.LoadCorpus(f)
 	if err != nil {
 		t.Fatalf("LoadCorpus: %v", err)
@@ -63,7 +63,7 @@ func TestLoadQuerySet_KnownItemReal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	qs, err := eval.LoadQuerySet("known-item", f, corpus)
 	if err != nil {
 		t.Fatalf("LoadQuerySet: %v", err)
@@ -79,7 +79,7 @@ func TestLoadQuerySet_SemanticParaphraseReal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	qs, err := eval.LoadQuerySet("semantic-paraphrase", f, corpus)
 	if err != nil {
 		t.Fatalf("LoadQuerySet: %v", err)
@@ -104,7 +104,7 @@ func TestRecordedRealEmbedderFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	rec, err := eval.LoadRecordedEmbeddings(f)
 	if err != nil {
 		t.Fatalf("LoadRecordedEmbeddings: %v", err)
@@ -127,7 +127,7 @@ func TestRecordedRealEmbedderFixture(t *testing.T) {
 			t.Fatalf("open %s: %v", name, err)
 		}
 		qs, err := eval.LoadQuerySet(name, qf, corpus)
-		qf.Close()
+		_ = qf.Close()
 		if err != nil {
 			t.Fatalf("LoadQuerySet(%s): %v", name, err)
 		}
@@ -157,7 +157,7 @@ func TestLoadBaseline_Real(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	b, err := eval.LoadBaseline(f)
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)

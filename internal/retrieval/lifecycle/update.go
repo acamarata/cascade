@@ -1,3 +1,5 @@
+package lifecycle
+
 // Purpose: `cascade recall index update` (R-16.8) — a git-diff-driven
 // incremental re-ingest of changed paths only, using the S-10.T1 stable
 // chunk ids and the S-10.T3 content-hash dedupe so an unchanged file's
@@ -18,8 +20,6 @@
 // whole corpus.
 //
 // SPORT: internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"sort"

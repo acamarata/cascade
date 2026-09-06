@@ -1,3 +1,5 @@
+package lifecycle
+
 // Purpose: `cascade recall index verify` — a consistency report between
 // the catalog document and both index legs, plus the R-21.189 generation
 // marker's drift status.
@@ -20,8 +22,6 @@
 // limitation, not a silent gap (see the CorpusVectorCount doc comment).
 //
 // SPORT: internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4).
-package lifecycle
-
 import (
 	"context"
 	"sort"

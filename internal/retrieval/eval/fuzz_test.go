@@ -19,7 +19,7 @@ import (
 // FuzzEvalFixture must never panic or hang on arbitrary bytes: every
 // malformed input is required to come back as an error, never a crash.
 func FuzzEvalFixture(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		_, _ = LoadRecordedEmbeddings(bytes.NewReader(data))
 	})
 }

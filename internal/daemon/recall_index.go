@@ -1,3 +1,5 @@
+package daemon
+
 // Purpose: registers the recall.index.rebuild|verify|migrate|update
 // namespace (F/S-11.T4) on the daemon's RPC router, over a real
 // internal/retrieval/lifecycle.Manager, and supplies the real git tree
@@ -26,8 +28,6 @@
 //
 // SPORT: internal/daemon (CHANGED — recall.index.* registration,
 // P1-E06-W2-S11-T4).
-package daemon
-
 import (
 	"context"
 	"database/sql"
