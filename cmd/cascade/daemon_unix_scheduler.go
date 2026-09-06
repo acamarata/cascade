@@ -85,12 +85,18 @@ func newSchedulerOwnerID() (string, error) {
 // caller is expected to have already cancelled ctx (or its parent)
 // before calling cleanup, matching every other platformDaemonRun
 // subsystem's shutdown order.
-func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, paths runtime.PathProvider, cfg *runtime.Config, clock runtime.Clock, bus *events.Bus, logger *slog.Logger) (*scheduler.Scheduler, *memory.AdminHandler, func(context.Context), error) {
+func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, paths runtime.PathProvider, cfg *runtime.Config, clock runtime.Clock, bus *events.Bus, logger *slog.Logger, gate scheduler.ActionGate) (*scheduler.Scheduler, *memory.AdminHandler, func(context.Context), error) {
 	ownerID, err := newSchedulerOwnerID()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	sched := scheduler.New(store, schedulerNamespace, clock, bus, ownerID, schedulerLeaseTTL)
+	// The policy gate, installed BEFORE Activate. Without it routeDispatch
+	// refuses every due job, which is what a daemon carrying no policy
+	// composition root did: the scheduler ran and fired nothing.
+	if err := sched.SetActionGate(gate, schedulerSubject(), schedulerCapability); err != nil {
+		return nil, nil, nil, err
+	}
 
 	if err := scheduler.RegisterRetentionJobs(ctx, sched, rawDB, storage.RetentionConfig{}, clock); err != nil {
 		return nil, nil, nil, err

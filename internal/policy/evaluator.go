@@ -168,7 +168,7 @@ func (e *Engine) Evaluate(ctx context.Context, req EvalRequest) (EvalOutcome, er
 		return denyOutcome(L4, LayerFailClosed, "capability is not registered"), err
 	}
 	run := &evalRun{cfg: e.config(), req: req}
-	run.classified = e.classify(ctx, req.Action)
+	run.classified = e.resolveRung(ctx, req, capDef)
 	run.level = maxLevel(run.classified, capDef.Class().Risk())
 	run.raisedByCapability = run.level > run.classified
 	out, err := run.stack(ctx)

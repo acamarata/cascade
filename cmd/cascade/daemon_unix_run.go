@@ -226,23 +226,28 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }
 
-// registerContextEngineHandlers registers context.scope.show (E/S-08.T4)
-// and context.slice/context.show (E/S-09.T2) together, factored out of
-// buildRPCServer purely to stay under Art.10.3's 50-line function cap
-// (mechanical relocation, same composition-root concern buildRPCServer's
-// own doc comment already names). Each registration opens its own second
-// sqlite connection to paths.DataDir()/cascade.db rather than reusing
+// registerContextEngineHandlers registers context.scope.show (E/S-08.T4),
+// context.slice/context.show (E/S-09.T2) and context.sync (E/S-09.T4)
+// together, factored out of buildRPCServer purely to stay under
+// Art.10.3's 50-line function cap (mechanical relocation, same
+// composition-root concern buildRPCServer's own doc comment already
+// names). The first two registrations open their own second sqlite
+// connection to paths.DataDir()/cascade.db rather than reusing
 // platformDaemonRun's rawDB — see internal/daemon/context_scope.go's and
 // internal/daemon/context_assemble.go's doc comments for why: threading
 // rawDB into this function's signature would ripple into call sites
 // outside either ticket's files_scope, and a second connection is a
 // documented no-op after the first opens it (every schema apply here is
-// idempotent by contract).
+// idempotent by contract). context.sync opens no connection at all — see
+// internal/daemon/context_sync.go's doc comment.
 func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
 	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
 		return err
 	}
 	if _, err := daemon.RegisterContextAssembleHandler(registry, paths, clock); err != nil {
+		return err
+	}
+	if err := daemon.RegisterContextSyncHandler(registry, paths, clock); err != nil {
 		return err
 	}
 	return nil

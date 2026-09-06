@@ -74,7 +74,16 @@ func TestStartScheduler_MemoryJobsFireThroughTheProductionRegistration(t *testin
 		"consolidation_schedule": "@every 1m",
 		"staleness_schedule":     "@every 1m",
 	}}}
-	sched, _, cleanup, err := startScheduler(ctx, store, rawDB, paths, cfg, clock, bus, logger)
+	// The gate comes from the PRODUCTION policy composition root, over the
+	// same real store, exactly as platformDaemonRun builds it. A test that
+	// installed an allow-gate of its own could not see whether a shipped
+	// daemon fires anything at all, which is the defect this file exists
+	// to catch.
+	pol, err := wirePolicy(ctx, store, clock, cfg)
+	if err != nil {
+		t.Fatalf("wirePolicy: %v", err)
+	}
+	sched, _, cleanup, err := startScheduler(ctx, store, rawDB, paths, cfg, clock, bus, logger, pol.Router)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
 	}

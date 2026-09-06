@@ -124,7 +124,15 @@ func (a Action) Validate() error {
 		return cascade.Newf(cascade.KindInvalidInput,
 			"routing: %s action %q names no capability (%s)", a.Origin, a.Ref, RouteDeniedCode)
 	}
-	if a.Command == "" {
+	// A hook action runs a command line, so an empty one is malformed and
+	// refused. A scheduler dispatch runs an in-process job and HAS no
+	// command line; it previously carried a fabricated command-shaped
+	// string, which the classifier correctly refused to recognise, pinning
+	// every dispatch at L4 where no grant could reach it (R-14.211). Its
+	// rung comes from the capability's declared class instead. The
+	// distinction is by ORIGIN rather than by "empty is allowed", so a
+	// hook that loses its command is still malformed.
+	if a.Command == "" && a.Origin != OriginScheduler {
 		return cascade.Newf(cascade.KindInvalidInput,
 			"routing: %s action %q has no command text to classify (%s)",
 			a.Origin, a.Ref, RouteDeniedCode)
@@ -226,9 +234,14 @@ func (a Action) request() policy.EvalRequest {
 		Capability: a.Capability,
 		Verb:       a.Verb,
 		Action:     a.Command,
-		Params:     a.Params,
-		Summary:    a.Summary,
-		Attributes: map[string]string{"origin": string(a.Origin), "ref": a.Ref},
+		// A scheduler dispatch runs an in-process job and has no command
+		// line, which it must DECLARE rather than signal by an empty
+		// string: an empty command from any other origin is malformed and
+		// stays unclassifiable (R-14.211).
+		CommandLess: a.Origin == OriginScheduler,
+		Params:      a.Params,
+		Summary:     a.Summary,
+		Attributes:  map[string]string{"origin": string(a.Origin), "ref": a.Ref},
 	}
 }
 

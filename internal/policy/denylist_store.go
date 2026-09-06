@@ -125,6 +125,20 @@ func (s *StoreDenyList) List(ctx context.Context) ([]DenyRule, error) {
 // matches, and a form the normalizer refuses is an error rather than a
 // pass.
 func (s *StoreDenyList) Denied(ctx context.Context, action string) (bool, error) {
+	// A deny-list row is a COMMAND pattern. An action with no command text
+	// is not a command, so no row can match it and there is nothing for the
+	// normalizer to normalize: passing it an empty string makes it refuse,
+	// and the layer turns any refusal into "treated as listed", which is
+	// how a scheduled dispatch ended up unable to run at all (R-14.211).
+	//
+	// Reporting "not denied" here is not a weakening. It is the deny-list
+	// saying, correctly, that it has no opinion about an action it cannot
+	// describe. Such an action is still governed by its capability's rung,
+	// by layer 4, and by the standing grant scheduler_route.go names as the
+	// operator's gesture; none of those is bypassed.
+	if action == "" {
+		return false, nil
+	}
 	rules, err := s.load(ctx)
 	if err != nil {
 		return false, err

@@ -96,6 +96,10 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	// 300-line cap, so growing it is avoided here too).
 	contextCmd.AddCommand(newContextSliceCmd(deps))
 	contextCmd.AddCommand(newContextShowCmd(deps))
+	// sync (E/S-09.T4) is defined in context_sync_cmd.go, split from
+	// context_cmd.go under the 300-line cap — see that file's own doc
+	// comment for the files_scope contradiction this records.
+	contextCmd.AddCommand(newContextSyncCmd(deps))
 	return contextCmd
 }
 

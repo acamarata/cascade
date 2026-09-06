@@ -114,9 +114,18 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	// cancellation, so ctx is not guaranteed to be cancelled when Run
 	// returns. schedCancel, called from the returned cleanup, is what
 	// actually stops the scheduler's tick loop on shutdown.
+	// The policy composition root. It is built BEFORE the scheduler
+	// because the scheduler's gate is installed from it: a scheduler
+	// started without one fires nothing at all (scheduler_route.go).
+	pol, err := wirePolicy(ctx, store, deps.Clock, cfg)
+	if err != nil {
+		watcher.Stop()
+		return nil, nil, err
+	}
+
 	schedCtx, schedCancel := context.WithCancel(ctx)
 	_, admin, schedCleanup, err := startScheduler(
-		schedCtx, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger())
+		schedCtx, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger(), pol.Router)
 	if err != nil {
 		schedCancel()
 		watcher.Stop()

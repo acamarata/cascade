@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/events/scheduler"
 	"github.com/acamarata/cascade/internal/testkit"
 )
 
@@ -47,8 +48,12 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 	bus := events.New(store, clock)
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
 
+	pol, err := wirePolicy(ctx, store, clock, nil)
+	if err != nil {
+		t.Fatalf("wirePolicy: %v", err)
+	}
 	sched, admin, cleanup, err := startScheduler(
-		ctx, store, rawDB, paths, nil, clock, bus, logger)
+		ctx, store, rawDB, paths, nil, clock, bus, logger, pol.Router)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
 	}
@@ -60,6 +65,15 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 		cleanup(context.Background())
 	})
 
+	assertSchedulerHoldsEveryJob(t, sched)
+}
+
+// assertSchedulerHoldsEveryJob checks that the running scheduler's own
+// persisted view names every owner this composition root registers, and
+// that none of them is orphaned. Split out of the test above under
+// Art.10.3's 50-line function cap (funlen counts test functions too).
+func assertSchedulerHoldsEveryJob(t *testing.T, sched *scheduler.Scheduler) {
+	t.Helper()
 	jobs, err := sched.ListScheduledJobs()
 	if err != nil {
 		t.Fatalf("ListScheduledJobs: %v", err)

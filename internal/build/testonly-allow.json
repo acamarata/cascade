@@ -145,29 +145,9 @@
     "expected_caller": "the recall command surface, once a Reranker driver is registered (Epic J sprint 19 ticket 6, wave 3)"
   },
   {
-    "symbol": "internal/policy.NewMemoryRegistry",
-    "reason": "P1-E09-W2-S17-T1 delivers the capability registry, grant model and TEAM carrier as internals only; its files_scope is internal/policy, and the contract states explicitly that daemon-boot wiring of the production registry singleton lands with the consuming daemon ticket. The in-memory registry is a real, complete implementation (Art.1), not a stub \u2014 it is simply not yet constructed by the composition root.",
-    "expected_caller": "the daemon composition root that builds the policy registry at boot from the `policy` storage domain, and the policy CLI/RPC surface (04 \u00a7Epic I S-18.T6)"
-  },
-  {
-    "symbol": "internal/policy.NewStoreGrants",
-    "reason": "The B-layer-backed grant store built by P1-E09-W2-S17-T1. It is exercised end to end against a real providers/sqlite database in its own tests; what is missing is only the composition root that opens the store and hands it in, which the contract places outside this ticket's files_scope.",
-    "expected_caller": "the daemon composition root, alongside NewMemoryRegistry; then the policy evaluation engine (S-17.T2) and the policy CLI/RPC surface (S-18.T6)"
-  },
-  {
     "symbol": "internal/policy.NewTeamCarrier",
     "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order \u2014 leaving it unwired once a sharing path exists would not be.",
     "expected_caller": "the policy evaluation engine (04 \u00a7Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
-  },
-  {
-    "symbol": "internal/policy.NewController",
-    "reason": "The autonomy profile's running-profile holder ships ahead of the composition root that binds it. Its production caller is the daemon boot path that loads config.toml and registers the [policy] section with the hot-reload engine; that wiring lives in internal/runtime + cmd/cascade, which this ticket's files_scope does not include. Building the fail-closed holder before the surface that feeds it is the right order: the surface is specified against this API, and a boot path that applied a policy section without a decided restrict-only resolution would be the unsafe half to ship first.",
-    "expected_caller": "the daemon config-load/hot-reload wiring that registers the [policy] section (04-PEWS-PLAN-W1-W3.md Epic C S-05.T8 consumer in internal/runtime + cmd/cascade); retire this entry together with internal/policy.NewEngine"
-  },
-  {
-    "symbol": "internal/policy.NewEngine",
-    "reason": "The evaluation entry point that binds R-14.26 layers 3-6 has no shipping caller yet: the surfaces that ask for a policy decision (the approval queue S-18.T3, the dry-run simulator S-18.T4, the hook routing S-18.T5 and the CLI surface S-18.T6) are later tickets in this sprint, and layers 1-2 (deny-list, elevation) compose in front of it from S-17.T4. The engine is fully implemented and exercised against the real grant store; only its callers are outstanding.",
-    "expected_caller": "the first policy-decision consumer to land \u2014 the approval queue (04-PEWS-PLAN-W1-W3.md Epic I S-18.T3) or the dry-run simulator (S-18.T4); retire this entry together with internal/policy.NewController"
   },
   {
     "symbol": "providers/embeddings/bgem3.New",
@@ -200,11 +180,6 @@
     "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test"
   },
   {
-    "symbol": "internal/context.GenerateHarnessInstructions",
-    "reason": "The multi-harness pipeline (discover the tiers once, merge them once, then render and materialize the files of every harness serializer the registry lists) is complete and drives Discover, MergeTiers, every registered writer's Generate and WriteHarnessFile from a single entry point. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. It supersedes the CC-only pipeline entry above it, which should be retired in the same change.",
-    "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry and the internal/context.GenerateCCInstructions entry together in the change that adds the verb and its end-to-end test"
-  },
-  {
     "symbol": "internal/policy.DataClassInternal",
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
     "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
@@ -218,11 +193,6 @@
     "symbol": "internal/retrieval.NewLeg",
     "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change.",
     "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired"
-  },
-  {
-    "symbol": "internal/policy.NewStoreDenyList",
-    "reason": "The B-layer-backed configurable deny-list. The policy evaluation engine it plugs into (internal/policy.NewEngine) has no shipping caller yet either, and an engine built by nobody cannot be handed a deny-list by anybody. NewEngine attaches DefaultDenyList in the meantime, which is the empty-list behaviour and is fully wired.",
-    "expected_caller": "the composition root that builds the policy engine, in the SAME change that retires the internal/policy.NewEngine entry"
   },
   {
     "symbol": "internal/policy.NewSameTurnLedger",
@@ -338,11 +308,6 @@
     "symbol": "internal/secrets.NewApprovalKeyReader",
     "reason": "The named non-elevated read for the approval signing key. It exists because a release binary refuses elevated verbs outright, so a key reachable only through Broker.Get is unreadable in exactly the builds that ship. Its consumer seam, internal/policy's ApprovalKeySource, has no production caller yet either: NewApprovalSigner is itself listed here awaiting the policy.Authorize middleware. Its caller allowlist is already machine-enforced by TestArchUnelevatedReadCallers, so widening it is a red test rather than a quiet change.",
     "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry"
-  },
-  {
-    "symbol": "internal/events/routing.NewActionRouter",
-    "reason": "The hook and scheduler policy gate is built before the composition root that injects it. Both call sites consume it through an interface (hooks.ActionRouter, scheduler.ActionGate) and both refuse every routed action until it is wired, so nothing is gated permissively in the meantime. Registering it is a one-line change in the daemon's own file, which this ticket may not edit.",
-    "expected_caller": "the daemon composition root, in the same change that builds the policy engine and audit log for the hook dispatcher and the scheduler"
   },
   {
     "symbol": "internal/runtime.RequiresElevationToLoosen",

@@ -37,7 +37,15 @@ type ActionGate interface {
 // Because the classifier cannot resolve this text to a rung, it lands at
 // the top rung and the dispatch is refused unless a standing grant on the
 // scheduler capability permits it, which is the intended operator gesture.
-func ScheduledActionText(owner string) string { return "scheduler.fire " + owner }
+// ScheduledActionText is the action text a cron dispatch carries, and it is
+// deliberately EMPTY. A scheduled dispatch runs an in-process job: there is
+// no command line, so there is nothing for the shell classifier to read.
+// This previously returned "scheduler.fire <owner>", a command-shaped string
+// invented to fill the field, which the classifier then correctly refused to
+// recognise, pinning every dispatch at L4 where no grant could reach it
+// (R-14.211). The owner is carried in the action's attributes, where it is
+// data rather than a fabricated command.
+func ScheduledActionText(string) string { return "" }
 
 // SetActionGate installs the policy gate every cron-triggered dispatch is
 // routed through, together with the subject and capability those

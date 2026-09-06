@@ -104,6 +104,15 @@ type EvalRequest struct {
 	// Verb is the RPC method name, when the action is one. Layer 2
 	// classifies it through the canonical §5.14 table.
 	Verb string
+	// CommandLess declares that this action HAS no command line, rather
+	// than that its command text happens to be empty. The two are not the
+	// same and must not be conflated: a hook whose command went missing is
+	// malformed and denies, while an in-process scheduled dispatch has
+	// nothing to put here by nature. Only a caller that sets this
+	// explicitly takes its rung from the capability's declared class
+	// (R-14.211); an empty Action alone is still unclassifiable and still
+	// L4, which is what TestEvaluateFailsClosedOnUnclassifiableInput pins.
+	CommandLess bool
 	// Action is the canonical text of what will run, and Params its
 	// parameters. Action is the classifier's ONLY input: the evaluator
 	// resolves the rung from it exactly once (R-21.236). The approval
