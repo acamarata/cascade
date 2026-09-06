@@ -32,3 +32,8 @@ Supported release platforms:
 
 Cross-compile for any of them with `GOOS` and `GOARCH`, for example
 `GOOS=linux GOARCH=arm64 go build ./...`.
+
+## Documentation
+
+- [Cross-harness instruction-file conventions](docs/harness-conventions.md): how Cascade
+  generates the instruction files each supported coding harness reads.
