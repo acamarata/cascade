@@ -14,9 +14,9 @@ import (
 
 // Purpose: the HookConfig TOML schema, the HookFire audit-event struct,
 //
-//	the two W1 action-type interfaces (PluginDispatcher, NoteWriter), and
-//	the action-type refusal error this package returns for shell/unknown
-//	action types.
+//	the action-type interfaces (PluginDispatcher, NoteWriter), and the
+//	action-type refusal error this package returns for an unrecognised
+//	action type.
 //
 // Inputs: HookConfig values decoded from config.toml's [hooks] section
 //
@@ -49,19 +49,23 @@ const (
 	// ActionTypeAgentNote writes a structured note via the injected
 	// NoteWriter. Permitted at W1.
 	ActionTypeAgentNote ActionType = "agent-note"
-	// ActionTypeShell is RECOGNISED but permanently refused at W1 — shell
-	// actions land only via I/S-18.T5's policy-routed risk ladder. It is
-	// declared here (rather than left as just another unknown string) so
-	// registry.go and dispatcher.go can name it explicitly in refusal
-	// messages instead of reporting it identically to a typo.
+	// ActionTypeShell runs a shell command. It is registrable, and every
+	// dispatch of one is routed through the policy engine first
+	// (shell_route.go). Plugin-call and agent-note are NOT routed: they
+	// are pre-approved at load time, and what they may do is decided by
+	// the injected dispatcher rather than by command text.
 	ActionTypeShell ActionType = "shell"
 )
 
-// permittedActionTypes is the W1 registrable set. Anything not in this
-// set — including ActionTypeShell — is refused by Registry.Register.
+// permittedActionTypes is the registrable set. Anything not in it —
+// including the empty string — is refused by Registry.Register. Shell
+// joined the set once policy routing existed to gate it; it is the
+// dispatch-time routing decision, not registration, that says whether any
+// particular shell action may run.
 var permittedActionTypes = map[ActionType]bool{
 	ActionTypePluginCall: true,
 	ActionTypeAgentNote:  true,
+	ActionTypeShell:      true,
 }
 
 // HookConfig is one hook definition, matching config.toml's [hooks]
@@ -108,10 +112,10 @@ const (
 	// abandoned, not killed (Go has no mechanism to force that) — see
 	// dispatcher.go.
 	ResultTimeout ResultCode = "timeout"
-	// ResultRefused reports that the action type was shell or unrecognised
-	// and was refused at dispatch time (defense-in-depth — Registry.Register
-	// should already have refused it, so reaching this path means some
-	// other path stored a HookConfig without going through Register).
+	// ResultRefused reports that the action was refused before it ran:
+	// an unrecognised action type (defense-in-depth — Registry.Register
+	// should already have refused it), an egress-firewall refusal, or a
+	// policy-routing deny for a shell action.
 	ResultRefused ResultCode = "refused"
 )
 

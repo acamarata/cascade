@@ -44,13 +44,15 @@ import (
 // HotReloader is the daemon-side config hot-reload engine. Zero value is
 // not usable; construct with NewHotReloader.
 type HotReloader struct {
-	path      string
-	loadOpts  LoadOptions
-	current   atomic.Pointer[Config]
-	clock     Clock
-	events    EventPublisher
-	audit     AuditRecorder
-	logs      *LogProvider
+	path     string
+	loadOpts LoadOptions
+	current  atomic.Pointer[Config]
+	clock    Clock
+	events   EventPublisher
+	audit    AuditRecorder
+	logs     *LogProvider
+	// elevation is the loosening-approval seam (config_elevation.go).
+	elevation ElevationApprover
 	watchStop func()
 }
 
@@ -82,8 +84,12 @@ type ReloadOutcome struct {
 	Rejected       bool
 	RestartKeys    []string
 	LooseningPaths []LooseningPath
-	AppliedLive    []string
-	Err            error
+	// ElevationRequired reports a refusal for want of elevation approval.
+	ElevationRequired bool
+	// ElevationRef is the reference an approved loosening was recorded under.
+	ElevationRef string
+	AppliedLive  []string
+	Err          error
 }
 
 // eventReloadAccepted / eventReloadRejected / eventRestartRequired name
@@ -120,23 +126,31 @@ func (hr *HotReloader) Reload(ctx context.Context) ReloadOutcome {
 	restartKeys := coldKeyDiff(old, proposed)
 	candidate := freezeColdSections(old, proposed)
 
+	elevationRef := ""
 	paths := CompareSecurity(extractEffectiveConfig(old), extractEffectiveConfig(candidate))
 	if len(paths) > 0 {
-		hr.reject(ctx, "proposed config loosens a guarded family (W1 unconditional deny)", paths)
-		return ReloadOutcome{Rejected: true, LooseningPaths: paths}
+		ref, err := hr.authorizeLoosening(ctx, paths)
+		if err != nil {
+			hr.reject(ctx, err.Error(), paths)
+			return ReloadOutcome{Rejected: true, ElevationRequired: true, LooseningPaths: paths, Err: err}
+		}
+		elevationRef = ref
 	}
 
 	applied := hr.applyLive(old, candidate)
 	hr.current.Store(candidate)
 
 	fields := map[string]interface{}{"restart_required_keys": restartKeys, "applied_live": applied}
+	if elevationRef != "" {
+		fields["elevation_ref"] = elevationRef
+	}
 	hr.events.Publish(ctx, eventReloadAccepted, fields)
 	_ = hr.recordAudit(ctx, auditKindReloadAccept, fields)
 	if len(restartKeys) > 0 {
 		hr.events.Publish(ctx, eventRestartRequired, map[string]interface{}{"keys": restartKeys})
 	}
 
-	return ReloadOutcome{Accepted: true, RestartKeys: restartKeys, AppliedLive: applied}
+	return ReloadOutcome{Accepted: true, RestartKeys: restartKeys, AppliedLive: applied, ElevationRef: elevationRef}
 }
 
 // reject publishes config.reload.rejected and persists the rejection

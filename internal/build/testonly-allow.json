@@ -115,11 +115,6 @@
     "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
   },
   {
-    "symbol": "internal/audit.HashParams",
-    "reason": "The audit log is built before the subsystems that write to it. HashParams is how a caller records what an action's parameters were without recording the parameters themselves, so it becomes reachable in the same change that gives policy, the approval queue, config reload, and the elevation middleware their injected audit.Writer. Wiring it earlier would mean inventing a caller that records nothing real.",
-    "expected_caller": "the policy decision path (04-PEWS-PLAN-W1-W3.md Epic I S-17.T2) and the elevation middleware (Epic D S-06.T3), in the change that injects audit.Writer into each"
-  },
-  {
     "symbol": "internal/audit.ParseFilter",
     "reason": "The token form of the query filter exists for the command line to hand its flags in. This ticket owns the query engine and is explicitly told not to build the CLI or RPC surface, so the only caller that can exist today is the test that proves the parser refuses an unknown field instead of widening the result set.",
     "expected_caller": "the `cascade policy audit query` command surface (04-PEWS-PLAN-W1-W3.md Epic I S-18.T6)"
@@ -343,5 +338,15 @@
     "symbol": "internal/secrets.NewApprovalKeyReader",
     "reason": "The named non-elevated read for the approval signing key. It exists because a release binary refuses elevated verbs outright, so a key reachable only through Broker.Get is unreadable in exactly the builds that ship. Its consumer seam, internal/policy's ApprovalKeySource, has no production caller yet either: NewApprovalSigner is itself listed here awaiting the policy.Authorize middleware. Its caller allowlist is already machine-enforced by TestArchUnelevatedReadCallers, so widening it is a red test rather than a quiet change.",
     "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry"
+  },
+  {
+    "symbol": "internal/events/routing.NewActionRouter",
+    "reason": "The hook and scheduler policy gate is built before the composition root that injects it. Both call sites consume it through an interface (hooks.ActionRouter, scheduler.ActionGate) and both refuse every routed action until it is wired, so nothing is gated permissively in the meantime. Registering it is a one-line change in the daemon's own file, which this ticket may not edit.",
+    "expected_caller": "the daemon composition root, in the same change that builds the policy engine and audit log for the hook dispatcher and the scheduler"
+  },
+  {
+    "symbol": "internal/runtime.RequiresElevationToLoosen",
+    "reason": "The write-verb side of the config loosening gate, so `config set` can tell an operator that a key needs elevation before the write is attempted. The reload path already enforces the same gate; this is the pre-flight answer for the CLI verb, which lands with the config-set surface.",
+    "expected_caller": "the config set command, in the change that surfaces the elevation requirement before a write"
   }
 ]

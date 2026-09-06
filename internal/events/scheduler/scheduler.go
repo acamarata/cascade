@@ -64,6 +64,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -134,6 +135,13 @@ type Scheduler struct {
 	// process exit with the lease still written. The next daemon then
 	// fails Activate with KindConflict for the rest of the lease.
 	closeMu sync.Mutex
+
+	// gate is the policy-routing seam every dispatch passes through, with
+	// the subject and capability those dispatches are evaluated as. A nil
+	// gate fires nothing (scheduler_route.go).
+	gate           ActionGate
+	gateSubject    policy.Subject
+	gateCapability string
 
 	mu         sync.Mutex
 	active     bool

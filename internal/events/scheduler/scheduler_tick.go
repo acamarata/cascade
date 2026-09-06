@@ -39,6 +39,11 @@ func isPanic(err error) bool {
 // returns immediately with TickReport.Skipped set and fires nothing — see
 // the package doc's "Overrun policy" section.
 //
+// Every due job is routed through the policy gate BEFORE its Runnable is
+// called (scheduler_route.go). A dispatch the gate does not allow is
+// recorded as a failed fire and the loop moves on; the Runnable is never
+// entered. A scheduler with no gate wired therefore fires nothing.
+//
 // A fired Runnable that returns a plain error is recorded
 // (EventKindSchedulerJobFailed) and Tick continues to the next due job. A
 // fired Runnable that PANICS is recovered, published as
@@ -80,18 +85,9 @@ func (s *Scheduler) Tick(ctx context.Context) (*TickReport, error) {
 			continue
 		}
 
-		err := runSafely(ctx, fn)
-		if err == nil {
-			s.recordFire(ctx, job, now)
-			continue
+		if fatal := s.tickJob(ctx, job, fn, now, report); fatal != nil {
+			return report, fatal
 		}
-		report.Errors = append(report.Errors, err)
-		if isPanic(err) {
-			s.publish(ctx, EventKindSchedulerJobPanicked, "error", job.CronJob, err.Error())
-			s.deactivateAfterFatal(ctx)
-			return report, err
-		}
-		s.publish(ctx, EventKindSchedulerJobFailed, "info", job.CronJob, err.Error())
 	}
 
 	if err := s.lock.Renew(ctx); err != nil {
@@ -100,6 +96,33 @@ func (s *Scheduler) Tick(ctx context.Context) (*TickReport, error) {
 		return report, err
 	}
 	return report, nil
+}
+
+// tickJob routes and then fires one due job, recording the outcome on
+// report. It returns a non-nil error ONLY for a fatal outcome (a
+// recovered panic), which Tick propagates after the scheduler has already
+// been deactivated; every other outcome, including a routing refusal, is
+// recorded and the tick continues to the next job.
+func (s *Scheduler) tickJob(ctx context.Context, job *scheduledJob, fn Runnable,
+	now time.Time, report *TickReport) error {
+	if routeErr := s.routeDispatch(ctx, job.CronJob); routeErr != nil {
+		report.Errors = append(report.Errors, routeErr)
+		s.publish(ctx, EventKindSchedulerJobFailed, "info", job.CronJob, routeErr.Error())
+		return nil
+	}
+	err := runSafely(ctx, fn)
+	if err == nil {
+		s.recordFire(ctx, job, now)
+		return nil
+	}
+	report.Errors = append(report.Errors, err)
+	if isPanic(err) {
+		s.publish(ctx, EventKindSchedulerJobPanicked, "error", job.CronJob, err.Error())
+		s.deactivateAfterFatal(ctx)
+		return err
+	}
+	s.publish(ctx, EventKindSchedulerJobFailed, "info", job.CronJob, err.Error())
+	return nil
 }
 
 // runSafely calls fn, converting a panic into a *panicError return rather

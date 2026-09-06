@@ -55,15 +55,26 @@ func TestRegistry_Register_AgentNote_HappyPath(t *testing.T) {
 	}
 }
 
-func TestHooksShellActionRegistrationRefused(t *testing.T) {
+// TestHooksShellActionRegistrationPermitted proves the W1 Register-time
+// shell refusal is gone: a shell hook registers and is stored. Whether
+// any particular shell action RUNS is decided per dispatch by the policy
+// engine (shell_route_test.go), which is the only place that question is
+// answerable.
+func TestHooksShellActionRegistrationPermitted(t *testing.T) {
 	r := hooks.NewRegistry()
-	_, err := r.Register(hooks.HookConfig{
-		Trigger:    "plugin.registered",
-		ActionType: hooks.ActionTypeShell,
+	got, err := r.Register(hooks.HookConfig{
+		Trigger:      "plugin.registered",
+		ActionType:   hooks.ActionTypeShell,
+		ActionParams: map[string]string{hooks.ShellCommandParam: "echo hi"},
 	})
-	assertActionNotPermitted(t, err)
-	if len(r.List()) != 0 {
-		t.Fatalf("List: got %d hooks after refused registration, want 0", len(r.List()))
+	if err != nil {
+		t.Fatalf("Register(shell): %v, want the hook stored", err)
+	}
+	if got.ID == "" {
+		t.Fatal("Register(shell): derived no ID")
+	}
+	if len(r.List()) != 1 {
+		t.Fatalf("List: got %d hooks, want the shell hook stored", len(r.List()))
 	}
 }
 

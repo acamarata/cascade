@@ -10,10 +10,11 @@ import (
 
 // Purpose: the hook registry — validates and stores HookConfig values,
 //
-//	refusing shell and any unrecognised action_type BEFORE a hook is
-//	stored (task 2's requirement: registration-time refusal, the first of
-//	this package's two defense-in-depth checks — dispatcher.go performs
-//	the second, at dispatch time).
+//	refusing any unrecognised action_type BEFORE a hook is stored. The
+//	W1 shell refusal that used to live here is gone: shell actions are
+//	registrable and are gated per dispatch by the policy engine
+//	(shell_route.go), which is where a shell action's permission question
+//	is actually answerable.
 //
 // Inputs: HookConfig values from Register's caller (composition-root
 //
@@ -55,10 +56,11 @@ func NewRegistry() *Registry {
 //     audit EventKind (EventKindHookFire) — refusing that trigger up
 //     front is this package's first re-entrancy guard (doc.go): a hook
 //     can never be configured to fire on its own audit trail.
-//  2. cfg.ActionType must be ActionTypePluginCall or ActionTypeAgentNote.
-//     ActionTypeShell and any other value — including the empty string —
-//     are refused with newActionNotPermittedError
-//     (HookActionNotPermittedCode).
+//  2. cfg.ActionType must be one of the three permitted types. Any other
+//     value — including the empty string — is refused with
+//     newActionNotPermittedError (HookActionNotPermittedCode). A shell
+//     hook registers here and is routed through the policy engine at
+//     every dispatch.
 //  3. A non-empty explicit cfg.ID must not already be registered.
 //
 // A rejected hook is NEVER stored — Register returns before touching the

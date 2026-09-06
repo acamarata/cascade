@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -51,7 +52,25 @@ func newTestSchedulerTTL(t *testing.T, ownerID string, leaseTTL time.Duration) (
 	clock := testkit.NewFrozenClock(testEpoch)
 	bus := events.New(store, clock)
 	sched := New(store, testNamespace, clock, bus, ownerID, leaseTTL)
+	// Every dispatch is routed through the policy gate (scheduler_route.go),
+	// so a scheduler that is expected to FIRE needs one wired. The
+	// allow-gate here keeps these tests about scheduling behaviour;
+	// scheduler_route_test.go covers the deny/ask/unwired legs.
+	if err := sched.SetActionGate(&stubGate{verdict: policy.VerdictAllow},
+		gateSubjectForTest(), "scheduler.dispatch"); err != nil {
+		t.Fatalf("SetActionGate: %v", err)
+	}
 	return sched, clock, bus, store
+}
+
+// newTestSchedulerUngated returns a Scheduler with NO policy gate wired,
+// for the tests that assert the fail-closed default.
+func newTestSchedulerUngated(t *testing.T, ownerID string) (*Scheduler, *testkit.FrozenClock, *events.Bus, *storetest.MemStore) {
+	t.Helper()
+	store := storetest.NewMemStore()
+	clock := testkit.NewFrozenClock(testEpoch)
+	bus := events.New(store, clock)
+	return New(store, testNamespace, clock, bus, ownerID, 1000*time.Hour), clock, bus, store
 }
 
 // countingRunnable returns a Runnable that increments *n on every call and

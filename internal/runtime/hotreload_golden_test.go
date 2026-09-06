@@ -22,6 +22,10 @@ import (
 //   sorted, never via a raw %v map dump (map iteration order is not
 //   deterministic).
 
+// TestConfigGolden_LoosingDenied renders the loosening outcome on a
+// machine with NO elevation helper enrolled, which is the refusal the
+// unconditional W1 deny was replaced by: ElevationRequired, naming the
+// loosened key, not a permanent no.
 func TestConfigGolden_LoosingDenied(t *testing.T) {
 	hr, path, events, _, store := newTestHotReloader(t, "[conductor]\nexternal_routing_enabled = false\n")
 	_ = writeFile(t, path, "[conductor]\nexternal_routing_enabled = true\n")
@@ -50,7 +54,8 @@ func TestConfigGolden_DivergentBoot(t *testing.T) {
 // field keys.
 func renderReloadGolden(outcome ReloadOutcome, events *fakeEventPublisher, store *storetest.MemStore) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "accepted=%v rejected=%v\n", outcome.Accepted, outcome.Rejected)
+	fmt.Fprintf(&b, "accepted=%v rejected=%v elevation_required=%v\n",
+		outcome.Accepted, outcome.Rejected, outcome.ElevationRequired)
 	fmt.Fprintf(&b, "loosening_paths:\n")
 	for _, p := range sortedLooseningPaths(outcome.LooseningPaths) {
 		fmt.Fprintf(&b, "  - family=%s key=%s current=%v proposed=%v\n", p.Family, p.Key, p.Current, p.Proposed)

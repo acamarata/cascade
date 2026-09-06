@@ -148,15 +148,12 @@ func newTestDispatcher(t *testing.T, reg *Registry, bus *events.Bus, clock *test
 	return d
 }
 
-// TestHooksShellActionDispatchRefused proves the SECOND, defense-in-depth
-// refusal: runAction refuses ActionTypeShell (and any unrecognised type)
-// immediately, before either PluginDispatcher or NoteWriter is ever
-// called — exercised directly because Registry.Register (the only route
-// an external caller has) already refuses shell at registration, so a
-// black-box test could never construct this situation through the public
-// API. hook is never stored in any Registry here — it is invoked exactly
-// as runAction would receive it had some other, non-Register path (e.g. a
-// future config-reload seam) stored it unvalidated.
+// TestHooksShellActionDispatchRefused proves the fail-closed leg of the
+// routed shell path: a dispatcher with NO policy router wired refuses
+// every shell action outright, before either injected action interface is
+// called. There is no configuration in which an unrouted shell action
+// runs. The second half proves an unrecognised action type takes the
+// identical refusal path.
 func TestHooksShellActionDispatchRefused(t *testing.T) {
 	pd := &fakePluginDispatcher{}
 	nw := &fakeNoteWriter{}

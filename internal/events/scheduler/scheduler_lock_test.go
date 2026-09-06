@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -31,7 +32,9 @@ func TestSchedulerAdvisoryLockExclusion(t *testing.T) {
 	clock := testkit.NewFrozenClock(testEpoch)
 	bus := events.New(store, clock)
 	schedA := New(store, testNamespace, clock, bus, "owner-a", time.Hour)
+	installGate(t, schedA, &stubGate{verdict: policy.VerdictAllow})
 	schedB := New(store, testNamespace, clock, bus, "owner-b", time.Hour)
+	installGate(t, schedB, &stubGate{verdict: policy.VerdictAllow})
 	ctx := context.Background()
 
 	var fireCount int
@@ -85,6 +88,7 @@ func TestSchedulerLockRelease_OnCancel(t *testing.T) {
 	clock := testkit.NewFrozenClock(testEpoch)
 	bus := events.New(store, clock)
 	schedA := New(store, testNamespace, clock, bus, "owner-a", time.Hour)
+	installGate(t, schedA, &stubGate{verdict: policy.VerdictAllow})
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if _, err := schedA.Activate(ctx); err != nil {
@@ -98,6 +102,7 @@ func TestSchedulerLockRelease_OnCancel(t *testing.T) {
 	}
 
 	schedB := New(store, testNamespace, clock, bus, "owner-b", time.Hour)
+	installGate(t, schedB, &stubGate{verdict: policy.VerdictAllow})
 	if _, err := schedB.Activate(context.Background()); err != nil {
 		t.Fatalf("schedB.Activate after cancellation = %v, want success (lock released)", err)
 	}
@@ -114,6 +119,7 @@ func TestSchedulerLockRelease_OnJobPanic(t *testing.T) {
 	clock := testkit.NewFrozenClock(testEpoch)
 	bus := events.New(store, clock)
 	schedA := New(store, testNamespace, clock, bus, "owner-a", time.Hour)
+	installGate(t, schedA, &stubGate{verdict: policy.VerdictAllow})
 	ctx := context.Background()
 
 	if err := schedA.RegisterRunnable("boom", func(context.Context) error {
@@ -138,6 +144,7 @@ func TestSchedulerLockRelease_OnJobPanic(t *testing.T) {
 	}
 
 	schedB := New(store, testNamespace, clock, bus, "owner-b", time.Hour)
+	installGate(t, schedB, &stubGate{verdict: policy.VerdictAllow})
 	if _, err := schedB.Activate(context.Background()); err != nil {
 		t.Fatalf("schedB.Activate after schedA's job panic = %v, want success (lock released)", err)
 	}
@@ -156,6 +163,7 @@ func TestSchedulerLockRelease_OnProcessDeath(t *testing.T) {
 	clock := testkit.NewFrozenClock(testEpoch)
 	bus := events.New(store, clock)
 	schedA := New(store, testNamespace, clock, bus, "owner-a", time.Hour)
+	installGate(t, schedA, &stubGate{verdict: policy.VerdictAllow})
 
 	if _, err := schedA.Activate(context.Background()); err != nil {
 		t.Fatalf("schedA.Activate: %v", err)
@@ -163,6 +171,7 @@ func TestSchedulerLockRelease_OnProcessDeath(t *testing.T) {
 	// schedA is now abandoned: no Tick, no Close, no cancellation.
 
 	schedB := New(store, testNamespace, clock, bus, "owner-b", time.Hour)
+	installGate(t, schedB, &stubGate{verdict: policy.VerdictAllow})
 	if _, err := schedB.Activate(context.Background()); !cascade.HasKind(err, cascade.KindConflict) {
 		t.Fatalf("schedB.Activate before lease expiry = %v, want KindConflict (lease still live)", err)
 	}

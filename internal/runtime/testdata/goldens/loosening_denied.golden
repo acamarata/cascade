@@ -1,4 +1,4 @@
-accepted=false rejected=true
+accepted=false rejected=true elevation_required=true
 loosening_paths:
   - family=conductor key=conductor.external_routing_enabled current=false proposed=true
 events:

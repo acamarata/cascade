@@ -7,13 +7,15 @@ import (
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // Purpose: the event-bus subscriber and action dispatcher — task 3
 //
 //	(subscribe, match, enqueue) and task 4 (dispatch plugin-call/
-//	agent-note, defense-in-depth shell/unknown refusal).
+//	agent-note, route shell through the policy engine, refuse anything
+//	unrecognised).
 //
 // Inputs: a *Registry, a *events.Bus subscription, an injected
 //
@@ -46,6 +48,10 @@ type Dispatcher struct {
 	egressToken      egress.Capability
 	pluginDispatcher PluginDispatcher
 	noteWriter       NoteWriter
+	router           ActionRouter
+	shellRunner      ShellRunner
+	routeSubject     policy.Subject
+	shellCapability  string
 	actionTimeout    time.Duration
 	triggerNamespace string
 	auditNamespace   string
@@ -72,6 +78,20 @@ type DispatcherConfig struct {
 	EgressToken      egress.Capability
 	PluginDispatcher PluginDispatcher
 	NoteWriter       NoteWriter
+	// Router is the policy-routing seam every shell action is gated on.
+	// It is OPTIONAL only in the sense that a dispatcher built without
+	// one refuses every shell action: there is no configuration in which
+	// a shell action runs unrouted (shell_route.go).
+	Router ActionRouter
+	// ShellRunner executes an allowed shell action. Required whenever
+	// Router is set, and useless without it.
+	ShellRunner ShellRunner
+	// RouteSubject is the principal shell actions are evaluated as, and
+	// ShellCapability the registered capability they need. Both are
+	// required whenever Router is set: the evaluator refuses a subject
+	// that names nobody and a capability that is not registered.
+	RouteSubject     policy.Subject
+	ShellCapability  string
 	ActionTimeout    time.Duration
 	TriggerNamespace string
 	AuditNamespace   string
@@ -97,6 +117,10 @@ func NewDispatcher(cfg DispatcherConfig) (*Dispatcher, error) {
 		return nil, fmt.Errorf("hooks: dispatcher: PluginDispatcher is required")
 	case cfg.NoteWriter == nil:
 		return nil, fmt.Errorf("hooks: dispatcher: NoteWriter is required")
+	case cfg.Router != nil && cfg.ShellRunner == nil:
+		return nil, fmt.Errorf("hooks: dispatcher: ShellRunner is required when Router is set")
+	case cfg.Router != nil && cfg.ShellCapability == "":
+		return nil, fmt.Errorf("hooks: dispatcher: ShellCapability is required when Router is set")
 	case cfg.ActionTimeout <= 0:
 		return nil, fmt.Errorf("hooks: dispatcher: ActionTimeout must be positive")
 	case cfg.TriggerNamespace == "":
@@ -116,6 +140,10 @@ func NewDispatcher(cfg DispatcherConfig) (*Dispatcher, error) {
 		egressToken:      cfg.EgressToken,
 		pluginDispatcher: cfg.PluginDispatcher,
 		noteWriter:       cfg.NoteWriter,
+		router:           cfg.Router,
+		shellRunner:      cfg.ShellRunner,
+		routeSubject:     cfg.RouteSubject,
+		shellCapability:  cfg.ShellCapability,
 		actionTimeout:    cfg.ActionTimeout,
 		triggerNamespace: cfg.TriggerNamespace,
 		auditNamespace:   cfg.AuditNamespace,
@@ -247,13 +275,9 @@ func (d *Dispatcher) runAction(ctx context.Context, hook HookConfig) (outcome ho
 		}
 		return hookOutcome{result: ResultSuccess}
 	case ActionTypeShell:
-		// Recognised but permanently refused at W1 — see hooks.go's
-		// ActionTypeShell doc. Falls through to the identical refusal the
-		// default case gives any OTHER unrecognised type; kept as its own
-		// switch arm (rather than folding into default) purely so the lint
-		// wall's exhaustive check proves every declared ActionType member
-		// was considered here, not just the two permitted ones.
-		return hookOutcome{result: ResultRefused, err: newActionNotPermittedError(hook.ActionType)}
+		// Routed, never categorical: shell_route.go asks the policy
+		// engine and refuses whenever it cannot get an allow.
+		return d.runShellAction(ctx, hook)
 	default:
 		return hookOutcome{result: ResultRefused, err: newActionNotPermittedError(hook.ActionType)}
 	}
