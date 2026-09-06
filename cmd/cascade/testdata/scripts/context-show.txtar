@@ -1,0 +1,23 @@
+# context-show.txtar
+#
+# Documents the `cascade context show` behavioral scenarios this ticket's
+# contract names. This module carries no testscript (rogpeppe/testscript)
+# dependency -- see context-slice.txtar's sibling note for why. The
+# scenarios below are instead expressed as executable Go in
+# cmd/cascade/context_cmd_test.go's TestContextShowCLIBehavioralCoverage;
+# this file records the intended script form for when a testscript
+# dependency is cleared.
+
+# Human output renders every resolved tier as a bordered block, or the
+# explicit empty-result message when none resolve (a legitimate, exit-0
+# outcome -- an isolated working directory with no .cascade files).
+exec cascade context show
+! stderr .
+
+# --json emits the versioned envelope with a `tiers` array.
+exec cascade --json context show
+stdout '"tiers"'
+
+# A positional argument is refused.
+! exec cascade context show extra-arg
+stderr 'unknown command'

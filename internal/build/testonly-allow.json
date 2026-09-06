@@ -340,11 +340,6 @@
     "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands"
   },
   {
-    "symbol": "internal/context.Assemble",
-    "reason": "P1-E05-W2-S09-T1's token-budgeted context assembler. Its own ticket text names the CLI ticket that consumes it as separate work ('the S-09.T2 CLI ticket is a separate ticket that consumes this assembler; this ticket ships the assembler only') and this ticket's files_scope is add-only and forbids touching cmd/cascade, internal/daemon, internal/hooks or internal/mcp, so no legal file exists in this ticket to mount it from. Built and tested end to end, including the R-16.4 scope-leak fixture (TestContextAssemblyScopeLeak) against real corpus.Store/fusion.ScopeFilter components.",
-    "expected_caller": "the S-09.T2 CLI ticket (the `cascade context assemble` verb / prompt-hydration path, R-16.6) that consumes this assembler"
-  },
-  {
     "symbol": "internal/secrets.NewApprovalKeyReader",
     "reason": "The named non-elevated read for the approval signing key. It exists because a release binary refuses elevated verbs outright, so a key reachable only through Broker.Get is unreadable in exactly the builds that ship. Its consumer seam, internal/policy's ApprovalKeySource, has no production caller yet either: NewApprovalSigner is itself listed here awaiting the policy.Authorize middleware. Its caller allowlist is already machine-enforced by TestArchUnelevatedReadCallers, so widening it is a red test rather than a quiet change.",
     "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry"

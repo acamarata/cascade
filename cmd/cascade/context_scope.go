@@ -88,6 +88,14 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	scopeCmd := &cobra.Command{Use: "scope", Short: "Session scope resolution and graph"}
 	scopeCmd.AddCommand(newContextScopeShowCmd(deps))
 	contextCmd.AddCommand(scopeCmd)
+	// slice and show (E/S-09.T2) are defined in context_cmd.go, not this
+	// file: this file already owns the `context scope show` verb and its
+	// composition-root wiring, and context_cmd.go's own doc comment names
+	// this as the mount point it reuses rather than declaring a second
+	// `context` group (root.go's mountSubcommands already sits at its
+	// 300-line cap, so growing it is avoided here too).
+	contextCmd.AddCommand(newContextSliceCmd(deps))
+	contextCmd.AddCommand(newContextShowCmd(deps))
 	return contextCmd
 }
 

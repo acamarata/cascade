@@ -1,0 +1,35 @@
+# context-slice.txtar
+#
+# Documents the `cascade context slice` behavioral scenarios this ticket's
+# contract names. This module carries no testscript (rogpeppe/testscript)
+# dependency -- adding one needs the license gate this repo has not cleared
+# (see cmd/cascade/context_scope_test.go's context-scope-show.txtar sibling,
+# which makes the same call, and cmd/cascade/memory_integration_test.go's
+# original note). The scenarios below are instead expressed as executable
+# Go in cmd/cascade/context_cmd_test.go's TestContextSliceCLIBehavioralCoverage
+# and TestContextSliceShowAreMountedOnRoot; this file records the intended
+# script form for when a testscript dependency is cleared.
+
+# Human output on an isolated working directory lists one row per slot,
+# each with its token count and source count, plus a totals row.
+exec cascade context slice
+stdout 'SLOT\s+TOKENS\s+SOURCES'
+stdout 'total'
+! stderr .
+
+# --json emits the versioned envelope carrying the per-slot counts.
+exec cascade --json context slice
+stdout '"ok":\s*true'
+stdout '"counts"'
+
+# --budget overrides the max-token ceiling.
+exec cascade context slice --budget 500
+stdout 'SLOT'
+
+# --budget 0 is an invalid budget (BudgetConfig.Validate), refused as
+# invalid input rather than silently falling back to a default.
+! exec cascade context slice --budget 0
+
+# A positional argument is refused.
+! exec cascade context slice extra-arg
+stderr 'unknown command'

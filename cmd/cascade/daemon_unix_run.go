@@ -205,15 +205,10 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
-	// context.scope.show (E/S-08.T4), registered for the same reason:
-	// the CLI's daemon-path client call (internal/client.Client.
-	// ContextScopeShow) dials this exact socket, so a daemon that never
-	// registers the method is the built-tested-unreachable pattern this
-	// composition root exists to close. See internal/daemon/
-	// context_scope.go's doc comment for why this owns a second sqlite
-	// connection rather than threading platformDaemonRun's rawDB through
-	// this function's signature.
-	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
+	// context.scope.show (E/S-08.T4) and context.slice/context.show
+	// (E/S-09.T2) — see registerContextEngineHandlers below for why each
+	// owns a second sqlite connection instead of threading rawDB in.
+	if err := registerContextEngineHandlers(registry, paths, clock); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -229,6 +224,28 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
+}
+
+// registerContextEngineHandlers registers context.scope.show (E/S-08.T4)
+// and context.slice/context.show (E/S-09.T2) together, factored out of
+// buildRPCServer purely to stay under Art.10.3's 50-line function cap
+// (mechanical relocation, same composition-root concern buildRPCServer's
+// own doc comment already names). Each registration opens its own second
+// sqlite connection to paths.DataDir()/cascade.db rather than reusing
+// platformDaemonRun's rawDB — see internal/daemon/context_scope.go's and
+// internal/daemon/context_assemble.go's doc comments for why: threading
+// rawDB into this function's signature would ripple into call sites
+// outside either ticket's files_scope, and a second connection is a
+// documented no-op after the first opens it (every schema apply here is
+// idempotent by contract).
+func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
+	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
+		return err
+	}
+	if _, err := daemon.RegisterContextAssembleHandler(registry, paths, clock); err != nil {
+		return err
+	}
+	return nil
 }
 
 // registerStatusHandler builds this composition root's *daemon.Manifest

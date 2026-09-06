@@ -172,10 +172,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 // the listen backlog; no accept() is required), so a second `daemon start`
 // racing the first could see the socket answer while the pidfile write was
 // still in flight, read that as "nothing recorded", and spawn a second
-// daemon onto the same socket path. This ordering is a real guarantee worth
-// having, but it is NOT what caused R-14.205's linux failure: the reorder
-// alone was run against the linux container and the test still failed. That
-// cause was the like-for-unlike start-time comparison selfStartTime fixes.
+// daemon onto the same socket path. This ordering is real and it was a
+// CONTRIBUTING cause: measured in isolation against the linux container it
+// took the failure from every run to roughly one in three. It was not the
+// whole cause, and a partial fix that turns "always" into "sometimes" is the
+// most dangerous kind, because the next run looks green. What took it to
+// never is the like-for-unlike start-time comparison selfStartTime fixes.
 func setUpSocketAndPIDFile(opts RunOptions, manifest *Manifest) (net.Listener, func(), error) {
 	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
 		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
