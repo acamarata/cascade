@@ -128,22 +128,22 @@ func TestElevationClassVerbsIsACopy(t *testing.T) {
 	}
 }
 
-// TestRedemptionStateMachine proves the R-21.209 CAS contract's state
+// TestApprovalRedemptionStateMachine proves the R-21.209 CAS contract's state
 // half: approved advances to consuming and consuming to consumed, exactly
 // one caller wins the approved->consuming race for a given
 // (request_id, nonce), a stable execution id is emitted before dispatch,
 // and recovery re-drives the SAME execution id rather than issuing a
 // second one.
-func TestRedemptionStateMachine(t *testing.T) {
-	next, err := NextRedemptionState(RedemptionApproved)
-	if err != nil || next != RedemptionConsuming {
+func TestApprovalRedemptionStateMachine(t *testing.T) {
+	next, err := NextApprovalState(ApprovalApproved)
+	if err != nil || next != ApprovalConsuming {
 		t.Fatalf("approved advances to %s, %v; want consuming", next, err)
 	}
-	if next, err = NextRedemptionState(RedemptionConsuming); err != nil || next != RedemptionConsumed {
+	if next, err = NextApprovalState(ApprovalConsuming); err != nil || next != ApprovalConsumed {
 		t.Fatalf("consuming advances to %s, %v; want consumed", next, err)
 	}
-	for _, from := range []RedemptionState{RedemptionConsumed, RedemptionState(0), RedemptionState(9)} {
-		if _, err := NextRedemptionState(from); err == nil {
+	for _, from := range []ApprovalState{ApprovalConsumed, ApprovalState(0), ApprovalState(99)} {
+		if _, err := NextApprovalState(from); err == nil {
 			t.Errorf("state %s was advanced; only approved and consuming may advance", from)
 		}
 	}
@@ -164,15 +164,15 @@ func TestRedemptionStateMachine(t *testing.T) {
 // It stands in for I/S-18.T3's ledger, which implements the same contract
 // over durable storage.
 type redemptionRow struct {
-	state     RedemptionState
+	state     ApprovalState
 	execution ExecutionID
 }
 
 // consume performs the compare-and-set and, on winning, appends the stable
 // execution id BEFORE any dispatch would occur.
 func (r *redemptionRow) consume(exec ExecutionID) error {
-	next, err := NextRedemptionState(r.state)
-	if err != nil || next != RedemptionConsuming {
+	next, err := NextApprovalState(r.state)
+	if err != nil || next != ApprovalConsuming {
 		return errors.New("already consumed")
 	}
 	r.state = next
@@ -184,7 +184,7 @@ func (r *redemptionRow) consume(exec ExecutionID) error {
 // winner's execution id and the loser's error.
 func runRedemptionRace(t *testing.T) (ExecutionID, error) {
 	t.Helper()
-	row := &redemptionRow{state: RedemptionApproved}
+	row := &redemptionRow{state: ApprovalApproved}
 	first, err := newExecutionID()
 	if err != nil {
 		t.Fatalf("minting an execution id: %v", err)
@@ -204,18 +204,18 @@ func runRedemptionRace(t *testing.T) (ExecutionID, error) {
 func recoverExecution(recorded ExecutionID) ExecutionID { return recorded }
 
 // TestRedemptionStateNames asserts the stable names and the fail-closed
-// zero value.
+// zero value of the redemption leg of ApprovalState.
 func TestRedemptionStateNames(t *testing.T) {
 	for _, tc := range []struct {
-		state RedemptionState
+		state ApprovalState
 		name  string
 		valid bool
 	}{
-		{RedemptionApproved, "approved", true},
-		{RedemptionConsuming, "consuming", true},
-		{RedemptionConsumed, "consumed", true},
-		{RedemptionState(0), "invalid-redemption-state", false},
-		{RedemptionState(200), "invalid-redemption-state", false},
+		{ApprovalApproved, "approved", true},
+		{ApprovalConsuming, "consuming", true},
+		{ApprovalConsumed, "consumed", true},
+		{ApprovalState(0), "invalid-approval-state", false},
+		{ApprovalState(200), "invalid-approval-state", false},
 	} {
 		if got := tc.state.String(); got != tc.name {
 			t.Errorf("state %d renders as %q, want %q", tc.state, got, tc.name)

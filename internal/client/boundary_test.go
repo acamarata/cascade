@@ -52,11 +52,16 @@ func clientModuleRoot(t *testing.T) string {
 // daemon_unix_run.go for the 300-line cap and carries the same daemon-SIDE
 // role: it serves RPC, it does not dial it, so the rule's "use
 // internal/client.Client instead" does not apply (R-14.197).
+// daemon_unix_run_memory.go was split out of daemon_unix_run.go for the
+// same 300-line cap and for the same reason as daemon_unix_handlers.go: it
+// MOUNTS the memory.* namespace on the daemon's registry. It serves RPC, it
+// does not dial it.
 var cmdRPCBoundaryExempt = map[string]bool{
-	"daemon_unix_run.go":      true,
-	"daemon_unix_handlers.go": true,
-	"mcp.go":                  true,
-	"elevate_helper.go":       true,
+	"daemon_unix_run.go":        true,
+	"daemon_unix_run_memory.go": true,
+	"daemon_unix_handlers.go":   true,
+	"mcp.go":                    true,
+	"elevate_helper.go":         true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

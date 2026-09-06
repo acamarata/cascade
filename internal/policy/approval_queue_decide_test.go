@@ -258,16 +258,17 @@ func TestCancelInvalidatesAnApproval(t *testing.T) {
 // real state.
 func TestApprovalStateStringIsTotal(t *testing.T) {
 	want := map[ApprovalState]string{
-		ApprovalPending:  "pending",
-		ApprovalApproved: "approved",
-		ApprovalDenied:   "denied",
-		ApprovalConsumed: "consumed",
-		ApprovalExpired:  "expired",
-		ApprovalCanceled: "canceled",
+		ApprovalPending:   "pending",
+		ApprovalApproved:  "approved",
+		ApprovalDenied:    "denied",
+		ApprovalConsumed:  "consumed",
+		ApprovalExpired:   "expired",
+		ApprovalCanceled:  "canceled",
+		ApprovalConsuming: "consuming",
 	}
 	for _, state := range []ApprovalState{
 		ApprovalPending, ApprovalApproved, ApprovalDenied,
-		ApprovalConsumed, ApprovalExpired, ApprovalCanceled,
+		ApprovalConsumed, ApprovalExpired, ApprovalCanceled, ApprovalConsuming,
 	} {
 		if got := state.String(); got != want[state] {
 			t.Errorf("state %d renders %q, want %q", state, got, want[state])

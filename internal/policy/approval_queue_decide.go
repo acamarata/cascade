@@ -212,6 +212,8 @@ func terminalRefusal(state ApprovalState, id string) error {
 		return refuse(ErrApprovalCanceled, "request %s was withdrawn", sanitize(id))
 	case ApprovalApproved, ApprovalDenied:
 		return refuse(ErrApprovalDecided, "request %s was already decided (%s)", sanitize(id), state)
+	case ApprovalConsuming:
+		return refuse(ErrTokenReplayed, "request %s is already being redeemed", sanitize(id))
 	case ApprovalPending:
 		return nil
 	default:

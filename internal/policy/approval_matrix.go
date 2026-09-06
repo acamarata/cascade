@@ -8,7 +8,7 @@
 // Inputs: an ActionClass, or a verb name, or a redemption state.
 // Outputs: RemoteApprovabilityMatrix, CanBridge, CanBridgeVerb,
 //
-//	ElevationClassVerbs, RedemptionState, ExecutionID, NextRedemptionState.
+//	ElevationClassVerbs, ExecutionID, NextApprovalState.
 //
 // Constraints: FAIL CLOSED. CanBridge is an ALLOW-LIST over two classes;
 //
@@ -20,7 +20,7 @@
 //
 // SPORT: internal/policy RemoteApprovabilityMatrix/ADDED, CanBridge/ADDED,
 //
-//	ElevationClassVerbs/ADDED, RedemptionState/ADDED, ExecutionID/ADDED
+//	ElevationClassVerbs/ADDED, ExecutionID/ADDED, NextApprovalState/ADDED
 //	(P1-E08-W2-S16-T3).
 package policy
 
@@ -125,44 +125,16 @@ func IsElevationClassVerb(verb string) bool {
 // re-drive the SAME execution rather than start a second one.
 type ExecutionID = cascade.ID
 
-// RedemptionState is where an approval stands on the road from a decision
-// to an execution (R-21.209). The zero value is deliberately not a member,
-// so a row that reached memory without a state does not read as approved.
-type RedemptionState uint8
+// The redemption lifecycle is described by ApprovalState
+// (approval_queue_types.go) and by nothing else. This file previously
+// declared a second enum, RedemptionState {approved, consuming, consumed},
+// over the same lifecycle ApprovalState already named; two enums over one
+// lifecycle is drift waiting to happen, so the second one is gone and
+// ApprovalState gained the one member it lacked (ApprovalConsuming).
+// NextApprovalState below is the CAS contract that used to live on it.
 
-// The three states, in the only order they may be reached.
-const (
-	_ RedemptionState = iota // 0 is deliberately not a valid state
-
-	// RedemptionApproved has a decision and an unspent token.
-	RedemptionApproved
-	// RedemptionConsuming has won the compare-and-set and holds the
-	// execution id. Exactly one caller ever reaches this state for a given
-	// (request_id, nonce).
-	RedemptionConsuming
-	// RedemptionConsumed has completed. It is terminal.
-	RedemptionConsumed
-)
-
-// redemptionStateNames holds each state's stable name, indexed by value.
-var redemptionStateNames = [...]string{"", "approved", "consuming", "consumed"}
-
-// String returns the state's stable name, e.g. "consuming". An invalid
-// value renders as "invalid-redemption-state" and never as a real state.
-func (s RedemptionState) String() string {
-	if !s.Valid() {
-		return "invalid-redemption-state"
-	}
-	return redemptionStateNames[s]
-}
-
-// Valid reports whether s names one of the three states.
-func (s RedemptionState) Valid() bool {
-	return s >= RedemptionApproved && s <= RedemptionConsumed
-}
-
-// NextRedemptionState is the CAS contract the controller implements: the
-// ONE legal advance from each state, and a refusal from anywhere else.
+// NextApprovalState is the CAS contract the controller implements: the ONE
+// legal advance from each state, and a refusal from anywhere else.
 //
 // The controller is the sole redemption authority. It performs an atomic
 // compare-and-set from approved to consuming under a unique
@@ -176,15 +148,16 @@ func (s RedemptionState) Valid() bool {
 // This function is the state half of that contract and the storage half
 // lives with the ledger. A transition this function refuses is a
 // KindConflict, because it means someone else already advanced the row.
-func NextRedemptionState(from RedemptionState) (RedemptionState, error) {
+func NextApprovalState(from ApprovalState) (ApprovalState, error) {
 	switch from {
-	case RedemptionApproved:
-		return RedemptionConsuming, nil
-	case RedemptionConsuming:
-		return RedemptionConsumed, nil
-	case RedemptionConsumed:
-		// Consumed is terminal: there is no further legal advance, so this
-		// falls through to the same fail-closed refusal as an unknown state.
+	case ApprovalApproved:
+		return ApprovalConsuming, nil
+	case ApprovalConsuming:
+		return ApprovalConsumed, nil
+	case ApprovalConsumed, ApprovalPending, ApprovalDenied, ApprovalExpired, ApprovalCanceled:
+		// Consumed is terminal and the rest were never on the redemption
+		// road at all, so each falls through to the same fail-closed
+		// refusal as an unknown state.
 		fallthrough
 	default:
 		return 0, cascade.Newf(cascade.KindConflict,

@@ -58,19 +58,32 @@ const (
 	ApprovalExpired
 	// ApprovalCanceled was withdrawn by the caller. It is terminal.
 	ApprovalCanceled
+	// ApprovalConsuming has won the redemption compare-and-set and holds
+	// the execution id. Exactly one caller ever reaches it for a given
+	// (request_id, nonce). It sits at the end of the block rather than
+	// between approved and consumed because the numeric values of the
+	// states above it are already written into stored rows and displayed
+	// strings; the enum's ORDER is not its lifecycle order, and
+	// NextApprovalState, not the iota, is what says which advance is legal.
+	ApprovalConsuming
 )
 
 // approvalStateNames holds each state's stable name, indexed by value.
 var approvalStateNames = [...]string{
-	"", "pending", "approved", "denied", "consumed", "expired", "canceled",
+	"", "pending", "approved", "denied", "consumed", "expired", "canceled", "consuming",
 }
 
 // String returns the state's stable name, e.g. "approved".
 func (s ApprovalState) String() string {
-	if s < ApprovalPending || s > ApprovalCanceled {
+	if !s.Valid() {
 		return "invalid-approval-state"
 	}
 	return approvalStateNames[s]
+}
+
+// Valid reports whether s names one of the states.
+func (s ApprovalState) Valid() bool {
+	return s >= ApprovalPending && s <= ApprovalConsuming
 }
 
 // ApprovalToken is the daemon-memory proof that one specific action was

@@ -6,6 +6,7 @@ Usage:
   cascade [command]
 
 Available Commands:
+  approval       Inspect and decide queued approval requests
   completion     Generate shell completion scripts
   config         Inspect and edit cascade's config.toml
   context        Session-scope and context-engine commands
@@ -14,6 +15,7 @@ Available Commands:
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
+  policy         Explain and inspect policy decisions
   recall         Search the retrieval index and print cited results
   status         One-shot summary of the running daemon
   vault          Store and retrieve secrets in the platform keychain

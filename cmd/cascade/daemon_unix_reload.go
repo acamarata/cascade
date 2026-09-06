@@ -102,10 +102,10 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // new concern). On a startScheduler failure this also stops the watcher
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
-func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, func(), error) {
+func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, *policyWiring, func(), error) {
 	_, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// schedCtx is deliberately its own cancellation, not ctx directly:
@@ -120,7 +120,7 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	pol, err := wirePolicy(ctx, store, deps.Clock, cfg)
 	if err != nil {
 		watcher.Stop()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	schedCtx, schedCancel := context.WithCancel(ctx)
@@ -129,10 +129,10 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	if err != nil {
 		schedCancel()
 		watcher.Stop()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return admin, func() {
+	return admin, pol, func() {
 		watcher.Stop()
 		schedCancel()
 		schedCleanup(context.Background())

@@ -90,6 +90,14 @@ type policyWiring struct {
 	// Router is the single authorization middleware every gated call site
 	// in this process shares.
 	Router *routing.ActionRouter
+	// Queue is the ONE approval queue in this process. The engine files
+	// its ask verdicts here and the approval.* verbs read the same value,
+	// so an operator listing the queue sees the entries the engine
+	// actually made rather than a second, empty queue.
+	Queue policy.ApprovalQueue
+	// Handlers is the approval/policy JSON-RPC handler set built over
+	// everything above. The RPC composition root registers it.
+	Handlers map[string]policy.MethodFunc
 }
 
 // wirePolicy constructs the production policy engine and the one
@@ -139,11 +147,55 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	}
 	engine = engine.WithDenyList(denyList)
 
-	router, err := routing.NewActionRouter(engine, audit.New(store, clock, nil))
+	log := audit.New(store, clock, nil)
+	queue, err := buildApprovalQueue(store, registry, grants, denyList, clock, log)
 	if err != nil {
 		return nil, err
 	}
-	return &policyWiring{Registry: registry, Engine: engine, Router: router}, nil
+	engine = engine.WithApprovalQueue(queue)
+
+	router, err := routing.NewActionRouter(engine, log)
+	if err != nil {
+		return nil, err
+	}
+	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue}
+	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
+		Queue:    queue,
+		Engine:   engine,
+		Registry: registry,
+		Grants:   grants,
+		DenyList: denyList,
+		Audit:    log,
+		Clock:    clock,
+		// Verifier and Attestor are deliberately absent. No production
+		// approval-key source and no production attestation helper exist
+		// in this tree, and both absences are fail-closed: approval.grant
+		// refuses a token nothing can verify, and every elevated verb
+		// returns ElevationRequired. Attaching a placeholder to either
+		// would make an unauthorized redemption report success.
+	})
+	return wiring, nil
+}
+
+// buildApprovalQueue constructs the approval queue and its single-use
+// ledger over the same store, registry, grants and deny-list the engine
+// itself was built from. It is split out of wirePolicy only to keep that
+// function under Art.10.3's 50-line cap: passing the SAME collaborator
+// values on is the point, since a queue built over a second registry or a
+// second grant store could answer a revocation question differently from
+// the engine that consults it.
+func buildApprovalQueue(
+	store provider.Store, registry *policy.MemoryRegistry, grants *policy.StoreGrants,
+	denyList *policy.StoreDenyList, clock runtime.Clock, log *audit.Log,
+) (*policy.StoreApprovals, error) {
+	return policy.NewApprovalQueue(policy.ApprovalQueueConfig{
+		Store:    store,
+		Registry: registry,
+		Grants:   grants,
+		Clock:    clock,
+		Recorder: log,
+		DenyList: denyList,
+	})
 }
 
 // applyAutonomyProfile loads the [policy] section into the controller. A
