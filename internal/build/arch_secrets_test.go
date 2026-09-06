@@ -112,3 +112,114 @@ func TestSecretsHasNoCGO(t *testing.T) {
 		}
 	}
 }
+
+// unelevatedReadAllowlist maps each NAMED non-elevated vault read to the
+// directories whose production files may name its constructor.
+//
+// Rule 4, and the reason it exists: internal/secrets holds two exported
+// reads that skip the elevated-verb gate, because a release binary
+// refuses elevated verbs outright and a value reachable only through
+// Broker.Get is unreadable in exactly the builds that ship. That
+// exemption is only safe while it stays where it was argued for. The
+// unexported internalGet cannot leave the package at all (rule 2 in
+// arch_rehydrate_test.go); these two CAN, so the boundary has to be
+// asserted rather than assumed.
+//
+// Each entry is one purpose with one allowlist. Widening either list is a
+// deliberate edit to this table with the argument written next to it,
+// which is the whole point.
+var unelevatedReadAllowlist = map[string][]string{
+	// The approval signer's key source. internal/policy is the consumer
+	// seam (its ApprovalKeySource interface); cmd/cascade is the
+	// composition root that hands one to the other.
+	"NewApprovalKeyReader(": {
+		filepath.Join("internal", "secrets"),
+		filepath.Join("internal", "policy"),
+		filepath.Join("cmd", "cascade"),
+	},
+	// The outbound firewall's value source. internal/mcp binds it to the
+	// egress engine on the response path; cmd/cascade may bind one for a
+	// process that builds its own engine.
+	"NewEgressVault(": {
+		filepath.Join("internal", "secrets"),
+		filepath.Join("internal", "mcp"),
+		filepath.Join("cmd", "cascade"),
+	},
+}
+
+// TestArchUnelevatedReadCallers asserts rule 4 on the real tree.
+func TestArchUnelevatedReadCallers(t *testing.T) {
+	root := archModuleRoot(t)
+	for _, dir := range []string{"internal", "cmd", "pkg"} {
+		scanUnelevatedReadCallers(t, root, filepath.Join(root, dir))
+	}
+}
+
+// scanUnelevatedReadCallers walks tree and fails on a production file
+// that names a non-elevated read constructor from outside its allowlist.
+// Test files are skipped for the same reason rules 1 and 2 skip them: a
+// test that drives the mechanism is not a caller in a shipped binary.
+func scanUnelevatedReadCallers(t *testing.T, root, tree string) {
+	t.Helper()
+	err := filepath.WalkDir(tree, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return err
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, rerr := os.ReadFile(path) //nolint:gosec // path comes from the module tree
+		if rerr != nil {
+			return rerr
+		}
+		rel, relErr := filepath.Rel(root, filepath.Dir(path))
+		if relErr != nil {
+			return relErr
+		}
+		for symbol, allowed := range unelevatedReadAllowlist {
+			if !strings.Contains(string(data), symbol) {
+				continue
+			}
+			if !dirOnAllowlist(rel, allowed) {
+				t.Fatalf("%s names %s; the non-elevated vault read is limited to %v", path, symbol, allowed)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", tree, err)
+	}
+}
+
+// dirOnAllowlist reports whether dir is at or under one allowlist entry,
+// matching whole path segments so a sibling directory sharing a prefix
+// never passes.
+func dirOnAllowlist(dir string, allowed []string) bool {
+	for _, a := range allowed {
+		if dir == a || strings.HasPrefix(dir, a+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestArchUnelevatedReadCallersDetectsViolation is the seeded-violation
+// half: the predicate above must report a directory that is NOT on the
+// allowlist, so a green run means the rule works rather than that the
+// scan matched nothing.
+func TestArchUnelevatedReadCallersDetectsViolation(t *testing.T) {
+	for symbol, allowed := range unelevatedReadAllowlist {
+		if dirOnAllowlist(filepath.Join("internal", "hooks", "egress"), allowed) {
+			t.Fatalf("%s must not be reachable from internal/hooks/egress", symbol)
+		}
+		if dirOnAllowlist(filepath.Join("internal", "secretsish"), allowed) {
+			t.Fatalf("%s allowlist matched a string prefix rather than a path segment", symbol)
+		}
+		if !dirOnAllowlist(filepath.Join("internal", "secrets"), allowed) {
+			t.Fatalf("%s must be reachable from its own package", symbol)
+		}
+	}
+	if dirOnAllowlist(filepath.Join("internal", "policy"), unelevatedReadAllowlist["NewEgressVault("]) {
+		t.Fatal("the egress vault must not be reachable from internal/policy; the two allowlists are not one list")
+	}
+}

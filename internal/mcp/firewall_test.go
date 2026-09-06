@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/secrets"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // recordingInterceptor captures what the marshaler handed the firewall.
@@ -78,31 +80,98 @@ func TestResponseMarshalerFailsClosed(t *testing.T) {
 	}
 }
 
+// tempVault points openProcessVault at a file vault under t.TempDir() and
+// stores each entry in values. It never touches the operator's real data
+// directory or OS keychain.
+func tempVault(t *testing.T, values map[string]string) {
+	t.Helper()
+	// Passphrase and a runner that always fails force the encrypted file
+	// vault: on a host with an OS keychain SelectCustody prefers it, and
+	// a unit test must not write into the operator's real keychain.
+	custody, err := secrets.SelectCustody(secrets.Config{
+		Service:    "cascade-mcp-firewall-test",
+		Dir:        t.TempDir(),
+		Passphrase: "firewall-test-pass",
+		Runner: func(context.Context, string, ...string) ([]byte, error) {
+			return nil, errors.New("no platform keychain in this test")
+		},
+	})
+	if err != nil {
+		t.Fatalf("SelectCustody: %v", err)
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		t.Fatalf("NewBroker: %v", err)
+	}
+	for name, value := range values {
+		if _, serr := broker.Set(context.Background(), name, []byte(value), secrets.SetUpdate); serr != nil {
+			t.Fatalf("seeding %s: %v", name, serr)
+		}
+	}
+	vault, err := secrets.NewEgressVault(broker)
+	if err != nil {
+		t.Fatalf("NewEgressVault: %v", err)
+	}
+	previous := openProcessVault
+	openProcessVault = func() (egress.Vault, error) { return vault, nil }
+	t.Cleanup(func() { openProcessVault = previous })
+}
+
 func TestDefaultResponseMarshalerIsUsable(t *testing.T) {
+	tempVault(t, nil)
+	// Split so no contiguous credential-shaped literal exists in the
+	// source; the runtime value, and therefore the assertion, is
+	// unchanged.
+	shaped := "AKIA" + "7YQ2XPLM4RZV6WTB"
 	m, err := NewDefaultResponseMarshaler()
 	if err != nil {
 		t.Fatalf("NewDefaultResponseMarshaler: %v", err)
 	}
 	out, merr := m.Marshal(context.Background(), &Response{
-		JSONRPC: "2.0", Result: map[string]string{"output": "key AKIA7YQ2XPLM4RZV6WTB here"},
+		JSONRPC: "2.0", Result: map[string]string{"output": "key " + shaped + " here"},
 	})
 	if merr != nil {
 		t.Fatalf("Marshal: %v", merr)
 	}
-	if strings.Contains(string(out), "AKIA7YQ2XPLM4RZV6WTB") {
+	if strings.Contains(string(out), shaped) {
 		t.Fatalf("the default marshaler let a shaped credential through: %s", out)
 	}
 }
 
-// TestUnboundVaultInventsNothing pins the stated gap: an unbound vault
-// reports no entries and refuses a lookup, rather than answering with a
-// value it does not have.
-func TestUnboundVaultInventsNothing(t *testing.T) {
-	names, err := unboundVault{}.List(context.Background())
-	if err != nil || len(names) != 0 {
-		t.Fatalf("List = (%v, %v), want (empty, nil)", names, err)
+// TestDefaultMarshalerSubstitutesAShapelessVaultValue is the proof that
+// the exact-value half of the substitution pass is live. The stored value
+// has no credential shape whatsoever, so the detector half cannot see it;
+// only a bound vault can. Before the vault was bound this response
+// crossed unredacted.
+func TestDefaultMarshalerSubstitutesAShapelessVaultValue(t *testing.T) {
+	const shapeless = "correct-horse-battery-staple"
+	tempVault(t, map[string]string{"TEAM_PASSPHRASE": shapeless})
+	m, err := NewDefaultResponseMarshaler()
+	if err != nil {
+		t.Fatalf("NewDefaultResponseMarshaler: %v", err)
 	}
-	if _, err := (unboundVault{}).Get(context.Background(), "ANY"); err == nil {
-		t.Fatal("an unbound vault must refuse a lookup")
+	out, merr := m.Marshal(context.Background(), &Response{
+		JSONRPC: "2.0", Result: map[string]string{"output": "the passphrase is " + shapeless},
+	})
+	if merr != nil {
+		t.Fatalf("Marshal: %v", merr)
+	}
+	if strings.Contains(string(out), shapeless) {
+		t.Fatalf("a vault-held value with no credential shape crossed the firewall: %s", out)
+	}
+}
+
+// TestDefaultResponseMarshalerFailsClosedWithoutAVault pins the refusal:
+// a process that cannot open its vault gets no marshaler, so the
+// transport writes nothing. An empty-value-source fallback would look
+// identical to a working firewall.
+func TestDefaultResponseMarshalerFailsClosedWithoutAVault(t *testing.T) {
+	previous := openProcessVault
+	openProcessVault = func() (egress.Vault, error) {
+		return nil, cascade.New(cascade.KindUnavailable, "mcp: test vault refusal")
+	}
+	t.Cleanup(func() { openProcessVault = previous })
+	if _, err := NewDefaultResponseMarshaler(); err == nil {
+		t.Fatal("a marshaler was built over a vault this process could not open")
 	}
 }

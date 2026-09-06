@@ -17,6 +17,7 @@
 //	total over arbitrary bytes (FuzzRehydrateScan).
 //
 // SPORT: REHYDRATE_CHANNEL: ADD (internal/secrets tag-span scanning).
+
 package secrets
 
 import (

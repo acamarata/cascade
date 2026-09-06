@@ -493,3 +493,72 @@ for a harness connection is an outbound crossing, and it is marshalled
 through the egress firewall on its `mcp.response` class rather than encoded
 straight to the wire. A transport that cannot build its firewall writes
 nothing rather than falling back to an unfiltered encode.
+
+## Secrets audit surface
+
+`cascade vault audit` is read-only. It reports every stored entry by NAME
+and kind, every stored OAuth grant with its declared expiry, and how many
+detections are waiting in the quarantine queue. No path through the
+command reaches a stored value, and the surface has no flag that would
+print one: reading a value is the elevated `cascade vault get` verb and
+stays there. Repeated runs over an unchanged vault return the same output
+and exit 0.
+
+Per-entry metadata (provider, last used, never resolved) is reported as
+unavailable rather than guessed. Sourcing it needs a metadata sidecar this
+build does not have, and a fabricated last-used timestamp on a security
+surface is worse than an honest absence.
+
+## Doctor checks for the vault
+
+`cascade doctor` registers five named secrets checks:
+
+| Check | What it asserts | Fixable |
+| --- | --- | --- |
+| `secrets/keychain-reachable` | the custody backend the vault selected answers | no |
+| `secrets/keys-resolvable` | every vault key the configuration references is readable | no |
+| `secrets/oauth-not-expired` | no stored OAuth grant is past its expiry or within 24 h of it | no |
+| `secrets/patterns-loaded` | the detector's pattern library is non-empty | no |
+| `secrets/quarantine-depth` | the quarantine queue is below its configured threshold | yes |
+
+An empty pattern library is an error, not a pass: a detector with no
+patterns reports every payload clean, which reads exactly like a payload
+that really is clean.
+
+`secrets/keys-resolvable` reads through the vault's named non-elevated
+path. A health probe must not raise an interactive attestation prompt, and
+a release binary refuses elevated verbs outright, so routing the probe
+through the elevated verb would make it fail in exactly the builds that
+ship.
+
+`cascade doctor --fix` flushes the pending quarantine queue after an
+explicit confirmation. Each entry is released with a recorded reason, so
+the ledger still accounts for every exit from quarantine. A flush on an
+already-empty queue changes nothing and exits 0. Under `CASCADE_NO_INPUT=1`
+`--fix` is a hard error: the confirmation cannot be asked, and a
+non-interactive caller must not have a review queue emptied on its behalf.
+
+On Windows, a tier-2 platform, `secrets/keychain-reachable` reports
+`keychain: not available on Windows (tier-2); encrypted-file-vault in use`
+and passes. The encrypted file vault is the supported store there, and
+reporting the absence of a keychain as a failure would tell every operator
+on that platform that a correctly configured host is broken.
+
+## Non-elevated vault reads
+
+Two reads on the vault skip the elevated-verb gate, each with one stated
+purpose and a caller allowlist enforced by an architecture test:
+
+- the approval signing key, because a release binary cannot perform an
+  elevated verb at all, so a key reachable only through the elevated read
+  is unreadable in exactly the builds that ship; and
+- the outbound firewall's value source, because a response is filtered on
+  the daemon's own path with no operator present.
+
+The firewall binding is what makes the substitution pass complete. The
+detector half redacts a string with credential shape; the exact-value half
+replaces a string that IS a stored secret. Without a bound vault only the
+first half ran, so a vault-held secret with no credential shape crossed
+unredacted. A process that cannot open its vault gets no response
+marshaler and writes nothing, because a firewall that cannot read the
+vault cannot redact what is in it.

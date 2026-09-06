@@ -14,6 +14,7 @@
 //	external-contract counterpart: it runs the real /usr/bin/pbcopy.
 //
 // SPORT: internal/secrets clipboard_darwin.go/ADDED (P1-E08-W2-S16-T4).
+
 package secrets
 
 import (

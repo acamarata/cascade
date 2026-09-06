@@ -19,6 +19,7 @@
 // SPORT: REHYDRATOR: ADD (internal/secrets.Rehydrator, RehydratedContent, Zero).
 //
 //	REHYDRATE_CHANNEL: ADD (internal/secrets - non-inherited buffer carrier).
+
 package secrets
 
 import (

@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
@@ -19,7 +20,11 @@ import (
 // retrieval_index check. Deleting the reg.Register call for it from
 // doctor.go turns this red.
 func TestDoctorRetrievalIndexCheckIsRegistered(t *testing.T) {
-	reg := productionCheckRegistry()
+	useTempCustody(t)
+	reg, err := productionCheckRegistry(context.Background(), doctorTestPaths(t), doctorTestClock())
+	if err != nil {
+		t.Fatalf("productionCheckRegistry: %v", err)
+	}
 	for _, check := range reg.List() {
 		if check.Name() == lifecycle.DoctorCheckName {
 			return

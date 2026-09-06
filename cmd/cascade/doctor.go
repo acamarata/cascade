@@ -35,7 +35,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/output"
-	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -48,11 +47,15 @@ type doctorDeps struct {
 	// so one shared registry rebuilt across two command executions in a
 	// single process (which every test binary does) would panic the second
 	// time.
-	Registry func() *doctor.CheckRegistry
+	Registry func(context.Context) (*doctor.CheckRegistry, error)
 	Paths    runtime.PathProvider
 	Getenv   runtime.Getenv
 	Environ  func() []string
 	Clock    runtime.Clock
+	// ConfirmFix asks the operator to confirm `--fix` before any check
+	// runs. Injected so the refusal paths are testable without a
+	// terminal; nil is a refusal, never a silent yes.
+	ConfirmFix func(cmd *cobra.Command) (bool, error)
 	// BundleDir is where `doctor bundle` writes; "" lets internal/doctor
 	// apply its own os.TempDir default. Tests set t.TempDir().
 	BundleDir string
@@ -61,33 +64,15 @@ type doctorDeps struct {
 // productionDoctorDeps builds doctorDeps against the real environment.
 func productionDoctorDeps() doctorDeps {
 	return doctorDeps{
-		Registry: productionCheckRegistry,
-		Paths:    lazyPaths{},
-		Getenv:   os.Getenv,
-		Environ:  os.Environ,
-		Clock:    runtime.SystemClock{},
+		Registry: func(ctx context.Context) (*doctor.CheckRegistry, error) {
+			return productionCheckRegistry(ctx, lazyPaths{}, runtime.SystemClock{})
+		},
+		Paths:      lazyPaths{},
+		Getenv:     os.Getenv,
+		Environ:    os.Environ,
+		Clock:      runtime.SystemClock{},
+		ConfirmFix: confirmOnStdin,
 	}
-}
-
-// productionCheckRegistry is the composition root for doctor's checks: the
-// one place a subsystem's Check is mounted, with no init() side effects.
-//
-// Only checks with a real data source are registered. doctor ships two
-// further framework checks, mcp_integration and subsystem_census, whose
-// constructors take a HarnessDiscoverer and a SubsystemStateProvider; neither
-// interface has a production implementation anywhere in this tree, and
-// satisfying one with a hand-written stand-in here would put a check in the
-// report that probes nothing (Art.1). They stay unmounted, and visibly so,
-// until their providers land.
-func productionCheckRegistry() *doctor.CheckRegistry {
-	reg := doctor.NewCheckRegistry()
-	reg.Register(doctor.NewDoctorSelfCheck())
-	// retrieval_index (F/S-11.T4): a real data source (the on-disk
-	// retrieval index) exists unconditionally — unlike mcp_integration/
-	// subsystem_census above, no unimplemented interface stands between
-	// this check and something real to probe, so it is mounted.
-	reg.Register(lifecycle.NewDoctorCheck(buildRecallIndexManager(lazyPaths{}, runtime.SystemClock{})))
-	return reg
 }
 
 // mountDoctorCmd attaches the top-level `doctor` command, following
@@ -131,6 +116,9 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 // runDoctor executes the registered checks, renders the report, and returns
 // the run's outcome as a process result.
 func runDoctor(cmd *cobra.Command, deps doctorDeps, f *doctorFlags) error {
+	if err := confirmDoctorFix(cmd, deps, f); err != nil {
+		return err
+	}
 	report, err := executeChecks(cmd.Context(), deps, f)
 	if err != nil {
 		return err
@@ -147,7 +135,10 @@ func runDoctor(cmd *cobra.Command, deps doctorDeps, f *doctorFlags) error {
 
 // executeChecks resolves the check set from the flags and runs it.
 func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor.RunReport, error) {
-	reg := deps.Registry()
+	reg, err := deps.Registry(ctx)
+	if err != nil {
+		return doctor.RunReport{}, err
+	}
 	checks := reg.List()
 	if f.firstRun {
 		checks = reg.FirstRun()

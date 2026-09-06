@@ -14,6 +14,7 @@
 //	error, and the transport writes nothing. No clock, no randomness.
 //
 // SPORT: MCP_RESPONSE_FIREWALL: ADD (internal/mcp response-marshal egress routing).
+
 package mcp
 
 import (
@@ -21,6 +22,7 @@ import (
 	"encoding/json"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -66,22 +68,76 @@ func NewResponseMarshaler(firewall ResponseInterceptor) (*ResponseMarshaler, err
 	return &ResponseMarshaler{firewall: firewall, token: token}, nil
 }
 
+// openProcessVault opens THIS process's vault as the firewall's value
+// source. It is a package variable so a test can drive the marshal path
+// against a temp-dir vault; production never replaces it.
+//
+// The broker is built with a nil elevation gate on purpose. A nil gate
+// refuses every elevated verb (see Broker.authorize), and this path uses
+// none: EgressVault reads through the named non-elevated path, which is
+// what lets an outbound response be filtered on the daemon's own path
+// with no operator present and in a release build that refuses elevated
+// verbs outright.
+var openProcessVault = func() (egress.Vault, error) {
+	paths, err := runtime.NewDefaultPathProvider()
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err,
+			"mcp: could not resolve the data directory the response firewall reads its vault from")
+	}
+	// The production config deliberately carries no Runner, so SelectCustody
+	// prefers the host's real credential store. That is right for a daemon
+	// and wrong for a test: a test calling THIS function on a host with a
+	// keychain writes to the operator's real one (R-14.206). Tests drive
+	// openVaultFrom instead, with a config that forces the file vault.
+	return openVaultFrom(secrets.Config{
+		Service: secrets.DefaultVaultService,
+		Dir:     paths.DataDir(),
+	})
+}
+
+// openVaultFrom builds the egress vault over whatever custody cfg selects.
+// Split from openProcessVault so the broker and vault construction can be
+// exercised against a temp-dir file vault without touching the host's real
+// credential store.
+func openVaultFrom(cfg secrets.Config) (egress.Vault, error) {
+	custody, err := secrets.SelectCustody(cfg)
+	if err != nil {
+		return nil, err
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		return nil, err
+	}
+	return secrets.NewEgressVault(broker)
+}
+
 // NewDefaultResponseMarshaler builds the marshaler a transport uses when
 // the composition root has not bound one.
 //
-// STATED GAP, deliberately not hidden: the engine it builds has no vault
-// bound, so the substitution pass's exact-value half matches nothing and
-// only the detector half runs. That is strictly more than the nothing
-// this path had before, and it is less than a vault-bound engine gives.
-// Binding the process vault is the composition root's job and belongs to
-// whoever mounts the egress engine; it is not something this package can
-// do for itself without inventing a secret store.
+// It binds the process vault, so BOTH halves of the substitution pass
+// run: the detector redacts a string with credential shape, and the
+// exact-value pass replaces a string that IS a stored secret even when it
+// has no credential shape at all. The second half is the one that used to
+// be inert here.
+//
+// It fails closed. A vault this process cannot open is an error and the
+// transport writes nothing, because a firewall that cannot read the vault
+// cannot redact what is in it, and a marshaler that quietly fell back to
+// an empty value source would look identical to a working one.
+//
+// STATED COST: the exact-value pass reads every stored value once per
+// intercepted response. On a host whose custody backend is an OS keychain
+// that is one backend call per secret per response.
 func NewDefaultResponseMarshaler() (*ResponseMarshaler, error) {
 	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
 	if err != nil {
 		return nil, err
 	}
-	engine, err := egress.NewEngine(egress.DefaultRegistry(), unboundVault{}, detector)
+	vault, err := openProcessVault()
+	if err != nil {
+		return nil, err
+	}
+	engine, err := egress.NewEngine(egress.DefaultRegistry(), vault, detector)
 	if err != nil {
 		return nil, err
 	}
@@ -104,19 +160,4 @@ func (m *ResponseMarshaler) Marshal(ctx context.Context, resp *Response) ([]byte
 		return nil, cascade.Wrap(cascade.KindInternal, err, "mcp: encoding response")
 	}
 	return m.firewall.Intercept(ctx, m.token, responseTier, raw)
-}
-
-// unboundVault is the value source of a process that has bound no vault:
-// it holds nothing and says so. It is not a stand-in for a vault that
-// exists elsewhere, and it never answers a lookup with a fabricated
-// value.
-type unboundVault struct{}
-
-// List reports an empty vault.
-func (unboundVault) List(context.Context) ([]string, error) { return nil, nil }
-
-// Get refuses: an unbound vault has no entries, and reporting one would
-// be an invention.
-func (unboundVault) Get(_ context.Context, name string) ([]byte, error) {
-	return nil, cascade.Newf(cascade.KindNotFound, "mcp: no vault is bound; %q cannot be read", name)
 }

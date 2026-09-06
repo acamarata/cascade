@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -62,18 +64,19 @@ func testDoctorDeps(t *testing.T, checks ...doctor.Check) doctorDeps {
 	t.Helper()
 	dir := t.TempDir()
 	return doctorDeps{
-		Registry: func() *doctor.CheckRegistry {
+		Registry: func(context.Context) (*doctor.CheckRegistry, error) {
 			reg := doctor.NewCheckRegistry()
 			for _, c := range checks {
 				reg.Register(c)
 			}
-			return reg
+			return reg, nil
 		},
-		Paths:     lazyPaths{},
-		Getenv:    func(string) string { return "" },
-		Environ:   func() []string { return nil },
-		Clock:     runtime.NewFixedClock(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)),
-		BundleDir: dir,
+		Paths:      lazyPaths{},
+		Getenv:     func(string) string { return "" },
+		Environ:    func() []string { return nil },
+		Clock:      runtime.NewFixedClock(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)),
+		ConfirmFix: func(*cobra.Command) (bool, error) { return true, nil },
+		BundleDir:  dir,
 	}
 }
 

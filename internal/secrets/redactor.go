@@ -15,6 +15,7 @@
 //	No clock, no randomness, no I/O.
 //
 // SPORT: AUDIT_REDACTION: ADD (internal/secrets.Redactor).
+
 package secrets
 
 import (
