@@ -156,7 +156,10 @@ func parseTagHead(head string) (Tag, error) {
 		return Tag{Type: TagType(head)}, nil
 	}
 	const kindPrefix = string(TagPII) + ` kind="`
-	if strings.HasPrefix(head, kindPrefix) && strings.HasSuffix(head, `"`) {
+	// The length guard is load bearing: `pii kind="` both starts with the
+	// prefix and ends with a quote, and slicing it without this check
+	// panics on a negative-length slice. Found by FuzzRehydrateScan.
+	if len(head) > len(kindPrefix) && strings.HasPrefix(head, kindPrefix) && strings.HasSuffix(head, `"`) {
 		kind := head[len(kindPrefix) : len(head)-1]
 		return Tag{Type: TagPII, PIIKind: kind}, nil
 	}

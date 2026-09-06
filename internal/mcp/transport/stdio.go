@@ -27,7 +27,6 @@ package transport
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 
@@ -51,13 +50,28 @@ type StdioTransport struct {
 	dispatcher Dispatcher
 	in         io.Reader
 	out        io.Writer
+	// marshaler routes every response through the egress firewall before
+	// it reaches the wire. marshalerErr records why there is none, so a
+	// transport that could not build one refuses to write rather than
+	// falling back to an unfiltered encode.
+	marshaler    *mcp.ResponseMarshaler
+	marshalerErr error
 }
 
 // NewStdioTransport builds a StdioTransport reading frames from in and
 // writing responses to out — both caller-supplied, never the os.Stdin/
 // os.Stdout globals (see this file's doc comment).
 func NewStdioTransport(dispatcher Dispatcher, in io.Reader, out io.Writer) *StdioTransport {
-	return &StdioTransport{dispatcher: dispatcher, in: in, out: out}
+	marshaler, err := mcp.NewDefaultResponseMarshaler()
+	return &StdioTransport{dispatcher: dispatcher, in: in, out: out, marshaler: marshaler, marshalerErr: err}
+}
+
+// WithResponseMarshaler replaces the transport's response firewall with
+// one the composition root built over the process vault. It returns the
+// transport so a caller can chain it onto the constructor.
+func (t *StdioTransport) WithResponseMarshaler(m *mcp.ResponseMarshaler) *StdioTransport {
+	t.marshaler, t.marshalerErr = m, nil
+	return t
 }
 
 // Serve reads frames from t.in until EOF (clean shutdown) or ctx is
@@ -81,13 +95,13 @@ func (t *StdioTransport) Serve(ctx context.Context) error {
 			continue
 		}
 		resp := t.dispatchLine(ctx, line)
-		if err := t.writeResponse(resp); err != nil {
+		if err := t.writeResponse(ctx, resp); err != nil {
 			return err
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		if errors.Is(err, bufio.ErrTooLong) {
-			return t.writeResponse(&mcp.Response{
+			return t.writeResponse(ctx, &mcp.Response{
 				JSONRPC: "2.0",
 				Error:   &mcp.ErrorObject{Code: -32700, Message: "frame exceeds maximum size"},
 			})
@@ -110,8 +124,17 @@ func (t *StdioTransport) dispatchLine(ctx context.Context, line []byte) *mcp.Res
 	return t.dispatcher.Dispatch(ctx, f)
 }
 
-func (t *StdioTransport) writeResponse(resp *mcp.Response) error {
-	b, err := json.Marshal(resp)
+// writeResponse marshals resp THROUGH the egress firewall and writes the
+// result. The encode is not a plain json.Marshal on purpose: an MCP
+// response is an outbound crossing, and this is the only place it is
+// turned into bytes, so it is where the substitution pass belongs.
+func (t *StdioTransport) writeResponse(ctx context.Context, resp *mcp.Response) error {
+	if t.marshalerErr != nil {
+		return t.marshalerErr
+	}
+	// A nil marshaler refuses from inside Marshal, so there is exactly
+	// one place that decides what an unconfigured firewall does.
+	b, err := t.marshaler.Marshal(ctx, resp)
 	if err != nil {
 		return err
 	}

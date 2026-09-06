@@ -130,11 +130,6 @@
     "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
   },
   {
-    "symbol": "internal/audit.New",
-    "reason": "The audit log is built and its only intended caller, the vault audit verb, deliberately refuses to print an empty list while nothing injects a writer. Wiring follows when a subsystem actually records events.",
-    "expected_caller": "cmd/cascade/vault_audit.go, once a writer is injected into internal/secrets"
-  },
-  {
     "symbol": "internal/retrieval/embed.New",
     "reason": "The embed pipeline is complete; the ingest and recall command surface that drives it is a later ticket in this epic.",
     "expected_caller": "the recall and index command surface, P1-E06-W2-S11-T3"
@@ -230,16 +225,6 @@
     "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired"
   },
   {
-    "symbol": "internal/hooks/egress.NewEngine",
-    "reason": "The egress firewall is built before the composition root that owns the vault, the detector and the hooks dispatcher. The dispatcher already REQUIRES an engine and a capability, so the firewall is not optional; what is missing is the daemon wiring that constructs the dispatcher at all, which no ticket has landed yet. Building the boundary before the callers is the right order; leaving it unconstructed once a dispatcher is started would not be.",
-    "expected_caller": "the daemon composition root, in the SAME change that first constructs hooks.NewDispatcher"
-  },
-  {
-    "symbol": "internal/hooks/egress.DefaultRegistry",
-    "reason": "Supplies the registered classes to the engine and issues the hook capability. Retire together with the NewEngine entry.",
-    "expected_caller": "the daemon composition root, alongside egress.NewEngine"
-  },
-  {
     "symbol": "internal/policy.NewStoreDenyList",
     "reason": "The B-layer-backed configurable deny-list. The policy evaluation engine it plugs into (internal/policy.NewEngine) has no shipping caller yet either, and an engine built by nobody cannot be handed a deny-list by anybody. NewEngine attaches DefaultDenyList in the meantime, which is the empty-list behaviour and is fully wired.",
     "expected_caller": "the composition root that builds the policy engine, in the SAME change that retires the internal/policy.NewEngine entry"
@@ -326,7 +311,7 @@
   },
   {
     "symbol": "internal/retrieval/eval.FusionDefaultGate",
-    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary — see LoadCorpus's entry in this file for why no CLI surface exists for it.",
+    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary \u2014 see LoadCorpus's entry in this file for why no CLI surface exists for it.",
     "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
   },
   {
@@ -343,5 +328,30 @@
     "symbol": "internal/secrets.NewSystemClipboardScheduler",
     "reason": "The production time.AfterFunc-backed ClipboardScheduler for P1-E08-W2-S16-T4's clipboard fallback. It is only wired in once the same composition root builds a real ClipboardWriter (see the NewClipboardWriter entry above); tests inject a fake scheduler instead.",
     "expected_caller": "same composition root as internal/secrets.NewClipboardWriter, once it exists"
+  },
+  {
+    "symbol": "internal/audit.NewWithRedactor",
+    "reason": "The append-path redaction seam is built before the engine that fills it. No composition root binds a secrets substitution pass yet, so every shipped Log is still built with New; wiring this constructor is the same change that mounts that engine.",
+    "expected_caller": "the composition root that builds the egress substitution engine, in the SAME change that binds a vault-backed redactor"
+  },
+  {
+    "symbol": "internal/secrets.NewRedactor",
+    "reason": "The concrete redactor that satisfies internal/audit.Redactor. It is unreachable for exactly as long as NewWithRedactor is; retire the two entries together.",
+    "expected_caller": "the composition root that builds the egress substitution engine, alongside internal/audit.NewWithRedactor"
+  },
+  {
+    "symbol": "internal/secrets.NewRehydrator",
+    "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces.",
+    "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands"
+  },
+  {
+    "symbol": "internal/context.Assemble",
+    "reason": "P1-E05-W2-S09-T1's token-budgeted context assembler. Its own ticket text names the CLI ticket that consumes it as separate work ('the S-09.T2 CLI ticket is a separate ticket that consumes this assembler; this ticket ships the assembler only') and this ticket's files_scope is add-only and forbids touching cmd/cascade, internal/daemon, internal/hooks or internal/mcp, so no legal file exists in this ticket to mount it from. Built and tested end to end, including the R-16.4 scope-leak fixture (TestContextAssemblyScopeLeak) against real corpus.Store/fusion.ScopeFilter components.",
+    "expected_caller": "the S-09.T2 CLI ticket (the `cascade context assemble` verb / prompt-hydration path, R-16.6) that consumes this assembler"
+  },
+  {
+    "symbol": "pkg/provider.NaiveTokenCounter",
+    "reason": "R-14.97's documented approximate TokenCounter fallback. internal/context.Assemble deliberately never substitutes it for a nil TokenCounter (acceptance criterion: nil TokenCounter is a typed error, not a silent default to the naive estimator), so no shipping code constructs one; a caller that wants the approximation must inject it explicitly.",
+    "expected_caller": "the S-09.T2 CLI ticket, or any future caller that explicitly opts into the naive estimate instead of a real provider-supplied TokenCounter"
   }
 ]

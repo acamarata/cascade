@@ -411,3 +411,85 @@ and the daemon-start re-arm call are not yet wired to the clipboard package
 described above (`internal/secrets`); a CI grep is designed to fail on any
 caller of `ClipboardWriter.Write` outside that verb once it exists, so the
 one-caller rule is enforced by the time either lands rather than assumed.
+
+## Action-boundary rehydration
+
+A turn that has been through the privacy firewall carries typed tags where
+credentials used to be: `<password>NAME</password>`, `<apikey>`, `<token>`,
+`<connstr>` and `<pii kind="...">`, each naming a vault reference and never a
+value. Putting the values back is a separate direction, and it happens at one
+boundary only.
+
+**Executor-only.** `Rehydrate` is called inside the executor's
+action-dispatch function, immediately before the content is handed to the
+subprocess or the model call. It must not appear in middleware, a pipeline
+stage, a tool handler, a log path or a storage write. The approved use is the
+whole of the permitted pattern:
+
+```go
+rc, err := rehydrator.Rehydrate(ctx, action.Content)
+if err != nil {
+    return err
+}
+defer rc.Zero()
+return executor.Run(ctx, rc.Data)
+```
+
+The rule is machine-enforced rather than documented: a build gate fails on a
+`Rehydrate` caller outside the secrets package and the conductor executor.
+
+**The Zero obligation.** The rehydrated buffer lives from `Rehydrate` to the
+executor's return and no longer. `Zero` overwrites every byte of the backing
+array with `0x00` and is idempotent, so the deferred call is safe on the
+success path and the error path alike. The same applies to any staging buffer
+a pipe carrier uses.
+
+**Fail-closed rules.** An unknown vault name refuses with
+`ErrVaultKeyNotFound`. A run of bytes that opens like a tag and does not
+satisfy the grammar refuses with `ErrMalformedTag`; this direction never
+falls back to treating it as prose. Content that is not valid UTF-8 refuses.
+Empty content returns nothing and makes no vault call. Every refusal returns
+no content at all, so a lookup that fails on the second tag cannot leave the
+first tag's value in a buffer the caller can read.
+
+**Anti-logging type invariants.** The returned type implements none of
+`fmt.Stringer`, `fmt.GoStringer`, `encoding.TextMarshaler`,
+`json.Marshaler` or `slog.LogValuer`, asserted at compile time. A logging
+call handed one prints a struct address, never a credential.
+
+**The vault read is not elevated.** Rehydration resolves each tag through an
+unexported in-package read rather than the elevated vault verb. Raising an
+attestation prompt per dispatched action is not a control anyone can answer
+honestly at that rate, and in a build where the elevated verbs are refused
+outright it would make every tagged action unrunnable.
+
+## Injection channel
+
+**One permitted carrier.** A rehydrated value lives in a non-inherited memory
+buffer inside the trusted executor process. Where a value must cross a
+process boundary at all, the only permitted carrier is an explicitly numbered
+pipe that no other descendant inherits, closed by the executor on completion
+and never referenced from a serialized payload.
+
+**Five forbidden carriers**, each with a red-team case asserting the value is
+absent byte for byte: child-process environment variables; argv;
+working-directory files, including temp files under the child's working
+directory; inherited file descriptors; and serialized task payloads, which
+covers job rows, queue messages, event bodies and journals.
+
+**Output redaction.** A subprocess that echoes its own input must not become
+a leak path. The executor's stdout, stderr and structured result reach no
+capture, log, event emit or persistence sink until they have passed the
+egress substitution pass on the executor's own egress path.
+
+**The audit log is on the same footing.** The append path runs the
+substitution pass over the `action` and `explain` fields through an injected
+redactor seam before the record is sealed, so a credential a caller puts in
+either field is tagged in the row that is written. A redactor failure refuses
+the append; there is no path that stores a field the redactor did not clear.
+
+**MCP responses are outbound.** A tool-protocol response leaving the daemon
+for a harness connection is an outbound crossing, and it is marshalled
+through the egress firewall on its `mcp.response` class rather than encoded
+straight to the wire. A transport that cannot build its firewall writes
+nothing rather than falling back to an unfiltered encode.

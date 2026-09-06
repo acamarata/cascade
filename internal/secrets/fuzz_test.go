@@ -184,3 +184,55 @@ func addTagSeeds(f *testing.F) {
 	f.Add("<pii kind=\"\">A</pii>")
 	f.Add(strings.Repeat("<password>", 64) + "DEEP" + strings.Repeat("</password>", 64))
 }
+
+// FuzzRehydrateScan fuzzes the rehydrate direction's tag-span scanner.
+// It is a DIFFERENT decoder from FuzzTagParser's: that one parses one tag
+// in isolation, this one decides where the tags are in arbitrary content
+// and refuses anything tag-like it cannot parse.
+//
+// Its seed corpus lives at testdata/fuzz/FuzzRehydrateScan/ in the
+// toolchain's own corpus encoding, so the six named files load without
+// f.Add ceremony (R-21.266).
+//
+// The invariants: never panic, never return a span the grammar refuses,
+// and never silently pass over a tag-like run - either every opener in
+// the input is accounted for by a returned span, or the scan refused.
+func FuzzRehydrateScan(f *testing.F) {
+	f.Fuzz(func(t *testing.T, content []byte) {
+		spans, err := scanRehydrationSpans(content)
+		if err != nil {
+			if len(spans) != 0 {
+				t.Fatalf("a refusal returned %d spans", len(spans))
+			}
+			return
+		}
+		covered := 0
+		for _, span := range spans {
+			if span.start < 0 || span.end > len(content) || span.start >= span.end {
+				t.Fatalf("span %v is not inside the input", span)
+			}
+			if _, perr := ParseTag(content[span.start:span.end]); perr != nil {
+				t.Fatalf("a returned span does not parse: %v", perr)
+			}
+			covered += span.end - span.start
+		}
+		for i := 0; i < len(content); i++ {
+			if content[i] != '<' {
+				continue
+			}
+			if _, ok := openerAt(content, i); ok && !inSpans(spans, i) {
+				t.Fatalf("a tag opener at offset %d was neither resolved nor refused", i)
+			}
+		}
+	})
+}
+
+// inSpans reports whether offset begins one of the returned spans.
+func inSpans(spans []rehydrationSpan, offset int) bool {
+	for _, span := range spans {
+		if span.start == offset {
+			return true
+		}
+	}
+	return false
+}

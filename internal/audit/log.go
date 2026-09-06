@@ -74,6 +74,10 @@ type Log struct {
 	store provider.Store
 	clock runtime.Clock
 	bus   Publisher
+	// redactor is the secrets substitution seam every appended record's
+	// free-text fields pass through. See redact.go; a nil redactor is a
+	// documented, unmounted configuration, not an error.
+	redactor Redactor
 
 	mu     sync.Mutex
 	head   head
@@ -99,6 +103,9 @@ func New(store provider.Store, clock runtime.Clock, bus Publisher) *Log {
 // in the log; retrying would append a second copy of the same event. The
 // error says so.
 func (l *Log) Append(ctx context.Context, event Event) (Record, error) {
+	if err := l.redactEvent(ctx, &event); err != nil {
+		return Record{}, err
+	}
 	if err := validateEvent(event); err != nil {
 		return Record{}, err
 	}

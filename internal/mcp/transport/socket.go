@@ -43,12 +43,30 @@ const MCPMethod = "mcp.dispatch"
 // socket_windows.go for the tier-2 refusal this same function name
 // performs on windows instead of registering anything.
 func RegisterSocketMCP(registry *rpc.Registry, dispatcher Dispatcher) error {
+	marshaler, merr := mcp.NewDefaultResponseMarshaler()
 	registry.Register(MCPMethod, func(ctx context.Context, params json.RawMessage) (any, error) {
+		if marshaler == nil {
+			return nil, merr
+		}
 		f, perr := mcp.ParseFrame(params)
 		if perr != nil {
-			return &mcp.Response{JSONRPC: "2.0", Error: perr}, nil
+			return marshaledResponse(ctx, marshaler, &mcp.Response{JSONRPC: "2.0", Error: perr})
 		}
-		return dispatcher.Dispatch(ctx, f), nil
+		return marshaledResponse(ctx, marshaler, dispatcher.Dispatch(ctx, f))
 	})
 	return nil
+}
+
+// marshaledResponse encodes resp through the egress firewall and hands
+// the JSON-RPC layer the finished bytes. The bridged handler cannot let
+// the RPC layer marshal the response itself: that encode happens outside
+// this package and would carry the response across the boundary without
+// the substitution pass ever seeing it.
+func marshaledResponse(ctx context.Context, marshaler *mcp.ResponseMarshaler,
+	resp *mcp.Response) (any, error) {
+	filtered, err := marshaler.Marshal(ctx, resp)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(filtered), nil
 }

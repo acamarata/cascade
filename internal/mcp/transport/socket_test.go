@@ -55,10 +55,7 @@ func TestRegisterSocketMCP_Dispatches(t *testing.T) {
 	if dispatchErr != nil {
 		t.Fatalf("registry.Dispatch error = %v", dispatchErr)
 	}
-	resp, ok := result.(*mcp.Response)
-	if !ok {
-		t.Fatalf("result type = %T, want *mcp.Response", result)
-	}
+	resp := decodeBridged(t, result)
 	if resp.Error != nil {
 		t.Fatalf("unexpected mcp-level error: %v", resp.Error)
 	}
@@ -82,8 +79,25 @@ func TestRegisterSocketMCP_MalformedParamsNeverReturnsHandlerError(t *testing.T)
 	if dispatchErr != nil {
 		t.Fatalf("registry.Dispatch error = %v, want nil (malformed MCP frame is an mcp.Response.Error)", dispatchErr)
 	}
-	resp := result.(*mcp.Response)
+	resp := decodeBridged(t, result)
 	if resp.Error == nil {
 		t.Fatal("want a non-nil mcp.Response.Error for a malformed frame")
 	}
+}
+
+// decodeBridged reads the bridged handler's result. The handler returns
+// the response ALREADY marshaled, because the encode has to happen inside
+// this package where the egress firewall runs; letting the RPC layer
+// encode it would carry the response across the boundary unfiltered.
+func decodeBridged(t *testing.T, result any) *mcp.Response {
+	t.Helper()
+	raw, ok := result.(json.RawMessage)
+	if !ok {
+		t.Fatalf("result type = %T, want json.RawMessage", result)
+	}
+	var resp mcp.Response
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("decoding the bridged response: %v", err)
+	}
+	return &resp
 }
