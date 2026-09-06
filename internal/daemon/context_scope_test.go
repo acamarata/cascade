@@ -75,7 +75,7 @@ func TestRegisterContextScopeHandler_RegistersAndDispatches(t *testing.T) {
 		t.Errorf("cascade.db was not created under DataDir: %v", err)
 	}
 
-	params := scope.ScopeShowParams{Cwd: repoDir, Session: "s1"}
+	params := scope.ShowParams{Cwd: repoDir, Session: "s1"}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		t.Fatalf("marshal params: %v", err)

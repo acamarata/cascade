@@ -32,7 +32,7 @@ func TestContextScopeShowEmptyParamsResolvesGeneral(t *testing.T) {
 
 func TestContextScopeShowDecodesEveryField(t *testing.T) {
 	store := newTestStore(t)
-	raw, err := json.Marshal(ScopeShowParams{
+	raw, err := json.Marshal(ShowParams{
 		Cwd: "/nowhere", User: "u1", Machine: "m1", Branch: "b1", Task: "t1", Session: "s1", ExplicitOverrides: "eo1",
 	})
 	if err != nil {
@@ -68,7 +68,7 @@ func TestContextScopeShowPropagatesStorageFailure(t *testing.T) {
 // params -- it always returns either a resolved SessionScope or a typed
 // *cascade.Error, never a panic and never a silent empty success on
 // malformed input. Seed corpus: seed-valid.json (a well-formed
-// ScopeShowParams object) and seed-malformed.json (truncated/invalid
+// ShowParams object) and seed-malformed.json (truncated/invalid
 // JSON), per R-21.266's package-local testdata/fuzz/<FuzzName>/
 // convention -- Go auto-loads both, no f.Add call needed.
 func FuzzContextScopeShowParams(f *testing.F) {

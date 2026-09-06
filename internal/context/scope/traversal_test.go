@@ -6,7 +6,7 @@ import "testing"
 // later widening (a new permitted pair, or a changed Direction/Transitive
 // value) fails CI rather than silently drifting (R-21.157).
 func TestTraversalTableGolden(t *testing.T) {
-	golden := map[ScopeKind]map[EdgeClass]TraversalRule{
+	golden := map[Kind]map[EdgeClass]TraversalRule{
 		ScopeKindSession: {
 			EdgeClassParent: {Direction: DirectionOutbound, Transitive: true},
 			EdgeClassMember: {Direction: DirectionOutbound, Transitive: true},
@@ -34,7 +34,7 @@ func TestTraversalTableGolden(t *testing.T) {
 			EdgeClassParent: {Direction: DirectionOutbound, Transitive: true},
 		},
 	}
-	allKinds := []ScopeKind{ScopeKindSession, ScopeKindTask, ScopeKindProject, ScopeKindWorkspace, ScopeKindProduct, ScopeKindGlobal, ScopeKindGeneral}
+	allKinds := []Kind{ScopeKindSession, ScopeKindTask, ScopeKindProject, ScopeKindWorkspace, ScopeKindProduct, ScopeKindGlobal, ScopeKindGeneral}
 	allEdges := []EdgeClass{EdgeClassParent, EdgeClassMember, EdgeClassRoute}
 	for _, k := range allKinds {
 		for _, e := range allEdges {
@@ -53,11 +53,11 @@ func TestTraversalTableGolden(t *testing.T) {
 
 // TestTraversalUnlistedPairDenies asserts the no-permissive-default rule
 // directly: ScopeKindGeneral (which has no entry in the table at all) and
-// an unknown ScopeKind/EdgeClass both deny rather than falling back to any
+// an unknown Kind/EdgeClass both deny rather than falling back to any
 // default rule.
 func TestTraversalUnlistedPairDenies(t *testing.T) {
 	cases := []struct {
-		kind ScopeKind
+		kind Kind
 		edge EdgeClass
 	}{
 		{ScopeKindGeneral, EdgeClassParent},
@@ -67,7 +67,7 @@ func TestTraversalUnlistedPairDenies(t *testing.T) {
 		{ScopeKindProduct, EdgeClassMember},
 		{ScopeKindGlobal, EdgeClassMember},
 		{ScopeKindGlobal, EdgeClassRoute},
-		{ScopeKind("bogus"), EdgeClassParent},
+		{Kind("bogus"), EdgeClassParent},
 		{ScopeKindSession, EdgeClass("bogus")},
 	}
 	for _, c := range cases {

@@ -52,9 +52,9 @@ func TestRepositoryForRootUnregisteredIsNoErrorNoOK(t *testing.T) {
 func TestPutEdgeRejectsUnknownKind(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	err := s.PutEdge(ctx, ScopeEdge{
-		From: ScopeRef{Kind: ScopeKindProject, ID: "p1"},
-		To:   ScopeRef{Kind: ScopeKindWorkspace, ID: "w1"},
+	err := s.PutEdge(ctx, Edge{
+		From: Ref{Kind: ScopeKindProject, ID: "p1"},
+		To:   Ref{Kind: ScopeKindWorkspace, ID: "w1"},
 		Kind: EdgeKind("owns"),
 	})
 	if err == nil {
@@ -68,9 +68,9 @@ func TestPutEdgeRejectsUnknownKind(t *testing.T) {
 func TestPutEdgeAndEdgeTargets(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	project := ScopeRef{Kind: ScopeKindProject, ID: "p1"}
-	workspace := ScopeRef{Kind: ScopeKindWorkspace, ID: "w1"}
-	if err := s.PutEdge(ctx, ScopeEdge{From: project, To: workspace, Kind: EdgeKindMemberOf}); err != nil {
+	project := Ref{Kind: ScopeKindProject, ID: "p1"}
+	workspace := Ref{Kind: ScopeKindWorkspace, ID: "w1"}
+	if err := s.PutEdge(ctx, Edge{From: project, To: workspace, Kind: EdgeKindMemberOf}); err != nil {
 		t.Fatalf("PutEdge: %v", err)
 	}
 	targets, err := s.EdgeTargets(ctx, project, EdgeKindMemberOf)
@@ -96,17 +96,17 @@ func TestPutEdgeAndEdgeTargets(t *testing.T) {
 func TestPutEdgeRejectsCycle(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	a := ScopeRef{Kind: ScopeKindProject, ID: "a"}
-	b := ScopeRef{Kind: ScopeKindWorkspace, ID: "b"}
-	c := ScopeRef{Kind: ScopeKindProduct, ID: "c"}
+	a := Ref{Kind: ScopeKindProject, ID: "a"}
+	b := Ref{Kind: ScopeKindWorkspace, ID: "b"}
+	c := Ref{Kind: ScopeKindProduct, ID: "c"}
 
-	if err := s.PutEdge(ctx, ScopeEdge{From: a, To: b, Kind: EdgeKindMemberOf}); err != nil {
+	if err := s.PutEdge(ctx, Edge{From: a, To: b, Kind: EdgeKindMemberOf}); err != nil {
 		t.Fatalf("PutEdge a->b: %v", err)
 	}
-	if err := s.PutEdge(ctx, ScopeEdge{From: b, To: c, Kind: EdgeKindMemberOf}); err != nil {
+	if err := s.PutEdge(ctx, Edge{From: b, To: c, Kind: EdgeKindMemberOf}); err != nil {
 		t.Fatalf("PutEdge b->c: %v", err)
 	}
-	err := s.PutEdge(ctx, ScopeEdge{From: c, To: a, Kind: EdgeKindMemberOf})
+	err := s.PutEdge(ctx, Edge{From: c, To: a, Kind: EdgeKindMemberOf})
 	if err == nil {
 		t.Fatal("PutEdge c->a (closes a cycle) = nil, want error")
 	}
@@ -115,7 +115,7 @@ func TestPutEdgeRejectsCycle(t *testing.T) {
 	}
 
 	// The self-edge case is a one-node cycle and must also be refused.
-	if err := s.PutEdge(ctx, ScopeEdge{From: a, To: a, Kind: EdgeKindMemberOf}); err == nil {
+	if err := s.PutEdge(ctx, Edge{From: a, To: a, Kind: EdgeKindMemberOf}); err == nil {
 		t.Error("PutEdge self-cycle = nil, want error")
 	}
 }
@@ -126,12 +126,12 @@ func TestPutEdgeRejectsCycle(t *testing.T) {
 func TestPutEdgeCycleCheckDoesNotApplyToRouteEdges(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	a := ScopeRef{Kind: ScopeKindProject, ID: "a"}
-	b := ScopeRef{Kind: ScopeKindProject, ID: "b"}
-	if err := s.PutEdge(ctx, ScopeEdge{From: a, To: b, Kind: EdgeKindDependsOn}); err != nil {
+	a := Ref{Kind: ScopeKindProject, ID: "a"}
+	b := Ref{Kind: ScopeKindProject, ID: "b"}
+	if err := s.PutEdge(ctx, Edge{From: a, To: b, Kind: EdgeKindDependsOn}); err != nil {
 		t.Fatalf("PutEdge a->b depends_on: %v", err)
 	}
-	if err := s.PutEdge(ctx, ScopeEdge{From: b, To: a, Kind: EdgeKindDependsOn}); err != nil {
+	if err := s.PutEdge(ctx, Edge{From: b, To: a, Kind: EdgeKindDependsOn}); err != nil {
 		t.Fatalf("PutEdge b->a depends_on (mutual, must be allowed): %v", err)
 	}
 }
@@ -139,10 +139,10 @@ func TestPutEdgeCycleCheckDoesNotApplyToRouteEdges(t *testing.T) {
 func TestPutScopeRejectsInvalidRef(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	if err := s.PutScope(ctx, ScopeGraphRecord{Ref: ScopeRef{Kind: ScopeKind("bogus"), ID: "x"}}); err == nil {
+	if err := s.PutScope(ctx, GraphRecord{Ref: Ref{Kind: Kind("bogus"), ID: "x"}}); err == nil {
 		t.Error("PutScope invalid kind = nil, want error")
 	}
-	if err := s.PutScope(ctx, ScopeGraphRecord{Ref: ScopeRef{Kind: ScopeKindProject, ID: ""}}); err == nil {
+	if err := s.PutScope(ctx, GraphRecord{Ref: Ref{Kind: ScopeKindProject, ID: ""}}); err == nil {
 		t.Error("PutScope empty id = nil, want error")
 	}
 }

@@ -75,7 +75,7 @@ func TestBuildRPCServer_ContextScopeShowReachableOverRealSocket(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	got, err := c.ContextScopeShow(ctx, scope.ScopeShowParams{Session: "s1"})
+	got, err := c.ContextScopeShow(ctx, scope.ShowParams{Session: "s1"})
 	if err != nil {
 		t.Fatalf("ContextScopeShow over the real socket: %v", err)
 	}

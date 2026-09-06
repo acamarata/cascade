@@ -7,20 +7,20 @@ import (
 )
 
 func TestScopeKindValid(t *testing.T) {
-	valid := []ScopeKind{
+	valid := []Kind{
 		ScopeKindSession, ScopeKindTask, ScopeKindProject, ScopeKindWorkspace,
 		ScopeKindProduct, ScopeKindGlobal, ScopeKindGeneral,
 	}
 	for _, k := range valid {
 		if !k.Valid() {
-			t.Errorf("ScopeKind(%q).Valid() = false, want true", k)
+			t.Errorf("Kind(%q).Valid() = false, want true", k)
 		}
 	}
-	if ScopeKind("bogus").Valid() {
-		t.Error("ScopeKind(\"bogus\").Valid() = true, want false")
+	if Kind("bogus").Valid() {
+		t.Error("Kind(\"bogus\").Valid() = true, want false")
 	}
-	if ScopeKind("").Valid() {
-		t.Error("ScopeKind(\"\").Valid() = true, want false")
+	if Kind("").Valid() {
+		t.Error("Kind(\"\").Valid() = true, want false")
 	}
 }
 
@@ -56,7 +56,7 @@ func TestValidateEdgeKindAcceptsEveryClosedValue(t *testing.T) {
 	}
 }
 
-func TestSessionScopeFieldCount(t *testing.T) {
+func TestSessionScopeFieldCount(_ *testing.T) {
 	// R-16.3: SessionScope carries EXACTLY the twelve named fields (Kind is
 	// the resolver's own discriminator, not one of the twelve). This test
 	// pins the struct shape so an accidental thirteenth field fails CI

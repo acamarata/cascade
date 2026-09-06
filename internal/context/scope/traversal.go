@@ -1,11 +1,11 @@
 package scope
 
 // Purpose: the R-21.157 closed traversal table as DATA, not prose:
-//   Traversal(kind, edge) returns the TraversalRule for every (ScopeKind,
+//   Traversal(kind, edge) returns the TraversalRule for every (Kind,
 //   EdgeClass) pair, with NO permissive default — an unlisted or unknown
 //   pair denies. traversal_test.go's golden test pins the whole table so a
 //   later widening fails CI.
-// Inputs: a ScopeKind and an EdgeClass.
+// Inputs: a Kind and an EdgeClass.
 // Outputs: a TraversalRule plus an ok bool (ok=false means "not
 //   traversable", never "look elsewhere for a default").
 // Constraints: the three persisted EdgeKind values map onto EdgeClass with
@@ -63,15 +63,15 @@ func EdgeClassFor(k EdgeKind) (EdgeClass, bool) {
 type Direction string
 
 const (
-	// DirectionOutbound: traverse from the resolved scope TOWARD the
+	// DirectionOutbound traverses from the resolved scope TOWARD the
 	// edge's declared target.
 	DirectionOutbound Direction = "outbound"
-	// DirectionInbound: traverse from the edge's declared target TOWARD
+	// DirectionInbound traverses from the edge's declared target TOWARD
 	// the resolved scope (the reverse of how the edge was declared).
 	DirectionInbound Direction = "inbound"
 )
 
-// TraversalRule is what Traversal returns for one (ScopeKind, EdgeClass)
+// TraversalRule is what Traversal returns for one (Kind, EdgeClass)
 // pair: the permitted Direction and whether the rule is Transitive
 // (follows more than one hop) or applies only to the immediate edge.
 type TraversalRule struct {
@@ -79,10 +79,10 @@ type TraversalRule struct {
 	Transitive bool
 }
 
-// traversalTable is the CLOSED (ScopeKind x EdgeClass) rule table.
+// traversalTable is the CLOSED (Kind x EdgeClass) rule table.
 // A pair absent from this map is NOT traversable (06 SS5.15/SS5.16
 // fail-closed pattern) -- Traversal has no permissive default. The table
-// is total over the six ScopeKind values R-21.157 names (session, task,
+// is total over the six Kind values R-21.157 names (session, task,
 // project, workspace, product, global); ScopeKindGeneral is deliberately
 // ABSENT -- a general-kind session has no graph membership to traverse
 // from, so every (general, *) pair correctly denies via the same "absent
@@ -106,7 +106,7 @@ type TraversalRule struct {
 //     except global, which is deliberately absent -- R-21.157's forward
 //     note reserves global-critical routing for AK/S-73.T2, not this
 //     ticket.
-var traversalTable = map[ScopeKind]map[EdgeClass]TraversalRule{
+var traversalTable = map[Kind]map[EdgeClass]TraversalRule{
 	ScopeKindSession: {
 		EdgeClassParent: {Direction: DirectionOutbound, Transitive: true},
 		EdgeClassMember: {Direction: DirectionOutbound, Transitive: true},
@@ -139,7 +139,7 @@ var traversalTable = map[ScopeKind]map[EdgeClass]TraversalRule{
 // the pair is absent from the closed table -- the fail-closed contract
 // CandidateScopeRefs and every visibility decision in this package relies
 // on. No caller may pass a rule of its own; this is the sole source.
-func Traversal(kind ScopeKind, edge EdgeClass) (TraversalRule, bool) {
+func Traversal(kind Kind, edge EdgeClass) (TraversalRule, bool) {
 	byEdge, ok := traversalTable[kind]
 	if !ok {
 		return TraversalRule{}, false

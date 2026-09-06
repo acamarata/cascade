@@ -8,7 +8,7 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// Purpose: ScopeMigrationSet defines exactly the four `context` domain
+// Purpose: MigrationSet defines exactly the four `context` domain
 //   tables R-16.3 ratifies -- scope, scope_edge, repository, repo_path --
 //   through the B/S-02.T2 typed migration DSL, portable to both the
 //   SQLite (local) and Postgres (server) dialects; ApplyScopeSchema runs
@@ -65,74 +65,98 @@ const scopeSchemaVersion = 2
 // duplicating the literal, so the two can never drift (R-14.198).
 const SchemaVersion = scopeSchemaVersion
 
-// ScopeMigrationSet is the four-table `context` domain schema R-16.3
+// MigrationSet is the four-table `context` domain schema R-16.3
 // ratifies. kind/from_ref_kind/etc. are stored as TEXT (the DSL has no
-// enum column type); model.go's EdgeKind/ScopeKind Valid() gates are the
+// enum column type); model.go's EdgeKind/Kind Valid() gates are the
 // application-level closed-vocabulary enforcement store.go applies before
 // any row reaches this schema, matching the fail-closed pattern used
 // throughout this package.
-func ScopeMigrationSet() migrate.MigrationSet {
+func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SchemaVersion:        scopeSchemaVersion,
 		MinimumReaderVersion: scopeSchemaVersion,
 		Steps: []migrate.MigrationStep{
-			{
-				Kind:        migrate.StepCreateTable,
-				Description: "context_repository: one row per resolved git repository (remote + path hash)",
-				Table: &migrate.TableDef{
-					Name: tableRepository,
-					Columns: []migrate.ColumnDef{
-						{Name: "id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "remote", Type: migrate.TypeText, NotNull: true},
-						{Name: "path_hash", Type: migrate.TypeText, NotNull: true},
-					},
-				},
-			},
-			{
-				Kind:        migrate.StepCreateTable,
-				Description: "context_repo_path: local filesystem anchor -> repository binding",
-				Table: &migrate.TableDef{
-					Name: tableRepoPath,
-					Columns: []migrate.ColumnDef{
-						{Name: "root_path", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "repository_id", Type: migrate.TypeText, NotNull: true},
-					},
-					ForeignKeys: []migrate.ForeignKeyDef{
-						{Column: "repository_id", RefTable: tableRepository, RefColumn: "id"},
-					},
-				},
-			},
-			{
-				Kind:        migrate.StepCreateTable,
-				Description: "context_scope: one row per scope graph node, addressed by (kind, id)",
-				Table: &migrate.TableDef{
-					Name: tableScope,
-					Columns: []migrate.ColumnDef{
-						{Name: "kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "display_name", Type: migrate.TypeText},
-					},
-				},
-			},
-			{
-				Kind:        migrate.StepCreateTable,
-				Description: "context_scope_edge: explicit depends_on/member_of/shares_context_with relationships",
-				Table: &migrate.TableDef{
-					Name: tableScopeEdge,
-					Columns: []migrate.ColumnDef{
-						{Name: "from_kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "from_id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "to_kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "to_id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
-						{Name: "edge_kind", Type: migrate.TypeText, NotNull: true},
-					},
-				},
+			repositoryTableStep(),
+			repoPathTableStep(),
+			scopeTableStep(),
+			scopeEdgeTableStep(),
+		},
+	}
+}
+
+// repositoryTableStep is the context_repository create-table step: one row
+// per resolved git repository (remote + path hash).
+func repositoryTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "context_repository: one row per resolved git repository (remote + path hash)",
+		Table: &migrate.TableDef{
+			Name: tableRepository,
+			Columns: []migrate.ColumnDef{
+				{Name: "id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "remote", Type: migrate.TypeText, NotNull: true},
+				{Name: "path_hash", Type: migrate.TypeText, NotNull: true},
 			},
 		},
 	}
 }
 
-// ApplyScopeSchema idempotently applies ScopeMigrationSet against db.
+// repoPathTableStep is the context_repo_path create-table step: one local
+// filesystem anchor bound to a repository.
+func repoPathTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "context_repo_path: local filesystem anchor -> repository binding",
+		Table: &migrate.TableDef{
+			Name: tableRepoPath,
+			Columns: []migrate.ColumnDef{
+				{Name: "root_path", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "repository_id", Type: migrate.TypeText, NotNull: true},
+			},
+			ForeignKeys: []migrate.ForeignKeyDef{
+				{Column: "repository_id", RefTable: tableRepository, RefColumn: "id"},
+			},
+		},
+	}
+}
+
+// scopeTableStep is the context_scope create-table step: one row per scope
+// graph node, addressed by (kind, id).
+func scopeTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "context_scope: one row per scope graph node, addressed by (kind, id)",
+		Table: &migrate.TableDef{
+			Name: tableScope,
+			Columns: []migrate.ColumnDef{
+				{Name: "kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "display_name", Type: migrate.TypeText},
+			},
+		},
+	}
+}
+
+// scopeEdgeTableStep is the context_scope_edge create-table step: explicit
+// depends_on/member_of/shares_context_with relationships.
+func scopeEdgeTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "context_scope_edge: explicit depends_on/member_of/shares_context_with relationships",
+		Table: &migrate.TableDef{
+			Name: tableScopeEdge,
+			Columns: []migrate.ColumnDef{
+				{Name: "from_kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "from_id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "to_kind", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "to_id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "edge_kind", Type: migrate.TypeText, NotNull: true},
+			},
+		},
+	}
+}
+
+// ApplyScopeSchema idempotently applies MigrationSet against db.
 // dbPath/backupDir enable migrate's SQLite snapshot when non-empty; either
 // may be left empty to disable it (an in-memory test database has nothing
 // to snapshot).
@@ -149,5 +173,5 @@ func ApplyScopeSchema(ctx context.Context, db *sql.DB, dialect migrate.Dialect, 
 		Clock:     clock,
 		DBPath:    dbPath,
 		BackupDir: backupDir,
-	}, ScopeMigrationSet())
+	}, MigrationSet())
 }

@@ -18,7 +18,7 @@ import (
 
 // ContextScopeShow calls context.scope.show and returns the resolved
 // SessionScope.
-func (c *Client) ContextScopeShow(ctx context.Context, params scope.ScopeShowParams) (scope.SessionScope, error) {
+func (c *Client) ContextScopeShow(ctx context.Context, params scope.ShowParams) (scope.SessionScope, error) {
 	var res scope.SessionScope
 	if err := c.Do(ctx, daemon.ContextScopeMethod, params, &res); err != nil {
 		return scope.SessionScope{}, err

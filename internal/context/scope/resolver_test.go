@@ -57,11 +57,11 @@ func TestResolveSessionScopeResolvedChain(t *testing.T) {
 	if err := store.PutRepoPath(ctx, RepoPathRecord{RepositoryID: "repo-1", RootPath: "/root"}); err != nil {
 		t.Fatalf("PutRepoPath: %v", err)
 	}
-	project := ScopeRef{Kind: ScopeKindProject, ID: "repo-1"}
-	if err := store.PutEdge(ctx, ScopeEdge{From: project, To: ScopeRef{Kind: ScopeKindWorkspace, ID: "ws-1"}, Kind: EdgeKindMemberOf}); err != nil {
+	project := Ref{Kind: ScopeKindProject, ID: "repo-1"}
+	if err := store.PutEdge(ctx, Edge{From: project, To: Ref{Kind: ScopeKindWorkspace, ID: "ws-1"}, Kind: EdgeKindMemberOf}); err != nil {
 		t.Fatalf("PutEdge project->workspace: %v", err)
 	}
-	if err := store.PutEdge(ctx, ScopeEdge{From: project, To: ScopeRef{Kind: ScopeKindProduct, ID: "prod-1"}, Kind: EdgeKindMemberOf}); err != nil {
+	if err := store.PutEdge(ctx, Edge{From: project, To: Ref{Kind: ScopeKindProduct, ID: "prod-1"}, Kind: EdgeKindMemberOf}); err != nil {
 		t.Fatalf("PutEdge project->product: %v", err)
 	}
 
@@ -89,9 +89,9 @@ func TestResolveSessionScopeResolvedChain(t *testing.T) {
 }
 
 func TestScopeChainGeneralIsEmpty(t *testing.T) {
-	chain := ScopeChain(SessionScope{Kind: ScopeKindGeneral, Session: "s1"})
+	chain := Chain(SessionScope{Kind: ScopeKindGeneral, Session: "s1"})
 	if len(chain) != 0 {
-		t.Errorf("ScopeChain(general) = %+v, want empty", chain)
+		t.Errorf("Chain(general) = %+v, want empty", chain)
 	}
 }
 
@@ -99,8 +99,8 @@ func TestScopeChainOrder(t *testing.T) {
 	s := SessionScope{
 		Kind: ScopeKindSession, Session: "s1", Task: "t1", Project: "p1", Workspace: "w1", Product: "pr1",
 	}
-	chain := ScopeChain(s)
-	want := []ScopeRef{
+	chain := Chain(s)
+	want := []Ref{
 		{Kind: ScopeKindSession, ID: "s1"},
 		{Kind: ScopeKindTask, ID: "t1"},
 		{Kind: ScopeKindProject, ID: "p1"},
@@ -108,11 +108,11 @@ func TestScopeChainOrder(t *testing.T) {
 		{Kind: ScopeKindProduct, ID: "pr1"},
 	}
 	if len(chain) != len(want) {
-		t.Fatalf("ScopeChain length = %d, want %d (%+v)", len(chain), len(want), chain)
+		t.Fatalf("Chain length = %d, want %d (%+v)", len(chain), len(want), chain)
 	}
 	for i := range want {
 		if chain[i] != want[i] {
-			t.Errorf("ScopeChain[%d] = %+v, want %+v", i, chain[i], want[i])
+			t.Errorf("Chain[%d] = %+v, want %+v", i, chain[i], want[i])
 		}
 	}
 }
@@ -123,9 +123,9 @@ func TestScopeChainOrder(t *testing.T) {
 func TestDenyByDefaultCandidateSet(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
-	project1 := ScopeRef{Kind: ScopeKindProject, ID: "project1"}
-	project3 := ScopeRef{Kind: ScopeKindProject, ID: "project3"}
-	chain := []ScopeRef{project1}
+	project1 := Ref{Kind: ScopeKindProject, ID: "project1"}
+	project3 := Ref{Kind: ScopeKindProject, ID: "project3"}
+	chain := []Ref{project1}
 
 	before, err := CandidateScopeRefs(ctx, store, chain)
 	if err != nil {
@@ -137,7 +137,7 @@ func TestDenyByDefaultCandidateSet(t *testing.T) {
 		}
 	}
 
-	if err := store.PutEdge(ctx, ScopeEdge{From: project1, To: project3, Kind: EdgeKindSharesContextWith}); err != nil {
+	if err := store.PutEdge(ctx, Edge{From: project1, To: project3, Kind: EdgeKindSharesContextWith}); err != nil {
 		t.Fatalf("PutEdge: %v", err)
 	}
 	after, err := CandidateScopeRefs(ctx, store, chain)
@@ -157,8 +157,8 @@ func TestDenyByDefaultCandidateSet(t *testing.T) {
 
 func TestCandidateScopeRefsDeduplicatesChain(t *testing.T) {
 	store := newTestStore(t)
-	ref := ScopeRef{Kind: ScopeKindProject, ID: "p1"}
-	out, err := CandidateScopeRefs(context.Background(), store, []ScopeRef{ref, ref})
+	ref := Ref{Kind: ScopeKindProject, ID: "p1"}
+	out, err := CandidateScopeRefs(context.Background(), store, []Ref{ref, ref})
 	if err != nil {
 		t.Fatalf("CandidateScopeRefs: %v", err)
 	}

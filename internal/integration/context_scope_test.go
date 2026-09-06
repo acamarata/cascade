@@ -147,7 +147,7 @@ func TestContextScopeRealCounterparts(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	got, err := c.ContextScopeShow(ctx, scope.ScopeShowParams{Cwd: repoDir, Session: "s1"})
+	got, err := c.ContextScopeShow(ctx, scope.ShowParams{Cwd: repoDir, Session: "s1"})
 	if err != nil {
 		t.Fatalf("ContextScopeShow: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestContextScopeRealCounterparts_WiringProof(t *testing.T) {
 	c := startContextScopeDaemon(t, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := c.ContextScopeShow(ctx, scope.ScopeShowParams{})
+	_, err := c.ContextScopeShow(ctx, scope.ShowParams{})
 	if err == nil {
 		t.Fatal("ContextScopeShow succeeded against an unregistered method, want an error")
 	}

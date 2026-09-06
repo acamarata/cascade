@@ -9,7 +9,7 @@ import (
 )
 
 // Purpose: GraphStore is the persisted scope-graph CRUD surface over the
-//   four ScopeMigrationSet tables: node upsert, edge upsert (with R-21.157
+//   four MigrationSet tables: node upsert, edge upsert (with R-21.157
 //   cycle rejection over the member_of/parent classes at build time),
 //   repository/repo_path upsert, and the direct-neighbor reads resolver.go
 //   composes into ResolveSessionScope and CandidateScopeRefs.
@@ -29,7 +29,7 @@ type GraphStore struct {
 	db *sql.DB
 }
 
-// NewGraphStore wraps db. db must already carry the ScopeMigrationSet
+// NewGraphStore wraps db. db must already carry the MigrationSet
 // tables (ApplyScopeSchema).
 func NewGraphStore(db *sql.DB) *GraphStore {
 	return &GraphStore{db: db}
@@ -96,7 +96,7 @@ func (s *GraphStore) RepositoryForRoot(ctx context.Context, rootPath string) (Re
 }
 
 // PutScope upserts one scope graph node.
-func (s *GraphStore) PutScope(ctx context.Context, rec ScopeGraphRecord) error {
+func (s *GraphStore) PutScope(ctx context.Context, rec GraphRecord) error {
 	if !rec.Ref.Kind.Valid() || rec.Ref.ID == "" {
 		return cascade.Newf(cascade.KindInvalidInput, "context/scope: invalid scope ref %+v", rec.Ref)
 	}
@@ -114,7 +114,7 @@ func (s *GraphStore) PutScope(ctx context.Context, rec ScopeGraphRecord) error {
 // REJECTS a member_of edge that would close a cycle (R-21.157: cycles are
 // rejected at graph BUILD time, never discovered at query time), and
 // upserts it.
-func (s *GraphStore) PutEdge(ctx context.Context, edge ScopeEdge) error {
+func (s *GraphStore) PutEdge(ctx context.Context, edge Edge) error {
 	if err := ValidateEdgeKind(edge.Kind); err != nil {
 		return err
 	}
@@ -150,12 +150,12 @@ func (s *GraphStore) PutEdge(ctx context.Context, edge ScopeEdge) error {
 // member_of edges (a cycle closes the moment the new edge's target can
 // already walk back to the new edge's source). A self-edge (from == to)
 // is always a one-node cycle.
-func (s *GraphStore) wouldCloseMemberCycle(ctx context.Context, from, to ScopeRef) (bool, error) {
+func (s *GraphStore) wouldCloseMemberCycle(ctx context.Context, from, to Ref) (bool, error) {
 	if from == to {
 		return true, nil
 	}
-	visited := map[ScopeRef]bool{to: true}
-	frontier := []ScopeRef{to}
+	visited := map[Ref]bool{to: true}
+	frontier := []Ref{to}
 	for len(frontier) > 0 {
 		next := frontier[0]
 		frontier = frontier[1:]
@@ -180,7 +180,7 @@ func (s *GraphStore) wouldCloseMemberCycle(ctx context.Context, from, to ScopeRe
 // declares itself a member of. Named "parent" because member_of is the
 // containment direction resolver.go walks upward through (project ->
 // product/workspace).
-func (s *GraphStore) ParentScopes(ctx context.Context, ref ScopeRef) ([]ScopeRef, error) {
+func (s *GraphStore) ParentScopes(ctx context.Context, ref Ref) ([]Ref, error) {
 	return s.EdgeTargets(ctx, ref, EdgeKindMemberOf)
 }
 
@@ -188,7 +188,7 @@ func (s *GraphStore) ParentScopes(ctx context.Context, ref ScopeRef) ([]ScopeRef
 // whose kind equals edgeKind, in insertion-stable order (ORDER BY the
 // composite key). Returns an empty, non-nil slice (never an error) when
 // ref has no such edges.
-func (s *GraphStore) EdgeTargets(ctx context.Context, ref ScopeRef, edgeKind EdgeKind) ([]ScopeRef, error) {
+func (s *GraphStore) EdgeTargets(ctx context.Context, ref Ref, edgeKind EdgeKind) ([]Ref, error) {
 	if err := ValidateEdgeKind(edgeKind); err != nil {
 		return nil, err
 	}
@@ -198,14 +198,14 @@ func (s *GraphStore) EdgeTargets(ctx context.Context, ref ScopeRef, edgeKind Edg
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "context/scope: query edge targets")
 	}
-	defer rows.Close()
-	out := make([]ScopeRef, 0)
+	defer func() { _ = rows.Close() }()
+	out := make([]Ref, 0)
 	for rows.Next() {
 		var kind, id string
 		if err := rows.Scan(&kind, &id); err != nil {
 			return nil, cascade.Wrap(cascade.KindUnavailable, err, "context/scope: scan edge target")
 		}
-		out = append(out, ScopeRef{Kind: ScopeKind(kind), ID: id})
+		out = append(out, Ref{Kind: Kind(kind), ID: id})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "context/scope: iterate edge targets")

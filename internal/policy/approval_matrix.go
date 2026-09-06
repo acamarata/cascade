@@ -182,6 +182,10 @@ func NextRedemptionState(from RedemptionState) (RedemptionState, error) {
 		return RedemptionConsuming, nil
 	case RedemptionConsuming:
 		return RedemptionConsumed, nil
+	case RedemptionConsumed:
+		// Consumed is terminal: there is no further legal advance, so this
+		// falls through to the same fail-closed refusal as an unknown state.
+		fallthrough
 	default:
 		return 0, cascade.Newf(cascade.KindConflict,
 			"policy: an approval in state %s cannot be advanced", from)

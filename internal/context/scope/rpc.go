@@ -34,11 +34,11 @@ import (
 // SPORT: cli/context-scope-show + rpc/context.scope.show +
 //   mcp/cascade_context_scope_show/ADD.
 
-// ScopeShowParams is context.scope.show's wire params shape and
+// ShowParams is context.scope.show's wire params shape and
 // `cascade context scope show`'s flag-derived input: every field
 // ResolveInput accepts, JSON-tagged for the RPC/MCP transports and reused
 // directly by the CLI and client layers so all three speak one shape.
-type ScopeShowParams struct {
+type ShowParams struct {
 	Cwd               string `json:"cwd,omitempty"`
 	User              string `json:"user,omitempty"`
 	Machine           string `json:"machine,omitempty"`
@@ -48,25 +48,17 @@ type ScopeShowParams struct {
 	ExplicitOverrides string `json:"explicit_overrides,omitempty"`
 }
 
-// ContextScopeShow decodes raw (a ScopeShowParams JSON object, or empty)
+// ContextScopeShow decodes raw (a ShowParams JSON object, or empty)
 // and resolves the SessionScope it describes. A malformed raw payload is
 // an A-T7 KindInvalidInput error, decoded BEFORE any store access -- the
 // fail-closed pattern this ticket's contract requires for "malformed
 // params" test coverage.
 func ContextScopeShow(ctx context.Context, deps ResolveDeps, raw json.RawMessage) (SessionScope, error) {
-	var p ScopeShowParams
+	var p ShowParams
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return SessionScope{}, cascade.Wrap(cascade.KindInvalidInput, err, "context/scope: malformed context.scope.show params")
 		}
 	}
-	return ResolveSessionScope(ctx, deps, ResolveInput{
-		Cwd:               p.Cwd,
-		User:              p.User,
-		Machine:           p.Machine,
-		Branch:            p.Branch,
-		Task:              p.Task,
-		Session:           p.Session,
-		ExplicitOverrides: p.ExplicitOverrides,
-	})
+	return ResolveSessionScope(ctx, deps, ResolveInput(p))
 }

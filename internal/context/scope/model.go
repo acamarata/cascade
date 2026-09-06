@@ -6,8 +6,8 @@ import (
 
 // Purpose: the R-16.3 exported types: SessionScope's exact twelve fields,
 //   the persisted-graph records, the closed edge-kind vocabulary, and the
-//   ScopeKind enumeration the R-21.157 traversal table is keyed on.
-// Inputs: none (types only); EdgeKind.Valid and ScopeKind.Valid are the
+//   Kind enumeration the R-21.157 traversal table is keyed on.
+// Inputs: none (types only); EdgeKind.Valid and Kind.Valid are the
 //   package's fail-closed vocabulary gates.
 // Outputs: none.
 // Constraints: SessionScope carries EXACTLY the twelve named fields R-16.3
@@ -15,31 +15,31 @@ import (
 //   precedence rule (R-16.3 defines none, so this ticket invents none).
 // SPORT: context/scope-model/ADD.
 
-// ScopeKind is the closed set of scope kinds the R-21.157 traversal table
+// Kind is the closed set of scope kinds the R-21.157 traversal table
 // is keyed on, plus the `general` restricted-result kind R-16.3 defines
-// for an unresolved cwd. ScopeKind is distinct from EdgeClass: a kind
+// for an unresolved cwd. Kind is distinct from EdgeClass: a kind
 // names WHAT a scope IS, an EdgeClass names HOW two scopes are connected.
-type ScopeKind string
+type Kind string
 
-// The closed ScopeKind vocabulary. General is not one of the six
+// The closed Kind vocabulary. General is not one of the six
 // traversal-table kinds (R-21.157 enumerates session|task|project|
 // workspace|product|global) — a general-kind SessionScope has no graph
 // membership to traverse from at all, by construction.
 const (
-	ScopeKindSession   ScopeKind = "session"
-	ScopeKindTask      ScopeKind = "task"
-	ScopeKindProject   ScopeKind = "project"
-	ScopeKindWorkspace ScopeKind = "workspace"
-	ScopeKindProduct   ScopeKind = "product"
-	ScopeKindGlobal    ScopeKind = "global"
+	ScopeKindSession   Kind = "session"
+	ScopeKindTask      Kind = "task"
+	ScopeKindProject   Kind = "project"
+	ScopeKindWorkspace Kind = "workspace"
+	ScopeKindProduct   Kind = "product"
+	ScopeKindGlobal    Kind = "global"
 	// ScopeKindGeneral is the R-16.3 restricted successful result for an
 	// unresolved cwd: user tiers plus cascade-pa context only, never a
 	// fallback to an unscoped/global query.
-	ScopeKindGeneral ScopeKind = "general"
+	ScopeKindGeneral Kind = "general"
 )
 
-// Valid reports whether k is one of the seven closed ScopeKind values.
-func (k ScopeKind) Valid() bool {
+// Valid reports whether k is one of the seven closed Kind values.
+func (k Kind) Valid() bool {
 	switch k {
 	case ScopeKindSession, ScopeKindTask, ScopeKindProject, ScopeKindWorkspace,
 		ScopeKindProduct, ScopeKindGlobal, ScopeKindGeneral:
@@ -54,6 +54,7 @@ func (k ScopeKind) Valid() bool {
 // typed invalid-input error (never a silent default).
 type EdgeKind string
 
+// The closed EdgeKind vocabulary R-16.3 declares as explicit data.
 const (
 	EdgeKindDependsOn         EdgeKind = "depends_on"
 	EdgeKindMemberOf          EdgeKind = "member_of"
@@ -82,13 +83,13 @@ func ValidateEdgeKind(k EdgeKind) error {
 	return nil
 }
 
-// ScopeRef identifies one node in the persisted scope graph: a kind plus
+// Ref identifies one node in the persisted scope graph: a kind plus
 // the stable identifier of the record that kind resolves to (a repository
 // remote+path hash for ScopeKindProject-adjacent records, a caller-
-// supplied id for task/session). ScopeRef is comparable so it can be used
+// supplied id for task/session). Ref is comparable so it can be used
 // as a map key for deduplication (CandidateScopeRefs).
-type ScopeRef struct {
-	Kind ScopeKind
+type Ref struct {
+	Kind Kind
 	ID   string
 }
 
@@ -101,7 +102,7 @@ type SessionScope struct {
 	// Kind is ScopeKindGeneral for an unresolved cwd, or the resolved
 	// scope's own kind otherwise (ScopeKindSession once a session id is
 	// attached, per the fixed resolution order).
-	Kind ScopeKind `json:"kind"`
+	Kind Kind `json:"kind"`
 
 	User              string            `json:"user"`
 	Machine           string            `json:"machine"`
@@ -138,20 +139,20 @@ type RepoPathRecord struct {
 	RootPath     string
 }
 
-// ScopeGraphRecord is the `scope` table's row shape: one node in the
-// persisted graph, addressed by ScopeRef, with an optional display name
+// GraphRecord is the `scope` table's row shape: one node in the
+// persisted graph, addressed by Ref, with an optional display name
 // (never used for matching — R-16.3 forbids cross-project name matching).
-type ScopeGraphRecord struct {
-	Ref         ScopeRef
+type GraphRecord struct {
+	Ref         Ref
 	DisplayName string
 }
 
-// ScopeEdge is the `scope_edge` table's row shape: one explicit,
+// Edge is the `scope_edge` table's row shape: one explicit,
 // user/init-declared relationship between two scope nodes. Kind is
 // validated against EdgeKind's closed vocabulary before it is ever
 // persisted (store.go's PutEdge).
-type ScopeEdge struct {
-	From ScopeRef
-	To   ScopeRef
+type Edge struct {
+	From Ref
+	To   Ref
 	Kind EdgeKind
 }

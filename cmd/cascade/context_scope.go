@@ -11,7 +11,7 @@
 //
 // Inputs: cobra flags (--branch/--task/--session, mirroring
 //
-//	ScopeShowParams) plus a contextScopeDeps injected at construction so
+//	ShowParams) plus a contextScopeDeps injected at construction so
 //	no test touches the real environment or a real socket (Art.7.1).
 //
 // Outputs: process output via internal/output.Writer; a typed taxonomy
@@ -93,7 +93,7 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 
 // newContextScopeShowCmd builds `context scope show`.
 func newContextScopeShowCmd(deps contextScopeDeps) *cobra.Command {
-	var params scope.ScopeShowParams
+	var params scope.ShowParams
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Resolve and print this session's scope",
@@ -120,7 +120,7 @@ func newContextScopeShowCmd(deps contextScopeDeps) *cobra.Command {
 // candidate set over RPC too).
 type contextScopeResult struct {
 	scope.SessionScope
-	Candidates []scope.ScopeRef
+	Candidates []scope.Ref
 }
 
 // fetchContextScopeShow routes through the D/S-07.T3 client when the
@@ -128,7 +128,7 @@ type contextScopeResult struct {
 // runtime otherwise. An undecidable probe result (DaemonlessStateFrom's
 // ok=false) is treated as embedded, matching root.go's own "unknown
 // defaults to embedded" rule (probeDaemonlessAndAttach's doc comment).
-func fetchContextScopeShow(ctx context.Context, deps contextScopeDeps, params scope.ScopeShowParams) (contextScopeResult, error) {
+func fetchContextScopeShow(ctx context.Context, deps contextScopeDeps, params scope.ShowParams) (contextScopeResult, error) {
 	st, ok := runtime.DaemonlessStateFrom(ctx)
 	if ok && !st.Embedded {
 		settings, err := daemon.ResolveSettings(nil, deps.Paths)
@@ -171,7 +171,7 @@ func cliGitRoot(ctx context.Context, cwd string) string {
 // the ONLY production caller of scope.ApplyScopeSchema, scope.NewGraphStore,
 // and scope.CandidateScopeRefs — the composition-root wiring this ticket's
 // mutation test proves reachable by removing mountContextCmd's call.
-func resolveContextScopeEmbedded(ctx context.Context, deps contextScopeDeps, params scope.ScopeShowParams) (contextScopeResult, error) {
+func resolveContextScopeEmbedded(ctx context.Context, deps contextScopeDeps, params scope.ShowParams) (contextScopeResult, error) {
 	if params.Cwd == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -207,7 +207,7 @@ func resolveContextScopeEmbedded(ctx context.Context, deps contextScopeDeps, par
 	if err != nil {
 		return contextScopeResult{}, err
 	}
-	candidates, err := scope.CandidateScopeRefs(ctx, store, scope.ScopeChain(resolved))
+	candidates, err := scope.CandidateScopeRefs(ctx, store, scope.Chain(resolved))
 	if err != nil {
 		return contextScopeResult{}, err
 	}
@@ -219,7 +219,7 @@ func resolveContextScopeEmbedded(ctx context.Context, deps contextScopeDeps, par
 // mirroring statusHumanView.
 type contextScopeHumanView struct {
 	scope.SessionScope
-	Candidates []scope.ScopeRef `json:"candidate_scopes,omitempty"`
+	Candidates []scope.Ref `json:"candidate_scopes,omitempty"`
 }
 
 // String renders the resolved scope as a human-readable table. A general

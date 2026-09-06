@@ -52,7 +52,7 @@ import (
 )
 
 // RegisterContextScopeHandler opens the scope graph's SQLite connection
-// under paths.DataDir(), applies the ScopeMigrationSet (idempotent), and
+// under paths.DataDir(), applies the MigrationSet (idempotent), and
 // registers ContextScopeMethod against registry. Returns the opened *sql.DB
 // so the caller can close it during daemon shutdown; a non-nil error means
 // no db was left open (this function closes its own db before returning

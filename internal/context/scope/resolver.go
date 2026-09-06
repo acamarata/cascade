@@ -57,16 +57,25 @@ type ResolveInput struct {
 	ExplicitOverrides string
 }
 
+// validateResolveDeps fails closed on a nil dependency ResolveSessionScope
+// cannot proceed without, before any store access is attempted.
+func validateResolveDeps(deps ResolveDeps) error {
+	if deps.Store == nil {
+		return cascade.New(cascade.KindInvalidInput, "context/scope: ResolveSessionScope requires a non-nil Store")
+	}
+	if deps.GitRoot == nil {
+		return cascade.New(cascade.KindInvalidInput, "context/scope: ResolveSessionScope requires a non-nil GitRoot")
+	}
+	return nil
+}
+
 // ResolveSessionScope implements the fixed R-16.3 order. An unresolved
 // cwd (no repository bound to the resolved git root) returns a
 // SUCCESSFUL ScopeKindGeneral result -- never an error, never a fallback
 // to an unscoped/global query.
 func ResolveSessionScope(ctx context.Context, deps ResolveDeps, in ResolveInput) (SessionScope, error) {
-	if deps.Store == nil {
-		return SessionScope{}, cascade.New(cascade.KindInvalidInput, "context/scope: ResolveSessionScope requires a non-nil Store")
-	}
-	if deps.GitRoot == nil {
-		return SessionScope{}, cascade.New(cascade.KindInvalidInput, "context/scope: ResolveSessionScope requires a non-nil GitRoot")
+	if err := validateResolveDeps(deps); err != nil {
+		return SessionScope{}, err
 	}
 	root := deps.GitRoot(ctx, in.Cwd)
 
@@ -85,20 +94,12 @@ func ResolveSessionScope(ctx context.Context, deps ResolveDeps, in ResolveInput)
 		}, nil
 	}
 
-	projectRef := ScopeRef{Kind: ScopeKindProject, ID: repo.ID}
+	projectRef := Ref{Kind: ScopeKindProject, ID: repo.ID}
 	parents, err := deps.Store.ParentScopes(ctx, projectRef)
 	if err != nil {
 		return SessionScope{}, err
 	}
-	var workspace, product string
-	for _, p := range parents {
-		switch p.Kind {
-		case ScopeKindWorkspace:
-			workspace = p.ID
-		case ScopeKindProduct:
-			product = p.ID
-		}
-	}
+	workspace, product := workspaceAndProductFrom(parents)
 
 	pkgPath := ""
 	if rel, relErr := filepath.Rel(root, in.Cwd); relErr == nil && rel != "." {
@@ -124,29 +125,47 @@ func ResolveSessionScope(ctx context.Context, deps ResolveDeps, in ResolveInput)
 	}, nil
 }
 
-// ScopeChain returns s's own resolved scope chain, in outbound EdgeClassParent
+// workspaceAndProductFrom classifies a project's EdgeClassParent members
+// (from ParentScopes) into the workspace and product it belongs to, per
+// the R-21.157 traversal table. Any other Kind is not a legal parent of a
+// project and is ignored rather than assigned.
+func workspaceAndProductFrom(parents []Ref) (workspace, product string) {
+	for _, p := range parents {
+		switch p.Kind {
+		case ScopeKindWorkspace:
+			workspace = p.ID
+		case ScopeKindProduct:
+			product = p.ID
+		case ScopeKindSession, ScopeKindTask, ScopeKindProject, ScopeKindGlobal, ScopeKindGeneral:
+			// Not a legal EdgeClassParent member of a project; ignored.
+		}
+	}
+	return workspace, product
+}
+
+// Chain returns s's own resolved scope chain, in outbound EdgeClassParent
 // order (session -> task -> project -> workspace/product), skipping any
 // unresolved link. A ScopeKindGeneral scope has an empty chain: it has no
 // graph membership to traverse from, by construction.
-func ScopeChain(s SessionScope) []ScopeRef {
+func Chain(s SessionScope) []Ref {
 	if s.Kind == ScopeKindGeneral {
 		return nil
 	}
-	var chain []ScopeRef
+	var chain []Ref
 	if s.Session != "" {
-		chain = append(chain, ScopeRef{Kind: ScopeKindSession, ID: s.Session})
+		chain = append(chain, Ref{Kind: ScopeKindSession, ID: s.Session})
 	}
 	if s.Task != "" {
-		chain = append(chain, ScopeRef{Kind: ScopeKindTask, ID: s.Task})
+		chain = append(chain, Ref{Kind: ScopeKindTask, ID: s.Task})
 	}
 	if s.Project != "" {
-		chain = append(chain, ScopeRef{Kind: ScopeKindProject, ID: s.Project})
+		chain = append(chain, Ref{Kind: ScopeKindProject, ID: s.Project})
 	}
 	if s.Workspace != "" {
-		chain = append(chain, ScopeRef{Kind: ScopeKindWorkspace, ID: s.Workspace})
+		chain = append(chain, Ref{Kind: ScopeKindWorkspace, ID: s.Workspace})
 	}
 	if s.Product != "" {
-		chain = append(chain, ScopeRef{Kind: ScopeKindProduct, ID: s.Product})
+		chain = append(chain, Ref{Kind: ScopeKindProduct, ID: s.Product})
 	}
 	return chain
 }
@@ -161,12 +180,12 @@ var routeEdgeKinds = []EdgeKind{EdgeKindDependsOn, EdgeKindSharesContextWith}
 // and transitivity come from Traversal exclusively; a (kind, route) pair
 // absent from that table contributes no targets for that kind, matching
 // the "no permissive default" rule.
-func CandidateScopeRefs(ctx context.Context, store *GraphStore, chain []ScopeRef) ([]ScopeRef, error) {
+func CandidateScopeRefs(ctx context.Context, store *GraphStore, chain []Ref) ([]Ref, error) {
 	if store == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "context/scope: CandidateScopeRefs requires a non-nil store")
 	}
-	seen := make(map[ScopeRef]bool, len(chain))
-	out := make([]ScopeRef, 0, len(chain))
+	seen := make(map[Ref]bool, len(chain))
+	out := make([]Ref, 0, len(chain))
 	for _, ref := range chain {
 		if seen[ref] {
 			continue

@@ -23,10 +23,10 @@ func TestContextScopeMethodLiteral(t *testing.T) {
 
 // TestContextScopeShowEncodesParams proves the request-side half of the
 // wire contract: ContextScopeShow's params marshal to exactly
-// scope.ScopeShowParams's JSON shape, with the method name this package's
+// scope.ShowParams's JSON shape, with the method name this package's
 // daemon.ContextScopeMethod names.
 func TestContextScopeShowEncodesParams(t *testing.T) {
-	params := scope.ScopeShowParams{Branch: "main", Session: "s1"}
+	params := scope.ShowParams{Branch: "main", Session: "s1"}
 	body, err := encodeRequest(daemon.ContextScopeMethod, params, "req-1")
 	if err != nil {
 		t.Fatalf("encodeRequest: %v", err)
@@ -63,18 +63,18 @@ func TestContextScopeShowDecodesRPCError(t *testing.T) {
 	}
 }
 
-// TestScopeShowParamsRoundTrip proves ScopeShowParams itself round-trips
+// TestScopeShowParamsRoundTrip proves ShowParams itself round-trips
 // through JSON with every field, since ContextScopeShow's wire contract
 // depends on that shape staying stable.
 func TestScopeShowParamsRoundTrip(t *testing.T) {
-	want := scope.ScopeShowParams{
+	want := scope.ShowParams{
 		Cwd: "/x", User: "u", Machine: "m", Branch: "b", Task: "t", Session: "s", ExplicitOverrides: "eo",
 	}
 	raw, err := json.Marshal(want)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var got scope.ScopeShowParams
+	var got scope.ShowParams
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

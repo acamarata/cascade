@@ -16,7 +16,7 @@
 //	storage domain (B/S-02.T2), and caller-supplied user/machine/branch/
 //	task/session identifiers this package never invents on its own.
 //
-// Outputs: SessionScope, ScopeRef, and the CandidateScopeRefs slice, all
+// Outputs: SessionScope, Ref, and the CandidateScopeRefs slice, all
 //
 //	pkg/cascade-typed on every error path.
 //
