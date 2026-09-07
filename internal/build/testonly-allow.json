@@ -1,5 +1,10 @@
 [
   {
+    "symbol": "providers/anthropic.New",
+    "reason": "P1-E10-W3-S19-T2 builds the real Anthropic ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's scope (files_scope covers only providers/anthropic/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live anthropic.Driver; retire this entry once either lands"
+  },
+  {
     "symbol": "plugins/pbd/internal/pews.EncodeTicket",
     "reason": "The encoder half of the same S-28.T1 codec, and unreachable for the same scoping reason: the authoring path that writes a ticket back out is N/S-28.T4's, not this ticket's. It is exercised here only by the round-trip test, which is what proves the two halves agree about field order.",
     "expected_caller": "the PEWS authoring/lifecycle surface (P1-E14-W3-S28-T4), which writes ticket YAML back to the tree; retire this entry in that ticket"
