@@ -408,5 +408,25 @@
     "symbol": "plugins/pbd.NewEventsHandler",
     "reason": "Builds cascade-pbd's GET /events SSE bridge (bus + eventsHandler) and its wired *pews.Projector, fully implemented and tested (unit coverage in plugins/pbd/internal/pews, Art.2 real-EventSource-client conformance in plugins/pbd/projector_test.go behind the integration tag). The daemon-side composition root that mounts this handler on its HTTP mux and calls Project on a file-change trigger is out of this ticket's files_scope (N/S-29.T1 covers only plugins/pbd/**) and belongs to whichever later ticket wires cascade-pbd into the daemon's HTTP surface.",
     "expected_caller": "the daemon composition root (cmd/cascade or internal/daemon) that mounts cascade-pbd's HTTP surface and drives Project from a PEWS tree file-change trigger; retire this entry once that wiring lands"
+  },
+  {
+    "symbol": "internal/fleet/sessions.NewStateMachine",
+    "reason": "P1-E12-W3-S25-T1 builds the session observation state machine as a standalone package with no wiring ticket of its own: the daemon-side poll loop that would call NewStateMachine once per census/tailer cycle and persist the result through the S-24.T3 sessions domain (Store.TransitionState) is a later ticket, not in this ticket's files_scope (internal/fleet/sessions/{types,config,statemachine,confidence,corpus_test}.go and their tests only). StateMachine.Advance ships fully implemented and tested (statemachine_test.go: transition-table arcs, terminal-state proof, fail-closed paths, determinism, -race concurrency) against the S-24 typed observation channels; only its call site inside a live poll loop is missing.",
+    "expected_caller": "the daemon's fleet session poll loop (a later ticket) that constructs one StateMachine, calls Advance per observation cycle, and writes the result back through sessions.Store.TransitionState; retire this entry once that wiring lands"
+  },
+  {
+    "symbol": "internal/fleet/sessions.SignalUnknown",
+    "reason": "P1-E12-W3-S25-T1's SignalKind zero value: production code (confidence.go's Weigh, statemachine.go's buildSignals) relies on SignalUnknown being the zero value and the fail-closed default for any unrecognized kind, but never spells the identifier out by name - buildSignals only ever constructs the six named, non-zero SignalKinds. The identifier exists so callers (and this ticket's own tests) have a documented name for the sentinel rather than a bare 0, per this file's godoc requirement (every exported symbol needs a comment) on a type whose zero value is meaningful.",
+    "expected_caller": "no production caller is expected to name SignalUnknown explicitly, by design (see reason); confidence_test.go exercises it directly to prove an explicit zero-value Signal contributes zero weight. Retire this entry only if a future caller needs to construct one explicitly."
+  },
+  {
+    "symbol": "plugins/pbd/internal/pews.RequireBuildable",
+    "reason": "P1-E14-W3-S29-T2 (draft-phase isolation) implements R-21.276's 'a draft phase cannot be built' as a typed refusal, but this ticket's own full_desc explicitly excludes lifecycle/dispatch scope ('Do not add residue carry-forward, status/board, lifecycle, projection, or dispatch; those remain with N/S-29.T1/T3-T4 and N/S-30'), so no build/dispatch entry point exists yet to call it from.",
+    "expected_caller": "N/S-30's ticket-lifecycle/dispatch seam (ticket to conductor task), which gates a build attempt against a phase's Draft state before dispatching; retire this entry once that wiring lands"
+  },
+  {
+    "symbol": "plugins/pbd.ReadRowsFromStore",
+    "reason": "P1-E14-W3-S29-T4 (status/board CLI) reads status/board data directly from the PEWS file tree (RunStatus/RunBoard) because RunCommand and DispatchTool's fixed signatures carry no channel to inject a pkg/provider.Store, and no daemon composition root exists yet to supply one at dispatch time. ReadRowsFromStore is the literal T1-files-to-database-projection read path the ticket's HOW section names, fully implemented and tested against a real providers/sqlite.Store populated by the real pews.Projector (TestReadRowsFromStore), ready for a caller that already holds a Store.",
+    "expected_caller": "a daemon composition root that constructs a live pkg/provider.Store and wires it into the plugin.pbd.status/plugin.pbd.board RPC dispatch path (or a future RunCommand/DispatchTool signature that carries one); retire this entry once that wiring lands"
   }
 ]
