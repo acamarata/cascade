@@ -24,8 +24,12 @@ func TestBuiltinRegistration(t *testing.T) {
 		t.Fatalf("plugin %q not found in builtin registry", pluginID)
 	}
 	// P1-E14-W3-S28-T4 (contract lint) adds `lint` alongside T2's already-
-	// landed `validate`; this proves both, and only both, are mounted.
-	wantCommands := map[string]bool{validateCommandName: true, lintCommandName: true}
+	// landed `validate`, and P1-E14-W3-S28-T3 (authoring) adds
+	// create/edit/move; this proves exactly these five are mounted.
+	wantCommands := map[string]bool{
+		validateCommandName: true, lintCommandName: true,
+		createCommandName: true, editCommandName: true, moveCommandName: true,
+	}
 	if len(entry.Manifest.Provides.Commands) != len(wantCommands) {
 		t.Fatalf("commands = %+v, want exactly %v", entry.Manifest.Provides.Commands, wantCommands)
 	}
