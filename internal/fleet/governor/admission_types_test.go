@@ -132,6 +132,31 @@ func enqueueAndWait(ctx context.Context, t *testing.T, ac *AdmissionController, 
 		p, err := ac.Admit(ctx, req)
 		out <- admissionResult{permit: p, err: err}
 	}()
-	<-ready
+
+	// A bare `<-ready` here is a hang by construction, and it hung: this
+	// helper assumes Admit always reaches the queue, but Admit RESOLVES
+	// EARLY whenever it grants immediately or refuses fail-closed, in
+	// which case afterEnqueue never fires and nothing ever closes ready.
+	// The package then burned its whole 10-minute timeout and reported a
+	// hang instead of the one-line reason, taking every other governor
+	// test's result down with it. This is the same defect, in the same
+	// shape, as the one already fixed in internal/secrets' single-flight
+	// helper; both are bounded now.
+	//
+	// out is buffered, so the goroutine never blocks and the result can be
+	// put back for a caller that wants to inspect it.
+	select {
+	case <-ready:
+	case res := <-out:
+		out <- res
+		t.Fatalf("Admit resolved without ever reaching the queue, so this helper's premise does not hold: permit=%v err=%v", res.permit, res.err)
+	case <-time.After(enqueueWaitTimeout):
+		t.Fatalf("the request neither reached the queue nor resolved within %s", enqueueWaitTimeout)
+	}
 	return out
 }
+
+// enqueueWaitTimeout bounds the wait above. It measures nothing and
+// nothing asserts on it; it exists so a stall is reported in seconds
+// rather than swallowed by the package timeout.
+const enqueueWaitTimeout = 30 * time.Second
