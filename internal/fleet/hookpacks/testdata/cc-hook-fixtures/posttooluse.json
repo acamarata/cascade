@@ -1,0 +1,14 @@
+{
+  "session_id": "ses_01J9EXAMPLE0000000000001",
+  "transcript_path": "/tmp/hookpacks-fixture/transcript.jsonl",
+  "cwd": "/tmp/hookpacks-fixture",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls -la"
+  },
+  "tool_response": {
+    "stdout": "total 0\n",
+    "exit_code": 0
+  }
+}

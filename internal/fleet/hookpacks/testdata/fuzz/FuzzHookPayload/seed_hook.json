@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"harness\":\"test-harness\",\"event_type\":\"PreToolUse\",\"session_id\":\"seed-session\",\"pid\":1,\"account\":\"seed-account\",\"timestamp_ms\":1700000000000}")

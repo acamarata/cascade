@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 1 --unix-socket {{CASCADE_SOCKET_PATH}} -X POST http://cascade.sock/rpc -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"fleet.sessions.hook_event\",\"params\":{\"event_type\":\"PostToolUse\"}}' \u003e/dev/null 2\u003e\u00261 || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 1 --unix-socket {{CASCADE_SOCKET_PATH}} -X POST http://cascade.sock/rpc -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"fleet.sessions.hook_event\",\"params\":{\"event_type\":\"PreToolUse\"}}' \u003e/dev/null 2\u003e\u00261 || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 1 --unix-socket {{CASCADE_SOCKET_PATH}} -X POST http://cascade.sock/rpc -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"fleet.sessions.hook_event\",\"params\":{\"event_type\":\"Stop\"}}' \u003e/dev/null 2\u003e\u00261 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
