@@ -373,5 +373,20 @@
     "symbol": "internal/fleet/sessions.EventsPath",
     "reason": "Names the route sessions.SSEHandler expects to be mounted at. Referenced only by this package's own tests until the composition root (out of scope, see the NewSSEHandler entry above) actually calls http.ServeMux.Handle(sessions.EventsPath, ...).",
     "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the same change that wires NewSSEHandler; retire together"
+  },
+  {
+    "symbol": "providers/embeddings.NewProviderEmbedder",
+    "reason": "P1-E10-W3-S19-T6 builds the api-backed ProviderEmbedder as a standalone adapter over any pkg/provider.ModelProvider, with no wiring ticket of its own: the embed pipeline that composes an Embedder with content-hash dedup and vector upsert is F-S10.T3's, explicitly out of this ticket's scope (full_desc: \"NOT here: ... the embed pipeline + vector upsert + content-hash dedupe (F-S10.T3's)\"), and the K/S-22.T3 Interceptor this type depends on is likewise built by a different ticket. ProviderEmbedder ships fully implemented and tested (recorded-fixture round-trip and order proof, capability-gate refusal propagation, malformed/empty-vector paths, sensitivity-tier propagation and fail-closed seam behaviour, construction validation) against a fake ModelProvider and a fake Interceptor; only its construction call site is missing until the pipeline lands.",
+    "expected_caller": "F-S10.T3's embed pipeline (internal/retrieval), which constructs a ProviderEmbedder over a live ModelProvider and a real Interceptor-backed adapter over internal/hooks/egress.Engine; retire this entry once it lands"
+  },
+  {
+    "symbol": "internal/fleet/census.New",
+    "reason": "P1-E12-W3-S24-T1 builds the fleet process census as a standalone package with no wiring ticket of its own: the caller that constructs a live Enumerator and feeds its Snapshot rows into the sessions domain is S-24.T3/T4, both explicitly out of this ticket's files_scope (internal/fleet/census/* only). The package is fully implemented and tested against a mocked procSource on every platform; only its construction call site is missing until the sessions poll loop lands.",
+    "expected_caller": "the sessions domain poll loop (P1-E12-W3-S24-T3/T4), which constructs a census.Enumerator via New and feeds Snapshot rows into the sessions store; retire this entry once it does"
+  },
+  {
+    "symbol": "internal/fleet/governor.NewAdmissionController",
+    "reason": "S-26.T2 builds the admission controller as a standalone daemon subsystem with no wiring ticket of its own: the caller that constructs a live AdmissionController and calls Admit before dispatching concurrent work is Conductor's fan-out (K/S-23.T2), which depends on this ticket but has not landed yet, plus the daemon composition root that owns both the shared Sampler and this controller's lifetime. The controller is fully implemented and tested (Admit/Drain/Pressure/compile-lock ceiling, -race clean) against a directly-populated Sampler; only its production construction call site is missing until the fan-out primitive lands.",
+    "expected_caller": "Conductor's fan-out primitive (K/S-23.T2) and the daemon composition root that constructs the shared Sampler (S-26.T1) both read; retire this entry once K/S-23.T2 lands"
   }
 ]
