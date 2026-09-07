@@ -328,5 +328,10 @@
     "symbol": "internal/fleet/journal.AllKinds",
     "reason": "Exported for the same reason pkg/cascade.AllKinds and internal/audit.AllKinds are: a closed enum needs one place a consumer (or a test elsewhere in the tree) can range over every member without hardcoding the list. No such external consumer exists yet because nothing outside this package reads journal.Kind values yet.",
     "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()"
+  },
+  {
+    "symbol": "internal/fleet/governor.NewSampler",
+    "reason": "S-26.T1 builds the resource sampler as a shared dependency of two sibling tickets that have not landed yet: the admission controller (S-26.T2) and the throttle ladder (S-26.T3). Both need a single, already-running Sampler to read from, so the sampler ships first with only its own test suite as a caller.",
+    "expected_caller": "the admission controller and throttle ladder (P1-E13-W3-S26-T2, P1-E13-W3-S26-T3), and the daemon composition root that starts the shared Sampler both of them read from; retire this entry once either lands"
   }
 ]
