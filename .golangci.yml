@@ -49,11 +49,24 @@ linters:
         # permits it forced a per-driver //nolint - two enforcement layers
         # disagreeing, papered over at each call site. Production code in
         # plugins/ and providers/ is still denied internal/** by both layers.
+        #
+        # internal/providers/** is excluded: it is a DIFFERENT, ratified
+        # subsystem (R-14.31/R-14.7 admitted internal/providers/ into
+        # 02-TARGET-STRUCTURE) from the top-level providers/ this rule's
+        # Art.10.2 comment describes - it is an ordinary internal/ package
+        # like any other, not first-party driver code bound by the
+        # plugins/providers-may-only-import-pkg contract. Its own ticket
+        # (P1-E10-W3-S20-T1) depends on internal/secrets and
+        # internal/hooks/egress by design (the vault/OAuth broker seam and
+        # the provider-intake egress class); without this exclusion the
+        # unanchored "**/providers/**" glob matched it by path-segment
+        # coincidence, which this ticket found and fixed.
         plugins-providers-boundary:
           files:
             - "**/plugins/**/*.go"
             - "**/providers/**/*.go"
             - "!**/*_test.go"
+            - "!**/internal/providers/**/*.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
               desc: "plugins/** and providers/** may import pkg/** only - never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"

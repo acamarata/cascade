@@ -16,6 +16,7 @@ Available Commands:
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
   policy         Explain and inspect policy decisions
+  provider       Register and manage model providers
   recall         Search the retrieval index and print cited results
   status         One-shot summary of the running daemon
   vault          Store and retrieve secrets in the platform keychain

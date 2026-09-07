@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\n  \"data\": [\n    {\n      \"id\": \"claude-3-5-sonnet-20241022\",\n      \"type\": \"model\",\n      \"display_name\": \"Claude 3.5 Sonnet\",\n      \"created_at\": \"2024-10-22T00:00:00Z\"\n    },\n    {\n      \"id\": \"claude-3-haiku-20240307\",\n      \"type\": \"model\",\n      \"display_name\": \"Claude 3 Haiku\",\n      \"created_at\": \"2024-03-07T00:00:00Z\"\n    }\n  ],\n  \"has_more\": false,\n  \"first_id\": \"claude-3-5-sonnet-20241022\",\n  \"last_id\": \"claude-3-haiku-20240307\"\n}\n")

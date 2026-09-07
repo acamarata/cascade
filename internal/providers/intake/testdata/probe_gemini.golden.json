@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "name": "models/gemini-1.5-pro",
+      "version": "001",
+      "displayName": "Gemini 1.5 Pro",
+      "supportedGenerationMethods": ["generateContent"]
+    },
+    {
+      "name": "models/gemini-1.5-flash",
+      "version": "001",
+      "displayName": "Gemini 1.5 Flash",
+      "supportedGenerationMethods": ["generateContent"]
+    }
+  ]
+}

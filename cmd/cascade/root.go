@@ -130,6 +130,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountContextCmd(root)
 	mountApprovalCmd(root)
 	mountPolicyCmd(root)
+	mountProviderCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following
@@ -153,9 +154,8 @@ func mountDaemonCmd(root *cobra.Command) {
 }
 
 // usageArgs adapts a cobra positional-argument validator so its errors carry
-// the invalid-input taxonomy kind. Cobra builds these errors internally and
-// they would otherwise reach main kindless and exit internal(1) instead of
-// invalid-input(2). Every command with an Args validator wraps it (R-14.113).
+// the invalid-input taxonomy kind: cobra's own errors would otherwise reach
+// main kindless and exit internal(1) instead of invalid-input(2) (R-14.113).
 func usageArgs(v cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := v(cmd, args); err != nil {

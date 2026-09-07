@@ -165,11 +165,6 @@
     "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry"
   },
   {
-    "symbol": "internal/secrets.NewOAuthBroker",
-    "reason": "The OAuth broker's production constructor - the one that wires the real loopback listener, the real HTTPS token client and the platform browser opener - ships ahead of any surface that runs an authorization. P1-E08-W2-S15-T2 defines the pkg/provider.OAuthBroker contract and implements it, and is explicitly scoped to declare no cmd/cascade surface (contract: 'the CLI flag itself is declared by J/S-20.T1'; 'no W2-to-W3 driver wiring occurs here'). Building the broker before its callers is the deliberate order: the Wave 3 drivers are specified against this interface, so it has to exist first. The unexported core constructor newOAuthBroker is what the tests use; this entry covers only the seam-wiring wrapper.",
-    "expected_caller": "cmd/cascade's `provider add --oauth` command (J/S-20.T1), or the first Wave 3 driver that runs an authorization (J/S-19.T2 Anthropic, J/S-19.T4 Gemini) - whichever lands first; retire this entry then"
-  },
-  {
     "symbol": "internal/context.GenerateCCInstructions",
     "reason": "The working-directory pipeline (discover the tiers, merge them under the precedence rule, render the harness instruction files, materialize each one) is complete and drives Discover, MergeTiers, CCInstructionWriter.Generate and WriteHarnessFile from a single entry point, which is what retired the separate Discover and MergeTiers entries. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. The gap is one wiring change wide and is named here rather than hidden behind an unexported seam.",
     "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test"
@@ -428,5 +423,20 @@
     "symbol": "plugins/pbd.ReadRowsFromStore",
     "reason": "P1-E14-W3-S29-T4 (status/board CLI) reads status/board data directly from the PEWS file tree (RunStatus/RunBoard) because RunCommand and DispatchTool's fixed signatures carry no channel to inject a pkg/provider.Store, and no daemon composition root exists yet to supply one at dispatch time. ReadRowsFromStore is the literal T1-files-to-database-projection read path the ticket's HOW section names, fully implemented and tested against a real providers/sqlite.Store populated by the real pews.Projector (TestReadRowsFromStore), ready for a caller that already holds a Store.",
     "expected_caller": "a daemon composition root that constructs a live pkg/provider.Store and wires it into the plugin.pbd.status/plugin.pbd.board RPC dispatch path (or a future RunCommand/DispatchTool signature that carries one); retire this entry once that wiring lands"
+  },
+  {
+    "symbol": "internal/fleet/hookpacks.RegisterHookEventHandler",
+    "reason": "Binds fleet.sessions.hook_event to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*, fleet.sessions.list per P1-E12-W3-S24-T3's own identical entry above) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include (files_scope.change lists cmd/cascade/root.go, which is pure cobra-tree wiring per its own doc comment and carries no RPC composition of any kind, and internal/rpc/registry.go, which is a fully generic name->HandlerFunc map with no method-specific code). RegisterHookEventHandler itself is exercised end-to-end against a real *rpc.Registry and a real sessions.Store (handler_test.go): every R-16.48 mapping-table event, malformed params, unknown harness, timestamp-out-of-range, unknown-event-type drop, domain-error propagation, the planted-credential canary, and the Windows tier-2 refusal.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls, once a sessions.Store and an *events.Bus are already composed there for P1-E12-W3-S24-T3's own RegisterHandlers call; retire this entry once it is called there"
+  },
+  {
+    "symbol": "internal/fleet/hookpacks.UnknownEventCount",
+    "reason": "Exposes dispatch's unknown-event-type drop counter (incremented when a HookPayload's event_type is outside ParseHookEventType's closed set) for diagnostics. No composition root wires a status/doctor surface to read fleet counters of this shape yet; the counter itself is exercised directly by handler_test.go's TestHookRPCHandler_UnknownEventTypeDroppedNotError, which proves the drop-not-error contract by observing it increment.",
+    "expected_caller": "a future `cascade doctor` or `cascade fleet` diagnostics surface that reports dropped-hook-event counts; retire this entry once one reads it"
+  },
+  {
+    "symbol": "internal/providers/intake.ParseInitConfig",
+    "reason": "P1-E10-W3-S20-T1 implements the non-interactive [[providers]] intake directive parser per 08-INIT-CONFIG-SPEC.md §2, but this ticket's files_scope covers only internal/providers/intake/* and cmd/cascade/provider_cmd.go (the `provider add` command) - it does not include a `cascade init` command, which is a separate, not-yet-landed ticket. ParseInitConfig is fully implemented and tested (TestParseInitConfig* in config_test.go) against the CASCADE_NO_INPUT and secret-literal rules; only the `cascade init --config` call site is missing.",
+    "expected_caller": "the `cascade init --config cascade-init.toml` command, which feeds each parsed AddRequest to internal/providers/intake.Add; retire this entry once that command lands"
   }
 ]
