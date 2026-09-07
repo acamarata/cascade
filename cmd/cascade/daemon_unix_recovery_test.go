@@ -78,6 +78,13 @@ func deadPid(t *testing.T) int {
 // it in, so a passing test proves reachability from the real entry point,
 // not a component test's ability to drive DomainRegistry directly.
 func TestPlatformDaemonRun_OrphanedAdvisoryLock_CleanedUpByProductionPath(t *testing.T) {
+	// Art.7.1: this drives the PRODUCTION path, which resolves its data
+	// directory from $HOME and opens the vault there. On a host with an OS
+	// keychain that selects the keychain and creates nothing; on linux there
+	// is no keychain, custody falls back to the encrypted file vault, and it
+	// CREATES $HOME/.cascade/data/vault.key. That is invisible on the dev
+	// machine and failed CI's redirected-HOME job every run.
+	t.Setenv("HOME", t.TempDir())
 	deps := newRunTestDeps(t, nil)
 	paths := deps.Paths
 

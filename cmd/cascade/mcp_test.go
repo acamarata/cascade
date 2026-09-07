@@ -137,6 +137,13 @@ func TestNewMCPCmd_MountsServeAndTools(t *testing.T) {
 // reader hits Scan's immediate-EOF branch, so Serve returns nil without
 // requiring any real stdin/stdout — no `net` import, no subprocess.
 func TestProductionMCPDeps_ServeStdio(t *testing.T) {
+	// Art.7.1: this drives the PRODUCTION path, which resolves its data
+	// directory from $HOME and opens the vault there. On a host with an OS
+	// keychain that selects the keychain and creates nothing; on linux there
+	// is no keychain, custody falls back to the encrypted file vault, and it
+	// CREATES $HOME/.cascade/data/vault.key. That is invisible on the dev
+	// machine and failed CI's redirected-HOME job every run.
+	t.Setenv("HOME", t.TempDir())
 	deps := productionMCPDeps()
 	if deps.NewTools == nil || deps.Paths == nil || deps.ServeStdio == nil || deps.ServeSocket == nil || deps.StdinIsPipe == nil {
 		t.Fatal("productionMCPDeps left a field nil")

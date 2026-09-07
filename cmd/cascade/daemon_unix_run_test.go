@@ -85,11 +85,44 @@ func nonexistentExecutable(t *testing.T) func() (string, error) {
 // legitimate outcome, just not the one this test exists to prove) reads
 // as a setup error instead of daemon.Run's own ctx.Done() select firing.
 func TestPlatformDaemonRun_ReturnsOnContextCancel(t *testing.T) {
+	// Art.7.1: this drives the PRODUCTION path, which resolves its data
+	// directory from $HOME and opens the vault there. On a host with an OS
+	// keychain that selects the keychain and creates nothing; on linux there
+	// is no keychain, custody falls back to the encrypted file vault, and it
+	// CREATES $HOME/.cascade/data/vault.key. That is invisible on the dev
+	// machine and failed CI's redirected-HOME job every run.
+	t.Setenv("HOME", t.TempDir())
 	deps := newRunTestDeps(t, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+
+	// Cancel once the daemon is actually SERVING, not after a fixed
+	// wall-clock delay. The previous form gave the whole startup 300ms and
+	// asserted no error, which raced storage bootstrap: on a slow or loaded
+	// machine the deadline fired midway through creating the SQLite tables
+	// and the run returned "context deadline exceeded" during bootstrap.
+	// That failed CI's linux/arm64 lane and reproduced every time in a linux
+	// container, while passing on the dev machine -- the test was reporting
+	// the speed of the host rather than the behaviour under test, which is
+	// only that a cancelled context makes platformDaemonRun return.
+	//
+	// Waiting for the socket to answer removes the race without slowing the
+	// test down: it cancels as soon as the daemon is up, which on a fast
+	// host is sooner than the old fixed delay. The outer bound exists only
+	// so a daemon that never comes up fails instead of hanging.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		deadline := time.Now().Add(30 * time.Second)
+		for time.Now().Before(deadline) {
+			if socketDialable(deps.Paths.SocketPath()) {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+	}()
+
 	if err := platformDaemonRun(ctx, deps); err != nil {
-		t.Fatalf("platformDaemonRun with a bounded-timeout context: %v", err)
+		t.Fatalf("platformDaemonRun with a cancelled context: %v", err)
 	}
 }
 
