@@ -228,8 +228,9 @@ jobs:
           GOCACHE: /tmp/cascade-gocache
           GOMODCACHE: /tmp/cascade-gomodcache
           GOPATH: /tmp/cascade-gopath
+          GOENV: /tmp/cascade-goenv/env
         run: |
-          mkdir -p "$HOME" /tmp/cascade-gocache /tmp/cascade-gomodcache /tmp/cascade-gopath
+          mkdir -p "$HOME" /tmp/cascade-gocache /tmp/cascade-gomodcache /tmp/cascade-gopath /tmp/cascade-goenv
           go test ./...
 
       - name: snapshot git status (after)

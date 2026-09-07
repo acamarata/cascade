@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/daemon"
-	"github.com/acamarata/cascade/internal/runtime"
 )
 
 func TestRelaunchArgs(t *testing.T) {
@@ -85,16 +84,4 @@ func TestEnsureSpawnDirs_CreatesLogDir(t *testing.T) {
 	if info, err := os.Stat(paths.LogDir()); err != nil || !info.IsDir() {
 		t.Errorf("LogDir() not created: err=%v", err)
 	}
-}
-
-// fakeDaemonPaths is a minimal runtime.PathProvider for this file's tests.
-type fakeDaemonPaths struct{ root string }
-
-func (p fakeDaemonPaths) Root() string       { return p.root }
-func (p fakeDaemonPaths) ConfigPath() string { return filepath.Join(p.root, "config.toml") }
-func (p fakeDaemonPaths) SocketPath() string { return filepath.Join(p.root, "daemon.sock") }
-func (p fakeDaemonPaths) DataDir() string    { return filepath.Join(p.root, "data") }
-func (p fakeDaemonPaths) LogDir() string     { return filepath.Join(p.root, "logs") }
-func (p fakeDaemonPaths) StorageRoot(prof runtime.Profile) string {
-	return filepath.Join(p.root, "data", "storage", string(prof))
 }
