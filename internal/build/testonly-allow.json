@@ -338,5 +338,40 @@
     "symbol": "providers/openai.New",
     "reason": "P1-E10-W3-S19-T3 builds the real openai-compat ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against recorded fixtures (openai/moonshot/zai/deepseek-style 401s, a constructed 429, malformed/truncated stream fixtures) plus a tagged live lane; only its construction call site is missing until the registry lands.",
     "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands"
+  },
+  {
+    "symbol": "providers/ollama.New",
+    "reason": "P1-E10-W3-S19-T5 builds the real ollama ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New and providers/openai.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against transcribed/recorded fixtures plus a tagged live lane; only its construction call site is missing until the registry lands.",
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live ollama.Driver; retire this entry once either lands"
+  },
+  {
+    "symbol": "providers/gemini.New",
+    "reason": "P1-E10-W3-S19-T4 builds the real Gemini ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket scope (files_scope covers only providers/gemini/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live gemini.Driver; retire this entry once either lands"
+  },
+  {
+    "symbol": "internal/fleet/sessions.New",
+    "reason": "The sessions domain Store constructor. Its production caller is cmd/cascade/daemon_unix_run.go's buildRPCServer, which composes the real provider.Store, runtime.Clock, and events.Bus into a Store and passes it to RegisterHandlers and the SSE surface. That file is not in P1-E12-W3-S24-T3's files_scope (only internal/fleet/sessions/*, internal/storage/domains.go, cmd/cascade/root.go, and internal/rpc/registry.go are); Store itself is fully implemented and tested against a real MemStore and a real providers/sqlite driver.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the wiring ticket that mounts the fleet.sessions surface; retire this entry once it constructs a Store and calls RegisterHandlers/NewSSEHandler with it"
+  },
+  {
+    "symbol": "internal/fleet/sessions.RegisterHandlers",
+    "reason": "Binds fleet.sessions.list to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include. RegisterHandlers itself is exercised end-to-end against a real rpc.Registry (rpc_test.go: happy path, empty params, and the unknown-filter-field refusal).",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls; retire this entry once it is called there"
+  },
+  {
+    "symbol": "internal/fleet/sessions.NewSSEHandler",
+    "reason": "Builds the GET /events?topic=fleet.sessions handler. The daemon's mux (cmd/cascade/daemon_unix_run.go's buildRPCServer, out of this ticket's files_scope) currently mounts exactly one SSEHandler at the fixed rpc.EventsPath bound to the \"daemon\" namespace (internal/rpc.NewSSEHandler); mounting a second handler at the same literal path would panic on ServeMux's duplicate-pattern check. This ticket's SSEHandler is a complete, independently tested http.Handler (event/data/id/retry wire format, topic validation, heartbeat, clean disconnect, Windows tier-2 refusal, plus a real-socket curl-based integration test) ready for whichever ticket restructures the mux to dispatch by topic or mounts a second route.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, once it is restructured to mount fleet.sessions's SSE stream (e.g. topic-dispatching wrapper or a second route); retire this entry then"
+  },
+  {
+    "symbol": "internal/fleet/sessions.NewClient",
+    "reason": "The typed fleet.sessions.list client wrapper (mirrors pkg/provider/client.go's ModelExecute pattern) for L/S-25.T2's `cascade fleet sessions` one-shot mode, which is explicitly out of this ticket's scope (full_desc: \"Do NOT implement... the cascade fleet sessions command (S-25.T2)\"). Client.List is fully tested (happy path, taxonomy-error passthrough, plain-error-to-KindInternal wrapping, and the Windows tier-2 refusal).",
+    "expected_caller": "L/S-25.T2's `cascade fleet sessions` command, which dials fleet.sessions.list through this Client when a daemon is present; retire this entry once that command lands"
+  },
+  {
+    "symbol": "internal/fleet/sessions.EventsPath",
+    "reason": "Names the route sessions.SSEHandler expects to be mounted at. Referenced only by this package's own tests until the composition root (out of scope, see the NewSSEHandler entry above) actually calls http.ServeMux.Handle(sessions.EventsPath, ...).",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the same change that wires NewSSEHandler; retire together"
   }
 ]
