@@ -26,6 +26,15 @@ import (
 // (socket_windows.go) and mcp.dispatch is never registered; everywhere
 // else it registers and dispatches for real.
 func TestRegisterSocketMCP_Dispatches(t *testing.T) {
+	// RegisterSocketMCP builds the real response marshaler, which opens
+	// THIS PROCESS's vault at the data dir resolved from $HOME. On a host
+	// with no OS keychain -- every linux CI runner -- custody falls back to
+	// the encrypted file vault, and that CREATES $HOME/.cascade/data. The
+	// darwin dev host takes the keychain branch and creates nothing, so the
+	// leak was invisible locally and failed CI's redirected-HOME job every
+	// run. Redirecting HOME keeps the test on the real code path while
+	// leaving the operator's own vault alone (R-14.206).
+	t.Setenv("HOME", t.TempDir())
 	reg := rpc.NewRegistry()
 	err := transport.RegisterSocketMCP(reg, echoOK())
 
@@ -73,6 +82,15 @@ func TestRegisterSocketMCP_Dispatches(t *testing.T) {
 // never as a registry.Dispatch error, on every platform where registration
 // itself succeeds.
 func TestRegisterSocketMCP_MalformedParamsNeverReturnsHandlerError(t *testing.T) {
+	// RegisterSocketMCP builds the real response marshaler, which opens
+	// THIS PROCESS's vault at the data dir resolved from $HOME. On a host
+	// with no OS keychain -- every linux CI runner -- custody falls back to
+	// the encrypted file vault, and that CREATES $HOME/.cascade/data. The
+	// darwin dev host takes the keychain branch and creates nothing, so the
+	// leak was invisible locally and failed CI's redirected-HOME job every
+	// run. Redirecting HOME keeps the test on the real code path while
+	// leaving the operator's own vault alone (R-14.206).
+	t.Setenv("HOME", t.TempDir())
 	if runtime.GOOS == "windows" {
 		t.Skip("mcp.dispatch is never registered on windows")
 	}

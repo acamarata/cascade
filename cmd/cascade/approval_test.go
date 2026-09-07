@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -125,5 +127,35 @@ func TestApprovalGrantRequiresTheToken(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "token") {
 		t.Errorf("the refusal does not name the missing token: %v", err)
+	}
+}
+
+// TestApprovalCommands_TransportFailurePropagates drives list/show/deny/
+// expire's REAL RunE past approvalClient's success and into the actual
+// c.ApprovalX call, which fails to dial a socket nothing serves — the
+// same hermetic pattern policy_test.go uses for the policy group.
+func TestApprovalCommands_TransportFailurePropagates(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  func(approvalDeps) *cobra.Command
+		args []string
+	}{
+		{"list", newApprovalListCmd, nil},
+		{"show", newApprovalShowCmd, []string{"01J8ZC5W2K4F6H8M0P2R4T6V8X"}},
+		{"deny", newApprovalDenyCmd, []string{"01J8ZC5W2K4F6H8M0P2R4T6V8X", "--presented-summary", "rm -rf /tmp/x"}},
+		{"expire", newApprovalExpireCmd, nil},
+	}
+	for _, tc := range cases {
+		deps := hermeticApprovalDeps(t)
+		out, err := execLeaf(t, tc.cmd(deps), tc.args)
+		if err == nil {
+			t.Fatalf("approval %s succeeded against a socket nothing listens on: %s", tc.name, out)
+		}
+		if !cascade.HasKind(err, cascade.KindUnavailable) {
+			t.Errorf("approval %s error kind = %v, want unavailable", tc.name, err)
+		}
+		if !strings.Contains(err.Error(), "daemon not running or unreachable") {
+			t.Errorf("approval %s error = %v, want it to name the unreachable daemon", tc.name, err)
+		}
 	}
 }
