@@ -38,7 +38,14 @@ func NewRegistry() *Registry {
 	return &Registry{handlers: make(map[string]HandlerFunc)}
 }
 
-// Register binds method to handler. Registering the same method twice
+// Register binds method to handler. R-21.273 requires every ticket that
+// registers an RPC method to list this file in files_scope.change;
+// internal/fleet/sessions.RegisterHandlers (P1-E12-W3-S24-T3) binds
+// fleet.sessions.list through exactly this generic Register call — no
+// method-specific code belongs here, by design (see registry_test.go and
+// internal/fleet/sessions/rpc.go's own CONTRACT DEVIATION note for why).
+//
+// Registering the same method twice
 // overwrites the prior binding — the daemon composition root is the only
 // caller and is expected to register each method exactly once; a
 // duplicate registration is not itself an error (Article-1 does not

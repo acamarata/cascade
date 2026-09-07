@@ -54,6 +54,18 @@ var EgressNetNotYetMigrated = []EgressAllowEntry{
 	{"internal/daemon", "the control-socket listener; local transport, not egress"},
 	{"internal/rpc", "the control-plane RPC frame layer; local transport, not egress"},
 	{"internal/runtime", "address and socket-path helpers"},
+	// NOTE ON THIS ENTRY'S PLACEMENT. internal/fleet/sessions does not
+	// "predate the egress ruling" the way every entry above it does: it
+	// was added after. It is here because it is the same KIND of importer
+	// as internal/rpc and internal/daemon -- it serves an SSE stream over
+	// the local control socket, so no bytes leave the machine and there is
+	// nothing for the egress firewall to filter. That class will never
+	// "migrate", because it was never egress; the list name is inaccurate
+	// for it, and splitting local-transport out into its own list is a
+	// change worth making deliberately rather than as a side effect of
+	// landing a ticket. Recorded so the imprecision is visible instead of
+	// buried in a one-line append.
+	{"internal/fleet/sessions", "the fleet.sessions SSE stream over the local control socket; local transport, not egress (see note above)"},
 }
 
 // EgressExecNormative is the set the ruling names as permitted importers

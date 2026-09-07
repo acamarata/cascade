@@ -1,0 +1,7 @@
+event: fleet.sessions.changed
+id: 1
+data: {"session_id":"s1","harness":"claude","account":"a1","pid":4242,"state":"running","started_at":1700000000000,"updated_at":1700000000000,"tool_count":0,"compaction_count":0}
+retry: 3000
+
+: keep-alive
+
