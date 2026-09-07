@@ -308,5 +308,25 @@
     "symbol": "internal/runtime.RequiresElevationToLoosen",
     "reason": "The write-verb side of the config loosening gate, so `config set` can tell an operator that a key needs elevation before the write is attempted. The reload path already enforces the same gate; this is the pre-flight answer for the CLI verb, which lands with the config-set surface.",
     "expected_caller": "the config set command, in the change that surfaces the elevation requirement before a write"
+  },
+  {
+    "symbol": "internal/fleet/tailer.NewTailer",
+    "reason": "P1-E12-W3-S24-T2 builds the rotation-safe transcript tailer itself; the ticket's own contract text names its caller as 'T3, sessions domain' and explicitly scopes the poll loop that drives Next() out of this ticket. No composition root constructs a Tailer yet.",
+    "expected_caller": "the sessions domain's poll loop (the ticket after P1-E12-W3-S24-T2 in Epic L that owns session/harness tracking), which calls NewTailer per watched transcript and drives Next() in a loop"
+  },
+  {
+    "symbol": "internal/fleet/journal.New",
+    "reason": "P1-E13-W3-S27-T1 builds the entity journal's append/checkpoint/replay store in isolation. The ticket's own contract text scopes the CLI surface ('cascade fleet journal show|replay') to S-27.T4 and the recovery classifier that reads intent/ack pairs to S-27.T2; neither is in-tree yet, so no composition root constructs a journal.SQLiteStore.",
+    "expected_caller": "the recovery classifier (P1-E13-W3-S27-T2) and the fleet journal CLI surface (P1-E13-W3-S27-T4), both of which call journal.New to obtain a Store over the daemon's cascade.db"
+  },
+  {
+    "symbol": "internal/fleet/journal.DefaultNamespace",
+    "reason": "Shares New's fate: it is the namespace constant a composition root passes to New, and nothing constructs a journal.SQLiteStore yet.",
+    "expected_caller": "the same S-27.T2/S-27.T4 callers that call journal.New"
+  },
+  {
+    "symbol": "internal/fleet/journal.AllKinds",
+    "reason": "Exported for the same reason pkg/cascade.AllKinds and internal/audit.AllKinds are: a closed enum needs one place a consumer (or a test elsewhere in the tree) can range over every member without hardcoding the list. No such external consumer exists yet because nothing outside this package reads journal.Kind values yet.",
+    "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()"
   }
 ]

@@ -112,7 +112,7 @@ var AllDomains = []DomainMeta{
 	{ID: DomainMemory, TablePrefix: "memory", OwnerPkg: "internal/memory (Epic G)"},
 	{ID: DomainAudit, TablePrefix: "audit", OwnerPkg: "internal/audit (Epic I)"},
 	{ID: DomainSecrets, TablePrefix: "secrets", OwnerPkg: "internal/secrets (Epic H)"},
-	{ID: DomainSessions, TablePrefix: "sessions", OwnerPkg: "internal/fleet (sessions, nodes, lanes)"},
+	{ID: DomainSessions, TablePrefix: "sessions", OwnerPkg: "internal/fleet (sessions, nodes, lanes, journal — P1-E13-W3-S27-T1)"},
 	{ID: DomainConfig, TablePrefix: "config", OwnerPkg: "internal/runtime (bootstrap, profiles, config)"},
 	{ID: DomainRetrieval, TablePrefix: "retrieval", OwnerPkg: "internal/retrieval"},
 	{ID: DomainBlobs, TablePrefix: "blobs", OwnerPkg: "providers/fs (R-14.6)"},
