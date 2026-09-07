@@ -5,11 +5,6 @@
     "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live anthropic.Driver; retire this entry once either lands"
   },
   {
-    "symbol": "plugins/pbd/internal/pews.EncodeTicket",
-    "reason": "The encoder half of the same S-28.T1 codec, and unreachable for the same scoping reason: the authoring path that writes a ticket back out is N/S-28.T4's, not this ticket's. It is exercised here only by the round-trip test, which is what proves the two halves agree about field order.",
-    "expected_caller": "the PEWS authoring/lifecycle surface (P1-E14-W3-S28-T4), which writes ticket YAML back to the tree; retire this entry in that ticket"
-  },
-  {
     "symbol": "internal/rpc.ElevationMiddleware",
     "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
     "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
@@ -388,5 +383,20 @@
     "symbol": "internal/fleet/governor.NewAdmissionController",
     "reason": "S-26.T2 builds the admission controller as a standalone daemon subsystem with no wiring ticket of its own: the caller that constructs a live AdmissionController and calls Admit before dispatching concurrent work is Conductor's fan-out (K/S-23.T2), which depends on this ticket but has not landed yet, plus the daemon composition root that owns both the shared Sampler and this controller's lifetime. The controller is fully implemented and tested (Admit/Drain/Pressure/compile-lock ceiling, -race clean) against a directly-populated Sampler; only its production construction call site is missing until the fan-out primitive lands.",
     "expected_caller": "Conductor's fan-out primitive (K/S-23.T2) and the daemon composition root that constructs the shared Sampler (S-26.T1) both read; retire this entry once K/S-23.T2 lands"
+  },
+  {
+    "symbol": "internal/fleet/governor.NewThrottleLadder",
+    "reason": "S-26.T3 builds the throttle ladder as a standalone daemon subsystem with no wiring ticket of its own, matching S-26.T1/T2's precedent: the StageProvider seam it plugs into (AdmissionController.SetStageProvider) already ships fully generic from S-26.T2, so wiring a real ladder in needs no further AdmissionController change - a caller need only call ac.SetStageProvider(ladder.Stage) once both are constructed, which TestThrottleLadderStageInstalledAsAdmissionStageProvider proves directly. Only the ladder's own construction call site is missing until the daemon composition root that owns the shared AdmissionController and starts a ThrottleLadder reading its Pressure() lands. The ladder is fully implemented and tested (evaluator hysteresis, fail-closed nil-source, Subscribe/cancel, -race clean) against a directly-populated PressureSource.",
+    "expected_caller": "the daemon composition root that constructs the shared AdmissionController (S-26.T2) and starts a ThrottleLadder reading its Pressure(), then calls ac.SetStageProvider(ladder.Stage); retire this entry once that root lands"
+  },
+  {
+    "symbol": "internal/fleet/governor.Load",
+    "reason": "S-26.T4 builds the governor config loader as a standalone package function with no composition-root ticket of its own: the caller that resolves a configPath and a live *Sampler.Snapshot() and hands the result to NewAdmissionController/NewThrottleLadder is the daemon composition root that also owns S-26.T1/T2/T3's own still-unwired constructors (see the three entries directly above this one). Load is fully implemented and tested (preset-then-explicit-key precedence, pinned-preset-wins, fail-closed on an unrecognised preset, absent-file and absent-block safe defaults, pure convergence on a second unpinned call, malformed-TOML and unparseable-duration error paths) against real temp-file TOML fixtures; only its production call site is missing until that root lands.",
+    "expected_caller": "the daemon composition root that also constructs the shared Sampler/AdmissionController/ThrottleLadder (P1-E13-W3-S26-T1/T2/T3); retire this entry once that root lands"
+  },
+  {
+    "symbol": "internal/fleet/governor.Recommend",
+    "reason": "S-26.T4 builds the doctor --fix calibration advisory as a pure function with no internal/doctor composition-root ticket of its own: internal/doctor/*.go is a different ticket's files_scope (this ticket's files_scope is internal/fleet/governor/* only), and no `cascade doctor` composition root exists in the P1 tree yet to register a governor-calibration Check, matching the precedent already documented in internal/doctor/retrieval_fusion.go (\"a Check constructed over an injected interface, not yet registered with a live CheckRegistry by a composition root\"). Recommend is fully implemented and tested (unpinned/pinned/fail-closed-unrecognised pin states, rationale non-empty) and never mutates configPath; only the doctor Check that would call it and format its output for `doctor --fix` is missing.",
+    "expected_caller": "the future governor-calibration doctor.Check (internal/doctor), constructed once that package's composition root exists; retire this entry once it does"
   }
 ]
