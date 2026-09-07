@@ -104,3 +104,48 @@ BEHAVIOR of the archived structural checker
 named authoritative by 06-FORGE-SPEC.md §8 until this engine existed) as
 JSON test vectors — never its code. See that directory's `README.md` for
 full provenance (source path, MD5, harvest date).
+
+## Files-to-database projection and the SSE update boundary
+
+`pews.Projector` (`plugins/pbd/internal/pews/projector.go`) projects a
+loaded PEWS tree into database-backed state through the Store family
+contract (`pkg/provider.Store`): every ticket's canonical id, declared id,
+title, weight, model class, and phase are written as one JSON record per
+ticket, keyed under the `plugin.pbd` namespace (a plugin-owned namespace,
+not one of `internal/storage/domains.go`'s eleven cascade.db domains — no
+`DomainID` change was needed or made).
+
+The files on disk are the source of truth. `Project`:
+
+- **is idempotent**: running it twice over an unchanged tree performs zero
+  writes and reports `Converged: true`;
+- **converges**: running it again after an external edit reaches exactly
+  the state a from-scratch projection over the edited tree would;
+- **handles deletion as the hard case**: a ticket file removed from disk
+  is diffed against the currently stored keys and its row is deleted in
+  the same atomic write as any other change — never left as an orphan.
+
+This ticket does not implement status/board, draft isolation, residue
+carry-forward, lifecycle, or dispatch — those remain N/S-29.T2-T3 and
+N/S-30.
+
+### SSE update boundary
+
+`plugins/pbd/pbd.go`'s `NewEventsHandler` builds the plugin's `GET /events`
+bridge onto the repository's existing HTTP/1.1 SSE transport
+(02-TARGET-STRUCTURE's boundary; not a second transport): an in-process
+fan-out `bus` implements `pews.EventPublisher`, and a small `http.Handler`
+forwards each projection-update notification as an `id`/`data` SSE record,
+following `internal/rpc.SSEHandler`'s proven connection-loop shape without
+importing `internal/events` or `internal/runtime` (`plugins/**` may import
+`pkg/**` only, Art.10.2). The handler terminates cleanly — no leaked
+goroutine or subscription — on context cancellation or client disconnect;
+`plugins/pbd/projector_test.go`'s `TestProjectionSSERealCounterpart`
+(behind the `integration` build tag, driven by `curl -N` as an independent
+real client, never a self-authored SSE dialect) proves both the wire
+format and the cleanup.
+
+`NewEventsHandler` has no production caller within this ticket's scope:
+mounting it on the daemon's HTTP mux and driving `Project` from a
+PEWS-tree file-change trigger belongs to a later daemon composition-root
+ticket (see `internal/build/testonly-allow.json`).
