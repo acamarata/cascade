@@ -44,12 +44,18 @@ type Violation struct {
 	Message  string
 }
 
-// Report is Validate's full result.
+// Report is Validate's full result. Draft mirrors the tree's own Draft
+// field (R-21.276): true whenever the phase record says draft: true,
+// regardless of whether its tickets were included. A default (excluded)
+// Load always produces ActiveCount 0 alongside Draft true for a draft
+// phase, never a draft ticket's structural facts folded silently into a
+// populated active report.
 type Report struct {
 	Violations     []Violation
 	ActiveCount    int
 	TombstoneCount int
 	GateOnlyCount  int
+	Draft          bool
 }
 
 // OK reports whether the tree validated clean.
@@ -82,6 +88,7 @@ func Validate(tree *Tree) (Report, error) {
 		ActiveCount:    len(tree.Tickets),
 		TombstoneCount: len(tree.Tombstones),
 		GateOnlyCount:  countGateOnly(tree.Tickets),
+		Draft:          tree.Draft,
 	}
 	if len(v) > 0 {
 		return report, cascade.Newf(cascade.KindInvalidInput, "pews: %d structural violation(s) found", len(v))

@@ -133,6 +133,18 @@ type FilesScope struct {
 	Delete []string `yaml:"delete"`
 }
 
+// Phase is the PEWS phase-level record: exactly one field, Draft, per
+// R-21.276. A draft phase (phase.yaml sets draft: true) accepts ticket
+// edits without weight/model_class validation and cannot be built;
+// store.go's Load excludes its tickets from an active read unless the
+// caller passes LoadOptions.IncludeDrafts. A missing phase.yaml means
+// Phase{} (Draft false) — see draft.go's loadPhaseRecord/DecodePhase.
+type Phase struct {
+	// Draft marks the phase a draft (default false); no directory or
+	// marker-file convention carries draft-ness (R-21.276).
+	Draft bool `yaml:"draft"`
+}
+
 // Ticket is the PEWS ticket-schema v2 contract: the 17 normative fields in
 // 06 §1 order, followed by the five declared extra flags and no others. A
 // pointer field (Journals, OwnerPrereq, GateOnly, ExternalContract) is nil
@@ -285,15 +297,4 @@ func validateEnums(t Ticket) error {
 	return nil
 }
 
-// inSet reports whether v appears in set. It backs every closed-set
-// membership check in this file, both for the string field names checkKeys
-// validates and for the typed enum values Weight/ModelClass/QALevel.Valid
-// check.
-func inSet[T comparable](v T, set []T) bool {
-	for _, s := range set {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}
+// inSet moved to draft.go (same package) for line-budget room.

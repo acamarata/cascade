@@ -27,7 +27,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
@@ -74,9 +73,12 @@ type Tombstone struct {
 }
 
 // Tree is a fully loaded, in-memory PEWS tree: every ticket found, plus
-// the recorded tombstones.
+// the recorded tombstones. Draft mirrors the phase record's Draft field
+// (R-21.276); when Draft is true and the tree came from a default Load,
+// Tickets and Tombstones are both empty (see LoadWithOptions, draft.go).
 type Tree struct {
 	Phase      string
+	Draft      bool
 	Tickets    []TicketRecord
 	Tombstones []Tombstone
 }
@@ -94,38 +96,18 @@ func NewStore(root, phase string) *Store {
 	return &Store{Root: root, Phase: phase}
 }
 
-// Load walks the store's tree and decodes every ticket file it finds. It
-// never returns a partially populated Tree: any structural or decode
-// failure returns (nil, err) with err a *cascade.Error.
+// Load walks the store's tree and decodes every ticket file it finds,
+// excluding a draft phase's tickets (LoadOptions{} — see LoadWithOptions,
+// draft.go, for the draft/active branch and IncludeDrafts). It never
+// returns a partially populated Tree: any structural or decode failure
+// returns (nil, err) with err a *cascade.Error.
 func (s *Store) Load() (*Tree, error) {
-	if s.Root == "" {
-		return nil, cascade.New(cascade.KindInvalidInput, "pews: store root must not be empty")
-	}
-	if s.Phase == "" {
-		return nil, cascade.New(cascade.KindInvalidInput, "pews: store phase must not be empty")
-	}
-	info, err := os.Stat(s.Root)
-	if err != nil {
-		return nil, cascade.Wrapf(cascade.KindNotFound, err, "pews: tree root %q", s.Root)
-	}
-	if !info.IsDir() {
-		return nil, cascade.Newf(cascade.KindInvalidInput, "pews: tree root %q is not a directory", s.Root)
-	}
-
-	tickets, err := s.loadTickets()
-	if err != nil {
-		return nil, err
-	}
-	tombstones, err := s.loadTombstones()
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(tickets, func(i, j int) bool { return tickets[i].CanonicalID < tickets[j].CanonicalID })
-	return &Tree{Phase: s.Phase, Tickets: tickets, Tombstones: tombstones}, nil
+	return s.LoadWithOptions(LoadOptions{})
 }
 
-// loadTickets walks Root/epics and decodes every ticket file beneath it.
-func (s *Store) loadTickets() ([]TicketRecord, error) {
+// loadTickets walks Root/epics and decodes every ticket file beneath it
+// using decode.
+func (s *Store) loadTickets(decode ticketDecoder) ([]TicketRecord, error) {
 	epicsDir := filepath.Join(s.Root, "epics")
 	epicEntries, err := readDirIfExists(epicsDir)
 	if err != nil {
@@ -141,7 +123,7 @@ func (s *Store) loadTickets() ([]TicketRecord, error) {
 			return nil, cascade.Newf(cascade.KindInvalidInput, "pews: malformed epic directory name %q", ee.Name())
 		}
 		letters := m[1]
-		recs, err := s.loadWaves(filepath.Join(epicsDir, ee.Name()), letters)
+		recs, err := s.loadWaves(filepath.Join(epicsDir, ee.Name()), letters, decode)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +132,7 @@ func (s *Store) loadTickets() ([]TicketRecord, error) {
 	return out, nil
 }
 
-func (s *Store) loadWaves(epicDir, letters string) ([]TicketRecord, error) {
+func (s *Store) loadWaves(epicDir, letters string, decode ticketDecoder) ([]TicketRecord, error) {
 	waveEntries, err := readDirIfExists(filepath.Join(epicDir, "waves"))
 	if err != nil {
 		return nil, err
@@ -165,7 +147,7 @@ func (s *Store) loadWaves(epicDir, letters string) ([]TicketRecord, error) {
 			return nil, cascade.Newf(cascade.KindInvalidInput, "pews: malformed wave directory name %q", we.Name())
 		}
 		wave, _ := strconv.Atoi(m[1])
-		recs, err := s.loadSprints(filepath.Join(epicDir, "waves", we.Name()), letters, wave)
+		recs, err := s.loadSprints(filepath.Join(epicDir, "waves", we.Name()), letters, wave, decode)
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +156,7 @@ func (s *Store) loadWaves(epicDir, letters string) ([]TicketRecord, error) {
 	return out, nil
 }
 
-func (s *Store) loadSprints(waveDir, letters string, wave int) ([]TicketRecord, error) {
+func (s *Store) loadSprints(waveDir, letters string, wave int, decode ticketDecoder) ([]TicketRecord, error) {
 	sprintEntries, err := readDirIfExists(filepath.Join(waveDir, "sprints"))
 	if err != nil {
 		return nil, err
@@ -189,7 +171,7 @@ func (s *Store) loadSprints(waveDir, letters string, wave int) ([]TicketRecord, 
 			return nil, cascade.Newf(cascade.KindInvalidInput, "pews: malformed sprint directory name %q", se.Name())
 		}
 		sprint, _ := strconv.Atoi(m[1])
-		recs, err := s.loadTicketFiles(filepath.Join(waveDir, "sprints", se.Name()), letters, wave, sprint)
+		recs, err := s.loadTicketFiles(filepath.Join(waveDir, "sprints", se.Name()), letters, wave, sprint, decode)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +180,7 @@ func (s *Store) loadSprints(waveDir, letters string, wave int) ([]TicketRecord, 
 	return out, nil
 }
 
-func (s *Store) loadTicketFiles(sprintDir, letters string, wave, sprint int) ([]TicketRecord, error) {
+func (s *Store) loadTicketFiles(sprintDir, letters string, wave, sprint int, decode ticketDecoder) ([]TicketRecord, error) {
 	ticketEntries, err := readDirIfExists(filepath.Join(sprintDir, "tickets"))
 	if err != nil {
 		return nil, err
@@ -219,7 +201,7 @@ func (s *Store) loadTicketFiles(sprintDir, letters string, wave, sprint int) ([]
 		if rerr != nil {
 			return nil, cascade.Wrapf(cascade.KindInternal, rerr, "pews: reading %q", path)
 		}
-		t, derr := DecodeTicket(data)
+		t, derr := decode(data)
 		if derr != nil {
 			return nil, cascade.Wrapf(cascade.KindInvalidInput, derr, "pews: decoding %q", path)
 		}

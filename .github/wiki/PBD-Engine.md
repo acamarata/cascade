@@ -149,3 +149,47 @@ format and the cleanup.
 mounting it on the daemon's HTTP mux and driving `Project` from a
 PEWS-tree file-change trigger belongs to a later daemon composition-root
 ticket (see `internal/build/testonly-allow.json`).
+
+## Draft-phase isolation (N/S-29.T2)
+
+A phase is a draft when its root carries a `phase.yaml` document with
+`draft: true` — the only representation (R-21.276): no directory
+convention, no marker file, no separate state value. A missing
+`phase.yaml` means the phase is not a draft, matching `Phase{}`'s own zero
+value. `pbd`'s tree-store, validator, and authoring engine all key off
+this single field.
+
+### The isolation boundary
+
+`Store.Load` (unchanged signature) always excludes a draft phase's
+tickets: it reads `phase.yaml` first, and when the phase is a draft it
+returns `&Tree{Draft: true}` with `Tickets`/`Tombstones` both nil —
+**without opening a single ticket file**. A malformed or incomplete draft
+ticket therefore can never break a default (active) read: the file is
+never decoded at all for an excluded phase.
+
+`Store.LoadWithOptions(LoadOptions{IncludeDrafts: true})` is the only way
+a draft phase's tickets enter a returned `Tree`. When drafts are included,
+ticket decoding uses `DecodeDraftTicket` in place of `DecodeTicket`: it
+runs the same fail-closed pipeline (malformed YAML, unknown fields, wrong
+shape, `cr_level`/`qa_level` validity) but skips the `weight`/
+`model_class` enum check, per R-21.276's "a draft phase accepts ticket
+edits without weight/model validation." Authoring (`Create`/`Edit`/`Move`)
+always loads with `IncludeDrafts: true` — a draft is edited normally,
+against its own sibling tickets — and additionally drops the
+`weight`-to-`cr_level` floor lint issue (`ruleCRWeight`) for a draft
+candidate tree before deciding pass/fail.
+
+`Validate`'s `Report` carries a `Draft` field mirroring the tree's own
+flag, so a clean, draft-excluded report (`ActiveCount: 0, Draft: true`)
+is never mistaken for a clean active one.
+
+A draft phase cannot be built: `RequireBuildable(tree)` returns a typed
+`cascade.KindConflict` refusal for a draft tree. No build/dispatch entry
+point calls it yet — that belongs to N/S-30 (see
+`internal/build/testonly-allow.json`).
+
+### What this ticket does not cover
+
+Residue carry-forward (`CarryForward(src, dst PhaseID)`), status/board,
+lifecycle, projection, and dispatch remain N/S-29.T1/T3-T4 and N/S-30's.

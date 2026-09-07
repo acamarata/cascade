@@ -23,11 +23,22 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// checkCandidate runs Lint (composes Validate) over the proposed tree,
-// returning its error verbatim.
+// checkCandidate runs Lint (composes Validate) over the proposed tree. For
+// a draft tree it drops any LintKindCRWeightMismatch issue before deciding
+// pass/fail (filterDraftLintIssues, draft.go) — R-21.276's "a draft phase
+// accepts ticket edits without weight/model validation" applied to the one
+// Lint rule that re-derives a weight-shaped constraint; every other issue
+// still refuses. A non-draft tree's result passes through verbatim.
 func checkCandidate(tree *Tree) error {
-	_, err := Lint(tree)
-	return err
+	report, err := Lint(tree)
+	if err == nil || !tree.Draft {
+		return err
+	}
+	filtered := filterDraftLintIssues(report.Issues)
+	if len(filtered) == 0 {
+		return nil
+	}
+	return cascade.Newf(cascade.KindInvalidInput, "pews: %d contract-lint issue(s) found", len(filtered))
 }
 
 // Create authors a brand-new ticket at t.ID's canonical position. It
@@ -66,7 +77,11 @@ func prepareWrite(root, phase string, t Ticket, wantExists bool) (string, error)
 	if err := requirePhase(c, phase, t.ID); err != nil {
 		return "", err
 	}
-	tree, err := NewStore(root, phase).Load()
+	// Authoring always sees a draft phase's own tickets (IncludeDrafts:
+	// true) — a draft is edited normally, only its weight/model
+	// validation is relaxed (checkCandidate below); the isolation
+	// R-21.276 requires is for ACTIVE reads, not for authoring itself.
+	tree, err := NewStore(root, phase).LoadWithOptions(LoadOptions{IncludeDrafts: true})
 	if err != nil {
 		return "", err
 	}
@@ -87,7 +102,7 @@ func prepareWrite(root, phase string, t Ticket, wantExists bool) (string, error)
 		}
 	}
 	tickets = append(tickets, recordFor(t, c, relPath))
-	candidate := &Tree{Phase: tree.Phase, Tombstones: tree.Tombstones, Tickets: tickets}
+	candidate := &Tree{Phase: tree.Phase, Draft: tree.Draft, Tombstones: tree.Tombstones, Tickets: tickets}
 	if err := checkCandidate(candidate); err != nil {
 		return "", err
 	}
@@ -113,7 +128,7 @@ func Move(root, phase, fromID, toID string) error {
 	if err != nil {
 		return err
 	}
-	tree, err := NewStore(root, phase).Load()
+	tree, err := NewStore(root, phase).LoadWithOptions(LoadOptions{IncludeDrafts: true})
 	if err != nil {
 		return err
 	}
@@ -126,7 +141,11 @@ func Move(root, phase, fromID, toID string) error {
 		}
 		return cascade.Wrapf(cascade.KindInternal, rerr, "pews: reading %q", fromAbs)
 	}
-	t, derr := DecodeTicket(data)
+	decode := ticketDecoder(DecodeTicket)
+	if tree.Draft {
+		decode = DecodeDraftTicket
+	}
+	t, derr := decode(data)
 	if derr != nil {
 		return cascade.Wrap(cascade.KindInvalidInput, derr, "pews: decoding ticket at move source")
 	}
@@ -183,7 +202,7 @@ func moveCandidateTree(tree *Tree, t Ticket, fromID string, toC idComponents, to
 		}
 	}
 	tickets = append(tickets, recordFor(t, toC, toPath))
-	return &Tree{Phase: tree.Phase, Tombstones: tree.Tombstones, Tickets: tickets}
+	return &Tree{Phase: tree.Phase, Draft: tree.Draft, Tombstones: tree.Tombstones, Tickets: tickets}
 }
 
 // fileExists distinguishes "does not exist" (false, nil) from a real stat

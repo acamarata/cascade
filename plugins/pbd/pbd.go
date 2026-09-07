@@ -71,39 +71,41 @@ func manifest() plugin.Manifest {
 		HostVersion: ">=0.1.0",
 		Runtime:     plugin.RuntimeBuiltin,
 		Provides: plugin.Provides{
-			Commands: []plugin.CommandSpec{
-				{
-					Name:        validateCommandName,
-					Description: "Validate the PEWS ticket tree for structural correctness.",
-				},
-				{
-					Name:        lintCommandName,
-					Description: "Lint every PEWS ticket contract for completeness against the Forge spec.",
-				},
-				{
-					Name:        createCommandName,
-					Description: "Author a new PEWS ticket at the canonical tree position its id implies.",
-				},
-				{
-					Name:        editCommandName,
-					Description: "Overwrite an existing PEWS ticket's contract in place.",
-				},
-				{
-					Name:        moveCommandName,
-					Description: "Relocate a PEWS ticket to a new canonical tree position.",
-				},
-			},
+			Commands: manifestCommands(),
+			Tools:    manifestTools(),
 		},
+	}
+}
+
+// manifestCommands is manifest()'s Provides.Commands, split out purely for
+// that function's own line budget (Art.10.5).
+func manifestCommands() []plugin.CommandSpec {
+	return []plugin.CommandSpec{
+		{Name: validateCommandName, Description: "Validate the PEWS ticket tree for structural correctness."},
+		{Name: lintCommandName, Description: "Lint every PEWS ticket contract for completeness against the Forge spec."},
+		{Name: createCommandName, Description: "Author a new PEWS ticket at the canonical tree position its id implies."},
+		{Name: editCommandName, Description: "Overwrite an existing PEWS ticket's contract in place."},
+		{Name: moveCommandName, Description: "Relocate a PEWS ticket to a new canonical tree position."},
+		{Name: statusCommandName, Description: "Show a summary of the PEWS ticket tree for one phase.", RPCMethod: statusRPCMethod},
+		{Name: boardCommandName, Description: "Show the PEWS ticket tree for one phase grouped by model class.", RPCMethod: boardRPCMethod},
+	}
+}
+
+// manifestTools is manifest()'s Provides.Tools.
+func manifestTools() []plugin.ToolSpec {
+	return []plugin.ToolSpec{
+		{Name: statusToolName, Description: "Read-only PEWS status summary for one phase."},
+		{Name: boardToolName, Description: "Read-only PEWS board (grouped by model class) for one phase."},
 	}
 }
 
 // handlers is cascade-pbd's plugin.BuiltinHandlers implementation.
 type handlers struct{}
 
-// DispatchTool always refuses: this ticket provides no tools.
-func (handlers) DispatchTool(_ context.Context, name string, _ []byte) ([]byte, error) {
-	return nil, cascade.Newf(cascade.KindUnsupported, "pbd: no tool named %q", name)
-}
+// DispatchTool is defined in status.go (same package): it services the
+// two policy-filtered MCP tools N/S-29.T4 adds (statusToolName,
+// boardToolName) and refuses every other name. Kept out of this file
+// purely for line-budget room (Art.10.5's 300-line cap).
 
 // DispatchIntent always refuses: this ticket provides no intents.
 func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte, error) {
@@ -135,6 +137,9 @@ func (handlers) RunCommand(_ context.Context, name string, args []string) error 
 		return runEditCommand(args)
 	case moveCommandName:
 		return runMoveCommand(args)
+	case statusCommandName, boardCommandName:
+		// runStatusOrBoardCommand is defined in status.go (line-budget).
+		return runStatusOrBoardCommand(name, args)
 	default:
 		return cascade.Newf(cascade.KindUnsupported, "pbd: no command named %q", name)
 	}
