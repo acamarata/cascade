@@ -333,5 +333,10 @@
     "symbol": "internal/fleet/governor.NewSampler",
     "reason": "S-26.T1 builds the resource sampler as a shared dependency of two sibling tickets that have not landed yet: the admission controller (S-26.T2) and the throttle ladder (S-26.T3). Both need a single, already-running Sampler to read from, so the sampler ships first with only its own test suite as a caller.",
     "expected_caller": "the admission controller and throttle ladder (P1-E13-W3-S26-T2, P1-E13-W3-S26-T3), and the daemon composition root that starts the shared Sampler both of them read from; retire this entry once either lands"
+  },
+  {
+    "symbol": "providers/openai.New",
+    "reason": "P1-E10-W3-S19-T3 builds the real openai-compat ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against recorded fixtures (openai/moonshot/zai/deepseek-style 401s, a constructed 429, malformed/truncated stream fixtures) plus a tagged live lane; only its construction call site is missing until the registry lands.",
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands"
   }
 ]
