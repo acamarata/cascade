@@ -42,6 +42,14 @@ func execRootContextScope(t *testing.T, dir string, args ...string) (string, err
 	// to be running on the machine executing this test.
 	t.Setenv("CASCADE_HOME", dir)
 	t.Setenv("CASCADE_SOCKET", dir+"/daemon.sock")
+	// HOME as well, and for a SECOND reason: CASCADE_HOME above steers the
+	// daemonless probe, but tier discovery resolves the global tier from the
+	// OS home directory independently, so these tests still read -- and the
+	// engine still created -- the operator's real ~/.cascade. That is the
+	// Art.7.1 leak CI's redirected-HOME job reports. Pointing HOME at a temp
+	// dir leaves the global tier legitimately absent, which is a state the
+	// commands must handle anyway.
+	t.Setenv("HOME", t.TempDir())
 	globalFlags = GlobalFlags{}
 	root := newRootCmd()
 	existing, _, err := root.Find([]string{"context"})

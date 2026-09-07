@@ -57,6 +57,10 @@ func TestDecodeContextAssembleParams(t *testing.T) {
 // pass.
 func TestRegisterContextAssembleHandler_RegistersAndDispatches(t *testing.T) {
 	dir := t.TempDir()
+	// Tier discovery walks up to the OS home for the global tier, so
+	// without this the handler read (and created) the operator's real
+	// ~/.cascade even though every other path here is injected (Art.7.1).
+	t.Setenv("HOME", t.TempDir())
 	seedRepo(t, dir)
 	chdir(t, dir)
 

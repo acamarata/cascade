@@ -108,6 +108,14 @@ func DaemonLogsHandler(ctx context.Context, opts DaemonLogsOptions) error {
 // Detecting it by IDENTITY (os.SameFile between the still-open handle
 // and a fresh stat of the path) is the fix — same technique `tail -F`
 // relies on.
+// missingGraceTicks is how many CONSECUTIVE polls may fail to stat the log
+// path before follow mode calls it deleted. It exists to span the gap
+// between a rotation's rename and its create, which are two syscalls with
+// a real, observable window between them. Three polls is long enough for
+// that window on a loaded machine and short enough that a genuinely
+// deleted file is still reported within a few poll intervals.
+const missingGraceTicks = 3
+
 func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset int64, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -117,6 +125,10 @@ func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset 
 		return &LogError{Field: "daemon.logs", Reason: fmt.Sprintf("stat open log file %s: %v", opts.Path, err)}
 	}
 
+	// missing counts CONSECUTIVE failed stats of opts.Path; see the comment
+	// at its use below for why a single one is not proof of deletion.
+	missing := 0
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -124,9 +136,29 @@ func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset 
 		case <-ticker.C:
 			pathInfo, err := os.Stat(opts.Path)
 			if err != nil {
+				// A rotation is a RENAME followed by a CREATE, and those
+				// are two separate syscalls: between them the path
+				// genuinely does not exist. A poll that lands in that
+				// window sees exactly what a deleted file looks like, so
+				// concluding "disappeared" on the first failed stat
+				// reports a rotation as a deletion. The window is short
+				// here and wider on a loaded machine, which is why this
+				// surfaced only under CI's race lane and never in twenty
+				// local -race runs.
+				//
+				// Waiting a bounded number of polls costs nothing when
+				// the file really is gone (it still exits, a few
+				// intervals later, with the same diagnostic) and is the
+				// difference between correct and incorrect when it is
+				// merely being rotated.
+				missing++
+				if missing <= missingGraceTicks {
+					continue
+				}
 				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s disappeared\n", opts.Path)
 				return nil
 			}
+			missing = 0
 			if !os.SameFile(openInfo, pathInfo) {
 				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s was rotated out from under the reader\n", opts.Path)
 				return nil
