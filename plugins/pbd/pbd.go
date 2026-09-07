@@ -1,30 +1,32 @@
 // Package pbd is the first-party builtin cascade-pbd plugin: it registers
-// the ratified `pbd validate` command (07-CLI-COMMAND-TREE.md's plugin-
-// contributed pbd namespace) with the host's compile-time builtin registry
-// (pkg/plugin.RegisterBuiltin), running the native tree-store/validator
-// engine in internal/pews over the canonical PEWS ticket tree.
+// the ratified `pbd validate` and `pbd lint` commands (07-CLI-COMMAND-TREE.md's
+// plugin-contributed pbd namespace) with the host's compile-time builtin
+// registry (pkg/plugin.RegisterBuiltin), running the native tree-store/
+// validator/lint engine in internal/pews over the canonical PEWS ticket
+// tree.
 //
-// Purpose: mount `validate` — and ONLY `validate` — through the builtin-
+// Purpose: mount `validate` (T2) and `lint` (T4) — and ONLY those two —
 //
-//	plugin boundary supplied by C/S-05.T7; T3 owns authoring, T4 owns
-//	lint, both as later commands on this same manifest.
+//	through the builtin-plugin boundary supplied by C/S-05.T7; T3 owns
+//	authoring as a later command on this same manifest.
 //
 // Inputs: RunCommand's args: args[0] is the tree root, args[1] (optional)
 //
 //	overrides DefaultPhase.
 //
-// Outputs: nil on a clean tree; a *cascade.Error of kind KindInvalidInput
+// Outputs: nil on a clean tree/lint; a *cascade.Error of kind
 //
-//	(fail closed) summarizing every violation otherwise — see validate.go.
+//	KindInvalidInput (fail closed) summarizing every violation/issue
+//	otherwise — see validate.go and lint.go.
 //
 // Constraints: imports pkg/** and this plugin's own internal/pews ONLY,
 //
 //	never the repo's internal/** (Art.10.2, internal/build/arch_test.go's
 //	plugins-providers-boundary rule) — this is also why RunCommand cannot
 //	format output through internal/output.Writer and instead folds every
-//	violation into the returned error's message.
+//	violation/issue into the returned error's message.
 //
-// SPORT: plugins/pbd (ADD) — P1-E14-W3-S28-T2.
+// SPORT: plugins/pbd (ADD) — P1-E14-W3-S28-T2; lint (ADD) — P1-E14-W3-S28-T4.
 package pbd
 
 import (
@@ -37,8 +39,11 @@ import (
 // pluginID is this plugin's manifest id.
 const pluginID = "pbd"
 
-// validateCommandName is the one CommandSpec this ticket mounts.
+// validateCommandName and lintCommandName are the CommandSpecs T2 and T4
+// mount respectively. Authoring (create/edit/move) is T3's; this file
+// only adds lint alongside the already-landed validate.
 const validateCommandName = "validate"
+const lintCommandName = "lint"
 
 // init registers cascade-pbd with the host's compile-time registry. A
 // blank-import of this package by the binary's composition root (or a
@@ -62,6 +67,10 @@ func manifest() plugin.Manifest {
 					Name:        validateCommandName,
 					Description: "Validate the PEWS ticket tree for structural correctness.",
 				},
+				{
+					Name:        lintCommandName,
+					Description: "Lint every PEWS ticket contract for completeness against the Forge spec.",
+				},
 			},
 		},
 	}
@@ -80,20 +89,23 @@ func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte
 	return nil, cascade.Newf(cascade.KindUnsupported, "pbd: no intent named %q", name)
 }
 
-// RunCommand services the validate CommandSpec: args[0] is the PEWS tree
-// root (required); args[1], if present, overrides DefaultPhase. It
-// returns nil on a clean tree and a fail-closed *cascade.Error describing
-// every violation found otherwise.
+// RunCommand services the validate and lint CommandSpecs: args[0] is the
+// PEWS tree root (required); args[1], if present, overrides DefaultPhase.
+// It returns nil on a clean tree/lint and a fail-closed *cascade.Error
+// describing every violation/issue found otherwise.
 func (handlers) RunCommand(_ context.Context, name string, args []string) error {
-	if name != validateCommandName {
+	if name != validateCommandName && name != lintCommandName {
 		return cascade.Newf(cascade.KindUnsupported, "pbd: no command named %q", name)
 	}
 	if len(args) == 0 || args[0] == "" {
-		return cascade.New(cascade.KindInvalidInput, "pbd validate: a tree root argument is required")
+		return cascade.Newf(cascade.KindInvalidInput, "pbd %s: a tree root argument is required", name)
 	}
 	phase := DefaultPhase
 	if len(args) > 1 && args[1] != "" {
 		phase = args[1]
+	}
+	if name == lintCommandName {
+		return runLintAndSummarize(args[0], phase)
 	}
 	return runValidateAndSummarize(args[0], phase)
 }

@@ -23,8 +23,16 @@ func TestBuiltinRegistration(t *testing.T) {
 	if !ok {
 		t.Fatalf("plugin %q not found in builtin registry", pluginID)
 	}
-	if len(entry.Manifest.Provides.Commands) != 1 || entry.Manifest.Provides.Commands[0].Name != validateCommandName {
-		t.Fatalf("commands = %+v, want exactly [%q]", entry.Manifest.Provides.Commands, validateCommandName)
+	// P1-E14-W3-S28-T4 (contract lint) adds `lint` alongside T2's already-
+	// landed `validate`; this proves both, and only both, are mounted.
+	wantCommands := map[string]bool{validateCommandName: true, lintCommandName: true}
+	if len(entry.Manifest.Provides.Commands) != len(wantCommands) {
+		t.Fatalf("commands = %+v, want exactly %v", entry.Manifest.Provides.Commands, wantCommands)
+	}
+	for _, c := range entry.Manifest.Provides.Commands {
+		if !wantCommands[c.Name] {
+			t.Errorf("unexpected command %q", c.Name)
+		}
 	}
 
 	cmd, ok := reg.NewCobraCommand(pluginID, validateCommandName)
