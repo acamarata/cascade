@@ -56,6 +56,16 @@ func TestOAuthSecretIsUnprintableUnderEveryVerb(t *testing.T) {
 	}
 }
 
+// TestOAuthSecretGoStringDirectly calls GoString directly: fmt routes
+// %#v through the Format method above it (which also redacts), so the
+// GoStringer implementation itself is only exercised by a direct call.
+func TestOAuthSecretGoStringDirectly(t *testing.T) {
+	s := newOAuthSecret([]byte("CANARY-GOSTRING-DIRECT"))
+	if got := s.GoString(); got != redactedPlaceholder {
+		t.Fatalf("GoString() = %q, want %q", got, redactedPlaceholder)
+	}
+}
+
 func TestOAuthSecretBytesAndZero(t *testing.T) {
 	raw := []byte("CANARY-ZEROED-9911")
 	s := newOAuthSecret(raw)

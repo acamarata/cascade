@@ -191,6 +191,15 @@ func TestFileVaultConstructionRefusals(t *testing.T) {
 }
 
 func TestFileVaultAvailableFalseOnUnwritableDir(t *testing.T) {
+	// This test makes a directory unwritable and asserts the vault reports
+	// itself unavailable. root ignores the permission bits entirely, so the
+	// write succeeds and the assertion fails for a reason that has nothing
+	// to do with the code. CI's runners are unprivileged and do exercise
+	// this, but a container lane commonly runs as root, where a hard
+	// failure here is noise that buries real ones.
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits do not restrict root, so this case cannot be exercised")
+	}
 	dir := t.TempDir()
 	fv, err := newFileVaultCustody(Config{Service: "s", Dir: dir, Passphrase: "p"})
 	if err != nil {

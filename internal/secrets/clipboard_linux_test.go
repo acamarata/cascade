@@ -54,6 +54,27 @@ func TestClipboard_Linux_RealXclip(t *testing.T) {
 	}
 }
 
+// TestClipboard_Linux_NewOps asserts newClipboardOps builds the real
+// production backend (xclip, its platform label) without touching a
+// subprocess, so it runs unconditionally even when xclip itself is not
+// installed on the runner.
+func TestClipboard_Linux_NewOps(t *testing.T) {
+	ops, err := newClipboardOps()
+	if err != nil {
+		t.Fatalf("newClipboardOps: %v", err)
+	}
+	if ops.platform() != "linux" {
+		t.Fatalf("platform() = %q, want linux", ops.platform())
+	}
+	lo, ok := ops.(*linuxClipboardOps)
+	if !ok {
+		t.Fatalf("newClipboardOps returned %T, want *linuxClipboardOps", ops)
+	}
+	if lo.bin != xclipBin {
+		t.Fatalf("bin = %q, want %q", lo.bin, xclipBin)
+	}
+}
+
 // TestClipboard_Linux_XclipAbsent asserts the fail-closed branch: when
 // the binary cannot be found, Write's underlying setValue returns
 // ErrClipboardUnavailable and nothing is attempted beyond the lookup.
