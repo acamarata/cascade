@@ -34,7 +34,6 @@ func TestWindowsNativeSyntaxFallsThroughToL4(t *testing.T) {
 		"Start-Process powershell -Verb RunAs",
 		"dir /s",
 		"del /f /q C:\\temp",
-		"rmdir /s /q C:\\temp",
 		"copy a.txt b.txt",
 		"move a.txt b.txt",
 		"type notes.txt",
@@ -54,6 +53,41 @@ func TestWindowsNativeSyntaxFallsThroughToL4(t *testing.T) {
 			}
 			if err == nil {
 				t.Fatalf("Classify(%q) returned L4 with no error; the refusal must be named, not implied", cmd)
+			}
+		})
+	}
+}
+
+// TestWindowsFormsThatCollideWithAPosixNameAreNamedNotUnclassified covers
+// the cases the list above deliberately does NOT contain.
+//
+// `rmdir` was originally in that list, and it failed: not because it was
+// permitted, but because it is refused MORE precisely than the list's
+// assertion allows. `rmdir` is a real POSIX command and sits in the L4
+// destructive group in classifier_table.go beside rm, shred and dd, so a
+// command line starting with it matches BY NAME and returns L4 with no
+// fall-through error. The list above requires an error, because an
+// unrecognised form must say it was not understood.
+//
+// Both outcomes are L4 and both are refusals. The distinction worth
+// keeping is which KIND of refusal happened, because the message a human
+// sees differs: a named rule can say what the command does, while a
+// fall-through can only say it was not understood. A cmd.exe form whose
+// verb collides with a POSIX destructive name therefore lands on the
+// stricter, better-explained path, and this test pins that rather than
+// leaving the collision to be rediscovered as a failure.
+func TestWindowsFormsThatCollideWithAPosixNameAreNamedNotUnclassified(t *testing.T) {
+	for _, cmd := range []string{
+		"rmdir /s /q C:\\temp",
+		"rmdir C:\\temp",
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			got, err := classify(t, cmd)
+			if got != L4 {
+				t.Fatalf("Classify(%q) = %s, want L4: rmdir is in the destructive group", cmd, got)
+			}
+			if err != nil {
+				t.Fatalf("Classify(%q) returned an unclassified error (%v); rmdir matches the table by name, so the refusal is named", cmd, err)
 			}
 		})
 	}
