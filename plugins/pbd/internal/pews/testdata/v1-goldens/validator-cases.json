@@ -1,0 +1,56 @@
+{
+  "provenance": {
+    "source_path": ".claude/planning/p1/.plan-audit.py",
+    "source_ref": "gitignored planning-corpus tool named as AUTHORITATIVE by 06-FORGE-SPEC.md §8 (\"the forge validator (N/S-28.T2) supersedes it once the engine exists\") and 12-QUALITY-CONSTITUTION.md §8; not present in the tracked repo, so this file harvests its OBSERVED BEHAVIOR only, never its code",
+    "source_md5": "630ffa77ac0d86d941742e783b8eb02e",
+    "harvest_date": "2026-09-06",
+    "harvested_by": "P1-E14-W3-S28-T2",
+    "method": "Each case below reproduces one of .plan-audit.py's four structural findings (duplicate id, out-of-order/gap sequence, tombstone bookkeeping, per-scope active count) against a small synthetic PEWS tree, translated from the archived tool's prose-based ticket-id grammar (\"EP/S-nn.Tn\", inline \"Tn TOMBSTONED\" markers) into this engine's YAML-tree vocabulary. No v1 implementation code is reproduced; only the input/output behavior it was observed to produce is recorded."
+  },
+  "cases": [
+    {
+      "name": "clean_sequence",
+      "description": "T1..T3 present, no gaps, no duplicates — archived tool prints 0 issues for a contiguous run.",
+      "epic": "N",
+      "wave": 3,
+      "sprint": 28,
+      "ticket_numbers": [1, 2, 3],
+      "tombstones": [],
+      "duplicate_ids": [],
+      "expect_violation_kinds": []
+    },
+    {
+      "name": "duplicate_id",
+      "description": "the same fully-qualified ticket id declared twice — archived tool reports \"DUPLICATE <id>\".",
+      "epic": "N",
+      "wave": 3,
+      "sprint": 28,
+      "ticket_numbers": [1],
+      "tombstones": [],
+      "duplicate_ids": ["P1-E14-W3-S28-T1"],
+      "expect_violation_kinds": ["duplicate-id"]
+    },
+    {
+      "name": "gap_uncovered",
+      "description": "T1 and T3 present, T2 absent with no tombstone recorded — archived tool reports \"gap at T[2]\".",
+      "epic": "N",
+      "wave": 3,
+      "sprint": 28,
+      "ticket_numbers": [1, 3],
+      "tombstones": [],
+      "duplicate_ids": [],
+      "expect_violation_kinds": ["gap"]
+    },
+    {
+      "name": "gap_covered_by_tombstone",
+      "description": "T1 and T3 present, T2 recorded tombstoned — archived tool's \"Tn TOMBSTONED\" inline marker suppresses the gap finding for that slot.",
+      "epic": "N",
+      "wave": 3,
+      "sprint": 28,
+      "ticket_numbers": [1, 3],
+      "tombstones": ["P1-E14-W3-S28-T2"],
+      "duplicate_ids": [],
+      "expect_violation_kinds": []
+    }
+  ]
+}

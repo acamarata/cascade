@@ -1,10 +1,5 @@
 [
   {
-    "symbol": "plugins/pbd/internal/pews.DecodeTicket",
-    "reason": "N/S-28.T1 defines the PEWS ticket-schema v2 contract and its YAML codec, and is explicitly scoped AWAY from the tree store, the validator, the authoring commands and the dispatch surface that read tickets. The decoder therefore ships one ticket before its first consumer by design: the schema is the thing those tickets are specified against, so building it second would mean specifying them against nothing. A codec with no reader is not a feature, and this entry must not outlive S-28.T2.",
-    "expected_caller": "the PEWS tree store and validator (P1-E14-W3-S28-T2), which decodes every ticket file it walks; retire this entry in that ticket"
-  },
-  {
     "symbol": "plugins/pbd/internal/pews.EncodeTicket",
     "reason": "The encoder half of the same S-28.T1 codec, and unreachable for the same scoping reason: the authoring path that writes a ticket back out is N/S-28.T4's, not this ticket's. It is exercised here only by the round-trip test, which is what proves the two halves agree about field order.",
     "expected_caller": "the PEWS authoring/lifecycle surface (P1-E14-W3-S28-T4), which writes ticket YAML back to the tree; retire this entry in that ticket"
