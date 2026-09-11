@@ -496,12 +496,27 @@ jobs:
             sleep 1
           done
 
+      # ONE container, and it VERIFIES rather than assumes. Two separate
+      # `docker run --rm` invocations cannot work here for a reason that is
+      # easy to miss: `mc alias set` writes the alias into the CONTAINER's
+      # own config, which --rm then throws away, so the second container
+      # had no alias to resolve. The image's ENTRYPOINT is already `mc`, so
+      # passing `mc ...` as the command made it `mc mc ...` as well.
+      #
+      # Both bugs were invisible until now: the Docker Hub pull was being
+      # denied before this step could run at all. Once it ran, it produced
+      # NO output and exited 0 while creating nothing, and the failure
+      # surfaced far away as "bucket does not exist" inside the tests. The
+      # closing `mc ls` is there so a setup step that silently does nothing
+      # can never again report success.
       - name: create minio test bucket
         run: |
-          docker run --rm --network host quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z \
-            mc alias set localminio http://localhost:9000 minioadmin minioadmin
-          docker run --rm --network host quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z \
-            mc mb localminio/cascade-test-bucket
+          docker run --rm --network host --entrypoint sh \
+            quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z -ec '
+              mc alias set localminio http://localhost:9000 minioadmin minioadmin
+              mc mb --ignore-existing localminio/cascade-test-bucket
+              mc ls localminio/cascade-test-bucket
+            '
 
       - name: go test -tags=integration ./providers/s3/...
         env:

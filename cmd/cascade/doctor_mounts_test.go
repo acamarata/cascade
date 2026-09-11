@@ -164,3 +164,39 @@ func TestDoctorFixRefusesWithoutConfirmation(t *testing.T) {
 		t.Fatal("a check was fixed after the confirmation was declined")
 	}
 }
+
+// TestConfirmOnStdin_Answers pins confirmOnStdin's own y/N reading: only an
+// explicit "y"/"yes" (case-insensitive, trailing whitespace trimmed) is a
+// yes, and it prompts on the command's stderr stream before reading.
+func TestConfirmOnStdin_Answers(t *testing.T) {
+	cases := []struct {
+		name  string
+		stdin string
+		want  bool
+	}{
+		{"lowercase y", "y\n", true},
+		{"yes", "yes\n", true},
+		{"uppercase YES", "YES\n", true},
+		{"explicit no", "n\n", false},
+		{"garbage", "maybe\n", false},
+		{"empty stdin", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: "doctor"}
+			cmd.SetIn(strings.NewReader(tc.stdin))
+			errBuf := &strings.Builder{}
+			cmd.SetErr(errBuf)
+			got, err := confirmOnStdin(cmd)
+			if err != nil {
+				t.Fatalf("confirmOnStdin(%q): %v", tc.stdin, err)
+			}
+			if got != tc.want {
+				t.Fatalf("confirmOnStdin(%q) = %v, want %v", tc.stdin, got, tc.want)
+			}
+			if !strings.Contains(errBuf.String(), "Continue?") {
+				t.Fatalf("confirmOnStdin did not write its prompt to stderr; got %q", errBuf.String())
+			}
+		})
+	}
+}

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T20:56:03Z",
+  "generated_at": "2026-09-11T21:12:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2780,6 +2780,13 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T1",
           "raw": "cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3)."
+        },
+        {
+          "file": "cmd/cascade/run_exec_output_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T1",
+          "raw": "cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3 sport_updates)."
         },
         {
           "file": "cmd/cascade/run_fuzz_test.go",
@@ -15162,7 +15169,7 @@
       ]
     }
   ],
-  "total_sites": 1519,
+  "total_sites": 1520,
   "unspecified_count": 29,
   "multi_status_count": 25
 }
