@@ -106,19 +106,98 @@ repo.json` carries the public recipient only. The ceremony that issues
 and custodies the identity, and the `backup key export|import` CLI
 surface, are separate pieces.
 
+## Restore & integrity gate
+
+`VerifyIntegrity` (`integrity.go`) is the fail-closed engine behind
+`backup verify` and the verification cron: given a snapshot id, it walks
+the manifest's `previous_snapshot` chain back to genesis, re-verifying
+every ancestor's Ed25519 signature, blake3 root_hash, and chain link (via
+`ReadManifest`), then re-decrypts and hash-checks every object the target
+snapshot's manifest lists (reusing the pipeline's own per-chunk
+verification, so the same call proves object presence and AEAD-tag
+authenticity together). A tampered signature, a root_hash mismatch
+anywhere in the history, a broken or cyclic chain link, a truncated or
+bit-flipped object, or a missing object all refuse before returning —
+there is no partial-trust result and no flag that skips a check.
+
+`Restore` (`restore.go`) is the elevated `backup restore` operation: it
+runs the gate FIRST, refusing without touching the destination on any
+gate failure, then resolves the effective domain set (bounded by the
+manifest's own domain list — `restore --domain` never restores a domain
+the snapshot never captured), fetches and reassembles each domain's
+export stream through the pipeline's read path, and applies it via
+`storage.Import`. No domain's `storage.Import` call runs until the gate
+has already passed for the whole snapshot, so a refused restore leaves
+the destination database exactly as it was found — never a half-applied
+recovery. `backup restore` carries the same elevated-verb boundary
+`backup create` does: a non-empty `ElevationProof` is required before any
+work starts; the real CLI/MCP attestation flow (and the Windows tier-2
+refusal that rides it) is the CLI/MCP surface's concern, not this
+engine's.
+
+Key custody for both: the backup age identity is resolved from
+`CASCADE_BACKUP_AGE_IDENTITY` (vault/env-ref only, per the pipeline's own
+key-custody rule above) — never caller-supplied, never persisted beside
+the target. An unset or malformed reference refuses before any Target
+call.
+
+## Targets
+
+`internal/backup/targets` implements `Target` (`repo.go`'s put/get/list/
+delete abstraction) three ways, each with a different integration mode:
+
+- **fs** (`FSTarget`) — a local filesystem root. Every write is
+  temp-file-then-rename so a crash mid-write never leaves a partial
+  object visible to a concurrent read. The default target.
+- **s3** (`S3Target`) — the real S3 REST API over `minio-go/v7`. This is
+  a standalone client this package constructs and owns: it does **not**
+  import `providers/s3` (the server profile's BlobStore driver) or its
+  wiring, even though both packages depend on the same wire library.
+  Credentials (endpoint, bucket, access key id, secret access key)
+  resolve through `ResolveS3TargetEnvRefs`, an `s3_env_prefix`-expanded
+  family of four env-refs (`_ENDPOINT`/`_BUCKET`/`_KEY_ID`/`_SECRET`,
+  the same shape 08-INIT-CONFIG-SPEC §2 defines) — never a literal
+  credential.
+- **rclone** (`RcloneTarget`) — exec-only against the real `rclone`
+  binary (`rcat`/`cat`/`lsjson --recursive`/`deletefile`), no rclone
+  Go-library linkage. This is the one target covering the NAS/B2/WebDAV/
+  Google Drive universe behind a single external tool. An absent binary
+  is a typed refusal at first use (`ErrRcloneBinaryAbsent`), never a
+  silent skip.
+
+Both remote targets (s3, rclone) route every outbound payload through
+the `backup-target` egress class (`egress.go`): each holds an unforgeable
+`egress.Capability` and calls `Intercept` with the tier declared
+explicitly before a byte reaches the wire or the subprocess. `fs` never
+does this — a local filesystem write is not egress.
+
+### The rclone version probe (`cascade doctor`)
+
+`RcloneDoctorCheck` (`doctor.go`) probes `rclone version` and reports it
+under the check name `backup`, registered at `cmd/cascade/doctor_mounts.go`'s
+composition root. It runs as part of every plain `cascade doctor`
+invocation — there is no `--backup` flag, matching the same gap the
+`nodes` check's own doc comment already records for `--nodes`.
+
+### Error taxonomy
+
+Every target maps its own failure shapes onto the frozen 14-kind
+taxonomy: an unreachable endpoint or remote is `KindUnavailable` or
+`KindTimeout`; a missing object is `KindNotFound`; an auth failure is
+`KindPermissionDenied`; an absent `rclone` binary is `KindUnsupported`;
+a missing or unset env-ref is `KindInvalidInput`. No target ever falls
+back to a different target on failure.
+
 ## Scope
 
 This document covers the engine `internal/backup` ships: the repository
-layout, the capture adapters, and the chunk → dedup → compress → encrypt
-pipeline (including its own read-side verification). Not covered here,
-because they are not built yet:
+layout, the capture adapters, the chunk → dedup → compress → encrypt
+pipeline (including its own read-side verification), the fs/s3/rclone
+targets, and restore + the integrity gate. Not covered here, because they
+are not built yet:
 
-- **Targets** — concrete fs/S3/rclone `Target` implementations.
 - **Snapshots and manifests** — the signed record of which object ids
   make up one point-in-time backup.
-- **Restore** — domain selection and the integrity gate over a whole
-  snapshot (distinct from the pipeline's own per-chunk verification
-  above).
 - **The recovery-key ceremony** — issuing, wrapping, and escrowing the
   age identity this pipeline consumes.
 - **The `backup` CLI/MCP surface.**

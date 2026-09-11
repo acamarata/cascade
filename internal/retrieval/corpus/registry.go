@@ -39,11 +39,19 @@ import "github.com/acamarata/cascade/pkg/cascade"
 // bare string repeated at every call site.
 const CorpusIDCode = "code"
 
+// CorpusIDGraph is the corpus id the symbol/dependency graph ingests
+// under (internal/retrieval's IngestSymbolGraph, P1-E33-W7-S67-T3). It
+// closes the seam P1-E25-W5-S52-T6 named and deliberately left open: a
+// second real ingestor alongside CorpusIDCode, sharing this same kind
+// registry rather than a parallel one.
+const CorpusIDGraph = "graph"
+
 // registeredCorpusKinds is the closed set this file recognizes. Adding a
 // kind here is a deliberate registration, matching a real ingestor this
 // tree ships; it is never grown to make a validation pass.
 var registeredCorpusKinds = map[string]bool{
-	CorpusIDCode: true,
+	CorpusIDCode:  true,
+	CorpusIDGraph: true,
 }
 
 // ValidateCorpusKind fails closed on any kind not in the registered set,

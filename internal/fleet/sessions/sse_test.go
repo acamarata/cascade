@@ -16,6 +16,7 @@ package sessions_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -129,6 +130,61 @@ func TestSessionSSE_WireFormat_EventDataIDRetry(t *testing.T) {
 	}
 	if !strings.HasSuffix(strings.TrimRight(body, " "), "\n\n") && !strings.Contains(body, "\n\n") {
 		t.Errorf("SSE record must be terminated by a blank line; got: %q", body)
+	}
+}
+
+// TestSessionSSE_LaneHealth_DistinctEventOnSameStream proves R-16.78 §2's
+// ruling end to end over the REAL *events.Bus and REAL SSEHandler this
+// file already drives for session-changed events (no fake bus, no fake
+// handler): a LaneHealthChangedKind event published via
+// PublishLaneHealth arrives on the SAME connection, as its OWN "event:"
+// name, alongside a session-changed event on the same subscription --
+// one stream, two distinguishable event types, exactly the ruling's
+// requirement.
+func TestSessionSSE_LaneHealth_DistinctEventOnSameStream(t *testing.T) {
+	h, bus, _ := newTestSSEHandler(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	w, done := runSSE(ctx, h, "?topic=fleet.sessions")
+	waitFor(t, func() bool { _, _, wrote := w.snapshot(); return wrote })
+
+	if _, err := bus.Publish(ctx, "fleet.sessions", "fleet.sessions.changed", "test", []byte(`{"session_id":"s1"}`)); err != nil {
+		t.Fatalf("Publish session event: %v", err)
+	}
+	health := sessions.LaneHealth{LaneID: "lane-anthropic-1", LatencyP50MS: 120, ErrorRate: 0, Healthy: true}
+	if err := sessions.PublishLaneHealth(ctx, bus, health); err != nil {
+		t.Fatalf("PublishLaneHealth: %v", err)
+	}
+	waitFor(t, func() bool { _, body, _ := w.snapshot(); return strings.Contains(body, "lane_id") })
+	cancel()
+	<-done
+
+	_, body, _ := w.snapshot()
+	if !strings.Contains(body, "event: fleet.sessions.changed\n") {
+		t.Error("body missing the session-changed event")
+	}
+	if !strings.Contains(body, "event: fleet.sessions.lane_health.changed\n") {
+		t.Error("body missing the lane-health-changed event as its own distinct event name")
+	}
+	if !strings.Contains(body, `"lane_id":"lane-anthropic-1"`) {
+		t.Errorf("body missing lane health payload; got: %q", body)
+	}
+}
+
+// TestPublishLaneHealth_ZeroValueNotOmitted proves an unprobed lane's
+// zero-valued LaneHealth still marshals every field -- LaneHealth carries
+// no `omitempty` tag, so a nil-probe caller's zero-valued struct is
+// indistinguishable in JSON shape from a real all-zero reading, never a
+// dropped field a consumer could mistake for "this lane was not
+// included."
+func TestPublishLaneHealth_ZeroValueNotOmitted(t *testing.T) {
+	payload, err := json.Marshal(sessions.LaneHealth{LaneID: "lane-never-probed"})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, field := range []string{`"latency_p50_ms":0`, `"latency_p95_ms":0`, `"error_rate":0`, `"cost_estimate":0`, `"healthy":false`} {
+		if !strings.Contains(string(payload), field) {
+			t.Errorf("zero-valued LaneHealth JSON missing %q; got: %s", field, payload)
+		}
 	}
 }
 

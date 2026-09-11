@@ -1,0 +1,73 @@
+{
+  "nodes": [
+    {
+      "id": "fixturegraphgo",
+      "kind": "package",
+      "package": "fixturegraphgo"
+    },
+    {
+      "id": "fixturegraphgo#Run",
+      "kind": "func",
+      "name": "Run",
+      "package": "fixturegraphgo",
+      "file": "main.go",
+      "line": 10
+    },
+    {
+      "id": "fixturegraphgo#Version",
+      "kind": "var",
+      "name": "Version",
+      "package": "fixturegraphgo",
+      "file": "main.go",
+      "line": 7
+    },
+    {
+      "id": "fixturegraphgo/pkg",
+      "kind": "package",
+      "package": "fixturegraphgo/pkg"
+    },
+    {
+      "id": "fixturegraphgo/pkg#Foo",
+      "kind": "func",
+      "name": "Foo",
+      "package": "fixturegraphgo/pkg",
+      "file": "pkg/foo.go",
+      "line": 9
+    },
+    {
+      "id": "fixturegraphgo/pkg#Widget",
+      "kind": "type",
+      "name": "Widget",
+      "package": "fixturegraphgo/pkg",
+      "file": "pkg/foo.go",
+      "line": 4
+    }
+  ],
+  "edges": [
+    {
+      "from": "fixturegraphgo",
+      "to": "fixturegraphgo#Run",
+      "kind": "declares"
+    },
+    {
+      "from": "fixturegraphgo",
+      "to": "fixturegraphgo#Version",
+      "kind": "declares"
+    },
+    {
+      "from": "fixturegraphgo",
+      "to": "fixturegraphgo/pkg",
+      "kind": "imports"
+    },
+    {
+      "from": "fixturegraphgo/pkg",
+      "to": "fixturegraphgo/pkg#Foo",
+      "kind": "declares"
+    },
+    {
+      "from": "fixturegraphgo/pkg",
+      "to": "fixturegraphgo/pkg#Widget",
+      "kind": "declares"
+    }
+  ]
+}

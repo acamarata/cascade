@@ -35,6 +35,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/events/routing"
+	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -203,9 +204,36 @@ func buildApprovalQueue(
 // baseline; a malformed section is returned as an error rather than
 // warned past, because unlike a maintenance schedule an unreadable policy
 // section decides what the daemon is allowed to do.
+//
+// [policy.risk_gates]'s gate-step names are validated HERE, before
+// Apply, rather than inside internal/policy: that package cannot import
+// internal/jobs (an import cycle -- see risk_gates_config.go's own doc
+// comment), so its own parse only checks the overlay's shape and its
+// risk-class-name keys. This composition root imports both packages, so
+// a bad gate-step name refuses the whole reload before controller.Apply
+// ever swaps anything in (validate-before-write, R-16.70(b), AH/S-69.T1).
 func applyAutonomyProfile(ctx context.Context, controller *policy.Controller, cfg *runtime.Config) error {
 	if cfg == nil {
 		return controller.Apply(ctx, map[string]interface{}{})
 	}
+	if err := validateRiskGateOverlay(cfg); err != nil {
+		return err
+	}
 	return controller.Apply(ctx, cfg.Extra)
+}
+
+// validateRiskGateOverlay re-parses the [policy] section far enough to
+// reach RiskGates and runs jobs.BuildRiskGateOverlay over it, so an
+// unparseable gate-step name is caught before the reload swap rather
+// than only when a later `policy risk explain` call happens to hit it.
+// A [policy] section this file cannot even parse structurally is not
+// this function's error to report -- controller.Apply reports that one
+// itself, with the richer refusal-audit path Controller already owns.
+func validateRiskGateOverlay(cfg *runtime.Config) error {
+	parsed, err := policy.ParseConfig(cfg.Extra)
+	if err != nil {
+		return nil
+	}
+	_, err = jobs.BuildRiskGateOverlay(parsed.RiskGates)
+	return err
 }

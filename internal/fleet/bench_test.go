@@ -11,6 +11,7 @@ package fleet
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -231,4 +232,19 @@ func TestPercentileEmptyIsZero(t *testing.T) {
 	if got := percentile(nil, 0.5); got != 0 {
 		t.Fatalf("percentile(nil) = %v, want 0", got)
 	}
+}
+
+// ExampleProbe demonstrates one minimal model.execute round-trip through
+// a ModelExecutor and reading whether it succeeded. Runnable Godoc
+// example (an "// Output:" comment, so `go test` executes and checks it)
+// per this ticket's docs_updates.
+func ExampleProbe() {
+	exec := &fakeExecutor{resp: provider.ModelResponse{Usage: provider.Usage{OutputTokens: 3}}}
+	result, err := Probe(context.Background(), "lane-anthropic-1", exec)
+	if err != nil {
+		fmt.Println("programming error:", err)
+		return
+	}
+	fmt.Println("success:", result.Success())
+	// Output: success: true
 }

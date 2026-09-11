@@ -140,6 +140,17 @@ linters:
             - "!**/cmd/cascade/daemon_unix_run.go"
             - "!**/cmd/cascade/daemon_unix_run_memory.go"
             - "!**/cmd/cascade/daemon_unix_handlers.go"
+            # daemon_unix_conductor.go earns its exemption by name, per this
+            # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
+            # hand-rolled client. It is called only from buildRPCServer, it
+            # REGISTERS "conductor.execute" on the daemon's own registry, and it
+            # never dials the daemon - so "use internal/client.Client instead"
+            # does not apply, exactly as for daemon_unix_handlers.go. It could not
+            # live in internal/daemon like RegisterFleetAttentionHandler does,
+            # because it needs cmd/cascade-local openMigratedDB and
+            # providerRegistryDBFile; moving those into internal/daemon would be
+            # worse coupling than this exemption (R-16.80).
+            - "!**/cmd/cascade/daemon_unix_conductor.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
             - "!**/*_test.go"

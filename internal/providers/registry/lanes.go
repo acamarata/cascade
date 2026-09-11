@@ -16,6 +16,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -211,4 +213,64 @@ func scanLaneRow(row rowScanner) (LaneRecord, error) {
 		return LaneRecord{}, cascade.Wrap(cascade.KindIntegrity, err, "registry: decode model_filter")
 	}
 	return rec, nil
+}
+
+// LaneProbeRecord is the registry's OWN persisted shape for a lane's
+// latest probe/bench reading (R-16.78 §1). It is deliberately NOT
+// internal/fleet.ProbeResult or BenchResult: a live measurement and a
+// migrated column set have different jobs and lifetimes, and sharing one
+// struct would couple a wire/measurement shape to a column set that can
+// grow for storage reasons alone. internal/fleet converts its own result
+// into this shape when writing, so the dependency runs one way only,
+// fleet -> registry, and the import cycle the previous agent found does
+// not exist to be broken.
+type LaneProbeRecord struct {
+	LaneName     string
+	LatencyP50MS float64
+	LatencyP95MS float64
+	ErrorRate    float64
+	CostEstimate float64
+	ProbedAt     time.Time
+}
+
+// UpsertLaneProbe records rec as LaneName's latest probe/bench reading,
+// replacing any prior row -- this table holds latest-only state, never a
+// history.
+func (r *Registry) UpsertLaneProbe(ctx context.Context, rec LaneProbeRecord) error {
+	if rec.LaneName == "" {
+		return cascade.New(cascade.KindInvalidInput, "registry: lane_name is required")
+	}
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO `+tableProviderLaneProbes+`
+			(lane_name, latency_p50_ms, latency_p95_ms, error_rate, cost_estimate, probed_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(lane_name) DO UPDATE SET
+			latency_p50_ms=excluded.latency_p50_ms, latency_p95_ms=excluded.latency_p95_ms,
+			error_rate=excluded.error_rate, cost_estimate=excluded.cost_estimate, probed_at=excluded.probed_at`,
+		rec.LaneName, rec.LatencyP50MS, rec.LatencyP95MS, rec.ErrorRate, rec.CostEstimate, rec.ProbedAt.UnixMilli())
+	if err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "registry: upsert lane probe %q", rec.LaneName)
+	}
+	return nil
+}
+
+// GetLaneProbe returns laneName's latest probe/bench reading, or (nil,
+// nil) when this lane has never been probed -- the honest "unknown"
+// state, never a zero-valued LaneProbeRecord mistaken for a real reading.
+func (r *Registry) GetLaneProbe(ctx context.Context, laneName string) (*LaneProbeRecord, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT lane_name, latency_p50_ms, latency_p95_ms, error_rate, cost_estimate, probed_at
+		FROM `+tableProviderLaneProbes+` WHERE lane_name = ?`, laneName)
+	var (
+		rec      LaneProbeRecord
+		probedAt int64
+	)
+	err := row.Scan(&rec.LaneName, &rec.LatencyP50MS, &rec.LatencyP95MS, &rec.ErrorRate, &rec.CostEstimate, &probedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "registry: get lane probe")
+	}
+	rec.ProbedAt = millisToTime(probedAt)
+	return &rec, nil
 }

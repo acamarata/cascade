@@ -60,8 +60,16 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	"daemon_unix_run.go":        true,
 	"daemon_unix_run_memory.go": true,
 	"daemon_unix_handlers.go":   true,
-	"mcp.go":                    true,
-	"elevate_helper.go":         true,
+	// daemon_unix_conductor.go is the R-16.80 composition-root connector: it
+	// REGISTERS "conductor.execute" on the daemon's own registry and never
+	// dials the daemon, so the rule's "use internal/client.Client instead"
+	// does not apply — the same daemon-SIDE reasoning as
+	// daemon_unix_handlers.go above. It cannot live in internal/daemon
+	// alongside RegisterFleetAttentionHandler because it needs
+	// cmd/cascade-local openMigratedDB and providerRegistryDBFile.
+	"daemon_unix_conductor.go": true,
+	"mcp.go":                   true,
+	"elevate_helper.go":        true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

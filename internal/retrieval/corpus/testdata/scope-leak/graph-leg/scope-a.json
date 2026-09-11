@@ -1,0 +1,24 @@
+{
+  "corpus": {
+    "id": "scope-a-graph",
+    "scope_ref": "project:scope-a",
+    "privacy": "project",
+    "visibility": "scope-local",
+    "trust": "trusted"
+  },
+  "membership": {
+    "scope": "project:scope-a",
+    "chain": ["user:local", "workspace:shared-workspace", "project:scope-a"],
+    "edges": []
+  },
+  "records": [
+    {
+      "id": "scope-a/graph#app.Run-imports-policy.Check",
+      "corpus_id": "scope-a-graph",
+      "scope_ref": "project:scope-a",
+      "privacy": "project",
+      "visibility": "scope-local",
+      "trust": "trusted"
+    }
+  ]
+}

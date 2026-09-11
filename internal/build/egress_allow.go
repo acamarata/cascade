@@ -77,6 +77,18 @@ var EgressExecNormative = []EgressAllowEntry{
 
 // EgressExecNotYetMigrated is what the tree holds today outside that set.
 var EgressExecNotYetMigrated = []EgressAllowEntry{
+	// NOTE ON THIS ENTRY'S PLACEMENT. internal/backup/targets does not
+	// "predate" the process-spawn ruling the way every entry below it
+	// does -- the ruling's own egressExecSpec names no member for it. It
+	// is here rather than on the normative list because R-21.265/§D-15
+	// name the rclone target as exec-only (no rclone Go-library linkage)
+	// but no ruling text adds it to THIS list; the process it spawns
+	// (rclone) is bound by the driver-boundary rules this file's own doc
+	// comment describes, not by the egress firewall (bytes still transit
+	// Intercept via egress.go before rclone ever sees them). Recorded
+	// here, with a reason, the same treatment internal/fleet/sessions
+	// already got for the identical kind of gap.
+	{"internal/backup/targets", "the rclone backup target's exec-only invocation of the rclone binary (P1-E19-W4-S41-T3, §D-15); outbound bytes still transit Intercept via egress.go before rclone is invoked"},
 	{"cmd/cascade", "the composition root runs the operator's own configured commands"},
 	{"cmd/cascade/config", "opens the operator's editor"},
 	{"internal/build", "the gates shell out to the toolchain to inspect the tree"},

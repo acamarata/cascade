@@ -10,8 +10,75 @@ package daemon
 // SPORT: internal/daemon (ADD, per T-2 sport_updates).
 
 import (
+	"context"
+	"errors"
 	"testing"
+
+	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/repo"
 )
+
+// TestReachabilitySeamWiring proves RegisterReachability wires a non-nil
+// jobs.ReachabilityFn into jobs.NewPlanner, and that the closure forwards
+// ctx unchanged and returns Reachable's own result unchanged (R-21.257,
+// R-21.247(b)).
+func TestReachabilitySeamWiring(t *testing.T) {
+	graph := &repo.SymbolGraph{
+		Nodes: []repo.GraphNode{
+			{ID: "internal/policy", Kind: repo.NodePackage, Package: "internal/policy", File: "internal/policy/policy.go"},
+		},
+	}
+	m := NewManifest(nil, nil)
+	fn, err := m.RegisterReachability(graph)
+	if err != nil {
+		t.Fatalf("RegisterReachability: %v", err)
+	}
+	if fn == nil {
+		t.Fatal("RegisterReachability returned a nil seam")
+	}
+	if planner := jobs.NewPlanner(fn); planner == nil {
+		t.Fatal("jobs.NewPlanner with a non-nil seam returned nil")
+	}
+
+	got, err := fn(context.Background(), []string{"internal/policy/policy.go"})
+	if err != nil {
+		t.Fatalf("seam call: %v", err)
+	}
+	direct, directErr := repo.NewReachability(graph)
+	if directErr != nil {
+		t.Fatalf("repo.NewReachability: %v", directErr)
+	}
+	want, wantErr := direct.Reachable(context.Background(), []string{"internal/policy/policy.go"},
+		[]repo.SensitiveClass{repo.ClassAuth, repo.ClassSecret, repo.ClassSchema})
+	if wantErr != nil {
+		t.Fatalf("direct Reachable: %v", wantErr)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("seam result = %v, want %v (Reachable's own result, unchanged)", got, want)
+	}
+
+	// The seam forwards ctx unchanged: a canceled ctx surfaces the same
+	// cancellation Reachable's own ctx.Err() check would produce.
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := fn(canceled, []string{"internal/policy/policy.go"}); !errors.Is(err, context.Canceled) {
+		t.Errorf("seam call with a canceled ctx: err = %v, want it to wrap context.Canceled", err)
+	}
+}
+
+// TestRegisterReachability_NilGraphFailsClosed proves a nil graph fails
+// the subsystem closed (a typed error, a Failed manifest entry, no seam)
+// rather than returning a seam that panics on first use.
+func TestRegisterReachability_NilGraphFailsClosed(t *testing.T) {
+	m := NewManifest(nil, nil)
+	fn, err := m.RegisterReachability(nil)
+	if err == nil {
+		t.Fatal("RegisterReachability(nil) = nil error, want a typed error")
+	}
+	if fn != nil {
+		t.Error("RegisterReachability(nil) returned a non-nil seam alongside an error")
+	}
+}
 
 func TestSubsystemState_String(t *testing.T) {
 	cases := []struct {

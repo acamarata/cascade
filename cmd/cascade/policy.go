@@ -52,6 +52,11 @@ func newPolicyCmd(deps approvalDeps) *cobra.Command {
 	policyCmd.AddCommand(newPolicyCheckCmd(deps))
 	policyCmd.AddCommand(newPolicyListCmd(deps))
 	policyCmd.AddCommand(newPolicyAuditCmd(deps))
+	// risk is the AH/S-69.T1 sole exception to this file's own "every
+	// verb goes through the daemon" posture (see policy_risk.go's own
+	// doc comment): risk classification is a pure local computation,
+	// not an Engine evaluation.
+	policyCmd.AddCommand(newPolicyRiskCmd())
 	return policyCmd
 }
 

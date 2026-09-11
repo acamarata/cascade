@@ -51,6 +51,14 @@ type Section struct {
 	// network not in this list (e.g. one never paired on before) is
 	// never scanned, even with ScanLAN=true.
 	DiscoveryNetworks []string `toml:"discovery_networks"`
+	// Travel marks this controller machine as one that regularly leaves
+	// its home LAN (08-INIT-CONFIG-SPEC.md §3 Round-16 schema,
+	// P1-E36-W7-S72-T3). Default false. Travel=true unconditionally
+	// disables mDNS advertisement (R-21.198, travel.go's
+	// AdvertisementAllowed) regardless of ScanLAN, and tells the
+	// presence prober that a node's transient unavailable presence
+	// should not be treated as a hard placement failure.
+	Travel bool `toml:"travel"`
 }
 
 // parseSection fail-closed-parses raw (the "nodes" sub-tree of a decoded
@@ -87,6 +95,13 @@ func parseSection(raw map[string]interface{}) (Section, error) {
 	}
 	if err := parseDiscoverySection(raw, &sec); err != nil {
 		return Section{}, err
+	}
+	if v, ok := raw["travel"]; ok {
+		b, ok := v.(bool)
+		if !ok {
+			return Section{}, cascade.New(cascade.KindInvalidInput, "nodes: [nodes].travel must be a bool")
+		}
+		sec.Travel = b
 	}
 	return sec, nil
 }

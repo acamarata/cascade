@@ -147,8 +147,24 @@ func LoadInventory(path string) ([]InventoryRow, error) {
 // number and a ticket number.
 var citationExpr = regexp.MustCompile(`\b([A-Z]{1,3})/S-(\d{1,3})\.T(\d{1,3})\b`)
 
-// deferralExpr finds a DEF-P2-<slug> deferral id in row text.
-var deferralExpr = regexp.MustCompile(`\bDEF-P2-[a-z0-9-]+\b`)
+// deferralExpr finds a DEF-<CLASS>-<slug> deferral id in row text.
+//
+// The class segment is deliberately NOT restricted to P2. phase/deferrals.yaml
+// carries 21 entries across three classes — 14 DEF-P2-*, 6 DEF-PROD-* and 1
+// DEF-DROP-* — and an earlier `\bDEF-P2-[a-z0-9-]+\b` matched only the first
+// group. The other seven were therefore INVISIBLE to this gate: a row citing a
+// genuinely registered deferral such as DEF-PROD-comms-hub was reported as an
+// uncovered gap, which is a false accusation by the gate rather than a real
+// hole in the plan. Found while resolving R-14.228's 62-row gap list, where
+// two of the last four "unresolved" rows turned out to be exactly this.
+//
+// Widening the EXTRACTION pattern cannot weaken the gate, because extraction
+// is not validation: BuildCoverageMatrix resolves whatever this finds against
+// knownDeferrals, the set actually loaded from deferrals.yaml. An invented or
+// misspelled id still extracts, still fails that membership check, and still
+// leaves the row a gap. Keeping the narrow pattern would have meant the gate
+// could never see a whole class of real deferral no matter how it was cited.
+var deferralExpr = regexp.MustCompile(`\bDEF-[A-Z0-9]+-[a-z0-9-]+\b`)
 
 // ExtractCitations returns every shorthand ticket citation and deferral
 // id found in text, each in its original form.

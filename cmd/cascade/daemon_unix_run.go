@@ -123,6 +123,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
 
 	registry := rpc.NewRegistry()
+	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	// Register the MCP dispatcher on the daemon's own socket. Without this
 	// the transport exists, is tested, and is reachable only through the
 	// separate socket the mcp command binds for itself, which is not the
@@ -151,6 +152,15 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
+	// conductor.execute (R-16.80) and jobs.reachability (R-16.80), the
+	// same treatment: see daemon_unix_conductor.go's header comment.
+	// Placed after registerContextEngineHandlers because WireReachability's
+	// ApplyGraphSchema requires context.scope's ApplyScopeSchema to have
+	// already created its foreign-key target in this same cascade.db.
+	if err := wireConductorAndReachability(context.Background(), registry, manifest, paths, clock, store); err != nil {
+		return nil, nil, nil, err
+	}
+
 	// recall.index.* (F/S-11.T4), registered for the same reason. A nil
 	// store (some existing test harnesses' minimal buildRPCServer calls)
 	// leaves the namespace unregistered rather than reaching into a store
@@ -175,7 +185,12 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// is a second reader over the one real journal, not a second one.
 	daemon.RegisterFleetJournalHandler(registry, store, clock)
 
-	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
+	// fleet.attention.list/get/ack (P1-E18-W4-S39-T1), registered for the
+	// same reason fleet.journal_show/replay is immediately above: a
+	// handler built, tested and never mounted is a subsystem nothing
+	// shipping can reach.
+	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
+
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }
 

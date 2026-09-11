@@ -2,11 +2,12 @@
 
 // Purpose: the !postgres twin of profile_server.go. A binary built without
 //
-//	-tags=postgres never links providers/postgres or providers/pgvector
-//	(both are themselves //go:build postgres), so `--profile server`
-//	refuses with a named, typed error instead of silently running against
-//	local storage — Art.1's anti-stub rule applies to this refusal too:
-//	it must say exactly why, never pretend to have tried.
+//	-tags=postgres never links providers/postgres, providers/pgvector,
+//	providers/redis or providers/s3 (profile_server.go, which alone
+//	imports all four, is itself //go:build postgres), so `--profile
+//	server` refuses with a named, typed error instead of silently running
+//	against local storage — Art.1's anti-stub rule applies to this
+//	refusal too: it must say exactly why, never pretend to have tried.
 //
 // SPORT: cmd/cascade.profile-server/ADDED (P1-E17-W4-S38-T4).
 package main

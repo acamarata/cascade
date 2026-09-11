@@ -65,6 +65,42 @@ twice in a row returns the identical result both times.
 > stream. If a future ticket adds a genuine live journal-change
 > subscription, it will be a distinct, separately documented capability.
 
+## `cascade fleet bench <lane-id>`
+
+Probes/benches a provider lane's health through the daemon's
+`fleet.bench_lane` method: `N` probes at a given concurrency, reporting
+p50/p95 latency, error rate, and a rough cost estimate.
+
+| Flag | Meaning |
+|---|---|
+| `--n <count>` | Probe count (default 1). |
+| `--concurrency <count>` | Probes in flight at once (default 1). |
+
+This is a one-shot, headless command — it never opens the daemon's SSE
+stream itself — but it still requires a **running daemon**: a probe
+dispatches through a real provider lane, which only the daemon's
+composition root can construct. There is no offline/embedded fallback
+(unlike `fleet sessions`). On Windows (tier-2, no daemon at all) and when
+no daemon socket is reachable, it returns a typed refusal, never a panic.
+
+### Lane health
+
+Each successful bench is recorded as its lane's **latest** reading (not a
+history) and, when the reading changed from what was last recorded, is
+published on the daemon's `fleet.sessions` event stream as a
+`fleet.sessions.lane_health.changed` event — a distinct event type on the
+SAME stream `fleet.sessions.changed` session events use, not a second
+stream and not a field folded into a session's own record (one session
+record describes one session; lane health describes lanes, an unrelated
+cardinality). A consumer that only wants session state can ignore an
+event type it does not need on the same connection.
+
+A lane that has never been probed reports every numeric field at zero
+rather than omitting the field, so a reader can always distinguish "this
+lane's health is not yet known" (a lookup that returns nothing) from "an
+all-zero reading" (a field that is present and reads 0) at the response
+shape level.
+
 ## Hidden alias
 
 `cascade journal show|replay <entity>` is a hidden top-level alias for

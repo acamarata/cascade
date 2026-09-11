@@ -258,6 +258,20 @@ func lastActivity(rec *SessionRecord) *time.Time {
 	return &t
 }
 
+// IsAttentionState reports whether st is one of the two states the
+// attention queue (internal/fleet/supervision, P1-E18-W4-S39-T1) escalates
+// on: Blocked or Stalled. This is a pure, stateless predicate — Advance
+// itself stays free of any bus/event side effect (this file's header
+// comment: "there is no concurrency, randomness, or wall-clock read
+// inside Advance"); the actual fleet.sessions.changed subscriber that
+// calls Push on a true result lives in
+// internal/fleet/supervision/subscribe.go, mirroring domain.go's
+// Store.emit/PublishLaneHealth split between "what changed" (pure) and
+// "who publishes it" (the owning Store).
+func IsAttentionState(st SessionState) bool {
+	return st == StateBlocked || st == StateStalled
+}
+
 // hasPresentSignal reports whether signals contains kind with Present
 // true.
 func hasPresentSignal(signals []Signal, kind SignalKind) bool {

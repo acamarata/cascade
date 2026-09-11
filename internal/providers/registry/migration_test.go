@@ -56,7 +56,7 @@ func TestMigrationIdempotent(t *testing.T) {
 	if err := ApplyMigrationSchema(ctx, db, dialect, clock, "", ""); err != nil {
 		t.Fatalf("first ApplyMigrationSchema on empty DB: %v", err)
 	}
-	for _, table := range []string{tableProviderRecords, tableProviderLanes} {
+	for _, table := range []string{tableProviderRecords, tableProviderLanes, tableProviderLaneProbes} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
 		if err != nil {
@@ -99,5 +99,17 @@ func TestMigrationReaderCeilingRefusesDowngrade(t *testing.T) {
 	downgraded.ReaderCeiling = registrySchemaVersion - 1
 	if err := migrate.Apply(ctx, migrate.ApplyConfig{DB: db, Dialect: dialect, Clock: clock}, downgraded); err == nil {
 		t.Fatal("Apply with a lowered ReaderCeiling should have been refused, got nil error")
+	}
+}
+
+// TestMigrationSetPostgresEmitSucceeds proves MigrationSet emits valid
+// DDL under the Postgres dialect too (no live Postgres in this sandbox --
+// successful dialect-correct emission is the achievable, honest
+// assertion, matching internal/ci/domain_test.go's identical depth for
+// the same reason). R-16.78 §1 widened this ticket's files_scope to
+// include provider_lane_probes; this proves it emits on both dialects.
+func TestMigrationSetPostgresEmitSucceeds(t *testing.T) {
+	if _, err := (migrate.PostgresEmitter{}).Emit(MigrationSet()); err != nil {
+		t.Fatalf("PostgresEmitter.Emit: %v", err)
 	}
 }

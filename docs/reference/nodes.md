@@ -164,6 +164,50 @@ at test time (`internal/nodes/tunnel_test.go`; provenance in
 `internal/nodes/testdata/README.md`) and wires the CI job
 `node-tunnel-real-sshd`.
 
+## Travel profile
+
+`[nodes].travel` (bool, default false) marks THIS controller machine as
+one that regularly leaves its home LAN (08-INIT-CONFIG-SPEC.md §3
+Round-16 schema). It has two effects.
+
+**Route fallback for presence (R-16.37 §Nodes).** Each enrolled device
+record can carry an optional `Route` — the same `<user@host>` ssh access
+captured at enrollment (S-36.T1), reused verbatim, never a second
+transport. The presence prober (`internal/nodes/prober.go`, S-72.T2)
+tries this route only once a node's direct probe has already failed
+`ProbeMissThreshold` (3) consecutive times AND the record carries a
+configured route — never on the first miss, and never for a node with no
+route to try. A route that answers classifies the node
+`remote-via-route` instead of `unavailable`; a configured route that
+does NOT answer, or no route at all, leaves the node on the ordinary
+path to `unavailable`. These are deliberately different answers at
+`RouteReachable`'s own level (`internal/nodes/travel.go`): "not
+configured" is a typed error distinct from "configured but did not
+answer" (a real negative, never an error) and from "answered" (true) —
+the bool-shaped `RouteChecker` interface the prober calls collapses the
+first two to `false`, but the finer distinction is real and tested.
+`RouteReachable` dials through the identical tunnel `Dialer`
+(`tunnel.go`, S-36.T3) the direct transport already uses; the ssh
+private key never leaves `NodeKeystore` custody, and `RouteConfig`
+itself carries only `User`/`Addr` — no credential field exists for a
+secret scanner to ever need to flag.
+
+**Advertise/browse precedence (R-21.198).** `travel=true` disables mDNS
+advertisement unconditionally, regardless of `[nodes].scan_lan` — travel
+wins the precedence. Browsing is independently confined to
+`[nodes].discovery_networks`: an empty allowlist (default) means no
+network qualifies, fail-closed, whether or not travel is set. The
+mDNS advertiser/browser itself (`discovery.go`) is not yet built in this
+tree (S-72.T1 deferred it); the travel⇒advertise-off decision lives as a
+package-private seam in `internal/nodes/travel.go` for that file to call
+once it lands.
+
+**Hot reload.** `[nodes].travel`/route parsing is pure and idempotent —
+applying the same config twice yields the same `Section` (06 §5.9). The
+whole `[nodes]` section has no hot-reload registration hook in the tree
+at all yet (`config.go`'s own doc comment records this pre-existing gap,
+predating this ticket); this ticket does not reintroduce or worsen it.
+
 ## Windows
 
 `cascade node serve` refuses unconditionally on Windows: the serve
@@ -175,4 +219,7 @@ unit-tested on every platform. The controller-side tunnel service is
 refused the same way (`RefuseTunnelServiceOnGOOS`, S-36.T3), asserted
 natively in the windows/amd64 CI lane
 (`internal/nodes/tunnel_windows_test.go`); its state-machine and
-host-key-verification logic stay unit-tested on every platform.
+host-key-verification logic stay unit-tested on every platform. The
+travel-profile route check (`RefuseRouteOnGOOS`, S-72.T3) is refused the
+same way, with an explicit typed message, for the identical reason: it
+reuses the same daemon-class tunnel dial.

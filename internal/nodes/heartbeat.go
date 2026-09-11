@@ -80,6 +80,12 @@ type HeartbeatDeps struct {
 	// Timeout is the liveness freshness window (liveness.go). Zero means
 	// DefaultHeartbeatTimeout.
 	Timeout time.Duration
+	// Bus publishes node.presence.changed on every real transition this
+	// heartbeat causes (P1-E36-W7-S72-T2). Nil is a documented no-op —
+	// matching HeartbeatSender's own "controller-unreachable is typed,
+	// never fatal" posture, SSE is observability, not a structural
+	// invariant of the heartbeat protocol itself.
+	Bus EventBus
 }
 
 // HeartbeatResult is ProcessHeartbeat's success outcome, echoed back to
@@ -101,7 +107,7 @@ type HeartbeatResult struct {
 // no new field added). Every failure mode is a typed fail-closed error;
 // there is no path that returns a zero-value success for an unverifiable
 // frame.
-func ProcessHeartbeat(_ context.Context, deps HeartbeatDeps, f HeartbeatFrame) (HeartbeatResult, error) {
+func ProcessHeartbeat(ctx context.Context, deps HeartbeatDeps, f HeartbeatFrame) (HeartbeatResult, error) {
 	rec, err := deps.Records.Get(f.NodeID)
 	if err != nil {
 		// Unknown node id: refused, never treated as "unknown means
@@ -116,8 +122,13 @@ func ProcessHeartbeat(_ context.Context, deps HeartbeatDeps, f HeartbeatFrame) (
 
 	now := deps.Clock.Now()
 	rec.LastSeen = now
+	fromPresence := rec.Presence
+	rec, transitioned := AdvancePresence(rec, PresenceObservation{OK: true, At: now, Authenticated: true}, now)
 	if err := deps.Records.put(rec); err != nil {
 		return HeartbeatResult{}, err
+	}
+	if transitioned {
+		publishPresenceChanged(ctx, deps.Bus, rec.NodeID, fromPresence, rec.Presence)
 	}
 
 	timeout := deps.Timeout
@@ -223,41 +234,6 @@ func reportErr(onError func(error), err error) {
 		onError(err)
 	}
 }
-
-// Ticker abstracts periodic notification (duck-typed against
-// internal/runtime.Ticker, mirroring records.go's Clock duck-type) so
-// RunHeartbeatLoop never blocks on a real sleep in tests.
-type Ticker interface {
-	C() <-chan struct{}
-	Stop()
-}
-
-// systemTicker is the production Ticker (mirrors internal/runtime's own
-// systemTicker; duplicated rather than exported cross-package for one
-// two-method helper).
-type systemTicker struct {
-	t *time.Ticker
-	c chan struct{}
-}
-
-// NewSystemTicker returns the production Ticker, firing every d (d must
-// be positive). Only production entrypoints should call this; tests
-// inject a fake Ticker instead (heartbeat_test.go's fakeTicker).
-func NewSystemTicker(d time.Duration) Ticker {
-	st := &systemTicker{t: time.NewTicker(d), c: make(chan struct{}, 1)}
-	go func() {
-		for range st.t.C {
-			select {
-			case st.c <- struct{}{}:
-			default:
-			}
-		}
-	}()
-	return st
-}
-
-func (s *systemTicker) C() <-chan struct{} { return s.c }
-func (s *systemTicker) Stop()              { s.t.Stop() }
 
 // NewTunnelHeartbeatSender returns the HeartbeatSender wire-delivery sink
 // this type deferred to S-36.T3: it writes each frame as an HTTP request

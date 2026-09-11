@@ -1,0 +1,24 @@
+{
+  "corpus": {
+    "id": "scope-b-graph",
+    "scope_ref": "project:scope-b",
+    "privacy": "project",
+    "visibility": "shared",
+    "trust": "trusted"
+  },
+  "membership": {
+    "scope": "project:scope-b",
+    "chain": ["user:local", "workspace:shared-workspace", "project:scope-b"],
+    "edges": []
+  },
+  "records": [
+    {
+      "id": "scope-b/graph#billing.Charge-imports-secrets.Load",
+      "corpus_id": "scope-b-graph",
+      "scope_ref": "project:scope-b",
+      "privacy": "project",
+      "visibility": "shared",
+      "trust": "trusted"
+    }
+  ]
+}

@@ -28,6 +28,8 @@ import (
 	"sync"
 
 	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/repo"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -215,4 +217,44 @@ func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, 
 	router := conductor.NewRouter(reg, quota, clock, classes)
 	m.Started(conductorRouterSubsystem, fmt.Sprintf("%d task classes loaded", len(classes)))
 	return router, nil
+}
+
+// reachabilitySubsystem is the fail-loud Manifest name RegisterReachability
+// reports under (R-14.87).
+const reachabilitySubsystem = "jobs.reachability"
+
+// reachabilityClasses fixes the R-21.182 sensitive-class set the
+// AC/S-59.T4 footprint rule's reachability expansion checks: auth, secret
+// and schema, exactly as R-21.182's own text names them.
+var reachabilityClasses = []repo.SensitiveClass{repo.ClassAuth, repo.ClassSecret, repo.ClassSchema}
+
+// RegisterReachability is the daemon composition root's call site for
+// wiring AG/S-67.T3's internal/repo.Reachable into the internal/jobs
+// ReachabilityFn seam settled by R-21.257: AC/S-59.T4 declares
+// `func(ctx context.Context, paths []string) ([]string, error)` without
+// importing a graph package, and this closure is the ONLY adapter --
+// Reachable keeps its own ctx/paths/classes parameters and error return,
+// and the seam type never imports internal/repo. graph must be non-nil.
+//
+// CONTRACT DEVIATION (recorded, not papered over -- matches
+// RegisterConductorRouter's own precedent above): no daemon startup path
+// (daemon.go, lifecycle_unix.go) yet calls RegisterReachability or
+// jobs.NewPlanner -- grep across internal/daemon for both returns zero
+// other production call sites at the time this ticket landed. This is
+// the composition root's FIRST call site for the reachability seam, the
+// same posture RegisterConductorRouter recorded for the router seam; a
+// later ticket wiring the scheduler (AH/S-69.T3) or the footprint rule
+// itself (AC/S-59.T4) is the one that calls it from a real startup path.
+func (m *Manifest) RegisterReachability(graph *repo.SymbolGraph) (jobs.ReachabilityFn, error) {
+	m.Register(reachabilitySubsystem)
+	reach, err := repo.NewReachability(graph)
+	if err != nil {
+		m.Failed(reachabilitySubsystem, err.Error())
+		return nil, err
+	}
+	fn := func(ctx context.Context, paths []string) ([]string, error) {
+		return reach.Reachable(ctx, paths, reachabilityClasses)
+	}
+	m.Started(reachabilitySubsystem, fmt.Sprintf("%d sensitive classes wired", len(reachabilityClasses)))
+	return fn, nil
 }

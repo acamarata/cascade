@@ -71,6 +71,10 @@ var DoctorMountExemptions = map[string]string{
 	"NewSubsystemCensusCheck": "takes a SubsystemStateProvider; nothing in the tree implements " +
 		"DeclaredSubsystems/RunningSubsystems, so there is no live state to compare a manifest against. Mounts in " +
 		"productionCheckRegistry in the SAME change that lands a real SubsystemStateProvider.",
+	"NewAttentionCheck": "takes a *supervision.Store; the daemon composition root that constructs a production " +
+		"Store (internal/build/testonly-allow.json's internal/fleet/supervision.NewStore entry, P1-E18-W4-S39-T1) " +
+		"does not exist yet, so there is no live store to check. Mounts in productionCheckRegistry in the SAME " +
+		"change that wires the daemon composition root's production Store.",
 }
 
 // ScanDoctorCheckConstructors returns every function in the tree that

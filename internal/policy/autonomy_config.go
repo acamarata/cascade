@@ -68,9 +68,6 @@ var policyForeignKeys = map[string]bool{
 	// preset is the init wizard's policy-preset shorthand (R-16.34,
 	// AM/S-76.T1).
 	"preset": true,
-	// risk_gates is [policy.risk_gates], the tightening-only per-class
-	// gate table (R-16.70, AH/S-69.T1).
-	"risk_gates": true,
 }
 
 // ApprovalBatching holds the two approval-queue numerics R-14.29 ratified.
@@ -104,6 +101,14 @@ type Config struct {
 	Overlays map[Verdict][]RiskLevel `json:"-"`
 	// Batching holds the two approval numerics.
 	Batching ApprovalBatching `json:"batching"`
+	// RiskGates is the decoded [policy.risk_gates] tightening-only
+	// overlay (R-16.70(b), AH/S-69.T1): risk-class name -> its declared
+	// gate-step names, RAW (this package cannot import internal/jobs --
+	// see risk_gates_config.go's own doc comment for why). An absent
+	// key yields a nil map. jobs.BuildRiskGateOverlay converts this into
+	// the typed jobs.RiskGateOverlay, validating each gate-step name
+	// against AC/S-59.T4's own vocabulary.
+	RiskGates map[string][]string `json:"-"`
 }
 
 // ParseConfig reads the [policy] section out of tree.
@@ -134,12 +139,18 @@ func ParseConfig(tree map[string]interface{}) (Config, error) {
 	if err := out.parseBatching(table); err != nil {
 		return Config{}, err
 	}
+	if err := out.parseRiskGates(table); err != nil {
+		return Config{}, err
+	}
 	return out, nil
 }
 
-// policyOwnedKeys are the keys this ticket parses: the complete 08 §3
-// [policy] set (autonomy_profile, the three overlay lists, and the two
-// approval numerics R-14.29 added).
+// policyOwnedKeys are the keys parsed under [policy]: the complete 08
+// §3 set this file's own ticket parses (autonomy_profile, the three
+// overlay lists, and the two approval numerics R-14.29 added) plus
+// risk_gates, [policy.risk_gates] (R-16.70, AH/S-69.T1,
+// risk_gates_config.go — a sibling file in this same package, not a
+// second parser for a different key).
 var policyOwnedKeys = map[string]bool{
 	"autonomy_profile":        true,
 	"allow":                   true,
@@ -147,6 +158,7 @@ var policyOwnedKeys = map[string]bool{
 	"deny":                    true,
 	"approval_batch_window_s": true,
 	"approval_batch_cap":      true,
+	"risk_gates":              true,
 }
 
 // checkPolicyKeys refuses any key under [policy] that is neither owned

@@ -1,22 +1,32 @@
-// Purpose: the server-profile composition-root helper (P1-E17-W4-S38-T4).
+// Purpose: the server-profile composition-root helper (P1-E17-W4-S38-T4,
 //
+//	extended by P1-E17-W4-S38-T6 for the Redis Cache+Queue legs and
+//	P1-E17-W4-S38-T7 for the S3 BlobStore leg).
 //	02-TARGET-STRUCTURE §Profiles: "server (Postgres/pgvector/S3/Redis)" —
-//	this file holds the profile-agnostic pieces of that composition (DSN
-//	env-ref resolution, the live schema migration Apply wrapper) so cmd/
-//	(the sole composition root, Art.10.2) can build the concrete
-//	providers/postgres and providers/pgvector drivers without this
-//	package ever importing providers/** itself.
+//	this file holds the profile-agnostic pieces of that composition (DSN/
+//	URL/env-ref-family resolution, the live schema migration Apply
+//	wrapper) so cmd/ (the sole composition root, Art.10.2) can build the
+//	concrete providers/postgres, providers/pgvector, providers/redis and
+//	providers/s3 drivers without this package ever importing providers/**
+//	itself.
 //
-// Inputs: an env-ref NAME (never a literal DSN — 08 §3's [storage] cold
+// Inputs: an env-ref NAME (never a literal DSN/URL — 08 §3's [storage]
 //
-//	section stores per-family driver + DSN as env-ref names, resolved
+//	cold section stores per-family driver + DSN as env-ref names, resolved
 //	through the process environment) plus a Clock for the migration
-//	ledger's applied_at stamps.
+//	ledger's applied_at stamps. The S3 leg instead resolves an env-ref
+//	PREFIX (08 §2's s3_env_prefix) expanding to four concrete environment
+//	variables, since S3 config is inherently multi-part
+//	(endpoint/bucket/key-id/secret), not a single connection string.
 //
-// Outputs: ResolveDSNEnvRef returns the resolved DSN string or a typed,
+// Outputs: ResolveDSNEnvRef returns the resolved DSN/URL string or a
 //
-//	fail-closed refusal (missing env-ref, or a value that looks like a
-//	secret literal rather than an env-ref result). PostgresMigrator
+//	typed, fail-closed refusal (missing env-ref, or a value that looks
+//	like a secret literal rather than an env-ref result) — reused as-is
+//	for the Redis leg's URL, since a Redis connection URL is the same
+//	"one env-ref name resolving to one connection string" shape as a
+//	Postgres DSN. ResolveS3EnvRefs resolves the four-part family, each
+//	part missing/unset failing closed the same way. PostgresMigrator
 //	returns a func(ctx, *sql.DB) error closure — structurally assignable
 //	to providers/postgres.Migrator without this package importing that
 //	type — that runs the KV table's real migration via
@@ -24,11 +34,11 @@
 //
 // Constraints: internal/** may import internal/** freely but never
 //
-//	providers/** (Art.10.2: cmd is the sole composition root). Redis/S3
-//	slots are genuinely absent from this file — S-38.T6/T7 add them, never
-//	stubbed here (Art.1).
+//	providers/** (Art.10.2: cmd is the sole composition root). No slot is
+//	stubbed here (Art.1) — this file only ever adds a real resolver once
+//	its corresponding ticket lands.
 //
-// SPORT: runtime.profile_server/ADDED (P1-E17-W4-S38-T4).
+// SPORT: runtime.profile_server/CHANGED (P1-E17-W4-S38-T7).
 
 package runtime
 
@@ -42,14 +52,17 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// ServerProfile holds the composed server-profile drivers: Postgres (Store)
-// + pgvector (VectorStore) per 02-TARGET-STRUCTURE §Profiles. Redis
-// (Cache) and S3 (BlobStore) slots are genuinely absent until S-38.T6/T7
-// extend this struct — never stubbed here (Art.1). Close releases both
-// drivers' connections; it is nil-safe and idempotent-per-call-site.
+// ServerProfile holds the composed server-profile drivers: Postgres
+// (Store) + pgvector (VectorStore) + Redis (Cache + Queue) + S3
+// (BlobStore) per 02-TARGET-STRUCTURE §Profiles — every family the server
+// profile names is now real (Art.1.4). Close releases every driver's
+// connection; it is nil-safe and idempotent-per-call-site.
 type ServerProfile struct {
 	Store   provider.Store
 	Vector  provider.VectorStore
+	Cache   provider.Cache
+	Queue   provider.Queue
+	Blob    provider.BlobStore
 	CloseFn func() error
 }
 
@@ -108,6 +121,41 @@ func ResolveDSNEnvRef(getenv EnvLookup, envRefName string) (string, error) {
 		return "", cascade.Newf(cascade.KindInvalidInput, "runtime: server profile env-ref %q is unset — set it before selecting --profile server", envRefName)
 	}
 	return v, nil
+}
+
+// S3EnvRefSuffixes are the four concrete environment-variable name
+// suffixes an s3_env_prefix (08 §2) expands to: prefix+"_ENDPOINT",
+// prefix+"_BUCKET", prefix+"_KEY_ID", prefix+"_SECRET".
+var s3EnvRefSuffixes = [4]string{"_ENDPOINT", "_BUCKET", "_KEY_ID", "_SECRET"}
+
+// ResolveS3EnvRefs resolves the four env vars an s3_env_prefix (08 §2)
+// names — endpoint, bucket, access key ID, secret access key — through
+// getenv, failing closed on the first missing/unset one exactly like
+// ResolveDSNEnvRef. prefix itself is checked with RefuseSecretLiteral
+// (it must be a bare name, never a literal endpoint/credential); the
+// four resolved VALUES are not — they are the real endpoint/bucket/
+// credential themselves, the same as ResolveDSNEnvRef's own resolved
+// DSN is not re-checked after lookup.
+func ResolveS3EnvRefs(getenv EnvLookup, prefix string) (endpoint, bucket, accessKeyID, secretAccessKey string, err error) {
+	if prefix == "" {
+		return "", "", "", "", cascade.New(cascade.KindInvalidInput, "runtime: server profile requires a [server] s3_env_prefix, got none")
+	}
+	if err := RefuseSecretLiteral(prefix); err != nil {
+		return "", "", "", "", err
+	}
+	if getenv == nil {
+		return "", "", "", "", cascade.Newf(cascade.KindInvalidInput, "runtime: server profile s3_env_prefix %q: no environment accessor supplied", prefix)
+	}
+	values := make([]string, len(s3EnvRefSuffixes))
+	for i, suffix := range s3EnvRefSuffixes {
+		name := prefix + suffix
+		v, ok := getenv(name)
+		if !ok || v == "" {
+			return "", "", "", "", cascade.Newf(cascade.KindInvalidInput, "runtime: server profile env-ref %q is unset — set it before selecting --profile server", name)
+		}
+		values[i] = v
+	}
+	return values[0], values[1], values[2], values[3], nil
 }
 
 // RefuseSecretLiteral implements 08 §2's rule at the [storage] boundary:

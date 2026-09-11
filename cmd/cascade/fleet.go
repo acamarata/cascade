@@ -93,6 +93,7 @@ func mountFleetCmd(root *cobra.Command) {
 	root.AddCommand(cmd)
 	mountFleetSessionsAlias(root)
 	mountFleetJournalAlias(root, deps)
+	mountFleetAttentionAlias(root, deps)
 }
 
 // mountFleetSessionsAlias registers the hidden top-level `cascade
@@ -118,6 +119,8 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 	}
 	cmd.AddCommand(newFleetSessionsCmd(deps))
 	cmd.AddCommand(newFleetJournalCmd(deps))
+	cmd.AddCommand(newFleetBenchCmd(deps))
+	cmd.AddCommand(newFleetAttentionCmd(deps))
 	return cmd
 }
 

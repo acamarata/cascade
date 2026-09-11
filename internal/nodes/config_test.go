@@ -100,3 +100,29 @@ func TestParseSection_DiscoveryNetworksWrongType(t *testing.T) {
 		t.Fatal("expected refusal for a non-string discovery_networks entry")
 	}
 }
+
+func TestParseSection_TravelDefaultFalse(t *testing.T) {
+	sec, err := parseSection(map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Travel {
+		t.Fatal("expected Travel default false")
+	}
+}
+
+func TestParseSection_TravelTrue(t *testing.T) {
+	sec, err := parseSection(map[string]interface{}{"travel": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sec.Travel {
+		t.Fatal("expected Travel=true")
+	}
+}
+
+func TestParseSection_TravelWrongType(t *testing.T) {
+	if _, err := parseSection(map[string]interface{}{"travel": "yes"}); err == nil {
+		t.Fatal("expected refusal for non-bool travel")
+	}
+}

@@ -76,3 +76,68 @@ apart from the scan timestamp, which comes from an injected clock, never
 a bare `time.Now()`. Inferred, non-deterministic facts (an LLM's read of
 what a repository is "for") are explicitly out of scope here and belong
 to the S-67.T2 ledger.
+
+## Symbol/dependency graph
+
+`SymbolGraph`/`GraphNode`/`GraphEdge` (`internal/repo/graph.go`) model a
+repository's symbols (packages, exported types/funcs/vars) and the
+`declares`/`imports`/`calls` relationships between them. `GraphExtractor`
+is a per-language registry (`RegisteredLanguages`/`ExtractorFor`)
+mirroring the detector family's own shape; Go, via
+`golang.org/x/tools/go/packages`, is the ONLY shipped implementation --
+no js/ts/rust/python/swift extractor exists or is claimed anywhere.
+`GraphStore` (`graph_store.go`) persists a graph keyed by repository and
+scan generation; a rescan replaces the prior graph atomically.
+
+The graph reaches recall as a `graph` corpus type (`CorpusIDGraph`,
+registered in `internal/retrieval/corpus/registry.go`; the serializer
+lives in `internal/retrieval/graphcorpus.go`, not `corpus/graph.go`,
+because `corpus -> retrieval -> fusion -> corpus` is a real import cycle
+the code-corpus ticket already worked around). Each node/edge becomes one
+provenance-carrying text record upserted through the EXISTING FTS5/vector
+paths -- no new chunker, no new store schema -- and inherits the trusted,
+local-only-by-default trust tier the code corpus already uses.
+
+### Cross-scope edge gating (R-21.190)
+
+A symbol/dependency edge is inherently cross-repository: repository A
+importing repository B's package is a real edge. Every such edge is
+stored -- extraction never drops one -- but a live traversal may cross it
+only when the `context/scope` graph holds a `depends_on` or
+`shares_context_with` edge between the two scopes. `CrossScopeGate`
+(`graph_scope.go`) answers that permission check against the real
+`scope.GraphStore`, and `GatedWalk` applies it at EVERY hop of a bounded,
+cycle-safe walk: a denied hop is recorded as a `Refusal` and that branch
+stops there, never post-rank and never silently dropped. At the
+already-ingested-corpus-record layer, no new mechanism is needed at all:
+a `graph` record is an ordinary `corpus.Record` with a `scope_ref`, so
+the EXISTING `Store.Query`/`Membership` scope check already denies a
+cross-scope `graph` record the same way it denies a cross-scope `code`
+record -- proved by the `graph-leg` extension of the shared-vocabulary
+leak fixture (`internal/retrieval/corpus/testdata/scope-leak/graph-leg/`).
+
+### Symbol reachability (R-21.182)
+
+`Reachability`/`Reachable` (`reachability.go`) answers the query
+AC/S-59.T4's change-footprint rule unions with its pre/post-image paths:
+given a set of changed file paths, which packages are reachable through
+graph edges into a package carrying an `auth`, `secret` or `schema`
+`SensitiveClass` (a directory-prefix derivation this ticket owns,
+mirroring `internal/jobs/risk.go`'s own disclosed Critical-floor
+derivation). A path this graph resolves to nothing returns a typed
+`KindNotFound` error, distinct from a resolved path with nothing sensitive
+reachable (an empty, successful result) -- the two are never conflated.
+A cycle in the input graph cannot loop the walk: a visited-set guard is
+tested against a real cycle even though a Go import graph is acyclic at
+package level.
+
+At the daemon composition root, `Manifest.RegisterReachability`
+(`internal/daemon/subsystems.go`) adapts `Reachable` into the
+`internal/jobs.ReachabilityFn` seam R-21.257 settles
+(`func(ctx, paths) ([]string, error)`, fixing the class set to
+auth/secret/schema): the closure is the only adapter, `internal/jobs`
+never imports this package, and `Reachable` keeps its own `classes`
+parameter and error return. No daemon startup path calls
+`RegisterReachability` yet -- the scheduler/footprint-rule composition is
+a later ticket's, matching `RegisterConductorRouter`'s own precedent in
+the same file.

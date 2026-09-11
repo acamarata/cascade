@@ -35,12 +35,34 @@ import (
 // cap.
 type Store struct {
 	db *sql.DB
+
+	// onTerminal, when non-nil, is invoked by PutTransition after a
+	// transition lands a job in one of its four terminal states
+	// (accepted|rejected|cancelled|failed) -- the DECIDED
+	// release-on-terminal lease path (P1-E29-W6-S59-T2). Set via
+	// SetTerminalHook by the composition root that also constructs this
+	// Store's LeaseManager; nil (the default) means no lease release is
+	// wired, which is correct for every caller that never acquires a
+	// lease (store_job_test.go's plain transition tests, for one).
+	onTerminal func(ctx context.Context, jobID string) error
 }
 
 // NewStore wraps db. db must already carry the MigrationSet tables
 // (ApplyJobsSchema).
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
+}
+
+// SetTerminalHook installs fn as the release-on-terminal callback
+// PutTransition invokes once a job reaches a terminal state. The
+// composition root calls this with LeaseManager.releaseAllForJob after
+// constructing both the Store and its LeaseManager -- there is no
+// import-cycle-free way for Store itself to hold a *LeaseManager
+// (LeaseManager already holds a *Store), so this seam is the injection
+// point instead. Passing nil disables the hook (the zero-value
+// behavior).
+func (s *Store) SetTerminalHook(fn func(ctx context.Context, jobID string) error) {
+	s.onTerminal = fn
 }
 
 // PutJob inserts or fully replaces one job row. A newly-created job
@@ -138,6 +160,11 @@ func (s *Store) PutTransition(ctx context.Context, id string, to JobState, updat
 		string(to), updatedAt, id)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "jobs: put transition")
+	}
+	if to.Terminal() && s.onTerminal != nil {
+		if err := s.onTerminal(ctx, id); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("[\n{\"Path\":\"objects\",\"Name\":\"objects\",\"Size\":96,\"MimeType\":\"inode/directory\",\"ModTime\":\"2026-09-11T14:24:02.885508673-04:00\",\"IsDir\":true},\n{\"Path\":\"objects/ab\",\"Name\":\"ab\",\"Size\":96,\"MimeType\":\"inode/directory\",\"ModTime\":\"2026-09-11T14:24:02.885547839-04:00\",\"IsDir\":true},\n{\"Path\":\"objects/ab/abcd\",\"Name\":\"abcd\",\"Size\":6,\"MimeType\":\"application/octet-stream\",\"ModTime\":\"2026-09-11T14:24:02.885249000-04:00\",\"IsDir\":false}\n]\n")

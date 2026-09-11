@@ -193,3 +193,68 @@ func TestReaderPropagatesUnderlyingErrors(t *testing.T) {
 		t.Fatal("Reader.GetProvider for a missing name should propagate the underlying not-found error")
 	}
 }
+
+// TestGetLaneProbeUnknownReturnsNilNil proves an unprobed lane reads as
+// the honest "unknown" state -- (nil, nil), never a zero-valued record.
+func TestGetLaneProbeUnknownReturnsNilNil(t *testing.T) {
+	reg := newTestRegistry(t)
+	rec, err := reg.GetLaneProbe(context.Background(), "never-probed")
+	if err != nil {
+		t.Fatalf("GetLaneProbe: %v", err)
+	}
+	if rec != nil {
+		t.Fatalf("GetLaneProbe(unprobed) = %+v, want nil", rec)
+	}
+}
+
+// TestUpsertLaneProbeRequiresLaneName mirrors UpsertLane's own
+// Validate-before-SQL discipline.
+func TestUpsertLaneProbeRequiresLaneName(t *testing.T) {
+	reg := newTestRegistry(t)
+	if err := reg.UpsertLaneProbe(context.Background(), LaneProbeRecord{}); err == nil {
+		t.Fatal("UpsertLaneProbe with an empty LaneName should have failed")
+	}
+}
+
+// TestUpsertLaneProbeRoundTripAndOverwrite proves the latest-only
+// semantics the table's own doc comment claims: a second UpsertLaneProbe
+// for the same lane replaces the row rather than accumulating a history.
+func TestUpsertLaneProbeRoundTripAndOverwrite(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+	upsertOwningProvider(t, reg, "anthropic")
+	if err := reg.UpsertLane(ctx, LaneRecord{
+		LaneName: "lane-anthropic-1", ProviderName: "anthropic",
+		Capacity: CapacityInteractiveUsage, State: LaneStateAvailable, Weight: 1,
+	}); err != nil {
+		t.Fatalf("UpsertLane: %v", err)
+	}
+
+	first := LaneProbeRecord{
+		LaneName: "lane-anthropic-1", LatencyP50MS: 120, LatencyP95MS: 180,
+		ErrorRate: 0, CostEstimate: 42, ProbedAt: time.Unix(1_700_000_000, 0).UTC(),
+	}
+	if err := reg.UpsertLaneProbe(ctx, first); err != nil {
+		t.Fatalf("UpsertLaneProbe (first): %v", err)
+	}
+	got, err := reg.GetLaneProbe(ctx, "lane-anthropic-1")
+	if err != nil {
+		t.Fatalf("GetLaneProbe: %v", err)
+	}
+	if got == nil || got.LatencyP50MS != 120 {
+		t.Fatalf("GetLaneProbe (first) = %+v, want LatencyP50MS=120", got)
+	}
+
+	second := first
+	second.LatencyP50MS, second.ErrorRate = 999, 1.0
+	if err := reg.UpsertLaneProbe(ctx, second); err != nil {
+		t.Fatalf("UpsertLaneProbe (second): %v", err)
+	}
+	got, err = reg.GetLaneProbe(ctx, "lane-anthropic-1")
+	if err != nil {
+		t.Fatalf("GetLaneProbe: %v", err)
+	}
+	if got == nil || got.LatencyP50MS != 999 || got.ErrorRate != 1.0 {
+		t.Fatalf("GetLaneProbe (after overwrite) = %+v, want the second reading, not a merge or a second row", got)
+	}
+}

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"all\":false,\"own_scope\":{\"Kind\":\"session\",\"ID\":\"s1\"},\"kind\":\"stall\",\"include_acked\":false}")

@@ -6,10 +6,9 @@
 //	command wiring and this file stays mounting, and so the mounting
 //	point the internal/build mount gate reads is a file of its own.
 //
-// Inputs: doctorDeps, and a context so a mount that has to load config or
+// Inputs: doctorDeps, and a context so a mount that loads config or opens
 //
-//	open a store does it under the run's own cancellation.
-//
+//	a store does it under the run's own cancellation.
 // Outputs: a fresh *doctor.CheckRegistry per invocation (Register panics
 //
 //	on a duplicate name, so one shared registry across two command
@@ -17,10 +16,8 @@
 //
 // Constraints: a check is mounted only against a REAL data source. A
 //
-//	mount that would need a hand-written stand-in is left out and
-//	recorded in internal/build's DoctorMountExemptions, where the mount
-//	gate can see it, rather than being satisfied with something that
-//	probes nothing (Art.1).
+//	mount needing a hand-written stand-in is left out and recorded in
+//	internal/build's DoctorMountExemptions instead (Art.1).
 //
 // SPORT: DOCTOR_SECRETS_REGISTRATION: CHANGE (cmd/cascade doctor mounts).
 
@@ -34,6 +31,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/backup/targets"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
@@ -74,6 +72,7 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// check reports a nil store as StatusError rather than as "no nodes
 	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
+	reg.Register(targets.NewRcloneDoctorCheck(nil)) // backup (P1-E19-W4-S41-T3)
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err

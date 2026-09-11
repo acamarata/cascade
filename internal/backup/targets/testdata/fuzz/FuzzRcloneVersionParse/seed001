@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("rclone v1.75.1\n- os/version: darwin 26.6.2 (64 bit)\n- os/kernel: 25.6.0 (arm64)\n- os/type: darwin\n- os/arch: arm64 (ARMv8 compatible)\n- go/version: go1.27.1\n- go/linking: dynamic\n- go/tags: none\n")

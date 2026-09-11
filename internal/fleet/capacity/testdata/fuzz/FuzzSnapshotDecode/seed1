@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"generated_at\":\"2026-09-11T12:00:00Z\",\"seq\":1,\"providers\":{\"acme\":{\"state\":\"exhausted\",\"buckets\":{\"api_credit\":{\"state\":\"unknown\"}}}},\"nodes\":{\"node1\":{\"presence\":\"unavailable\"}}}")

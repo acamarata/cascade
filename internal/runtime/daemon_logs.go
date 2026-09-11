@@ -119,10 +119,52 @@ func DaemonLogsHandler(ctx context.Context, opts DaemonLogsOptions) error {
 // diagnostic, no data — after the first rotation. Detecting rotation by
 // size alone can never work: a rotated file legitimately starts small.
 // Detecting it by IDENTITY (os.SameFile between the still-open handle
-// and a fresh stat of the path) is the fix — same technique `tail -F`
+// and a fresh probe of the path) is the fix — same technique `tail -F`
 // relies on.
-// missingGraceTicks is how many CONSECUTIVE polls may fail to stat the log
-// path before follow mode calls it deleted. It exists to span the gap
+//
+// BLOCKING FIX 2 (Windows disappearance-vs-rotation): FIX 1's original
+// shape called plain os.Stat(opts.Path) for the fresh side of that
+// SameFile comparison. On Windows that is unreliable for exactly the
+// disappearance case FIX 1 exists to tell apart from rotation. A deleted
+// file with an open handle (this handler's own, kept open by the
+// FILE_SHARE_DELETE fix in daemon_logs_windows.go) enters NTFS's
+// delete-pending state, and os.Stat's Windows implementation resolves a
+// bare path through GetFileAttributesEx first (Go's os/stat_windows.go:
+// "Try GetFileAttributesEx first, because it is faster than CreateFile"),
+// a lightweight metadata query that STILL SUCCEEDS against a
+// delete-pending name and returns a FileInfo with its identity fields
+// left zeroed. os.SameFile then has to re-resolve that identity lazily
+// by re-opening the path (os/types_windows.go's loadFileId, itself a bare
+// CreateFile), which for a delete-pending file fails outright (Windows
+// refuses to open a name pending deletion, for any access or share mode)
+// — and SameFile treats that failure as simply "not the same file", with
+// no way to signal "could not tell". A deleted file therefore compares
+// as a DIFFERENT file at the same path, which is exactly what a rotation
+// looks like, and the wrong diagnostic fires. POSIX has no equivalent
+// third state: unlink detaches the name immediately and unconditionally,
+// so a later stat of the same path fails cleanly with ENOENT regardless
+// of open handles; the unix side's plain os.Stat was already correct on
+// its own terms, not accidentally so.
+//
+// The fix avoids bare path-Stat for the fresh side entirely: it probes
+// the path with openLogFile (the same per-platform open every reader
+// uses) and, on success, calls .Stat() on THAT HANDLE rather than on the
+// path. A handle-based Stat always resolves identity via
+// GetFileInformationByHandle on both platforms (os/stat_windows.go's
+// statHandle path), never through the fragile-on-Windows
+// GetFileAttributesEx shortcut, so it cannot return the zeroed-identity
+// FileInfo that caused this. And critically, opening a delete-pending
+// path by name fails outright on Windows — the same failure a truly
+// missing path gives on both platforms — so a deletion now surfaces
+// through the SAME "could not resolve the path at all" branch the
+// missingGraceTicks logic already handles correctly, instead of falling
+// through to the rotation branch. No runtime.GOOS branch was needed:
+// openLogFile already carries the one genuine platform difference (the
+// share flags), and everything downstream of it is identical on both
+// platforms once the probe replaces the bare Stat.
+//
+// missingGraceTicks is how many CONSECUTIVE polls may fail to resolve the
+// log path before follow mode calls it deleted. It exists to span the gap
 // between a rotation's rename and its create, which are two syscalls with
 // a real, observable window between them. Three polls is long enough for
 // that window on a loaded machine and short enough that a genuinely
@@ -141,8 +183,8 @@ func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset 
 		return &LogError{Field: "daemon.logs", Reason: fmt.Sprintf("stat open log file %s: %v", opts.Path, err)}
 	}
 
-	// missing counts CONSECUTIVE failed stats of opts.Path; see the comment
-	// at its use below for why a single one is not proof of deletion.
+	// missing counts CONSECUTIVE failed path resolutions; see
+	// pollFollowedFile for why a single one is not proof of deletion.
 	missing := 0
 
 	for {
@@ -150,43 +192,59 @@ func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset 
 		case <-ctx.Done():
 			return nil
 		case <-tick.C():
-			pathInfo, err := os.Stat(opts.Path)
-			if err != nil {
-				// A rotation is a RENAME followed by a CREATE, and those
-				// are two separate syscalls: between them the path
-				// genuinely does not exist. A poll that lands in that
-				// window sees exactly what a deleted file looks like, so
-				// concluding "disappeared" on the first failed stat
-				// reports a rotation as a deletion. The window is short
-				// here and wider on a loaded machine, which is why this
-				// surfaced only under CI's race lane and never in twenty
-				// local -race runs.
-				//
-				// Waiting a bounded number of polls costs nothing when
-				// the file really is gone (it still exits, a few
-				// intervals later, with the same diagnostic) and is the
-				// difference between correct and incorrect when it is
-				// merely being rotated.
-				missing++
-				if missing <= missingGraceTicks {
-					continue
-				}
-				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s disappeared\n", opts.Path)
+			done, next, pollErr := pollFollowedFile(opts, f, openInfo, offset, &missing)
+			if pollErr != nil {
+				return pollErr
+			}
+			offset = next
+			if done {
 				return nil
 			}
-			missing = 0
-			if !os.SameFile(openInfo, pathInfo) {
-				_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s was rotated out from under the reader\n", opts.Path)
-				return nil
-			}
-			if pathInfo.Size() <= offset {
-				continue
-			}
-			n, err := io.Copy(opts.Out, f)
-			if err != nil {
-				return &LogError{Field: "daemon.logs", Reason: fmt.Sprintf("read log file %s: %v", opts.Path, err)}
-			}
-			offset += n
 		}
 	}
+}
+
+// pollFollowedFile runs one followLoop poll. It resolves whether
+// opts.Path still names the file f has open by probing the path (see
+// BLOCKING FIX 2 above for why a probe-open, not a bare Stat, is the
+// reliable check), reports done=true with the matching diagnostic on
+// either disappearance or rotation, and otherwise copies any newly
+// appended bytes to opts.Out. missing is the consecutive-failure counter
+// from followLoop, threaded through by pointer so it survives polls.
+func pollFollowedFile(opts DaemonLogsOptions, f *os.File, openInfo os.FileInfo, offset int64, missing *int) (done bool, newOffset int64, err error) {
+	var pathInfo os.FileInfo
+	probe, probeErr := openLogFile(opts.Path)
+	if probeErr == nil {
+		pathInfo, probeErr = probe.Stat()
+		_ = probe.Close()
+	}
+	if probeErr != nil {
+		// A rotation is a RENAME followed by a CREATE, and those are two
+		// separate syscalls: between them the path genuinely cannot be
+		// opened. A poll that lands in that window looks exactly like a
+		// deleted file, so waiting missingGraceTicks consecutive misses
+		// before calling it gone costs nothing when the file really is
+		// gone (it still exits, a few intervals later, with the same
+		// diagnostic) and is the difference between correct and
+		// incorrect when it is merely being rotated.
+		*missing++
+		if *missing <= missingGraceTicks {
+			return false, offset, nil
+		}
+		_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s disappeared\n", opts.Path)
+		return true, offset, nil
+	}
+	*missing = 0
+	if !os.SameFile(openInfo, pathInfo) {
+		_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: log file %s was rotated out from under the reader\n", opts.Path)
+		return true, offset, nil
+	}
+	if pathInfo.Size() <= offset {
+		return false, offset, nil
+	}
+	n, copyErr := io.Copy(opts.Out, f)
+	if copyErr != nil {
+		return false, offset, &LogError{Field: "daemon.logs", Reason: fmt.Sprintf("read log file %s: %v", opts.Path, copyErr)}
+	}
+	return false, offset + n, nil
 }

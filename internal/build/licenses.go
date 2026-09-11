@@ -95,11 +95,16 @@ var LicenseAllowlist = map[string]bool{
 // new transitive dependency: wazero has no runtime dependencies of its
 // own (`go list -m all` shows none beyond the stdlib).
 var KnownModuleLicenses = map[string]string{
-	"filippo.io/age":                       "BSD-3-Clause",
-	"github.com/klauspost/compress":        "BSD-3-Clause",
-	"mvdan.cc/sh/v3":                       "BSD-3-Clause",
-	"github.com/godbus/dbus/v5":            "BSD-2-Clause",
-	"golang.org/x/crypto":                  "BSD-3-Clause",
+	"filippo.io/age":                "BSD-3-Clause",
+	"github.com/klauspost/compress": "BSD-3-Clause",
+	"mvdan.cc/sh/v3":                "BSD-3-Clause",
+	"github.com/godbus/dbus/v5":     "BSD-2-Clause",
+	"golang.org/x/crypto":           "BSD-3-Clause",
+	// Verified against the LICENSE file in the module cache at
+	// v4.10.0 ("The MIT License (MIT)", Copyright (c) 2014 Bob Matcuk),
+	// not inferred from the module path or from a package index. Pulled in
+	// by internal/jobs/glob.go for lease-scope pattern matching.
+	"github.com/bmatcuk/doublestar/v4":     "MIT",
 	"github.com/pelletier/go-toml/v2":      "MIT",
 	"github.com/spf13/cobra":               "Apache-2.0",
 	"github.com/inconshreveable/mousetrap": "Apache-2.0",
@@ -150,6 +155,52 @@ var KnownModuleLicenses = map[string]string{
 	"github.com/jackc/puddle/v2":     "MIT",
 	"golang.org/x/sync":              "BSD-3-Clause",
 	"golang.org/x/text":              "BSD-3-Clause",
+	// golang.org/x/tools (P1-E33-W7-S67-T3, 06-FORGE-SPEC §7 license-gated
+	// standing-authorized addition): internal/repo/graph_go.go's real Go
+	// symbol-graph extractor uses golang.org/x/tools/go/packages. Verified
+	// against the module-cache LICENSE file: the same standard Go Authors
+	// three-clause text as golang.org/x/sys/x/mod/x/sync/x/crypto above.
+	// `go mod tidy` also bumped x/mod, x/sys and x/sync (already
+	// registered) to versions x/tools requires; no new transitive module
+	// path was introduced.
+	"golang.org/x/tools": "BSD-3-Clause",
+	// P1-E17-W4-S38-T6 added github.com/redis/go-redis/v9 (providers/redis's
+	// wire client) and its transitive closure, plus
+	// github.com/alicebob/miniredis/v2 (a real-RESP, pure-Go in-memory
+	// Redis, _test.go-only, untagged coverage lane; Art.2's real-server
+	// docker lane is separate). Verified per-module LICENSE file:
+	"github.com/redis/go-redis/v9":     "BSD-2-Clause",
+	"github.com/cespare/xxhash/v2":     "MIT",
+	"go.uber.org/atomic":               "MIT",
+	"github.com/alicebob/miniredis/v2": "MIT",
+	"github.com/yuin/gopher-lua":       "MIT",
+	// P1-E17-W4-S38-T7 added github.com/minio/minio-go/v7 (providers/s3's
+	// wire client) and its transitive closure. Verified per-module
+	// LICENSE file:
+	"github.com/minio/minio-go/v7": "Apache-2.0",
+	"github.com/minio/crc64nvme":   "Apache-2.0",
+	"github.com/minio/md5-simd":    "Apache-2.0",
+	"gopkg.in/ini.v1":              "Apache-2.0",
+	"github.com/klauspost/crc32":   "BSD-3-Clause",
+	"golang.org/x/net":             "BSD-3-Clause",
+	"github.com/philhofer/fwd":     "MIT",
+	"github.com/rs/xid":            "MIT",
+	"github.com/tinylib/msgp":      "MIT",
+	"github.com/zeebo/xxh3":        "BSD-2-Clause",
+	// go.yaml.in/yaml/v3: same dual MIT/Apache-2.0 split as gopkg.in/yaml.v3
+	// above (successor namespace); more-restrictive half recorded here.
+	"go.yaml.in/yaml/v3": "Apache-2.0",
+	// P1-E17-W4-S38-T7 also added github.com/johannesboyne/gofakes3 (a
+	// real S3 REST API over an in-memory backend, _test.go-only, untagged
+	// coverage lane) and its ACTUAL (module-graph-pruned) closure.
+	// gofakes3's own go.mod additionally names
+	// aws-sdk-go-v2/afero/bbolt/mgo.v2/testify — dependencies of
+	// gofakes3's OWN _test.go files only; `go mod tidy` correctly never
+	// added them here (verified absent above), so they carry no
+	// license-gate obligation. Verified per-module LICENSE file:
+	"github.com/johannesboyne/gofakes3": "MIT",
+	"github.com/ryszard/goskiplist":     "Apache-2.0",
+	"go.shabbyrobe.org/gocovmerge":      "BSD-2-Clause",
 }
 
 // LicenseDependency is one require-directive entry parsed from a go.mod:

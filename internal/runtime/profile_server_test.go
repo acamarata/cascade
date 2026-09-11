@@ -7,7 +7,21 @@
 //	providers/postgres/integration_test.go's job — this file proves the
 //	profile-agnostic pieces this package owns.
 //
-// SPORT: runtime.profile_server/ADDED (P1-E17-W4-S38-T4).
+// P1-E17-W4-S38-T6/T7 note: the tickets' own task text calls for
+// TestServerProfileAssembly (profile_server_live_test.go) to "boot the
+// profile with Postgres + pgvector + Redis/S3 wired" — that is not
+// possible from this package: Art.10.2 forbids internal/** importing
+// providers/**, and the concrete Redis/S3 drivers only exist in
+// providers/redis and providers/s3, opened by
+// cmd/cascade/profile_server.go. This file's own contribution stays what
+// TestServerProfile_CacheQueueFields and TestServerProfile_BlobField
+// below prove: every ServerProfile field round-trips through
+// WithServerProfile/ServerProfileFrom the same way. The real wiring
+// proof — that assembleServerProfile actually populates them from a live
+// server — lives at cmd/cascade (untestable from here by construction,
+// so also untested from here).
+//
+// SPORT: runtime.profile_server/CHANGED (P1-E17-W4-S38-T7).
 package runtime
 
 import (
@@ -30,6 +44,37 @@ func TestServerProfileContext_RoundTrip(t *testing.T) {
 	got, ok := ServerProfileFrom(ctx)
 	if !ok || got != p {
 		t.Fatalf("ServerProfileFrom after WithServerProfile = %v, %v, want %v, true", got, ok, p)
+	}
+}
+
+// TestServerProfile_CacheQueueFields proves the Cache/Queue fields
+// S-38.T6 added round-trip through WithServerProfile/ServerProfileFrom
+// exactly like Store/Vector — see this file's package doc for why the
+// real Redis-backed proof cannot live in this package.
+func TestServerProfile_CacheQueueFields(t *testing.T) {
+	p := &ServerProfile{}
+	ctx := WithServerProfile(context.Background(), p)
+	got, ok := ServerProfileFrom(ctx)
+	if !ok {
+		t.Fatal("ServerProfileFrom = ok=false, want true")
+	}
+	if got.Cache != nil || got.Queue != nil {
+		t.Fatalf("zero-value ServerProfile Cache/Queue = %v/%v, want nil/nil", got.Cache, got.Queue)
+	}
+}
+
+// TestServerProfile_BlobField proves the Blob field S-38.T7 added
+// round-trips the same way — see this file's package doc for why the
+// real S3-backed proof cannot live in this package.
+func TestServerProfile_BlobField(t *testing.T) {
+	p := &ServerProfile{}
+	ctx := WithServerProfile(context.Background(), p)
+	got, ok := ServerProfileFrom(ctx)
+	if !ok {
+		t.Fatal("ServerProfileFrom = ok=false, want true")
+	}
+	if got.Blob != nil {
+		t.Fatalf("zero-value ServerProfile Blob = %v, want nil", got.Blob)
 	}
 }
 
@@ -144,5 +189,61 @@ func TestPostgresMigrator_ReturnsClosure(t *testing.T) {
 	fn := PostgresMigrator(stubClock{t: time.Unix(0, 0)})
 	if fn == nil {
 		t.Fatal("PostgresMigrator returned a nil closure")
+	}
+}
+
+func TestResolveS3EnvRefs_Success(t *testing.T) {
+	values := map[string]string{
+		"CASCADE_S3_ENDPOINT": "http://127.0.0.1:9000",
+		"CASCADE_S3_BUCKET":   "cascade",
+		"CASCADE_S3_KEY_ID":   "minioadmin",
+		"CASCADE_S3_SECRET":   "minioadmin",
+	}
+	getenv := func(k string) (string, bool) { v, ok := values[k]; return v, ok }
+	endpoint, bucket, keyID, secret, err := ResolveS3EnvRefs(getenv, "CASCADE_S3")
+	if err != nil {
+		t.Fatalf("ResolveS3EnvRefs: %v", err)
+	}
+	if endpoint != values["CASCADE_S3_ENDPOINT"] || bucket != values["CASCADE_S3_BUCKET"] ||
+		keyID != values["CASCADE_S3_KEY_ID"] || secret != values["CASCADE_S3_SECRET"] {
+		t.Fatalf("ResolveS3EnvRefs = %q/%q/%q/%q, want the four configured values", endpoint, bucket, keyID, secret)
+	}
+}
+
+func TestResolveS3EnvRefs_EmptyPrefix(t *testing.T) {
+	_, _, _, _, err := ResolveS3EnvRefs(func(string) (string, bool) { return "", false }, "")
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("ResolveS3EnvRefs(empty prefix) = %v, want KindInvalidInput", err)
+	}
+}
+
+func TestResolveS3EnvRefs_SecretLiteralPrefix(t *testing.T) {
+	_, _, _, _, err := ResolveS3EnvRefs(func(string) (string, bool) { return "", false }, "https://not-a-prefix")
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("ResolveS3EnvRefs(secret-shaped prefix) = %v, want KindInvalidInput", err)
+	}
+}
+
+func TestResolveS3EnvRefs_NilGetenv(t *testing.T) {
+	_, _, _, _, err := ResolveS3EnvRefs(nil, "CASCADE_S3")
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("ResolveS3EnvRefs(nil getenv) = %v, want KindInvalidInput", err)
+	}
+}
+
+func TestResolveS3EnvRefs_MissingPart(t *testing.T) {
+	values := map[string]string{
+		"CASCADE_S3_ENDPOINT": "http://127.0.0.1:9000",
+		"CASCADE_S3_BUCKET":   "cascade",
+		// _KEY_ID deliberately unset.
+		"CASCADE_S3_SECRET": "minioadmin",
+	}
+	getenv := func(k string) (string, bool) { v, ok := values[k]; return v, ok }
+	_, _, _, _, err := ResolveS3EnvRefs(getenv, "CASCADE_S3")
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("ResolveS3EnvRefs(missing part) = %v, want KindInvalidInput", err)
+	}
+	if !strings.Contains(err.Error(), "CASCADE_S3_KEY_ID") {
+		t.Fatalf("ResolveS3EnvRefs(missing part) error = %v, want it to name the missing env-ref", err)
 	}
 }

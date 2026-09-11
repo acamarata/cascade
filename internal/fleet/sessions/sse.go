@@ -52,12 +52,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // EventsPath is the route this handler expects to be mounted at.
@@ -181,4 +183,45 @@ func (h *SSEHandler) stream(ctx context.Context, w http.ResponseWriter, flusher 
 func writeSSEEvent(w http.ResponseWriter, ev events.Event) {
 	_, _ = fmt.Fprintf(w, "event: %s\nid: %d\ndata: %s\nretry: %d\n\n",
 		ev.Kind, ev.Seq, ev.Payload, sseRetryMillis)
+}
+
+// LaneHealthChangedKind is a DISTINCT event kind on the SAME
+// fleet.sessions stream (R-16.78 §2), never a second stream and never an
+// envelope field folded into one SessionRecord (which describes exactly
+// one harness session, not every lane). This SSEHandler's stream/
+// writeSSEEvent above forwards any Kind published to changedNamespace
+// unfiltered -- ev.Kind already becomes the SSE "event:" field -- so no
+// dispatch change was needed here to carry a second event type; only the
+// kind constant and payload shape are new.
+const LaneHealthChangedKind = events.EventKind("fleet.sessions.lane_health.changed")
+
+// LaneHealth is one lane's latest probe/bench reading, as published on
+// LaneHealthChangedKind. No field carries `omitempty`: a lane that has
+// never been probed still emits every numeric field at its zero value
+// (Healthy=false), never an omitted field a consumer could confuse with
+// "this lane was not included."
+type LaneHealth struct {
+	LaneID       string  `json:"lane_id"`
+	LatencyP50MS float64 `json:"latency_p50_ms"`
+	LatencyP95MS float64 `json:"latency_p95_ms"`
+	ErrorRate    float64 `json:"error_rate"`
+	CostEstimate float64 `json:"cost_estimate"`
+	Healthy      bool    `json:"healthy"`
+}
+
+// PublishLaneHealth publishes health as a LaneHealthChangedKind event on
+// bus's changedNamespace stream. The caller decides WHETHER to call this
+// -- lane health is emitted on change only, never on a timer (R-16.78
+// §2: a status feed that re-emits unchanged state is indistinguishable
+// to a reader from a lane flapping), so this function itself carries no
+// change-detection state and simply publishes what it is given.
+func PublishLaneHealth(ctx context.Context, bus *events.Bus, health LaneHealth) error {
+	payload, err := json.Marshal(health)
+	if err != nil {
+		return cascade.Wrap(cascade.KindInternal, err, "sessions: encode lane health")
+	}
+	if _, err := bus.Publish(ctx, changedNamespace, LaneHealthChangedKind, "lane:"+health.LaneID, payload); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "sessions: publish lane health")
+	}
+	return nil
 }

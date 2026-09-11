@@ -68,6 +68,34 @@ type DeviceRecord struct {
 	// filter reads this flag; it does not remove the record or affect
 	// liveness/heartbeat processing.
 	Drained bool `json:"drained,omitempty"`
+	// Presence is the R-21.65/R-16.67 four-value presence state
+	// (presence.go, P1-E36-W7-S72-T2). Empty until the prober's first
+	// pass; AdvancePresence/ResolveHeartbeatTimeoutPresence are the only
+	// writers.
+	Presence Presence `json:"presence,omitempty"`
+	// PresenceChangedAt is the timestamp of the most recent presence
+	// transition (never a mere probe attempt that did not transition).
+	PresenceChangedAt time.Time `json:"presence_changed_at,omitempty"`
+	// ConsecutiveMisses/FirstMissAt and ConsecutiveHits/FirstHitAt are
+	// the R-21.197 hysteresis dwell-window counters presence.go's
+	// AdvancePresence needs to survive across probe ticks — persisted
+	// here rather than held in prober.go memory so a daemon restart does
+	// not silently reset an in-progress hysteresis window.
+	ConsecutiveMisses int       `json:"consecutive_misses,omitempty"`
+	FirstMissAt       time.Time `json:"first_miss_at,omitempty"`
+	ConsecutiveHits   int       `json:"consecutive_hits,omitempty"`
+	FirstHitAt        time.Time `json:"first_hit_at,omitempty"`
+	// Route is the optional ssh/VPN route the presence prober falls back
+	// to once this node's direct probe has failed (travel.go,
+	// P1-E36-W7-S72-T3, R-16.37 §Nodes). nil means no route is
+	// configured. Route carries only the public dial address reused from
+	// this node's S-36.T1 enrollment shape (User, Addr) — never a
+	// private key, password or passphrase: the private key stays in
+	// NodeKeystore custody and signs the ssh handshake via tunnel.go's
+	// existing keystoreSigner, exactly as the direct tunnel dial already
+	// does. See travel.go's RouteConfig doc comment for the same
+	// invariant stated at the type.
+	Route *RouteConfig `json:"route,omitempty"`
 }
 
 // Clock abstracts time.Now so this package never reads the wall clock
@@ -200,6 +228,28 @@ func (s *RecordStore) put(rec DeviceRecord) error {
 		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: write device records")
 	}
 	return nil
+}
+
+// PendingCandidate is one discovery finding — a candidate device, a new
+// pairing, or an observed harness change — awaiting explicit user
+// approval (R-21.163). This is a plain data shape only, deliberately with
+// no accompanying store: R-21.161 designates AI/S-71 as the ONLY
+// proposal store in the tree, and no ticket in this tree has yet built
+// one (verified: no internal package under this repo defines a proposal
+// store as of this ticket). Building a second CRUD store here — even a
+// well-intentioned one — would be exactly the competing-registry defect
+// R-16.79 and this ticket's own brief warn against. A future discovery
+// producer (T1's deferred discovery.go) or AI/S-71's real proposal store
+// constructs values of this type; this ticket only fixes its shape and
+// the invariant that matters structurally: a PendingCandidate is never a
+// DeviceRecord and RecordStore exposes no path that admits one as a
+// placement target without going through Enroll, which always requires
+// an explicit, valid trust_tier (see records_test.go).
+type PendingCandidate struct {
+	ID           string    `json:"id"`
+	Source       string    `json:"source"`
+	Detail       string    `json:"detail,omitempty"`
+	DiscoveredAt time.Time `json:"discovered_at"`
 }
 
 // fileRecordBackend is the production RecordBackend: one JSON file under

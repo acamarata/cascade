@@ -42,3 +42,18 @@ package's own output, and never regenerated from it (Art.2).
 None of these fixtures, nor any golden derived from them, encodes a host
 path, personal name, or machine identifier -- every detector under test
 receives a `t.TempDir()` root and every stored fact is repo-relative.
+
+- `fixture-graph-go/` -- a minimal real two-package Go module (`go.mod`,
+  `main.go` importing `pkg`, `pkg/foo.go`) exercising the symbol/
+  dependency graph extractor (P1-E33-W7-S67-T3) against the real
+  `golang.org/x/tools/go/packages` loader, never a hand-built graph. Each
+  non-test `.go` file carries a sibling `_test.go` placeholder (mirroring
+  `internal/plugins/testdata/conformance/proc_stub`); Go's toolchain
+  ignores `testdata/` trees entirely, so these siblings never affect
+  extraction. `golden-symbolgraph.json` is the real extractor's own
+  canonical-JSON output against this fixture, captured once and checked
+  in for the byte-for-byte determinism test -- every `File` path in it is
+  relative to the fixture root, never absolute.
+- `fixture-graph-malformed/` -- a minimal Go module whose one file has a
+  real syntax error, proving the extractor returns a typed error rather
+  than a panic or a silently-partial graph.

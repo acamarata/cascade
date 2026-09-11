@@ -17,15 +17,12 @@
 //	unconditionally on Windows (internal/nodes.RefuseOnGOOS). Mounted on
 //	the cobra root per R-16.56: THIS ticket mounts `node serve` only;
 //	enroll/list/status/drain/remove are S-36.T4's mounts under the same
-//	`node` group. This file is the promised caller_site for every
-//	internal/build/testonly-allow.json entry whose retire_ticket is
-//	P1-E17-W4-S36-T2 (GenerateIdentity, NewFileKnownHostsBackend,
+//	`node` group. This file is the promised caller_site for P1-E17-W4-S36-T2's
+//	testonly-allow.json entries (GenerateIdentity, NewFileKnownHostsBackend,
 //	NewFileRecordBackend, NewKnownHosts, NewNodeKeystore, NewRecordStore,
 //	RegisterHandlers, Satisfies, SignRotationRequest, SignTranscript,
-//	SignatureRevoked) — every one is referenced below, directly or
-//	transitively through internal/nodes.BuildServeRegistry/
-//	EnsureLocalIdentity, and those allow-list entries are retired in the
-//	same change that adds this file.
+//	SignatureRevoked) and, as of the R-16.80-class wiring fix below, for
+//	internal/nodes.NewProber/NewNetworkWatcher too.
 //
 // SPORT: cmd/cascade/node (ADD, per T-2 sport_updates).
 package main
@@ -93,6 +90,10 @@ type nodeServeDeps struct {
 	// order applies.
 	SecretsDir string
 	GOOS       string
+	// ProbeTicker replaces the real Prober ticker startPresenceSubsystems
+	// otherwise builds; nil in production. Tests inject a fake so a
+	// probe pass runs deterministically without a real clock wait.
+	ProbeTicker nodes.Ticker
 }
 
 // productionNodeServeDeps builds nodeServeDeps against the real
@@ -103,11 +104,16 @@ func productionNodeServeDeps() nodeServeDeps {
 
 // nodeServeComposition is runNodeServe's built collaborators, split out of
 // runNodeServe itself so that function stays under the 50-line cap.
+// recordStore/knownHosts are kept here (not only closed over inside
+// registry) because node_serve_presence.go's Prober/NetworkWatcher need
+// the SAME instances the RPC surface uses, never a second one.
 type nodeServeComposition struct {
-	dataDir  string
-	keystore *nodes.NodeKeystore
-	self     nodes.Identity
-	registry *nodes.ServeRegistry
+	dataDir     string
+	keystore    *nodes.NodeKeystore
+	self        nodes.Identity
+	registry    *nodes.ServeRegistry
+	recordStore *nodes.RecordStore
+	knownHosts  *nodes.KnownHosts
 }
 
 // composeNodeServe resolves dataDir and builds every collaborator
@@ -126,16 +132,21 @@ func composeNodeServe(ctx context.Context, deps nodeServeDeps) (nodeServeComposi
 	if err != nil {
 		return nodeServeComposition{}, cascade.Wrap(cascade.KindUnavailable, err, "node serve: establish local identity")
 	}
+	recordStore := nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), deps.Clock)
+	knownHosts := nodes.NewKnownHosts(nodes.NewFileKnownHostsBackend(dataDir))
 	registry := nodes.NewServeRegistry(nodes.ServeDeps{
-		Records:    nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), deps.Clock),
-		KnownHosts: nodes.NewKnownHosts(nodes.NewFileKnownHostsBackend(dataDir)),
+		Records:    recordStore,
+		KnownHosts: knownHosts,
 		Keystore:   keystore,
 		Self:       self,
 		Sequences:  nodes.NewSequenceStore(),
 		Clock:      deps.Clock,
 		Timeout:    nodes.DefaultHeartbeatTimeout,
 	})
-	return nodeServeComposition{dataDir: dataDir, keystore: keystore, self: self, registry: registry}, nil
+	return nodeServeComposition{
+		dataDir: dataDir, keystore: keystore, self: self, registry: registry,
+		recordStore: recordStore, knownHosts: knownHosts,
+	}, nil
 }
 
 // runNodeServe is the platform-independent entry point: it refuses on
@@ -148,13 +159,13 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 	if err != nil {
 		return err
 	}
-	dataDir, keystore, self, registry := comp.dataDir, comp.keystore, comp.self, comp.registry
+	stopBackground, err := startNodeServeBackgroundLoops(ctx, comp, deps)
+	if err != nil {
+		return err
+	}
+	defer stopBackground()
 
-	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
-	defer stopHeartbeat()
-	startOutboundHeartbeat(heartbeatCtx, dataDir, self, keystore)
-
-	socketPath := filepath.Join(dataDir, "nodes", "node.sock")
+	socketPath := filepath.Join(comp.dataDir, "nodes", "node.sock")
 	ln, err := listenNodeSocket(socketPath)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "node serve: listen on node socket")
@@ -164,7 +175,7 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 		_ = os.Remove(socketPath)
 	}()
 
-	srv := &http.Server{Handler: registry.Handler(), ConnContext: nodes.ConnContext}
+	srv := &http.Server{Handler: comp.registry.Handler(), ConnContext: nodes.ConnContext}
 	serveErrCh := make(chan error, 1)
 	go func() { serveErrCh <- srv.Serve(ln) }()
 
@@ -182,6 +193,30 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 	}
 	_ = srv.Shutdown(context.Background())
 	return nil
+}
+
+// startNodeServeBackgroundLoops starts every background loop runNodeServe
+// keeps alive for its whole run: the outbound heartbeat (a silent no-op
+// pre-enrollment) and the presence/network-change subsystems
+// (node_serve_presence.go). Split out so runNodeServe itself stays under
+// the 50-line cap, and so the two independently-cancelable contexts each
+// loop needs are built and deferred in exactly one place.
+func startNodeServeBackgroundLoops(ctx context.Context, comp nodeServeComposition, deps nodeServeDeps) (func(), error) {
+	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
+	startOutboundHeartbeat(heartbeatCtx, comp.dataDir, comp.self, comp.keystore)
+
+	presenceCtx, stopPresence := context.WithCancel(ctx)
+	closePresence, err := startPresenceSubsystems(presenceCtx, comp, deps)
+	if err != nil {
+		stopHeartbeat()
+		stopPresence()
+		return nil, err
+	}
+	return func() {
+		stopHeartbeat()
+		stopPresence()
+		closePresence()
+	}, nil
 }
 
 // startOutboundHeartbeat launches the node-initiated periodic heartbeat

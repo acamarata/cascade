@@ -1,0 +1,14 @@
+{
+  "request": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "fleet.capacity"
+  },
+  "result": {
+    "generated_at": "2026-09-11T12:00:00Z",
+    "nodes": {},
+    "providers": {},
+    "seq": 0,
+    "task_capabilities": null
+  }
+}

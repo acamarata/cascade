@@ -46,21 +46,24 @@ import (
 // TablePrefix convention applies since this is not one of the eleven
 // closed domains (see this file's CONTRACT DEVIATION note above).
 const (
-	tableProviderRecords = "provider_records"
-	tableProviderLanes   = "provider_lanes"
+	tableProviderRecords    = "provider_records"
+	tableProviderLanes      = "provider_lanes"
+	tableProviderLaneProbes = "provider_lane_probes"
 )
 
 // registrySchemaVersion is this package's MigrationSet target version --
-// the next unused slot in the single global sequence. See this file's
-// SCHEMA VERSION doc comment.
-const registrySchemaVersion = 4
+// the next unused slot in this SetID's own independent sequence (R-16.77
+// gave the ledger per-(SetID, schema_version) identity, so this number is
+// no longer shared with any other package). Bumped 4 -> 5 by
+// P1-E12-W3-S25-T5 (R-16.78 §1) to add provider_lane_probes.
+const registrySchemaVersion = 5
 
 // SchemaVersion is registrySchemaVersion exported for a future composition
 // root's reader-ceiling max(), matching scope.SchemaVersion's and
 // lifecycle.SchemaVersion's own exported-for-the-same-reason pattern.
 const SchemaVersion = registrySchemaVersion
 
-// MigrationSet is the providers registry's two-table schema.
+// MigrationSet is the providers registry's three-table schema.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SetID:         "providers-registry",
@@ -69,6 +72,36 @@ func MigrationSet() migrate.MigrationSet {
 		Steps: []migrate.MigrationStep{
 			providerRecordsTableStep(),
 			providerLanesTableStep(),
+			providerLaneProbesTableStep(),
+		},
+	}
+}
+
+// providerLaneProbesTableStep is the provider_lane_probes create-table
+// step (R-16.78 §1): one row per lane, holding ONLY that lane's latest
+// probe/bench reading. This is the registry's OWN persisted shape --
+// deliberately not internal/fleet.ProbeResult or BenchResult -- so the
+// two packages never need to share a type and the dependency direction
+// stays fleet -> registry, one way, never the reverse (see lanes.go's
+// LaneProbeRecord doc comment for the full rationale). Latest-only by
+// design: a new probe replaces the row rather than appending a history.
+func providerLaneProbesTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "provider_lane_probes: one row per lane, its latest probe/bench reading only",
+		Table: &migrate.TableDef{
+			Name: tableProviderLaneProbes,
+			Columns: []migrate.ColumnDef{
+				{Name: "lane_name", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "latency_p50_ms", Type: migrate.TypeReal, NotNull: true},
+				{Name: "latency_p95_ms", Type: migrate.TypeReal, NotNull: true},
+				{Name: "error_rate", Type: migrate.TypeReal, NotNull: true},
+				{Name: "cost_estimate", Type: migrate.TypeReal, NotNull: true},
+				{Name: "probed_at", Type: migrate.TypeInteger, NotNull: true},
+			},
+			ForeignKeys: []migrate.ForeignKeyDef{
+				{Column: "lane_name", RefTable: tableProviderLanes, RefColumn: "lane_name", OnDelete: "CASCADE"},
+			},
 		},
 	}
 }

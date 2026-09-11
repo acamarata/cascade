@@ -411,6 +411,99 @@ jobs:
           CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
         run: go test -tags="postgres integration" -count=1 -race ./providers/pgvector/... -v
 
+  redis-storetest-under-docker:
+    # P1-E17-W4-S38-T6: the Redis Cache + Queue drivers' conformance run
+    # against a REAL redis:7-alpine service container, never a
+    # self-authored RESP dialect (Art.2). providers/redis carries no
+    # build tag of its own (unlike providers/postgres/pgvector), so the
+    # `integration` tag alone gates this job's live-server cases,
+    # matching the untagged-by-default convention this driver's own
+    # ticket checks establish.
+    name: redis-storetest-under-docker (required)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: verify redis service container is reachable
+        # redis-cli is not preinstalled on the ubuntu-latest runner image
+        # (unlike postgresql-client's pg_isready above) - a plain TCP probe
+        # via bash's /dev/tcp needs no extra package, and the service's own
+        # --health-cmd already gates job start on a real PING succeeding.
+        run: bash -c 'exec 3<>/dev/tcp/localhost/6379 && echo reachable'
+
+      - name: go test -tags=integration ./providers/redis/...
+        env:
+          CASCADE_TEST_REDIS_URL: redis://localhost:6379/0
+        run: go test -tags=integration -count=1 -race ./providers/redis/... -v
+
+  s3-storetest-under-docker:
+    # P1-E17-W4-S38-T7: the S3 BlobStore driver's conformance run against
+    # a REAL MinIO server, never a self-authored S3 dialect (Art.2).
+    # providers/s3 carries no build tag of its own (matching
+    # providers/redis's precedent), so the `integration` tag alone gates
+    # this job's live-server cases.
+    #
+    # MinIO runs as a plain `docker run` step, NOT a GitHub Actions
+    # `services:` container: services literally cannot pass a custom
+    # command to the container (verified by probe, not assumed — a bare
+    # `minio/minio` with no command prints usage and exits immediately,
+    # so it needs `server /data` as its command, which `services:` has
+    # no field for). A `docker run` step gives that command directly.
+    # MinIO also does not pre-create a bucket on boot (unlike the
+    # Postgres/Redis images above), so a bucket-creation step runs next,
+    # using the minio/mc image against the server's published port.
+    name: s3-storetest-under-docker (required)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: start minio server
+        run: |
+          docker run -d --name cascade-ci-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 1
+          done
+
+      - name: create minio test bucket
+        run: |
+          docker run --rm --network host minio/mc:latest \
+            mc alias set localminio http://localhost:9000 minioadmin minioadmin
+          docker run --rm --network host minio/mc:latest \
+            mc mb localminio/cascade-test-bucket
+
+      - name: go test -tags=integration ./providers/s3/...
+        env:
+          CASCADE_TEST_S3_ENDPOINT: http://localhost:9000
+          CASCADE_TEST_S3_BUCKET: cascade-test-bucket
+          CASCADE_TEST_S3_ACCESS_KEY: minioadmin
+          CASCADE_TEST_S3_SECRET_KEY: minioadmin
+        run: go test -tags=integration -count=1 -race ./providers/s3/... -v
+
+      - name: stop minio server
+        if: always()
+        run: docker stop cascade-ci-minio
+
   server-profile-assembly:
     # P1-E17-W4-S38-T4: internal/runtime's profile-agnostic composition
     # pieces (DSN env-ref resolution, the live migration closure) against
@@ -508,14 +601,14 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, server-profile-assembly]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

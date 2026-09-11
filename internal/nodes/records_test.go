@@ -279,3 +279,21 @@ func TestRecordStoreRemove_BackendSaveErrorPropagates(t *testing.T) {
 		t.Fatal("expected error from Remove when backend save fails")
 	}
 }
+
+// TestDeviceRecordRouteRoundTrips: Route round-trips through
+// RecordStore.put/Get with only RouteConfig's two fields (S-72.T3).
+func TestDeviceRecordRouteRoundTrips(t *testing.T) {
+	store := NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now()))
+	id := testIdentity(t, "route")
+	rec, err := store.Enroll(id, TierWorkerTrusted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.Route = &RouteConfig{User: "worker", Addr: "host1:22"}
+	if err := store.put(rec); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.Get(id.NodeID); err != nil || got.Route == nil || got.Route.User != "worker" || got.Route.Addr != "host1:22" {
+		t.Fatalf("Get = %+v, err=%v, want Route{worker, host1:22}", got.Route, err)
+	}
+}
