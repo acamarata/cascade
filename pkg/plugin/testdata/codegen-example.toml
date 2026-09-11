@@ -1,0 +1,29 @@
+id = 'cascade-authorkit-example'
+name = 'Cascade Author Kit Example'
+schema = 'cascade.plugin/v2'
+version = '0.1.0'
+host_version = '>=2.0.0'
+runtime = 'wasm'
+requires = ['network.egress']
+
+[provides]
+[[provides.intents]]
+name = 'authorkit-example.greet'
+description = 'Demonstrate an intent this example plugin can satisfy.'
+
+[[provides.tools]]
+name = 'authorkit-example.chat'
+description = 'Demonstrate a tool this example plugin exposes.'
+
+[[provides.domains]]
+name = 'authorkit-example'
+description = "The example plugin's own namespaced storage domain."
+
+[[provides.commands]]
+name = 'authorkit-example'
+description = "Inspect the example plugin's status."
+rpc_method = 'plugin.authorkit-example.status'
+
+[[permissions]]
+name = 'network.egress'
+description = "Make outbound network requests on the user's behalf."

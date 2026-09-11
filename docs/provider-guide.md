@@ -180,3 +180,72 @@ something a driver is still holding.
   immutable and cannot be zeroed. The response buffer, which the broker does
   own, is zeroed. This is named rather than papered over with a zeroing call
   that would not do anything.
+
+## The ModelProvider driver contract
+
+`pkg/provider` (`types.go`, `model.go`, `events.go`, `compliance.go`) also
+defines `ModelProvider` (P1-E10-W3-S19-T1): the vendor-neutral driver contract
+every J/S-19 driver (anthropic, openai-compat, gemini, ollama) implements.
+Exactly five verbs, and no sixth surface:
+
+- `Chat(ctx, ChatRequest) (ChatResponse, error)` — one-shot completion.
+- `Embed(ctx, ModelEmbedRequest) (ModelEmbedResponse, error)` — the
+  model-side embedding call (distinct from the retrieval-side `Embedder`).
+- `Count(ctx, CountRequest) (CountResponse, error)` — the provider's own
+  token count for a piece of text.
+- `Stream(ctx, ChatRequest, StreamSink) error` — a sequence of typed
+  `StreamEvent`s (`delta`, `tool_call`, `usage`, terminating in exactly one
+  `done` or `error`) delivered to the sink, in order.
+- `Capabilities(ctx, lane string) (Capabilities, error)` — the descriptor the
+  router matches requirements against; it describes a lane, it never routes.
+
+A later ruling (R-21.28, AN/S-77.T5, W9) adds a sixth method,
+`Discover(ctx) ([]LaneOffering, error)`; this interface is not closed against
+that addition, it simply does not implement it yet.
+
+ctx is always the crossing function's first parameter and is never stored in
+a struct. No provider-specific type or credential shape crosses this
+boundary — a driver obtains credentials through the `ProviderOAuthConfig` /
+`OAuthBroker` flow described above, never through a `ModelProvider` field.
+
+### Capabilities
+
+`Capabilities` carries six R-14.88 tool-capability dimensions — `Search`,
+`URLFetch`, `Vision`, `ToolUse`, `LongContext`, `StructuredOutput` — each a
+tri-state `CapabilityState` (`unknown` the zero value, `supported`,
+`unsupported`), resolvable per-lane since pool members' tiers differ per key.
+`RequiredCapabilities` mirrors the same six dimensions on the request side;
+`Capabilities.Satisfies(RequiredCapabilities)` reports whether every
+dimension the caller set to true resolves to `supported`.
+
+`Capabilities.CompliancePosture` (R-16.10) is every driver's vendor-terms
+self-declaration: `AuthModes`, `InteractiveEntitlement`,
+`ProgrammaticEntitlement`, `AutomationModes`, `Pacing`,
+`MultiProfileEnabled`, and `CredentialSharing` — always
+`CredentialSharingForbidden`. `NewCompliancePosture` is the only constructor
+and has no parameter through which a driver could request anything else;
+`Validate()` fails closed on any other value.
+
+## Calling the model door
+
+The frozen daemon client (`internal/client.Client`) gains no new method for
+model execution. `pkg/provider/client.go` adds the typed door instead
+(R-21.280):
+
+- `RPCCaller` — the one-method seam
+  (`Do(ctx, method string, params, out any) error`) the frozen client already
+  satisfies.
+- `Client`, built by `NewClient(c RPCCaller) *Client` — a thin value holding
+  no socket, no transport, and no state beyond its `RPCCaller`, so
+  `pkg/provider` stays free of `internal/` imports.
+- `(*Client).ModelExecute(ctx, ModelRequest) (ModelResponse, error)` — exactly
+  one `Do(ctx, "model.execute", req, &resp)` call, with any error mapped
+  through the `pkg/cascade` taxonomy.
+- `(*Client).JobCancel(ctx, JobID) error` — the idempotent
+  `Do(ctx, "job.cancel", ...)` call; a repeat call for the same job is a
+  no-op because `job.cancel` is idempotent server-side. Cancellation is never
+  written to the SSE stream (`GET /events` is delivery only).
+
+`plugins/pbd` and `internal/fleet` reach `model.execute` only through this
+wrapper — neither package imports `internal/conductor`, which implements
+`ModelExecutor` and owns the real execution plumbing.

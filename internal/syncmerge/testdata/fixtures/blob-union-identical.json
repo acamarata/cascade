@@ -1,0 +1,11 @@
+{
+  "domain": "blob",
+  "case": "union-identical-sets-idempotence",
+  "description": "Both sides stage the byte-identical payload, so they land under the same content address after staging. The union must not grow: len(union) == len(sideA), demonstrating idempotence for the content-addressed union.",
+  "sideA": [
+    {"logicalID": "blob-c", "dataBase64": "aWRlbnRpY2FsIHBheWxvYWQgc2hhcmVkIGJ5IGJvdGggc2lkZXM="}
+  ],
+  "sideB": [
+    {"logicalID": "blob-c", "dataBase64": "aWRlbnRpY2FsIHBheWxvYWQgc2hhcmVkIGJ5IGJvdGggc2lkZXM="}
+  ]
+}

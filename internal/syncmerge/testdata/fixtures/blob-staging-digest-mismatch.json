@@ -1,0 +1,9 @@
+{
+  "domain": "blob",
+  "case": "truncated-staged-blob-rejected-at-admission",
+  "description": "fullDataBase64 is the complete payload; truncatedDataBase64 simulates an interrupted transfer of the same declared content address (computed from the FULL payload). Admission must recompute BLAKE3 over the truncated bytes, see it does not match the declared address, and discard the staged bytes with ErrBlobDigestMismatch -- never commit a truncated transfer under a valid-looking address.",
+  "sideA": [
+    {"logicalID": "blob-e", "fullDataBase64": "dGhlIGNvbXBsZXRlIHVudHJ1bmNhdGVkIHN0YWdlZCBibG9iIHBheWxvYWQgZm9yIGFkbWlzc2lvbiB0ZXN0aW5n", "truncatedDataBase64": "dGhlIGNvbXBsZXRlIHVudHJ1bmM="}
+  ],
+  "sideB": []
+}

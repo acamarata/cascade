@@ -1,0 +1,45 @@
+# fleet-sessions.txtar
+#
+# Documents the `cascade fleet sessions [--watch]` behavioral scenarios
+# this ticket's contract names (R-40.X17: the single home for testscripts
+# exercising the cascade binary's own commands). This module carries no
+# testscript (rogpeppe/testscript) dependency -- adding one needs the
+# license gate this repo has not cleared (see the sibling
+# context-slice.txtar / context-scope-show.txtar, which make the same
+# call, and cmd/cascade/memory_integration_test.go's original note). The
+# scenarios below are instead expressed as executable Go: mount
+# reachability and the hidden-alias check in cmd/cascade/fleet_test.go's
+# TestFleetSessionsMountedOnRoot / TestFleetSessionsAliasHidden, one-shot
+# table/JSON rendering in TestFleetSessionRows_TableHasRequiredColumns,
+# the --watch refusals in TestFleetSessionsErrors_AreActionable and (on
+# Windows CI) TestFleetSessionsWatch_WindowsTier2Refusal, and NDJSON
+# decoding in TestDecodeSessionEvent_RoundTrip. This file records the
+# intended script form for when a testscript dependency is cleared.
+
+# One-shot human output on an isolated environment (no daemon reachable)
+# lists the required columns via the embedded runtime path.
+exec cascade fleet sessions
+stdout 'SESSION_ID\s+BINARY\s+STATE\s+CONFIDENCE\s+ACCOUNT\s+ELAPSED'
+! stderr .
+
+# --json emits the versioned envelope; automation parity (06 §5.8) -- the
+# non-interactive equivalent of --watch.
+exec cascade --json fleet sessions
+stdout '"ok":\s*true'
+
+# The hidden top-level alias resolves identically and does not appear in
+# --help output.
+exec cascade sessions
+stdout 'SESSION_ID\s+BINARY\s+STATE\s+CONFIDENCE\s+ACCOUNT\s+ELAPSED'
+exec cascade --help
+! stdout '(?m)^\s+sessions\s'
+
+# --watch with no reachable daemon socket is refused with an actionable
+# message, not a panic.
+! exec cascade fleet sessions --watch
+stderr 'no daemon socket reachable'
+stderr 'cascade daemon run'
+
+# A positional argument is refused.
+! exec cascade fleet sessions extra-arg
+stderr 'unknown command'

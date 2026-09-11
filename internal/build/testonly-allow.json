@@ -2,441 +2,925 @@
   {
     "symbol": "providers/anthropic.New",
     "reason": "P1-E10-W3-S19-T2 builds the real Anthropic ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's scope (files_scope covers only providers/anthropic/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live anthropic.Driver; retire this entry once either lands"
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live anthropic.Driver; retire this entry once either lands",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "internal/providers/registry/registry.go"
   },
   {
     "symbol": "internal/rpc.ElevationMiddleware",
-    "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be.",
-    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb"
+    "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/rpc.NewNonceLedger",
-    "reason": "Constructed only by the elevation middleware, which is not installed yet. Retire together with the ElevationMiddleware entry.",
-    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, alongside ElevationMiddleware"
-  },
-  {
-    "symbol": "internal/runtime.DaemonlessElevationPrecondition",
-    "reason": "Evaluates the injected precondition for the daemonless guard and shares its fate.",
-    "expected_caller": "the daemonless execution path, once an elevated verb can be invoked without a daemon"
+    "reason": "Constructed only by the elevation middleware, which is not installed yet. Retire together with the ElevationMiddleware entry. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, alongside ElevationMiddleware",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/runtime.NewBaselineChecker",
-    "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens.",
-    "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs"
+    "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/runtime.DaemonLogsHandler",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the daemon logs command"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon logs command",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_logs.go"
   },
   {
     "symbol": "internal/runtime.Bootstrap",
-    "reason": "Deliberate and documented: cmd/cascade/daemon_unix.go calls runtime.Scan directly and explains why in a comment at its call site. Listed for visibility, not as a defect.",
-    "expected_caller": "none by design; revisit only if that comment's reasoning changes"
+    "reason": "Deliberate and documented: cmd/cascade/daemon_unix.go calls runtime.Scan directly and explains why in a comment at its call site. Listed for visibility, not as a defect. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "none by design; revisit only if that comment's reasoning changes",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix.go"
   },
   {
     "symbol": "internal/runtime.OpenEmbeddedReadStore",
-    "reason": "The read-only open used by the daemonless read path, awaiting the first daemonless read verb.",
-    "expected_caller": "daemonless read verb implementations"
+    "reason": "The read-only open used by the daemonless read path, awaiting the first daemonless read verb. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "daemonless read verb implementations",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/runtime.NewFixedClock",
-    "reason": "A deterministic clock provided for tests in other packages. Shipping code correctly uses the system clock.",
-    "expected_caller": "none; test-facing by design, kept out of a test-only package because production types reference the Clock interface"
+    "reason": "A deterministic clock provided for tests in other packages. Shipping code correctly uses the system clock. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "none; test-facing by design, kept out of a test-only package because production types reference the Clock interface",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/runtime/clock.go"
   },
   {
     "symbol": "internal/daemon.NewConnTracker",
-    "reason": "The connection tracker is constructed inside the serve path rather than by name from outside.",
-    "expected_caller": "none directly; retire if the serve path stops using the type"
+    "reason": "The connection tracker is constructed inside the serve path rather than by name from outside. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "none directly; retire if the serve path stops using the type",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/daemon/daemon.go"
   },
   {
     "symbol": "internal/storage.Export",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the export command"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the export command",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/export.go"
   },
   {
     "symbol": "internal/storage.Import",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the import command"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the import command",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/import.go"
   },
   {
     "symbol": "internal/storage.SetExportClock",
-    "reason": "Determinism seam for export, unused until export has a command.",
-    "expected_caller": "the export command"
+    "reason": "Determinism seam for export, unused until export has a command. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the export command",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/export.go"
   },
   {
     "symbol": "internal/storage.NewCapabilityRegistry",
-    "reason": "Cross-domain capability grants are built and not consulted by any shipped path yet.",
-    "expected_caller": "the storage composition root, once a plugin requests a cross-domain grant"
-  },
-  {
-    "symbol": "internal/storage.ReservedPluginHostNamespace",
-    "reason": "Reserved-namespace constant, consulted once plugin storage namespacing is enforced at runtime.",
-    "expected_caller": "the plugin host storage path"
+    "reason": "Cross-domain capability grants are built and not consulted by any shipped path yet. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the storage composition root, once a plugin requests a cross-domain grant",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/storage/composition.go"
   },
   {
     "symbol": "internal/storage.StorageHealthCheck",
-    "reason": "Adapting this into a doctor.Check needs a live *sql.DB, which the doctor command has no handle on: nothing in cmd/ opens the storage database, and the adapter itself belongs in internal/storage, not in the CLI layer.",
-    "expected_caller": "the storage doctor.Check adapter, registered from productionCheckRegistry in cmd/cascade/doctor.go once storage exposes one"
+    "reason": "Adapting this into a doctor.Check needs a live *sql.DB, which the doctor command has no handle on: nothing in cmd/ opens the storage database, and the adapter itself belongs in internal/storage, not in the CLI layer. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the storage doctor.Check adapter, registered from productionCheckRegistry in cmd/cascade/doctor.go once storage exposes one",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/doctor.go"
   },
   {
     "symbol": "internal/storage/queue.New",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the queue consumer, scheduled with its command surface"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the queue consumer, scheduled with its command surface",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/storage/queue/consumer.go"
   },
   {
     "symbol": "internal/events.EventKindPluginRegistered",
-    "reason": "An event kind defined ahead of the plugin registration path that will publish it.",
-    "expected_caller": "the plugin registration path"
+    "reason": "An event kind defined ahead of the plugin registration path that will publish it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the plugin registration path",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/plugins/registration.go"
   },
   {
     "symbol": "internal/hooks.NewRegistry",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the daemon run path, once hooks are dispatched"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon run path, once hooks are dispatched",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/hooks.NewDispatcher",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed.",
-    "expected_caller": "the daemon run path, once hooks are dispatched"
+    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon run path, once hooks are dispatched",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/doctor.NewMCPIntegrationCheck",
-    "reason": "The mcp_integration check takes a HarnessDiscoverer. No production implementation of that interface exists anywhere in the tree, so the doctor command cannot mount this check without a hand-written stand-in that would probe nothing (Art.1). The command's composition root (productionCheckRegistry in cmd/cascade/doctor.go) names the gap in a comment.",
-    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real HarnessDiscoverer"
+    "reason": "The mcp_integration check takes a HarnessDiscoverer. No production implementation of that interface exists anywhere in the tree, so the doctor command cannot mount this check without a hand-written stand-in that would probe nothing (Art.1). The command's composition root (productionCheckRegistry in cmd/cascade/doctor.go) names the gap in a comment. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real HarnessDiscoverer",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/doctor.go"
   },
   {
     "symbol": "internal/doctor.NewSubsystemCensusCheck",
-    "reason": "The subsystem_census check takes a SubsystemStateProvider. Nothing in the tree implements DeclaredSubsystems/RunningSubsystems, so the doctor command cannot mount this check against a real data source yet.",
-    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real SubsystemStateProvider"
+    "reason": "The subsystem_census check takes a SubsystemStateProvider. Nothing in the tree implements DeclaredSubsystems/RunningSubsystems, so the doctor command cannot mount this check against a real data source yet. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real SubsystemStateProvider",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/doctor.go"
   },
   {
     "symbol": "providers/postgres.Open",
-    "reason": "The postgres provider is selectable by configuration, but no shipped code path resolves a provider by name yet, so nothing constructs it. Postgres is therefore unreachable in a running daemon regardless of configuration.",
-    "expected_caller": "the provider resolution path that maps a configured driver name to its Open function"
+    "reason": "The postgres provider is selectable by configuration, but no shipped code path resolves a provider by name yet, so nothing constructs it. Postgres is therefore unreachable in a running daemon regardless of configuration. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the provider resolution path that maps a configured driver name to its Open function",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/storage/provider_resolve.go"
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
     "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
-    "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it"
+    "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it",
+    "retire_ticket": "P1-E07-W2-S13-T3",
+    "caller_site": "internal/retrieval/recall.go"
   },
   {
     "symbol": "internal/memory.NewPromotionLadder",
-    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
-    "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference"
+    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design — the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
+    "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference",
+    "retire_ticket": "P1-E07-W2-S14-T3",
+    "caller_site": "internal/memory/consolidation.go"
   },
   {
     "symbol": "internal/retrieval/embed.New",
     "reason": "The embed pipeline is complete; the ingest and recall command surface that drives it is a later ticket in this epic.",
-    "expected_caller": "the recall and index command surface, P1-E06-W2-S11-T3"
+    "expected_caller": "the recall and index command surface, P1-E06-W2-S11-T3",
+    "retire_ticket": "P1-E06-W2-S11-T3",
+    "caller_site": "cmd/cascade/recall_cmd.go"
   },
   {
     "symbol": "internal/storage/cache.New",
-    "reason": "The cache domain is implemented against the storage interfaces; no shipping path opens a cache yet.",
-    "expected_caller": "the composition root that opens the store, when a subsystem needs caching"
+    "reason": "The cache domain is implemented against the storage interfaces; no shipping path opens a cache yet. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the composition root that opens the store, when a subsystem needs caching",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/storage/composition.go"
   },
   {
     "symbol": "providers/fs.New",
-    "reason": "A storage provider implementation. Nothing resolves a provider by name in shipping code yet, which is the same gap recorded for the postgres provider.",
-    "expected_caller": "the provider resolution path that maps a configured driver name to its constructor"
+    "reason": "A storage provider implementation. Nothing resolves a provider by name in shipping code yet, which is the same gap recorded for the postgres provider. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the provider resolution path that maps a configured driver name to its constructor",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/storage/provider_resolve.go"
   },
   {
     "symbol": "internal/retrieval/rrf.Rerank",
-    "reason": "The optional post-fusion reranker stage. It is off by default (retrieval.reranker.enabled = false) and no Reranker implementation exists anywhere in the tree yet, so nothing that ships can call it with a usable configuration. The stage was built before its driver deliberately: it gives the api-backed reranker a fixed seam to land against, and its security properties are the ones worth fixing before a real implementation exists rather than after.",
-    "expected_caller": "the recall command surface, once a Reranker driver is registered (Epic J sprint 19 ticket 6, wave 3)"
+    "reason": "The optional post-fusion reranker stage. It is off by default (retrieval.reranker.enabled = false) and no Reranker implementation exists anywhere in the tree yet, so nothing that ships can call it with a usable configuration. The stage was built before its driver deliberately: it gives the api-backed reranker a fixed seam to land against, and its security properties are the ones worth fixing before a real implementation exists rather than after. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the recall command surface, once a Reranker driver is registered (Epic J sprint 19 ticket 6, wave 3)",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/recall_cmd.go"
   },
   {
     "symbol": "internal/policy.NewTeamCarrier",
-    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order \u2014 leaving it unwired once a sharing path exists would not be.",
-    "expected_caller": "the policy evaluation engine (04 \u00a7Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope"
+    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
+    "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope",
+    "retire_ticket": "P1-E09-W2-S17-T1",
+    "caller_site": "internal/policy/evaluate.go"
   },
   {
     "symbol": "providers/embeddings/bgem3.New",
     "reason": "The BGE-M3 sidecar client is a seam whose server does not exist yet: the native sidecar ships as a separate post-P1 artifact (01-FEATURE-INVENTORY, Local-LLM row; the 04-PEWS-PLAN DECIDED ruling for F/S-12.T2). P1 deliberately ships the wire spec (providers/embeddings/bgem3/SPEC.md) and the client that speaks it WITHOUT registering it as an active embedder lane, because a registered lane with no sidecar behind it would be a capability that appears to work; the absence is documented instead (Art.1.3). The client's protocol conformance is asserted against a spec-conformance server that exists only under _test.go (Art.1.1).",
-    "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket"
+    "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket",
+    "retire_ticket": "S-12.T2",
+    "caller_site": "internal/retrieval/embed/sidecar_wiring.go"
   },
   {
     "symbol": "internal/secrets.NewScrubber",
     "reason": "The scrubber is the composed rewrite boundary - one detector over the default registry, one rewriter, one configuration - and it ships before the two boundaries that will scan. This ticket (P1-E08-W2-S15-T4) owns the tag grammar and the rewrite direction; the memory-write path and the recall pipeline that call a scrubber are other tickets in this sprint and wave, built in parallel, and the action-boundary rehydration that reverses the rewrite is S-16.T2. Wiring into a boundary that is itself mid-change would couple two lanes for no gain. Building the constructor here is what retired the internal/secrets.NewDetector and internal/secrets.DefaultRegistry entries: the detector and its pattern table are now constructed by shipping code, and this single entry stands in place of the two.",
-    "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15), or the action-boundary rehydration point (S-16.T2) - whichever lands first; retire this entry then, together with internal/secrets.ParseDetectionConfig once the [secrets] section has a typed consumer"
+    "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15), or the action-boundary rehydration point (S-16.T2) - whichever lands first; retire this entry then, together with internal/secrets.ParseDetectionConfig once the [secrets] section has a typed consumer",
+    "retire_ticket": "P1-E08-W2-S15-T4",
+    "caller_site": "internal/memory/scan_boundary.go"
   },
   {
     "symbol": "internal/secrets.ParseDetectionConfig",
-    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC \u00a73, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today.",
-    "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry"
+    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/runtime/hotreload.go"
   },
   {
     "symbol": "internal/context.GenerateCCInstructions",
-    "reason": "The working-directory pipeline (discover the tiers, merge them under the precedence rule, render the harness instruction files, materialize each one) is complete and drives Discover, MergeTiers, CCInstructionWriter.Generate and WriteHarnessFile from a single entry point, which is what retired the separate Discover and MergeTiers entries. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. The gap is one wiring change wide and is named here rather than hidden behind an unexported seam.",
-    "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test"
+    "reason": "The working-directory pipeline (discover the tiers, merge them under the precedence rule, render the harness instruction files, materialize each one) is complete and drives Discover, MergeTiers, CCInstructionWriter.Generate and WriteHarnessFile from a single entry point, which is what retired the separate Discover and MergeTiers entries. Nothing in cmd/ reaches it yet: the CLI verb that exposes harness instruction generation belongs to the command-tree ticket, whose files this ticket may not touch. The gap is one wiring change wide and is named here rather than hidden behind an unexported seam. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the harness instruction-generation verb in cmd/cascade (07-CLI-COMMAND-TREE.md, harness instruction entries); retire this entry in the same change that adds the verb and its end-to-end test",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/context_cmd.go"
   },
   {
     "symbol": "internal/policy.DataClassInternal",
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
-    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
+    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)",
+    "retire_ticket": "S-77.T4",
+    "caller_site": "internal/policy/lane_privacy.go"
   },
   {
     "symbol": "internal/policy.DataClassConfidential",
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
-    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)"
+    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)",
+    "retire_ticket": "S-77.T4",
+    "caller_site": "internal/policy/lane_privacy.go"
   },
   {
     "symbol": "internal/retrieval.NewLeg",
-    "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change.",
-    "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired"
+    "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/composition.go"
   },
   {
     "symbol": "internal/policy.NewSameTurnLedger",
-    "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired.",
-    "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine"
+    "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/policy/ingress_authorize.go"
   },
   {
     "symbol": "internal/policy.NewApprovalSigner",
     "reason": "The Ed25519 approval signer is built before the middleware that mints approvals. R-21.207 routes every action origin through one policy.Authorize middleware, and that middleware does not exist yet; nothing else may hold the signing key. Building the signer first is the right order, leaving it unbuilt once the middleware exists would not be.",
-    "expected_caller": "the policy.Authorize middleware (P1-E09-W2-S18-T5), in the SAME change that mints its first approval token"
+    "expected_caller": "the policy.Authorize middleware (P1-E09-W2-S18-T5), in the SAME change that mints its first approval token",
+    "retire_ticket": "P1-E09-W2-S18-T5",
+    "caller_site": "internal/policy/authorize_middleware.go"
   },
   {
     "symbol": "internal/policy.NewApprovalVerifier",
     "reason": "The verifier's production caller is the controller's redemption path, which is I/S-18.T3's ledger work. This ticket owns the data model only and ships no ledger, so nothing shipping verifies a token yet.",
-    "expected_caller": "the controller redemption path in internal/policy/ledger.go (P1-E09-W2-S18-T3), alongside the single-use nonce check"
+    "expected_caller": "the controller redemption path in internal/policy/ledger.go (P1-E09-W2-S18-T3), alongside the single-use nonce check",
+    "retire_ticket": "P1-E09-W2-S18-T3",
+    "caller_site": "internal/policy/ledger.go"
   },
   {
     "symbol": "internal/policy.BridgePayload",
     "reason": "The request-id-only bridge projection is built ahead of the bridge that carries it. W/S-48.T4 owns the bridge leg and its fail-closed gate; until that lands, no shipping code sends an approval anywhere.",
-    "expected_caller": "the bridge approval leg (P1-E23-W5-S48-T4), in the SAME change that first sends an approval reference off-machine"
+    "expected_caller": "the bridge approval leg (P1-E23-W5-S48-T4), in the SAME change that first sends an approval reference off-machine",
+    "retire_ticket": "P1-E23-W5-S48-T4",
+    "caller_site": "internal/policy/bridge_leg.go"
   },
   {
     "symbol": "internal/policy.ElevationClassVerbs",
     "reason": "The exported copy of the elevation-class enumeration exists for callers outside this package that need the list itself rather than a membership test; inside the package the membership test IsElevationClassVerb is the shipped path and is wired to CreateStandingGrant. No out-of-package caller exists yet.",
-    "expected_caller": "the verb registry that R-21.207 requires the policy.Authorize middleware to consult (P1-E09-W2-S18-T5)"
+    "expected_caller": "the verb registry that R-21.207 requires the policy.Authorize middleware to consult (P1-E09-W2-S18-T5)",
+    "retire_ticket": "P1-E09-W2-S18-T5",
+    "caller_site": "internal/policy/authorize_middleware.go"
   },
   {
     "symbol": "internal/policy.NextApprovalState",
     "reason": "The redemption CAS contract's state half. R-21.209 makes the controller the sole redemption authority and assigns the storage half to I/S-18.T3; this ticket defines and tests the states and transitions the ledger will drive.",
-    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3)"
+    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3)",
+    "retire_ticket": "P1-E09-W2-S18-T3",
+    "caller_site": "internal/policy/ledger.go"
   },
   {
     "symbol": "internal/policy.ExecutionID",
     "reason": "The stable execution identifier a winning redemption appends before dispatch. It is minted by the same ledger path as NextApprovalState and shares its fate.",
-    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3), retired together with the NextApprovalState entry"
+    "expected_caller": "the controller redemption compare-and-set in internal/policy/ledger.go (P1-E09-W2-S18-T3), retired together with the NextApprovalState entry",
+    "retire_ticket": "P1-E09-W2-S18-T3",
+    "caller_site": "internal/policy/ledger.go"
   },
   {
     "symbol": "internal/retrieval/eval.LoadCorpus",
-    "reason": "internal/retrieval/eval is R-16.9's CI-only evaluation harness: 07-CLI-COMMAND-TREE.md ratifies no retrieval-eval verb, so this ticket adds no CLI/RPC/MCP/daemon surface by its own boundary ruling. The harness's only consumer is its own CI-gate test suite (TestFusionGate, TestV1August2026Baseline, TestRecordedRealEmbedderFixture) and internal/runtime's/internal/doctor's cross-package TestRetrievalFusionEnabledDefault/TestRetrievalFusionGateNote checks.",
-    "expected_caller": "a future retrieval-eval maintenance verb, if 07-CLI-COMMAND-TREE.md is ever amended to add one; until then this is deliberately CI-invoked infrastructure"
+    "reason": "internal/retrieval/eval is R-16.9's CI-only evaluation harness: 07-CLI-COMMAND-TREE.md ratifies no retrieval-eval verb, so this ticket adds no CLI/RPC/MCP/daemon surface by its own boundary ruling. The harness's only consumer is its own CI-gate test suite (TestFusionGate, TestV1August2026Baseline, TestRecordedRealEmbedderFixture) and internal/runtime's/internal/doctor's cross-package TestRetrievalFusionEnabledDefault/TestRetrievalFusionGateNote checks. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "a future retrieval-eval maintenance verb, if 07-CLI-COMMAND-TREE.md is ever amended to add one; until then this is deliberately CI-invoked infrastructure",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.LoadQuerySet",
-    "reason": "Same CI-only harness as LoadCorpus in this file; loads the known-item and semantic/paraphrase query-set fixtures the gate measures against.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the known-item and semantic/paraphrase query-set fixtures the gate measures against. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.LoadRecordedEmbeddings",
-    "reason": "Same CI-only harness as LoadCorpus in this file; loads the provenance-stamped recorded-embedder fixture the vector leg replays.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the provenance-stamped recorded-embedder fixture the vector leg replays. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.LoadBaseline",
-    "reason": "Same CI-only harness as LoadCorpus in this file; loads the harvested v1 August-2026 regression fixture TestV1August2026Baseline compares against.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; loads the harvested v1 August-2026 regression fixture TestV1August2026Baseline compares against. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.NewRecordedVectorEmbedder",
-    "reason": "Same CI-only harness as LoadCorpus in this file; the fusion.Embedder adapter the vector leg queries through during the harness's own test runs.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; the fusion.Embedder adapter the vector leg queries through during the harness's own test runs. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.RunKnownItem",
-    "reason": "Same CI-only harness as LoadCorpus in this file; runs the known-item query set through the real FTS5/vector/RRF legs.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; runs the known-item query set through the real FTS5/vector/RRF legs. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.RunSemanticParaphrase",
-    "reason": "Same CI-only harness as LoadCorpus in this file; runs the semantic/paraphrase query set the fusion default gate measures its relative recall lift from.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "Same CI-only harness as LoadCorpus in this file; runs the semantic/paraphrase query set the fusion default gate measures its relative recall lift from. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/retrieval/eval.FusionDefaultGate",
-    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary \u2014 see LoadCorpus's entry in this file for why no CLI surface exists for it.",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus"
+    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary — see LoadCorpus's entry in this file for why no CLI surface exists for it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/retrieval/eval/verb.go"
   },
   {
     "symbol": "internal/secrets.NewClipboardWriter",
     "reason": "P1-E08-W2-S16-T4's clipboard fallback. R-21.242 names its sole production caller as the elevated `cascade vault get --clipboard` verb, which lives in cmd/cascade (another agent's concurrent lane on this ticket) and does not exist yet. Built and tested against a fake and, on darwin, a real pbcopy; nothing that ships constructs one yet.",
-    "expected_caller": "the `cascade vault get --clipboard` RunE in cmd/cascade/vault_elevated.go, once that flag is added"
+    "expected_caller": "the `cascade vault get --clipboard` RunE in cmd/cascade/vault_elevated.go, once that flag is added",
+    "retire_ticket": "P1-E08-W2-S16-T4",
+    "caller_site": "cmd/cascade/vault_elevated.go"
   },
   {
     "symbol": "internal/secrets.RearmPendingClears",
     "reason": "P1-E08-W2-S16-T4's restart-survival re-arm for a pending clipboard clear. Its caller is the daemon start path (internal/daemon), another agent's concurrent lane; no daemon boot sequence calls it yet. Exported and covered by TestClipboardPendingClearRearmedOnBoot's simulated crash-restart.",
-    "expected_caller": "the daemon start path in internal/daemon, once it constructs a ClipboardWriter and a PendingClearStore"
+    "expected_caller": "the daemon start path in internal/daemon, once it constructs a ClipboardWriter and a PendingClearStore",
+    "retire_ticket": "P1-E08-W2-S16-T4",
+    "caller_site": "internal/daemon/lifecycle_unix_start.go"
   },
   {
     "symbol": "internal/secrets.NewSystemClipboardScheduler",
     "reason": "The production time.AfterFunc-backed ClipboardScheduler for P1-E08-W2-S16-T4's clipboard fallback. It is only wired in once the same composition root builds a real ClipboardWriter (see the NewClipboardWriter entry above); tests inject a fake scheduler instead.",
-    "expected_caller": "same composition root as internal/secrets.NewClipboardWriter, once it exists"
+    "expected_caller": "same composition root as internal/secrets.NewClipboardWriter, once it exists",
+    "retire_ticket": "P1-E08-W2-S16-T4",
+    "caller_site": "internal/daemon/lifecycle_unix_start.go"
   },
   {
     "symbol": "internal/audit.NewWithRedactor",
-    "reason": "The append-path redaction seam is built before the engine that fills it. No composition root binds a secrets substitution pass yet, so every shipped Log is still built with New; wiring this constructor is the same change that mounts that engine.",
-    "expected_caller": "the composition root that builds the egress substitution engine, in the SAME change that binds a vault-backed redactor"
+    "reason": "The append-path redaction seam is built before the engine that fills it. No composition root binds a secrets substitution pass yet, so every shipped Log is still built with New; wiring this constructor is the same change that mounts that engine. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the composition root that builds the egress substitution engine, in the SAME change that binds a vault-backed redactor",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/audit/composition.go"
   },
   {
     "symbol": "internal/secrets.NewRedactor",
-    "reason": "The concrete redactor that satisfies internal/audit.Redactor. It is unreachable for exactly as long as NewWithRedactor is; retire the two entries together.",
-    "expected_caller": "the composition root that builds the egress substitution engine, alongside internal/audit.NewWithRedactor"
+    "reason": "The concrete redactor that satisfies internal/audit.Redactor. It is unreachable for exactly as long as NewWithRedactor is; retire the two entries together. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the composition root that builds the egress substitution engine, alongside internal/audit.NewWithRedactor",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/audit/composition.go"
   },
   {
     "symbol": "internal/secrets.NewRehydrator",
-    "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces.",
-    "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands"
+    "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/conductor/executor.go"
   },
   {
     "symbol": "internal/secrets.NewApprovalKeyReader",
     "reason": "The named non-elevated read for the approval signing key. It exists because a release binary refuses elevated verbs outright, so a key reachable only through Broker.Get is unreadable in exactly the builds that ship. Its consumer seam, internal/policy's ApprovalKeySource, has no production caller yet either: NewApprovalSigner is itself listed here awaiting the policy.Authorize middleware. Its caller allowlist is already machine-enforced by TestArchUnelevatedReadCallers, so widening it is a red test rather than a quiet change.",
-    "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry"
+    "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry",
+    "retire_ticket": "P1-E09-W2-S18-T5",
+    "caller_site": "internal/policy/authorize_middleware.go"
   },
   {
     "symbol": "internal/runtime.RequiresElevationToLoosen",
-    "reason": "The write-verb side of the config loosening gate, so `config set` can tell an operator that a key needs elevation before the write is attempted. The reload path already enforces the same gate; this is the pre-flight answer for the CLI verb, which lands with the config-set surface.",
-    "expected_caller": "the config set command, in the change that surfaces the elevation requirement before a write"
+    "reason": "The write-verb side of the config loosening gate, so `config set` can tell an operator that a key needs elevation before the write is attempted. The reload path already enforces the same gate; this is the pre-flight answer for the CLI verb, which lands with the config-set surface. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the config set command, in the change that surfaces the elevation requirement before a write",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/config_cmd.go"
   },
   {
     "symbol": "internal/fleet/tailer.NewTailer",
     "reason": "P1-E12-W3-S24-T2 builds the rotation-safe transcript tailer itself; the ticket's own contract text names its caller as 'T3, sessions domain' and explicitly scopes the poll loop that drives Next() out of this ticket. No composition root constructs a Tailer yet.",
-    "expected_caller": "the sessions domain's poll loop (the ticket after P1-E12-W3-S24-T2 in Epic L that owns session/harness tracking), which calls NewTailer per watched transcript and drives Next() in a loop"
+    "expected_caller": "the sessions domain's poll loop (the ticket after P1-E12-W3-S24-T2 in Epic L that owns session/harness tracking), which calls NewTailer per watched transcript and drives Next() in a loop",
+    "retire_ticket": "P1-E12-W3-S24-T2",
+    "caller_site": "internal/fleet/sessions/poll.go"
   },
   {
     "symbol": "internal/fleet/journal.New",
     "reason": "P1-E13-W3-S27-T1 builds the entity journal's append/checkpoint/replay store in isolation. The ticket's own contract text scopes the CLI surface ('cascade fleet journal show|replay') to S-27.T4 and the recovery classifier that reads intent/ack pairs to S-27.T2; neither is in-tree yet, so no composition root constructs a journal.SQLiteStore.",
-    "expected_caller": "the recovery classifier (P1-E13-W3-S27-T2) and the fleet journal CLI surface (P1-E13-W3-S27-T4), both of which call journal.New to obtain a Store over the daemon's cascade.db"
+    "expected_caller": "the recovery classifier (P1-E13-W3-S27-T2) and the fleet journal CLI surface (P1-E13-W3-S27-T4), both of which call journal.New to obtain a Store over the daemon's cascade.db",
+    "retire_ticket": "P1-E13-W3-S27-T2",
+    "caller_site": "internal/fleet/journal_wiring.go"
   },
   {
     "symbol": "internal/fleet/journal.DefaultNamespace",
     "reason": "Shares New's fate: it is the namespace constant a composition root passes to New, and nothing constructs a journal.SQLiteStore yet.",
-    "expected_caller": "the same S-27.T2/S-27.T4 callers that call journal.New"
+    "expected_caller": "the same S-27.T2/S-27.T4 callers that call journal.New",
+    "retire_ticket": "S-27.T2",
+    "caller_site": "internal/fleet/journal_wiring.go"
   },
   {
     "symbol": "internal/fleet/journal.AllKinds",
     "reason": "Exported for the same reason pkg/cascade.AllKinds and internal/audit.AllKinds are: a closed enum needs one place a consumer (or a test elsewhere in the tree) can range over every member without hardcoding the list. No such external consumer exists yet because nothing outside this package reads journal.Kind values yet.",
-    "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()"
+    "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()",
+    "retire_ticket": "P1-E13-W3-S27-T3",
+    "caller_site": "internal/fleet/governor/escalation_wiring.go"
   },
   {
     "symbol": "internal/fleet/governor.NewSampler",
     "reason": "S-26.T1 builds the resource sampler as a shared dependency of two sibling tickets that have not landed yet: the admission controller (S-26.T2) and the throttle ladder (S-26.T3). Both need a single, already-running Sampler to read from, so the sampler ships first with only its own test suite as a caller.",
-    "expected_caller": "the admission controller and throttle ladder (P1-E13-W3-S26-T2, P1-E13-W3-S26-T3), and the daemon composition root that starts the shared Sampler both of them read from; retire this entry once either lands"
+    "expected_caller": "the admission controller and throttle ladder (P1-E13-W3-S26-T2, P1-E13-W3-S26-T3), and the daemon composition root that starts the shared Sampler both of them read from; retire this entry once either lands",
+    "retire_ticket": "P1-E13-W3-S26-T2",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "providers/openai.New",
     "reason": "P1-E10-W3-S19-T3 builds the real openai-compat ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against recorded fixtures (openai/moonshot/zai/deepseek-style 401s, a constructed 429, malformed/truncated stream fixtures) plus a tagged live lane; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands"
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "internal/providers/registry/registry.go"
   },
   {
     "symbol": "providers/ollama.New",
     "reason": "P1-E10-W3-S19-T5 builds the real ollama ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New and providers/openai.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against transcribed/recorded fixtures plus a tagged live lane; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live ollama.Driver; retire this entry once either lands"
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live ollama.Driver; retire this entry once either lands",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "internal/providers/registry/registry.go"
   },
   {
     "symbol": "providers/gemini.New",
     "reason": "P1-E10-W3-S19-T4 builds the real Gemini ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket scope (files_scope covers only providers/gemini/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live gemini.Driver; retire this entry once either lands"
+    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live gemini.Driver; retire this entry once either lands",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "internal/providers/registry/registry.go"
   },
   {
     "symbol": "internal/fleet/sessions.New",
     "reason": "The sessions domain Store constructor. Its production caller is cmd/cascade/daemon_unix_run.go's buildRPCServer, which composes the real provider.Store, runtime.Clock, and events.Bus into a Store and passes it to RegisterHandlers and the SSE surface. That file is not in P1-E12-W3-S24-T3's files_scope (only internal/fleet/sessions/*, internal/storage/domains.go, cmd/cascade/root.go, and internal/rpc/registry.go are); Store itself is fully implemented and tested against a real MemStore and a real providers/sqlite driver.",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the wiring ticket that mounts the fleet.sessions surface; retire this entry once it constructs a Store and calls RegisterHandlers/NewSSEHandler with it"
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the wiring ticket that mounts the fleet.sessions surface; retire this entry once it constructs a Store and calls RegisterHandlers/NewSSEHandler with it",
+    "retire_ticket": "P1-E12-W3-S24-T3",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/sessions.RegisterHandlers",
-    "reason": "Binds fleet.sessions.list to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include. RegisterHandlers itself is exercised end-to-end against a real rpc.Registry (rpc_test.go: happy path, empty params, and the unknown-filter-field refusal).",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls; retire this entry once it is called there"
+    "reason": "Binds fleet.sessions.list to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include. RegisterHandlers itself is exercised end-to-end against a real rpc.Registry (rpc_test.go: happy path, empty params, and the unknown-filter-field refusal). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls; retire this entry once it is called there",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/sessions.NewSSEHandler",
-    "reason": "Builds the GET /events?topic=fleet.sessions handler. The daemon's mux (cmd/cascade/daemon_unix_run.go's buildRPCServer, out of this ticket's files_scope) currently mounts exactly one SSEHandler at the fixed rpc.EventsPath bound to the \"daemon\" namespace (internal/rpc.NewSSEHandler); mounting a second handler at the same literal path would panic on ServeMux's duplicate-pattern check. This ticket's SSEHandler is a complete, independently tested http.Handler (event/data/id/retry wire format, topic validation, heartbeat, clean disconnect, Windows tier-2 refusal, plus a real-socket curl-based integration test) ready for whichever ticket restructures the mux to dispatch by topic or mounts a second route.",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, once it is restructured to mount fleet.sessions's SSE stream (e.g. topic-dispatching wrapper or a second route); retire this entry then"
-  },
-  {
-    "symbol": "internal/fleet/sessions.NewClient",
-    "reason": "The typed fleet.sessions.list client wrapper (mirrors pkg/provider/client.go's ModelExecute pattern) for L/S-25.T2's `cascade fleet sessions` one-shot mode, which is explicitly out of this ticket's scope (full_desc: \"Do NOT implement... the cascade fleet sessions command (S-25.T2)\"). Client.List is fully tested (happy path, taxonomy-error passthrough, plain-error-to-KindInternal wrapping, and the Windows tier-2 refusal).",
-    "expected_caller": "L/S-25.T2's `cascade fleet sessions` command, which dials fleet.sessions.list through this Client when a daemon is present; retire this entry once that command lands"
+    "reason": "Builds the GET /events?topic=fleet.sessions handler. The daemon's mux (cmd/cascade/daemon_unix_run.go's buildRPCServer, out of this ticket's files_scope) currently mounts exactly one SSEHandler at the fixed rpc.EventsPath bound to the \"daemon\" namespace (internal/rpc.NewSSEHandler); mounting a second handler at the same literal path would panic on ServeMux's duplicate-pattern check. This ticket's SSEHandler is a complete, independently tested http.Handler (event/data/id/retry wire format, topic validation, heartbeat, clean disconnect, Windows tier-2 refusal, plus a real-socket curl-based integration test) ready for whichever ticket restructures the mux to dispatch by topic or mounts a second route. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, once it is restructured to mount fleet.sessions's SSE stream (e.g. topic-dispatching wrapper or a second route); retire this entry then",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/sessions.EventsPath",
-    "reason": "Names the route sessions.SSEHandler expects to be mounted at. Referenced only by this package's own tests until the composition root (out of scope, see the NewSSEHandler entry above) actually calls http.ServeMux.Handle(sessions.EventsPath, ...).",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the same change that wires NewSSEHandler; retire together"
+    "reason": "Names the route sessions.SSEHandler expects to be mounted at. Referenced only by this package's own tests until the composition root (out of scope, see the NewSSEHandler entry above) actually calls http.ServeMux.Handle(sessions.EventsPath, ...). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the same change that wires NewSSEHandler; retire together",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "providers/embeddings.NewProviderEmbedder",
     "reason": "P1-E10-W3-S19-T6 builds the api-backed ProviderEmbedder as a standalone adapter over any pkg/provider.ModelProvider, with no wiring ticket of its own: the embed pipeline that composes an Embedder with content-hash dedup and vector upsert is F-S10.T3's, explicitly out of this ticket's scope (full_desc: \"NOT here: ... the embed pipeline + vector upsert + content-hash dedupe (F-S10.T3's)\"), and the K/S-22.T3 Interceptor this type depends on is likewise built by a different ticket. ProviderEmbedder ships fully implemented and tested (recorded-fixture round-trip and order proof, capability-gate refusal propagation, malformed/empty-vector paths, sensitivity-tier propagation and fail-closed seam behaviour, construction validation) against a fake ModelProvider and a fake Interceptor; only its construction call site is missing until the pipeline lands.",
-    "expected_caller": "F-S10.T3's embed pipeline (internal/retrieval), which constructs a ProviderEmbedder over a live ModelProvider and a real Interceptor-backed adapter over internal/hooks/egress.Engine; retire this entry once it lands"
-  },
-  {
-    "symbol": "internal/fleet/census.New",
-    "reason": "P1-E12-W3-S24-T1 builds the fleet process census as a standalone package with no wiring ticket of its own: the caller that constructs a live Enumerator and feeds its Snapshot rows into the sessions domain is S-24.T3/T4, both explicitly out of this ticket's files_scope (internal/fleet/census/* only). The package is fully implemented and tested against a mocked procSource on every platform; only its construction call site is missing until the sessions poll loop lands.",
-    "expected_caller": "the sessions domain poll loop (P1-E12-W3-S24-T3/T4), which constructs a census.Enumerator via New and feeds Snapshot rows into the sessions store; retire this entry once it does"
+    "expected_caller": "F-S10.T3's embed pipeline (internal/retrieval), which constructs a ProviderEmbedder over a live ModelProvider and a real Interceptor-backed adapter over internal/hooks/egress.Engine; retire this entry once it lands",
+    "retire_ticket": "P1-E10-W3-S19-T6",
+    "caller_site": "internal/retrieval/embed_pipeline.go"
   },
   {
     "symbol": "internal/fleet/governor.NewAdmissionController",
     "reason": "S-26.T2 builds the admission controller as a standalone daemon subsystem with no wiring ticket of its own: the caller that constructs a live AdmissionController and calls Admit before dispatching concurrent work is Conductor's fan-out (K/S-23.T2), which depends on this ticket but has not landed yet, plus the daemon composition root that owns both the shared Sampler and this controller's lifetime. The controller is fully implemented and tested (Admit/Drain/Pressure/compile-lock ceiling, -race clean) against a directly-populated Sampler; only its production construction call site is missing until the fan-out primitive lands.",
-    "expected_caller": "Conductor's fan-out primitive (K/S-23.T2) and the daemon composition root that constructs the shared Sampler (S-26.T1) both read; retire this entry once K/S-23.T2 lands"
+    "expected_caller": "Conductor's fan-out primitive (K/S-23.T2) and the daemon composition root that constructs the shared Sampler (S-26.T1) both read; retire this entry once K/S-23.T2 lands",
+    "retire_ticket": "S-23.T2",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/governor.NewThrottleLadder",
     "reason": "S-26.T3 builds the throttle ladder as a standalone daemon subsystem with no wiring ticket of its own, matching S-26.T1/T2's precedent: the StageProvider seam it plugs into (AdmissionController.SetStageProvider) already ships fully generic from S-26.T2, so wiring a real ladder in needs no further AdmissionController change - a caller need only call ac.SetStageProvider(ladder.Stage) once both are constructed, which TestThrottleLadderStageInstalledAsAdmissionStageProvider proves directly. Only the ladder's own construction call site is missing until the daemon composition root that owns the shared AdmissionController and starts a ThrottleLadder reading its Pressure() lands. The ladder is fully implemented and tested (evaluator hysteresis, fail-closed nil-source, Subscribe/cancel, -race clean) against a directly-populated PressureSource.",
-    "expected_caller": "the daemon composition root that constructs the shared AdmissionController (S-26.T2) and starts a ThrottleLadder reading its Pressure(), then calls ac.SetStageProvider(ladder.Stage); retire this entry once that root lands"
+    "expected_caller": "the daemon composition root that constructs the shared AdmissionController (S-26.T2) and starts a ThrottleLadder reading its Pressure(), then calls ac.SetStageProvider(ladder.Stage); retire this entry once that root lands",
+    "retire_ticket": "S-26.T2",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/governor.Load",
     "reason": "S-26.T4 builds the governor config loader as a standalone package function with no composition-root ticket of its own: the caller that resolves a configPath and a live *Sampler.Snapshot() and hands the result to NewAdmissionController/NewThrottleLadder is the daemon composition root that also owns S-26.T1/T2/T3's own still-unwired constructors (see the three entries directly above this one). Load is fully implemented and tested (preset-then-explicit-key precedence, pinned-preset-wins, fail-closed on an unrecognised preset, absent-file and absent-block safe defaults, pure convergence on a second unpinned call, malformed-TOML and unparseable-duration error paths) against real temp-file TOML fixtures; only its production call site is missing until that root lands.",
-    "expected_caller": "the daemon composition root that also constructs the shared Sampler/AdmissionController/ThrottleLadder (P1-E13-W3-S26-T1/T2/T3); retire this entry once that root lands"
+    "expected_caller": "the daemon composition root that also constructs the shared Sampler/AdmissionController/ThrottleLadder (P1-E13-W3-S26-T1/T2/T3); retire this entry once that root lands",
+    "retire_ticket": "P1-E13-W3-S26-T1",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/governor.Recommend",
     "reason": "S-26.T4 builds the doctor --fix calibration advisory as a pure function with no internal/doctor composition-root ticket of its own: internal/doctor/*.go is a different ticket's files_scope (this ticket's files_scope is internal/fleet/governor/* only), and no `cascade doctor` composition root exists in the P1 tree yet to register a governor-calibration Check, matching the precedent already documented in internal/doctor/retrieval_fusion.go (\"a Check constructed over an injected interface, not yet registered with a live CheckRegistry by a composition root\"). Recommend is fully implemented and tested (unpinned/pinned/fail-closed-unrecognised pin states, rationale non-empty) and never mutates configPath; only the doctor Check that would call it and format its output for `doctor --fix` is missing.",
-    "expected_caller": "the future governor-calibration doctor.Check (internal/doctor), constructed once that package's composition root exists; retire this entry once it does"
+    "expected_caller": "the future governor-calibration doctor.Check (internal/doctor), constructed once that package's composition root exists; retire this entry once it does",
+    "retire_ticket": "S-26.T4",
+    "caller_site": "internal/doctor/governor_check.go"
   },
   {
     "symbol": "internal/fleet/governor.NewEscalationLadder",
     "reason": "S-27.T3 builds the four-rung escalation ladder as a standalone daemon subsystem with no wiring ticket of its own, matching S-26.T1/T2/T3's precedent (see the three internal/fleet/governor entries directly above this one): the five seam implementations Advance calls through (the S-25.T1 fleet session state machine as ConfidenceProvider, the S-26.T2 admission controller as Retryer, the retrieval/context package as ContextEnricher, the task/PBD engine as SupervisorCreator, and internal/notify as HumanNotifier) and the daemon composition root that constructs a live *EscalationLadder from them are explicitly out of this ticket's files_scope (internal/fleet/governor/* only). The ladder is fully implemented and tested (all four rung-success/rung-failure transitions, Human-exhausted terminal path with exactly-once Notify, fail-closed confidence and rung handling, R-21.216 attempt-budget exhaustion, foreign-kind journal isolation, journal-write-failure handling, concurrent-Advance serialization, -race clean) against stub seams and an in-memory journal.Store.",
-    "expected_caller": "the daemon composition root that constructs the five real seam implementations and a live *EscalationLadder, once S-25.T1's state machine and the seam packages it depends on land; retire this entry once that root lands"
+    "expected_caller": "the daemon composition root that constructs the five real seam implementations and a live *EscalationLadder, once S-25.T1's state machine and the seam packages it depends on land; retire this entry once that root lands",
+    "retire_ticket": "S-25.T1",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "plugins/pbd.NewEventsHandler",
     "reason": "Builds cascade-pbd's GET /events SSE bridge (bus + eventsHandler) and its wired *pews.Projector, fully implemented and tested (unit coverage in plugins/pbd/internal/pews, Art.2 real-EventSource-client conformance in plugins/pbd/projector_test.go behind the integration tag). The daemon-side composition root that mounts this handler on its HTTP mux and calls Project on a file-change trigger is out of this ticket's files_scope (N/S-29.T1 covers only plugins/pbd/**) and belongs to whichever later ticket wires cascade-pbd into the daemon's HTTP surface.",
-    "expected_caller": "the daemon composition root (cmd/cascade or internal/daemon) that mounts cascade-pbd's HTTP surface and drives Project from a PEWS tree file-change trigger; retire this entry once that wiring lands"
-  },
-  {
-    "symbol": "internal/fleet/sessions.NewStateMachine",
-    "reason": "P1-E12-W3-S25-T1 builds the session observation state machine as a standalone package with no wiring ticket of its own: the daemon-side poll loop that would call NewStateMachine once per census/tailer cycle and persist the result through the S-24.T3 sessions domain (Store.TransitionState) is a later ticket, not in this ticket's files_scope (internal/fleet/sessions/{types,config,statemachine,confidence,corpus_test}.go and their tests only). StateMachine.Advance ships fully implemented and tested (statemachine_test.go: transition-table arcs, terminal-state proof, fail-closed paths, determinism, -race concurrency) against the S-24 typed observation channels; only its call site inside a live poll loop is missing.",
-    "expected_caller": "the daemon's fleet session poll loop (a later ticket) that constructs one StateMachine, calls Advance per observation cycle, and writes the result back through sessions.Store.TransitionState; retire this entry once that wiring lands"
+    "expected_caller": "the daemon composition root (cmd/cascade or internal/daemon) that mounts cascade-pbd's HTTP surface and drives Project from a PEWS tree file-change trigger; retire this entry once that wiring lands",
+    "retire_ticket": "S-29.T1",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/sessions.SignalUnknown",
     "reason": "P1-E12-W3-S25-T1's SignalKind zero value: production code (confidence.go's Weigh, statemachine.go's buildSignals) relies on SignalUnknown being the zero value and the fail-closed default for any unrecognized kind, but never spells the identifier out by name - buildSignals only ever constructs the six named, non-zero SignalKinds. The identifier exists so callers (and this ticket's own tests) have a documented name for the sentinel rather than a bare 0, per this file's godoc requirement (every exported symbol needs a comment) on a type whose zero value is meaningful.",
-    "expected_caller": "no production caller is expected to name SignalUnknown explicitly, by design (see reason); confidence_test.go exercises it directly to prove an explicit zero-value Signal contributes zero weight. Retire this entry only if a future caller needs to construct one explicitly."
+    "expected_caller": "no production caller is expected to name SignalUnknown explicitly, by design (see reason); confidence_test.go exercises it directly to prove an explicit zero-value Signal contributes zero weight. Retire this entry only if a future caller needs to construct one explicitly.",
+    "retire_ticket": "P1-E12-W3-S25-T1",
+    "caller_site": "internal/fleet/sessions/confidence.go"
   },
   {
     "symbol": "plugins/pbd/internal/pews.RequireBuildable",
     "reason": "P1-E14-W3-S29-T2 (draft-phase isolation) implements R-21.276's 'a draft phase cannot be built' as a typed refusal, but this ticket's own full_desc explicitly excludes lifecycle/dispatch scope ('Do not add residue carry-forward, status/board, lifecycle, projection, or dispatch; those remain with N/S-29.T1/T3-T4 and N/S-30'), so no build/dispatch entry point exists yet to call it from.",
-    "expected_caller": "N/S-30's ticket-lifecycle/dispatch seam (ticket to conductor task), which gates a build attempt against a phase's Draft state before dispatching; retire this entry once that wiring lands"
+    "expected_caller": "N/S-30's ticket-lifecycle/dispatch seam (ticket to conductor task), which gates a build attempt against a phase's Draft state before dispatching; retire this entry once that wiring lands",
+    "retire_ticket": "P1-E14-W3-S29-T2",
+    "caller_site": "internal/conductor/dispatch.go"
   },
   {
     "symbol": "plugins/pbd.ReadRowsFromStore",
     "reason": "P1-E14-W3-S29-T4 (status/board CLI) reads status/board data directly from the PEWS file tree (RunStatus/RunBoard) because RunCommand and DispatchTool's fixed signatures carry no channel to inject a pkg/provider.Store, and no daemon composition root exists yet to supply one at dispatch time. ReadRowsFromStore is the literal T1-files-to-database-projection read path the ticket's HOW section names, fully implemented and tested against a real providers/sqlite.Store populated by the real pews.Projector (TestReadRowsFromStore), ready for a caller that already holds a Store.",
-    "expected_caller": "a daemon composition root that constructs a live pkg/provider.Store and wires it into the plugin.pbd.status/plugin.pbd.board RPC dispatch path (or a future RunCommand/DispatchTool signature that carries one); retire this entry once that wiring lands"
+    "expected_caller": "a daemon composition root that constructs a live pkg/provider.Store and wires it into the plugin.pbd.status/plugin.pbd.board RPC dispatch path (or a future RunCommand/DispatchTool signature that carries one); retire this entry once that wiring lands",
+    "retire_ticket": "P1-E14-W3-S29-T4",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/hookpacks.RegisterHookEventHandler",
     "reason": "Binds fleet.sessions.hook_event to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*, fleet.sessions.list per P1-E12-W3-S24-T3's own identical entry above) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include (files_scope.change lists cmd/cascade/root.go, which is pure cobra-tree wiring per its own doc comment and carries no RPC composition of any kind, and internal/rpc/registry.go, which is a fully generic name->HandlerFunc map with no method-specific code). RegisterHookEventHandler itself is exercised end-to-end against a real *rpc.Registry and a real sessions.Store (handler_test.go): every R-16.48 mapping-table event, malformed params, unknown harness, timestamp-out-of-range, unknown-event-type drop, domain-error propagation, the planted-credential canary, and the Windows tier-2 refusal.",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls, once a sessions.Store and an *events.Bus are already composed there for P1-E12-W3-S24-T3's own RegisterHandlers call; retire this entry once it is called there"
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls, once a sessions.Store and an *events.Bus are already composed there for P1-E12-W3-S24-T3's own RegisterHandlers call; retire this entry once it is called there",
+    "retire_ticket": "P1-E12-W3-S24-T3",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/fleet/hookpacks.UnknownEventCount",
-    "reason": "Exposes dispatch's unknown-event-type drop counter (incremented when a HookPayload's event_type is outside ParseHookEventType's closed set) for diagnostics. No composition root wires a status/doctor surface to read fleet counters of this shape yet; the counter itself is exercised directly by handler_test.go's TestHookRPCHandler_UnknownEventTypeDroppedNotError, which proves the drop-not-error contract by observing it increment.",
-    "expected_caller": "a future `cascade doctor` or `cascade fleet` diagnostics surface that reports dropped-hook-event counts; retire this entry once one reads it"
+    "reason": "Exposes dispatch's unknown-event-type drop counter (incremented when a HookPayload's event_type is outside ParseHookEventType's closed set) for diagnostics. No composition root wires a status/doctor surface to read fleet counters of this shape yet; the counter itself is exercised directly by handler_test.go's TestHookRPCHandler_UnknownEventTypeDroppedNotError, which proves the drop-not-error contract by observing it increment. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "a future `cascade doctor` or `cascade fleet` diagnostics surface that reports dropped-hook-event counts; retire this entry once one reads it",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/doctor.go"
   },
   {
     "symbol": "internal/providers/intake.ParseInitConfig",
     "reason": "P1-E10-W3-S20-T1 implements the non-interactive [[providers]] intake directive parser per 08-INIT-CONFIG-SPEC.md §2, but this ticket's files_scope covers only internal/providers/intake/* and cmd/cascade/provider_cmd.go (the `provider add` command) - it does not include a `cascade init` command, which is a separate, not-yet-landed ticket. ParseInitConfig is fully implemented and tested (TestParseInitConfig* in config_test.go) against the CASCADE_NO_INPUT and secret-literal rules; only the `cascade init --config` call site is missing.",
-    "expected_caller": "the `cascade init --config cascade-init.toml` command, which feeds each parsed AddRequest to internal/providers/intake.Add; retire this entry once that command lands"
+    "expected_caller": "the `cascade init --config cascade-init.toml` command, which feeds each parsed AddRequest to internal/providers/intake.Add; retire this entry once that command lands",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "cmd/cascade/provider_cmd.go"
+  },
+  {
+    "symbol": "internal/conversation.NewStore",
+    "reason": "P1-E20-W5-S43-T1 builds the append-only conversation domain (Thread/Turn/Segment types, ConversationStore) as a standalone package with no composition-root ticket of its own: files_scope.change is empty, matching internal/jobs.NewStore's and internal/providers/registry.NewRegistry's identical precedent. No CLI/RPC surface ships in this ticket (the adapter API is T2, the cascade chat CLI is T3, MCP tools are T4 -- see domain.go's Scope boundary). NewStore/conversationStore is fully implemented and tested (append/read round trips, ErrImmutable on a duplicate turn/segment id, ErrOutOfOrder refusal, ErrTurnNotFound, insertion-order listing, clock-injection proof, and TestErrorsNeverEchoContent) against a real migrated modernc-sqlite database.",
+    "expected_caller": "the T2 adapter/SSE layer (or the daemon storage composition root, cmd/cascade/daemon_unix_store.go), which would construct a live conversationStore over the shared *sql.DB and pass it to the adapter API; retire this entry once that wiring lands",
+    "retire_ticket": "P1-E20-W5-S43-T1",
+    "caller_site": "cmd/cascade/daemon_unix_store.go"
+  },
+  {
+    "symbol": "internal/conversation.ApplyConversationSchema",
+    "reason": "Same gap as internal/conversation.NewStore above: this ticket's own migration entry point has no composition-root caller inside files_scope (cmd/cascade/daemon_unix_store.go's runtimeReaderCeiling, which would need a term for conversation.SchemaVersion, is outside files_scope.change, which is empty for this ticket), matching internal/providers/registry.ApplyMigrationSchema's identical precedent. ApplyConversationSchema is fully implemented and tested (TestApplyConversationSchemaCreatesTables, TestApplyConversationSchemaIdempotent, TestApplyConversationSchemaRequiresDBAndClock, TestConversationMigrationMinimumReaderVersionRefusesDowngrade) against a real migrated SQLite database. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the daemon storage composition root (cmd/cascade/daemon_unix_store.go), alongside its existing ApplyScopeSchema/RetrievalMigrationSet/registry/jobs/usage calls, adding a term for conversation.SchemaVersion to runtimeReaderCeiling; retire this entry once that wiring lands",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/daemon_unix_store.go"
+  },
+  {
+    "symbol": "internal/conversation.NewTurnID",
+    "reason": "The content-addressed Turn.ID constructor a caller uses to build a Turn before calling Store.AppendTurn. This package's own AppendTurn takes an already-constructed Turn (matching the ticket's exact ConversationStore method list, which has no CreateTurn), so NewTurnID's only callers today are this package's own tests, which exercise it directly (TestContentAddressedIDsAreDeterministicAndDistinct) and via every AppendTurn/AppendSegment round trip in store_test.go/conversation_test.go. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the T2 adapter layer's turn-construction path, once it builds a Turn from an incoming user/assistant exchange and calls Store.AppendTurn; retire this entry once that wiring lands",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/conversation/adapter.go"
+  },
+  {
+    "symbol": "internal/conversation.NewSegmentID",
+    "reason": "NewTurnID's twin for Segment.ID. Same gap: no production caller exists in this ticket's scope, only this package's own tests (TestContentAddressedIDsAreDeterministicAndDistinct and every AppendSegment round trip). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "expected_caller": "the T2 adapter layer's segment-construction path, once it builds a Segment from a turn's typed content slices and calls Store.AppendSegment; retire this entry once that wiring lands",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/conversation/adapter.go"
+  },
+  {
+    "symbol": "internal/conversation/topics.AssertFloors",
+    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S45-T2",
+    "caller_site": "internal/conversation/topics/classifier.go"
+  },
+  {
+    "symbol": "internal/conversation/topics.Evaluate",
+    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S45-T2",
+    "caller_site": "internal/conversation/topics/classifier.go"
+  },
+  {
+    "symbol": "internal/conversation/topics.LoadCorpus",
+    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S45-T2",
+    "caller_site": "internal/conversation/topics/classifier.go"
+  },
+  {
+    "symbol": "internal/events.EncodeNotificationPayload",
+    "reason": "EncodeNotificationPayload landed with the router under P1-E23-W5-S49-T1. The bridge adapter that encodes for a real channel is explicitly out of that ticket and lands in S-49.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/notify/bridge.go, which P1-E23-W5-S49-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E23-W5-S49-T2",
+    "caller_site": "internal/notify/bridge.go"
+  },
+  {
+    "symbol": "internal/fleet/census.NewCollector",
+    "reason": "The census Collector landed under P1-E12-W3-S25-T4. The composition that constructs one Collector shared between the sessions poll consumer and the telemetry readers is S-24.T3. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/fleet/census/collector_wire.go, which P1-E12-W3-S24-T3 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E12-W3-S24-T3",
+    "caller_site": "internal/fleet/census/collector_wire.go"
+  },
+  {
+    "symbol": "internal/jobs.ApplyJobsSchema",
+    "reason": "The jobs domain landed under P1-E29-W6-S59-T1, whose files_scope covers internal/jobs/* only. The jobs CLI surface is S-60.T1. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/fleet_jobs.go, which P1-E29-W6-S60-T1 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E29-W6-S60-T1",
+    "caller_site": "cmd/cascade/fleet_jobs.go"
+  },
+  {
+    "symbol": "internal/jobs.NewStore",
+    "reason": "The jobs domain landed under P1-E29-W6-S59-T1, whose files_scope covers internal/jobs/* only. The jobs CLI surface is S-60.T1. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/fleet_jobs.go, which P1-E29-W6-S60-T1 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E29-W6-S60-T1",
+    "caller_site": "cmd/cascade/fleet_jobs.go"
+  },
+  {
+    "symbol": "internal/jobs.PolicyTransitionAllowed",
+    "reason": "The jobs domain landed under P1-E29-W6-S59-T1, whose files_scope covers internal/jobs/* only. The jobs CLI surface is S-60.T1. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/fleet_jobs.go, which P1-E29-W6-S60-T1 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E29-W6-S60-T1",
+    "caller_site": "cmd/cascade/fleet_jobs.go"
+  },
+  {
+    "symbol": "internal/nodes.GenerateIdentity",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.NewFileKnownHostsBackend",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.NewFileRecordBackend",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.NewKnownHosts",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.NewNodeKeystore",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.NewRecordStore",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.RegisterHandlers",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.Satisfies",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.SignRotationRequest",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.SignTranscript",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/nodes.SignatureRevoked",
+    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T2",
+    "caller_site": "cmd/cascade/node_serve.go"
+  },
+  {
+    "symbol": "internal/notify.DefaultConfig",
+    "reason": "The notification router landed under P1-E23-W5-S49-T1. Its [notify] config wiring sits in bootstrap.go, outside that files_scope; the inbox surface that constructs a Service is S-73.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/inbox.go, which P1-E37-W8-S73-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E37-W8-S73-T2",
+    "caller_site": "cmd/cascade/inbox.go"
+  },
+  {
+    "symbol": "internal/notify.NewService",
+    "reason": "The notification router landed under P1-E23-W5-S49-T1. Its [notify] config wiring sits in bootstrap.go, outside that files_scope; the inbox surface that constructs a Service is S-73.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/inbox.go, which P1-E37-W8-S73-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E37-W8-S73-T2",
+    "caller_site": "cmd/cascade/inbox.go"
+  },
+  {
+    "symbol": "internal/plugins/process.TrustTierUntrusted",
+    "reason": "The process plugin runtime landed under P1-E15-W4-S31-T3. The plugin dispatch composition root that selects a runtime is S-32.T4. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/plugins/wasm.DefaultResourceLimits",
+    "reason": "The wazero runtime landed under P1-E15-W4-S32-T1. The plugin dispatch composition root that selects a runtime and constructs one is S-32.T4 and does not exist yet. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/plugins/wasm.HostABIVersion",
+    "reason": "The wazero runtime landed under P1-E15-W4-S32-T1. The plugin dispatch composition root that selects a runtime and constructs one is S-32.T4 and does not exist yet. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/plugins/wasm.NewRuntime",
+    "reason": "The wazero runtime landed under P1-E15-W4-S32-T1. The plugin dispatch composition root that selects a runtime and constructs one is S-32.T4 and does not exist yet. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/providers/health.DefaultIntervals",
+    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/health.NewManager",
+    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/health.NewScheduler",
+    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/registry.ApplyMigrationSchema",
+    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/registry.NewReader",
+    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/registry.NewRegistry",
+    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/usage.ApplyMigrationSchema",
+    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/usage.NewManager",
+    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/providers/usage.NewReader",
+    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E10-W3-S21-T2",
+    "caller_site": "cmd/cascade/provider_health_cmd.go"
+  },
+  {
+    "symbol": "internal/repo.ApplyInventorySchema",
+    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E33-W7-S67-T2",
+    "caller_site": "cmd/cascade/repo_cmd.go"
+  },
+  {
+    "symbol": "internal/repo.NewStore",
+    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E33-W7-S67-T2",
+    "caller_site": "cmd/cascade/repo_cmd.go"
+  },
+  {
+    "symbol": "internal/repo.Scan",
+    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E33-W7-S67-T2",
+    "caller_site": "cmd/cascade/repo_cmd.go"
+  },
+  {
+    "symbol": "internal/runtime.ResolveTelemetryConfig",
+    "reason": "ResolveTelemetryConfig landed under P1-E27-W10-S55-T3, whose files_scope forbade touching config.go and config_sections.go, so the section is real and self-contained but not yet read by Load. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/runtime/bootstrap.go, which P1-E27-W10-S55-T3 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E27-W10-S55-T3",
+    "caller_site": "internal/runtime/bootstrap.go"
+  },
+  {
+    "symbol": "internal/storage.NewPluginDomainRegistry",
+    "reason": "Plugin storage scoping and migrations landed under P1-E15-W4-S32-T3. Their constructor is called by the plugin host, which is S-32.T4. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/storage.NewPluginMigrator",
+    "reason": "Plugin storage scoping and migrations landed under P1-E15-W4-S32-T3. Their constructor is called by the plugin host, which is S-32.T4. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/storage.NewPluginStorage",
+    "reason": "Plugin storage scoping and migrations landed under P1-E15-W4-S32-T3. Their constructor is called by the plugin host, which is S-32.T4. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/plugins/dispatch.go, which P1-E15-W4-S32-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E15-W4-S32-T4",
+    "caller_site": "internal/plugins/dispatch.go"
+  },
+  {
+    "symbol": "internal/syncmerge.DomainConfig",
+    "reason": "internal/syncmerge landed as the P1-E13-W3-S27-T5 convergence spike. Its ADR refutes memory-domain associativity, so Q/S-38.T2 must adopt a single-accumulator topology before calling it. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/sync/merge_engine.go, which P1-E17-W4-S38-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/merge_engine.go"
+  },
+  {
+    "symbol": "internal/syncmerge.DomainContext",
+    "reason": "internal/syncmerge landed as the P1-E13-W3-S27-T5 convergence spike. Its ADR refutes memory-domain associativity, so Q/S-38.T2 must adopt a single-accumulator topology before calling it. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/sync/merge_engine.go, which P1-E17-W4-S38-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/merge_engine.go"
+  },
+  {
+    "symbol": "internal/syncmerge.FilterSensitive",
+    "reason": "internal/syncmerge landed as the P1-E13-W3-S27-T5 convergence spike. Its ADR refutes memory-domain associativity, so Q/S-38.T2 must adopt a single-accumulator topology before calling it. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "internal/sync/merge_engine.go, which P1-E17-W4-S38-T2 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/merge_engine.go"
+  },
+  {
+    "symbol": "plugins/pbd/internal/pews.CarryForward",
+    "reason": "CarryForward landed under P1-E14-W3-S29-T3. The phase-advance path that carries residue forward at a real boundary is S-29.T4. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "plugins/pbd/internal/pews/phase_advance.go, which P1-E14-W3-S29-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E14-W3-S29-T4",
+    "caller_site": "plugins/pbd/internal/pews/phase_advance.go"
   }
 ]

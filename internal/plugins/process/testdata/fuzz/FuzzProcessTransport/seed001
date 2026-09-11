@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"cascade.hello\",\"params\":{\"min_protocol_version\":\"1.0.0\"}}")

@@ -1,9 +1,8 @@
 // Purpose: cobra root command definition and persistent global flags.
 // Inputs:  process args, parsed by cobra into GlobalFlags.
-// Outputs: the constructed root *cobra.Command tree (root + version + completion
+// Outputs: the constructed root *cobra.Command tree; command groups mount
 //
-//	at this ticket; later tickets mount further command groups per
-//	07-CLI-COMMAND-TREE.md against this same root).
+//	against this same root per 07-CLI-COMMAND-TREE.md.
 //
 // Constraints: pure CLI wiring only — no business logic (06-FORGE-SPEC §2).
 //
@@ -131,6 +130,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountApprovalCmd(root)
 	mountPolicyCmd(root)
 	mountProviderCmd(root)
+	mountFleetCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following

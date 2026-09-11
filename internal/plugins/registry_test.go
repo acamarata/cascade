@@ -6,8 +6,11 @@ import (
 
 	// Blank-import triggers example-builtin's init(), which calls
 	// plugin.RegisterBuiltin — the compile-time registration this whole
-	// test suite exercises. This is the ONLY builtin plugin package this
-	// test binary blank-imports.
+	// test suite exercises. registry.go (this package, under test) itself
+	// now imports plugins/codex and plugins/opencode to wire their real
+	// generators (P1-E16-W4-S34-T3, P1-E16-W4-S35-T1), so this test
+	// binary also observes cascade-codex and cascade-opencode registered
+	// — see TestBuiltinRegistry_List's updated count below.
 	_ "github.com/acamarata/cascade/plugins/examples/example-builtin"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -94,11 +97,14 @@ func TestBuiltinRegistry_GetUnknown(t *testing.T) {
 func TestBuiltinRegistry_List(t *testing.T) {
 	r := loadedRegistry(t)
 	list := r.List()
-	if len(list) != 1 {
-		t.Fatalf("List() len = %d, want 1 (only example-builtin should be valid)", len(list))
+	wantIDs := []string{"cascade-codex", "cascade-opencode", "example-builtin"}
+	if len(list) != len(wantIDs) {
+		t.Fatalf("List() len = %d, want %d (%v)", len(list), len(wantIDs), wantIDs)
 	}
-	if list[0].Manifest.ID != "example-builtin" {
-		t.Errorf("List()[0].Manifest.ID = %q, want %q", list[0].Manifest.ID, "example-builtin")
+	for i, id := range wantIDs {
+		if list[i].Manifest.ID != id {
+			t.Errorf("List()[%d].Manifest.ID = %q, want %q (List sorts by manifest id)", i, list[i].Manifest.ID, id)
+		}
 	}
 }
 

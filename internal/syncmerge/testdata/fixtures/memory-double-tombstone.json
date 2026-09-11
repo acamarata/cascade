@@ -1,0 +1,11 @@
+{
+  "domain": "context",
+  "case": "double-tombstone-idempotence",
+  "description": "Both sides independently tombstone the same record id (e.g. two peers both processed a delete). Merging must remain tombstoned, and merge(A,A) must also remain tombstoned (idempotence).",
+  "sideA": [
+    {"RecordID": "mem-2", "VersionVector": {"node-a": 5}, "Revision": 12, "HLC": 60, "NodeID": "node-a", "Content": "", "Sensitivity": "normal", "Tombstone": true}
+  ],
+  "sideB": [
+    {"RecordID": "mem-2", "VersionVector": {"node-b": 4}, "Revision": 11, "HLC": 58, "NodeID": "node-b", "Content": "", "Sensitivity": "normal", "Tombstone": true}
+  ]
+}

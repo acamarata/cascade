@@ -76,6 +76,16 @@ var LicenseAllowlist = map[string]bool{
 // (Copyright (c) 2012 The Go Authors / fsnotify Authors), allowlisted; it
 // added no new transitive dependency (golang.org/x/sys was already
 // direct).
+//
+// P1-E14-W3-S30-T6 (wazero host-ABI parity spike) added
+// github.com/tetratelabs/wazero (the wazero adapter in
+// internal/plugins/adapter_wazero_spike_test.go loads a real compiled
+// wasm module through the real library, per Art.2 - a hand-rolled
+// interpreter would not satisfy the external-contract requirement).
+// Verified against the module-cache LICENSE file: Apache-2.0,
+// allowlisted (same license family as github.com/spf13/cobra above). No
+// new transitive dependency: wazero has no runtime dependencies of its
+// own (`go list -m all` shows none beyond the stdlib).
 var KnownModuleLicenses = map[string]string{
 	"mvdan.cc/sh/v3":                       "BSD-3-Clause",
 	"github.com/godbus/dbus/v5":            "BSD-2-Clause",
@@ -93,6 +103,16 @@ var KnownModuleLicenses = map[string]string{
 	"github.com/remyoudompheng/bigfft":     "BSD-3-Clause",
 	"github.com/zeebo/blake3":              "CC0-1.0",
 	"golang.org/x/sys":                     "BSD-3-Clause",
+	"github.com/tetratelabs/wazero":        "Apache-2.0",
+	// Verified against the module-cache LICENSE file: the standard
+	// three-clause Go Authors text, including the "Neither the name of
+	// Google LLC" clause that distinguishes BSD-3 from BSD-2. Pulled in by
+	// internal/repo/detector_go.go, which parses a real go.mod to detect a
+	// Go module; the file's own header calls it the license-gated addition.
+	// Note the comment at the top of THIS file, which said modfile "would
+	// itself be a new dependency" back when the license gate was written.
+	// It is one now, deliberately, and this is the entry that gates it.
+	"golang.org/x/mod": "BSD-3-Clause",
 	// gopkg.in/yaml.v3 ships a dual license: the files ported from libyaml
 	// (apic.go, emitterc.go, parserc.go, readerc.go, scannerc.go, writerc.go,
 	// yamlh.go, yamlprivateh.go) stay under their original MIT, and the rest

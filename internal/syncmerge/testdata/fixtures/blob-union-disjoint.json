@@ -1,0 +1,11 @@
+{
+  "domain": "blob",
+  "case": "union-disjoint-sets",
+  "description": "Two sides hold entirely different blobs (no shared content address). The union must contain all of both with no loss. dataBase64 is the raw payload; the test computes the real BLAKE3 digest and stages each blob for real via stageBlob before unioning, so admission is exercised on real content, not a hand-authored address.",
+  "sideA": [
+    {"logicalID": "blob-a", "dataBase64": "aGVsbG8gd29ybGQgLSBibG9iIEEgcGF5bG9hZA=="}
+  ],
+  "sideB": [
+    {"logicalID": "blob-b", "dataBase64": "ZGlzdGluY3QgcGF5bG9hZCBmb3IgYmxvYiBC"}
+  ]
+}

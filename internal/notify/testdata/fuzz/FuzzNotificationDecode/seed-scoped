@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"id\":\"n1\",\"target_scope\":\"project-1\"}")

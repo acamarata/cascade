@@ -85,6 +85,7 @@ var EgressExecNotYetMigrated = []EgressAllowEntry{
 	{"internal/daemon/service", "installs the platform service definition"},
 	{"internal/doctor", "probes the toolchain the operator has installed"},
 	{"internal/secrets", "reads a custody backend through its platform command-line tool"},
+	{"internal/syncmerge", "P1-E13-W3-S27-T5 spike: phaseMergeGit shells out to the real git binary to exercise the Git external contract (Art.2); every merge function in this package, including this one, is guarded by the spike build tag and ships in no release binary, and Q/S-38.T2 deletes the file when its production engine lands"},
 }
 
 // EgressNetImports are the stdlib import paths the network list governs.

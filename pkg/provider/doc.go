@@ -1,7 +1,8 @@
 // Package provider defines the public provider contracts that third-party
-// code implements: agent, model, embedder, reranker, and review providers
-// (added by other tickets), and the five storage families declared by
-// P1-E02-W1-S02-T1:
+// code implements: agent (AgentProvider, agent_provider.go), model
+// (ModelProvider, types.go), embedder (embedder.go), reranker (reranker.go),
+// and review (ReviewProvider, review_provider.go) providers, and the five
+// storage families declared by P1-E02-W1-S02-T1:
 //
 //   - Store — the namespace-scoped key-value abstraction every cascade.db
 //     domain (R-14.5: context, memory, audit, secrets, sessions, config,

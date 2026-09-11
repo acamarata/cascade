@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocol_version": "1.0.0",
+    "manifest_hash": "deadbeef"
+  }
+}

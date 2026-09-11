@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"models\":{\"claude-3-5-sonnet\":{\"input_micro_usd_per_token\":3000,\"output_micro_usd_per_token\":15000}},\"last_refreshed\":\"2026-09-01T00:00:00Z\"}")

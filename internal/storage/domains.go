@@ -79,16 +79,27 @@ const (
 )
 
 // ReservedPluginHostNamespace is the R-14.100 reserved PluginStorage
-// namespace prefix ("plugin.__host__.metadata/<name>", host-owned,
-// O/S-32.T3/T4). This ticket does not implement PluginStorage — that is
-// O/S-32's surface, layered on pkg/provider.Store's namespace-scoped kv
-// table, not on the domain-anchor tables Bootstrap creates here — but
-// domains_test.go's isolation test asserts none of this ticket's
-// TablePrefix values collides with it, so the closed domain set never
-// encroaches on a namespace R-14.100 already reserved elsewhere. Exported
-// so that test (and any future consumer) can assert against it directly
-// rather than duplicating the literal string.
+// namespace prefix ("plugin.__host__.metadata/<name>", host-owned).
+// PluginStorage itself now lives in plugin.go (P1-E15-W4-S32-T3),
+// layered on pkg/provider.Store's namespace-scoped kv table under
+// PluginNamespace below — never on the domain-anchor tables Bootstrap
+// creates here, and never a twelfth DomainID (the eleven-domain set stays
+// CLOSED). domains_test.go's isolation test asserts none of this ticket's
+// TablePrefix values collides with this reserved prefix, so the closed
+// domain set never encroaches on a namespace R-14.100 already reserved
+// elsewhere. Exported so that test (and any future consumer) can assert
+// against it directly rather than duplicating the literal string.
 const ReservedPluginHostNamespace = "plugin.__host__"
+
+// PluginNamespace builds the provider.Store namespace one plugin's
+// PluginStorage slot lives under: "plugin.<id>". This is a plain string
+// namespace, not a DomainID — the eleven-domain set is closed by R-14.5/
+// R-16.51, and a dynamically-installed plugin cannot participate in a
+// closed, compile-time-enumerated set. Callers must validate id before
+// calling this (plugin.go's validatePluginID) so a malformed or reserved
+// id can never silently collide with ReservedPluginHostNamespace or with
+// another plugin's slot.
+func PluginNamespace(id string) string { return "plugin." + id }
 
 // DomainMeta describes one cascade.db domain: its typed ID, the anchor-
 // table-name prefix Bootstrap uses (and later tickets extend with the
@@ -108,7 +119,7 @@ type DomainMeta struct {
 // eleven values, so a future R-14.5
 // amendment changes only this one declaration.
 var AllDomains = []DomainMeta{
-	{ID: DomainContext, TablePrefix: "context", OwnerPkg: "internal/context (Epic E)"},
+	{ID: DomainContext, TablePrefix: "context", OwnerPkg: "internal/context (Epic E); internal/repo's context_repo_inventory table also lives here (Epic AG, P1-E33-W7-S67-T1) -- the R-14.5/R-16.51 domain list stays CLOSED per R-21.22, so a new table joins an existing domain rather than adding a twelfth DomainID"},
 	{ID: DomainMemory, TablePrefix: "memory", OwnerPkg: "internal/memory (Epic G)"},
 	{ID: DomainAudit, TablePrefix: "audit", OwnerPkg: "internal/audit (Epic I)"},
 	{ID: DomainSecrets, TablePrefix: "secrets", OwnerPkg: "internal/secrets (Epic H)"},
@@ -117,7 +128,7 @@ var AllDomains = []DomainMeta{
 	{ID: DomainRetrieval, TablePrefix: "retrieval", OwnerPkg: "internal/retrieval"},
 	{ID: DomainBlobs, TablePrefix: "blobs", OwnerPkg: "providers/fs (R-14.6)"},
 	{ID: DomainQueue, TablePrefix: "queue", OwnerPkg: "internal/storage/queue"},
-	{ID: DomainJobs, TablePrefix: "jobs", OwnerPkg: "internal/fleet (task/job dispatch; owning epic not yet finalized beyond R-14.5)"},
+	{ID: DomainJobs, TablePrefix: "jobs", OwnerPkg: "internal/jobs (DAG/execution/lease/worktree domain, Epic AC; P1-E29-W6-S59-T1)"},
 	{ID: DomainPolicy, TablePrefix: "policy", OwnerPkg: "internal/policy (Epic I; R-16.51)"},
 }
 

@@ -1,0 +1,7 @@
+tier,gate,satisfies
+controller,local-only,true
+controller,restricted,true
+worker-trusted,local-only,false
+worker-trusted,restricted,true
+paired-device,local-only,false
+paired-device,restricted,false

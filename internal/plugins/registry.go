@@ -1,7 +1,9 @@
 package plugins
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -9,8 +11,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	casctx "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
+	"github.com/acamarata/cascade/plugins/codex"
+	"github.com/acamarata/cascade/plugins/opencode"
 )
 
 // Purpose: the host-side registry consuming pkg/plugin's compile-time
@@ -178,4 +183,107 @@ func (r *BuiltinRegistry) NewCobraCommand(pluginID, commandName string) (*cobra.
 		}, true
 	}
 	return nil, false
+}
+
+// # cascade-codex / cascade-opencode generator wiring (P1-E16-W4-S34-T3,
+// P1-E16-W4-S35-T1)
+//
+// plugins/codex and plugins/opencode may only import pkg/** (Art.10.2,
+// plugins-providers-boundary): they cannot reach internal/context, the
+// package that owns the real E/S-09.T3 instruction generator. This
+// package, being internal/, is the one place allowed to import both
+// sides, so it is the composition root that bridges them: init() below
+// sets each plugin's Generate seam to a real adapter over
+// internal/context's Discover + MergeTiers + its harness-specific writer.
+//
+// init always succeeds: the adapter closures constructed here are never
+// nil, so SetGenerator's only failure mode cannot occur. A panic here
+// would mean the adapter's own construction is broken, matching the
+// established init-time-registry-failure pattern (internal/doctor/
+// registry.go, internal/hooks/egress/registry.go).
+func init() {
+	if err := codex.SetGenerator(harnessGenerator(&casctx.CXInstructionWriter{})); err != nil {
+		panic("internal/plugins: wire cascade-codex generator: " + err.Error())
+	}
+	if err := opencode.SetGenerator(harnessGeneratorOC(&casctx.OCInstructionWriter{})); err != nil {
+		panic("internal/plugins: wire cascade-opencode generator: " + err.Error())
+	}
+}
+
+// generatedFile is the internal/context-side shape shared by both harness
+// adapters below, before it is translated into the target plugin's own
+// GeneratedFile type.
+type generatedFile struct {
+	path    string
+	content []byte
+}
+
+// resolveHarnessFiles runs the full internal/context pipeline once for cwd
+// (discover the five tiers, merge them, render w's files) and resolves
+// each rendered file's tier-relative name against its tier's own root
+// directory, matching internal/context's own gen_harness_sync.go
+// writeHarnessBatch resolution exactly.
+func resolveHarnessFiles(ctx context.Context, cwd string, w casctx.HarnessGenerator) ([]generatedFile, error) {
+	records, err := casctx.Discover(ctx, cwd, nil)
+	if err != nil {
+		return nil, err
+	}
+	merged, err := casctx.MergeTiers(records)
+	if err != nil {
+		return nil, err
+	}
+	roots := make(map[casctx.TierRole]string, len(records))
+	for _, rec := range records {
+		roots[rec.Role] = rec.Dir
+	}
+	files, err := w.Generate(merged)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]generatedFile, 0, len(files))
+	for _, f := range files {
+		root := roots[f.Role]
+		if root == "" {
+			return out, fmt.Errorf("internal/plugins: tier %d contributed sections but discovery gave it no directory", f.Role)
+		}
+		out = append(out, generatedFile{
+			path:    filepath.Join(root, filepath.FromSlash(f.Name)),
+			content: f.Content,
+		})
+	}
+	return out, nil
+}
+
+// harnessGenerator adapts w into cascade-codex's GeneratorFunc shape.
+func harnessGenerator(w casctx.HarnessGenerator) codex.GeneratorFunc {
+	return func(ctx context.Context, cwd string) ([]codex.GeneratedFile, error) {
+		files, err := resolveHarnessFiles(ctx, cwd, w)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]codex.GeneratedFile, 0, len(files))
+		for _, f := range files {
+			out = append(out, codex.GeneratedFile{Path: f.path, Content: f.content})
+		}
+		return out, nil
+	}
+}
+
+// harnessGeneratorOC adapts w into cascade-opencode's GeneratorFunc shape.
+// A second function, rather than a generic helper, because the two
+// plugins' GeneratedFile types are deliberately distinct (each plugin owns
+// its own internal/-free vocabulary; see plugins/codex/install.go's
+// GENERATOR SEAM note).
+func harnessGeneratorOC(w casctx.HarnessGenerator) opencode.GeneratorFunc {
+	return func(ctx context.Context, cwd string) ([]opencode.GeneratedFile, error) {
+		files, err := resolveHarnessFiles(ctx, cwd, w)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]opencode.GeneratedFile, 0, len(files))
+		for _, f := range files {
+			out = append(out, opencode.GeneratedFile{Path: f.path, Content: f.content})
+		}
+		return out, nil
+	}
 }

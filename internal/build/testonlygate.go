@@ -24,6 +24,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -37,6 +38,13 @@ type TestOnlySymbol struct {
 // TestOnlyAllowEntry records a symbol that is deliberately not yet called
 // from shipping code, and why. An entry without a reason is not an
 // exemption, it is a silence, so the loader rejects one.
+//
+// RetireTicket and CallerSite exist because a reason and a free-text
+// "expected caller" sentence are not falsifiable: a caller can be named in
+// prose forever without anyone ever checking whether it showed up. Symbol,
+// Reason and Caller stay in place unchanged (existing entries keep their
+// original narrative); RetireTicket and CallerSite add a machine-checkable
+// promise on top of it. See CheckCallerSitesWired.
 type TestOnlyAllowEntry struct {
 	// Symbol is "<dir>.<Name>", e.g. "internal/policy.IsSomethingAllowed".
 	Symbol string `json:"symbol"`
@@ -45,7 +53,34 @@ type TestOnlyAllowEntry struct {
 	// Caller names what is expected to call it, so the entry can be
 	// retired deliberately rather than forgotten. Required.
 	Caller string `json:"expected_caller"`
+	// RetireTicket is the ticket id that will wire this symbol, e.g.
+	// "P1-E17-W4-S36-T2" or the short form "E-08.T4". The literal value
+	// "UnownedTicket" ("UNOWNED") is accepted for a legacy entry whose
+	// text names no ticket; see UnownedTicketCount. Required, and
+	// validated against ticketIDPattern.
+	RetireTicket string `json:"retire_ticket"`
+	// CallerSite is a repo-relative path to the non-test .go file
+	// expected to reference Symbol. Required. CheckCallerSitesWired
+	// fails the gate if this file exists and does not reference Symbol:
+	// the day the owning ticket creates the file, the exemption must
+	// already be wired, or the promise was false.
+	CallerSite string `json:"caller_site"`
 }
+
+// UnownedTicket is the literal RetireTicket value for a legacy exemption
+// whose reason names no ticket. It is accepted so migrating an entry never
+// requires inventing an owner that does not exist, but every use of it is
+// counted (UnownedTicketCount) against a checked-in baseline
+// (testdata/testonly-unowned-baseline.txt) so the count can be visible and
+// frozen without being retired in one sitting.
+const UnownedTicket = "UNOWNED"
+
+// ticketIDPattern accepts the ticket-id shapes this tree actually uses in
+// tracked Go comments and SPORT lines: the full form
+// "P1-E17-W4-S36-T2" and the short form "E-08.T4" or "S-08.T4". Anything
+// else is rejected rather than silently accepted, so a typo cannot pass as
+// an exemption.
+var ticketIDPattern = regexp.MustCompile(`^(P1-E\d{1,3}-W\d{1,2}-S\d{1,3}-T\d{1,3}|[ES]-\d{1,3}\.T\d{1,3})$`)
 
 // LoadTestOnlyAllowList reads the allow list from path. A missing file is
 // an empty list, not an error: having no exemptions is the stricter state
@@ -73,9 +108,52 @@ func LoadTestOnlyAllowList(path string) (map[string]TestOnlyAllowEntry, error) {
 		if strings.TrimSpace(e.Caller) == "" {
 			return nil, fmt.Errorf("test-only gate: %s names no expected caller", e.Symbol)
 		}
+		if err := validateTicketAndCallerSite(e); err != nil {
+			return nil, err
+		}
 		out[e.Symbol] = e
 	}
 	return out, nil
+}
+
+// validateTicketAndCallerSite enforces the falsifiable half of an entry:
+// a real ticket shape (or the counted UnownedTicket escape hatch) and a
+// caller_site path that could plausibly exist one day. It never accesses
+// the filesystem; CheckCallerSitesWired does that.
+func validateTicketAndCallerSite(e TestOnlyAllowEntry) error {
+	ticket := strings.TrimSpace(e.RetireTicket)
+	if ticket == "" {
+		return fmt.Errorf("test-only gate: %s names no retire_ticket", e.Symbol)
+	}
+	if ticket != UnownedTicket && !ticketIDPattern.MatchString(ticket) {
+		return fmt.Errorf("test-only gate: %s has retire_ticket %q, which matches neither a ticket id "+
+			"nor the literal %q", e.Symbol, ticket, UnownedTicket)
+	}
+	site := strings.TrimSpace(e.CallerSite)
+	if site == "" {
+		return fmt.Errorf("test-only gate: %s names no caller_site", e.Symbol)
+	}
+	if !strings.HasSuffix(site, ".go") || strings.HasSuffix(site, "_test.go") {
+		return fmt.Errorf("test-only gate: %s has caller_site %q, which must be a non-test .go file", e.Symbol, site)
+	}
+	if strings.HasPrefix(site, "/") || strings.Contains(site, "..") {
+		return fmt.Errorf("test-only gate: %s has caller_site %q, which must be a repo-relative path", e.Symbol, site)
+	}
+	return nil
+}
+
+// UnownedTicketCount returns how many entries in allow carry the literal
+// RetireTicket UnownedTicket. The caller compares this against a checked-in
+// baseline so the count of un-owned legacy exemptions is visible and can
+// only shrink, never silently grow.
+func UnownedTicketCount(allow map[string]TestOnlyAllowEntry) int {
+	n := 0
+	for _, e := range allow {
+		if e.RetireTicket == UnownedTicket {
+			n++
+		}
+	}
+	return n
 }
 
 // FindTestOnlySymbols returns exported symbols that shipping code declares

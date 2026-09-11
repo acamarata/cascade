@@ -49,8 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: darwin, goarch: arm64, runner: macos-14 }
-          - { goos: darwin, goarch: amd64, runner: macos-13 }
+          - { goos: darwin, goarch: arm64, runner: macos-15 }
           - { goos: linux, goarch: amd64, runner: ubuntu-latest }
           - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm }
           - { goos: windows, goarch: amd64, runner: windows-latest }
@@ -72,8 +71,49 @@ jobs:
       # binaries — this satisfies Art.5.1 without ever hitting the
       # "cannot execute a cross-compiled binary" limitation the dev
       # environment has on darwin.
+      #
+      # ART.5.1 DEVIATION, darwin/amd64. This matrix used to carry a
+      # { darwin, amd64, macos-13 } entry. GitHub retired the macos-13
+      # image, so that job never got scheduled: it sat queued forever while
+      # every other lane finished, which is why a full `ci` run had never
+      # once completed. The only Intel macOS images left (macos-15-intel /
+      # macos-26-intel, both aliases for billed "larger" runners) are not
+      # free even on a public repo, and this project does not pay GitHub for
+      # CI. So darwin/amd64 gets the build+vet lane below instead of native
+      # execution. That is a REAL reduction in coverage and is recorded as
+      # such rather than dropped silently: it still compiles every file and
+      # still catches the build-tag parity defect class (an untagged
+      # _test.go over a tagged implementation), but nothing asserts darwin
+      # amd64 RUNTIME behavior. Restore a native entry the day a free Intel
+      # macOS image exists.
       - name: go test ./...
         run: go test ./... -v
+
+  # The darwin/amd64 stand-in for the retired macos-13 matrix entry (see
+  # the ART.5.1 DEVIATION note above). It runs on the arm64 macOS runner and
+  # cross-compiles, so it proves the whole tree BUILDS and VETS for darwin
+  # amd64 without executing anything. `go vet` is the load-bearing half:
+  # `go build` does not compile _test.go files, so vet is the only thing in
+  # this repo that catches a test file whose build tags do not match the
+  # implementation it exercises.
+  darwin-amd64-build:
+    name: build+vet (darwin/amd64, cross-compiled)
+    runs-on: macos-15
+    env:
+      GOOS: darwin
+      GOARCH: amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go build ./...
+        run: go build ./...
+
+      - name: go vet ./...
+        run: go vet ./...
 
   # The linux PAM keystore sits behind `cgo && pam` and is the only code in
   # the tree that needs a system header. Releases build with CGO_ENABLED=0,

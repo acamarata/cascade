@@ -1,0 +1,11 @@
+{
+  "domain": "config",
+  "case": "delete-vs-concurrent-write",
+  "description": "One side deletes (tombstone) a config record while the other side concurrently writes a new value; the same revision/HLC/node-id ordering decides the winner, deletion carries no dominance in the config domain (unlike memory).",
+  "sideA": [
+    {"RecordID": "cfg-2", "Revision": 7, "HLC": 50, "NodeID": "node-a", "WallClock": 2000, "Value": "", "ValueHash": "", "Sensitivity": "normal", "Tombstone": true}
+  ],
+  "sideB": [
+    {"RecordID": "cfg-2", "Revision": 6, "HLC": 99, "NodeID": "node-b", "WallClock": 2100, "Value": "new-value", "ValueHash": "hash-new", "Sensitivity": "normal", "Tombstone": false}
+  ]
+}

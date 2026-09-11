@@ -193,3 +193,53 @@ point calls it yet — that belongs to N/S-30 (see
 
 Residue carry-forward (`CarryForward(src, dst PhaseID)`), status/board,
 lifecycle, projection, and dispatch remain N/S-29.T1/T3-T4 and N/S-30's.
+
+## Residue carry-forward (R-21.276)
+
+`CarryForward(src, dst PhaseID) error` moves a closing phase's unfinished
+work into a draft successor. `PhaseID{Root, Phase string}` names one
+phase's tree — the same `(root, phase)` pair `Store` already takes.
+
+**Residue** is every `src` ticket not already recorded in `src`'s own
+`tombstones.yaml`. (R-21.276 defines residue by ticket "status", but no
+status field exists anywhere in this engine yet — `Ticket`'s 17+5-field
+contract has none, and `pews.Row` adds none by design. Tombstone
+presence is the one terminal-state signal the tree already persists; a
+real completion field remains a gap for a later ticket to add.)
+
+**The carry.** Each residue ticket is assigned a new canonical id in
+`dst`'s own id space — the same epic/wave/sprint coordinates as in
+`src`, at the smallest free ticket number at or above its original one
+(a `dst` collision bumps the number, never clobbers). Every
+`depends_on` entry naming another carried ticket is rewritten to that
+ticket's new id; an entry naming a ticket that was not carried (already
+done, or tombstoned before this call) is preserved verbatim. The copy is
+written through the same underlying atomic-write primitive `Create`/
+`Edit`/`Move` use, not through `Create`'s Lint preflight: carry-forward
+preserves an existing contract exactly as it already reads in `src`,
+and re-gating it against contract-lint policy is a separate concern.
+
+**The stamp.** R-21.276 requires marking each copy with
+`carried_from: <src-ticket-id>`, but `Ticket`'s field set is closed and
+fails closed on an unknown key. The stamp instead lives in a root-level
+`carried-forward.yaml` sidecar in `dst` (`new_id` → `carried_from`),
+mirroring `tombstones.yaml`'s own existing root-level convention rather
+than reopening the frozen ticket contract.
+
+**The originals.** Once every copy is written, `CarryForward` appends
+one `tombstones.yaml` entry per carried ticket to `src` and removes its
+original file — a live ticket file at an id its own `tombstones.yaml`
+also names is itself a structural violation (`Validate`'s
+`ViolationTombstoneLive`), so tombstoning always means both parts.
+
+**The refusal.** `CarryForward` checks `dst.Draft` (via
+`LoadWithOptions{IncludeDrafts: true}`) before any write and returns a
+typed `cascade.KindConflict` refusal when `dst` is not a draft phase —
+leaving both phases byte-for-byte untouched. An empty residue set is a
+clean no-op.
+
+No production caller exists yet: this ticket's own scope explicitly
+excludes status/board, projection, lifecycle, and dispatch. See
+`internal/build/testonly-allow.json`'s entry for
+`plugins/pbd/internal/pews.CarryForward` — N/S-30's phase-close seam is
+the expected caller.

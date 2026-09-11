@@ -1,0 +1,8 @@
+{
+  "domain": "phase-state",
+  "case": "disjoint-branches",
+  "description": "Local and remote histories share no common ancestor at all (two independently git-init'd repos). phaseMergeGit must refuse with ErrPhaseStateDiverged rather than perform an unrelated-histories merge. Built fresh per test run per the same provenance note as phase-git-fast-forward.json.",
+  "sideA": {"role": "local", "history": "independent-init-1"},
+  "sideB": {"role": "remote", "history": "independent-init-2"},
+  "expected": {"fastForwarded": false, "error": "ErrPhaseStateDiverged"}
+}

@@ -1,0 +1,30 @@
+# cascade-opencode plugin manifest (cascade.plugin/v2).
+#
+# Documentation/authoring artifact matching plugin.go's in-code Manifest
+# value (pkg/plugin.RegisterBuiltin reads the Go struct, not this file, for
+# a compile-time builtin - see plugins/examples/example-builtin for the
+# same precedent). Kept byte-for-byte consistent with manifest() in
+# plugin.go so a future TOML-driven loader has a ready fixture.
+
+id = "cascade-opencode"
+name = "Cascade Opencode Harness"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "builtin"
+
+[[provides.commands]]
+name = "detect"
+description = "Report whether the opencode binary is present in PATH."
+
+[[provides.commands]]
+name = "install"
+description = "Install the OpenCode AGENTS.md instruction golden for the current working directory."
+
+[[provides.commands]]
+name = "harness-uninstall"
+description = "Remove only the AGENTS.md files this plugin's install step placed."
+
+[[permissions]]
+name = "read-context"
+description = "Read the merged instruction context to render the OpenCode instruction golden."

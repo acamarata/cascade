@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"node_id\":\"abc\",\"node_pubkey_b64\":\"AAAA\",\"trust_tier\":\"worker-trusted\",\"host\":\"h\",\"host_key_fingerprint\":\"fp\",\"node_signature_b64\":\"sig\"}")

@@ -1,0 +1,31 @@
+[
+  {
+    "lane_name": "lane-auth-required",
+    "capacity": "agent_sdk_credit",
+    "state": "auth-required",
+    "reset_estimate": "2026-09-01T00:00:00Z"
+  },
+  {
+    "lane_name": "lane-available",
+    "capacity": "agent_sdk_credit",
+    "state": "available"
+  },
+  {
+    "lane_name": "lane-constrained",
+    "capacity": "agent_sdk_credit",
+    "state": "constrained",
+    "reset_estimate": "2026-09-01T00:00:00Z"
+  },
+  {
+    "lane_name": "lane-exhausted",
+    "capacity": "agent_sdk_credit",
+    "state": "exhausted",
+    "reset_estimate": "2026-09-01T00:00:00Z"
+  },
+  {
+    "lane_name": "lane-unknown",
+    "capacity": "agent_sdk_credit",
+    "state": "unknown",
+    "reset_estimate": "2026-09-01T00:00:00Z"
+  }
+]

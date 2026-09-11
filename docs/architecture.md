@@ -158,3 +158,69 @@ digest) is pre-registered without a real runnable behind it.
 
 No journal wiring: every event this package publishes goes to the event
 bus only. Journal integration is explicitly deferred to `M/S-27.T1`.
+
+## Notification router (`internal/notify`)
+
+Status: `P1-E23-W5-S49-T1`. Ticket contract:
+`.claude/planning/p1/phase/epics/E-W/waves/W-5/sprints/S-49/tickets/T-1.yaml`.
+`internal/notify` is the core, strictly-internal notification router: it
+aggregates, prioritizes, scope-gates, and fans out `Notification` values
+to in-process subscribers. It never sends outbound traffic itself and
+holds no knowledge of any specific bridge, channel, or harness — outbound
+delivery (e.g. a Telegram bridge) is a separate, later consumer (`S-48`),
+not built here.
+
+### Aggregate pattern
+
+`NewService` wires one `Registry` (subscriber bookkeeping), one
+`Dispatcher` (priority-ordered fan-out), one `Inbox` (the query
+projection), one `Notifier` (the direct producer entry point), and one
+`NotificationRouter` (the event-bus decoder) around a shared, unexported
+`queueSet` of four buffered channels, one per `Priority`. Two paths feed
+the same queues: `NotificationRouter.Run` decodes events off a live
+`internal/events.Bus` subscription per the normative source-Kind mapping
+table, and `Notifier.Deliver` is the direct producer API (CI fan-out,
+delegation results, and future callers) that validates and enqueues
+without touching the bus at all.
+
+### Priority ordering
+
+`Priority` is an ordered `int` (`Urgent` < `High` < `Normal` < `Low`), so
+`Dispatcher.Drain` drains the four queues in that fixed order every call.
+The ordering guarantee is per single `Drain` call, not across calls.
+
+### Deep-link semantics
+
+`Notification.DeepLink` is an opaque `cascade://` URI hint for a
+consuming surface to route the user to the right place. The router never
+parses, validates, or resolves it — it is carried through unmodified.
+
+### Subscriber contract and delivery ledger
+
+A `Subscriber` (`ID`, `Match`, `Receive`) registers into the `Registry`
+paired with a `CandidateSession` (its own session ID plus its precomputed
+scope-graph candidate set, from
+`internal/context/scope.CandidateScopeRefs` computed by the caller — this
+package never calls that function itself, keeping its delivery logic pure
+and I/O-free). Before every fan-out, `ScopeDeliveryPredicate` (`scope.go`)
+gates delivery per R-16.5: `scoped` requires membership in the candidate
+set, `addressed` requires an exact session-ID match, `global-critical`
+always delivers, and anything else — including an unresolvable scoped
+Notification with no scope fields set — is withheld and counted, never
+delivered as a fallback. A per-`Drain`-call ledger (keyed on Notification
+ID plus Subscriber ID) prevents dispatching the same Notification to the
+same Subscriber twice within one cycle; a Subscriber whose `Receive`
+errors is logged and its Notification is queued for redelivery on the
+*next* `Drain` call, not fed back into the channel mid-cycle, which would
+let the ledger silently swallow the retry in the same pass.
+
+### Inbox is a projection, not a record of truth
+
+Per R-21.227, `Inbox` holds a live, in-memory view only — it persists
+nothing across a daemon restart. `Inbox.List/Read/Ack` apply the same
+`ScopeDeliveryPredicate` plus a fail-closed `Visibility` gate
+(`private`/`scoped`/`shared`/`executive`, unknown resolving to `private`)
+before a record is discoverable by id, so a withheld record never leaks
+through existence. A producer that needs pending-across-restart semantics
+owns its own durable table and re-`Deliver`s on daemon start; this
+package makes no durability claim.

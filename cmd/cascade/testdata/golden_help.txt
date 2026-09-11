@@ -12,6 +12,7 @@ Available Commands:
   context        Session-scope and context-engine commands
   daemon         Manage the cascade daemon process
   doctor         Diagnose the local cascade installation
+  fleet          Inspect the local fleet of harness sessions
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records

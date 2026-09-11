@@ -1,0 +1,17 @@
+[
+  {
+    "demotion_count": 1,
+    "health_status": "degraded",
+    "reason": "rate_limited_429"
+  },
+  {
+    "demotion_count": 2,
+    "health_status": "degraded",
+    "reason": "rate_limited_429"
+  },
+  {
+    "demotion_count": 3,
+    "health_status": "dead",
+    "reason": "rate_limited_429"
+  }
+]

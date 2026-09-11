@@ -1,0 +1,20 @@
+[
+  {
+    "Provider": "p1",
+    "Lane": "a",
+    "Model": "m1",
+    "TokensIn": 1
+  },
+  {
+    "Provider": "p1",
+    "Lane": "b",
+    "Model": "m2",
+    "TokensIn": 2
+  },
+  {
+    "Provider": "p2",
+    "Lane": "a",
+    "Model": "m1",
+    "TokensIn": 3
+  }
+]

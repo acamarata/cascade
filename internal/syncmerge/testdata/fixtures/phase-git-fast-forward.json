@@ -1,0 +1,8 @@
+{
+  "domain": "phase-state",
+  "case": "clean-fast-forward",
+  "description": "Local repo is a strict ancestor of remote's HEAD (remote advanced by one commit past local's tip). phaseMergeGit must fast-forward and no divergence error occurs. This domain's real counterpart is the git binary itself (Art.2); the byte-for-byte repo state is built fresh per test run in t.TempDir() by TestPhaseMergeGit/clean-fast-forward rather than replayed from stored git objects, because commit hashes are timestamp-dependent -- the expected field below is the scenario's outcome contract, not a stored object.",
+  "sideA": {"role": "local", "startsAt": "phase: 1"},
+  "sideB": {"role": "remote", "advancesTo": "phase: 2", "aheadBy": 1},
+  "expected": {"fastForwarded": true, "error": null, "resultContent": "phase: 2"}
+}

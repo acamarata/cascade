@@ -1,0 +1,11 @@
+{
+  "domain": "config",
+  "case": "revision-tie-break-hlc-then-nodeid",
+  "description": "Two writers commit the same revision with different HLC values; the ordering must resolve by HLC, then node id, exactly once.",
+  "sideA": [
+    {"RecordID": "cfg-1", "Revision": 4, "HLC": 100, "NodeID": "node-a", "WallClock": 1000, "Value": "on", "ValueHash": "hash-a", "Sensitivity": "normal", "Tombstone": false}
+  ],
+  "sideB": [
+    {"RecordID": "cfg-1", "Revision": 4, "HLC": 105, "NodeID": "node-b", "WallClock": 900, "Value": "off", "ValueHash": "hash-b", "Sensitivity": "normal", "Tombstone": false}
+  ]
+}

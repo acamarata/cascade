@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"id\":\"seed001\",\"turns\":[{\"speaker\":\"a\",\"text\":\"hi\"},{\"speaker\":\"b\",\"text\":\"bye\"}],\"boundaries\":[1],\"topic_labels\":{\"0\":\"greeting\"}}")

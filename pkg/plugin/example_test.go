@@ -12,6 +12,8 @@
 package plugin_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,4 +57,53 @@ func ExampleValidate() {
 	errs := plugin.Validate(m)
 	fmt.Println(errs[0])
 	// Output: schema: schema-version: schema must equal "cascade.plugin/v2", got "cascade.plugin/v1"
+}
+
+// ExampleGenerateExampleManifest builds the author kit's canonical example
+// manifest from Go struct literals and encodes it to TOML — the codegen
+// entry point pkg/plugin/testdata/codegen-example.toml is generated from.
+func ExampleGenerateExampleManifest() {
+	m := plugin.GenerateExampleManifest()
+
+	data, err := plugin.EncodeManifestTOML(m)
+	if err != nil {
+		fmt.Println("encode error:", err)
+		return
+	}
+
+	// Round-trip through the same parser real manifests go through, to
+	// show the codegen output is a genuine cascade.plugin/v2 document.
+	parsed, err := plugin.ParseManifest(strings.NewReader(string(data)))
+	if err != nil {
+		fmt.Println("parse error:", err)
+		return
+	}
+	fmt.Println(parsed.ID)
+	// Output: cascade-authorkit-example
+}
+
+// ExampleGuestDispatcher shows a guest binary registering an
+// AgentProviderMethod handler and routing a plugin_invoke envelope to it —
+// the pattern a wasm guest's real plugin_invoke export follows per
+// R-14.50.
+func ExampleGuestDispatcher() {
+	d := plugin.NewGuestDispatcher()
+	d.Register(plugin.MethodChat, func(_ context.Context, _ json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`{"reply":"hello"}`), nil
+	})
+
+	envelope, err := json.Marshal(plugin.InvokeEnvelope{Method: plugin.MethodChat.String(), Params: json.RawMessage(`{}`)})
+	if err != nil {
+		fmt.Println("marshal error:", err)
+		return
+	}
+
+	out := d.Dispatch(context.Background(), envelope)
+	var res plugin.InvokeResult
+	if err := json.Unmarshal(out, &res); err != nil {
+		fmt.Println("unmarshal error:", err)
+		return
+	}
+	fmt.Println(string(res.Result))
+	// Output: {"reply":"hello"}
 }

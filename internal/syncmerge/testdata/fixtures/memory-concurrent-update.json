@@ -1,0 +1,11 @@
+{
+  "domain": "context",
+  "case": "concurrent-update-genuinely-concurrent-version-vectors",
+  "description": "Two nodes concurrently update the same memory record; neither version vector dominates the other, so resolution falls back to the revision/HLC/node-id total order. Asserts merge(A,B) equals merge(B,A).",
+  "sideA": [
+    {"RecordID": "mem-1", "VersionVector": {"node-a": 3, "node-b": 1}, "Revision": 8, "HLC": 40, "NodeID": "node-a", "Content": "content-a", "Sensitivity": "normal", "Tombstone": false}
+  ],
+  "sideB": [
+    {"RecordID": "mem-1", "VersionVector": {"node-a": 1, "node-b": 3}, "Revision": 9, "HLC": 20, "NodeID": "node-b", "Content": "content-b", "Sensitivity": "normal", "Tombstone": false}
+  ]
+}

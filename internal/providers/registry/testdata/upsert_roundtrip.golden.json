@@ -1,0 +1,10 @@
+{
+  "account_kind": "personal",
+  "auth_type": "key",
+  "driver_kind": "anthropic",
+  "known_models": [
+    "claude-3-5-sonnet-20241022"
+  ],
+  "name": "anthropic",
+  "tier": "strong"
+}

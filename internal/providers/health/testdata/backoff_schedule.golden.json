@@ -1,0 +1,47 @@
+[
+  {
+    "count": 1,
+    "status": "degraded",
+    "want_seconds": 60
+  },
+  {
+    "count": 2,
+    "status": "degraded",
+    "want_seconds": 120
+  },
+  {
+    "count": 3,
+    "status": "degraded",
+    "want_seconds": 240
+  },
+  {
+    "count": 4,
+    "status": "degraded",
+    "want_seconds": 480
+  },
+  {
+    "count": 0,
+    "status": "dead",
+    "want_seconds": 900
+  },
+  {
+    "count": 1,
+    "status": "dead",
+    "want_seconds": 1800
+  },
+  {
+    "count": 2,
+    "status": "dead",
+    "want_seconds": 3600
+  },
+  {
+    "count": 3,
+    "status": "dead",
+    "want_seconds": 3600
+  },
+  {
+    "count": 20,
+    "status": "dead",
+    "want_seconds": 3600
+  }
+]

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("module example.com/x\n\ngo 1.22\n")

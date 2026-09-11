@@ -1,0 +1,23 @@
+[
+  {
+    "cost_micro_usd": 500,
+    "errors": 0,
+    "requests": 1,
+    "tokens_in": 100,
+    "tokens_out": 20
+  },
+  {
+    "cost_micro_usd": 750,
+    "errors": 1,
+    "requests": 2,
+    "tokens_in": 150,
+    "tokens_out": 30
+  },
+  {
+    "cost_micro_usd": 875,
+    "errors": 1,
+    "requests": 3,
+    "tokens_in": 175,
+    "tokens_out": 35
+  }
+]

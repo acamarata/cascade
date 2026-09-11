@@ -1,0 +1,11 @@
+{
+  "domain": "context",
+  "case": "stale-peer-cursor-too-old",
+  "description": "A peer's resync cursor (Revision field, repurposed as the cursor position for this fixture) predates the oldest retained tombstone revision; tombstones are never pruned in P1, so the peer is refused with ErrCursorTooOld rather than resynced incrementally.",
+  "sideA": [
+    {"RecordID": "peer-cursor", "VersionVector": {}, "Revision": 3, "HLC": 0, "NodeID": "peer-x", "Content": "", "Sensitivity": "normal", "Tombstone": false}
+  ],
+  "sideB": [
+    {"RecordID": "oldest-retained-tombstone", "VersionVector": {}, "Revision": 20, "HLC": 0, "NodeID": "server", "Content": "", "Sensitivity": "normal", "Tombstone": true}
+  ]
+}
