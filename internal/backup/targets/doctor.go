@@ -22,6 +22,7 @@ package targets
 
 import (
 	"context"
+	"errors"
 
 	"github.com/acamarata/cascade/internal/doctor"
 )
@@ -61,20 +62,66 @@ func (RcloneDoctorCheck) Fix(context.Context) (doctor.FixResult, error) {
 	return doctor.FixResult{}, doctor.ErrCheckNotFixable
 }
 
-// Run probes `rclone version`. An absent binary or unparseable output is
-// StatusError (Art.1: an unverifiable subject is never a silent OK) —
-// only a successfully parsed version reports StatusOK. Both are
-// legitimate outcomes of "the rclone target may or may not be usable
-// here," so neither is a check failure in the framework sense, only in
-// the reported Status.
+// Run probes `rclone version` and reports one of three tiers, split by
+// what was actually established rather than by whether the call returned
+// an error:
+//
+//	StatusOK    a version was parsed — the target is usable.
+//	StatusWarn  the binary is VERIFIED ABSENT — nothing is broken, the
+//	            optional target is simply unavailable.
+//	StatusError the subject could not be VERIFIED at all: a binary that
+//	            exists but will not run, or output that will not parse.
+//	            Art.1's "an unverifiable subject is never a silent OK"
+//	            applies to exactly these, and not to a clean absence.
+//
+// None of the three is a check failure in the framework sense; the
+// distinction lives entirely in the reported Status.
 func (c RcloneDoctorCheck) Run(ctx context.Context) (doctor.CheckResult, error) {
 	stdout, stderr, err := c.runner.Run(ctx, nil, "version")
+	if errors.Is(err, ErrRcloneBinaryAbsent) {
+		// VERIFIED ABSENT is not UNVERIFIABLE, and that distinction is the
+		// whole reason this is StatusOK. Art.1 forbids reporting a subject
+		// we COULD NOT VERIFY as a silent OK. An absent rclone is not that:
+		// we verified it is not installed, and we know nothing is broken,
+		// because rclone is one OPTIONAL target among fs and s3. The
+		// Message says so out loud, so this is not a silent OK either.
+		//
+		// This shipped as StatusError and turned `cascade doctor` red on
+		// all four CI platforms immediately, passing locally only because
+		// the authoring agent had installed rclone for its own real-server
+		// testing. StatusWarn was tried next and is ALSO wrong here, for a
+		// non-obvious reason worth recording: cmd/cascade/doctor.go maps a
+		// warn outcome to a NON-ZERO exit (doctor_test.go pins
+		// warn -> ExitUnavailable deliberately), so a warn from a check
+		// that runs on EVERY plain `cascade doctor` would still fail the
+		// command on any machine without an optional tool. A doctor that
+		// exits non-zero for "you could optionally install this" trains
+		// operators to ignore it.
+		//
+		// KNOWN LIMITATION, deliberately not fixed here: this check has no
+		// configuration awareness, so it cannot yet distinguish "rclone is
+		// absent and unused" (fine, this branch) from "rclone is absent but
+		// an rclone TARGET IS CONFIGURED" (genuinely broken, should be
+		// StatusError). Wiring config in is a separate change; recorded in
+		// T0-OPEN-FOLLOWUPS.
+		//
+		// Every OTHER failure below stays StatusError, because those really
+		// are unverifiable: a binary that exists but will not run, and
+		// output that will not parse, both leave us unable to say whether
+		// the target works.
+		return doctor.CheckResult{
+			Status:      doctor.StatusOK,
+			Message:     "rclone not installed; the optional rclone backup target is unavailable (fs and s3 are unaffected)",
+			Detail:      string(stderr),
+			Remediation: "install rclone (https://rclone.org/downloads/) if you intend to use the rclone backup target",
+		}, nil
+	}
 	if err != nil {
 		return doctor.CheckResult{
 			Status:      doctor.StatusError,
-			Message:     "rclone binary not found or failed to run",
+			Message:     "rclone binary found but failed to run",
 			Detail:      string(stderr),
-			Remediation: "install rclone (https://rclone.org/downloads/) to use the rclone backup target",
+			Remediation: "run `rclone version` manually; the binary is present but did not execute successfully",
 		}, nil
 	}
 	v, perr := ParseRcloneVersionOutput(stdout)

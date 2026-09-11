@@ -34,6 +34,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/events"
@@ -54,6 +55,17 @@ const presenceEventsDBFile = "events.db"
 // for the event store; the two loops themselves stop via ctx.
 func startPresenceSubsystems(ctx context.Context, comp nodeServeComposition, deps nodeServeDeps) (func(), error) {
 	dbPath := filepath.Join(comp.dataDir, "nodes", presenceEventsDBFile)
+	// OpenEmbeddedWriteStore does NOT create the parent directory (verified
+	// in internal/runtime/daemonless.go: it goes straight to sqlite.Open),
+	// so this caller must. Omitting it passed locally and failed on every CI
+	// platform, because a developer machine already has <data>/nodes from
+	// earlier node work while a fresh runner does not — the sqlite schema
+	// init then failed against a path whose directory did not exist. 0o700
+	// matches daemon_unix.go's own MkdirAll for the log directory: this is
+	// operator data under the private data dir, not world-readable output.
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "node serve: create presence event store directory")
+	}
 	store, err := cruntime.OpenEmbeddedWriteStore(ctx, dbPath, nil, nil)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "node serve: open presence event store")

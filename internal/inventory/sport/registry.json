@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T19:31:34Z",
+  "generated_at": "2026-09-11T19:49:29Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2643,6 +2643,18 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/node (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/node_serve_presence.go",
+          "line": 29,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/node (CHG — retires internal/build/"
+        },
+        {
+          "file": "cmd/cascade/node_serve_presence_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade/node (ADD — R-16.80-class wiring fix for"
         },
         {
           "file": "cmd/cascade/node_serve_test.go",
@@ -11186,6 +11198,84 @@
       ]
     },
     {
+      "name": "jobs/completion-gate",
+      "sites": [
+        {
+          "file": "internal/jobs/completion.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/completion_errors.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/completion_errors_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/evidence.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/evidence_authz.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/evidence_authz_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/evidence_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/gate_stall_integration_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/migration_evidence.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/migration_evidence_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T3",
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "jobs/dag-planner",
       "sites": [
         {
@@ -11291,6 +11381,12 @@
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
         },
         {
+          "file": "internal/jobs/lease_events_drive_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "jobs/lease-model (FIX, coverage floor restoration)."
+        },
+        {
           "file": "internal/jobs/lease_expiry.go",
           "line": 26,
           "status": "ADD",
@@ -11312,6 +11408,12 @@
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
         },
         {
+          "file": "internal/jobs/lease_fence_unix_test.go",
+          "line": 17,
+          "status": "",
+          "raw": "jobs/lease-model (FIX, coverage floor restoration)."
+        },
+        {
           "file": "internal/jobs/lease_fence_windows.go",
           "line": 21,
           "status": "ADD",
@@ -11324,9 +11426,16 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
+        },
+        {
+          "file": "internal/jobs/lease_reclaimall_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "jobs/lease-model (FIX, coverage floor restoration)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -11420,9 +11529,16 @@
           "status": "ADD",
           "ticket": "P1-E34-W7-S69-T1",
           "raw": "jobs/risk-reclass-guard/ADD (P1-E34-W7-S69-T1)."
+        },
+        {
+          "file": "internal/jobs/risk_reclass_wrappers_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "jobs/risk-reclass-guard (FIX, coverage floor restoration)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -14972,7 +15088,7 @@
       ]
     }
   ],
-  "total_sites": 1491,
+  "total_sites": 1507,
   "unspecified_count": 30,
-  "multi_status_count": 22
+  "multi_status_count": 24
 }

@@ -192,8 +192,18 @@ func TestExecRcloneRunner_BinaryAbsentIsTypedRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if res.Status != doctor.StatusError {
-		t.Fatalf("Status = %v, want StatusError with PATH cleared", res.Status)
+	// OK, not Error: an empty PATH makes rclone VERIFIED ABSENT, the same
+	// tier doctor.go reports for any clean absence of this OPTIONAL target.
+	// Art.1 reserves StatusError for a subject that could not be verified at
+	// all — see TestRcloneDoctorCheck_BinaryPresentButFailsReportsError in
+	// doctor_test.go, which pins that tier so this cannot be mistaken for a
+	// blanket weakening of the check.
+	if res.Status != doctor.StatusOK {
+		t.Fatalf("Status = %v, want StatusOK with PATH cleared (verified absent optional target)", res.Status)
+	}
+	// ...but never a SILENT ok: the absence must be visible to an operator.
+	if res.Message == "" {
+		t.Fatal("absent-binary OK must state the absence in its Message")
 	}
 }
 
