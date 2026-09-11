@@ -68,7 +68,10 @@ func newNodeRotateKeyCmd(deps nodeCLIDeps) *cobra.Command {
 			}
 			nodeID := args[0]
 			dataDir := deps.Paths.DataDir()
-			keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir})
+			keystore, err := nodes.NewNodeKeystore(secrets.Config{
+				Dir:            deps.SecretsDir,
+				ForceFileVault: deps.SecretsDir != "",
+			})
 			if err != nil {
 				return err
 			}

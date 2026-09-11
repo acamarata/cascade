@@ -68,8 +68,14 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// alongside RegisterFleetAttentionHandler because it needs
 	// cmd/cascade-local openMigratedDB and providerRegistryDBFile.
 	"daemon_unix_conductor.go": true,
-	"mcp.go":                   true,
-	"elevate_helper.go":        true,
+	// daemon_unix_evidence.go registers "conductor.expand" on the daemon's
+	// own registry from buildRPCServer, on the identical daemon-SIDE
+	// reasoning as daemon_unix_conductor.go above. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together or this gate and the linter disagree.
+	"daemon_unix_evidence.go": true,
+	"mcp.go":                  true,
+	"elevate_helper.go":       true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

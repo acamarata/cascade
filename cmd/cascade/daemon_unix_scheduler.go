@@ -35,8 +35,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log/slog"
+	"os"
 	"time"
 
+	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
 	"github.com/acamarata/cascade/internal/memory"
@@ -110,6 +112,18 @@ func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, pa
 	// flight over the same tree at once.
 	admin, err := registerMemoryJobs(ctx, sched, paths, cfg, clock, bus, logger)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	// P1-E19-W4-S42-T1: the persisted backup target/policy registry's
+	// scheduled jobs register on the SAME scheduler, before Activate. A
+	// fresh daemon has no targets yet (S-42.T3's CLI to add one has not
+	// landed), so this is a real, live call site that currently registers
+	// zero jobs — not a stub: RegisterConfiguredBackupJobs' own doc
+	// explains the no-op-until-configured behavior. engine is nil: no
+	// egress.Engine is wired at daemon boot yet, so an s3/rclone target
+	// added later would refuse (KindUnavailable) until a future ticket
+	// threads one through; an fs target needs none and works today.
+	if _, err := backup.RegisterConfiguredBackupJobs(ctx, sched, store, schedulerNamespace, clock, nil, os.Getenv); err != nil {
 		return nil, nil, nil, err
 	}
 	if _, err := sched.Activate(ctx); err != nil {

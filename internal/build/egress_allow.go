@@ -102,6 +102,7 @@ var EgressExecNotYetMigrated = []EgressAllowEntry{
 	{"internal/inventory/sport", "shells out to `git ls-files` to derive the tracked .go file list at SPORT-registry generation time only (ComputeRegistry/tree.go); the production binary reads the embedded registry.json instead (embed.go) and never spawns this"},
 	{"internal/secrets", "reads a custody backend through its platform command-line tool"},
 	{"internal/syncmerge", "P1-E13-W3-S27-T5 spike: phaseMergeGit shells out to the real git binary to exercise the Git external contract (Art.2); every merge function in this package, including this one, is guarded by the spike build tag and ships in no release binary, and Q/S-38.T2 deletes the file when its production engine lands"},
+	{"internal/evidence", "P1-E43-W9-S83-T1: fetch.go's gitShow resolves a git-sourced evidence row's blob at its recorded commit via `git show <commit>:<path>`, the same R-14.80 git-is-an-Art.2-external-contract class internal/retrieval's GitTrackedFiles already occupies above -- no F/S-10.T4 fetcher package exists anywhere in the tree for this ticket to depend on instead (see fetch.go's own doc comment)"},
 }
 
 // EgressNetImports are the stdlib import paths the network list governs.

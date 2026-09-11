@@ -188,6 +188,64 @@ taxonomy: an unreachable endpoint or remote is `KindUnavailable` or
 a missing or unset env-ref is `KindInvalidInput`. No target ever falls
 back to a different target on failure.
 
+## Scheduling & multi-target policy
+
+`internal/backup`'s `TargetRecord`/`TargetPolicy`/`Outcome` types
+(`targets.go`, `policy.go`, `schedule.go`) are the persisted registry, the
+per-target cadence policy, and the scheduler integration every target
+rides on — the data model behind the (not-yet-built) `backup target
+add|list|remove` CLI verbs.
+
+- **Target registry** — a `TargetRecord` names a target (name, kind
+  fs|s3|rclone, driver config) persisted via `provider.Store`
+  (`PutTarget`/`GetTarget`/`DeleteTarget`/`ListTargets`, key prefix
+  `backup:target:`). Driver config is never a literal credential: `fs`
+  stores a local root path, `s3` stores only the `s3_env_prefix` name
+  `ResolveS3TargetEnvRefs` expands (never the resolved secret), and
+  `rclone` stores the remote spec (rclone resolves its own credentials
+  from the operator's own rclone config, outside this record). Every
+  kind-specific field is checked against the H/S-15.T3 detector at its
+  default threshold before it is ever persisted — a secret-shaped
+  literal is refused at registration time.
+- **Per-target cadence policy** — a `TargetPolicy` (key prefix
+  `backup:policy:`) names one target's own cron spec (parsed through
+  C/S-04.T4's `scheduler.ParseSpec` — no new parser) and domain set. One
+  target, one policy, one scheduled job: a due fire always selects
+  exactly that policy's target and domain set by construction, never a
+  selection step that could pick the wrong one.
+- **Scheduler semantics, inherited verbatim** —
+  `RegisterConfiguredBackupJobs` (the daemon composition root's entry
+  point, called from `cmd/cascade/daemon_unix_scheduler.go`'s
+  `startScheduler` alongside the retention and memory jobs) registers one
+  `scheduler.CronJob` per configured target on C/S-04.T4's persisted
+  cron scheduler: job persistence across restart, the advisory lock
+  excluding a second scheduler handle, and skip-missed (a long outage
+  fires once for the next valid window, never once per missed window)
+  are the scheduler's own unmodified behavior — this package adds no new
+  scheduling logic of its own.
+- **ActionRouter gating** — every dispatch on that scheduler, backup jobs
+  included, already transits `Scheduler.routeDispatch`
+  (I/S-18.T5's `ActionGate`, installed once by the composition root) with
+  a routing-decision audit event. There is no separate or bypassable
+  gate for backup jobs specifically.
+- **No elevation bypass** — past that gate, the registered Runnable calls
+  `CreateSnapshot` with a **hardcoded empty `ElevationProof`**: an
+  unattended cron tick has no interactive attestation to supply, and
+  06 §5.24 forbids a standing grant for an elevation-class verb.
+  `CreateSnapshot`'s own `ErrElevationRequired` refusal — its very first
+  check, before the domain set or signing key are ever touched — is what
+  makes "no snapshot, ever, from an unattended fire" true by
+  construction. An authorized (non-empty-proof) fire runs the real
+  stack end to end; only the unattended scheduled path is permanently
+  refused until a future ticket supplies a real attended attestation
+  flow.
+- **Per-target outcome records** — every fire, successful or refused,
+  writes an `Outcome` (target, snapshot id if any, when, success,
+  error text) via `RecordOutcome` (key prefix `backup:outcome:`,
+  chronologically ordered per target via `ListOutcomes`) — the
+  bookkeeping the (not-yet-built) verification cron and lose-the-laptop
+  drill read.
+
 ## Scope
 
 This document covers the engine `internal/backup` ships: the repository

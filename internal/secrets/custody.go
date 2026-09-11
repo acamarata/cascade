@@ -118,6 +118,17 @@ type Config struct {
 	// Runner runs external programs (darwin's /usr/bin/security). Nil means
 	// the real exec.CommandContext runner.
 	Runner commandRunner
+	// ForceFileVault is a determinism seam: when true, SelectCustody skips
+	// platformCustody entirely and always returns the encrypted file
+	// vault, regardless of what platformCustody(cfg).Available() reports.
+	// It exists because a set Dir alone does NOT force the file vault —
+	// SelectCustody still prefers an available platform backend over it —
+	// so a test (or a host with no usable OS keychain, such as a headless
+	// CI runner where /usr/bin/security exists but no login keychain is
+	// unlocked) needs an explicit way to opt out of the platform backend.
+	// Default false: production callers never set this, so a real user's
+	// secrets always land in their OS keychain/keyring when one works.
+	ForceFileVault bool
 }
 
 func (c Config) rand() io.Reader {
@@ -142,12 +153,17 @@ func (c Config) runner() commandRunner {
 // which backend answered, and the broker surfaces it, so a host that fell
 // back to the file vault says so rather than pretending it used the OS
 // keychain.
+//
+// cfg.ForceFileVault skips the platform-availability check below entirely;
+// see its doc comment for why Dir alone is not enough to force this.
 func SelectCustody(cfg Config) (Custody, error) {
 	if cfg.Service == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "secrets: custody config needs a service label")
 	}
-	if plat, err := platformCustody(cfg); err == nil && plat != nil && plat.Available() {
-		return plat, nil
+	if !cfg.ForceFileVault {
+		if plat, err := platformCustody(cfg); err == nil && plat != nil && plat.Available() {
+			return plat, nil
+		}
 	}
 	fv, err := newFileVaultCustody(cfg)
 	if err != nil {

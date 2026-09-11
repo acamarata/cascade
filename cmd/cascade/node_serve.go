@@ -84,10 +84,9 @@ func newNodeServeCmd() *cobra.Command {
 type nodeServeDeps struct {
 	Paths cruntime.PathProvider
 	Clock cruntime.Clock
-	// SecretsDir, when set, is forwarded as secrets.Config.Dir so tests
-	// force the encrypted file-vault backend instead of a real OS
-	// keychain. Empty in production: NewNodeKeystore's own selection
-	// order applies.
+	// SecretsDir, when set, forces the encrypted file-vault backend (via
+	// secrets.Config.Dir + ForceFileVault) instead of a real OS keychain.
+	// Empty in production: NewNodeKeystore's own selection order applies.
 	SecretsDir string
 	GOOS       string
 	// ProbeTicker replaces the real Prober ticker startPresenceSubsystems
@@ -124,7 +123,7 @@ func composeNodeServe(ctx context.Context, deps nodeServeDeps) (nodeServeComposi
 	if dataDir == "" {
 		return nodeServeComposition{}, cascade.New(cascade.KindUnavailable, "node serve: could not resolve the data directory")
 	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir})
+	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir, ForceFileVault: deps.SecretsDir != ""})
 	if err != nil {
 		return nodeServeComposition{}, cascade.Wrap(cascade.KindUnavailable, err, "node serve: open keystore")
 	}

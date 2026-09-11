@@ -1,0 +1,35 @@
+{
+  "claim": {
+    "id": "CLM-0000000000000000000000AA",
+    "statement": "the build passed on darwin/arm64",
+    "type": "observed_fact",
+    "confidence": 0.95,
+    "produced_by": {
+      "run_id": "run-1",
+      "lane_id": "lane-1"
+    },
+    "verification": [
+      {
+        "run_id": "run-2",
+        "result": "corroborated"
+      }
+    ],
+    "contradictions": [],
+    "data_class": "internal"
+  },
+  "evidence": {
+    "id": "EVD-0000000000000000000000BB",
+    "claim_id": "CLM-0000000000000000000000AA",
+    "source": {
+      "type": "git",
+      "repository": "/tmp/repo",
+      "commit": "abc123",
+      "path": "go.mod",
+      "locator": "lines:1-3"
+    },
+    "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "observed_at": "2026-09-11T00:00:00Z",
+    "data_class": "internal",
+    "captured_ref": "artifact://ART-00"
+  }
+}

@@ -131,7 +131,10 @@ func TestNodeRotateKeyCmd_Success(t *testing.T) {
 	if _, err := store.Enroll(id, nodes.TierWorkerTrusted); err != nil {
 		t.Fatal(err)
 	}
-	ks, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir})
+	ks, err := nodes.NewNodeKeystore(secrets.Config{
+		Dir:            deps.SecretsDir,
+		ForceFileVault: deps.SecretsDir != "",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

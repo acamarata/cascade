@@ -161,6 +161,12 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
+	// conductor.expand (R-21.68), the AQ-owned row of the same conductor.*
+	// manifest: see daemon_unix_evidence.go's header comment.
+	if err := wireConductorExpand(context.Background(), registry, paths, clock); err != nil {
+		return nil, nil, nil, err
+	}
+
 	// recall.index.* (F/S-11.T4), registered for the same reason. A nil
 	// store (some existing test harnesses' minimal buildRPCServer calls)
 	// leaves the namespace unregistered rather than reaching into a store

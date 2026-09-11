@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T21:12:41Z",
+  "generated_at": "2026-09-11T22:03:24Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1098,6 +1098,88 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "R-21.41/R-21.78",
+      "sites": [
+        {
+          "file": "internal/evidence/expand.go",
+          "line": 17,
+          "status": "",
+          "raw": "R-21.41/R-21.78."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "R-21.68",
+      "sites": [
+        {
+          "file": "internal/rpc/conductor_expand.go",
+          "line": 18,
+          "status": "",
+          "raw": "R-21.68."
+        },
+        {
+          "file": "internal/rpc/conductor_expand_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "R-21.68."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "R-21.78",
+      "sites": [
+        {
+          "file": "internal/evidence/fetch.go",
+          "line": 32,
+          "status": "",
+          "raw": "R-21.78."
+        },
+        {
+          "file": "internal/evidence/fetch_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "R-21.78."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "R-21.78/R-21.86",
+      "sites": [
+        {
+          "file": "internal/evidence/capture.go",
+          "line": 41,
+          "status": "",
+          "raw": "R-21.78/R-21.86."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "R-21.94",
+      "sites": [
+        {
+          "file": "internal/evidence/dataclass.go",
+          "line": 36,
+          "status": "",
+          "raw": "R-21.94."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -2315,6 +2397,12 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; R-14.117 sibling"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_evidence.go",
+          "line": 39,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, R-21.68)."
         },
         {
           "file": "cmd/cascade/daemon_unix_handlers.go",
@@ -3600,6 +3688,142 @@
       ]
     },
     {
+      "name": "evidence/capture-pin",
+      "sites": [
+        {
+          "file": "internal/evidence/capture.go",
+          "line": 41,
+          "status": "ADD",
+          "raw": "evidence/capture-pin (ADD)"
+        },
+        {
+          "file": "internal/evidence/capture_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "evidence/capture-pin (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "evidence/claim-record",
+      "sites": [
+        {
+          "file": "internal/evidence/claim_store.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/claims.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/errors.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/expand.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)"
+        },
+        {
+          "file": "internal/evidence/fetch.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)"
+        },
+        {
+          "file": "internal/evidence/fetch_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)"
+        },
+        {
+          "file": "internal/evidence/index.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/migration_claim.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/migration_claim_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "evidence/claim-record (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "evidence/data-class",
+      "sites": [
+        {
+          "file": "internal/evidence/dataclass.go",
+          "line": 36,
+          "status": "ADD",
+          "raw": "evidence/data-class (ADD)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "evidence/evidence-record",
+      "sites": [
+        {
+          "file": "internal/evidence/evidence_store.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "evidence/evidence-record (ADD)."
+        },
+        {
+          "file": "internal/evidence/records.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "evidence/evidence-record (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "evidence/locator",
+      "sites": [
+        {
+          "file": "internal/evidence/fuzz_locator_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "evidence/locator (ADD)."
+        },
+        {
+          "file": "internal/evidence/locator.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "evidence/locator (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "file split only",
       "sites": [
         {
@@ -4412,6 +4636,28 @@
       ]
     },
     {
+      "name": "internal.backup.policy",
+      "sites": [
+        {
+          "file": "internal/backup/policy.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.policy/ADD (P1-E19-W4-S42-T1)."
+        },
+        {
+          "file": "internal/backup/policy_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.policy/ADD (tests) (P1-E19-W4-S42-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.backup.repo",
       "sites": [
         {
@@ -4456,6 +4702,28 @@
       ]
     },
     {
+      "name": "internal.backup.schedule",
+      "sites": [
+        {
+          "file": "internal/backup/schedule.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.schedule/ADD (P1-E19-W4-S42-T1)."
+        },
+        {
+          "file": "internal/backup/schedule_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.schedule/ADD (tests) (P1-E19-W4-S42-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.backup.snapshot",
       "sites": [
         {
@@ -4481,6 +4749,13 @@
       "name": "internal.backup.targets",
       "sites": [
         {
+          "file": "internal/backup/targets.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.targets/ADD (P1-E19-W4-S42-T1)."
+        },
+        {
           "file": "internal/backup/targets/doc.go",
           "line": 10,
           "status": "ADD",
@@ -4493,6 +4768,13 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T3",
           "raw": "internal.backup.targets/ADDED (P1-E19-W4-S41-T3)."
+        },
+        {
+          "file": "internal/backup/targets_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T1",
+          "raw": "internal.backup.targets/ADD (tests) (P1-E19-W4-S42-T1)."
         }
       ],
       "statuses": [
@@ -12040,10 +12322,10 @@
       "sites": [
         {
           "file": "pkg/provider/client.go",
-          "line": 17,
+          "line": 36,
           "status": "ADD",
           "ticket": "P1-E10-W3-S19-T1",
-          "raw": "pkg.provider.client-wrapper/ADD (P1-E10-W3-S19-T1)."
+          "raw": "pkg.provider.client-wrapper/ADD (P1-E10-W3-S19-T1); FIX"
         }
       ],
       "statuses": [
@@ -14500,6 +14782,26 @@
       ]
     },
     {
+      "name": "rpc/conductor-expand",
+      "sites": [
+        {
+          "file": "internal/rpc/conductor_expand.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "rpc/conductor-expand (ADD)"
+        },
+        {
+          "file": "internal/rpc/conductor_expand_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "rpc/conductor-expand (ADD)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime.profile_server",
       "sites": [
         {
@@ -15169,7 +15471,7 @@
       ]
     }
   ],
-  "total_sites": 1520,
-  "unspecified_count": 29,
+  "total_sites": 1552,
+  "unspecified_count": 34,
   "multi_status_count": 25
 }

@@ -228,3 +228,42 @@ func TestPlatformElevatedRefusalIsNilOnDarwin(t *testing.T) {
 		t.Fatal("darwin is a tier-1 platform; it must not refuse elevated verbs outright")
 	}
 }
+
+// TestSelectCustodyForceFileVaultSkipsAnAvailablePlatformBackend mutation
+// -proves ForceFileVault: fakeSecurity answers list-keychains the way a
+// CI runner does (the binary exists and reports keychains, exactly the
+// darwin-hosted-runner shape that made TestRunNodeServeStartsAndDrainsOnCancel
+// fail in CI while passing on a developer Mac), so platformCustody(cfg)
+// .Available() is true and unforced selection lands on the keychain. With
+// ForceFileVault set, the same cfg must land on the file vault instead.
+func TestSelectCustodyForceFileVaultSkipsAnAvailablePlatformBackend(t *testing.T) {
+	unforcedFake := newFakeSecurity()
+	unforced, err := SelectCustody(Config{
+		Service: "cascade-force-file-vault-test",
+		Runner:  unforcedFake.run,
+	})
+	if err != nil {
+		t.Fatalf("SelectCustody (unforced): %v", err)
+	}
+	if unforced.Name() != darwinCustodyName {
+		t.Fatalf("unforced selection = %q, want the platform keychain", unforced.Name())
+	}
+
+	forcedFake := newFakeSecurity()
+	custody, err := SelectCustody(Config{
+		Service:        "cascade-force-file-vault-test",
+		Dir:            t.TempDir(),
+		Passphrase:     "force-file-vault-test",
+		Runner:         forcedFake.run,
+		ForceFileVault: true,
+	})
+	if err != nil {
+		t.Fatalf("SelectCustody (forced): %v", err)
+	}
+	if custody.Name() != fileVaultName {
+		t.Fatalf("forced selection = %q, want the file vault", custody.Name())
+	}
+	if len(forcedFake.calls) != 0 {
+		t.Fatalf("ForceFileVault still invoked the platform runner: %v", forcedFake.calls)
+	}
+}

@@ -15,12 +15,13 @@ import (
 // keychain (Art.7.1). Exported (capital N) so enroll_test.go's fixtures
 // can build one; still test-only by construction (no production caller
 // beyond NewNodeKeystore's own real selection, which this helper
-// deliberately bypasses by forcing Dir).
+// deliberately bypasses via secrets.Config.ForceFileVault).
 func NewNodeKeystoreForTest(t *testing.T) (*NodeKeystore, error) {
 	t.Helper()
 	return NewNodeKeystore(secrets.Config{
-		Service: "cascade-node-identity-test",
-		Dir:     t.TempDir(),
+		Service:        "cascade-node-identity-test",
+		Dir:            t.TempDir(),
+		ForceFileVault: true,
 	})
 }
 

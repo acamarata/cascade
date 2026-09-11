@@ -126,7 +126,10 @@ func composeNodeAdmit(ctx context.Context, deps nodeCLIDeps) (nodeAdmitCompositi
 	if dataDir == "" {
 		return nodeAdmitComposition{}, cascade.New(cascade.KindUnavailable, "node enroll: could not resolve the data directory")
 	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir})
+	keystore, err := nodes.NewNodeKeystore(secrets.Config{
+		Dir:            deps.SecretsDir,
+		ForceFileVault: deps.SecretsDir != "",
+	})
 	if err != nil {
 		return nodeAdmitComposition{}, err
 	}

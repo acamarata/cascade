@@ -151,6 +151,14 @@ linters:
             # providerRegistryDBFile; moving those into internal/daemon would be
             # worse coupling than this exemption (R-16.80).
             - "!**/cmd/cascade/daemon_unix_conductor.go"
+            # daemon_unix_evidence.go earns its exemption on the identical
+            # grounds as daemon_unix_conductor.go directly above: it is a
+            # composition-root file called only from buildRPCServer, it
+            # REGISTERS "conductor.expand" on the daemon's own registry, and it
+            # never dials the daemon. It needs cmd/cascade-local openMigratedDB
+            # and the daemon's own PathProvider to site the evidence schema and
+            # blob store, so it cannot live in internal/daemon either.
+            - "!**/cmd/cascade/daemon_unix_evidence.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
             - "!**/*_test.go"

@@ -154,13 +154,6 @@
     "caller_site": "internal/storage/composition.go"
   },
   {
-    "symbol": "providers/fs.New",
-    "reason": "A storage provider implementation. Nothing resolves a provider by name in shipping code yet, which is the same gap recorded for the postgres provider. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the provider resolution path that maps a configured driver name to its constructor",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "internal/storage/provider_resolve.go"
-  },
-  {
     "symbol": "internal/retrieval/rrf.Rerank",
     "reason": "The optional post-fusion reranker stage. It is off by default (retrieval.reranker.enabled = false) and no Reranker implementation exists anywhere in the tree yet, so nothing that ships can call it with a usable configuration. The stage was built before its driver deliberately: it gives the api-backed reranker a fixed seam to land against, and its security properties are the ones worth fixing before a real implementation exists rather than after. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "the recall command surface, once a Reranker driver is registered (Epic J sprint 19 ticket 6, wave 3)",
@@ -861,13 +854,6 @@
     "caller_site": "internal/daemon/subsystems.go"
   },
   {
-    "symbol": "internal/backup.CreateSnapshot",
-    "reason": "P1-E19-W4-S41-T2 builds the elevated snapshot-create operation - the flow that orchestrates S-41.T1's capture adapters and pipeline over a supplied domain set and writes a signed manifest - fully implemented and tested (real SQLite domain capture, second-run dedup, chain validation, tamper rejection). The CLI/MCP surface that calls it as `backup create` and supplies a real ElevationProof is S-42.T3's, explicitly out of this ticket's scope (06-FORGE-SPEC §5.14: create/restore are elevated, CLI/MCP gate wiring named as S-42.T3's).",
-    "expected_caller": "S-42.T3's `backup create` CLI/MCP handler, which resolves a real attestation and calls CreateSnapshot; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "internal/backup/create_command.go"
-  },
-  {
     "symbol": "internal/backup.Restore",
     "reason": "P1-E19-W4-S41-T4 builds the elevated restore operation - integrity gate first (chain walk via ReadManifest, object completeness/AEAD re-decrypt), then domain selection and storage.Import write-back - fully implemented and tested (real round trip, corrupted-artifact refusals, destination-untouched-on-refusal). The CLI/MCP surface that calls it as `backup restore` and supplies a real ElevationProof is S-42.T3's, explicitly out of this ticket's scope (06-FORGE-SPEC §5.14: create/restore are elevated, CLI/MCP gate wiring named as S-42.T3's), mirroring the CreateSnapshot entry above.",
     "expected_caller": "S-42.T3's `backup restore` CLI/MCP handler, which resolves a real attestation and calls Restore; retire this entry once it lands",
@@ -1225,34 +1211,6 @@
     "caller_site": "internal/jobs/completion_gate.go"
   },
   {
-    "symbol": "internal/backup/targets.NewFSTarget",
-    "reason": "P1-E19-W4-S41-T3 ships the fs backup Target driver fully implemented and tested against a real filesystem, but the target registry/multi-target policy that would construct one from operator config is S/S-42.T1, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S/S-42.T1's target registry/multi-target policy; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T1",
-    "caller_site": "internal/backup/registry.go"
-  },
-  {
-    "symbol": "internal/backup/targets.NewS3Target",
-    "reason": "P1-E19-W4-S41-T3 ships the s3 backup Target driver, proven against a real docker MinIO server, but the target registry that would construct one from operator config is S/S-42.T1, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S/S-42.T1's target registry/multi-target policy; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T1",
-    "caller_site": "internal/backup/registry.go"
-  },
-  {
-    "symbol": "internal/backup/targets.NewRcloneTarget",
-    "reason": "P1-E19-W4-S41-T3 ships the rclone backup Target driver, proven against the real rclone binary, but the target registry that would construct one from operator config is S/S-42.T1, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S/S-42.T1's target registry/multi-target policy; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T1",
-    "caller_site": "internal/backup/registry.go"
-  },
-  {
-    "symbol": "internal/backup/targets.ResolveS3TargetEnvRefs",
-    "reason": "P1-E19-W4-S41-T3 ships the s3 target's env-ref resolver (08 section 2 s3_env_prefix family shape), but the `backup target add` CLI surface that would read an operator-supplied prefix and call it is S/S-42.T3, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S/S-42.T3's `backup target add|list|remove` CLI/MCP surface; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
     "symbol": "internal/fleet/supervision.NewDetector",
     "reason": "P1-E18-W4-S39-T5 ships the stall detector fully implemented and tested (progress tracking, R-16.73 signal normalization and the 3-in-30-minute gate-denied rule, the full Retry/Context/SupervisorTask/Human escalation walk against a real governor.EscalationLadder, idempotency, and recovery cancellation), and this ticket's NewDetector call already retires the prior internal/fleet/governor.NewEscalationLadder exemption by giving it a real, non-test caller. The daemon composition root that would construct a live *Detector from the daemon's own bus, journal.Store, and the S-26.T2/retrieval-context Retryer/ContextEnricher seams is out of this ticket's files_scope (internal/fleet/supervision/* only).",
     "expected_caller": "a new internal/daemon/stall_detector.go, once the Retryer/ContextEnricher seams and a daemon-lifetime context for Run/RunPoll are available (the same daemon-lifetime-context gap NewSubscription's own entry above records); retire this entry once it lands",
@@ -1307,5 +1265,83 @@
     "expected_caller": "the daemon storage-bootstrap composition root that already calls ApplyJobsSchema; retire this entry once it also calls this one",
     "retire_ticket": "P1-E29-W6-S60-T3",
     "caller_site": "internal/daemon/storage_bootstrap.go"
+  },
+  {
+    "symbol": "internal/backup.PutTarget",
+    "reason": "P1-E19-W4-S42-T1 ships the target registry's write side, fully implemented and tested (validation, the H/S-15.T3 secret-literal refusal), but the operator-facing surface that calls it with a real name/kind/driver-config -- `backup target add` -- is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph. The composition-root read side (ListTargets, via RegisterConfiguredBackupJobs) is already wired at daemon boot.",
+    "expected_caller": "S-42.T3's `backup target add` CLI/MCP handler; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "cmd/cascade/backup_cmd.go"
+  },
+  {
+    "symbol": "internal/backup.GetTarget",
+    "reason": "P1-E19-W4-S42-T1 ships the target registry's by-name read, tested against a real in-memory Store, but the operator-facing surface that would look up one target by name is S-42.T3's CLI/MCP surface (`backup target list` uses ListTargets, already wired), explicitly out of this ticket's own BOUNDARY paragraph.",
+    "expected_caller": "S-42.T3's `backup target` CLI/MCP handler(s) that need a single named record; retire this entry once one lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "cmd/cascade/backup_cmd.go"
+  },
+  {
+    "symbol": "internal/backup.DeleteTarget",
+    "reason": "P1-E19-W4-S42-T1 ships the target registry's delete, but the operator-facing surface that calls it -- `backup target remove` -- is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph.",
+    "expected_caller": "S-42.T3's `backup target remove` CLI/MCP handler; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "cmd/cascade/backup_cmd.go"
+  },
+  {
+    "symbol": "internal/backup.PutPolicy",
+    "reason": "P1-E19-W4-S42-T1 ships the per-target cadence policy's write side, fully implemented and tested (cron-spec validation via C/S-04.T4's own ParseSpec, non-empty domain set), but the operator-facing surface that supplies a real cron spec and domain set is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph. The composition-root read side (ListPolicies, via RegisterConfiguredBackupJobs) is already wired at daemon boot.",
+    "expected_caller": "S-42.T3's `backup target add`/policy-setting CLI/MCP handler; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "cmd/cascade/backup_cmd.go"
+  },
+  {
+    "symbol": "internal/backup.GetPolicy",
+    "reason": "P1-E19-W4-S42-T1 ships the per-target policy's by-name read, tested against a real in-memory Store, but the operator-facing surface that would look up one target's policy is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph.",
+    "expected_caller": "S-42.T3's `backup target` CLI/MCP handler(s) that need a single named policy; retire this entry once one lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "cmd/cascade/backup_cmd.go"
+  },
+  {
+    "symbol": "internal/backup.ListOutcomes",
+    "reason": "P1-E19-W4-S42-T1 ships the per-target outcome bookkeeping's read side (RecordOutcome, the write side, is already wired: every scheduled fire calls it via fireBackupTarget). The consumer that reads outcome history back -- S-42.T4's verification cron and S-42.T5's lose-the-laptop drill -- is explicitly out of this ticket's own BOUNDARY paragraph.",
+    "expected_caller": "S-42.T4's verification cron (reads recent outcomes to decide pass/fail) and S-42.T5's drill; retire this entry once either lands",
+    "retire_ticket": "P1-E19-W4-S42-T4",
+    "caller_site": "internal/backup/verify.go"
+  },
+  {
+    "symbol": "internal/evidence.NewClaimID",
+    "reason": "P1-E43-W9-S83-T1: mints a fresh CLM-<id>. Its real caller is AQ/S-83.T2's distiller, which writes every extracted claim with produced_by plus at least one Evidence row -- explicitly out of this ticket's own BOUNDARIES paragraph. Exercised directly in claims_test.go (prefix, length, uniqueness).",
+    "expected_caller": "AQ/S-83.T2's distiller, when it mints a new Claim row",
+    "retire_ticket": "P1-E43-W9-S83-T2",
+    "caller_site": "internal/evidence/distill.go"
+  },
+  {
+    "symbol": "internal/evidence.NewEvidenceID",
+    "reason": "P1-E43-W9-S83-T1: mints a fresh EVD-<id>. Same caller and boundary as NewClaimID: AQ/S-83.T2's distiller, which writes at least one Evidence row per claim. Exercised directly in records_test.go.",
+    "expected_caller": "AQ/S-83.T2's distiller, when it writes a new Evidence row",
+    "retire_ticket": "P1-E43-W9-S83-T2",
+    "caller_site": "internal/evidence/distill.go"
+  },
+  {
+    "symbol": "internal/evidence.Join",
+    "reason": "P1-E43-W9-S83-T1's contract text is explicit that this ticket owns only the immutable per-row DataClass and the Join primitive itself: \"the per-REQUEST effective-class derivation -- the lattice join over resolved sources and the per-partition ErrDataClassDenied refusal of R-21.71 -- belongs to AQ/S-83.T2 and AQ/S-83.T3; this ticket owns only the immutable per-row class and the Join primitive they call.\" Exercised directly in dataclass_test.go (MAX semantics, fail-closed on an unknown/empty input, commutativity).",
+    "expected_caller": "AQ/S-83.T2's per-partition derivation and AQ/S-83.T3's per-manifest-item derivation",
+    "retire_ticket": "P1-E43-W9-S83-T2",
+    "caller_site": "internal/evidence/distill.go"
+  },
+  {
+    "symbol": "internal/evidence.IndexURI",
+    "reason": "P1-E43-W9-S83-T1: renders evidence://<run_id>, the source_index_ref value ExecutiveEvidenceBriefV1 (AQ/S-83.T2) writes into every distilled brief -- explicitly out of this ticket's own BOUNDARIES paragraph. ParseIndexURI/ResolveIndex, this function's inverse and consumer, are exercised directly in index_test.go and are themselves reachable from Store.ResolveIndex, so only the constructor side is unreached.",
+    "expected_caller": "AQ/S-83.T2's distiller, when it stamps source_index_ref on a brief",
+    "retire_ticket": "P1-E43-W9-S83-T2",
+    "caller_site": "internal/evidence/distill.go"
+  },
+  {
+    "symbol": "internal/evidence.NewCapturer",
+    "reason": "P1-E43-W9-S83-T1: the Capturer constructor over a provider.BlobStore and an ArtifactWriter. conductor.expand's wiring (cmd/cascade/daemon_unix_evidence.go) deliberately does NOT construct one: nothing on the expand read path calls Capture/Pin/Referenced. Its real production caller remains AQ/S-83.T2's distiller, which writes claims/evidence in the first place and does not exist in this tree yet -- explicitly out of this ticket's own BOUNDARIES paragraph, same as the sibling NewClaimID/NewEvidenceID/Join/IndexURI entries above, which already name that ticket rather than UNOWNED. Capture/Pin/Referenced are exercised end-to-end (capture_test.go, package evidence_test) against a real providers/fs.BlobStore and a real internal/jobs.Store through a one-line ArtifactWriter adapter -- the exact shape AQ/S-83.T2's composition root will supply.",
+    "expected_caller": "AQ/S-83.T2's distiller, when it wires internal/jobs.Store and providers/fs (or providers/s3) into evidence.NewCapturer",
+    "retire_ticket": "P1-E43-W9-S83-T2",
+    "caller_site": "internal/evidence/distill.go"
   }
+
 ]

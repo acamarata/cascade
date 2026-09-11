@@ -27,20 +27,31 @@ type doCall struct {
 }
 
 // isCLISourceFile restricts the `.Do` call-site scan to cmd/cascade's own
-// non-test files - R-16.80 Ruling 3(c)'s own wording ("every method name
-// a CLI c.Do call passes"). A tree-wide `.Do` scan would ALSO flag
-// pkg/provider.Client.ModelExecute's "model.execute" call
-// (pkg/provider/client.go:65) as unregistered - a real, separate,
-// pre-existing gap (grep confirms zero production Register("model.
-// execute", ...) callers anywhere), but fixing it is a different door
-// than R-16.80's conductor.execute connector and out of this ticket's
-// authorized scope (no new ticket may be created - 18-T0-RULINGS-R16.md's
-// own Ruling 2). Scoping this gate to cmd/cascade avoids shipping it
-// already red for a defect this ticket does not fix; see this file's
-// package doc comment and this ticket's journal for the disclosure.
+// non-test files plus pkg/'s own non-test files - R-16.80 Ruling 3(c)'s
+// own wording ("every method name a CLI c.Do call passes") covered only
+// cmd/cascade at first, deliberately: a tree-wide `.Do` scan would ALSO
+// have flagged pkg/provider.Client.ModelExecute's then-dead "model.
+// execute" call (pkg/provider/client.go:65) as unregistered - a real,
+// separate, pre-existing gap this gate's own comment recorded rather than
+// papered over, since fixing it was a different door than R-16.80's
+// conductor.execute connector and out of that ticket's authorized scope.
+//
+// FIXED (T0-OPEN-FOLLOWUPS.md, R-16.80 addendum): ModelExecute now dials
+// the daemon's real, registered "conductor.execute" door instead
+// (pkg/provider/client.go), so the gap this comment used to disclose is
+// closed - the scan widens to pkg/ here rather than staying narrowed
+// around it. It stops at cmd/cascade + pkg/, not the whole tree: those are
+// the two locations any exported JSON-RPC-dialing surface lives in this
+// codebase (the CLI's own calls, and the public SDK's typed wrappers);
+// internal/ callers are wired directly against internal/daemon's real
+// Registry and are covered by other means (RegisterConductorExecuteHandler
+// and its own callers), not by this AST-literal scan.
 func isCLISourceFile(rel string) bool {
 	p := filepath.ToSlash(rel)
-	return strings.Contains(p, "cmd/cascade/") && strings.HasSuffix(p, ".go") && !strings.HasSuffix(p, "_test.go")
+	if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+		return false
+	}
+	return strings.Contains(p, "cmd/cascade/") || strings.HasPrefix(p, "pkg/")
 }
 
 // sortedCopy returns a sorted copy of files so scan order is deterministic.

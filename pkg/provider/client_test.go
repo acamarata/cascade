@@ -61,7 +61,7 @@ func TestClientModelExecuteWrapper(t *testing.T) {
 		Output:    "hello",
 		Usage:     provider.Usage{InputTokens: 2, OutputTokens: 1},
 	}
-	caller.results["model.execute"] = wantResp
+	caller.results["conductor.execute"] = wantResp
 
 	client := provider.NewClient(caller)
 	req := provider.ModelRequest{TaskID: "t-1", TaskClass: "chat"}
@@ -79,15 +79,79 @@ func TestClientModelExecuteWrapper(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("recorded %d calls, want 1", len(caller.calls))
 	}
-	if caller.calls[0].method != "model.execute" {
-		t.Fatalf("method = %q, want model.execute", caller.calls[0].method)
+	// ModelExecute must dial the daemon's real, registered door -
+	// "conductor.execute" - never the dead "model.execute" surface
+	// nothing in the tree ever registered (T0-OPEN-FOLLOWUPS.md, R-16.80
+	// addendum).
+	if caller.calls[0].method != "conductor.execute" {
+		t.Fatalf("method = %q, want conductor.execute", caller.calls[0].method)
 	}
-	gotReq, ok := caller.calls[0].params.(provider.ModelRequest)
-	if !ok {
-		t.Fatalf("params type = %T, want provider.ModelRequest", caller.calls[0].params)
+	// caller.calls[0].params holds pkg/provider's unexported wire-params
+	// struct (modelExecuteWireParams) - this test lives in package
+	// provider_test and cannot name that type, so it proves the wire
+	// shape by round-tripping through encoding/json exactly as the real
+	// internal/client.Client would put it on the wire, and asserting the
+	// resulting JSON fields.
+	raw, err := json.Marshal(caller.calls[0].params)
+	if err != nil {
+		t.Fatalf("json.Marshal(params) error = %v", err)
 	}
-	if !reflect.DeepEqual(gotReq, req) {
-		t.Fatalf("params = %+v, want %+v", gotReq, req)
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if decoded["task_id"] != req.TaskID {
+		t.Errorf(`wire "task_id" = %v, want %q`, decoded["task_id"], req.TaskID)
+	}
+	if decoded["task_class"] != req.TaskClass {
+		t.Errorf(`wire "task_class" = %v, want %q`, decoded["task_class"], req.TaskClass)
+	}
+	// SensitivityRestricted is ModelRequest.Sensitivity's zero value; its
+	// wire name is "restricted", never a raw numeric encoding - the real
+	// door (internal/daemon/conductor_execute_params.go) decodes
+	// sensitivity as a string name, not SensitivityTier's int-backed
+	// encoding.
+	if decoded["sensitivity"] != "restricted" {
+		t.Errorf(`wire "sensitivity" = %v, want "restricted"`, decoded["sensitivity"])
+	}
+	if _, ok := decoded["fan_out"]; ok {
+		t.Errorf(`wire "fan_out" present for a zero FanOut, want omitted`)
+	}
+}
+
+// TestClientModelExecuteWrapper_NonDefaultSensitivitySerializesAsName
+// asserts a ModelRequest with a non-default (non-zero) Sensitivity tier
+// serializes the wire "sensitivity" field as that tier's String() name -
+// the exact contract internal/daemon/conductor_execute_params.go's
+// parseSensitivityTier decodes - never SensitivityTier's raw uint8
+// encoding, which parseSensitivityTier would reject with
+// KindInvalidInput.
+func TestClientModelExecuteWrapper_NonDefaultSensitivitySerializesAsName(t *testing.T) {
+	caller := newRecordingRPCCaller()
+	client := provider.NewClient(caller)
+	req := provider.ModelRequest{
+		TaskID:      "t-2",
+		TaskClass:   "code",
+		Sensitivity: provider.SensitivityPublic,
+	}
+
+	if _, err := client.ModelExecute(context.Background(), req); err != nil {
+		t.Fatalf("ModelExecute() error = %v", err)
+	}
+
+	// Round-trip through encoding/json, exactly as the real
+	// internal/client.Client would put it on the wire, and confirm the
+	// "sensitivity" field lands as the tier's string name.
+	raw, err := json.Marshal(caller.calls[0].params)
+	if err != nil {
+		t.Fatalf("json.Marshal(params) error = %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if decoded["sensitivity"] != provider.SensitivityPublic.String() {
+		t.Fatalf(`wire "sensitivity" = %v, want %q`, decoded["sensitivity"], provider.SensitivityPublic.String())
 	}
 }
 
@@ -97,7 +161,7 @@ func TestClientModelExecuteWrapper(t *testing.T) {
 func TestClientModelExecuteWrapperMapsTaxonomy(t *testing.T) {
 	t.Run("plain error maps to KindInternal", func(t *testing.T) {
 		caller := newRecordingRPCCaller()
-		caller.errs["model.execute"] = errors.New("boom")
+		caller.errs["conductor.execute"] = errors.New("boom")
 		client := provider.NewClient(caller)
 
 		_, err := client.ModelExecute(context.Background(), provider.ModelRequest{})
@@ -112,7 +176,7 @@ func TestClientModelExecuteWrapperMapsTaxonomy(t *testing.T) {
 	t.Run("taxonomy error passes through unchanged", func(t *testing.T) {
 		caller := newRecordingRPCCaller()
 		wantErr := cascade.New(cascade.KindUnavailable, "daemon unreachable")
-		caller.errs["model.execute"] = wantErr
+		caller.errs["conductor.execute"] = wantErr
 		client := provider.NewClient(caller)
 
 		_, err := client.ModelExecute(context.Background(), provider.ModelRequest{})
