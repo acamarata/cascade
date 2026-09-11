@@ -1,7 +1,7 @@
 // Purpose: the no-network unit lane for ProviderEmbedder (apibacked.go):
 //
 //	replays the fixture testdata/README.md documents through a fake
-//	provider.ModelProvider and a fake Interceptor (doubles_test.go),
+//	EmbedExecutor and a fake Interceptor (doubles_test.go),
 //	proving the happy-path round-trip in order, the capability-gate
 //	refusal propagation, the malformed-response error paths, and
 //	sensitivity-tier propagation through the Interceptor seam.
@@ -145,7 +145,7 @@ func TestProviderEmbedderMalformedResponse(t *testing.T) {
 // receives.
 func TestProviderEmbedderSensitivityPropagation(t *testing.T) {
 	intercept := &passthroughIntercept{}
-	pe, err := NewProviderEmbedder(&fakeModelProvider{embed: noopEmbed}, testModel, provider.SensitivityInternal, intercept)
+	pe, err := NewProviderEmbedder(&fakeEmbedExecutor{embed: noopEmbed}, testModel, provider.SensitivityInternal, intercept)
 	if err != nil {
 		t.Fatalf("NewProviderEmbedder: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestProviderEmbedderSeamFailsClosed(t *testing.T) {
 // rule 15), rather than being rejected or passed through unresolved.
 func TestNewProviderEmbedderUnresolvableTierFailsClosed(t *testing.T) {
 	intercept := &passthroughIntercept{}
-	pe, err := NewProviderEmbedder(&fakeModelProvider{embed: noopEmbed}, testModel, provider.SensitivityTier(99), intercept)
+	pe, err := NewProviderEmbedder(&fakeEmbedExecutor{embed: noopEmbed}, testModel, provider.SensitivityTier(99), intercept)
 	if err != nil {
 		t.Fatalf("NewProviderEmbedder: %v", err)
 	}
@@ -204,11 +204,11 @@ func TestNewProviderEmbedderUnresolvableTierFailsClosed(t *testing.T) {
 // checked at construction, each with cascade.KindInvalidInput, rather than
 // deferred to the first Embed call.
 func TestNewProviderEmbedderValidation(t *testing.T) {
-	okMP := &fakeModelProvider{embed: noopEmbed}
+	okMP := &fakeEmbedExecutor{embed: noopEmbed}
 	okIntercept := &passthroughIntercept{}
 	cases := []struct {
 		name      string
-		mp        provider.ModelProvider
+		mp        EmbedExecutor
 		model     provider.EmbedModel
 		intercept Interceptor
 	}{

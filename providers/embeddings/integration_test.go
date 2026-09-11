@@ -48,6 +48,23 @@ func (allowAllIntercept) InterceptClass(_ context.Context, _ EgressClass, _ prov
 	return content, nil
 }
 
+// directEmbedExecutor adapts a real provider.ModelProvider driver straight
+// to EmbedExecutor for this tagged, opt-in lane only. It is declared in a
+// _test.go file, so it is invisible to
+// TestSeam_NoDirectModelProviderCallOutsideConductor and
+// TestExecute_ProviderCallGraph (both scan non-test .go files only): the
+// R-40.X10 sole-door rule binds production code, not a driver-conformance
+// probe that intentionally skips conductor's security pipeline to isolate
+// the provider round-trip, matching this file's existing allowAllIntercept
+// for the same reason.
+type directEmbedExecutor struct {
+	mp provider.ModelProvider
+}
+
+func (d directEmbedExecutor) Embed(ctx context.Context, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error) {
+	return d.mp.Embed(ctx, req)
+}
+
 // TestProviderEmbedderLiveAPI is this ticket's tagged live lane. Without
 // PROVIDER_EMBED_TEST=1 it reports an explicit skip reason and never
 // silently passes as a real-counterpart proof (Art.2). It additionally
@@ -83,7 +100,7 @@ func TestProviderEmbedderLiveAPI(t *testing.T) {
 		t.Fatalf("openai.New: %v", err)
 	}
 
-	pe, err := NewProviderEmbedder(driver, provider.EmbedModel{ID: model, Dimensions: 1536}, provider.SensitivityInternal, allowAllIntercept{})
+	pe, err := NewProviderEmbedder(directEmbedExecutor{mp: driver}, provider.EmbedModel{ID: model, Dimensions: 1536}, provider.SensitivityInternal, allowAllIntercept{})
 	if err != nil {
 		t.Fatalf("NewProviderEmbedder: %v", err)
 	}

@@ -1,9 +1,8 @@
 // Purpose: `cascade provider add` (07-CLI-COMMAND-TREE §provider): the
 //   composition-root wiring for the internal/providers/intake orchestrator
 //   - cobra flags, the production Deps (real vault broker, real egress
-//   engine, a process-lifetime in-memory registry per this ticket's
-//   MemoryRegistry doc comment - S-20.T2's durable registry has not
-//   landed), and the --json/table rendering.
+//   engine, the durable registry resolved by resolveProviderRegistry --
+//   see provider_registry_adapter.go), and the --json/table rendering.
 // Inputs: cobra args/flags; a providerDeps injected at construction so a
 //   test never touches the real keychain, network, or environment.
 // Outputs: process output via internal/output.Writer.
@@ -14,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -33,13 +33,6 @@ import (
 // intakeHTTPTimeout bounds every shape-probe/verify call.
 const intakeHTTPTimeout = 20 * time.Second
 
-// providerRegistry is the process-lifetime registry every production
-// `provider add` invocation shares, per the MemoryRegistry doc comment in
-// internal/providers/intake/types.go: durable, cross-process persistence
-// is S-20.T2's registry domain, which has not landed as of this ticket. A
-// test supplies its own isolated registry via providerDeps.Registry.
-var providerRegistry = intake.NewMemoryRegistry()
-
 // providerDeps carries provider_cmd.go's external inputs, mirroring
 // vault.go's vaultDeps pattern so a test never touches the real keychain,
 // network, or environment - Doer and Registry are the seams a CLI test
@@ -52,7 +45,19 @@ type providerDeps struct {
 	ReadStdin    func() ([]byte, error)
 	StdinIsPiped func() bool
 	Doer         intake.Doer
-	Registry     intake.Registry
+	// Registry, when non-nil, overrides the durable-store resolution
+	// runProviderAdd otherwise performs (openProviderStorage + a
+	// registryAdapter over providers.db, the SAME file list/remove/
+	// health/usage open) -- the fix for the disclosed add/list split. A
+	// test substitutes an isolated intake.Registry (e.g. MemoryRegistry)
+	// to avoid touching disk; production leaves this nil.
+	Registry intake.Registry
+	// HealthHTTPDoer is the transport `cascade provider test`'s
+	// reachability prober (provider_health_cmd.go's
+	// httpReachabilityProber) uses. Nil resolves to a real *http.Client
+	// in production; a test substitutes a fake implementation so
+	// TestProviderTest_* never opens a real socket (Art.7.2).
+	HealthHTTPDoer httpDoer
 }
 
 // productionProviderDeps builds providerDeps against the real environment.
@@ -79,7 +84,6 @@ func productionProviderDeps() providerDeps {
 		},
 		StdinIsPiped: productionStdinIsPiped,
 		Doer:         intake.NewHTTPDoer(intakeHTTPTimeout),
-		Registry:     providerRegistry,
 	}
 }
 
@@ -91,7 +95,9 @@ func mountProviderCmd(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
-// newProviderCmd builds the provider noun and mounts `add`.
+// newProviderCmd builds the provider noun and mounts `add` plus the
+// list/test/remove/health/usage leaves (P1-E10-W3-S21-T2,
+// mountProviderQueryCmds in provider_health_cmd.go).
 func newProviderCmd(deps providerDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider",
@@ -102,10 +108,14 @@ func newProviderCmd(deps providerDeps) *cobra.Command {
 			"openai-compat and gemini in that order, enumerates models, and stores the\n" +
 			"result. Every flag has a non-interactive equivalent: --key-env names an\n" +
 			"environment variable (never a literal value), and CASCADE_NO_INPUT=1\n" +
-			"makes --oauth's interactive browser step a hard error.",
+			"makes --oauth's interactive browser step a hard error.\n\n" +
+			"`provider list/test/remove/health/usage` operate on the local registry,\n" +
+			"health and usage-accounting domains directly (no daemon RPC as of this\n" +
+			"ticket) -- see docs/provider-guide.md and .github/wiki/Provider-Guide.md.",
 		Annotations: map[string]string{"local": "true"},
 	}
 	cmd.AddCommand(newProviderAddCmd(deps))
+	mountProviderQueryCmds(cmd, deps)
 	return cmd
 }
 
@@ -152,13 +162,21 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 	return cmd
 }
 
-// runProviderAdd builds the AddRequest and production Deps and runs Add.
+// runProviderAdd builds the AddRequest and production Deps and runs Add,
+// writing through resolveProviderRegistry's registry -- the fix for the
+// disclosed add/list split (provider_registry_adapter.go's header comment).
 func runProviderAdd(cmd *cobra.Command, deps providerDeps, name string, flags providerAddFlags) error {
 	req, err := buildAddRequest(cmd, deps, name, flags)
 	if err != nil {
 		return err
 	}
-	intakeDeps, err := buildIntakeDeps(deps)
+	reg, closeReg, err := resolveProviderRegistry(cmd.Context(), deps)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closeReg() }()
+
+	intakeDeps, err := buildIntakeDeps(deps, reg)
 	if err != nil {
 		return err
 	}
@@ -167,6 +185,24 @@ func runProviderAdd(cmd *cobra.Command, deps providerDeps, name string, flags pr
 		return err
 	}
 	return vaultOutputWriter(cmd).Result(result)
+}
+
+// resolveProviderRegistry returns the intake.Registry `add` writes through
+// and a closer the caller MUST defer. deps.Registry, when set, is used
+// unchanged (the CLI-unit-test seam); production opens the durable
+// providerStorage (provider_health_cmd.go's openProviderStorage, the same
+// composition root list/test/remove/health/usage already use) and wraps
+// its Registry in a registryAdapter, so an added provider is durable and
+// visible to every other subcommand.
+func resolveProviderRegistry(ctx context.Context, deps providerDeps) (intake.Registry, func() error, error) {
+	if deps.Registry != nil {
+		return deps.Registry, func() error { return nil }, nil
+	}
+	store, err := openProviderStorage(ctx, deps)
+	if err != nil {
+		return nil, nil, err
+	}
+	return newRegistryAdapter(store.Registry), store.Close, nil
 }
 
 // buildAddRequest resolves the mutually-exclusive credential flags into an
@@ -212,9 +248,9 @@ func buildAddRequest(cmd *cobra.Command, deps providerDeps, name string, flags p
 }
 
 // buildIntakeDeps wires the production intake.Deps: a real vault broker
-// over deps' custody/gate, the process egress engine, and the shared
-// process-lifetime registry.
-func buildIntakeDeps(deps providerDeps) (intake.Deps, error) {
+// over deps' custody/gate, the process egress engine, and reg (resolved by
+// resolveProviderRegistry).
+func buildIntakeDeps(deps providerDeps, reg intake.Registry) (intake.Deps, error) {
 	custody, err := deps.NewCustody()
 	if err != nil {
 		return intake.Deps{}, err
@@ -232,7 +268,7 @@ func buildIntakeDeps(deps providerDeps) (intake.Deps, error) {
 		Clock:    intakeClockAdapter{runtime.NewSystemClock()},
 		Vault:    broker,
 		Egress:   engine,
-		Registry: deps.Registry,
+		Registry: reg,
 		NewOAuthBroker: func(cfg provider.ProviderOAuthConfig, oa secrets.OAuthDeps) (provider.OAuthBroker, error) {
 			return secrets.NewOAuthBroker(cfg, oa)
 		},

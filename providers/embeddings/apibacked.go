@@ -1,16 +1,20 @@
 // Package embeddings holds the api-backed Embedder (R-14.32): a concrete
-// provider.Embedder implementation adapting any pkg/provider.ModelProvider
-// driver's Embed verb to the retrieval-side Embedder interface.
+// provider.Embedder implementation adapting a conductor-mediated embed
+// door's Embed verb to the retrieval-side Embedder interface.
 //
 // Purpose: the api-backed Embedder (R-14.32): a concrete provider.Embedder
 //
-//	that routes every Embed call through an injected provider.ModelProvider's
-//	Embed verb (J/S-19.T1), rather than speaking to any embedding backend
-//	directly. It is the thin adapter F-S10.T3's embed pipeline composes
-//	with once a ModelProvider driver (T2 anthropic, T3 openai-compat, T4
-//	gemini, T5 ollama) is wired.
+//	that routes every Embed call through an injected EmbedExecutor -
+//	never a raw pkg/provider.ModelProvider (R-40.X10: internal/conductor
+//	is the sole permitted caller of a ModelProvider verb, and this
+//	package's own files_scope, providers -> pkg only, forbids it from
+//	importing internal/conductor to reach that door itself). It is the
+//	thin adapter F-S10.T3's embed pipeline composes with once the daemon
+//	composition root binds a conductor.Executor-backed EmbedExecutor
+//	(T2 anthropic, T3 openai-compat, T4 gemini, T5 ollama drivers sit
+//	behind it, unchanged).
 //
-// Inputs: a ModelProvider, the embedding space it is configured to
+// Inputs: an EmbedExecutor, the embedding space it is configured to
 //
 //	produce, the caller-declared SensitivityTier for the content this
 //	instance embeds, and an Interceptor seam every request transits before
@@ -26,7 +30,9 @@
 //	policy, no wire decoding here - those stay F-S10.T3's and the
 //	ModelProvider driver's, respectively (06-FORGE-SPEC.md §5 rule 1).
 //
-// SPORT: providers.embeddings.ProviderEmbedder/ADD (P1-E10-W3-S19-T6).
+// SPORT: providers.embeddings.ProviderEmbedder/ADD (P1-E10-W3-S19-T6);
+//
+//	R-40.X10 defect fix (mp provider.ModelProvider -> exec EmbedExecutor).
 package embeddings
 
 import (
@@ -67,18 +73,35 @@ type Interceptor interface {
 	InterceptClass(ctx context.Context, class EgressClass, tier provider.SensitivityTier, content []byte) ([]byte, error)
 }
 
+// EmbedExecutor is the conductor-mediated embed door every ProviderEmbedder
+// request transits (R-40.X10): the sole permitted path to a
+// pkg/provider.ModelProvider's Embed verb. It is declared locally rather
+// than imported from internal/conductor, for exactly the reason
+// Interceptor's own doc gives (providers -> pkg only forbids reaching into
+// internal/): internal/conductor.Executor's EmbeddingExecutor method
+// returns a value that satisfies this interface structurally, with no
+// import in either direction, and the daemon composition root is what
+// wires that value in. A ProviderEmbedder built directly against a raw
+// pkg/provider.ModelProvider (bypassing this seam) is exactly the
+// TestSeam_NoDirectModelProviderCallOutsideConductor /
+// TestExecute_ProviderCallGraph violation this type exists to close.
+type EmbedExecutor interface {
+	Embed(ctx context.Context, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error)
+}
+
 // ProviderEmbedder is the api-backed provider.Embedder implementation
-// (R-14.32): it holds a ModelProvider and routes every Embed call through
-// that provider's own Embed verb, after transiting every input through
-// Interceptor under EgressClassConductor with this instance's Sensitivity
-// tier, unchanged (R-21.265).
+// (R-14.32): it holds an EmbedExecutor and routes every Embed call through
+// it, after transiting every input through Interceptor under
+// EgressClassConductor with this instance's Sensitivity tier, unchanged
+// (R-21.265). It never holds, names, or calls a pkg/provider.ModelProvider
+// directly (R-40.X10).
 //
 // ProviderEmbedder never widens the tier it was constructed with, never
-// invents a vector when the underlying ModelProvider or Interceptor
+// invents a vector when the underlying EmbedExecutor or Interceptor
 // refuses, and performs no content-hash dedup: dedup is F-S10.T3's
 // pipeline-layer responsibility, not this adapter's (06 §5 rule 1).
 type ProviderEmbedder struct {
-	mp        provider.ModelProvider
+	exec      EmbedExecutor
 	model     provider.EmbedModel
 	tier      provider.SensitivityTier
 	intercept Interceptor
@@ -88,10 +111,11 @@ type ProviderEmbedder struct {
 // so a change to either side breaks the build rather than the seam.
 var _ provider.Embedder = (*ProviderEmbedder)(nil)
 
-// NewProviderEmbedder builds a ProviderEmbedder over mp, producing vectors
-// in the embedding space model names, for content classified at tier.
+// NewProviderEmbedder builds a ProviderEmbedder over exec, producing
+// vectors in the embedding space model names, for content classified at
+// tier.
 //
-// Every dependency is required and validated up front: a nil mp or
+// Every dependency is required and validated up front: a nil exec or
 // intercept, or an unset model identity (empty ID or non-positive
 // Dimensions), is refused rather than accepted and left to fail
 // confusingly on the first Embed call (Art.1). An invalid tier (outside
@@ -99,9 +123,9 @@ var _ provider.Embedder = (*ProviderEmbedder)(nil)
 // provider.SensitivityRestricted rather than being rejected, matching the
 // fail-closed rule that an unresolvable tier never reads as permissive
 // (06 §5 rule 15).
-func NewProviderEmbedder(mp provider.ModelProvider, model provider.EmbedModel, tier provider.SensitivityTier, intercept Interceptor) (*ProviderEmbedder, error) {
-	if mp == nil {
-		return nil, cascade.New(cascade.KindInvalidInput, "embeddings: NewProviderEmbedder requires a non-nil ModelProvider")
+func NewProviderEmbedder(exec EmbedExecutor, model provider.EmbedModel, tier provider.SensitivityTier, intercept Interceptor) (*ProviderEmbedder, error) {
+	if exec == nil {
+		return nil, cascade.New(cascade.KindInvalidInput, "embeddings: NewProviderEmbedder requires a non-nil EmbedExecutor")
 	}
 	if model.ID == "" || model.Dimensions <= 0 {
 		return nil, cascade.Newf(cascade.KindInvalidInput,
@@ -114,7 +138,7 @@ func NewProviderEmbedder(mp provider.ModelProvider, model provider.EmbedModel, t
 	if !tier.Valid() {
 		tier = provider.SensitivityRestricted
 	}
-	return &ProviderEmbedder{mp: mp, model: model, tier: tier, intercept: intercept}, nil
+	return &ProviderEmbedder{exec: exec, model: model, tier: tier, intercept: intercept}, nil
 }
 
 // Model returns the embedding space this ProviderEmbedder is configured
@@ -130,7 +154,7 @@ func (p *ProviderEmbedder) Model() provider.EmbedModel {
 // order.
 //
 // A refusal at either seam - the Interceptor or the underlying
-// ModelProvider - is returned unchanged: this is what lets a provider
+// EmbedExecutor - is returned unchanged: this is what lets a provider
 // whose Embed verb has no backend (anthropic's KindUnsupported) refuse a
 // caller honestly instead of this adapter converting that refusal into an
 // empty or zero vector (Art.1.1).
@@ -142,7 +166,7 @@ func (p *ProviderEmbedder) Embed(ctx context.Context, inputs []provider.EmbedInp
 	if err != nil {
 		return nil, err
 	}
-	resp, err := p.mp.Embed(ctx, provider.ModelEmbedRequest{Inputs: texts, Model: p.model.ID})
+	resp, err := p.exec.Embed(ctx, provider.ModelEmbedRequest{Inputs: texts, Model: p.model.ID})
 	if err != nil {
 		return nil, err
 	}

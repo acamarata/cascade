@@ -1,3 +1,4 @@
+internal/conductor.NewExecutor
 internal/context.GenerateCCInstructions
 internal/conversation.ApplyConversationSchema
 internal/conversation.NewStore

@@ -103,7 +103,6 @@ func newRootCmd() *cobra.Command {
 	// the SAME tree, or the golden-help fixture can only ever match one of
 	// them and every later command lands on a tree the tests do not see.
 	registerNoColorFlag(root)
-
 	mountSubcommands(root)
 
 	return root
@@ -131,6 +130,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountPolicyCmd(root)
 	mountProviderCmd(root)
 	mountFleetCmd(root)
+	mountNodeCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following

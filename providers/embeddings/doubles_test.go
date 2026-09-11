@@ -1,9 +1,9 @@
 // Purpose: shared test doubles for the ProviderEmbedder unit lane
 //
-//	(apibacked_test.go): a fake provider.ModelProvider, a fake
-//	Interceptor that records what it receives, and the fixtures/builders
-//	every test in that file composes with. Split into its own file so
-//	apibacked_test.go stays under the 300-line file cap.
+//	(apibacked_test.go): a fake EmbedExecutor, a fake Interceptor that
+//	records what it receives, and the fixtures/builders every test in
+//	that file composes with. Split into its own file so apibacked_test.go
+//	stays under the 300-line file cap.
 //
 // Inputs: none external.
 // Outputs: none - this file is test support only.
@@ -22,32 +22,15 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// fakeModelProvider is a minimal provider.ModelProvider test double.
-// ProviderEmbedder only ever calls Embed; the other four verbs panic if
-// exercised, so a regression that starts calling them is caught
-// immediately rather than silently returning a zero value.
-type fakeModelProvider struct {
+// fakeEmbedExecutor is a minimal EmbedExecutor test double: the R-40.X10
+// fix's replacement for a raw provider.ModelProvider, holding only the one
+// verb ProviderEmbedder ever calls.
+type fakeEmbedExecutor struct {
 	embed func(ctx context.Context, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error)
 }
 
-func (f *fakeModelProvider) Chat(context.Context, provider.ChatRequest) (provider.ChatResponse, error) {
-	panic("fakeModelProvider: Chat not exercised by ProviderEmbedder")
-}
-
-func (f *fakeModelProvider) Embed(ctx context.Context, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error) {
+func (f *fakeEmbedExecutor) Embed(ctx context.Context, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error) {
 	return f.embed(ctx, req)
-}
-
-func (f *fakeModelProvider) Count(context.Context, provider.CountRequest) (provider.CountResponse, error) {
-	panic("fakeModelProvider: Count not exercised by ProviderEmbedder")
-}
-
-func (f *fakeModelProvider) Stream(context.Context, provider.ChatRequest, provider.StreamSink) error {
-	panic("fakeModelProvider: Stream not exercised by ProviderEmbedder")
-}
-
-func (f *fakeModelProvider) Capabilities(context.Context, string) (provider.Capabilities, error) {
-	panic("fakeModelProvider: Capabilities not exercised by ProviderEmbedder")
 }
 
 // interceptCall records one InterceptClass invocation, so a test can
@@ -106,7 +89,7 @@ func recordedEmbedFixture() provider.ModelEmbedResponse {
 	}
 }
 
-// newTestEmbedder builds a ProviderEmbedder over a fakeModelProvider
+// newTestEmbedder builds a ProviderEmbedder over a fakeEmbedExecutor
 // driven by embed, with intercept as its Interceptor (a fresh
 // passthroughIntercept when nil).
 func newTestEmbedder(t *testing.T, embed func(context.Context, provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error), intercept Interceptor) *ProviderEmbedder {
@@ -114,7 +97,7 @@ func newTestEmbedder(t *testing.T, embed func(context.Context, provider.ModelEmb
 	if intercept == nil {
 		intercept = &passthroughIntercept{}
 	}
-	pe, err := NewProviderEmbedder(&fakeModelProvider{embed: embed}, testModel, provider.SensitivityInternal, intercept)
+	pe, err := NewProviderEmbedder(&fakeEmbedExecutor{embed: embed}, testModel, provider.SensitivityInternal, intercept)
 	if err != nil {
 		t.Fatalf("NewProviderEmbedder: %v", err)
 	}

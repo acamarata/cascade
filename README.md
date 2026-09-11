@@ -37,3 +37,5 @@ Cross-compile for any of them with `GOOS` and `GOARCH`, for example
 
 - [Cross-harness instruction-file conventions](docs/harness-conventions.md): how Cascade
   generates the instruction files each supported coding harness reads.
+- [Provider author guide](.github/wiki/Provider-Guide.md): the `ModelProvider` interface,
+  shape-probe order, credential intake, key-pool lanes, and how to add a new driver.

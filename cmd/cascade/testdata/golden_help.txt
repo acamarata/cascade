@@ -16,6 +16,7 @@ Available Commands:
   help           Help about any command
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
+  node           Manage this machine's participation in the node fleet
   policy         Explain and inspect policy decisions
   provider       Register and manage model providers
   recall         Search the retrieval index and print cited results

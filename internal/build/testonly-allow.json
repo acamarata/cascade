@@ -665,81 +665,18 @@
     "caller_site": "cmd/cascade/fleet_jobs.go"
   },
   {
-    "symbol": "internal/nodes.GenerateIdentity",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.NewFileKnownHostsBackend",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.NewFileRecordBackend",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.NewKnownHosts",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.NewNodeKeystore",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.NewRecordStore",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.RegisterHandlers",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.Satisfies",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
     "symbol": "internal/nodes.SignRotationRequest",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
+    "reason": "P1-E17-W4-S36-T2 (node serve + heartbeat) landed and did NOT wire this symbol: SignRotationRequest signs with a raw private key a caller already holds, and node serve's own composition signs exclusively through NodeKeystore.Sign (never a raw key). The genuine future caller is the rotate/revoke CLI verb (06 section 5.14 elevated verb; 07-CLI-COMMAND-TREE assigns it to S-36.T4 alongside enroll/list/status/drain/remove), corrected here from the prior placeholder that pointed at node_serve.go.",
+    "expected_caller": "cmd/cascade/node_rotate.go, which P1-E17-W4-S36-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_rotate.go"
   },
   {
     "symbol": "internal/nodes.SignTranscript",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
-  },
-  {
-    "symbol": "internal/nodes.SignatureRevoked",
-    "reason": "internal/nodes landed under P1-E17-W4-S36-T1, whose files_scope covers internal/nodes/* only. The enrollment and identity surface is reachable from the CLI once the node serve command lands. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/node_serve.go, which P1-E17-W4-S36-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T2",
-    "caller_site": "cmd/cascade/node_serve.go"
+    "reason": "P1-E17-W4-S36-T2 (node serve + heartbeat) landed and did NOT wire this symbol: SignTranscript signs with a raw private key a caller already holds, but node.enroll's real controller-side path (enroll.go, S-36.T1) signs exclusively through NodeKeystore.Sign. The genuine future caller is the node-side half of the enroll handshake, driven by the operator-facing `node enroll` CLI verb S-36.T4 owns, corrected here from the prior placeholder that pointed at node_serve.go.",
+    "expected_caller": "cmd/cascade/node_enroll.go, which P1-E17-W4-S36-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_enroll.go"
   },
   {
     "symbol": "internal/notify.DefaultConfig",
@@ -785,66 +722,24 @@
   },
   {
     "symbol": "internal/providers/health.DefaultIntervals",
-    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "reason": "P1-E10-W3-S21-T2 wired health.NewManager (construction) via a one-shot CLI/doctor check, which has no periodic scheduler loop; DefaultIntervals/NewScheduler are for a daemon-resident background poller, a separate composition root not yet built (internal/daemon/subsystems.go exists but does not run one). Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "a future daemon-resident health-poller subsystem (internal/daemon/provider_health_poller.go), not yet built; retire this entry when that lands",
     "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/health.NewManager",
-    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
+    "caller_site": "internal/daemon/provider_health_poller.go"
   },
   {
     "symbol": "internal/providers/health.NewScheduler",
-    "reason": "Provider health probes landed under P1-E10-W3-S20-T3 with files_scope limited to internal/providers/health/*. The provider management CLI and doctor check that construct a live Manager are S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
+    "reason": "P1-E10-W3-S21-T2 wired health.NewManager (construction) via a one-shot CLI/doctor check, which has no periodic scheduler loop; DefaultIntervals/NewScheduler are for a daemon-resident background poller, a separate composition root not yet built (internal/daemon/subsystems.go exists but does not run one). Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "a future daemon-resident health-poller subsystem (internal/daemon/provider_health_poller.go), not yet built; retire this entry when that lands",
     "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/registry.ApplyMigrationSchema",
-    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
+    "caller_site": "internal/daemon/provider_health_poller.go"
   },
   {
     "symbol": "internal/providers/registry.NewReader",
-    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/registry.NewRegistry",
-    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/usage.ApplyMigrationSchema",
-    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/usage.NewManager",
-    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
-  },
-  {
-    "symbol": "internal/providers/usage.NewReader",
-    "reason": "Per-lane usage accounting landed under P1-E10-W3-S20-T4 with an empty files_scope.change, so it had no in-scope call site at all. The provider management CLI is S-21.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/provider_health_cmd.go, which P1-E10-W3-S21-T2 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E10-W3-S21-T2",
-    "caller_site": "cmd/cascade/provider_health_cmd.go"
+    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. P1-E10-W3-S21-T2 (provider CLI) wires the write-capable Registry directly, not the pkg/provider-facing Reader wrapper; Reader's consumer is K/S-22.T2's Router, which takes a pkg/provider.ProviderRegistryReader. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
+    "expected_caller": "P1-E11-W3-S22-T2's Router construction path (internal/conductor/router.go), which needs a pkg/provider.ProviderRegistryReader; retire this entry when that lands",
+    "retire_ticket": "P1-E11-W3-S22-T2",
+    "caller_site": "internal/conductor/router.go"
   },
   {
     "symbol": "internal/repo.ApplyInventorySchema",
@@ -922,5 +817,68 @@
     "expected_caller": "plugins/pbd/internal/pews/phase_advance.go, which P1-E14-W3-S29-T4 constructs; retire this entry when that lands",
     "retire_ticket": "P1-E14-W3-S29-T4",
     "caller_site": "plugins/pbd/internal/pews/phase_advance.go"
+  },
+  {
+    "symbol": "internal/conductor.NewQuotaPolicy",
+    "reason": "P1-E10-W3-S21-T1 builds the quota/spill policy layer (QuotaPolicy.NextLane, an ordering function per R-21.264) as a standalone package with no wiring ticket of its own. NextLane's sole permitted caller is P1-E11-W3-S22-T2's Router, which constructs the QuotaPolicy this function returns; that Router has not landed (internal/conductor/router.go does not exist yet). quota.go/spill.go ship fully implemented and unit-tested (quota_test.go, spill_test.go, quota_bench_test.go) against a fake EventPublisher; only the production construction call site is missing until the Router lands.",
+    "expected_caller": "P1-E11-W3-S22-T2's Router construction path in internal/conductor/router.go, which builds and holds the QuotaPolicy it calls NextLane on over its own immutable candidate snapshot (R-21.213); retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T2",
+    "caller_site": "internal/conductor/router.go"
+  },
+  {
+    "symbol": "internal/conductor.ParseQuotaConfig",
+    "reason": "P1-E10-W3-S21-T1's [conductor.quota] TOML section parser, reading runtime.Config.Extra (config.go is at its 300-line cap, so this ticket's files_scope parses the section in internal/conductor rather than adding a new runtime/config_quota.go typed field -- see the ticket's journal). Its production caller is the same daemon composition root that will construct the Router and QuotaPolicy under P1-E11-W3-S22-T2; that call site does not exist yet. Fully unit-tested (quota_test.go) against valid, missing, and malformed [conductor.quota] fixtures.",
+    "expected_caller": "the daemon composition root that constructs P1-E11-W3-S22-T2's Router (internal/conductor/router.go), calling ParseQuotaConfig on the loaded runtime.Config.Extra before building the QuotaPolicy; retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T2",
+    "caller_site": "internal/conductor/router.go"
+  },
+  {
+    "symbol": "internal/conductor.PublishDivergence",
+    "reason": "P1-E10-W3-S21-T1's fail-closed divergence event: emitted once, at QuotaPolicy construction, when ParseQuotaConfig reports the [conductor.quota] section was missing or unverifiable. Its caller is the same daemon composition root named in the NewQuotaPolicy/ParseQuotaConfig entries above, gated on the same P1-E11-W3-S22-T2 Router landing. Unit-tested directly (TestPublishDivergence_EmitsDivergenceEvent) against a fake EventPublisher.",
+    "expected_caller": "the daemon composition root that constructs P1-E11-W3-S22-T2's Router (internal/conductor/router.go), calling PublishDivergence immediately after a divergent ParseQuotaConfig result; retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T2",
+    "caller_site": "internal/conductor/router.go"
+  },
+  {
+    "symbol": "internal/conductor.NewExecutor",
+    "reason": "P1-E11-W3-S22-T1 builds the model.execute door (Executor, NewExecutor, Execute, ExecuteStream) fully implemented and tested against fakes for every collaborator (Router, ProviderResolver, Classifier, TaskClassTable, PolicyEvaluator, audit.Writer, SensitivityGate, egress.Engine), but the daemon composition root that would call NewExecutor with real collaborators is internal/daemon/subsystems.go, owned by P1-E11-W3-S22-T4 (not a dependency of this ticket) which also wires the real Router's taxonomy table. Until that lands, NewExecutor has no production caller.",
+    "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), which P1-E11-W3-S22-T4 constructs alongside the real Router; retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/subsystems.go"
+  },
+  {
+    "symbol": "internal/nodes.LivenessUnavailable",
+    "reason": "P1-E17-W4-S36-T2 defines R-21.225's full three-state Liveness enum ({reachable, unavailable, unknown}). This ticket's own heartbeat/doctor code paths only ever produce LivenessReachable or LivenessUnknown (the fail-closed default on timeout); LivenessUnavailable is the explicit-negative-signal value the ticket's own doc comment (liveness.go) names as S-37.T2/S-37.T3's concern (a controller-observed dispatch failure), not something this ticket's heartbeat path detects. The value must exist now so S-37.T1/S-37.T3 compile against the complete enum; its first producer lands with dispatch failure detection.",
+    "expected_caller": "S-37.T3's dispatch failure/re-queue path, which sets a device record's derived liveness to LivenessUnavailable on an observed dispatch failure; retire this entry once that lands",
+    "retire_ticket": "P1-E18-W4-S37-T3",
+    "caller_site": "internal/fleet/dispatch/requeue.go"
+  },
+  {
+    "symbol": "internal/nodes.GetLiveness",
+    "reason": "P1-E17-W4-S36-T2's convenience wrapper (RecordStore.Get + ComputeLiveness in one call) for a single-node liveness lookup. This ticket's own doctor.go check iterates every record via RecordStore.List and calls ComputeLiveness directly (it needs the whole fleet, not one lookup), so GetLiveness itself has no caller yet; the real future caller is a single-node `node status <id>` CLI verb, which is S-36.T4's mount, not this ticket's.",
+    "expected_caller": "cmd/cascade/node_status.go, which P1-E17-W4-S36-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_status.go"
+  },
+  {
+    "symbol": "internal/nodes.HasCapability",
+    "reason": "P1-E17-W4-S36-T2's capability-report membership test, built for S-37.T1's placement filter (02-TARGET-STRUCTURE §Key contracts: need{browser, docker, 4hr_runtime} -> Conductor selects node) -- S-37.T1 has not landed, so nothing calls it yet.",
+    "expected_caller": "S-37.T1's placement filter, which P1-E18-W4-S37-T1 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E18-W4-S37-T1",
+    "caller_site": "internal/fleet/placement/filter.go"
+  },
+  {
+    "symbol": "internal/nodes.SignHeartbeatFrame",
+    "reason": "P1-E17-W4-S36-T2's raw-private-key heartbeat signer, mirroring transcript.go's SignTranscript/rotate.go's SignRotationRequest exactly: it exists for a caller that already holds a raw key (tests, or a future out-of-band tool), while every production signer in this ticket signs through NodeKeystore.Sign instead (BuildHeartbeatFrame, heartbeat.go), which never returns the private key. No production caller holds a raw key on this path.",
+    "expected_caller": "any future caller that legitimately holds a raw node identity key outside custody (none identified as of this ticket); revisit if S-36.T4's CLI surface ever needs one",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_enroll.go"
+  },
+  {
+    "symbol": "internal/providers/intake.NewMemoryRegistry",
+    "reason": "The provider add/list split fix (P1-E10-W3-S21-T2's disclosed defect, S-20.T1 follow-up) retires MemoryRegistry as `provider add`'s production store: productionProviderDeps no longer constructs one, and resolveProviderRegistry (cmd/cascade/provider_cmd.go) opens the durable internal/providers/registry.Registry instead, via a registryAdapter (provider_registry_adapter.go). NewMemoryRegistry itself stays exported and used: it remains the fast, disk-free intake.Registry seam providerDeps.Registry's own doc comment describes, injected by cmd/cascade's isolated CLI unit tests (provider_cmd_test.go) and internal/providers/intake's own package tests, so no production caller constructs one anymore.",
+    "expected_caller": "none in production by design; every caller of this constructor is a test substituting an isolated Registry (cmd/cascade/provider_cmd_test.go, internal/providers/intake's own *_test.go files)",
+    "retire_ticket": "P1-E10-W3-S20-T1",
+    "caller_site": "internal/providers/intake/types.go"
   }
 ]

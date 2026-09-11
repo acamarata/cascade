@@ -35,6 +35,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/doctor"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -61,6 +62,19 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// the check itself reports as an error rather than as a fusion
 	// verdict it could not read.
 	reg.Register(doctor.NewRetrievalFusionGateCheck(fusionProviderFor(ctx, paths)))
+	// provider_health (P1-E10-W3-S21-T2, R-14.35): providerHealthSourceFor
+	// opens the S-20.T2 registry + S-20.T3 health.Manager the same way
+	// `cascade provider list/test/health` do (provider_health_cmd.go);
+	// the adapter itself never evicts or deletes a provider record.
+	reg.Register(doctor.NewProviderHealthCheck(providerHealthSourceFor(paths)))
+	// nodes (P1-E17-W4-S36-T2): reads the same file-backed device record
+	// store `node serve` writes heartbeats into, so doctor reports the
+	// liveness the serving path actually recorded rather than a second
+	// opinion. nodesRecordStoreFor returns nil when the data directory
+	// cannot be resolved, and the check reports a nil store as StatusError
+	// rather than as "no nodes enrolled" - an unreadable subject is never
+	// silently OK.
+	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
@@ -207,4 +221,65 @@ func confirmOnStdin(cmd *cobra.Command) (bool, error) {
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
 	return answer == "y" || answer == "yes", nil
+}
+
+// providerHealthSourceAdapter adapts openProviderStorage
+// (provider_health_cmd.go) to doctor.ProviderHealthSource: each call
+// opens the registry+health storage fresh and closes it before
+// returning, mirroring how `cascade provider list/test/health` already
+// treat that storage as per-invocation rather than long-lived.
+type providerHealthSourceAdapter struct{}
+
+// providerHealthSourceFor returns the production doctor.ProviderHealthSource.
+// paths is accepted for signature symmetry with this file's other
+// providerFor helpers; the adapter resolves the real environment paths
+// via productionProviderDeps(), the same composition root `cascade
+// provider add` already uses.
+func providerHealthSourceFor(paths runtime.PathProvider) doctor.ProviderHealthSource {
+	_ = paths
+	return providerHealthSourceAdapter{}
+}
+
+// ListProviderHealth implements doctor.ProviderHealthSource.
+func (providerHealthSourceAdapter) ListProviderHealth(ctx context.Context) ([]doctor.ProviderHealthRow, error) {
+	store, err := openProviderStorage(ctx, productionProviderDeps())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = store.Close() }()
+
+	recs, err := store.Registry.ListProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]doctor.ProviderHealthRow, len(recs))
+	for i, rec := range recs {
+		rows[i] = doctor.ProviderHealthRow{Name: rec.Name, Status: string(rec.HealthStatus)}
+	}
+	return rows, nil
+}
+
+// RecoverProviderHealth implements doctor.ProviderHealthSource.
+func (providerHealthSourceAdapter) RecoverProviderHealth(ctx context.Context, name string) (bool, error) {
+	store, err := openProviderStorage(ctx, productionProviderDeps())
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = store.Close() }()
+	return store.Health.RecoverProbe(ctx, name)
+}
+
+// nodesRecordStoreFor opens the file-backed device record store that
+// `node serve` writes heartbeats into. It returns nil ON PURPOSE when the
+// data directory cannot be resolved: nodes.HealthCheck reports a nil store
+// as StatusError, which is the honest answer for "the records that decide
+// this could not be located". Inventing an empty store here would print
+// "no nodes enrolled" for an installation whose nodes are simply
+// unreadable, which is the one wrong answer a fleet check can give.
+func nodesRecordStoreFor(paths runtime.PathProvider, clock runtime.Clock) *nodes.RecordStore {
+	dataDir := paths.DataDir()
+	if dataDir == "" {
+		return nil
+	}
+	return nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), clock)
 }

@@ -3,7 +3,9 @@
 //   --key-env non-interactive path end to end, and the --help automation-
 //   parity acceptance criterion. Every test substitutes a fake Doer and an
 //   isolated MemoryRegistry (providerDeps.Doer/Registry), so no test opens
-//   a socket or touches the real keychain.
+//   a socket or touches the real keychain. provider_add_list_test.go
+//   covers the add/list/remove unification fix against the real durable
+//   store (deps.Registry left nil, matching production).
 // SPORT: cli.provider.add/ADD (P1-E10-W3-S20-T1).
 
 package main
@@ -18,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/providers/intake"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 )
 
@@ -47,7 +50,21 @@ func anthropicModelsOnlyDoer() intake.Doer {
 func testProviderDeps(t *testing.T, env map[string]string) providerDeps {
 	t.Helper()
 	dir := t.TempDir()
+	homeDir := t.TempDir()
+	paths, err := runtime.NewPathProvider(
+		func(k string) string {
+			if k == "CASCADE_HOME" {
+				return homeDir
+			}
+			return env[k]
+		},
+		func() (string, error) { return homeDir, nil },
+	)
+	if err != nil {
+		t.Fatalf("runtime.NewPathProvider: %v", err)
+	}
 	return providerDeps{
+		Paths:  paths,
 		Getenv: func(k string) string { return env[k] },
 		NewCustody: func() (secrets.Custody, error) {
 			return secrets.SelectCustody(secrets.Config{
@@ -192,7 +209,7 @@ func TestBuildIntakeDepsPropagatesCustodyError(t *testing.T) {
 			return nil, os.ErrPermission
 		},
 	}
-	if _, err := buildIntakeDeps(deps); err == nil {
+	if _, err := buildIntakeDeps(deps, intake.NewMemoryRegistry()); err == nil {
 		t.Fatal("expected buildIntakeDeps to propagate a custody construction error")
 	}
 }
@@ -200,9 +217,15 @@ func TestBuildIntakeDepsPropagatesCustodyError(t *testing.T) {
 func TestProductionProviderDepsResolvesDataDir(t *testing.T) {
 	// Smoke-checks that productionProviderDeps builds without panicking
 	// and that its lazily-resolved NewCustody path is reachable; it does
-	// not assert a specific backend, since that varies by host.
+	// not assert a specific backend, since that varies by host. Registry
+	// is deliberately nil here: resolveProviderRegistry opens the durable
+	// store lazily, at `add` invocation time, never at Deps construction
+	// (constructing the command tree must never touch disk).
 	deps := productionProviderDeps()
-	if deps.NewCustody == nil || deps.Doer == nil || deps.Registry == nil {
+	if deps.NewCustody == nil || deps.Doer == nil {
 		t.Fatal("expected productionProviderDeps to populate every required field")
+	}
+	if deps.Registry != nil {
+		t.Fatal("expected productionProviderDeps to leave Registry nil for lazy resolution")
 	}
 }
