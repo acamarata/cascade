@@ -735,13 +735,6 @@
     "caller_site": "internal/daemon/provider_health_poller.go"
   },
   {
-    "symbol": "internal/providers/registry.NewReader",
-    "reason": "The provider registry landed under P1-E10-W3-S20-T2, whose files_scope excludes every composition root. P1-E10-W3-S21-T2 (provider CLI) wires the write-capable Registry directly, not the pkg/provider-facing Reader wrapper; Reader's consumer is K/S-22.T2's Router, which takes a pkg/provider.ProviderRegistryReader. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "P1-E11-W3-S22-T2's Router construction path (internal/conductor/router.go), which needs a pkg/provider.ProviderRegistryReader; retire this entry when that lands",
-    "retire_ticket": "P1-E11-W3-S22-T2",
-    "caller_site": "internal/conductor/router.go"
-  },
-  {
     "symbol": "internal/repo.ApplyInventorySchema",
     "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
     "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
@@ -819,27 +812,6 @@
     "caller_site": "plugins/pbd/internal/pews/phase_advance.go"
   },
   {
-    "symbol": "internal/conductor.NewQuotaPolicy",
-    "reason": "P1-E10-W3-S21-T1 builds the quota/spill policy layer (QuotaPolicy.NextLane, an ordering function per R-21.264) as a standalone package with no wiring ticket of its own. NextLane's sole permitted caller is P1-E11-W3-S22-T2's Router, which constructs the QuotaPolicy this function returns; that Router has not landed (internal/conductor/router.go does not exist yet). quota.go/spill.go ship fully implemented and unit-tested (quota_test.go, spill_test.go, quota_bench_test.go) against a fake EventPublisher; only the production construction call site is missing until the Router lands.",
-    "expected_caller": "P1-E11-W3-S22-T2's Router construction path in internal/conductor/router.go, which builds and holds the QuotaPolicy it calls NextLane on over its own immutable candidate snapshot (R-21.213); retire this entry once that lands",
-    "retire_ticket": "P1-E11-W3-S22-T2",
-    "caller_site": "internal/conductor/router.go"
-  },
-  {
-    "symbol": "internal/conductor.ParseQuotaConfig",
-    "reason": "P1-E10-W3-S21-T1's [conductor.quota] TOML section parser, reading runtime.Config.Extra (config.go is at its 300-line cap, so this ticket's files_scope parses the section in internal/conductor rather than adding a new runtime/config_quota.go typed field -- see the ticket's journal). Its production caller is the same daemon composition root that will construct the Router and QuotaPolicy under P1-E11-W3-S22-T2; that call site does not exist yet. Fully unit-tested (quota_test.go) against valid, missing, and malformed [conductor.quota] fixtures.",
-    "expected_caller": "the daemon composition root that constructs P1-E11-W3-S22-T2's Router (internal/conductor/router.go), calling ParseQuotaConfig on the loaded runtime.Config.Extra before building the QuotaPolicy; retire this entry once that lands",
-    "retire_ticket": "P1-E11-W3-S22-T2",
-    "caller_site": "internal/conductor/router.go"
-  },
-  {
-    "symbol": "internal/conductor.PublishDivergence",
-    "reason": "P1-E10-W3-S21-T1's fail-closed divergence event: emitted once, at QuotaPolicy construction, when ParseQuotaConfig reports the [conductor.quota] section was missing or unverifiable. Its caller is the same daemon composition root named in the NewQuotaPolicy/ParseQuotaConfig entries above, gated on the same P1-E11-W3-S22-T2 Router landing. Unit-tested directly (TestPublishDivergence_EmitsDivergenceEvent) against a fake EventPublisher.",
-    "expected_caller": "the daemon composition root that constructs P1-E11-W3-S22-T2's Router (internal/conductor/router.go), calling PublishDivergence immediately after a divergent ParseQuotaConfig result; retire this entry once that lands",
-    "retire_ticket": "P1-E11-W3-S22-T2",
-    "caller_site": "internal/conductor/router.go"
-  },
-  {
     "symbol": "internal/conductor.NewExecutor",
     "reason": "P1-E11-W3-S22-T1 builds the model.execute door (Executor, NewExecutor, Execute, ExecuteStream) fully implemented and tested against fakes for every collaborator (Router, ProviderResolver, Classifier, TaskClassTable, PolicyEvaluator, audit.Writer, SensitivityGate, egress.Engine), but the daemon composition root that would call NewExecutor with real collaborators is internal/daemon/subsystems.go, owned by P1-E11-W3-S22-T4 (not a dependency of this ticket) which also wires the real Router's taxonomy table. Until that lands, NewExecutor has no production caller.",
     "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), which P1-E11-W3-S22-T4 constructs alongside the real Router; retire this entry once that lands",
@@ -882,13 +854,6 @@
     "caller_site": "internal/providers/intake/types.go"
   },
   {
-    "symbol": "internal/nodes.NewSSHDialer",
-    "reason": "P1-E17-W4-S36-T3 (ssh tunnel + reconnect) implements the real production Dialer over golang.org/x/crypto/ssh, driven end-to-end by TestTunnelRealSSHD against a real loopback sshd (internal/nodes/tunnel_test.go, tagged integration) and by TestTunnelHostKeyChangedRefused/TestTunnelUnknownHostKeyRefused (reconnect_test.go). It has no production caller in THIS ticket because Target (the ssh reachability struct NewSSHDialer's Dial method takes) has no durable source yet: DeviceRecord (records.go, S-36.T1) carries no Host/User field, and records.go is out of this ticket's files_scope. cmd/cascade/daemon.go's startNodeTunnelService registers the tunnel Manager and documents this exact gap in its own doc comment. The real production caller is S-36.T4's `node enroll`/`node status` CLI verbs, which will hold a Target from the enroll flow and call Manager.Start(ctx, TunnelConfig{Dialer: NewSSHDialer(...), ...}).",
-    "expected_caller": "cmd/cascade/node_enroll.go or node_status.go, which P1-E17-W4-S36-T4 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E17-W4-S36-T4",
-    "caller_site": "cmd/cascade/node_enroll.go"
-  },
-  {
     "symbol": "internal/nodes.NewTunnelHeartbeatSender",
     "reason": "P1-E17-W4-S36-T3 implements the HeartbeatSender wire-delivery sink S-36.T2 deferred: it writes each frame as a real HTTP/JSON-RPC request over the tunnel's local end (D-24 pattern), proven by TestNewTunnelHeartbeatSender_RoundTrip (heartbeat_test.go) against a real req.Write/http.ReadResponse round trip. Its production caller is the NODE side's HeartbeatLoopOptions.Send (RunHeartbeatLoop, heartbeat.go). cmd/cascade/node_serve.go (S-36.T2's file) already exists and is at 264/300 lines, out of this ticket's files_scope to edit; wiring this sink there needs new dial-construction code that will need its own split file, matching this repo's established 300-line-cap split precedent (daemon_unix_handlers.go, daemon_unix_run_memory.go), not an edit squeezed into the existing file.",
     "expected_caller": "cmd/cascade/node_serve_heartbeat.go (a new split file, mirroring daemon_unix_handlers.go's precedent), constructed by the ticket that wires node serve's HeartbeatLoopOptions.Send to this sink; retire this entry when that lands",
@@ -922,5 +887,54 @@
     "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags fused retrieval chunks with SlotKindRetrieval before calling Compose; retire this entry when that lands",
     "retire_ticket": "P1-E21-W5-S46-T5",
     "caller_site": "internal/conversation/compose.go"
+  },
+  {
+    "symbol": "internal/conductor.NewDaemonRouter",
+    "reason": "P1-E11-W3-S22-T2 adds NewDaemonRouter, the production Router-construction path that wires internal/providers/registry.NewReader, ParseQuotaConfig, NewQuotaPolicy and PublishDivergence together (retiring their own exemptions below/above). The daemon composition root that CALLS NewDaemonRouter with a real *registry.Registry, event bus and S-22.T4 taxonomy table is internal/daemon/subsystems.go, owned by P1-E11-W3-S22-T4 (not a dependency of this ticket). NewDaemonRouter itself is unit-tested against fakes in router_test.go.",
+    "expected_caller": "internal/daemon/router_wiring.go, a not-yet-built file where P1-E11-W3-S22-T4 is expected to call NewDaemonRouter alongside constructing the real Executor (internal/daemon/subsystems.go already exists for other subsystems and is not itself the promised caller); retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/router_wiring.go"
+  },
+  {
+    "symbol": "internal/nodes.NewPairingStore",
+    "reason": "P1-E36-W7-S72-T1 (LAN discovery + pairing) implements the pairing-code lifecycle (GeneratePairingCode/VerifyPairingCode, 128-bit entropy, 10-minute TTL, atomic single-use, 5-attempt-per-peer-per-hour lockout, constant-time comparison) fully and tests it directly. This ticket did NOT reach discovery.go (mDNS advertiser/browser), pair_noise.go (Noise XXpsk3 PAKE) or the enroll.go convergence change that would construct a PairingStore and drive it from a real admission path -- see the ticket journal's honest completion accounting. NewPairingStore therefore has no production caller yet.",
+    "expected_caller": "a not-yet-built internal/nodes/pair_admit.go (or equivalent), the pairing-admission path (nodes.PairWithCode, per the ticket's own contract) that converges pairing onto S-36.T1's EnrollNode; retire this entry when a future session completes that convergence",
+    "retire_ticket": "P1-E36-W7-S72-T1",
+    "caller_site": "internal/nodes/pair_admit.go"
+  },
+  {
+    "symbol": "internal/coverage.BuildCoverageMatrix",
+    "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it builds the inventory-coverage matrix. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
+    "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
+    "retire_ticket": "P1-E28-W10-S57-T1",
+    "caller_site": "internal/tools/coverage-matrix/main.go"
+  },
+  {
+    "symbol": "internal/coverage.GapReport",
+    "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it renders the unresolved-gap report. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
+    "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
+    "retire_ticket": "P1-E28-W10-S57-T1",
+    "caller_site": "internal/tools/coverage-matrix/main.go"
+  },
+  {
+    "symbol": "internal/coverage.LoadDeferrals",
+    "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it loads the explicit product-deferral list. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
+    "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
+    "retire_ticket": "P1-E28-W10-S57-T1",
+    "caller_site": "internal/tools/coverage-matrix/main.go"
+  },
+  {
+    "symbol": "internal/coverage.LoadInventory",
+    "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it loads the feature-inventory rows. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
+    "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
+    "retire_ticket": "P1-E28-W10-S57-T1",
+    "caller_site": "internal/tools/coverage-matrix/main.go"
+  },
+  {
+    "symbol": "internal/coverage.LoadTicketTree",
+    "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it loads the ticket corpus. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
+    "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
+    "retire_ticket": "P1-E28-W10-S57-T1",
+    "caller_site": "internal/tools/coverage-matrix/main.go"
   }
 ]

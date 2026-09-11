@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"os"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -198,5 +199,43 @@ func TestPinSaveErrorPropagates(t *testing.T) {
 	kh := NewKnownHosts(backend)
 	if err := kh.Pin("host", "fp", false); err == nil {
 		t.Fatal("expected error when backend save fails")
+	}
+}
+
+// TestFileKnownHostsLoad_UnreadableNotNotExist: a directory at the
+// expected file path makes os.ReadFile fail with something other than
+// IsNotExist, which fileKnownHostsBackend.Load must propagate rather
+// than swallowing into an empty map.
+func TestFileKnownHostsLoad_UnreadableNotNotExist(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir+"/nodes/known_hosts.json", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewFileKnownHostsBackend(dir).Load(); err == nil {
+		t.Fatal("expected a read error for an unreadable (directory) store path")
+	}
+}
+
+// TestFileKnownHostsLoad_NullJSONBecomesEmptyMap proves a store file
+// whose content is the JSON literal "null" (valid JSON, decodes to a nil
+// map) resolves to an empty, non-nil map, not a nil one a caller might
+// panic writing into.
+func TestFileKnownHostsLoad_NullJSONBecomesEmptyMap(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir+"/nodes", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/nodes/known_hosts.json", []byte("null"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewFileKnownHostsBackend(dir).Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m == nil {
+		t.Fatal("expected a non-nil empty map for JSON null content")
+	}
+	if len(m) != 0 {
+		t.Fatalf("expected an empty map, got %d entries", len(m))
 	}
 }

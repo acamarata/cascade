@@ -63,6 +63,11 @@ type DeviceRecord struct {
 	// preserved verbatim across rotation per R-21.220 — this ticket never
 	// reads or writes individual cursor values, only round-trips the map).
 	SyncCursors map[string]string `json:"sync_cursors,omitempty"`
+	// Drained reports whether this node has been marked drained (drain.go,
+	// P1-E17-W4-S36-T4): not accepting new work. S-37.T1's placement
+	// filter reads this flag; it does not remove the record or affect
+	// liveness/heartbeat processing.
+	Drained bool `json:"drained,omitempty"`
 }
 
 // Clock abstracts time.Now so this package never reads the wall clock
@@ -161,6 +166,26 @@ func (s *RecordStore) List() ([]DeviceRecord, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].NodeID < out[j].NodeID })
 	return out, nil
+}
+
+// Remove deletes nodeID's device record outright (`node remove <id>`,
+// S-36.T4's elevated verb — unlike Drain/Rotate/Revoke, this is a true
+// deletion, not a preserved-record state transition). Removing an unknown
+// node id returns cascade.ErrNotFound (via Get), never a silent success:
+// a typo'd id must not be reported as "removed" when nothing was.
+func (s *RecordStore) Remove(nodeID string) error {
+	if _, err := s.Get(nodeID); err != nil {
+		return err
+	}
+	records, err := s.backend.Load()
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: read device records")
+	}
+	delete(records, nodeID)
+	if err := s.backend.Save(records); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: write device records")
+	}
+	return nil
 }
 
 // put writes rec back into the store, for use by rotate.go's Rotate/Revoke

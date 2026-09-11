@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"crypto/ed25519"
 	"strings"
 	"testing"
 	"time"
@@ -169,6 +170,93 @@ func TestRevokePutErrorPropagates(t *testing.T) {
 	backend := store.backend.(*memRecordBackend)
 	backend.saveErr = cascade.New(cascade.KindUnavailable, "simulated write failure")
 	if _, err := store.Revoke(id.NodeID); err == nil {
+		t.Fatal("expected error when backend save fails")
+	}
+}
+
+// TestRotateUnknownNodeIsNotFound: Rotate on a node id with no device
+// record must refuse via Get, never a zero-value success.
+func TestRotateUnknownNodeIsNotFound(t *testing.T) {
+	store := NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now()))
+	newID, _, err := GenerateIdentity(strings.NewReader(strings.Repeat("s", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Rotate("does-not-exist", newID.PubKeyB64(), []byte("sig"))
+	if err == nil {
+		t.Fatal("expected refusal rotating an unknown node id")
+	}
+	if k, ok := cascade.KindOf(err); !ok || k != cascade.KindNotFound {
+		t.Fatalf("expected KindNotFound, got %v (ok=%v)", k, ok)
+	}
+}
+
+// TestRevokeUnknownNodeIsNotFound: same for Revoke.
+func TestRevokeUnknownNodeIsNotFound(t *testing.T) {
+	store := NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now()))
+	if _, err := store.Revoke("does-not-exist"); err == nil {
+		t.Fatal("expected refusal revoking an unknown node id")
+	} else if k, ok := cascade.KindOf(err); !ok || k != cascade.KindNotFound {
+		t.Fatalf("expected KindNotFound, got %v (ok=%v)", k, ok)
+	}
+}
+
+// TestRotateCorruptStoredKeyRefused proves Rotate's OWN ParsePublicKey
+// check on the current record's key (distinct from Revoke's identical
+// check, already covered by TestRevokeCorruptStoredKeyRefused).
+func TestRotateCorruptStoredKeyRefused(t *testing.T) {
+	backend := newMemRecordBackend()
+	store := NewRecordStore(backend, testkit.NewFrozenClock(time.Now()))
+	backend.records["broken-node"] = DeviceRecord{NodeID: "broken-node", PubKeyB64: "not-valid-base64!!!", Tier: TierWorkerTrusted}
+	newID, _, err := GenerateIdentity(strings.NewReader(strings.Repeat("t", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Rotate("broken-node", newID.PubKeyB64(), []byte("sig"))
+	if err == nil {
+		t.Fatal("expected refusal rotating a record with a corrupt stored public key")
+	}
+	if k, ok := cascade.KindOf(err); !ok || k != cascade.KindIntegrity {
+		t.Fatalf("expected KindIntegrity, got %v (ok=%v)", k, ok)
+	}
+}
+
+// TestRotateMalformedNewKeyRefused proves the NEW key's own shape is
+// validated, not just the signature over it.
+func TestRotateMalformedNewKeyRefused(t *testing.T) {
+	store, _, id := rotateFixture(t)
+	_, _, currentPriv := rotateFixtureKeyMaterial(t)
+	_, err := store.Rotate(id.NodeID, "not-valid-base64!!!", SignRotationRequest(id.NodeID, "not-valid-base64!!!", currentPriv))
+	if err == nil {
+		t.Fatal("expected refusal for a malformed new public key")
+	}
+}
+
+// rotateFixtureKeyMaterial regenerates the SAME current identity
+// rotateFixture(t) enrolls (seed "r"), so a caller can sign a rotation
+// request with the correct current private key.
+func rotateFixtureKeyMaterial(t *testing.T) (Identity, ed25519.PublicKey, ed25519.PrivateKey) {
+	t.Helper()
+	id, priv, err := GenerateIdentity(strings.NewReader(strings.Repeat("r", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id, id.PubKey, priv
+}
+
+// TestRotatePutErrorPropagates proves Rotate's own s.put error branch,
+// distinct from Revoke's identical check already covered above.
+func TestRotatePutErrorPropagates(t *testing.T) {
+	store, _, id := rotateFixture(t)
+	_, _, currentPriv := rotateFixtureKeyMaterial(t)
+	newID, _, err := GenerateIdentity(strings.NewReader(strings.Repeat("u", 64)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := SignRotationRequest(id.NodeID, newID.PubKeyB64(), currentPriv)
+	backend := store.backend.(*memRecordBackend)
+	backend.saveErr = cascade.New(cascade.KindUnavailable, "simulated write failure")
+	if _, err := store.Rotate(id.NodeID, newID.PubKeyB64(), sig); err == nil {
 		t.Fatal("expected error when backend save fails")
 	}
 }

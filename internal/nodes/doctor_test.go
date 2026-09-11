@@ -7,6 +7,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func TestHealthCheckEmptyFleet(t *testing.T) {
@@ -93,5 +94,36 @@ func TestHealthCheckMetadataAndFix(t *testing.T) {
 	}
 	if check.Describe() == "" {
 		t.Fatal("expected a non-empty Describe()")
+	}
+}
+
+// TestHealthCheckCanceledContextIsError proves Run refuses on an
+// already-canceled context rather than reading the store anyway.
+func TestHealthCheckCanceledContextIsError(t *testing.T) {
+	check := NewHealthCheck(NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now())), testkit.NewFrozenClock(time.Now()), 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res, err := check.Run(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != doctor.StatusError {
+		t.Fatalf("got status %v, want StatusError for a canceled context", res.Status)
+	}
+}
+
+// TestHealthCheckListErrorIsStatusError proves an unreadable record
+// store is reported as StatusError, not silently treated as empty.
+func TestHealthCheckListErrorIsStatusError(t *testing.T) {
+	backend := newMemRecordBackend()
+	backend.loadErr = cascade.New(cascade.KindUnavailable, "simulated storage outage")
+	clock := testkit.NewFrozenClock(time.Now())
+	check := NewHealthCheck(NewRecordStore(backend, clock), clock, 0)
+	res, err := check.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != doctor.StatusError {
+		t.Fatalf("got status %v, want StatusError for an unreadable store", res.Status)
 	}
 }

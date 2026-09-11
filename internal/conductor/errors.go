@@ -43,6 +43,11 @@ var ErrSensitivityViolation = cascade.New(cascade.KindPolicyDenied, "conductor: 
 // substitution.
 var ErrSecurityPipelineNotReady = cascade.New(cascade.KindUnavailable, "conductor: security pipeline not ready")
 
+// ErrEgressSubstitutionFailed is returned when the EgressSubstitutor
+// (sensitivity.go, P1-E11-W3-S22-T3) refuses or fails to substitute an
+// outbound payload. The payload never reaches the provider on this error.
+var ErrEgressSubstitutionFailed = cascade.New(cascade.KindInternal, "conductor: egress substitution refused the outbound payload")
+
 // ErrConstructionFailed is returned by NewExecutor when a required
 // collaborator (the router, the provider resolver, or any of the six
 // R-21.206 collaborators) is nil. Construction never succeeds without a

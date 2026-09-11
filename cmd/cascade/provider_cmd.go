@@ -14,14 +14,11 @@ package main
 
 import (
 	"context"
-	"io"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/providers/intake"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -62,29 +59,7 @@ type providerDeps struct {
 
 // productionProviderDeps builds providerDeps against the real environment.
 func productionProviderDeps() providerDeps {
-	paths := lazyPaths{}
-	getenv := os.Getenv
-	return providerDeps{
-		Paths: paths,
-		NewCustody: func() (secrets.Custody, error) {
-			dir := paths.DataDir()
-			if dir == "" {
-				return nil, cascade.New(cascade.KindUnavailable, "provider: could not resolve the cascade data directory")
-			}
-			return secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
-		},
-		Gate: newElevationGate(
-			elevation.NewKeystore,
-			func() elevation.Backend { return elevation.NewFileBackend(paths.DataDir()) },
-			runtime.NewSystemClock(), getenv,
-		),
-		Getenv: getenv,
-		ReadStdin: func() ([]byte, error) {
-			return io.ReadAll(io.LimitReader(os.Stdin, maxSecretValueBytes+1))
-		},
-		StdinIsPiped: productionStdinIsPiped,
-		Doer:         intake.NewHTTPDoer(intakeHTTPTimeout),
-	}
+	return providerDepsFor(lazyPaths{})
 }
 
 // mountProviderCmd attaches the `provider` command tree, following

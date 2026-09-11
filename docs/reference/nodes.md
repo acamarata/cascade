@@ -17,9 +17,46 @@ reuse the same identity rather than generating a new one.
 
 `node.enroll` is mounted on the node's own RPC registry and admits a peer
 identity into this node's device-record store, following the mutually
-signed transcript protocol (`internal/nodes`, S-36.T1). The enroll/list/
-status/drain/remove CLI verbs are mounted by a later ticket (S-36.T4); this
-ticket mounts `node serve` only.
+signed transcript protocol (`internal/nodes`, S-36.T1). `node serve` is
+mounted by S-36.T2; every other verb (`enroll`/`list`/`status`/`drain`/
+`remove`/`rotate-key`/`revoke`) is mounted by S-36.T4, documented in
+§CLI below.
+
+## CLI (S-36.T4)
+
+`cascade node <verb>` is a thin surface over `internal/nodes`' own
+methods. Every verb refuses on Windows tier-2 (`internal/nodes.RefuseOnGOOS`,
+the same refusal `node serve` uses).
+
+- **`enroll <user@host> --trust-tier {worker-trusted|controller}`** ⚠
+  (elevated). `--trust-tier` is REQUIRED — omitting it is a typed refusal
+  before anything else runs, never a default. `--host-key-fingerprint
+  <sha256>` supplies the out-of-band override `KnownHosts.Verify` accepts.
+  The command performs a real ssh dial to `user@host` to observe and
+  verify/pin the host key, then admits the peer via the real `EnrollNode`
+  operation. The node-supplied half of the handshake payload
+  (`node_id`/`node_pubkey_b64`/`node_signature_b64`) is read as JSON from
+  stdin, or from `--payload-file`: this CLI does not fetch it over the
+  wire (see the contradiction noted in the ticket journal — the existing
+  ssh `Session` has no remote-dial primitive to do so, and adding one is
+  outside this ticket's files_scope).
+- **`list`** ✦ / **`status <id>`** ✦ (read-only, never elevated): render
+  the device record joined with derived liveness. `status`'s `tunnel`
+  field is currently always `"unknown (no in-process tunnel session)"` —
+  a fresh CLI process has no access to another process's in-memory
+  `Manager`; see the ticket journal for the full contradiction against
+  this doc's own Transport section.
+- **`drain <id>`**: marks the device record drained (not accepting new
+  work) via `RecordStore.Drain`. Idempotent; preserves every other field.
+- **`remove <id>`** ⚠ (elevated, already in `internal/rpc`'s
+  elevation table): deletes the device record outright.
+- **`rotate-key <id>`** ⚠ / **`revoke <id>`** ⚠ (elevated; enforced
+  directly by the CLI rather than via the shared elevation table, which
+  does not yet list these two verbs — see the ticket journal). `rotate-key`
+  rotates THIS machine's own local identity (the machine invoking it must
+  hold the private key for `<id>` in its own keystore); `revoke` calls
+  `RecordStore.Revoke`, moving the current key into the record's
+  `RevokedKeys` set.
 
 ## Heartbeat and capability report
 

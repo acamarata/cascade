@@ -107,6 +107,43 @@ func TestNodeKeystoreBackendName(t *testing.T) {
 	}
 }
 
+// TestNodeKeystoreSignCorruptCustodyEntry proves Sign fails closed
+// (KindIntegrity) when custody holds a value of the wrong length for an
+// Ed25519 private key — a corrupt entry, never treated as a usable key.
+// It writes directly through the same-package custody field rather than
+// Store, since Store itself refuses a wrong-size key before it ever
+// reaches custody (this is the state a corrupt store would be in, not a
+// path Store can produce).
+func TestNodeKeystoreSignCorruptCustodyEntry(t *testing.T) {
+	ks, err := NewNodeKeystoreForTest(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ks.custody.Set(context.Background(), keystoreSecretName("corrupt-node"), []byte("too-short")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ks.Sign(context.Background(), "corrupt-node", []byte("payload"))
+	if err == nil {
+		t.Fatal("expected refusal signing with a corrupt custody entry")
+	}
+	if k, ok := cascade.KindOf(err); !ok || k != cascade.KindIntegrity {
+		t.Fatalf("expected KindIntegrity, got %v (ok=%v)", k, ok)
+	}
+}
+
+// TestNewNodeKeystoreDefaultsService proves an empty cfg.Service defaults
+// to keystoreService rather than being passed through empty to
+// secrets.SelectCustody.
+func TestNewNodeKeystoreDefaultsService(t *testing.T) {
+	ks, err := NewNodeKeystore(secrets.Config{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ks.BackendName() == "" {
+		t.Fatal("expected a usable keystore with the defaulted service label")
+	}
+}
+
 func TestNewNodeKeystoreNoBackendAvailable(t *testing.T) {
 	// An empty Dir with no OS keychain reachable in this sandbox falls
 	// through to the file vault's own "needs a directory" refusal.

@@ -42,6 +42,15 @@ type Section struct {
 	// KnownHostsPath overrides the known_hosts store location
 	// (<data_dir>/nodes/known_hosts.json when empty).
 	KnownHostsPath string `toml:"known_hosts_path"`
+	// ScanLAN gates LAN discovery advertising/browsing (R-21.198,
+	// P1-E36-W7-S72-T1). Default false: discovery is opt-in.
+	ScanLAN bool `toml:"scan_lan"`
+	// DiscoveryNetworks allowlists the interface/SSID names discovery may
+	// run on when ScanLAN is true. Default empty: an empty allowlist
+	// means discovery runs on NO network — fail-closed (R-21.198). A
+	// network not in this list (e.g. one never paired on before) is
+	// never scanned, even with ScanLAN=true.
+	DiscoveryNetworks []string `toml:"discovery_networks"`
 }
 
 // parseSection fail-closed-parses raw (the "nodes" sub-tree of a decoded
@@ -76,5 +85,36 @@ func parseSection(raw map[string]interface{}) (Section, error) {
 		}
 		sec.KnownHostsPath = s
 	}
+	if err := parseDiscoverySection(raw, &sec); err != nil {
+		return Section{}, err
+	}
 	return sec, nil
+}
+
+// parseDiscoverySection parses scan_lan/discovery_networks into sec, split
+// out of parseSection to keep it under the 50-line cap.
+func parseDiscoverySection(raw map[string]interface{}, sec *Section) error {
+	if v, ok := raw["scan_lan"]; ok {
+		b, ok := v.(bool)
+		if !ok {
+			return cascade.New(cascade.KindInvalidInput, "nodes: [nodes].scan_lan must be a bool")
+		}
+		sec.ScanLAN = b
+	}
+	if v, ok := raw["discovery_networks"]; ok {
+		list, ok := v.([]interface{})
+		if !ok {
+			return cascade.New(cascade.KindInvalidInput, "nodes: [nodes].discovery_networks must be a list of strings")
+		}
+		nets := make([]string, 0, len(list))
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return cascade.New(cascade.KindInvalidInput, "nodes: [nodes].discovery_networks entries must be strings")
+			}
+			nets = append(nets, s)
+		}
+		sec.DiscoveryNetworks = nets
+	}
+	return nil
 }

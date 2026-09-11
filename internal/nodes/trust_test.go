@@ -128,3 +128,16 @@ func TestSatisfiesUnknownGateRefused(t *testing.T) {
 		t.Fatal("an unrecognized gate must never be satisfied")
 	}
 }
+
+// TestSatisfiesGateLocalOnly proves GateLocalOnly is an exact identity
+// check against TierController, not a rank threshold: a worker-trusted
+// tier (which outranks nothing controller-equivalent) must not satisfy
+// it, and the controller tier itself must.
+func TestSatisfiesGateLocalOnly(t *testing.T) {
+	if !Satisfies(TierController, GateLocalOnly) {
+		t.Fatal("expected TierController to satisfy GateLocalOnly")
+	}
+	if Satisfies(TierWorkerTrusted, GateLocalOnly) {
+		t.Fatal("expected a non-controller tier to never satisfy GateLocalOnly")
+	}
+}

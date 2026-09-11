@@ -241,3 +241,41 @@ func TestRecordStorePutErrorPropagates(t *testing.T) {
 		t.Fatal("expected error from put when backend save fails")
 	}
 }
+
+func TestRecordStoreRemove_DeletesRecord(t *testing.T) {
+	store := NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now()))
+	id := testIdentity(t, "j")
+	if _, err := store.Enroll(id, TierWorkerTrusted); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Remove(id.NodeID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := store.Get(id.NodeID); err == nil {
+		t.Fatal("expected the record to be gone after Remove")
+	}
+}
+
+func TestRecordStoreRemove_UnknownNodeIsNotFound(t *testing.T) {
+	store := NewRecordStore(newMemRecordBackend(), testkit.NewFrozenClock(time.Now()))
+	err := store.Remove("does-not-exist")
+	if err == nil {
+		t.Fatal("expected an error for an unknown node id")
+	}
+	if k, ok := cascade.KindOf(err); !ok || k != cascade.KindNotFound {
+		t.Fatalf("expected KindNotFound, got %v (ok=%v)", k, ok)
+	}
+}
+
+func TestRecordStoreRemove_BackendSaveErrorPropagates(t *testing.T) {
+	backend := newMemRecordBackend()
+	store := NewRecordStore(backend, testkit.NewFrozenClock(time.Now()))
+	id := testIdentity(t, "k")
+	if _, err := store.Enroll(id, TierWorkerTrusted); err != nil {
+		t.Fatal(err)
+	}
+	backend.saveErr = cascade.New(cascade.KindUnavailable, "simulated write failure")
+	if err := store.Remove(id.NodeID); err == nil {
+		t.Fatal("expected error from Remove when backend save fails")
+	}
+}

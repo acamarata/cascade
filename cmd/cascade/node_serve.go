@@ -54,15 +54,16 @@ import (
 )
 
 // mountNodeCmd attaches the `node` command group with its `serve`
-// subcommand, following mountDaemonCmd's exact pattern. Sibling
-// subcommands (enroll/list/status/drain/remove, S-36.T4) attach to the
-// SAME group in a later ticket.
+// subcommand, following mountDaemonCmd's exact pattern, plus (S-36.T4)
+// every other node.* verb: enroll/list/status/drain/remove/rotate-key/
+// revoke, mounted via node.go's mountNodeCLICmds.
 func mountNodeCmd(root *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Manage this machine's participation in the node fleet",
 	}
 	cmd.AddCommand(newNodeServeCmd())
+	mountNodeCLICmds(cmd, productionNodeCLIDeps())
 	guardUnknownSubcommands(cmd)
 	root.AddCommand(cmd)
 }

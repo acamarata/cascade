@@ -69,11 +69,10 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	reg.Register(doctor.NewProviderHealthCheck(providerHealthSourceFor(paths)))
 	// nodes (P1-E17-W4-S36-T2): reads the same file-backed device record
 	// store `node serve` writes heartbeats into, so doctor reports the
-	// liveness the serving path actually recorded rather than a second
-	// opinion. nodesRecordStoreFor returns nil when the data directory
-	// cannot be resolved, and the check reports a nil store as StatusError
-	// rather than as "no nodes enrolled" - an unreadable subject is never
-	// silently OK.
+	// liveness the serving path actually recorded. nodesRecordStoreFor
+	// returns nil when the data directory cannot be resolved, and the
+	// check reports a nil store as StatusError rather than as "no nodes
+	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
@@ -253,7 +252,10 @@ func providerHealthSourceFor(paths runtime.PathProvider) doctor.ProviderHealthSo
 func (a providerHealthSourceAdapter) ListProviderHealth(ctx context.Context) ([]doctor.ProviderHealthRow, error) {
 	deps := productionProviderDeps()
 	if a.paths != nil {
-		deps.Paths = a.paths
+		// providerDepsFor, NOT a field reassignment: NewCustody and Gate
+		// capture the PathProvider in closures, so overwriting deps.Paths
+		// alone would leave those two still resolving the real home.
+		deps = providerDepsFor(a.paths)
 	}
 	store, err := openProviderStorage(ctx, deps)
 	if err != nil {

@@ -55,6 +55,11 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 		e.auditRefusal(ctx, req, tier, ErrNoLane)
 		return provider.ModelResponse{}, ErrNoLane
 	}
+	req, err = e.substituteInputs(ctx, req, tier)
+	if err != nil {
+		e.auditOutcome(ctx, req, tier, sel, "egress_substitution_failed", err)
+		return provider.ModelResponse{}, ErrEgressSubstitutionFailed
+	}
 	resp, finalSel, err := e.dispatchWithFailover(ctx, sel, req)
 	if err != nil {
 		mapped := mapProviderError(err)
@@ -134,6 +139,11 @@ func (e *Executor) ExecuteStream(ctx context.Context, req provider.ModelRequest)
 	if err != nil {
 		e.auditRefusal(ctx, req, tier, ErrNoLane)
 		return nil, nil, ErrNoLane
+	}
+	req, err = e.substituteInputs(ctx, req, tier)
+	if err != nil {
+		e.auditOutcome(ctx, req, tier, sel, "egress_substitution_failed", err)
+		return nil, nil, ErrEgressSubstitutionFailed
 	}
 	ch := make(chan provider.StreamEvent, 1)
 	cctx, cancel := context.WithCancel(ctx)

@@ -562,3 +562,44 @@ first half ran, so a vault-held secret with no credential shape crossed
 unredacted. A process that cannot open its vault gets no response
 marshaler and writes nothing, because a firewall that cannot read the
 vault cannot redact what is in it.
+
+## Conductor egress enforcement
+
+`conductor.provider-dispatch` (`EgressClassConductor`, internal/conductor
+/sensitivity.go) is the egress-inventory label for every outbound payload
+leaving the model-execution door toward a provider. It registers with
+`Enabled: true`, `AllowRestricted: true`, `AllowLocalOnly: true`, and
+`AllowedTiers` naming all four tiers (local-only, restricted, internal,
+public). Registration is idempotent: a second `RegisterEgressClassConductor`
+call on the same registry succeeds rather than erroring, since no single
+composition-root init hook exists yet to call it exactly once.
+
+`SubstitutionMiddleware` runs immediately after the router selects a lane
+and before any model-provider call. It carries the caller-declared
+sensitivity tier as an explicit argument (never derived from context or
+inferred from the payload) straight through to the firewall's
+`InterceptClass`. A substitutor error never lets the original payload
+through: `Execute` and `ExecuteStream` both return
+`ErrEgressSubstitutionFailed` and dispatch never runs.
+
+`EgressClassConductor` is the one registered class that admits local-only
+content, because router filter 2 (K/S-22.T2) is the layer that keeps
+local-only work off a remote lane before a lane is ever selected. The two
+layers agree by construction: a lane filter 2 retains is one whose content
+this class's firewall check then admits.
+
+**Known gap (recorded, not silent):** the ticket text also calls for a
+second, pre-dispatch assertion that the selected lane's *computed*
+locality is `local` before a local-only payload transits the middleware.
+`provider.Selection` carries no locality-bearing field, and
+`ExecutorConfig` (internal/conductor/pipeline.go) grants the execute path
+no registry reader to compute that predicate from at this layer; both are
+outside this ticket's files_scope. Router filter 2 remains the only
+reachable computed-locality enforcement point in this build. See the
+P1-E11-W3-S22-T3 journal for the full contradiction.
+
+Embeddings (J/S-19.T6's `ProviderEmbedder`) are specified to transit this
+same middleware under `EgressClassConductor`. `internal/conductor/embed.go`
+is outside this ticket's files_scope, so that wiring has not landed;
+embedding dispatch does not yet transit the substitution pass. This is a
+tracked gap, not a silent one.
