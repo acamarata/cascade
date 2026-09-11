@@ -288,3 +288,11 @@ func (e *Executor) append(ctx context.Context, req provider.ModelRequest, tier p
 		Explain:    explain,
 	})
 }
+
+// ExecuteFanOut dispatches n legs of req through FanOut (fanout.go),
+// R-21.214, using e.Execute as every leg's exec function. withPermit and
+// journal are per-call parameters, not Executor fields: ExecutorConfig
+// (pipeline.go) is outside this ticket's files_scope, see the journal.
+func (e *Executor) ExecuteFanOut(ctx context.Context, req provider.ModelRequest, n int, completed map[int]JobID, withPermit WithPermitFn, journal JournalAppender) ([]provider.ModelResponse, error) {
+	return FanOut(ctx, req, n, completed, withPermit, journal, e.Execute)
+}

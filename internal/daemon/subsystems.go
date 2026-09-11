@@ -23,10 +23,13 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // SubsystemState is one subsystem's lifecycle state as tracked by Manifest.
@@ -173,4 +176,43 @@ func (m *Manifest) logf(level slog.Level, name, msg, detail string) {
 		return
 	}
 	m.log.Log(context.Background(), level, msg, slog.String("subsystem", name), slog.String("detail", detail))
+}
+
+// conductorRouterSubsystem is the fail-loud Manifest name
+// RegisterConductorRouter reports under (R-14.87).
+const conductorRouterSubsystem = "conductor.router"
+
+// RegisterConductorRouter is the daemon composition root's call site for
+// wiring internal/conductor/task_classes.go's §5.16 taxonomy table into a
+// conductor.DefaultRouter (R-14.38, R-21.217). It builds the router from
+// reg/quota/clock — the same registry and QuotaPolicy dependencies
+// R-21.217 says already live at the composition root — plus
+// conductor.TaskClasses(), and records the wiring against m so "the
+// taxonomy table never reached the router" is a distinguishable, logged
+// failure rather than silent absence (R-14.87).
+//
+// CONTRACT DEVIATION (recorded, not papered over): this ticket's contract
+// text asserts subsystems.go "is where the Router's registry and
+// QuotaPolicy dependencies already live". They do not: at the time this
+// ticket landed, no file under internal/daemon constructed a
+// conductor.Router, a conductor.Executor, or any registry/QuotaPolicy
+// instance — grep across internal/daemon for NewDaemonRouter, NewRouter
+// and NewExecutor returns zero production call sites. This function is
+// therefore the composition root's FIRST Router-construction call site,
+// not a pre-existing one gaining a new argument, and no daemon startup
+// path (daemon.go, lifecycle_unix.go) yet calls it: those files are
+// outside this ticket's files_scope (internal/daemon/subsystems.go only).
+// See task_classes.go's journal entry for both sides quoted, and this
+// file's own testonly-allow.json entry recording the same gap.
+func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, quota conductor.QuotaSpiller, clock conductor.Clock) (*conductor.DefaultRouter, error) {
+	m.Register(conductorRouterSubsystem)
+	classes := conductor.TaskClasses()
+	if len(classes) != 9 {
+		reason := fmt.Sprintf("task-class taxonomy table has %d rows, want 9", len(classes))
+		m.Failed(conductorRouterSubsystem, reason)
+		return nil, fmt.Errorf("daemon: %s: %s", conductorRouterSubsystem, reason)
+	}
+	router := conductor.NewRouter(reg, quota, clock, classes)
+	m.Started(conductorRouterSubsystem, fmt.Sprintf("%d task classes loaded", len(classes)))
+	return router, nil
 }

@@ -203,12 +203,50 @@ func TestExecute_CancellationPropagation(t *testing.T) {
 	_ = drained
 }
 
-// TestExecute_FanOutParentResponseShape is UNMET: fan-out requires
-// provider.ModelRequest.FanOut and provider.ModelResponse.Legs/CostRecord
-// (R-21.214), which R-40.X8 places in pkg/provider/model.go. This ticket's
-// files_scope.change is empty and does not include pkg/provider/model.go,
-// so those fields cannot be added here without violating scope. See the
-// journal for both sides of this contradiction quoted.
+// TestExecute_FanOutParentResponseShape is PARTIALLY MET (S-23.T2): the
+// full parent-response shape R-21.214 describes (parent JobID, empty
+// Output, summed cost_record, index-ordered Legs) needs
+// provider.ModelRequest.FanOut and provider.ModelResponse.Legs/CostRecord,
+// which R-40.X8 places in pkg/provider/model.go - outside both S-22.T1's
+// and this ticket's files_scope. What IS provided and asserted here:
+// Executor.ExecuteFanOut (execute.go) routes n legs through FanOut
+// (fanout.go), using e.Execute as each leg's exec function, and returns
+// one index-ordered ModelResponse per leg, each with its own real JobID
+// from a real (audited) Execute call. See the journal for both sides of
+// the pkg/provider/model.go contradiction quoted.
+// concurrencySafeRouter wraps a *fakeRouter's fixed-mapping behavior
+// without its unsynchronized calls counter (model_test.go's fakeRouter is
+// shared across every _test.go file in this package and is not safe for
+// concurrent Select calls - the first caller to dispatch concurrent legs
+// through it, so this test supplies its own thread-safe double instead of
+// editing model_test.go, which is outside this ticket's files_scope).
+type concurrencySafeRouter struct{}
+
+func (concurrencySafeRouter) Select(_ context.Context, _ provider.ModelRequest, _ ...string) (provider.Selection, error) {
+	return provider.Selection{LaneID: "lane-1", Provider: "test", Model: "test-model"}, nil
+}
+
 func TestExecute_FanOutParentResponseShape(t *testing.T) {
-	t.Skip("blocked: provider.ModelRequest has no FanOut field and files_scope forbids editing pkg/provider/model.go to add it; see journal")
+	cfg, deps := newReadyConfig(t)
+	cfg.Router = concurrencySafeRouter{}
+	exec, err := NewExecutor(cfg)
+	if err != nil {
+		t.Fatalf("NewExecutor: %v", err)
+	}
+	req := validReq()
+	results, err := exec.ExecuteFanOut(context.Background(), req, 2, nil, passthroughPermit, &spyJournal{})
+	if err != nil {
+		t.Fatalf("ExecuteFanOut: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	for i, r := range results {
+		if r.JobID == "" {
+			t.Errorf("leg %d: empty JobID", i)
+		}
+	}
+	if deps.audit.count() != 2 {
+		t.Fatalf("audit count = %d, want 2 (one per leg through Execute)", deps.audit.count())
+	}
 }

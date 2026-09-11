@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"layout_version\":1,\"age_recipient\":\"age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqgpqyqszqgpq\"}")

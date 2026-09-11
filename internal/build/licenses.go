@@ -59,6 +59,14 @@ var LicenseAllowlist = map[string]bool{
 // each module's module-cache LICENSE file: zeebo/blake3 is public domain /
 // CC0-1.0, klauspost/cpuid/v2 is MIT - both allowlisted.
 //
+// P1-E19-W4-S41-T1 added filippo.io/age (the REFERENCE age encryption
+// implementation the backup pipeline's crypto.go encrypts/decrypts chunks
+// with - Art.2 forbids a hand-rolled cipher) and github.com/klauspost/compress
+// (pure-Go zstd - internal/backup/crypto.go's Compress/Decompress stage, no
+// CGO per 06 §2). Both verified against their module-cache LICENSE file:
+// BSD-3-Clause. Neither pulled in a new transitive dependency (`go mod tidy`
+// added no further require lines).
+//
 // The vault ticket (internal/secrets) added github.com/godbus/dbus/v5 (the
 // pure-Go D-Bus client the linux secret-service custody backend speaks, so
 // no libsecret cgo binding is needed) and golang.org/x/crypto (the
@@ -87,6 +95,8 @@ var LicenseAllowlist = map[string]bool{
 // new transitive dependency: wazero has no runtime dependencies of its
 // own (`go list -m all` shows none beyond the stdlib).
 var KnownModuleLicenses = map[string]string{
+	"filippo.io/age":                       "BSD-3-Clause",
+	"github.com/klauspost/compress":        "BSD-3-Clause",
 	"mvdan.cc/sh/v3":                       "BSD-3-Clause",
 	"github.com/godbus/dbus/v5":            "BSD-2-Clause",
 	"golang.org/x/crypto":                  "BSD-3-Clause",

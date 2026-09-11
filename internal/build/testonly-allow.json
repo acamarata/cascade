@@ -63,13 +63,6 @@
     "caller_site": "internal/daemon/daemon.go"
   },
   {
-    "symbol": "internal/storage.Export",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the export command",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "cmd/cascade/export.go"
-  },
-  {
     "symbol": "internal/storage.Import",
     "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "the import command",
@@ -936,5 +929,19 @@
     "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
     "retire_ticket": "P1-E28-W10-S57-T1",
     "caller_site": "internal/tools/coverage-matrix/main.go"
+  },
+  {
+    "symbol": "internal/conductor.ModelClassToTaskClass",
+    "reason": "P1-E11-W3-S22-T4 builds task_classes.go as the sole owner of the frozen §5.18 model_class->task_class mapping, exported specifically for callers outside conductor's own call path that resolve model_class before constructing a ModelRequest. K/S-22.T1's Execute never calls it (R-16.59: the envelope carries task_class only), and its two named production callers have not landed yet.",
+    "expected_caller": "N/S-30.T2 (ticket dispatch, internal/pbd) and AH/S-69.T3 (DAG jobs), both of which call ModelClassToTaskClass directly and set req.task_class themselves; retire this entry once either lands",
+    "retire_ticket": "P1-E14-W3-S30-T2",
+    "caller_site": "internal/pbd/dispatch.go"
+  },
+  {
+    "symbol": "internal/backup.Snapshot",
+    "reason": "P1-E19-W4-S41-T1 builds the chunk/dedup/zstd/encrypt pipeline and the repo layout as a standalone engine: Snapshot ties repo-config bootstrap and one domain's capture adapter to Pipeline.Write end to end, fully implemented and tested against a real SQLite database and the reference age library. The snapshot/manifest orchestration that loops over domains and calls it from a `backup create` surface is S-41.T2's, explicitly out of this ticket's files_scope.",
+    "expected_caller": "S-41.T2's snapshot/manifest layer, which calls Snapshot once per domain and records the returned []ObjectRef in a signed manifest; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S41-T2",
+    "caller_site": "internal/backup/snapshot.go"
   }
 ]
