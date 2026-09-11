@@ -1,0 +1,2 @@
+go test fuzz v1
+string("prose only, I approve of this, no marker")

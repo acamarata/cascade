@@ -139,11 +139,35 @@ func gitTrackedGoFiles(repoRoot string) ([]string, error) {
 	}
 	var files []string
 	for _, f := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
-		if f != "" {
-			files = append(files, f)
+		if f == "" || isSeededViolationFixture(f) {
+			continue
 		}
+		files = append(files, f)
 	}
 	return files, nil
+}
+
+// seededViolationDir holds the deliberately-broken fixtures the gates in
+// internal/build use to prove they can turn red.
+const seededViolationDir = "internal/build/testdata/seeded-violations/"
+
+// isSeededViolationFixture reports whether path is one of those fixtures.
+//
+// They must be excluded from every REAL-TREE scan, and the reason is not
+// tidiness. The SPORT gate's own fixture contains a deliberately malformed
+// SPORT marker so that the gate can be proven to fail on one. Scanning it
+// as if it were ordinary source makes the real-tree check report a
+// malformed line that is doing exactly its job, so the gate fails on its
+// own evidence and the registry cannot be generated at all.
+//
+// This bit locally for an unusually sharp reason: the scan reads `git
+// ls-files`, and the fixture was still UNTRACKED when the gate was written
+// and verified. It became tracked in the same commit that shipped the gate,
+// so the check went red the first time CI ran it and green every time
+// locally beforehand. A gate verified against a working tree is not
+// verified against the tree CI sees.
+func isSeededViolationFixture(path string) bool {
+	return strings.HasPrefix(path, seededViolationDir)
 }
 
 // ciMatrix mirrors the ".github/workflows/ci.yml" fields this file reads:

@@ -162,6 +162,22 @@ func (ac *AdmissionController) QueueDepth() int {
 	return ac.queue.Len()
 }
 
+// EnforcedCeiling reports the admission ceiling CURRENTLY in force -
+// never cfg.MaxInflight's static value alone. At StageHalt the honest
+// ceiling is zero additional room (Admit refuses every new request), so
+// EnforcedCeiling reports exactly the work already admitted, never a
+// higher number implying room that does not exist; StageCritical reports
+// its halved effective limit; StageNormal/StageWarn report cfg.MaxInflight
+// unchanged. This is the binding-ceiling-honesty seam P1-E18-W4-S40-T2's
+// HeadroomModel denominates against.
+func (ac *AdmissionController) EnforcedCeiling() int {
+	stage := ac.stage()
+	if stage == StageHalt {
+		return ac.Inflight()
+	}
+	return ac.effectiveMaxInflight(stage)
+}
+
 // Permit is the receipt Admit returns on a successful admission. Callers
 // must call Release exactly once when the admitted work finishes; Release
 // is idempotent and safe to call more than once, and a zero-value Permit's

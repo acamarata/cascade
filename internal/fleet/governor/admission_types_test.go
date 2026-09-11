@@ -32,6 +32,53 @@ func TestAdmissionRequestPriorityDefault(t *testing.T) {
 	}
 }
 
+// TestEnforcedCeilingReflectsCurrentStage proves binding-ceiling honesty
+// at the AdmissionController level: EnforcedCeiling tracks whatever
+// StageProvider reports right now, never cfg.MaxInflight alone -
+// StageCritical halves it, and StageHalt reports exactly the work already
+// admitted (zero additional room), never a higher static number.
+func TestEnforcedCeilingReflectsCurrentStage(t *testing.T) {
+	ac := newTestController(AdmissionConfig{MaxInflight: 8}, ResourceSnapshot{})
+
+	ac.SetStageProvider(func() ThrottleStage { return StageNormal })
+	if got := ac.EnforcedCeiling(); got != 8 {
+		t.Fatalf("EnforcedCeiling at StageNormal = %d, want 8 (cfg.MaxInflight unchanged)", got)
+	}
+
+	ac.SetStageProvider(func() ThrottleStage { return StageCritical })
+	if got := ac.EnforcedCeiling(); got != 4 {
+		t.Fatalf("EnforcedCeiling at StageCritical = %d, want 4 (halved)", got)
+	}
+
+	// At StageHalt with nothing admitted, the honest ceiling is zero
+	// additional room - never cfg.MaxInflight=8, which would imply
+	// capacity Admit would actually refuse.
+	ac.SetStageProvider(func() ThrottleStage { return StageHalt })
+	if got := ac.EnforcedCeiling(); got != 0 {
+		t.Fatalf("EnforcedCeiling at StageHalt with 0 inflight = %d, want 0 (Inflight(), not cfg.MaxInflight)", got)
+	}
+}
+
+// TestEnforcedCeilingAtHaltReflectsInflight proves the StageHalt case is
+// not simply always zero: it tracks the real in-flight count, so a
+// consumer denominating against it sees exactly the room Admit would
+// grant (none) rather than a fixed placeholder.
+func TestEnforcedCeilingAtHaltReflectsInflight(t *testing.T) {
+	ac := newTestController(AdmissionConfig{MaxInflight: 8}, ResourceSnapshot{})
+	ac.SetStageProvider(func() ThrottleStage { return StageNormal })
+
+	permit, err := ac.Admit(context.Background(), AdmissionRequest{Weight: 3})
+	if err != nil {
+		t.Fatalf("Admit() error = %v", err)
+	}
+	defer permit.Release()
+
+	ac.SetStageProvider(func() ThrottleStage { return StageHalt })
+	if got := ac.EnforcedCeiling(); got != 3 {
+		t.Fatalf("EnforcedCeiling at StageHalt with 3 inflight = %d, want 3", got)
+	}
+}
+
 func TestRequestWeightNormalization(t *testing.T) {
 	cases := []struct {
 		in   int

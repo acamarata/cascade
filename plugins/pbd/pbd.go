@@ -88,6 +88,9 @@ func manifestCommands() []plugin.CommandSpec {
 		{Name: moveCommandName, Description: "Relocate a PEWS ticket to a new canonical tree position."},
 		{Name: statusCommandName, Description: "Show a summary of the PEWS ticket tree for one phase.", RPCMethod: statusRPCMethod},
 		{Name: boardCommandName, Description: "Show the PEWS ticket tree for one phase grouped by model class.", RPCMethod: boardRPCMethod},
+		{Name: claimCommandName, Description: "Claim a PEWS ticket, starting its lifecycle.", RPCMethod: claimRPCMethod},
+		{Name: stepCommandName, Description: "Record a step, CR, or QA pass in a PEWS ticket's lifecycle.", RPCMethod: stepRPCMethod},
+		{Name: doneCommandName, Description: "Complete a PEWS ticket's lifecycle.", RPCMethod: doneRPCMethod},
 	}
 }
 
@@ -117,8 +120,10 @@ func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte
 // override; create, edit, and move have their own arg shapes documented
 // on runCreateCommand/runEditCommand/runMoveCommand (author.go). It
 // returns nil on success and a fail-closed *cascade.Error otherwise.
-func (handlers) RunCommand(_ context.Context, name string, args []string) error {
+func (handlers) RunCommand(ctx context.Context, name string, args []string) error {
 	switch name {
+	case claimCommandName, stepCommandName, doneCommandName:
+		return runLifecycleCommand(ctx, name, args)
 	case validateCommandName, lintCommandName:
 		if len(args) == 0 || args[0] == "" {
 			return cascade.Newf(cascade.KindInvalidInput, "pbd %s: a tree root argument is required", name)

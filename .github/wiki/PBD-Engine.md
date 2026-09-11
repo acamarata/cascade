@@ -243,3 +243,65 @@ excludes status/board, projection, lifecycle, and dispatch. See
 `internal/build/testonly-allow.json`'s entry for
 `plugins/pbd/internal/pews.CarryForward` — N/S-30's phase-close seam is
 the expected caller.
+
+## Dogfood engine conversion (N/S-30.T3)
+
+`Convert(src, dst string) (ConvertResult, error)` is the Epic N dogfood
+proof: it loads a PEWS tree from `src` via the S-28.T2 store, requires it
+to lint clean (`Lint`, which itself composes `Validate` as a
+precondition — both must report zero issues), and re-emits every ticket
+plus any `tombstones.yaml` into `dst`, skipping a file that already holds
+byte-identical content. No plan-Markdown parser, no dep-grammar
+re-resolver, and no new CLI verb are added — the ratified `pbd` namespace
+(`status · board · create|edit|move · validate · lint · claim|step|done`)
+is unchanged.
+
+**Dropped-nothing proof.** `Convert` never tries a ticket file and skips
+it on failure: `NewStore.Load`'s own contract already refuses the WHOLE
+load on any decode failure ("Load never returns a partially populated
+Tree on error"), so reusing that loader verbatim is what makes "an
+unparseable ticket refuses, never silently drops" true here, with no
+extra logic in this file.
+
+**Idempotency.** A second `Convert` call over an already-emitted target
+(the target used as its own source) compares each file's freshly-encoded
+bytes against what is already on disk and skips an unchanged file,
+reporting `ConvertResult{Changed: false}` — a clean "no changes" delta.
+
+**Emission is always scratch.** `dst` is always a `t.TempDir()` or other
+caller-supplied scratch target (R-14.45): this repo never gains a
+root-level `phase/` tree (Art.10.1 Clean Root), and the real plan tree
+under `.claude/planning/p1/` — gitignored, CI cannot read it — is never
+committed by this driver.
+
+### Local dogfood run (not a CI check)
+
+`TestDogfoodConvertRealPlan` is skipped unless `CASCADE_PBD_DOGFOOD_SRC`
+names the real forged P1 tree; `CASCADE_PBD_DOGFOOD_PLAN_AUDIT` optionally
+names `.plan-audit.py` for an active-ticket-count cross-check. This is
+local-only verification, documented in the ticket's journal, never a
+CI-path check — the source tree is gitignored.
+
+**Finding from the local run (2026-09-11):** converting the real P1 tree
+(405 ticket files, matching `.plan-audit.py`'s "405 active + 7
+tombstoned" count) refuses at the load step: 7 of the 405 files carry a
+field outside the closed 17-normative + 5-extra-flag `Ticket` contract
+(`security_class` in 3 files, `blocking` in 1, `amendment_note` in 3) —
+398 decode cleanly. This is a genuine plan-vs-schema mismatch, not an
+engine defect: `DecodeTicket`'s fail-closed behavior is exactly what
+caught it. Neither the source plan tree nor the schema contract are in
+this ticket's `files_scope` to fix.
+
+### Local checks
+
+```
+go build ./...
+go test ./plugins/pbd/internal/pews -run '^TestDogfoodConvert' -race -count=1
+go test ./plugins/pbd/... -run '^TestDogfood' -race -count=1
+go test -race ./plugins/pbd/...
+go vet ./plugins/pbd/...
+```
+
+No production caller exists yet — this ticket's own HOW section forbids
+adding one. See `internal/build/testonly-allow.json`'s entry for
+`plugins/pbd/internal/pews.Convert`.

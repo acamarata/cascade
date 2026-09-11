@@ -49,9 +49,23 @@ func gitTrackedGoFiles(repoRoot string) ([]string, error) {
 	}
 	var files []string
 	for _, f := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
-		if f != "" {
-			files = append(files, f)
+		if f == "" || strings.HasPrefix(f, seededViolationDir) {
+			continue
 		}
+		files = append(files, f)
 	}
 	return files, nil
 }
+
+// seededViolationDir holds the deliberately-broken fixtures internal/build's
+// gates use to prove they can turn red. One of them carries a malformed
+// SPORT marker on purpose, so scanning it as ordinary source makes this
+// package report a malformed line that is doing exactly its job: the gate
+// then fails on its own evidence and the registry cannot be generated.
+//
+// Worth knowing why this was missed: the scan reads `git ls-files`, and the
+// fixture was still UNTRACKED while the gate was written and verified. It
+// became tracked in the same commit that shipped the gate, so the check was
+// green every local run beforehand and red the first time CI saw it. A gate
+// verified against a working tree is not verified against the tree CI sees.
+const seededViolationDir = "internal/build/testdata/seeded-violations/"

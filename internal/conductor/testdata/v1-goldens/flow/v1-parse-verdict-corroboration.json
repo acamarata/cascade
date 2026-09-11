@@ -1,0 +1,23 @@
+{
+  "provenance": {
+    "tool": "git show <tag>:<path>",
+    "source_repo": "../cascade-v1",
+    "tag": "archive/p9-integration",
+    "date_harvested": "2026-08-31",
+    "source_file": "crates/cascade-cli/src/cmd/conductor/flow/tests.rs",
+    "note": "historical record only; not read by flow_test.go, whose assertions cite the R-21.218 table in v2's own grammar"
+  },
+  "cases": [
+    {"v1_test": "an_explicit_pass_is_a_pass", "input": "looks fine.\n[[VERDICT: pass]]", "v1_output": "Pass"},
+    {"v1_test": "an_explicit_pass_is_a_pass", "input": "[[VERDICT:pass]]", "v1_output": "Pass"},
+    {"v1_test": "an_explicit_pass_is_a_pass", "input": "[[VERDICT: PASS]]", "v1_output": "Pass"},
+    {"v1_test": "a_fail_carries_its_reason", "input": "[[VERDICT: fail — off-by-one in the loop bound]]", "v1_output": "Fail{reason: \"off-by-one in the loop bound\"}"},
+    {"v1_test": "a_bare_fail_is_still_a_fail", "input": "[[VERDICT: fail]]", "v1_output": "Fail{reason: \"\"}"},
+    {"v1_test": "prose_approval_without_the_marker_is_not_a_pass", "input": "This looks good to me, no issues found.", "v1_output": "Unclear"},
+    {"v1_test": "prose_approval_without_the_marker_is_not_a_pass", "input": "I approve. Ship it.", "v1_output": "Unclear"},
+    {"v1_test": "a_malformed_or_missing_marker_is_unclear_not_pass", "input": "", "v1_output": "Unclear"},
+    {"v1_test": "a_malformed_or_missing_marker_is_unclear_not_pass", "input": "[[VERDICT: maybe]]", "v1_output": "Unclear"},
+    {"v1_test": "a_malformed_or_missing_marker_is_unclear_not_pass", "input": "[[VERDICT: pass", "v1_output": "Unclear"},
+    {"v1_test": "no_reviewers_is_not_a_pass", "input": "[]", "v1_output": "cleared=false"}
+  ]
+}

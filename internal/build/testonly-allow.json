@@ -518,13 +518,6 @@
     "caller_site": "internal/fleet/sessions/confidence.go"
   },
   {
-    "symbol": "plugins/pbd/internal/pews.RequireBuildable",
-    "reason": "P1-E14-W3-S29-T2 (draft-phase isolation) implements R-21.276's 'a draft phase cannot be built' as a typed refusal, but this ticket's own full_desc explicitly excludes lifecycle/dispatch scope ('Do not add residue carry-forward, status/board, lifecycle, projection, or dispatch; those remain with N/S-29.T1/T3-T4 and N/S-30'), so no build/dispatch entry point exists yet to call it from.",
-    "expected_caller": "N/S-30's ticket-lifecycle/dispatch seam (ticket to conductor task), which gates a build attempt against a phase's Draft state before dispatching; retire this entry once that wiring lands",
-    "retire_ticket": "P1-E14-W3-S29-T2",
-    "caller_site": "internal/conductor/dispatch.go"
-  },
-  {
     "symbol": "plugins/pbd.ReadRowsFromStore",
     "reason": "P1-E14-W3-S29-T4 (status/board CLI) reads status/board data directly from the PEWS file tree (RunStatus/RunBoard) because RunCommand and DispatchTool's fixed signatures carry no channel to inject a pkg/provider.Store, and no daemon composition root exists yet to supply one at dispatch time. ReadRowsFromStore is the literal T1-files-to-database-projection read path the ticket's HOW section names, fully implemented and tested against a real providers/sqlite.Store populated by the real pews.Projector (TestReadRowsFromStore), ready for a caller that already holds a Store.",
     "expected_caller": "a daemon composition root that constructs a live pkg/provider.Store and wires it into the plugin.pbd.status/plugin.pbd.board RPC dispatch path (or a future RunCommand/DispatchTool signature that carries one); retire this entry once that wiring lands",
@@ -936,5 +929,82 @@
     "expected_caller": "S-41.T4's restore integrity gate, which calls ReadManifest to recover and verify a snapshot's manifest; retire this entry once it lands",
     "retire_ticket": "P1-E19-W4-S41-T4",
     "caller_site": "internal/backup/restore.go"
+  },
+  {
+    "symbol": "internal/conductor.ParseVerdict",
+    "reason": "P1-E11-W3-S23-T6 builds the FLOW primitives (ParseVerdict, Consensus, LoopStop) as pure Go decision functions per the R-21.218 normative table. This ticket's files_scope is limited to flow.go/flow_test.go/flow_fuzz_test.go/testdata and does not include any caller file; the loop-until-dry, adversarial-verify-N, and completeness-critic driver that dispatches models and calls these primitives is W6 Epics AC/AD (agentic AgentProvider execution, R-16.12), not yet built. Every branch (case-insensitive match, first-line-wins, no-match fail-closed) is exercised directly by flow_test.go and FuzzParseVerdict.",
+    "expected_caller": "P1-E29-W6-S60-T2 (typed job templates for six work kinds, including adversarial), which depends on this ticket and will call ParseVerdict on each reviewer's raw output; retire this entry once it lands",
+    "retire_ticket": "P1-E29-W6-S60-T2",
+    "caller_site": "internal/conductor/flow.go"
+  },
+  {
+    "symbol": "internal/conductor.Consensus",
+    "reason": "Same P1-E11-W3-S23-T6 scope constraint as ParseVerdict above: the adversarial-verify-N caller that aggregates N reviewers' verdicts via Consensus is W6 Epics AC/AD and is not yet built. Every branch (weighted share, high-price veto, exact-0.5 tie, empty-quorum typed error) is exercised directly by flow_test.go.",
+    "expected_caller": "P1-E29-W6-S60-T2 (typed job templates for six work kinds, including adversarial), which depends on this ticket and will call Consensus once per round to aggregate reviewer verdicts; retire this entry once it lands",
+    "retire_ticket": "P1-E29-W6-S60-T2",
+    "caller_site": "internal/conductor/flow.go"
+  },
+  {
+    "symbol": "internal/conductor.LoopStop",
+    "reason": "Same P1-E11-W3-S23-T6 scope constraint as ParseVerdict above: the loop-until-dry caller that decides whether to continue another round via LoopStop is W6 Epics AC/AD and is not yet built. Every branch (identical-consecutive-rounds, attempt-cap, cost-ceiling) is exercised directly by flow_test.go.",
+    "expected_caller": "P1-E29-W6-S60-T2 (typed job templates for six work kinds, including adversarial), which depends on this ticket and will call LoopStop after each round to decide whether to continue; retire this entry once it lands",
+    "retire_ticket": "P1-E29-W6-S60-T2",
+    "caller_site": "internal/conductor/flow.go"
+  },
+  {
+    "symbol": "internal/fleet.NewHeadroomPublisher",
+    "reason": "P1-E18-W4-S40-T2 builds the fleet headroom model as a real, fully tested consumer of governor.AdmissionController.Inflight/EnforcedCeiling and census.Reader, publishing to the C-S05.T4 *runtime.Registry gauge API. It has no composition-root ticket of its own: governor.NewAdmissionController and governor.NewThrottleLadder themselves are still test-only-allowed (see the entries above) pending the daemon composition root that constructs the shared Sampler/AdmissionController/ThrottleLadder in the first place (P1-E13-W3-S26-T1/T2/T3). HeadroomPublisher cannot be given a real production caller before that root exists to hand it a live AdmissionController. Compute/Start/Stop/gauge-publication are fully implemented and tested (-race clean): full-capacity zero-ratio, zero-admission full-headroom, enforced_ceiling=0 fail-closed refusal, nil-seam fail-closed refusal, mid-run ceiling-drop reflection, binding-ceiling-honesty (never the static config max), census.Reader-only consumption, Registry gauge snapshot publication, Start/Stop idempotency, and an unavailable-tick-leaves-gauges-unchanged proof.",
+    "expected_caller": "the daemon composition root that also constructs the shared Sampler/AdmissionController/ThrottleLadder (P1-E13-W3-S26-T1/T2/T3) and Conductor's fan-out primitive (K/S-23.T2); retire this entry once that root lands and calls NewHeadroomPublisher with the real AdmissionController and Registry",
+    "retire_ticket": "S-23.T2",
+    "caller_site": "cmd/cascade/daemon_unix_fleet_governor.go"
+  },
+  {
+    "symbol": "internal/fleet.RegisterBenchHandlers",
+    "reason": "P1-E12-W3-S25-T5 builds the fleet.bench_lane JSON-RPC door, matching internal/fleet/sessions.RegisterHandlers's already-documented precedent exactly (P1-E12-W3-S24-T3, see its own CONTRACT DEVIATION note in internal/fleet/sessions/rpc.go): internal/rpc/registry.go's Register is a fully generic name->HandlerFunc map with no method-specific code, so every landed precedent registers via a Register*Handlers function called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which is out of this ticket's files_scope. RegisterBenchHandlers is fully implemented and tested through a real *rpc.Registry.Dispatch (happy path, missing lane_id refusal, unknown-field refusal, method-registered check) against a fake ModelExecutor; only the live ModelExecutor (K/S-22.T1's Conductor) the composition root would inject is missing.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, once a live pkg/provider.ModelExecutor (Conductor) exists to inject; retire this entry once it registers fleet.bench_lane there",
+    "retire_ticket": "P1-E11-W3-S22-T1",
+    "caller_site": "cmd/cascade/daemon_unix_fleet_rpc.go"
+  },
+  {
+    "symbol": "internal/fleet.WithBenchClock",
+    "reason": "P1-E12-W3-S25-T5's Probe/Bench never read a bare time.Now (Art.7.3): WithBenchClock installs an injected elapsed-time reading on ctx for LatencyMS. bench_test.go exercises it directly (TestProbeSuccess); the daemon composition root that would wire a real runtime.Clock-backed reading through it is the same one that constructs a live ModelExecutor (see the RegisterBenchHandlers entry directly above) and is out of this ticket's files_scope.",
+    "expected_caller": "the daemon composition root (cmd/cascade/daemon_unix_run.go) that constructs the real ModelExecutor and wires a runtime.Clock-backed elapsed-time reading through WithBenchClock before calling Probe/Bench in production; retire this entry once that lands",
+    "retire_ticket": "P1-E11-W3-S22-T1",
+    "caller_site": "cmd/cascade/daemon_unix_fleet_rpc.go"
+  },
+  {
+    "symbol": "plugins/pbd.ClaimRPC",
+    "reason": "P1-E14-W3-S30-T1 (ticket lifecycle) mounts plugin.pbd.claim's RPCMethod name on the manifest and drives RunCommand's claim verb through runLifecycle directly (TestTicketLifecycleCommands), matching status.go/board's own RunCommand-vs-RPC split, but no daemon composition root exists yet that constructs an internal/rpc.Registry and calls Register(claimRPCMethod, ClaimRPC) in production (the same gap NewEventsHandler and ReadRowsFromStore already document above). ClaimRPC is fully implemented and proven against a real rpc.Registry/rpc.Parse client (TestTicketLifecycleRealJSONRPCCounterpart, Art.2).",
+    "expected_caller": "a future internal/daemon/pbd_rpc.go (or equivalent daemon composition file) that builds the JSON-RPC registry and registers every plugin-contributed RPCMethod, mirroring internal/daemon/journal_rpc.go's own pattern; retire this entry once claim/step/done register there",
+    "retire_ticket": "P1-E14-W3-S30-T1",
+    "caller_site": "internal/daemon/pbd_rpc.go"
+  },
+  {
+    "symbol": "plugins/pbd.StepRPC",
+    "reason": "Same gap as plugins/pbd.ClaimRPC directly above: plugin.pbd.step has no daemon composition root registering it yet. Fully implemented and proven against a real rpc.Registry/rpc.Parse client (TestTicketLifecycleRealJSONRPCCounterpart).",
+    "expected_caller": "a future internal/daemon/pbd_rpc.go that registers every plugin-contributed RPCMethod; retire alongside ClaimRPC/DoneRPC once that wiring lands",
+    "retire_ticket": "P1-E14-W3-S30-T1",
+    "caller_site": "internal/daemon/pbd_rpc.go"
+  },
+  {
+    "symbol": "plugins/pbd.DoneRPC",
+    "reason": "Same gap as plugins/pbd.ClaimRPC directly above: plugin.pbd.done has no daemon composition root registering it yet. Fully implemented and proven against a real rpc.Registry/rpc.Parse client (TestTicketLifecycleRealJSONRPCCounterpart).",
+    "expected_caller": "a future internal/daemon/pbd_rpc.go that registers every plugin-contributed RPCMethod; retire alongside ClaimRPC/StepRPC once that wiring lands",
+    "retire_ticket": "P1-E14-W3-S30-T1",
+    "caller_site": "internal/daemon/pbd_rpc.go"
+  },
+  {
+    "symbol": "plugins/pbd/internal/pews.DecodeLifecyclePayload",
+    "reason": "P1-E14-W3-S30-T1's EncodeLifecyclePayload-equivalent write path (encodeLifecyclePayload, unexported) is fully wired into RecordCR/RecordQA/Step; DecodeLifecyclePayload is the read-side counterpart, proven directly (TestTicketLifecycle's level-carriage subtest), but no production caller reads a recorded entry's payload back yet: this ticket adds only claim/step/CR/QA/done write handling and the status/board surfaces (S-29.T4) report pews.Row fields, not journal payloads.",
+    "expected_caller": "a future ticket-history/detail read surface (e.g. a `pbd history` verb or a lifecycle-aware `pbd status` extension) that decodes a ticket's recorded CR/QA levels or step notes back out for display; retire this entry once that lands",
+    "retire_ticket": "P1-E14-W3-S30-T1",
+    "caller_site": "plugins/pbd/history.go"
+  },
+  {
+    "symbol": "plugins/pbd/internal/pews.Convert",
+    "reason": "P1-E14-W3-S30-T3 (dogfood-convert P1 plan through PEWS engine) is itself the dogfood proof, not a shipped end-user feature: its own HOW section explicitly forbids adding a new CLI verb ('the ratified 07 pbd namespace is unchanged') and forbids a plan-Markdown parser or dep-grammar re-resolver. Convert is exercised two ways: TestDogfoodConvert (committed fixture trees, happy path plus every error path) and the env-guarded TestDogfoodConvertRealPlan (CASCADE_PBD_DOGFOOD_SRC), which converts the real, gitignored P1 tree locally and cross-checks the active ticket count against .plan-audit.py. 06-FORGE-SPEC §6.4 frames this as an engine-conversion proof for a YAML tree that remains its own source of truth 'until then' — Convert has no reason to run outside a test or a future migration tool.",
+    "expected_caller": "a future migration ticket that moves the PEWS tree's source of truth from YAML files to database-backed storage (06-FORGE-SPEC §6.4's 'until then'), which would call Convert (or its direct successor) as the one-time migration step; retire this entry if/when that ticket lands, or if a phase-close tool adopts Convert directly",
+    "retire_ticket": "P1-E14-W3-S30-T3",
+    "caller_site": "internal/migrate/pews_migrate.go"
   }
 ]
