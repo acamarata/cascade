@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T20:37:25Z",
+  "generated_at": "2026-09-11T20:56:03Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2047,6 +2047,18 @@
           "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
         },
         {
+          "file": "cmd/cascade/daemon_unix_memory_jobs_sink_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade (ADD, coverage-floor fix)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_run_memory_sink_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade (ADD, coverage-floor fix)."
+        },
+        {
           "file": "cmd/cascade/main.go",
           "line": 21,
           "status": "",
@@ -2057,6 +2069,18 @@
           "line": 15,
           "status": "",
           "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
+        },
+        {
+          "file": "cmd/cascade/profile_server_stub_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade (ADD, coverage-floor fix)."
+        },
+        {
+          "file": "cmd/cascade/provider_registry_adapter_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade (ADD, coverage-floor fix)."
         },
         {
           "file": "cmd/cascade/root.go",
@@ -2084,7 +2108,8 @@
         }
       ],
       "statuses": [
-        ""
+        "",
+        "ADD"
       ]
     },
     {
@@ -2643,6 +2668,12 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/node (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/node_serve_drain.go",
+          "line": 4,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/node (CHANGE, drain-on-cancel fix)."
         },
         {
           "file": "cmd/cascade/node_serve_presence.go",
@@ -4298,7 +4329,14 @@
       "sites": [
         {
           "file": "internal/backup/integrity.go",
-          "line": 28,
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S41-T4",
+          "raw": "internal.backup.integrity/ADDED (P1-E19-W4-S41-T4)."
+        },
+        {
+          "file": "internal/backup/integrity_scope_test.go",
+          "line": 7,
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T4",
           "raw": "internal.backup.integrity/ADDED (P1-E19-W4-S41-T4)."
@@ -8141,6 +8179,12 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/build (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/build/stringers_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/build (ADD, coverage-floor fix)."
         }
       ],
       "statuses": [
@@ -8279,6 +8323,12 @@
           "raw": "internal/daemon (ADD, T0-daemon-composition-root; attention"
         },
         {
+          "file": "internal/daemon/attention_rpc_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, coverage-floor fix)."
+        },
+        {
           "file": "internal/daemon/conductor_execute.go",
           "line": 28,
           "status": "ADD",
@@ -8295,6 +8345,18 @@
           "line": 17,
           "status": "ADD",
           "raw": "internal/daemon (ADD, R-16.80)."
+        },
+        {
+          "file": "internal/daemon/conductor_execute_params_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, coverage-floor fix)."
+        },
+        {
+          "file": "internal/daemon/conductor_execute_unit_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, coverage-floor fix)."
         },
         {
           "file": "internal/daemon/context_assemble.go",
@@ -8505,10 +8567,22 @@
           "raw": "internal/daemon (CHANGED, approval/policy registration,"
         },
         {
+          "file": "internal/daemon/policy_rpc_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, coverage-floor fix)."
+        },
+        {
           "file": "internal/daemon/reachability_wiring.go",
           "line": 18,
           "status": "ADD",
           "raw": "internal/daemon (ADD, R-16.80)."
+        },
+        {
+          "file": "internal/daemon/reachability_wiring_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, coverage-floor fix)."
         },
         {
           "file": "internal/daemon/recall_index.go",
@@ -15088,7 +15162,7 @@
       ]
     }
   ],
-  "total_sites": 1507,
-  "unspecified_count": 30,
-  "multi_status_count": 24
+  "total_sites": 1519,
+  "unspecified_count": 29,
+  "multi_status_count": 25
 }

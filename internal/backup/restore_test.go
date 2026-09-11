@@ -62,6 +62,22 @@ func readKVRows(t *testing.T, db *sql.DB, namespace string) []kvRow {
 	return out
 }
 
+// firstObjectKey returns one arbitrary stored objects/ key. Safe ONLY
+// against a target holding a single snapshot's objects (restoreFixture's
+// shape: one CreateSnapshot call, no chain) — every stored object then
+// necessarily belongs to that one manifest, so which key List happens to
+// return first does not matter. A target built from a CHAIN of snapshots
+// does not have this property (see integrity_test.go's manifestObjectKey
+// and its doc comment for why) and must not use this helper.
+func firstObjectKey(t *testing.T, target *memTarget) string {
+	t.Helper()
+	keys, err := target.List(context.Background(), "objects/")
+	if err != nil || len(keys) == 0 {
+		t.Fatalf("List(objects/) = %v, %v; want at least one stored object", keys, err)
+	}
+	return keys[0]
+}
+
 // restoreFixture builds one real snapshot over one real SQLite domain
 // (source) plus a fresh, independently-bootstrapped destination database,
 // and returns everything RestoreOptions needs.

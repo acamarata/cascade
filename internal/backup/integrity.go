@@ -5,10 +5,25 @@
 //	Restore calls FIRST, before touching a single domain. It walks
 //	Manifest's previous_snapshot chain back to genesis re-verifying every
 //	ancestor's signature/root_hash/link (S-41.T2's manifest.go), then
-//	confirms the target snapshot's own object set is complete and
-//	authentic by re-decrypting every stored chunk (pipeline.go's
-//	readOneChunk — reused as-is, so this file adds no new parser per 06
-//	§5.7).
+//	confirms the TARGET snapshot's own object set — and only the target
+//	snapshot's — is complete and authentic by re-decrypting every stored
+//	chunk it lists (pipeline.go's readOneChunk — reused as-is, so this
+//	file adds no new parser per 06 §5.7).
+//
+// Scope decision (deliberate, not an oversight — see VerifyIntegrity's own
+// doc comment for the full statement and TestIntegrityGate_ObjectScopeIs-
+// TargetSnapshotOnly for the pinning test): object-level re-decryption
+// covers the id argument's own manifest entries only. An ancestor's
+// MANIFEST is cryptographically re-verified (signature, root_hash, link)
+// by every chain walk; an ancestor's OBJECTS — chunks referenced only by
+// an older snapshot and not by the target — are not read. This keeps
+// "can I restore this snapshot" (Restore's actual question, and the one
+// a corrupted, no-longer-needed ancient chunk must never block) separate
+// from "is the entire backup history's every chunk still intact" (a
+// distinct, chain-wide question a future full-history audit would answer
+// by calling VerifyIntegrity once per snapshot id, at O(total chunks in
+// the whole chain) cost, not by this single call silently doing that work
+// under one id).
 //
 // Inputs: a Target, the S-42.T6 backup age identity (resolved here, via
 //
@@ -89,18 +104,41 @@ type GateOptions struct {
 	PubKey ed25519.PublicKey
 }
 
-// GateReport summarizes one passed VerifyIntegrity call.
+// GateReport summarizes one passed VerifyIntegrity call. The two counters
+// measure DIFFERENT scopes, deliberately (see VerifyIntegrity's doc
+// comment): ChainDepth is chain-wide (every ancestor manifest reached by
+// the walk), ObjectsVerified is NOT (id's own manifest entries only) — a
+// large ChainDepth next to a small ObjectsVerified is expected on a long
+// history and is not itself a sign anything was skipped that should not
+// have been.
 type GateReport struct {
-	Snapshot        SnapshotID
-	ChainDepth      int // ancestors walked, including the target snapshot
-	ObjectsVerified int // objects re-decrypted and hash-checked
+	Snapshot   SnapshotID
+	ChainDepth int // ancestor MANIFESTS walked and re-verified, including id itself
+	// ObjectsVerified counts objects re-decrypted and hash-checked from
+	// id's OWN manifest entries only — never an ancestor's. A chunk
+	// referenced solely by an older snapshot is not counted here and is
+	// not read by this call at all.
+	ObjectsVerified int
 }
 
 // VerifyIntegrity is the fail-closed gate: resolve the backup age identity,
 // walk id's previous_snapshot chain back to genesis re-verifying every
-// ancestor (signature, root_hash, link), then re-decrypt and hash-check
-// every object the target snapshot's manifest lists. A damaged repo at any
+// ancestor MANIFEST (signature, root_hash, link), then re-decrypt and
+// hash-check every object id's OWN manifest lists. A damaged repo at any
 // of these steps never passes: the first failure is returned immediately.
+//
+// Object-verification scope, stated plainly because "integrity verified"
+// that silently means only "the tip is restorable" is a false assurance:
+// this call reads and authenticates the chunks id's manifest references.
+// It does NOT read a chunk that exists solely because an OLDER ancestor
+// snapshot in the same chain wrote it and id's own manifest never refers
+// back to it. Ancestor manifests are still fully cryptographically
+// verified (their signature, root_hash, and previous_snapshot link), so a
+// tampered or forged ancestor is caught; a bit-rotted ancestor OBJECT that
+// no living manifest still needs is not. To verify an ancestor snapshot's
+// own objects, call VerifyIntegrity with that ancestor's SnapshotID
+// directly — each call's ObjectsVerified always describes only the id it
+// was given.
 func VerifyIntegrity(ctx context.Context, opts GateOptions, id SnapshotID) (Manifest, GateReport, error) {
 	if len(opts.PubKey) != ed25519.PublicKeySize {
 		return Manifest{}, GateReport{}, cascade.New(cascade.KindInvalidInput,

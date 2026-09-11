@@ -35,15 +35,43 @@ func (m *memTarget) truncate(key string) {
 	m.data[key] = append([]byte{}, data[:len(data)/2]...)
 }
 
-// firstObjectKey returns one arbitrary stored objects/ key, so a test can
-// corrupt a real chunk without hard-coding a hash.
-func firstObjectKey(t *testing.T, target *memTarget) string {
+// manifestObjectKey returns the stored objects/ key that m's OWN manifest
+// entries reference, via the identical hex-hash -> object-key path
+// production uses (manifestRefToObjectRef + ObjectKey). Unlike picking an
+// arbitrary key off Target.List, this is safe to use against a target that
+// holds more than one snapshot's objects (a chained fixture): the key
+// comes straight from m's own manifest, so whatever it names is guaranteed
+// to be something m's own completeness pass reads — regardless of whether
+// that same object also happens to be reachable from another snapshot in
+// the chain. Target.List("objects/") over a multi-snapshot target does NOT
+// have this property: object ids are content-addressed, and
+// ExportHeader.ExportedAt usually (but not always — two captures can land
+// in the same RFC3339 second and dedup to one shared object, see
+// distinctChainedSnapshots's doc comment) makes each snapshot's export
+// bytes distinct, so List's returned set — and therefore which key sorts
+// first — varies run to run with the wall clock. That variability is
+// exactly what made the original firstObjectKey-over-List helper flaky.
+func manifestObjectKey(t *testing.T, m Manifest) string {
 	t.Helper()
-	keys, err := target.List(context.Background(), "objects/")
-	if err != nil || len(keys) == 0 {
-		t.Fatalf("List(objects/) = %v, %v; want at least one stored object", keys, err)
+	ref, ok := firstManifestRef(m)
+	if !ok {
+		t.Fatalf("manifest %q has no entries/refs to corrupt", m.Snapshot)
 	}
-	return keys[0]
+	objRef, err := manifestRefToObjectRef(ref)
+	if err != nil {
+		t.Fatalf("manifestRefToObjectRef(%q): %v", ref.Hash, err)
+	}
+	return ObjectKey(objRef.Hash)
+}
+
+// firstManifestRef returns m's first entries/refs element, if any.
+func firstManifestRef(m Manifest) (ManifestObjectRef, bool) {
+	for _, entry := range m.Entries {
+		if len(entry.Refs) > 0 {
+			return entry.Refs[0], true
+		}
+	}
+	return ManifestObjectRef{}, false
 }
 
 // chainedSnapshots builds two real, chained snapshots (via CreateSnapshot,
@@ -130,7 +158,7 @@ func TestIntegrityGate_DetectsTamperedObject(t *testing.T) {
 	if _, _, err := VerifyIntegrity(ctx, opts, second.Snapshot); err != nil {
 		t.Fatalf("baseline VerifyIntegrity before tampering: %v", err)
 	}
-	target.corrupt(firstObjectKey(t, target))
+	target.corrupt(manifestObjectKey(t, second))
 
 	_, _, err := VerifyIntegrity(ctx, opts, second.Snapshot)
 	if err == nil {
@@ -149,7 +177,7 @@ func TestIntegrityGate_DetectsTruncatedObject(t *testing.T) {
 	if _, _, err := VerifyIntegrity(ctx, opts, second.Snapshot); err != nil {
 		t.Fatalf("baseline VerifyIntegrity before truncation: %v", err)
 	}
-	target.truncate(firstObjectKey(t, target))
+	target.truncate(manifestObjectKey(t, second))
 
 	if _, _, err := VerifyIntegrity(ctx, opts, second.Snapshot); err == nil {
 		t.Fatal("VerifyIntegrity after truncating a stored object = nil error, want a refusal")
@@ -164,7 +192,7 @@ func TestIntegrityGate_DetectsMissingObject(t *testing.T) {
 	if _, _, err := VerifyIntegrity(ctx, opts, second.Snapshot); err != nil {
 		t.Fatalf("baseline VerifyIntegrity before deletion: %v", err)
 	}
-	objectKey := firstObjectKey(t, target)
+	objectKey := manifestObjectKey(t, second)
 	if err := target.Delete(ctx, objectKey); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
