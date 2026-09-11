@@ -127,6 +127,24 @@ func (f *fakeJournalStore) Replay(_ context.Context, entityID string, _ journal.
 	return out, nil
 }
 
+// ListEntities and Recover satisfy journal.Store's two enumeration/
+// recovery methods (M/S-27.T2 CHANGE to journal.go): this fake has no
+// torn-tail concept of its own (Append never writes malformed bytes), so
+// Recover always reports a clean scan.
+func (f *fakeJournalStore) ListEntities(_ context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.entries))
+	for id := range f.entries {
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+func (f *fakeJournalStore) Recover(_ context.Context, _ string) (journal.TruncationReport, error) {
+	return journal.TruncationReport{}, nil
+}
+
 func (f *fakeJournalStore) Close() error { return nil }
 
 func (f *fakeJournalStore) count(entityID string) int {

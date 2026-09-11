@@ -110,6 +110,8 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 	cmd.Flags().BoolVar(&f.fix, "fix", false,
 		"attempt to remediate every fixable check that reports a problem")
 	cmd.AddCommand(newDoctorBundleCmd(deps))
+	cmd.AddCommand(newDoctorCountsCmd(deps))
+	cmd.AddCommand(newDoctorSportCmd(deps))
 	return cmd
 }
 

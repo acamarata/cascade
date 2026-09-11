@@ -76,7 +76,16 @@ func (b *Broker) Backend() string { return b.custody.Name() }
 
 // authorize runs the elevated-verb gate. A broker with no gate refuses:
 // this is the fail-closed rule that keeps a partially-wired composition
-// root from handing out secret values with no authorisation at all.
+// root from handing out secret values with no authorisation at all. The
+// platform-wide fallback (Windows has no local elevation helper) applies
+// ONLY in that no-gate case: an injected gate is always consulted and
+// always decides, on every platform, so a caller that wires a real
+// elevation gate (the production CLI path, or an internal broker used for
+// OAuth token storage) gets that gate's answer rather than a hardcoded
+// per-platform override. TestBrokerNilGateRefusesElevatedVerbs's own
+// isKindOneOf(ElevationRequired, Unsupported) is written for exactly this:
+// the nil-gate branch is allowed to answer differently per platform, the
+// gate-present branch is not.
 //
 // The single-use attestation ledger check belongs here once the approval
 // token layer lands; the gate interface is the seam it plugs into, and the
@@ -84,14 +93,14 @@ func (b *Broker) Backend() string { return b.custody.Name() }
 // CASCADE-ALLOW: approval-token ledger wiring is owned by the audit-domain
 // ticket that follows this one; the ElevationGate seam is the open path.
 func (b *Broker) authorize(ctx context.Context, verb string) error {
+	if b.gate != nil {
+		return b.gate.Authorize(ctx, verb)
+	}
 	if refusal := platformElevatedRefusal(); refusal != nil {
 		return refusal
 	}
-	if b.gate == nil {
-		return cascade.Newf(cascade.KindElevationRequired,
-			"secrets: %s is an elevated verb and no elevation gate is configured; refusing", verb)
-	}
-	return b.gate.Authorize(ctx, verb)
+	return cascade.Newf(cascade.KindElevationRequired,
+		"secrets: %s is an elevated verb and no elevation gate is configured; refusing", verb)
 }
 
 // Get returns a secret's value. Elevated: the gate runs first, and a

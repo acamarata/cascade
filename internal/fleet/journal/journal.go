@@ -176,6 +176,23 @@ type Store interface {
 	// never deduplicated against each other, since they differ in kind).
 	Replay(ctx context.Context, entityID string, cursor Cursor, kinds []Kind) ([]Entry, error)
 
+	// ListEntities returns every distinct entity id that has ever been
+	// appended to, in no particular order. CHANGE (P1-E13-W3-S27-T2): no
+	// prior caller needed to discover an entity id without already
+	// holding one; the resume scan does, since a crash leaves no
+	// external list of "which tasks were in flight" other than the
+	// journal domain itself.
+	ListEntities(ctx context.Context) ([]string, error)
+
+	// Recover runs entityID's torn-tail scan (idempotent, memoized per
+	// Store instance) and returns its TruncationReport. CHANGE
+	// (P1-E13-W3-S27-T2): previously reachable only on the concrete
+	// *SQLiteStore; promoted onto the interface so a caller holding only
+	// a Store value — the resume scan — can still observe a truncated
+	// tail as an attention item rather than silently losing that signal
+	// (R-21.216).
+	Recover(ctx context.Context, entityID string) (TruncationReport, error)
+
 	// Close releases the store's resources.
 	Close() error
 }

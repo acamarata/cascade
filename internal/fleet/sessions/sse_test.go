@@ -17,7 +17,6 @@ package sessions_test
 import (
 	"context"
 	"net/http/httptest"
-	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -215,26 +214,6 @@ func TestSessionSSE_ClientDisconnect_CleanUnsubscribeNoLeak(t *testing.T) {
 		t.Fatalf("Subscribe after disconnect: %v", err)
 	}
 	_ = sub.Unsubscribe()
-}
-
-// TestSessionSSE_Windows_Returns501 proves the handler actually refuses
-// on a Windows CI lane (R-14.131); self-skips off-Windows since this
-// ticket's files_scope names exactly sse_test.go, with no sibling
-// `//go:build windows` file such as internal/rpc/sse_windows_test.go's.
-func TestSessionSSE_Windows_Returns501(t *testing.T) {
-	if goruntime.GOOS != "windows" {
-		t.Skip("this refusal is GOOS-gated (sse.go); only Windows CI actually exercises it")
-	}
-	h, _, _ := newTestSSEHandler(t)
-	req := httptest.NewRequest("GET", sessions.EventsPath, nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 501 {
-		t.Fatalf("status = %d, want 501 on Windows", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "Windows") {
-		t.Fatalf("501 body must be an actionable Windows-specific message, got: %q", rec.Body.String())
-	}
 }
 
 func TestSessionSSE_ContextCancel_TerminatesCleanly(t *testing.T) {

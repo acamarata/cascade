@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-09-11T14:24:06Z",
+  "providers": 11,
+  "plugins": 5,
+  "sport_lines": 1178,
+  "platforms": [
+    "darwin",
+    "linux",
+    "windows"
+  ]
+}

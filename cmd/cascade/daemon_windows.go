@@ -17,9 +17,18 @@ import (
 	"context"
 
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/fleet/resume"
 )
 
+// platformDaemonRun reports resume.RefuseDaemonlessResume's typed
+// refusal FIRST (M/S-27.T2's Windows tier-2 leg — the daemon this
+// package's ResumeManager resumes for does not exist on this platform at
+// all), then falls through to internal/daemon's own windows build, which
+// refuses every verb identically via lifecycle_windows.go.
 func platformDaemonRun(ctx context.Context, _ daemonDeps) error {
+	if err := resume.RefuseDaemonlessResume(); err != nil {
+		return err
+	}
 	return daemon.Run(ctx, daemon.RunOptions{})
 }
 

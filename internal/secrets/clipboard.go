@@ -202,6 +202,16 @@ func (w *clipboardWriter) Write(ctx context.Context, signedApproval []byte, payl
 		return cascade.Wrap(cascade.KindElevationRequired, ErrApprovalRequired, err.Error())
 	}
 	if err := w.ops.setValue(ctx, payload); err != nil {
+		// A taxonomy error setValue already produced (Windows tier-2's
+		// ErrTier2Unsupported, in particular) is returned as-is: wrapping
+		// it again in ErrClipboardUnavailable would bury its Kind behind
+		// a second cascade.Error, and errors.Is(err, ErrTier2Unsupported)
+		// stops matching once that happens. Only a genuine non-taxonomy
+		// OS error (the real POSIX clipboard-tool-missing case) gets
+		// promoted to ErrClipboardUnavailable here.
+		if _, ok := cascade.KindOf(err); ok {
+			return err
+		}
 		return cascade.Wrap(cascade.KindUnavailable, ErrClipboardUnavailable, err.Error())
 	}
 	refID, err := cascade.NewID()

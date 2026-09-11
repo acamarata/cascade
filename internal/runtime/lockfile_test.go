@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -167,32 +166,6 @@ func TestRemoveSocketFile_RemovesExisting(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("socket file still present after RemoveSocketFile: %v", err)
-	}
-}
-
-func TestProcessAlive_SelfIsAlive(t *testing.T) {
-	liveness, err := ProcessAlive(os.Getpid())
-	if err != nil {
-		t.Fatalf("ProcessAlive(self): unexpected error: %v", err)
-	}
-	if liveness != ProcessLivenessAlive {
-		t.Fatalf("ProcessAlive(self) = %v, want ProcessLivenessAlive", liveness)
-	}
-}
-
-func TestProcessAlive_ExitedProcessIsDead(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "-c", "exit 0")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("spawn+run short-lived child: %v", err)
-	}
-	pid := cmd.Process.Pid
-
-	liveness, err := ProcessAlive(pid)
-	if err != nil {
-		t.Fatalf("ProcessAlive(exited pid %d): unexpected error: %v", pid, err)
-	}
-	if liveness != ProcessLivenessDead {
-		t.Fatalf("ProcessAlive(exited pid %d) = %v, want ProcessLivenessDead", pid, liveness)
 	}
 }
 

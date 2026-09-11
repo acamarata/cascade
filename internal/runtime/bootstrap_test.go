@@ -19,6 +19,7 @@ func TestBootstrap_ComposesPathsProfileAndConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	if rt.Profile != DefaultProfile {
 		t.Errorf("Profile = %q, want default %q", rt.Profile, DefaultProfile)
 	}
@@ -49,6 +50,7 @@ func TestBootstrap_ProfileFlagWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	if rt.Profile != ProfileWorker {
 		t.Errorf("Profile = %q, want worker", rt.Profile)
 	}
@@ -77,6 +79,7 @@ func TestBootstrap_DefaultClockWhenUnset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	if rt.Clock == nil {
 		t.Fatal("Clock = nil, want a default SystemClock")
 	}

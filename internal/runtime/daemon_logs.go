@@ -55,6 +55,14 @@ type DaemonLogsOptions struct {
 	// instead (Art.7.3 governs values read INTO a decision, not a
 	// polling cadence).
 	PollInterval time.Duration
+	// Ticker paces follow mode's poll loop, mirroring metrics_emitter.go's
+	// Ticker seam. Production leaves this nil and gets a real
+	// NewSystemTicker(PollInterval); tests inject a manually-driven fake so
+	// each poll is triggered on demand instead of raced against a real
+	// interval, which is what makes the rotation-gap grace period
+	// (missingGraceTicks) provable by tick COUNT rather than by hoping a
+	// real Sleep landed inside the right window under load.
+	Ticker Ticker
 }
 
 // DaemonLogsHandler streams opts.Path to opts.Out. Without Follow, it
@@ -117,8 +125,11 @@ func DaemonLogsHandler(ctx context.Context, opts DaemonLogsOptions) error {
 const missingGraceTicks = 3
 
 func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset int64, interval time.Duration) error {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	tick := opts.Ticker
+	if tick == nil {
+		tick = NewSystemTicker(interval)
+	}
+	defer tick.Stop()
 
 	openInfo, err := f.Stat()
 	if err != nil {
@@ -133,7 +144,7 @@ func followLoop(ctx context.Context, opts DaemonLogsOptions, f *os.File, offset 
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-tick.C():
 			pathInfo, err := os.Stat(opts.Path)
 			if err != nil {
 				// A rotation is a RENAME followed by a CREATE, and those

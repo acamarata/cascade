@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Purpose: recovery.go's Scan coverage for five of the six ticket-
 //   mandated named scenarios (clean state, stale pidfile, stale socket,
 //   stale advisory lock, live-daemon-blocked). The sixth

@@ -167,6 +167,14 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		}
 	}
 
+	// fleet.journal_show/replay (P1-E13-W3-S27-T4), registered for the
+	// same reason status.get is: a handler built, tested and never
+	// mounted is a subsystem R-14.223 found nothing could reach. The
+	// SAME store this composition root already opened is the SAME store
+	// wireResumeScan (daemon_resume.go) reads its journal from, so this
+	// is a second reader over the one real journal, not a second one.
+	daemon.RegisterFleetJournalHandler(registry, store, clock)
+
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }

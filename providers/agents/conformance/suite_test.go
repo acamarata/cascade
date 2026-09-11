@@ -17,10 +17,12 @@ package conformance
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -30,6 +32,14 @@ import (
 // it runs the real assertions (which must fail) instead of spawning
 // another subprocess.
 const vacuityCheckEnv = "CASCADE_CONFORMANCE_VACUITY_CHECK"
+
+// vacuityChildDeadline bounds how long the re-exec child in
+// TestSuiteFailsAgainstEmptyImplementation may run. It exists ONLY to
+// catch "the child never reached a verdict" (a loaded runner starting a
+// fresh go test binary and running seven cases under -race can be slow,
+// but not unboundedly so); it must never be read as "the suite failed",
+// which is a different and unrelated outcome that needs its own message.
+const vacuityChildDeadline = 60 * time.Second
 
 // wantCaseCount is the nineteen named conformance cases: ten original
 // (suite.go) plus four lifecycle (cases_lifecycle.go) plus five security
@@ -156,9 +166,31 @@ func TestSuiteFailsAgainstEmptyImplementation(t *testing.T) {
 		runEmptyImplementationCases(t)
 		return
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=TestSuiteFailsAgainstEmptyImplementation", "-test.v")
+
+	ctx, cancel := context.WithTimeout(context.Background(), vacuityChildDeadline)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestSuiteFailsAgainstEmptyImplementation", "-test.v")
 	cmd.Env = append(os.Environ(), vacuityCheckEnv+"=1")
 	out, err := cmd.CombinedOutput()
+
+	// Three distinct outcomes, each needing its own message so a reader
+	// never mistakes one for another:
+	//   1. the child never reached a verdict within the deadline (a
+	//      loaded runner, not a suite result -- must not read as either
+	//      pass or fail of the suite itself);
+	//   2. the child process never started at all (an exec-level failure,
+	//      equally not a suite result);
+	//   3. the child ran to completion and either passed (vacuous, the
+	//      real defect this test exists to catch) or failed (the wanted
+	//      outcome).
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("child process did not reach a verdict within %s (child never ran to completion, not a suite result -- this is a runner-load timeout, not proof either way):\n%s", vacuityChildDeadline, out)
+	}
+	var execErr *exec.Error
+	if errors.As(err, &execErr) {
+		t.Fatalf("failed to start the child process: %v (child never ran, not a suite result)", execErr)
+	}
 	if err == nil {
 		t.Fatalf("empty implementation PASSED the suite (child exit 0): the suite is vacuous\n%s", out)
 	}

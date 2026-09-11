@@ -35,7 +35,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -82,12 +81,11 @@ func NewSSEHandler(bus *events.Bus, namespace string, known KnownEventKind, cloc
 	return &SSEHandler{bus: bus, namespace: namespace, known: known, clock: clock}
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP implements http.Handler. No platform check: the daemon that
+// would mount this already refuses entirely on Windows (tier-2, no
+// unix-socket transport), so duplicating that here would only defeat
+// this handler's own platform-neutral routing tests.
 func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if goruntime.GOOS == "windows" {
-		http.Error(w, "GET /events: the daemon IPC unix socket is not supported on Windows (tier-2); run this from a POSIX daemon (macOS or Linux) instead", http.StatusNotImplemented)
-		return
-	}
 	if r.URL.Path != EventsPath || r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return

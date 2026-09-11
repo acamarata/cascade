@@ -84,6 +84,9 @@ var EgressExecNotYetMigrated = []EgressAllowEntry{
 	{"internal/daemon", "starts and stops the daemon process"},
 	{"internal/daemon/service", "installs the platform service definition"},
 	{"internal/doctor", "probes the toolchain the operator has installed"},
+	{"internal/inventory", "shells out to `git ls-files`/`git rev-parse` to derive tree-wide counts (providers, plugins, SPORT lines) at generation time; no subprocess in the installed binary's own request path"},
+	{"internal/inventory/gen", "the counts.json generator; resolves the repo root via `git rev-parse --show-toplevel`, same class as internal/inventory above"},
+	{"internal/inventory/sport", "shells out to `git ls-files` to derive the tracked .go file list at SPORT-registry generation time only (ComputeRegistry/tree.go); the production binary reads the embedded registry.json instead (embed.go) and never spawns this"},
 	{"internal/secrets", "reads a custody backend through its platform command-line tool"},
 	{"internal/syncmerge", "P1-E13-W3-S27-T5 spike: phaseMergeGit shells out to the real git binary to exercise the Git external contract (Art.2); every merge function in this package, including this one, is guarded by the spike build tag and ships in no release binary, and Q/S-38.T2 deletes the file when its production engine lands"},
 }

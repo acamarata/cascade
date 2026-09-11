@@ -399,20 +399,6 @@
     "caller_site": "internal/fleet/sessions/poll.go"
   },
   {
-    "symbol": "internal/fleet/journal.New",
-    "reason": "P1-E13-W3-S27-T1 builds the entity journal's append/checkpoint/replay store in isolation. The ticket's own contract text scopes the CLI surface ('cascade fleet journal show|replay') to S-27.T4 and the recovery classifier that reads intent/ack pairs to S-27.T2; neither is in-tree yet, so no composition root constructs a journal.SQLiteStore.",
-    "expected_caller": "the recovery classifier (P1-E13-W3-S27-T2) and the fleet journal CLI surface (P1-E13-W3-S27-T4), both of which call journal.New to obtain a Store over the daemon's cascade.db",
-    "retire_ticket": "P1-E13-W3-S27-T2",
-    "caller_site": "internal/fleet/journal_wiring.go"
-  },
-  {
-    "symbol": "internal/fleet/journal.DefaultNamespace",
-    "reason": "Shares New's fate: it is the namespace constant a composition root passes to New, and nothing constructs a journal.SQLiteStore yet.",
-    "expected_caller": "the same S-27.T2/S-27.T4 callers that call journal.New",
-    "retire_ticket": "S-27.T2",
-    "caller_site": "internal/fleet/journal_wiring.go"
-  },
-  {
     "symbol": "internal/fleet/journal.AllKinds",
     "reason": "Exported for the same reason pkg/cascade.AllKinds and internal/audit.AllKinds are: a closed enum needs one place a consumer (or a test elsewhere in the tree) can range over every member without hardcoding the list. No such external consumer exists yet because nothing outside this package reads journal.Kind values yet.",
     "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()",
@@ -799,8 +785,8 @@
   },
   {
     "symbol": "internal/conductor.NewExecutor",
-    "reason": "P1-E11-W3-S22-T1 builds the model.execute door (Executor, NewExecutor, Execute, ExecuteStream) fully implemented and tested against fakes for every collaborator (Router, ProviderResolver, Classifier, TaskClassTable, PolicyEvaluator, audit.Writer, SensitivityGate, egress.Engine), but the daemon composition root that would call NewExecutor with real collaborators is internal/daemon/subsystems.go, owned by P1-E11-W3-S22-T4 (not a dependency of this ticket) which also wires the real Router's taxonomy table. Until that lands, NewExecutor has no production caller.",
-    "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), which P1-E11-W3-S22-T4 constructs alongside the real Router; retire this entry once that lands",
+    "reason": "T0-daemon-composition-root (R-14.223 follow-up) confirmed the composition root's blocker is narrower than the file it lives in: internal/daemon/subsystems.go's Manifest can now build a real Router (RegisterConductorRouter) and a real audit.Writer is available (audit.New over the daemon's own provider.Store, the same store buildRPCServer already opens), but NewExecutor also requires a non-nil ProviderResolver, and NO type in this tree implements conductor.ProviderResolver against a real provider.ModelProvider driver (providers/anthropic, providers/openai, providers/gemini, providers/ollama) - grep for `Resolve(ctx context.Context, sel provider.Selection)` finds zero production implementations. cmd/cascade/daemon_resume.go's own wireResumeScan doc comment independently confirms this: \"no conductor.Executor is constructed anywhere in this tree's production code yet ... a separate, larger composition-root gap this ticket does not close.\" Faking a resolver that always errors would satisfy the gate without being real (Art.1), so this entry stays, corrected rather than papered over.",
+    "expected_caller": "the daemon composition root (internal/daemon/subsystems.go or a sibling split file), once a real lane-aware ProviderResolver over the registry+driver set exists; retire this entry once that lands and NewExecutor is called with it",
     "retire_ticket": "P1-E11-W3-S22-T4",
     "caller_site": "internal/daemon/subsystems.go"
   },
@@ -845,13 +831,6 @@
     "expected_caller": "cmd/cascade/node_serve_heartbeat.go (a new split file, mirroring daemon_unix_handlers.go's precedent), constructed by the ticket that wires node serve's HeartbeatLoopOptions.Send to this sink; retire this entry when that lands",
     "retire_ticket": "P1-E17-W4-S36-T4",
     "caller_site": "cmd/cascade/node_serve_heartbeat.go"
-  },
-  {
-    "symbol": "internal/fleet/journal.RegisterHandlers",
-    "reason": "P1-E13-W3-S27-T4 lands the fleet journal show/replay RPC handlers and CLI. Registering them on the daemon means editing cmd/cascade/daemon_unix_run.go, which is outside this ticket's files_scope and is owned by no ticket at all (see R-14.223). This is the SAME unresolved shape as internal/fleet/sessions.RegisterHandlers, which sits in the caller-site baseline for the identical reason; recorded alongside it rather than treated as a new class.",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go, the daemon composition root that registers every other RPC handler; retire this entry when the wiring lands",
-    "retire_ticket": "P1-E11-W3-S22-T4",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
   },
   {
     "symbol": "internal/context.NewComposer",
@@ -931,10 +910,31 @@
     "caller_site": "internal/pbd/dispatch.go"
   },
   {
-    "symbol": "internal/backup.Snapshot",
-    "reason": "P1-E19-W4-S41-T1 builds the chunk/dedup/zstd/encrypt pipeline and the repo layout as a standalone engine: Snapshot ties repo-config bootstrap and one domain's capture adapter to Pipeline.Write end to end, fully implemented and tested against a real SQLite database and the reference age library. The snapshot/manifest orchestration that loops over domains and calls it from a `backup create` surface is S-41.T2's, explicitly out of this ticket's files_scope.",
-    "expected_caller": "S-41.T2's snapshot/manifest layer, which calls Snapshot once per domain and records the returned []ObjectRef in a signed manifest; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S41-T2",
-    "caller_site": "internal/backup/snapshot.go"
+    "symbol": "internal/conductor.NewDefaultProductionSpawnHook",
+    "reason": "P1-E12-W3-S25-T3 builds the unified spawned-agent registry (sessions.SpawnRecord/Registry/DefaultRegistry) and this composition-root assembly function (builds a DefaultRegistry and returns the SpawnHook that registers into it), fully implemented and tested against a real storetest.MemStore, but the daemon composition root that would call it and pass the result to Executor.SetSpawnHook does not exist yet - internal/daemon/subsystems.go already wires the Router but explicitly documents zero NewExecutor call sites (its own comment: \"NewExecutor returns zero production call sites\"), so the SpawnHook wiring is even further out. Until a daemon file actually calls this function, it has no production caller.",
+    "expected_caller": "a future daemon composition file that constructs the Executor with a real SpawnHook (alongside NewExecutor); retire this entry once it calls NewDefaultProductionSpawnHook and Executor.SetSpawnHook",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/conductor_spawn_wiring.go"
+  },
+  {
+    "symbol": "internal/conductor.RegisterHandlers",
+    "reason": "job.cancel's registration takes a *Executor, so it is blocked by the SAME missing dependency as internal/conductor.NewExecutor directly above (no production conductor.ProviderResolver implementation exists anywhere in this tree yet - see that entry's corrected reason, T0-daemon-composition-root/R-14.223 follow-up). RegisterHandlers itself is fully wired and tested against a real *rpc.Registry (cancel_test.go); only a real Executor to register against is missing.",
+    "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), alongside its NewExecutor call, once a real ProviderResolver exists; retire this entry once it calls conductor.RegisterHandlers",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/subsystems.go"
+  },
+  {
+    "symbol": "internal/backup.CreateSnapshot",
+    "reason": "P1-E19-W4-S41-T2 builds the elevated snapshot-create operation - the flow that orchestrates S-41.T1's capture adapters and pipeline over a supplied domain set and writes a signed manifest - fully implemented and tested (real SQLite domain capture, second-run dedup, chain validation, tamper rejection). The CLI/MCP surface that calls it as `backup create` and supplies a real ElevationProof is S-42.T3's, explicitly out of this ticket's scope (06-FORGE-SPEC \u00a75.14: create/restore are elevated, CLI/MCP gate wiring named as S-42.T3's).",
+    "expected_caller": "S-42.T3's `backup create` CLI/MCP handler, which resolves a real attestation and calls CreateSnapshot; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S42-T3",
+    "caller_site": "internal/backup/create_command.go"
+  },
+  {
+    "symbol": "internal/backup.ReadManifest",
+    "reason": "P1-E19-W4-S41-T2 builds the manifest decode/validate reader (age-decrypt, schema validation, R-14.58 signature verification, chain check) - the one path the ticket names S-41.T4's restore integrity gate and S-42.T4's verification cron as consuming. Both are explicitly out of this ticket's scope and have not landed yet, so ReadManifest has no production caller today; every refusal path (wrong key, unsigned, tampered ciphertext, absent) is exercised directly by this ticket's own tests.",
+    "expected_caller": "S-41.T4's restore integrity gate, which calls ReadManifest to recover and verify a snapshot's manifest; retire this entry once it lands",
+    "retire_ticket": "P1-E19-W4-S41-T4",
+    "caller_site": "internal/backup/restore.go"
   }
 ]

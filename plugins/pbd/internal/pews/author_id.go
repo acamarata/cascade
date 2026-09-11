@@ -8,7 +8,7 @@ package pews
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strconv"
 
@@ -59,9 +59,16 @@ func lettersFromEpicNumber(n int) string {
 }
 
 // relPathFor returns c's canonical ticket path relative to a tree root, in
-// the directory shape store.go's loader walks.
+// the directory shape store.go's loader walks. Always forward-slash
+// (path.Join, never filepath.Join): this value is a portable identifier
+// serialized into TicketRecord.RelPath and compared/stored across
+// platforms, not a native OS path — a Windows-built binary must produce
+// the identical string a macOS/Linux one does for the same ticket.
+// residue.go's filepath.Join(src.Root, relPath) still resolves this
+// correctly into a real OS path on every platform, since filepath.Clean
+// normalizes "/" on Windows too.
 func relPathFor(c idComponents) string {
-	return filepath.Join(
+	return path.Join(
 		"epics", "E-"+lettersFromEpicNumber(c.epicNum),
 		"waves", fmt.Sprintf("W-%d", c.wave),
 		"sprints", fmt.Sprintf("S-%02d", c.sprint),

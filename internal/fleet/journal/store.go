@@ -68,6 +68,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/acamarata/cascade/internal/runtime"
@@ -223,6 +224,33 @@ func (s *SQLiteStore) commitEntryTx(ctx context.Context, tx provider.Tx, entityI
 		return Entry{}, err
 	}
 	return e, nil
+}
+
+// ListEntities implements Store (CHANGE, P1-E13-W3-S27-T2): it scans the
+// namespace for every head-pointer key ("h:" + entityID + keyDelim) and
+// strips the fixed prefix/suffix to recover entityID. Head keys, never
+// entry keys, are the enumeration source: every entity that has ever been
+// appended to has exactly one head record and it is never deleted, so this
+// is a complete and duplicate-free list without touching per-entry data.
+func (s *SQLiteStore) ListEntities(ctx context.Context) ([]string, error) {
+	it, err := s.store.Scan(ctx, s.namespace, "h:")
+	if err != nil {
+		return nil, wrapStore(err, "journal: listing entities")
+	}
+	defer func() { _ = it.Close() }()
+
+	var out []string
+	for it.Next(ctx) {
+		key := it.Key()
+		id := strings.TrimSuffix(strings.TrimPrefix(key, "h:"), keyDelim)
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	if err := it.Err(); err != nil {
+		return nil, wrapStore(err, "journal: listing entities")
+	}
+	return out, nil
 }
 
 // loadHeadFrom reads entityID's head pointer through g (either the top-

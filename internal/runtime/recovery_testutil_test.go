@@ -1,3 +1,16 @@
+//go:build !windows
+
+// Windows parity note (pass 2): tagged !windows because every consumer
+// of these doubles (recovery_test.go, recovery_errors_test.go,
+// recovery_failsafe_test.go, recovery_killnine_test.go) dials a real
+// unix socket and spawns a real "/bin/sh" child to exercise recovery.go's
+// POSIX socket-probe internals - internals recovery.go's own windows
+// build never runs (its Scan short-circuits to a clean, logged
+// platform-unsupported return before touching any socket, proven by
+// recovery_windows_test.go). Both platforms' behavior stays tested; this
+// file's doubles just never needed to exist on the platform whose Scan
+// never reaches the code they exercise.
+//
 // Purpose: shared test doubles for every recovery*_test.go file in this
 //   package (fakeEventBus, fakeRegistry, fakeConn/dialerStub, and small
 //   helpers) — split out under R-14.117 (Art.10.3's 300-line cap; a

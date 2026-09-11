@@ -27,13 +27,25 @@ import (
 type stubReader struct {
 	heads   map[string]uint64
 	entries map[string][]journal.Entry
+	// headErr and replayErr, when set, are returned unconditionally by
+	// HeadSeq/Replay instead of the map-driven happy-path behavior below
+	// — used to prove resolveEntries propagates a reader failure rather
+	// than swallowing it.
+	headErr   error
+	replayErr error
 }
 
 func (s *stubReader) HeadSeq(_ context.Context, entityID string) (uint64, error) {
+	if s.headErr != nil {
+		return 0, s.headErr
+	}
 	return s.heads[entityID], nil
 }
 
 func (s *stubReader) Replay(_ context.Context, entityID string, cursor journal.Cursor, _ []journal.Kind) ([]journal.Entry, error) {
+	if s.replayErr != nil {
+		return nil, s.replayErr
+	}
 	var out []journal.Entry
 	for _, e := range s.entries[entityID] {
 		if e.Seq > cursor.Seq {

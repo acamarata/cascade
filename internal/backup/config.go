@@ -21,6 +21,8 @@ package backup
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 
 	"filippo.io/age"
@@ -33,13 +35,20 @@ import (
 // (KindUnsupported) rather than attempting a best-effort read.
 const CurrentLayoutVersion = 1
 
-// RepoConfig is the repo's config/ document: layout version plus the age
-// recipient the repo is encrypted to. It carries no private material —
-// AgeRecipient is public by construction (age1... recipient strings decrypt
-// nothing on their own).
+// RepoConfig is the repo's config/ document: layout version, the age
+// recipient the repo is encrypted to, and (P1-E19-W4-S41-T2, R-14.58) the
+// backup-manifest signing key's PUBLIC half. Neither field carries private
+// material: AgeRecipient decrypts nothing on its own, and
+// ManifestSigningPubKey (base64-encoded Ed25519, 32 bytes) only lets a
+// reader VERIFY a manifest signature — it can never produce one. It is
+// optional (empty string) until a snapshot has been created: T2's
+// CreateSnapshot populates it itself, on first use, from the signing key
+// it resolves by vault reference (config.go carries no dependency on the
+// later S-42.T6 ceremony beyond that key existing).
 type RepoConfig struct {
-	LayoutVersion int    `json:"layout_version"`
-	AgeRecipient  string `json:"age_recipient"`
+	LayoutVersion         int    `json:"layout_version"`
+	AgeRecipient          string `json:"age_recipient"`
+	ManifestSigningPubKey string `json:"manifest_signing_pubkey,omitempty"`
 }
 
 // EncodeRepoConfig validates cfg and marshals it to canonical JSON.
@@ -93,6 +102,25 @@ func validateRepoConfig(cfg RepoConfig) error {
 	}
 	if _, err := age.ParseX25519Recipient(cfg.AgeRecipient); err != nil {
 		return cascade.Wrap(cascade.KindInvalidInput, err, "backup: repo config age recipient is not a valid age recipient")
+	}
+	return validateManifestSigningPubKey(cfg.ManifestSigningPubKey)
+}
+
+// validateManifestSigningPubKey validates the optional pubkey field: an
+// empty string is valid (not yet populated — no snapshot has run), but a
+// non-empty value must decode as exactly one Ed25519 public key. This is
+// the S-41.T2 extension to S-41.T1's decoder named in the ticket's HOW.
+func validateManifestSigningPubKey(encoded string) error {
+	if encoded == "" {
+		return nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return cascade.Wrap(cascade.KindInvalidInput, err, "backup: repo config manifest signing pubkey is not valid base64")
+	}
+	if len(raw) != ed25519.PublicKeySize {
+		return cascade.Newf(cascade.KindInvalidInput,
+			"backup: repo config manifest signing pubkey is %d bytes, want %d", len(raw), ed25519.PublicKeySize)
 	}
 	return nil
 }

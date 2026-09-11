@@ -105,40 +105,15 @@ func TestSessionsList_UnknownFilterField(t *testing.T) {
 	}
 }
 
-func TestSessionsListClient_HappyPath(t *testing.T) {
-	caller := &recordingCaller{}
-	client := sessions.NewClient(caller)
-	if _, err := client.List(context.Background(), sessions.Filter{}); err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if !caller.called {
-		t.Fatal("Client.List never called the RPCCaller")
-	}
-}
-
 // failingCaller is an RPCCaller double returning a fixed error, used to
 // prove Client.List propagates both a taxonomy error unchanged and a
-// plain error wrapped as KindInternal.
-type failingCaller struct{ err error }
+// plain error wrapped as KindInternal. Defined here (not in
+// rpc_client_unix_test.go) because it has no platform dependency of its
+// own; it is simply unused on the windows build, which never reaches the
+// tests that construct it.
+type failingCaller struct{ err error } //nolint:unused // used by rpc_client_unix_test.go's !windows tests
 
 func (f *failingCaller) Do(context.Context, string, any, any) error { return f.err }
-
-func TestSessionsListClient_TaxonomyErrorPassesThrough(t *testing.T) {
-	want := cascade.New(cascade.KindUnavailable, "boom")
-	client := sessions.NewClient(&failingCaller{err: want})
-	_, err := client.List(context.Background(), sessions.Filter{})
-	if !errors.Is(err, want) {
-		t.Fatalf("List error = %v, want it to carry KindUnavailable", err)
-	}
-}
-
-func TestSessionsListClient_PlainErrorWrappedAsInternal(t *testing.T) {
-	client := sessions.NewClient(&failingCaller{err: errors.New("transport exploded")})
-	_, err := client.List(context.Background(), sessions.Filter{})
-	if !cascade.HasKind(err, cascade.KindInternal) {
-		t.Fatalf("List error = %v, want KindInternal", err)
-	}
-}
 
 // recordingCaller is a real-shape RPCCaller double whose Do decodes into
 // the actual listResult wire shape via a JSON round trip, matching how a

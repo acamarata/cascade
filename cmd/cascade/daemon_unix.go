@@ -78,6 +78,14 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
 		return err
 	}
+	// M/S-27.T2: crash/upgrade-in-place resume, over the SAME store,
+	// before this daemon accepts any RPC connection. See
+	// daemon_resume.go's own doc comment for the disclosed
+	// conductor.Executor gap wireResumeScan's FanOutFunc surfaces rather
+	// than papering over.
+	if _, err := wireResumeScan(ctx, store, deps.Clock); err != nil {
+		return err
+	}
 
 	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
 	if err != nil {

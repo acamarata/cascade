@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"snapshot\":\"01SEEDSNAPSHOT0000000000001\",\"domains\":[\"journal\"],\"objects\":1,\"root_hash\":\"6a6f75726e616caa000000000000000a\",\"encryption\":{\"version\":1,\"algorithm\":\"age-x25519+zstd\"},\"entries\":[{\"domain\":\"journal\",\"refs\":[{\"hash\":\"aa\",\"size\":10}]}],\"signature_algorithm\":\"ed25519\",\"signature\":\"KhDQAYAb8TXwzjl+cHypbVT/H3CJiPxbuLHlqnes0roas2I+8PDHxzTgRrTYeGhyd4mCZ6hkRTsU0c3Dx+bWDQ==\"}")

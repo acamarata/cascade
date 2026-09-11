@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Purpose: recovery.go's error-path, PID-recycling, and startup-race
 //   coverage — split from recovery_test.go under R-14.117 (Art.10.3's
 //   300-line cap; a cap-driven split joins the ticket's authorized write

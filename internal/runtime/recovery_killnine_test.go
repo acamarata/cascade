@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Purpose: TestKillNineHarness, the ticket-mandated kill -9 test harness
 //   — split from recovery_test.go under R-14.117 (Art.10.3's 300-line
 //   cap; a cap-driven split joins the ticket's authorized write set

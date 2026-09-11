@@ -1,3 +1,14 @@
+//go:build !windows
+
+// Purpose (this file): the POSIX elevation round-trip - a genuine
+//   attestation is verified and reaches the real handler. On Windows,
+//   elevation_windows.go's platformElevationRefusal preempts the
+//   attestation flow entirely (by design, not by accident: its own doc
+//   comment says "never runs the attestation flow at all"), so this exact
+//   assertion is false there. elevation_flow_windows_test.go carries the
+//   real Windows-side assertion: the SAME attestation is refused, never
+//   reaching the handler.
+
 package rpc
 
 import (
@@ -84,15 +95,6 @@ func TestElevationMiddleware_FullRoundTripWithAttestation(t *testing.T) {
 	}
 
 	assertReplayRejected(t, wrapped, envBytes)
-}
-
-func TestElevationMiddleware_WindowsRefusalNeverAttempts(t *testing.T) {
-	if platformElevationRefusal() != nil {
-		// This test only asserts something meaningful on POSIX, where
-		// platformElevationRefusal is nil — elevation_windows.go carries
-		// the mirror-image assertion under its own build tag.
-		t.Skip("platform refuses elevation unconditionally; see elevation_windows.go")
-	}
 }
 
 // assertReplayRejected proves a consumed nonce cannot be reused. Extracted

@@ -285,7 +285,7 @@ func FuzzHookPayload(f *testing.F) {
 	registry := rpc.NewRegistry()
 	if err := hookpacks.RegisterHookEventHandler(registry, store, nil, clock); err != nil {
 		if goruntime.GOOS == "windows" {
-			return // no registry to fuzz against on windows tier-2
+			f.Skip("no registry to fuzz against on windows tier-2") // not a bare return: fuzz requires F.Fuzz/Fail/Skip
 		}
 		f.Fatalf("RegisterHookEventHandler: %v", err)
 	}

@@ -24,11 +24,13 @@ import (
 type recordingCaller struct {
 	called bool
 	method string
+	params any
 }
 
-func (r *recordingCaller) Do(_ context.Context, method string, _, out any) error {
+func (r *recordingCaller) Do(_ context.Context, method string, params, out any) error {
 	r.called = true
 	r.method = method
+	r.params = params
 	data, _ := json.Marshal(struct {
 		Entries []journal.Entry `json:"entries"`
 	}{})
@@ -43,6 +45,31 @@ func TestJournalClient_ShowHappyPath(t *testing.T) {
 	}
 	if !caller.called || caller.method != journal.MethodShow {
 		t.Fatalf("Client.Show did not call %q (called=%v method=%q)", journal.MethodShow, caller.called, caller.method)
+	}
+}
+
+// TestJournalClient_ShowWithLimit proves a positive limit is actually
+// forwarded onto the wire request's "limit" field, not silently dropped
+// (Show's limit <= 0 branch is already exercised by
+// TestJournalClient_ShowHappyPath's limit-0 call).
+func TestJournalClient_ShowWithLimit(t *testing.T) {
+	caller := &recordingCaller{}
+	client := journal.NewClient(caller)
+	if _, err := client.Show(context.Background(), "e1", nil, 25); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	encoded, err := json.Marshal(caller.params)
+	if err != nil {
+		t.Fatalf("marshal recorded params: %v", err)
+	}
+	var decoded struct {
+		Limit *int `json:"limit"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode recorded params: %v", err)
+	}
+	if decoded.Limit == nil || *decoded.Limit != 25 {
+		t.Fatalf("Show(limit=25) sent limit=%v, want 25", decoded.Limit)
 	}
 }
 

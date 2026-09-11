@@ -34,6 +34,7 @@ func TestBootstrap_MetricsRegistryAlwaysAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	if rt.Metrics == nil {
 		t.Fatal("Runtime.Metrics = nil, want an always-available Registry")
 	}
@@ -65,6 +66,7 @@ func TestBootstrap_NoMetricsBusStartsNoEmitter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	if rt.Metrics == nil {
 		t.Fatal("Runtime.Metrics = nil even with no MetricsBus")
 	}
@@ -99,6 +101,7 @@ func TestBootstrap_MetricsBusStartsEmitter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
+	t.Cleanup(func() { _ = rt.Close() })
 	rt.Metrics.RegisterCounter("wired_total", nil)
 
 	deadline := time.After(500 * time.Millisecond)

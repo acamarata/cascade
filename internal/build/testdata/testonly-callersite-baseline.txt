@@ -1,4 +1,5 @@
 internal/conductor.NewExecutor
+internal/conductor.RegisterHandlers
 internal/context.GenerateCCInstructions
 internal/conversation.ApplyConversationSchema
 internal/conversation.NewStore
@@ -12,7 +13,6 @@ internal/fleet/governor.NewSampler
 internal/fleet/governor.NewThrottleLadder
 internal/fleet/hookpacks.RegisterHookEventHandler
 internal/fleet/hookpacks.UnknownEventCount
-internal/fleet/journal.RegisterHandlers
 internal/fleet/sessions.EventsPath
 internal/fleet/sessions.New
 internal/fleet/sessions.NewSSEHandler

@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Purpose: coverage for Scan's most safety-critical fail-safe branches
 //   — the ones a CR of this ticket found untested: the PID-recycling
 //   defense (scanPidfile's `liveness != ProcessLivenessDead` skip

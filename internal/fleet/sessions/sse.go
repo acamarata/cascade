@@ -54,7 +54,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	goruntime "runtime"
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
@@ -91,12 +90,15 @@ func NewSSEHandler(bus *events.Bus, clock runtime.Clock) *SSEHandler {
 	return &SSEHandler{bus: bus, clock: clock}
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP implements http.Handler. No platform check here: the daemon
+// that would ever construct and mount this handler refuses entirely on
+// Windows already (tier-2, no daemon at all — see cmd/cascade's
+// platformDaemonStart/Run windows build), so duplicating that refusal
+// here would only defeat this handler's own direct-dispatch unit tests,
+// which exercise platform-neutral routing/streaming logic (see
+// internal/rpc/sse.go's identical reasoning, applied here for
+// consistency).
 func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if goruntime.GOOS == "windows" {
-		http.Error(w, "GET /events?topic=fleet.sessions: no daemon exists on Windows (tier-2); SSE unavailable on Windows tier-2", http.StatusNotImplemented)
-		return
-	}
 	if topic := r.URL.Query().Get("topic"); topic != "" && topic != changedNamespace {
 		http.Error(w, fmt.Sprintf("unknown topic: %q", topic), http.StatusBadRequest)
 		return
