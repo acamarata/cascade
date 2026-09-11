@@ -880,5 +880,47 @@
     "expected_caller": "none in production by design; every caller of this constructor is a test substituting an isolated Registry (cmd/cascade/provider_cmd_test.go, internal/providers/intake's own *_test.go files)",
     "retire_ticket": "P1-E10-W3-S20-T1",
     "caller_site": "internal/providers/intake/types.go"
+  },
+  {
+    "symbol": "internal/nodes.NewSSHDialer",
+    "reason": "P1-E17-W4-S36-T3 (ssh tunnel + reconnect) implements the real production Dialer over golang.org/x/crypto/ssh, driven end-to-end by TestTunnelRealSSHD against a real loopback sshd (internal/nodes/tunnel_test.go, tagged integration) and by TestTunnelHostKeyChangedRefused/TestTunnelUnknownHostKeyRefused (reconnect_test.go). It has no production caller in THIS ticket because Target (the ssh reachability struct NewSSHDialer's Dial method takes) has no durable source yet: DeviceRecord (records.go, S-36.T1) carries no Host/User field, and records.go is out of this ticket's files_scope. cmd/cascade/daemon.go's startNodeTunnelService registers the tunnel Manager and documents this exact gap in its own doc comment. The real production caller is S-36.T4's `node enroll`/`node status` CLI verbs, which will hold a Target from the enroll flow and call Manager.Start(ctx, TunnelConfig{Dialer: NewSSHDialer(...), ...}).",
+    "expected_caller": "cmd/cascade/node_enroll.go or node_status.go, which P1-E17-W4-S36-T4 constructs; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_enroll.go"
+  },
+  {
+    "symbol": "internal/nodes.NewTunnelHeartbeatSender",
+    "reason": "P1-E17-W4-S36-T3 implements the HeartbeatSender wire-delivery sink S-36.T2 deferred: it writes each frame as a real HTTP/JSON-RPC request over the tunnel's local end (D-24 pattern), proven by TestNewTunnelHeartbeatSender_RoundTrip (heartbeat_test.go) against a real req.Write/http.ReadResponse round trip. Its production caller is the NODE side's HeartbeatLoopOptions.Send (RunHeartbeatLoop, heartbeat.go). cmd/cascade/node_serve.go (S-36.T2's file) already exists and is at 264/300 lines, out of this ticket's files_scope to edit; wiring this sink there needs new dial-construction code that will need its own split file, matching this repo's established 300-line-cap split precedent (daemon_unix_handlers.go, daemon_unix_run_memory.go), not an edit squeezed into the existing file.",
+    "expected_caller": "cmd/cascade/node_serve_heartbeat.go (a new split file, mirroring daemon_unix_handlers.go's precedent), constructed by the ticket that wires node serve's HeartbeatLoopOptions.Send to this sink; retire this entry when that lands",
+    "retire_ticket": "P1-E17-W4-S36-T4",
+    "caller_site": "cmd/cascade/node_serve_heartbeat.go"
+  },
+  {
+    "symbol": "internal/fleet/journal.RegisterHandlers",
+    "reason": "P1-E13-W3-S27-T4 lands the fleet journal show/replay RPC handlers and CLI. Registering them on the daemon means editing cmd/cascade/daemon_unix_run.go, which is outside this ticket's files_scope and is owned by no ticket at all (see R-14.223). This is the SAME unresolved shape as internal/fleet/sessions.RegisterHandlers, which sits in the caller-site baseline for the identical reason; recorded alongside it rather than treated as a new class.",
+    "expected_caller": "cmd/cascade/daemon_unix_run.go, the daemon composition root that registers every other RPC handler; retire this entry when the wiring lands",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "cmd/cascade/daemon_unix_run.go"
+  },
+  {
+    "symbol": "internal/context.NewComposer",
+    "reason": "P1-E21-W5-S46-T1 builds the context Composer as a standalone, fully-tested unit (bounded-context invariant table + generated matrix, composer_invariant_test.go). Its production caller is the conversation acceptance flow that assembles a real per-request context from tier+memory+retrieval+history content, which is S-46.T5 ('Verify topic auto-filing and bounded-context acceptance', same sprint), explicitly out of this ticket's files_scope (internal/context/composer_*.go and testdata only). T4's topics/threads CLI may also become a caller.",
+    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which constructs a Composer over a real TokenCounter and calls Compose per request; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S46-T5",
+    "caller_site": "internal/conversation/compose.go"
+  },
+  {
+    "symbol": "internal/context.SlotKindMemory",
+    "reason": "Composer's SlotKind vocabulary (tier/memory/retrieval/history) is exercised end-to-end by this ticket's own tests, but no production caller tags a real Slot with SlotKindMemory until a real memory/SOUL-store reader is wired into the Composer by S-46.T5. Same shape and same owner as internal/context.NewComposer above.",
+    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags memory/SOUL-store content with SlotKindMemory before calling Compose; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S46-T5",
+    "caller_site": "internal/conversation/compose.go"
+  },
+  {
+    "symbol": "internal/context.SlotKindRetrieval",
+    "reason": "Same shape as internal/context.SlotKindMemory directly above: no production caller tags a real Slot with SlotKindRetrieval until S-46.T5 wires retrieval hits into the Composer.",
+    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags fused retrieval chunks with SlotKindRetrieval before calling Compose; retire this entry when that lands",
+    "retire_ticket": "P1-E21-W5-S46-T5",
+    "caller_site": "internal/conversation/compose.go"
   }
 ]

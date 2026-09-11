@@ -228,7 +228,17 @@ func confirmOnStdin(cmd *cobra.Command) (bool, error) {
 // opens the registry+health storage fresh and closes it before
 // returning, mirroring how `cascade provider list/test/health` already
 // treat that storage as per-invocation rather than long-lived.
-type providerHealthSourceAdapter struct{}
+type providerHealthSourceAdapter struct {
+	// paths is the PathProvider the caller injected. It exists because
+	// this adapter USED to discard it and call productionProviderDeps()
+	// unconditionally, which meant `cascade doctor` always read the
+	// DEFAULT provider store no matter what CASCADE_HOME resolved to. A
+	// diagnostic that reports on a different store than the one the
+	// operator configured is worse than no diagnostic, and it also leaked
+	// real databases into the redirected HOME the hygiene lane asserts is
+	// clean, which is how it was found.
+	paths runtime.PathProvider
+}
 
 // providerHealthSourceFor returns the production doctor.ProviderHealthSource.
 // paths is accepted for signature symmetry with this file's other
@@ -236,13 +246,16 @@ type providerHealthSourceAdapter struct{}
 // via productionProviderDeps(), the same composition root `cascade
 // provider add` already uses.
 func providerHealthSourceFor(paths runtime.PathProvider) doctor.ProviderHealthSource {
-	_ = paths
-	return providerHealthSourceAdapter{}
+	return providerHealthSourceAdapter{paths: paths}
 }
 
 // ListProviderHealth implements doctor.ProviderHealthSource.
-func (providerHealthSourceAdapter) ListProviderHealth(ctx context.Context) ([]doctor.ProviderHealthRow, error) {
-	store, err := openProviderStorage(ctx, productionProviderDeps())
+func (a providerHealthSourceAdapter) ListProviderHealth(ctx context.Context) ([]doctor.ProviderHealthRow, error) {
+	deps := productionProviderDeps()
+	if a.paths != nil {
+		deps.Paths = a.paths
+	}
+	store, err := openProviderStorage(ctx, deps)
 	if err != nil {
 		return nil, err
 	}

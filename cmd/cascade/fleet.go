@@ -87,10 +87,12 @@ func productionFleetSessionsDeps() fleetSessionsDeps {
 // mountFleetCmd attaches the `fleet` command group, following
 // mountStatusCmd's exact pattern.
 func mountFleetCmd(root *cobra.Command) {
-	cmd := newFleetCmd(productionFleetSessionsDeps())
+	deps := productionFleetSessionsDeps()
+	cmd := newFleetCmd(deps)
 	guardUnknownSubcommands(cmd)
 	root.AddCommand(cmd)
 	mountFleetSessionsAlias(root)
+	mountFleetJournalAlias(root, deps)
 }
 
 // mountFleetSessionsAlias registers the hidden top-level `cascade
@@ -115,6 +117,7 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 		Short: "Inspect the local fleet of harness sessions",
 	}
 	cmd.AddCommand(newFleetSessionsCmd(deps))
+	cmd.AddCommand(newFleetJournalCmd(deps))
 	return cmd
 }
 

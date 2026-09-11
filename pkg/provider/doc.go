@@ -4,6 +4,16 @@
 // and review (ReviewProvider, review_provider.go) providers, and the five
 // storage families declared by P1-E02-W1-S02-T1:
 //
+// AgentProvider (agent_provider.go, extended in place by AD/S-61.T1,
+// R-16.68a) additionally exposes job dispatch (Spawn/Message/Status/
+// Cancel/Collect/Artifacts, agent_types.go's AgentJobSpec/AgentRunState/
+// SpawnResult), the R-21.143 DataClass lattice, the R-21.151 spawn-policy
+// allowlists and pre-spawn scan (agent_spawn_policy.go), and the R-21.158
+// protocol pin (agent_protocol.go). Its errors are the agent_errors.go
+// sentinels only, never an invented Kind. providers/agents/conformance
+// holds the driver-agnostic suite every implementation must pass; no
+// driver ships from pkg/provider itself.
+//
 //   - Store — the namespace-scoped key-value abstraction every cascade.db
 //     domain (R-14.5: context, memory, audit, secrets, sessions, config,
 //     retrieval, blobs, queue, jobs) and every plugin's namespaced storage

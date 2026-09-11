@@ -1,8 +1,10 @@
 package nodes
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -36,9 +38,7 @@ func fixedReader(t *testing.T, seed string) *repeatReader {
 	return &repeatReader{b: []byte(seed)}
 }
 
-// repeatReader deterministically repeats a seed byte string, matching
-// testIdentity's strings.Repeat(seed, 64) shape without re-importing
-// strings here.
+// repeatReader deterministically repeats a seed byte string.
 type repeatReader struct {
 	b   []byte
 	pos int
@@ -54,8 +54,7 @@ func (r *repeatReader) Read(p []byte) (int, error) {
 
 func TestProcessHeartbeatAccepted(t *testing.T) {
 	deps, rec, _, build := newHeartbeatHarness(t)
-	f := build(1)
-	res, err := ProcessHeartbeat(context.Background(), deps, f)
+	res, err := ProcessHeartbeat(context.Background(), deps, build(1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,9 +70,7 @@ func TestProcessHeartbeatAccepted(t *testing.T) {
 	}
 }
 
-// TestProcessHeartbeatUnenrolledNodeRefused proves the authenticated-
-// channel requirement: a heartbeat for a node id with no device record at
-// all is refused, never silently accepted as "unknown means allow".
+// TestProcessHeartbeatUnenrolledNodeRefused: unknown node id is refused.
 func TestProcessHeartbeatUnenrolledNodeRefused(t *testing.T) {
 	deps, _, _, build := newHeartbeatHarness(t)
 	f := build(1)
@@ -93,9 +90,7 @@ func TestProcessHeartbeatRevokedKeyRefused(t *testing.T) {
 	if err := deps.Records.put(rec); err != nil {
 		t.Fatal(err)
 	}
-	f := build(1)
-	_, err := ProcessHeartbeat(context.Background(), deps, f)
-	if err == nil {
+	if _, err := ProcessHeartbeat(context.Background(), deps, build(1)); err == nil {
 		t.Fatal("expected refusal for revoked key")
 	}
 }
@@ -120,29 +115,16 @@ func TestDecodeHeartbeatFrameRejectsMalformed(t *testing.T) {
 	}
 }
 
-func oversizedCapString() string {
-	b := make([]byte, maxCapabilityLen+1)
-	for i := range b {
-		b[i] = 'a'
-	}
-	return string(b)
-}
+func oversizedCapString() string { return string(bytes.Repeat([]byte("a"), maxCapabilityLen+1)) }
 
 func TestDecodeHeartbeatFrameOversizedPayload(t *testing.T) {
-	huge := make([]byte, maxHeartbeatPayloadBytes+1)
-	for i := range huge {
-		huge[i] = ' '
-	}
+	huge := bytes.Repeat([]byte(" "), maxHeartbeatPayloadBytes+1)
 	if _, err := DecodeHeartbeatFrame(huge); err == nil {
 		t.Fatal("expected refusal for oversized payload")
 	}
 }
 
-// TestRegisterHeartbeatHandler_EndToEndThroughDispatch drives the REAL
-// production entry point: rpc.Registry.Dispatch through the handler
-// RegisterHeartbeatHandler mounts, mirroring
-// TestRegisterHandlers_EndToEndThroughDispatch's proof shape for
-// node.enroll.
+// TestRegisterHeartbeatHandler_EndToEndThroughDispatch drives the real handler.
 func TestRegisterHeartbeatHandler_EndToEndThroughDispatch(t *testing.T) {
 	deps, _, _, build := newHeartbeatHarness(t)
 	f := build(1)
@@ -166,10 +148,7 @@ func TestRegisterHeartbeatHandler_EndToEndThroughDispatch(t *testing.T) {
 	}
 }
 
-// TestRegisterHeartbeatHandler_WithoutWiring_MethodNotFound proves the
-// wiring above is load-bearing: an otherwise-identical registry that
-// never calls RegisterHeartbeatHandler refuses node.heartbeat with
-// method-not-found, never reaching ProcessHeartbeat at all.
+// TestRegisterHeartbeatHandler_WithoutWiring_MethodNotFound: unwired refuses.
 func TestRegisterHeartbeatHandler_WithoutWiring_MethodNotFound(t *testing.T) {
 	_, _, _, build := newHeartbeatHarness(t)
 	f := build(1)
@@ -185,8 +164,7 @@ func TestRegisterHeartbeatHandler_WithoutWiring_MethodNotFound(t *testing.T) {
 	}
 }
 
-// fakeTicker is a manually-fired Ticker for deterministic loop tests
-// (Art.7.3 — no real sleeps).
+// fakeTicker is a manually-fired Ticker for deterministic loop tests.
 type fakeTicker struct {
 	ch      chan struct{}
 	stopped bool
@@ -197,9 +175,7 @@ func (f *fakeTicker) C() <-chan struct{} { return f.ch }
 func (f *fakeTicker) Stop()              { f.stopped = true }
 func (f *fakeTicker) fire()              { f.ch <- struct{}{} }
 
-// storedTestKeystore builds a NodeKeystore for testID with a freshly
-// generated key already stored under it, shared by the RunHeartbeatLoop
-// tests to keep each test under the function-length cap.
+// storedTestKeystore builds a NodeKeystore for testID with a fresh key.
 func storedTestKeystore(t *testing.T, seed, nodeID string) *NodeKeystore {
 	t.Helper()
 	ks, err := NewNodeKeystoreForTest(t)
@@ -294,4 +270,31 @@ func TestRunHeartbeatLoopReportsSendErrorAndContinues(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+// bufConn is a Conn (io.ReadWriteCloser) backed by an in-memory write
+// buffer and a canned read response — no goroutine, no "net" import
+// needed to exercise the sender's real req.Write/http.ReadResponse path.
+type bufConn struct {
+	written bytes.Buffer
+	resp    *bytes.Reader
+}
+
+func (c *bufConn) Read(p []byte) (int, error)  { return c.resp.Read(p) }
+func (c *bufConn) Write(p []byte) (int, error) { return c.written.Write(p) }
+func (c *bufConn) Close() error                { return nil }
+
+// TestNewTunnelHeartbeatSender_RoundTrip proves the sink writes a real
+// HTTP/JSON-RPC request and decodes a real canned response.
+func TestNewTunnelHeartbeatSender_RoundTrip(t *testing.T) {
+	body := `{"jsonrpc":"2.0","id":1,"result":{"node_id":"n"}}`
+	resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s", len(body), body)
+	conn := &bufConn{resp: bytes.NewReader([]byte(resp))}
+	sender := NewTunnelHeartbeatSender(func(context.Context) (Conn, error) { return conn, nil })
+	if err := sender(context.Background(), HeartbeatFrame{NodeID: "n", EnrollmentID: "e", Sequence: 1}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if conn.written.Len() == 0 {
+		t.Fatal("expected a request to be written to the tunnel conn")
+	}
 }

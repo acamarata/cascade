@@ -385,6 +385,35 @@ jobs:
           CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
         run: go test -tags=postgres -count=1 ./providers/postgres/... -v
 
+  node-tunnel-real-sshd:
+    # P1-E17-W4-S36-T3, Art.2: the ssh tunnel exercised against a REAL
+    # sshd (internal/nodes/tunnel_test.go's TestTunnelRealSSHD, tagged
+    # `integration`), never a self-authored dialect — see
+    # internal/nodes/testdata/README.md for provenance. Same allowed-fail
+    # shape as storetest-under-docker above (D-2 precedent): this lane
+    # provisions a real OpenSSH server on the runner itself rather than a
+    # service container (no official sshd image), so continue-on-error
+    # absorbs any runner-image sshd/openssh-server drift without blocking
+    # ci-gate on infra outside this repo's control.
+    name: node-tunnel-real-sshd (loopback OpenSSH, allowed-fail)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: install openssh-server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssh-server
+          /usr/sbin/sshd -V
+
+      - name: go test -tags=integration ./internal/nodes/ (real loopback sshd)
+        run: go test -tags=integration -race -count=1 ./internal/nodes/ -run '^TestTunnelRealSSHD' -v
+
   retrieval-eval-gate:
     # P1-E06-W2-S12-T6 (R-16.9): the retrieval evaluation harness over
     # the committed corpus/query-set fixtures, the v1 August-2026

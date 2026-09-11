@@ -1,47 +1,36 @@
-// Purpose: the heartbeat protocol: the controller-side decode/verify/
-//
-//	apply path that keeps a S-36.T1 device record's LastSeen current, the
+// Purpose: the heartbeat protocol: the controller-side decode/verify/apply
+//	path that keeps a S-36.T1 device record's LastSeen current, the
 //	node-side scheduler that sends heartbeats on a deterministic clock,
-//	and the JSON-RPC "node.heartbeat" handler that wires the controller
-//	side to a production caller.
-//
+//	the JSON-RPC "node.heartbeat" handler wiring the controller side to a
+//	production caller, and (S-36.T3) the ssh-tunnel wire-delivery sink.
 // Inputs: HeartbeatFrame wire bytes from an enrolled-but-untrusted-per-
-//
-//	frame peer (heartbeat_sign.go's VerifyHeartbeatFrame decides whether
-//	to trust any given frame).
-//
+//	frame peer (heartbeat_sign.go's VerifyHeartbeatFrame decides trust).
 // Outputs: an updated DeviceRecord.LastSeen and a derived Liveness, or a
-//
 //	typed fail-closed error.
-//
-// Constraints: A HEARTBEAT IS AN AUTHENTICATED CHANNEL (this ticket's own
-//
-//	security-boundary text) — an unenrolled, unknown, expired, revoked or
-//	unparseable node identity is refused, never defaulted to "unknown
-//	means allow". Scheduling runs on the injected Clock/Ticker only
-//	(Art.7.3 — no sleeps as synchronization). Controller-unreachable is a
-//	typed error path with retry, never a crash.
-//
-// SPORT: internal/nodes ProcessHeartbeat/ADDED,
-//
-//	RegisterHeartbeatHandler/ADDED, RunHeartbeatLoop/ADDED
-//	(P1-E17-W4-S36-T2).
+// Constraints: A HEARTBEAT IS AN AUTHENTICATED CHANNEL — an unenrolled,
+//	unknown, expired, revoked or unparseable node identity is refused,
+//	never defaulted to "unknown means allow". Scheduling runs on the
+//	injected Clock/Ticker only (Art.7.3 — no sleeps as synchronization).
+//	Controller-unreachable is a typed error path with retry, never a crash.
+// SPORT: internal/nodes ProcessHeartbeat/RegisterHeartbeatHandler/
+//	RunHeartbeatLoop ADDED (S-36.T2), NewTunnelHeartbeatSender ADDED (S-36.T3).
 
 package nodes
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"time"
 
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// maxHeartbeatPayloadBytes bounds the decoder against a memory-exhaustion
-// attack, mirroring enroll.go's maxEnrollPayloadBytes.
+// maxHeartbeatPayloadBytes bounds the decoder (mirrors maxEnrollPayloadBytes).
 const maxHeartbeatPayloadBytes = 64 * 1024
 
 // DefaultHeartbeatInterval is the node-side scheduler's default tick
@@ -156,19 +145,16 @@ func RegisterHeartbeatHandler(registry *rpc.Registry, deps HeartbeatDeps) {
 	})
 }
 
-// HeartbeatSender sends one signed heartbeat frame to the controller and
-// reports whether it was accepted. Production implementations POST the
-// frame to the controller's node.heartbeat RPC method; tests inject a
-// fake. Controller-unreachable is this function's typed error path (never
-// a crash) — RunHeartbeatLoop retries on the next scheduled tick rather
-// than treating a single failed send as fatal.
+// HeartbeatSender sends one signed heartbeat frame to the controller.
+// NewTunnelHeartbeatSender is the production implementation; tests inject
+// a fake. Controller-unreachable is a typed error (never a crash) —
+// RunHeartbeatLoop retries next tick rather than treating one failed send
+// as fatal.
 type HeartbeatSender func(ctx context.Context, f HeartbeatFrame) error
 
 // BuildHeartbeatFrame assembles and signs the next heartbeat frame for
-// nodeID, using keystore to sign (the private key never leaves custody,
-// per keystore.go's R-21.220 contract) and seq as this frame's sequence
-// number (the caller is responsible for strict monotonicity — see
-// HeartbeatLoopOptions.NextSequence).
+// nodeID via keystore (the private key never leaves custody, R-21.220)
+// and seq (caller-owned strict monotonicity; see NextSequence below).
 func BuildHeartbeatFrame(ctx context.Context, keystore *NodeKeystore, nodeID, enrollmentID string, seq uint64, report CapabilityReport) (HeartbeatFrame, error) {
 	f := HeartbeatFrame{NodeID: nodeID, EnrollmentID: enrollmentID, Sequence: seq, Report: report}
 	payload, err := f.signingPayload()
@@ -209,10 +195,9 @@ type HeartbeatLoopOptions struct {
 }
 
 // RunHeartbeatLoop sends one heartbeat frame per tick from opts.Ticker
-// until ctx is canceled. Every send failure (build error, sign error, or
-// a controller-unreachable HeartbeatSender error) is reported to
-// opts.OnError and the loop continues to the next tick — a single failed
-// heartbeat never terminates the node agent.
+// until ctx is canceled. Every send failure is reported to opts.OnError
+// and the loop continues — one failed heartbeat never terminates the
+// node agent.
 func RunHeartbeatLoop(ctx context.Context, opts HeartbeatLoopOptions) {
 	defer opts.Ticker.Stop()
 	for {
@@ -239,22 +224,17 @@ func reportErr(onError func(error), err error) {
 	}
 }
 
-// Ticker abstracts periodic notification so RunHeartbeatLoop never blocks
-// on a real sleep in tests, duck-typed against internal/runtime.Ticker
-// (mirroring records.go's Clock duck-type: this package must not import
-// internal/runtime for a two-method interface it does not otherwise
-// need).
+// Ticker abstracts periodic notification (duck-typed against
+// internal/runtime.Ticker, mirroring records.go's Clock duck-type) so
+// RunHeartbeatLoop never blocks on a real sleep in tests.
 type Ticker interface {
 	C() <-chan struct{}
 	Stop()
 }
 
-// systemTicker is the production Ticker, backed by a real time.Ticker,
-// mirroring internal/runtime's own systemTicker (metrics_emitter.go)
-// exactly: this package cannot import internal/runtime for its Ticker
-// concrete type without importing the whole runtime package for one
-// helper, so the same small adapter is duplicated here rather than
-// exported cross-package.
+// systemTicker is the production Ticker (mirrors internal/runtime's own
+// systemTicker; duplicated rather than exported cross-package for one
+// two-method helper).
 type systemTicker struct {
 	t *time.Ticker
 	c chan struct{}
@@ -278,3 +258,43 @@ func NewSystemTicker(d time.Duration) Ticker {
 
 func (s *systemTicker) C() <-chan struct{} { return s.c }
 func (s *systemTicker) Stop()              { s.t.Stop() }
+
+// NewTunnelHeartbeatSender returns the HeartbeatSender wire-delivery sink
+// this type deferred to S-36.T3: it writes each frame as an HTTP request
+// directly onto dial's connection (the ssh tunnel's local end, D-24) via
+// plain req.Write/http.ReadResponse — never http.Transport, so this sink
+// needs no net.Conn, only this package's own Conn. Speaks internal/rpc's
+// exact JSON-RPC 2.0 envelope, interoperating with BuildServeRegistry's
+// node.heartbeat handler unchanged.
+func NewTunnelHeartbeatSender(dial func(ctx context.Context) (Conn, error)) HeartbeatSender {
+	return func(ctx context.Context, f HeartbeatFrame) error {
+		conn, err := dial(ctx)
+		if err != nil {
+			return cascade.Wrap(cascade.KindUnavailable, err, "nodes: heartbeat tunnel dial failed")
+		}
+		defer func() { _ = conn.Close() }()
+		params, _ := json.Marshal(f)
+		body, _ := json.Marshal(rpc.Request{JSONRPC: "2.0", Method: "node.heartbeat", Params: params, ID: json.RawMessage("1")})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix"+RPCPath, bytes.NewReader(body))
+		if err != nil {
+			return cascade.Wrap(cascade.KindInternal, err, "nodes: heartbeat request build failed")
+		}
+		req.ContentLength = int64(len(body))
+		if err := req.Write(conn); err != nil {
+			return cascade.Wrap(cascade.KindUnavailable, err, "nodes: heartbeat send over tunnel failed")
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(conn), req)
+		if err != nil {
+			return cascade.Wrap(cascade.KindUnavailable, err, "nodes: heartbeat response read failed")
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var env rpc.ResponseEnvelope
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			return cascade.Wrap(cascade.KindUnavailable, err, "nodes: heartbeat response decode failed")
+		}
+		if env.Error != nil {
+			return cascade.Newf(cascade.KindUnavailable, "nodes: heartbeat rejected: %s", env.Error.Message)
+		}
+		return nil
+	}
+}

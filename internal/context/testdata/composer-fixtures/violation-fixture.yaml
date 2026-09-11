@@ -1,0 +1,7 @@
+# Self-authored (Art.2.2; see README.md). NEVER fed through Compose --
+# Compose is designed to never produce this shape. Used only to prove the
+# test suite's invariant-checking helper (boundedContextHolds) can detect a
+# violation when given one directly.
+name: seeded-invariant-violation
+budget: 10
+claimed_tokens_used: 15

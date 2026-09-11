@@ -1,0 +1,6 @@
+id           = "alpha"
+name         = "Alpha Plugin"
+schema       = "cascade.plugin/v2"
+version      = "1.0.0"
+host_version = ">=0.9.0"
+runtime      = "wasm"

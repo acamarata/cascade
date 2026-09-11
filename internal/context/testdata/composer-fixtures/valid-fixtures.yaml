@@ -1,0 +1,72 @@
+# Self-authored property-test table (Art.2.2; see README.md). Each case is
+# fed through the real Composer.Compose. The invariant under test:
+# TokensUsed never exceeds Budget, for every case, whether Compose returns
+# a result or refuses with a typed error.
+cases:
+  - name: everything-fits-with-room-to-spare
+    budget: 1000
+    slots:
+      - {kind: tier, label: gci, tokens: 10}
+      - {kind: tier, label: pai, tokens: 5}
+      - {kind: memory, label: soul-1, tokens: 20}
+      - {kind: memory, label: soul-2, tokens: 20}
+      - {kind: retrieval, label: chunk-1, tokens: 30}
+      - {kind: retrieval, label: chunk-2, tokens: 30}
+      - {kind: history, label: turn-1, tokens: 15}
+  - name: exact-fit-no-slack
+    budget: 50
+    slots:
+      - {kind: tier, label: gci, tokens: 20}
+      - {kind: memory, label: soul-1, tokens: 15}
+      - {kind: retrieval, label: chunk-1, tokens: 15}
+  - name: low-priority-retrieval-hit-alone-exceeds-budget
+    budget: 30
+    slots:
+      - {kind: tier, label: gci, tokens: 10}
+      - {kind: retrieval, label: chunk-huge, tokens: 500}
+  - name: highest-priority-tier-slot-alone-exceeds-budget
+    budget: 5
+    slots:
+      - {kind: tier, label: gci, tokens: 500}
+      - {kind: memory, label: soul-1, tokens: 1}
+  - name: many-small-memory-candidates-tail-drops
+    budget: 40
+    slots:
+      - {kind: tier, label: gci, tokens: 10}
+      - {kind: memory, label: soul-1, tokens: 10}
+      - {kind: memory, label: soul-2, tokens: 10}
+      - {kind: memory, label: soul-3, tokens: 10}
+      - {kind: memory, label: soul-4, tokens: 10}
+      - {kind: memory, label: soul-5, tokens: 10}
+  - name: many-retrieval-hits-tail-drops
+    budget: 25
+    slots:
+      - {kind: tier, label: gci, tokens: 5}
+      - {kind: retrieval, label: chunk-1, tokens: 10}
+      - {kind: retrieval, label: chunk-2, tokens: 10}
+      - {kind: retrieval, label: chunk-3, tokens: 10}
+      - {kind: retrieval, label: chunk-4, tokens: 10}
+  - name: single-token-budget-single-tiny-slot
+    budget: 1
+    slots:
+      - {kind: tier, label: gci, tokens: 1}
+  - name: single-token-budget-oversized-first-slot
+    budget: 1
+    slots:
+      - {kind: tier, label: gci, tokens: 2}
+  - name: history-and-retrieval-interleave
+    budget: 60
+    slots:
+      - {kind: tier, label: gci, tokens: 10}
+      - {kind: history, label: turn-1, tokens: 10}
+      - {kind: retrieval, label: chunk-1, tokens: 10}
+      - {kind: history, label: turn-2, tokens: 10}
+      - {kind: retrieval, label: chunk-2, tokens: 10}
+      - {kind: history, label: turn-3, tokens: 30}
+  - name: all-slots-massively-over-budget
+    budget: 10
+    slots:
+      - {kind: tier, label: gci, tokens: 5}
+      - {kind: memory, label: soul-1, tokens: 100}
+      - {kind: retrieval, label: chunk-1, tokens: 200}
+      - {kind: history, label: turn-1, tokens: 300}

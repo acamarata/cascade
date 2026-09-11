@@ -38,12 +38,14 @@ package main
 import (
 	"context"
 	"os"
+	goruntime "runtime"
 
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/daemon/service"
 	"github.com/acamarata/cascade/internal/elevation"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -71,6 +73,11 @@ type daemonDeps struct {
 	// Resolved once via service.NewInstaller() in production; every test
 	// injects a fake.
 	Installer service.Installer
+	// NodeTunnels is the controller-side ssh tunnel registry (S-36.T3):
+	// `node enroll`/`node status` (S-36.T4) start/read tunnels through it.
+	// A nil value (every existing test's zero-value daemonDeps) is valid —
+	// see startNodeTunnelService's own nil guard.
+	NodeTunnels *nodes.Manager
 }
 
 // productionDaemonDeps builds daemonDeps against the real environment. The
@@ -79,14 +86,15 @@ type daemonDeps struct {
 // does.
 func productionDaemonDeps() daemonDeps {
 	return daemonDeps{
-		Paths:      lazyPaths{},
-		Getenv:     os.Getenv,
-		Environ:    os.Environ,
-		Clock:      runtime.SystemClock{},
-		Executable: os.Executable,
-		HomeDir:    os.UserHomeDir,
-		Getuid:     os.Getuid,
-		Installer:  service.NewInstaller(),
+		Paths:       lazyPaths{},
+		Getenv:      os.Getenv,
+		Environ:     os.Environ,
+		Clock:       runtime.SystemClock{},
+		Executable:  os.Executable,
+		HomeDir:     os.UserHomeDir,
+		Getuid:      os.Getuid,
+		Installer:   service.NewInstaller(),
+		NodeTunnels: nodes.NewManager(),
 	}
 }
 
@@ -112,9 +120,33 @@ func newDaemonRunCmd(deps daemonDeps) *cobra.Command {
 		Short: "Run the daemon in the foreground",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			startNodeTunnelService(deps)
 			return platformDaemonRun(cmd.Context(), deps)
 		},
 	}
+}
+
+// startNodeTunnelService registers the controller-side ssh tunnel service
+// (S-36.T3) with deps.NodeTunnels. WINDOWS (R-21.226):
+// nodes.RefuseTunnelServiceOnGOOS's refusal is honored by returning
+// without starting anything — the daemon still runs, only the tunnel
+// service is unsupported there (mirrors node_serve.go's per-verb refusal
+// rather than failing `daemon run` outright). EVERY OTHER PLATFORM —
+// CONTRADICTION (full quote in the ticket journal): per-node auto-start
+// is not implemented here because Target has no durable source yet —
+// DeviceRecord (records.go, S-36.T1, out of this ticket's files_scope)
+// carries no Host/User field. deps.NodeTunnels is still real, wired
+// infrastructure: S-36.T4's `node enroll`/`node status` verbs call
+// Manager.Start/State on it directly once they land.
+func startNodeTunnelService(deps daemonDeps) {
+	if deps.NodeTunnels == nil {
+		return
+	}
+	if err := nodes.RefuseTunnelServiceOnGOOS(goruntime.GOOS); err != nil {
+		return
+	}
+	// No enrolled-node Target source exists yet (see doc comment above);
+	// deps.NodeTunnels is registered and ready for S-36.T4 to drive.
 }
 
 func newDaemonStartCmd(deps daemonDeps) *cobra.Command {

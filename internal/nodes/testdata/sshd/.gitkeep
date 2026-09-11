@@ -1,0 +1,3 @@
+This directory intentionally holds no static fixtures. See ../README.md's
+'ssh tunnel real-counterpart provenance' section: sshd_config, the host key,
+and authorized_keys are all generated fresh per test run under t.TempDir().

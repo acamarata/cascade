@@ -3,8 +3,7 @@
 `cascade node serve` runs the node agent: the same binary, running in
 node-serve mode, hosting the node-side JSON-RPC surface on a unix socket
 under the data directory (`<data_dir>/nodes/node.sock`). The controller
-reaches this surface over an ssh tunnel; this ticket does not implement
-the tunnel transport itself.
+reaches this surface over an ssh tunnel — see Transport below.
 
 ## Identity
 
@@ -61,6 +60,73 @@ currently reachable. As of this ticket it is not yet registered in
 `internal/build/testonly-allow.json`'s `internal/nodes.NewHealthCheck`
 entry for the tracked follow-up.
 
+## Transport
+
+The controller reaches an enrolled node over a managed, reconnecting ssh
+tunnel (`internal/nodes/tunnel.go`, `reconnect.go`; S-36.T3). The
+controller dials `<user@host>` (the same ssh access enrollment used) as
+the ssh client; the tunnel never introduces a new credential class or new
+wire format — it carries the existing node RPC framing (Epic D) and the
+S-36.T2 heartbeat frame over it.
+
+**Lifecycle.** A `Tunnel` moves through three states: `down` ->
+`reconnecting` -> `up`. `Manager.Start` is idempotent per node id — a
+second `Start` for a node already running returns the existing tunnel,
+never a duplicate connection or forward. Every transition is emitted as
+an event (`node.tunnel.reconnecting` / `.up` / `.down` /
+`.host_key_refused` / `.reconnect_exhausted`) and is readable live via
+`Manager.State(nodeID)`.
+
+**Host-key verification (R-21.220).** Every connect attempt — the first
+and every reconnect alike — verifies the presented ssh host key against
+the S-36.T1 `known_hosts` store and the fingerprint pinned in the
+enrollment transcript, through the identical `KnownHosts.Verify` call
+each time. An unknown key on first contact, or a key that has changed
+since it was pinned, is refused as the typed `ErrHostKeyUnknown` /
+`ErrHostKeyChanged` error (`KindPermissionDenied`) and is terminal: the
+tunnel sets `down` and never reconnects on it. Re-establishing a tunnel
+to a host whose key changed requires an operator to re-pin the key out of
+band first (`KnownHosts.Pin` with `force=true`).
+
+**Reconnect.** Every other connect failure (unreachable, connection
+refused, auth failure, a mid-stream drop) is transient and feeds a
+capped exponential backoff (`ReconnectPolicy`: `InitialBackoff` doubling
+up to `MaxBackoff`), driven by the injected `Sleeper`/`Clock` so the
+schedule is deterministic under test — never a real sleep. The loop is
+bounded both by `ReconnectPolicy.MaxAttempts` (optional) and by the
+caller's `context.Context`; canceling that context (`Manager.Stop`, or
+daemon shutdown) tears the tunnel down cleanly, mid-backoff or
+mid-session alike.
+
+**Carried channel (the D-24 ssh-forwarded-socket pattern).** Once up, the
+tunnel remote-forwards a unix socket on the node's filesystem (ssh -R
+streamlocal) back to the controller process; connections a node-side
+process makes to that socket arrive at the controller and are piped,
+byte for byte, to the controller's own local RPC socket. This is how
+S-36.T2's heartbeat sender (`NewTunnelHeartbeatSender`, the wire-delivery
+sink deferred to this ticket) reaches the controller: it POSTs the
+existing `node.heartbeat` JSON-RPC envelope over the tunnel's local end,
+unchanged.
+
+**Later consumers.** This transport is the substrate, not the payload,
+for: S-36.T5's over-ssh binary provisioning, S-37.T2's remote dispatch /
+journal streaming, and S-38.T1's chunked sync transfer. None of them are
+implemented by this ticket; each rides the same tunnel once it lands.
+
+**`node status <id>` fields.** The connection-state surface S-36.T4
+mounts reads `Manager.State(nodeID)` directly: `state` (`down` /
+`reconnecting` / `up`) and whether the node has a registered tunnel at
+all. No additional persisted field is required — state is live, in
+Manager's own registry, matching Liveness's derived-not-persisted
+convention above.
+
+**Real-counterpart testing (Art.2).** Establish/host-key/forward/
+reconnect are exercised against a REAL sshd, never a self-authored
+dialect: the tagged `integration` lane spawns a loopback OpenSSH server
+at test time (`internal/nodes/tunnel_test.go`; provenance in
+`internal/nodes/testdata/README.md`) and wires the CI job
+`node-tunnel-real-sshd`.
+
 ## Windows
 
 `cascade node serve` refuses unconditionally on Windows: the serve
@@ -68,4 +134,8 @@ listener is daemon-class, outside Windows tier-2's binary + headless
 one-shot promise (06-FORGE-SPEC §2). The refusal is a typed
 `KindUnsupported` error with an actionable message. The heartbeat and
 capability-report protocol logic itself is platform-independent and is
-unit-tested on every platform.
+unit-tested on every platform. The controller-side tunnel service is
+refused the same way (`RefuseTunnelServiceOnGOOS`, S-36.T3), asserted
+natively in the windows/amd64 CI lane
+(`internal/nodes/tunnel_windows_test.go`); its state-machine and
+host-key-verification logic stay unit-tested on every platform.
